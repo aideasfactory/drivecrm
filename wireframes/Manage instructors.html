@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#DC2626',
+                        'primary-light': '#FEE2E2',
+                    }
+                }
+            }
+        }
+    </script>
+    <script> window.FontAwesomeConfig = { autoReplaceSvg: 'nest'};</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { display: none; }
+        .nav-item { transition: all 0.2s; }
+        .nav-item:hover { background-color: #FEE2E2; }
+        .nav-item.active { background-color: #FEE2E2; color: #DC2626; }
+        .table-row:hover { background-color: #F9FAFB; cursor: pointer; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="flex h-screen overflow-hidden">
+        <aside id="sidebar" class="w-64 bg-white border-r border-gray-200 flex flex-col">
+            <div class="p-6 border-b border-gray-200">
+                <h1 class="text-xl font-bold text-gray-900">GoRoadie Driving School</h1>
+            </div>
+            <nav class="flex-1 p-4 space-y-1">
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700">
+                    <i class="fa-solid fa-chart-line w-5"></i>
+                    <span class="font-medium">Dashboard</span>
+                </a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700">
+                    <i class="fa-solid fa-envelope w-5"></i>
+                    <span class="font-medium">Enquiries</span>
+                </a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700">
+                    <i class="fa-solid fa-graduation-cap w-5"></i>
+                    <span class="font-medium">Pupils</span>
+                </a>
+                <a href="#" class="nav-item active flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700">
+                    <i class="fa-solid fa-users w-5"></i>
+                    <span class="font-medium">Instructors</span>
+                </a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700">
+                    <i class="fa-solid fa-chart-bar w-5"></i>
+                    <span class="font-medium">Reports</span>
+                </a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700">
+                    <i class="fa-solid fa-folder w-5"></i>
+                    <span class="font-medium">Resources</span>
+                </a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700">
+                    <i class="fa-solid fa-gear w-5"></i>
+                    <span class="font-medium">Settings</span>
+                </a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700">
+                    <i class="fa-solid fa-grid-2 w-5"></i>
+                    <span class="font-medium">Apps</span>
+                </a>
+            </nav>
+        </aside>
+
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <header id="header" class="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-end">
+                <div class="flex items-center gap-3">
+                    <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-2.jpg" alt="User" class="w-10 h-10 rounded-full">
+                    <div class="flex items-center gap-2">
+                        <span class="font-medium text-gray-900">Admin User</span>
+                        <i class="fa-solid fa-chevron-down text-gray-500 text-sm"></i>
+                    </div>
+                </div>
+            </header>
+
+            <main id="main-content" class="flex-1 overflow-y-auto">
+                <div class="p-8">
+                    <div id="page-header" class="mb-8">
+                        <h2 class="text-3xl font-bold text-gray-900 mb-2">Instructors</h2>
+                        <p class="text-gray-500">Manage your driving instructors and their performance</p>
+                    </div>
+
+                    <div id="search-section" class="mb-6">
+                        <div class="relative max-w-md">
+                            <i class="fa-solid fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                            <input type="text" placeholder="Search instructors..." class="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                    </div>
+
+                    <div id="instructors-table" class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                        <table class="w-full">
+                            <thead class="bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                    <th class="text-left px-6 py-4 text-sm font-semibold text-gray-900">Name</th>
+                                    <th class="text-left px-6 py-4 text-sm font-semibold text-gray-900">App</th>
+                                    <th class="text-left px-6 py-4 text-sm font-semibold text-gray-900">Pupils</th>
+                                    <th class="text-left px-6 py-4 text-sm font-semibold text-gray-900">Last Sync</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200">
+                                <tr class="table-row" onclick="window.location.href='#instructor-view'">
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-3">
+                                            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-2.jpg" alt="Instructor" class="w-10 h-10 rounded-full">
+                                            <div>
+                                                <div class="font-semibold text-gray-900">James Mitchell</div>
+                                                <div class="text-sm text-gray-500">james.mitchell@goroadie.com</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-2">
+                                            <i class="fa-solid fa-mobile-screen text-primary"></i>
+                                            <span class="text-gray-700">Connected</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="text-gray-900 font-medium">24</span>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="text-gray-700">2 hours ago</span>
+                                    </td>
+                                </tr>
+                                <tr class="table-row" onclick="window.location.href='#instructor-view'">
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-3">
+                                            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-5.jpg" alt="Instructor" class="w-10 h-10 rounded-full">
+                                            <div>
+                                                <div class="font-semibold text-gray-900">Sarah Thompson</div>
+                                                <div class="text-sm text-gray-500">sarah.thompson@goroadie.com</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-2">
+                                            <i class="fa-solid fa-mobile-screen text-primary"></i>
+                                            <span class="text-gray-700">Connected</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="text-gray-900 font-medium">31</span>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="text-gray-700">5 hours ago</span>
+                                    </td>
+                                </tr>
+                                <tr class="table-row" onclick="window.location.href='#instructor-view'">
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-3">
+                                            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-8.jpg" alt="Instructor" class="w-10 h-10 rounded-full">
+                                            <div>
+                                                <div class="font-semibold text-gray-900">Robert Davies</div>
+                                                <div class="text-sm text-gray-500">robert.davies@goroadie.com</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-2">
+                                            <i class="fa-solid fa-mobile-screen text-gray-400"></i>
+                                            <span class="text-gray-500">Not Connected</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="text-gray-900 font-medium">18</span>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="text-gray-700">Yesterday</span>
+                                    </td>
+                                </tr>
+                                <tr class="table-row" onclick="window.location.href='#instructor-view'">
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-3">
+                                            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-6.jpg" alt="Instructor" class="w-10 h-10 rounded-full">
+                                            <div>
+                                                <div class="font-semibold text-gray-900">Emma Wilson</div>
+                                                <div class="text-sm text-gray-500">emma.wilson@goroadie.com</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-2">
+                                            <i class="fa-solid fa-mobile-screen text-primary"></i>
+                                            <span class="text-gray-700">Connected</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="text-gray-900 font-medium">27</span>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="text-gray-700">1 hour ago</span>
+                                    </td>
+                                </tr>
+                                <tr class="table-row" onclick="window.location.href='#instructor-view'">
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-3">
+                                            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-3.jpg" alt="Instructor" class="w-10 h-10 rounded-full">
+                                            <div>
+                                                <div class="font-semibold text-gray-900">Michael Brown</div>
+                                                <div class="text-sm text-gray-500">michael.brown@goroadie.com</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-2">
+                                            <i class="fa-solid fa-mobile-screen text-primary"></i>
+                                            <span class="text-gray-700">Connected</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="text-gray-900 font-medium">22</span>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="text-gray-700">3 hours ago</span>
+                                    </td>
+                                </tr>
+                                <tr class="table-row" onclick="window.location.href='#instructor-view'">
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-3">
+                                            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-7.jpg" alt="Instructor" class="w-10 h-10 rounded-full">
+                                            <div>
+                                                <div class="font-semibold text-gray-900">Jessica Taylor</div>
+                                                <div class="text-sm text-gray-500">jessica.taylor@goroadie.com</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-2">
+                                            <i class="fa-solid fa-mobile-screen text-primary"></i>
+                                            <span class="text-gray-700">Connected</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="text-gray-900 font-medium">29</span>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="text-gray-700">4 hours ago</span>
+                                    </td>
+                                </tr>
+                                <tr class="table-row" onclick="window.location.href='#instructor-view'">
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-3">
+                                            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-9.jpg" alt="Instructor" class="w-10 h-10 rounded-full">
+                                            <div>
+                                                <div class="font-semibold text-gray-900">David Anderson</div>
+                                                <div class="text-sm text-gray-500">david.anderson@goroadie.com</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-2">
+                                            <i class="fa-solid fa-mobile-screen text-gray-400"></i>
+                                            <span class="text-gray-500">Not Connected</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="text-gray-900 font-medium">15</span>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="text-gray-700">2 days ago</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+
+            <footer id="footer" class="bg-white border-t border-gray-200 px-8 py-4">
+                <div class="flex items-center justify-between text-sm text-gray-500">
+                    <div>© GoRoadie 2025. All rights reserved.</div>
+                    <div class="flex items-center gap-6">
+                        <a href="#" class="hover:text-gray-900">Privacy Policy</a>
+                        <a href="#" class="hover:text-gray-900">Cookie Settings</a>
+                    </div>
+                </div>
+            </footer>
+        </div>
+    </div>
+</body>
+</html>

@@ -25,6 +25,22 @@ Route::get('dashboard', function () {
     return Inertia::render('Dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
+// Main Application Routes
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/instructors', [\App\Http\Controllers\InstructorController::class, 'index'])
+        ->name('instructors.index');
+    Route::get('/pupils', [\App\Http\Controllers\PupilController::class, 'index'])
+        ->name('pupils.index');
+    Route::get('/teams', [\App\Http\Controllers\TeamController::class, 'index'])
+        ->name('teams.index');
+    Route::get('/reports', [\App\Http\Controllers\ReportController::class, 'index'])
+        ->name('reports.index');
+    Route::get('/resources', [\App\Http\Controllers\ResourceController::class, 'index'])
+        ->name('resources.index');
+    Route::get('/apps', [\App\Http\Controllers\AppController::class, 'index'])
+        ->name('apps.index');
+});
+
 // Onboarding Routes (Public - no auth required)
 // Entry point — creates new enquiry
 Route::get('/onboarding', [OnboardingController::class, 'start'])
