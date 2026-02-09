@@ -1,32 +1,33 @@
 <template>
-  <div class="min-h-screen bg-gray-50">
-    <header class="bg-white border-b border-gray-200">
-      <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between items-center h-16">
-          <div>
-            <h1 class="text-2xl font-bold text-gray-900">Driver Training Onboarding</h1>
-          </div>
-          <div v-if="enquiry" class="text-sm text-gray-500">
-            Session ID: {{ enquiry.id.slice(0, 8) }}
+  <div class="min-h-screen">
+    <Card class="rounded-none border-x-0 border-t-0">
+      <CardHeader>
+        <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="flex justify-between items-center">
+            <CardTitle class="text-2xl">Driver Training Onboarding</CardTitle>
+            <CardDescription v-if="enquiry" class="text-sm">
+              Session ID: {{ enquiry.id.slice(0, 8) }}
+            </CardDescription>
           </div>
         </div>
-      </div>
-    </header>
+      </CardHeader>
+    </Card>
 
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <Stepper 
-        :current-step="currentStep" 
+      <Stepper
+        :current-step="currentStep"
         :completed-steps="completedSteps"
         :steps="steps"
       />
 
+      <!-- Flash Messages -->
       <div v-if="flash.error || flash.success" class="mt-6">
-        <div v-if="flash.error" class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {{ flash.error }}
-        </div>
-        <div v-if="flash.success" class="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
-          {{ flash.success }}
-        </div>
+        <Alert v-if="flash.error" variant="destructive">
+          <AlertDescription>{{ flash.error }}</AlertDescription>
+        </Alert>
+        <Alert v-if="flash.success">
+          <AlertDescription>{{ flash.success }}</AlertDescription>
+        </Alert>
       </div>
 
       <main class="mt-8">
@@ -34,20 +35,28 @@
       </main>
     </div>
 
-    <footer class="mt-auto bg-white border-t border-gray-200">
-      <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <p class="text-center text-sm text-gray-500">
-          © {{ new Date().getFullYear() }} Your Driving School. All rights reserved.
-        </p>
-      </div>
+    <footer class="mt-auto">
+      <Card class="rounded-none border-x-0 border-b-0">
+        <CardContent class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <p class="text-center text-sm">
+            © {{ new Date().getFullYear() }} Your Driving School. All rights reserved.
+          </p>
+        </CardContent>
+      </Card>
     </footer>
+
+    <!-- Sonner Toast -->
+    <Sonner position="top-right" rich-colors />
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { usePage } from '@inertiajs/vue3'
-import Stepper from '@/Components/Onboarding/Stepper.vue'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Sonner } from '@/components/ui/sonner'
+import Stepper from '@/components/Onboarding/Stepper.vue'
 
 const page = usePage()
 

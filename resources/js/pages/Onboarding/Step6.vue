@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-gray-50 flex flex-col">
+  <div class="min-h-screen flex flex-col">
     <OnboardingHeader :current-step="6" :total-steps="6" :max-step-reached="maxStepReached" />
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1">
@@ -8,30 +8,32 @@
         <div class="lg:col-span-1">
           <OnboardingLeftSidebar>
             <template #extra-content>
-              <div class="border-t pt-6">
-                <h4 class="font-semibold text-gray-900 mb-3">Booking Summary</h4>
+              <Separator class="my-6" />
+              <div>
+                <h4 class="font-semibold mb-3">Booking Summary</h4>
                 <div class="space-y-3 text-sm">
                   <div class="flex justify-between">
-                    <span class="text-gray-600">Package:</span>
+                    <span class="text-muted-foreground">Package:</span>
                     <span class="font-medium">{{ package?.name || 'No package selected' }}</span>
                   </div>
                   <div class="flex justify-between">
-                    <span class="text-gray-600">Lessons:</span>
+                    <span class="text-muted-foreground">Lessons:</span>
                     <span class="font-medium">{{ package?.lessons_count || '0' }} lessons</span>
                   </div>
                   <div class="flex justify-between">
-                    <span class="text-gray-600">Instructor:</span>
+                    <span class="text-muted-foreground">Instructor:</span>
                     <span class="font-medium">{{ instructor?.name || 'Not selected' }}</span>
                   </div>
                   <div class="flex justify-between">
-                    <span class="text-gray-600">Start Date:</span>
+                    <span class="text-muted-foreground">Start Date:</span>
                     <span class="font-medium">{{ formatDate(schedule?.date) }}</span>
                   </div>
                   <div class="flex justify-between">
-                    <span class="text-gray-600">Time:</span>
+                    <span class="text-muted-foreground">Time:</span>
                     <span class="font-medium">{{ formatTime(schedule?.start_time) }}</span>
                   </div>
-                  <div class="border-t pt-3 flex justify-between font-semibold">
+                  <Separator class="my-3" />
+                  <div class="flex justify-between font-semibold">
                     <span>Total:</span>
                     <span>£{{ pricing?.upfront?.total || '0.00' }}</span>
                   </div>
@@ -43,82 +45,86 @@
 
         <!-- Payment Form -->
         <div class="lg:col-span-2">
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-            <div class="mb-8">
-              <h1 class="text-2xl font-bold text-gray-900 mb-2">Complete your booking</h1>
-              <p class="text-gray-600">Choose your preferred payment method to secure your driving lesson booking.</p>
-            </div>
+          <Card>
+            <CardHeader>
+              <CardTitle class="text-2xl">Complete your booking</CardTitle>
+              <CardDescription>
+                Choose your preferred payment method to secure your driving lesson booking.
+              </CardDescription>
+            </CardHeader>
 
-            <form @submit.prevent="processPayment">
-              <div class="space-y-8">
-                <!-- Payment Options -->
-                <div>
-                  <h3 class="text-lg font-semibold text-gray-900 mb-4">Payment Options</h3>
+            <CardContent>
+              <form @submit.prevent="processPayment">
+                <div class="space-y-8">
+                  <!-- Payment Options -->
+                  <div>
+                    <h3 class="text-lg font-semibold mb-4">Payment Options</h3>
 
-                  <div class="space-y-4">
-                    <label class="flex items-center p-4 border-2 rounded-lg cursor-pointer"
-                           :class="form.payment_mode === 'upfront' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-blue-600 hover:bg-blue-50'">
-                      <input type="radio" v-model="form.payment_mode" value="upfront" class="sr-only">
-                      <div class="flex-1">
-                        <div class="flex items-center justify-between">
-                          <div>
-                            <div class="font-medium text-gray-900">Pay in full</div>
-                            <div class="text-sm text-gray-600">Complete payment now via Stripe</div>
-                          </div>
-                          <div class="text-xl font-bold text-gray-900">{{ package?.total_price || '0.00' }}</div>
-                        </div>
-                      </div>
-                      <div class="ml-4">
-                        <div class="w-5 h-5 border-2 rounded-full flex items-center justify-center"
-                             :class="form.payment_mode === 'upfront' ? 'border-blue-600' : 'border-gray-300'">
-                          <div v-if="form.payment_mode === 'upfront'" class="w-2.5 h-2.5 bg-blue-600 rounded-full"></div>
-                        </div>
-                      </div>
-                    </label>
-
-                    <label class="flex items-center p-4 border-2 rounded-lg cursor-pointer"
-                           :class="form.payment_mode === 'weekly' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-blue-600 hover:bg-blue-50'">
-                      <input type="radio" v-model="form.payment_mode" value="weekly" class="sr-only">
-                      <div class="flex-1">
-                        <div class="flex items-center justify-between">
-                          <div>
-                            <div class="font-medium text-gray-900">Pay weekly</div>
-                            <div class="text-sm text-gray-600">{{ package?.lessons_count || 0 }} weekly invoices</div>
-                          </div>
-                          <div class="text-xl font-bold text-gray-900">
-                            {{ package?.weekly_payment || '0.00' }}<span class="text-sm font-normal text-gray-600">/lesson</span>
+                    <div class="space-y-4">
+                      <label
+                        class="flex items-center p-4 border-2 rounded-lg cursor-pointer transition-colors"
+                        :class="form.payment_mode === 'upfront' ? 'border-primary bg-primary/5' : 'hover:border-primary hover:bg-primary/5'"
+                      >
+                        <input type="radio" v-model="form.payment_mode" value="upfront" class="sr-only">
+                        <div class="flex-1">
+                          <div class="flex items-center justify-between">
+                            <div>
+                              <div class="font-medium">Pay in full</div>
+                              <div class="text-sm text-muted-foreground">Complete payment now via Stripe</div>
+                            </div>
+                            <div class="text-xl font-bold">{{ package?.total_price || '0.00' }}</div>
                           </div>
                         </div>
-                      </div>
-                      <div class="ml-4">
-                        <div class="w-5 h-5 border-2 rounded-full flex items-center justify-center"
-                             :class="form.payment_mode === 'weekly' ? 'border-blue-600' : 'border-gray-300'">
-                          <div v-if="form.payment_mode === 'weekly'" class="w-2.5 h-2.5 bg-blue-600 rounded-full"></div>
+                        <div class="ml-4">
+                          <div class="w-5 h-5 border-2 rounded-full flex items-center justify-center"
+                               :class="form.payment_mode === 'upfront' ? 'border-primary' : ''">
+                            <div v-if="form.payment_mode === 'upfront'" class="w-2.5 h-2.5 bg-primary rounded-full"></div>
+                          </div>
                         </div>
-                      </div>
-                    </label>
-                  </div>
+                      </label>
 
-                  <!-- Weekly Schedule Info -->
-                  <div v-if="form.payment_mode === 'weekly'" class="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                    <div class="flex items-start">
-                      <i class="fa-solid fa-calendar-alt text-amber-600 mt-0.5 mr-3"></i>
-                      <div class="text-sm text-amber-800">
-                        <p class="font-medium mb-2">Weekly Payment Schedule</p>
+                      <label
+                        class="flex items-center p-4 border-2 rounded-lg cursor-pointer transition-colors"
+                        :class="form.payment_mode === 'weekly' ? 'border-primary bg-primary/5' : 'hover:border-primary hover:bg-primary/5'"
+                      >
+                        <input type="radio" v-model="form.payment_mode" value="weekly" class="sr-only">
+                        <div class="flex-1">
+                          <div class="flex items-center justify-between">
+                            <div>
+                              <div class="font-medium">Pay weekly</div>
+                              <div class="text-sm text-muted-foreground">{{ package?.lessons_count || 0 }} weekly invoices</div>
+                            </div>
+                            <div class="text-xl font-bold">
+                              {{ package?.weekly_payment || '0.00' }}<span class="text-sm font-normal text-muted-foreground">/lesson</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="ml-4">
+                          <div class="w-5 h-5 border-2 rounded-full flex items-center justify-center"
+                               :class="form.payment_mode === 'weekly' ? 'border-primary' : ''">
+                            <div v-if="form.payment_mode === 'weekly'" class="w-2.5 h-2.5 bg-primary rounded-full"></div>
+                          </div>
+                        </div>
+                      </label>
+                    </div>
+
+                    <!-- Weekly Schedule Info -->
+                    <Alert v-if="form.payment_mode === 'weekly'" class="mt-4" variant="default">
+                      <i class="fa-solid fa-calendar-alt"></i>
+                      <AlertTitle>Weekly Payment Schedule</AlertTitle>
+                      <AlertDescription>
                         <p class="mb-2">You will receive {{ package?.lessons_count || 0 }} invoices via email, one for each lesson 24 hours before it's scheduled.</p>
                         <p class="text-xs">First lesson: {{ formatDate(schedule?.date) }}</p>
                         <p class="text-xs">Payment per lesson: {{ pricing?.weekly?.per_lesson || '0.00' }}</p>
-                      </div>
-                    </div>
+                      </AlertDescription>
+                    </Alert>
                   </div>
-                </div>
 
-                <!-- Secure Payment Info -->
-                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div class="flex items-start">
-                    <i class="fa-solid fa-shield-halved text-blue-600 mt-0.5 mr-3"></i>
-                    <div class="text-sm text-blue-800">
-                      <p class="font-medium mb-1">Secure Payment via Stripe</p>
+                  <!-- Secure Payment Info -->
+                  <Alert>
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <AlertTitle>Secure Payment via Stripe</AlertTitle>
+                    <AlertDescription>
                       <p v-if="form.payment_mode === 'upfront'">
                         You'll be redirected to Stripe's secure checkout page to complete your payment.
                         We accept all major credit and debit cards, Apple Pay, and Google Pay.
@@ -126,73 +132,74 @@
                       <p v-else>
                         Your order will be activated immediately. You'll receive invoice emails 24 hours before each lesson.
                       </p>
-                    </div>
+                    </AlertDescription>
+                  </Alert>
+
+                  <!-- Terms -->
+                  <Card>
+                    <CardContent class="pt-6">
+                      <div class="flex items-start space-x-3">
+                        <Checkbox
+                          v-model:checked="form.terms_accepted"
+                          id="terms"
+                        />
+                        <Label for="terms" class="cursor-pointer">
+                          I agree to the <span class="text-primary hover:underline cursor-pointer">Terms & Conditions</span>
+                          and <span class="text-primary hover:underline cursor-pointer">Privacy Policy</span>.
+                          I understand the cancellation policy and payment terms.
+                        </Label>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <!-- Actions -->
+                  <div class="flex items-center justify-between pt-6 border-t">
+                    <Link :href="step5({ uuid: uuid }).url">
+                      <Button variant="outline" class="cursor-pointer">
+                        <ArrowLeft class="mr-2 h-4 w-4" />
+                        Back
+                      </Button>
+                    </Link>
+
+                    <Button type="submit" :disabled="!form.terms_accepted || form.processing" class="cursor-pointer">
+                      <Spinner v-if="form.processing" class="mr-2 h-4 w-4 animate-spin" />
+                      <Lock v-if="!form.processing" class="mr-2 h-4 w-4" />
+                      {{ paymentButtonText }}
+                    </Button>
                   </div>
                 </div>
-
-                <!-- Terms -->
-                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <label class="flex items-start cursor-pointer">
-                    <input v-model="form.terms_accepted" type="checkbox"
-                           class="mt-1 mr-3 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
-                    <div class="text-sm text-gray-700">
-                      I agree to the <span class="text-blue-600 hover:underline cursor-pointer">Terms & Conditions</span>
-                      and <span class="text-blue-600 hover:underline cursor-pointer">Privacy Policy</span>.
-                      I understand the cancellation policy and payment terms.
-                    </div>
-                  </label>
-                </div>
-
-                <!-- Actions -->
-                <div class="flex items-center justify-between pt-6 border-t">
-                  <Link :href="step5({ uuid: uuid }).url"
-                        class="px-6 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors">
-                    <i class="fa-solid fa-arrow-left mr-2"></i>
-                    Back
-                  </Link>
-
-                  <button type="submit" :disabled="!form.terms_accepted || form.processing"
-                          class="px-8 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center disabled:opacity-50 disabled:cursor-not-allowed">
-                    <span v-if="form.processing">
-                      <i class="fa-solid fa-spinner fa-spin mr-2"></i>
-                      Processing...
-                    </span>
-                    <span v-else>
-                      <i class="fa-solid fa-lock mr-2"></i>
-                      {{ paymentButtonText }}
-                    </span>
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
+              </form>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </main>
 
     <!-- Footer -->
-    <footer class="bg-white border-t border-gray-200 mt-16">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div class="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
-          <div class="text-sm text-gray-600">
-            © 2024 DRIVE Academy
-          </div>
+    <footer class="mt-auto">
+      <Card class="rounded-none border-x-0 border-b-0">
+        <CardContent class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="text-sm">
+              © 2024 DRIVE Academy
+            </div>
 
-          <div class="flex items-center space-x-6">
-            <span class="text-sm text-gray-600 hover:text-gray-900 cursor-pointer">Terms & Conditions</span>
-            <span class="text-sm text-gray-600 hover:text-gray-900 cursor-pointer">Privacy Policy</span>
-            <span class="text-sm text-gray-600 hover:text-gray-900 cursor-pointer">Cookies</span>
-          </div>
+            <div class="flex items-center space-x-6">
+              <span class="text-sm cursor-pointer hover:underline">Terms & Conditions</span>
+              <span class="text-sm cursor-pointer hover:underline">Privacy Policy</span>
+              <span class="text-sm cursor-pointer hover:underline">Cookies</span>
+            </div>
 
-          <div class="flex items-center space-x-2">
-            <i class="fa-brands fa-cc-visa text-2xl text-gray-400"></i>
-            <i class="fa-brands fa-cc-mastercard text-2xl text-gray-400"></i>
-            <i class="fa-brands fa-cc-amex text-2xl text-gray-400"></i>
-            <i class="fa-brands fa-apple-pay text-2xl text-gray-400"></i>
-            <i class="fa-brands fa-google-pay text-2xl text-gray-400"></i>
+            <div class="flex items-center space-x-2">
+              <i class="fa-brands fa-cc-visa text-2xl"></i>
+              <i class="fa-brands fa-cc-mastercard text-2xl"></i>
+              <i class="fa-brands fa-cc-amex text-2xl"></i>
+              <i class="fa-brands fa-apple-pay text-2xl"></i>
+              <i class="fa-brands fa-google-pay text-2xl"></i>
+            </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </footer>
   </div>
 </template>
@@ -200,10 +207,18 @@
 <script setup>
 import { computed } from 'vue'
 import { Link, useForm, usePage } from '@inertiajs/vue3'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Separator } from '@/components/ui/separator'
+import { Spinner } from '@/components/ui/spinner'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
 import { step5 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step6'
+import { ArrowLeft, Lock } from 'lucide-vue-next'
 
 const props = defineProps({
   uuid: String,
