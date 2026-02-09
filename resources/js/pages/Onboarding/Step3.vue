@@ -5,27 +5,29 @@
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <!-- Left Sidebar -->
-        <OnboardingLeftSidebar>
-          <template #extra-content>
-            <Separator class="my-6" />
-            <div>
-              <h4 class="font-semibold mb-3">Your selection</h4>
-              <div class="space-y-2 text-sm">
-                <div class="flex justify-between">
-                  <span class="text-muted-foreground">Area:</span>
-                  <span class="font-medium">{{ postcode }}</span>
-                </div>
-                <div class="flex justify-between">
-                  <span class="text-muted-foreground">Instructor:</span>
-                  <span class="font-medium">{{ selectedInstructor?.name || 'None selected' }}</span>
+        <div class="order-2 lg:order-1">
+          <OnboardingLeftSidebar>
+            <template #extra-content>
+              <Separator class="my-6" />
+              <div>
+                <h4 class="font-semibold mb-3">Your selection</h4>
+                <div class="space-y-2 text-sm">
+                  <div class="flex justify-between">
+                    <span class="text-muted-foreground">Area:</span>
+                    <span class="font-medium">{{ postcode }}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-muted-foreground">Instructor:</span>
+                    <span class="font-medium">{{ selectedInstructor?.name || 'None selected' }}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </template>
-        </OnboardingLeftSidebar>
+            </template>
+          </OnboardingLeftSidebar>
+        </div>
 
         <!-- Main Content -->
-        <div class="lg:col-span-2">
+        <div class="lg:col-span-2 order-1 lg:order-2">
           <Card>
             <CardHeader>
               <CardTitle class="text-3xl">Pick a package</CardTitle>
@@ -34,24 +36,15 @@
               </CardDescription>
             </CardHeader>
 
-            <CardContent>
+            <CardContent class="pt-6">
               <form @submit.prevent="submit">
                 <div v-if="packages && packages.length > 0" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                   <div
                     v-for="pkg in packages"
                     :key="pkg.id"
                     class="relative"
-                    :class="{ 'transform md:scale-105 md:-mt-4': pkg.promoted }"
+                    :class="{ 'md:scale-105 md:-mt-4': pkg.promoted }"
                   >
-                    <!-- Promoted Badge -->
-                    <Badge
-                      v-if="pkg.promoted"
-                      variant="destructive"
-                      class="absolute -top-3 left-1/2 transform -translate-x-1/2 z-10"
-                    >
-                      Offer
-                    </Badge>
-
                     <input
                       type="radio"
                       :id="`package-${pkg.id}`"
@@ -61,39 +54,84 @@
                     >
                     <label
                       :for="`package-${pkg.id}`"
-                      :class="[
-                        'block cursor-pointer transition-all duration-200 h-full border-2 rounded-lg',
-                        pkg.promoted
-                          ? 'p-8 border-destructive hover:border-destructive/80 peer-checked:border-destructive peer-checked:bg-destructive peer-checked:text-destructive-foreground'
-                          : 'p-6 hover:border-primary peer-checked:border-primary peer-checked:bg-primary/5'
-                      ]"
+                      class="block cursor-pointer h-full"
                     >
-                      <div class="text-center">
-                        <div class="mb-4">
-                          <i
-                            :class="[
-                              'fa-solid text-3xl',
-                              getPackageIcon(pkg),
-                              pkg.promoted ? 'text-white peer-checked:text-white' : 'text-muted-foreground'
-                            ]"
-                          ></i>
+                      <Card
+                        :class="[
+                          'relative transition-all duration-200 h-full overflow-hidden',
+                          pkg.promoted
+                            ? 'border-destructive hover:border-destructive/80 peer-checked:ring-4 peer-checked:ring-destructive peer-checked:border-destructive'
+                            : 'hover:border-primary peer-checked:ring-4 peer-checked:ring-primary peer-checked:border-primary'
+                        ]"
+                      >
+                        <!-- Selected Indicator -->
+                        <div
+                          v-if="form.package_id === pkg.id"
+                          :class="[
+                            'absolute top-4 right-4 z-20 rounded-full p-1',
+                            pkg.promoted ? 'bg-destructive' : 'bg-primary'
+                          ]"
+                        >
+                          <CheckCircle2 class="h-5 w-5 text-black" />
                         </div>
-                        <h3 class="text-xl font-semibold mb-2">{{ pkg.name }}</h3>
-                        <div class="flex-row items-baseline justify-center mb-3">
-                          <span class="text-3xl font-bold">{{ pkg.formatted_total_price }}</span>
-                          <span class="text-lg ml-2 text-muted-foreground">{{ pkg.lessons_count }} lessons</span>
-                        </div>
-                        <div class="text-sm mb-2">
-                          <span class="font-medium">{{ pkg.formatted_lesson_price }}</span> per hour
-                        </div>
-                        <p class="text-sm text-muted-foreground">{{ pkg.description }}</p>
-                      </div>
+
+                        <CardHeader :class="pkg.promoted ? 'bg-destructive text-destructive-foreground' : ''">
+                          
+
+                          <div class="text-center pt-2">
+                            <div class="mb-4 flex justify-center">
+                              <component
+                                :is="getPackageIcon(pkg)"
+                                :class="[
+                                  'h-12 w-12',
+                                  pkg.promoted ? 'text-destructive-foreground' : 'text-muted-foreground'
+                                ]"
+                              />
+                            </div>
+                            <CardTitle class="text-xl mb-2">{{ pkg.name }}</CardTitle>
+                            <CardDescription
+                              :class="[
+                                'text-lg',
+                                pkg.promoted ? 'text-destructive-foreground/80' : ''
+                              ]"
+                            >
+                              {{ pkg.lessons_count }} lessons
+                            </CardDescription>
+                          </div>
+                        </CardHeader>
+
+                        <CardContent class="pt-6 text-center">
+                          <div class="mb-4">
+                            <div class="text-4xl font-bold mb-1">{{ pkg.formatted_total_price }}</div>
+                            <div class="text-sm text-muted-foreground">
+                              {{ pkg.formatted_lesson_price }} per hour
+                            </div>
+                          </div>
+                          <p class="text-sm text-muted-foreground">{{ pkg.description }}</p>
+                        </CardContent>
+
+                        <CardFooter
+                          :class="[
+                            'justify-center',
+                            pkg.promoted ? '' : ''
+                          ]"
+                        >
+                          <Button
+                            type="button"
+                            :variant="form.package_id === pkg.id ? 'default' : 'outline'"
+                            :class="pkg.promoted && form.package_id === pkg.id ? 'bg-destructive hover:bg-destructive/90' : ''"
+                            class="w-full"
+                          >
+                            {{ form.package_id === pkg.id ? 'Selected' : 'Select Package' }}
+                          </Button>
+                        </CardFooter>
+                      </Card>
                     </label>
                   </div>
                 </div>
 
                 <div v-else class="text-center py-12 mb-8">
-                  <i class="fa-solid fa-exclamation-triangle text-4xl mb-4 text-muted-foreground"></i>
+                  <AlertTriangle class="h-12 w-12 mb-4 text-muted-foreground mx-auto" />
                   <p class="text-muted-foreground">No packages available for the selected instructor.</p>
                   <Link
                     :href="step2({ uuid: uuid }).url"
@@ -104,7 +142,7 @@
                 </div>
 
                 <Alert v-if="packages && packages.length > 0" variant="default" class="mb-8">
-                  <i class="fa-solid fa-info-circle mr-2"></i>
+                  <Info class="h-4 w-4" />
                   <AlertTitle>Pricing Note</AlertTitle>
                   <AlertDescription>
                     Prices may vary by area and instructor. Your final price will be confirmed before payment.
@@ -125,8 +163,8 @@
                       :disabled="!form.package_id || form.processing"
                       class="cursor-pointer"
                     >
-                      <Spinner v-if="form.processing" class="mr-2 h-4 w-4 animate-spin" />
                       Next
+                      <Spinner v-if="form.processing" class="ml-2 h-4 w-4 animate-spin" />
                       <ArrowRight v-if="!form.processing" class="ml-2 h-4 w-4" />
                     </Button>
                   </div>
@@ -170,7 +208,7 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
 import { usePage, useForm, Link } from '@inertiajs/vue3'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -181,7 +219,7 @@ import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
 import { step2 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step3'
-import { ArrowLeft, ArrowRight } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, Car, GraduationCap, Trophy, Rocket, CheckCircle2, AlertTriangle, Info } from 'lucide-vue-next'
 
 const props = defineProps({
   uuid: String,
@@ -208,12 +246,12 @@ const selectedInstructor = computed(() => {
   return props.selectedInstructor || null
 })
 
-// Get appropriate icon for package
+// Get appropriate icon component for package
 function getPackageIcon(pkg: any) {
-  if (pkg.hours <= 2) return 'fa-car'
-  if (pkg.hours <= 10) return 'fa-graduation-cap'
-  if (pkg.hours <= 20) return 'fa-trophy'
-  return 'fa-rocket'
+  if (pkg.hours <= 2) return Car
+  if (pkg.hours <= 10) return GraduationCap
+  if (pkg.hours <= 20) return Trophy
+  return Rocket
 }
 
 // Show toast when package is selected
