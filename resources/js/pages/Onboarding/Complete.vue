@@ -5,8 +5,8 @@
     <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex-1">
       <!-- Success Icon -->
       <div class="text-center mb-8">
-        <div class="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-4">
-          <i class="fa-solid fa-check text-green-600 text-4xl"></i>
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-full mb-4 bg-primary/10">
+          <CheckCircle class="h-12 w-12 text-primary" />
         </div>
         <h1 class="text-3xl font-bold mb-2">Booking Confirmed!</h1>
         <p class="text-lg text-muted-foreground">Your driving lessons have been successfully booked.</p>
@@ -16,8 +16,8 @@
       <Card class="mb-6">
         <CardContent class="p-8 space-y-6">
           <!-- Confirmation Message -->
-          <Alert variant="default" class="bg-green-50 border-green-200">
-            <i class="fa-solid fa-circle-check text-green-600"></i>
+          <Alert variant="default">
+            <CircleCheck class="h-4 w-4" />
             <AlertTitle>Payment Successful</AlertTitle>
             <AlertDescription>
               A confirmation email has been sent to your email address with all the details.
@@ -28,9 +28,9 @@
           <div>
             <h2 class="text-xl font-semibold mb-4">What happens next?</h2>
             <div class="space-y-4">
-              <div class="flex items-start">
-                <Badge variant="default" class="w-8 h-8 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
-                  1
+              <div class="flex items-start gap-4">
+                <Badge variant="default" class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Mail class="h-4 w-4" />
                 </Badge>
                 <div>
                   <h3 class="font-medium mb-1">Check your email</h3>
@@ -40,9 +40,9 @@
                 </div>
               </div>
 
-              <div class="flex items-start">
-                <Badge variant="default" class="w-8 h-8 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
-                  2
+              <div class="flex items-start gap-4">
+                <Badge variant="default" class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Phone class="h-4 w-4" />
                 </Badge>
                 <div>
                   <h3 class="font-medium mb-1">Your instructor will contact you</h3>
@@ -52,9 +52,9 @@
                 </div>
               </div>
 
-              <div class="flex items-start">
-                <Badge variant="default" class="w-8 h-8 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
-                  3
+              <div class="flex items-start gap-4">
+                <Badge variant="default" class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Calendar class="h-4 w-4" />
                 </Badge>
                 <div>
                   <h3 class="font-medium mb-1">Prepare for your first lesson</h3>
@@ -67,8 +67,8 @@
           </div>
 
           <!-- Important Information -->
-          <Alert variant="default" class="bg-amber-50 border-amber-200">
-            <i class="fa-solid fa-info-circle text-amber-600"></i>
+          <Alert variant="default">
+            <Info class="h-4 w-4" />
             <AlertTitle>Important Information</AlertTitle>
             <AlertDescription>
               <ul class="list-disc list-inside space-y-1 mt-2">
@@ -87,12 +87,13 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { Card, CardContent } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
+import { CheckCircle, CircleCheck, Mail, Phone, Calendar, Info } from 'lucide-vue-next'
 
 defineProps({
   enquiry: Object
