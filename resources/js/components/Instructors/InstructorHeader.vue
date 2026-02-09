@@ -67,7 +67,7 @@ const getInitials = (name: string) => {
             </div>
 
             <!-- Edit Profile Button -->
-            <Button variant="outline" @click="emit('edit')">
+            <Button @click="emit('edit')">
                 <Edit class="mr-2 h-4 w-4" />
                 Edit Profile
             </Button>

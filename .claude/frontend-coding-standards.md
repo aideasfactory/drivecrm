@@ -61,6 +61,63 @@ const handleSubmit = async () => {
   - ✅ DO: `AppSidebar.vue`, `NavUser.vue`.
 - **Pages**: `resources/js/pages`. Use PascalCase matching Controller names.
 
+### Component Data Loading (Self-Managed Data)
+- **Pattern**: Each component is responsible for loading its own data
+  - ✅ DO: Fetch data in component's `onMounted` lifecycle hook
+  - ✅ DO: Show skeleton/loading states while data is being fetched
+  - ✅ DO: Use `ref()` for loading state management (`const loading = ref(true)`)
+  - ✅ DO: Implement polling if real-time data updates are needed
+  - ❌ DON'T: Rely on parent components to pass all data down as props
+  - ❌ DON'T: Show empty content while loading (use skeletons instead)
+
+**Example Pattern:**
+```vue
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { index } from '@/actions/App/Http/Controllers/DataController'
+import { Skeleton } from '@/components/ui/skeleton'
+
+const data = ref<DataType[]>([])
+const loading = ref(true)
+
+const loadData = async () => {
+  loading.value = true
+  try {
+    const response = await index.visit()
+    data.value = response.props.data
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  loadData()
+})
+
+// Optional: Polling for real-time updates
+// const startPolling = () => {
+//   setInterval(loadData, 5000) // Poll every 5 seconds
+// }
+</script>
+
+<template>
+  <div v-if="loading">
+    <Skeleton class="h-10 w-full" />
+    <Skeleton class="h-10 w-full mt-2" />
+  </div>
+  <div v-else>
+    <!-- Actual content -->
+  </div>
+</template>
+```
+
+**Benefits:**
+- Components are self-contained and reusable
+- Parallel data loading (multiple components load independently)
+- Better user experience with skeleton states
+- Easy to implement polling/real-time updates
+- No prop-drilling for deeply nested data
+
 ### Data & Actions (Wayfinder)
 - **Auto-Generated**: We use Laravel Wayfinder to sync routes/controllers to TS.
 - **Imports**: Use explicit imports from `@/actions` or `@/routes`.

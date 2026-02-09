@@ -35,6 +35,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('instructors.show');
     Route::put('/instructors/{instructor}', [\App\Http\Controllers\InstructorController::class, 'update'])
         ->name('instructors.update');
+    Route::get('/instructors/{instructor}/packages', [\App\Http\Controllers\InstructorController::class, 'packages'])
+        ->name('instructors.packages');
+    Route::post('/instructors/{instructor}/packages', [\App\Http\Controllers\InstructorController::class, 'createPackage'])
+        ->name('instructors.packages.store');
+    Route::put('/packages/{package}', [\App\Http\Controllers\PackageController::class, 'update'])
+        ->name('packages.update');
     Route::get('/pupils', [\App\Http\Controllers\PupilController::class, 'index'])
         ->name('pupils.index');
     Route::get('/teams', [\App\Http\Controllers\TeamController::class, 'index'])

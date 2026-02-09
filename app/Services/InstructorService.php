@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Actions\CreateInstructorCalendarDataAction;
 use App\Actions\FetchPostcodeCoordinatesAction;
 use App\Actions\FindInstructorsByPostcodeSectorAction;
+use App\Actions\Instructor\CreateInstructorPackageAction;
+use App\Actions\Instructor\GetInstructorPackagesAction;
 use App\Enums\UserRole;
 use App\Models\Calendar;
 use App\Models\CalendarItem;
@@ -20,7 +22,9 @@ class InstructorService
     public function __construct(
         protected FetchPostcodeCoordinatesAction $fetchPostcodeCoordinates,
         protected FindInstructorsByPostcodeSectorAction $findInstructorsByPostcodeSector,
-        protected CreateInstructorCalendarDataAction $createInstructorCalendarData
+        protected CreateInstructorCalendarDataAction $createInstructorCalendarData,
+        protected GetInstructorPackagesAction $getInstructorPackages,
+        protected CreateInstructorPackageAction $createInstructorPackage
     ) {}
 
     /**
@@ -154,5 +158,24 @@ class InstructorService
         $time = \Carbon\Carbon::parse($nextSlot->item_start_time);
 
         return $date->format('Y-m-d').' - '.$time->format('H:i:s');
+    }
+
+    /**
+     * Get all packages available to an instructor.
+     *
+     * @param  bool  $onlyActive  Filter to only active packages
+     * @return Collection Formatted package data
+     */
+    public function getPackages(Instructor $instructor, bool $onlyActive = true): Collection
+    {
+        return ($this->getInstructorPackages)($instructor, $onlyActive);
+    }
+
+    /**
+     * Create a new bespoke package for an instructor.
+     */
+    public function createPackage(Instructor $instructor, array $data): \App\Models\Package
+    {
+        return ($this->createInstructorPackage)($instructor, $data);
     }
 }

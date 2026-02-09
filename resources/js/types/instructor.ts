@@ -48,3 +48,17 @@ export interface CreateInstructorData {
   latitude?: number
   longitude?: number
 }
+
+export interface Package {
+  id: number
+  name: string
+  description: string | null
+  total_price_pence: number
+  lessons_count: number
+  lesson_price_pence: number
+  formatted_total_price: string
+  formatted_lesson_price: string
+  active: boolean
+  is_platform_package: boolean
+  is_bespoke_package: boolean
+}

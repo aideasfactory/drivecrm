@@ -45,13 +45,168 @@ php artisan serve # Backend (or use Herd)
 - Find Controller: `find app/Http/Controllers -name "*Controller.php"`
 
 ## 6. Backend Patterns (Laravel)
-- **Architecture**: Follow **Controller -> Service -> Action** pattern
-- **Actions**: Atomic steps (no HTTP).
-- **Services**: Orchestration, Transactions & **Caching**.
-- **Controllers**: Invokable, Web/Api split, inject Services.
+
+### 🎯 Architecture: Controller -> Service -> Action Pattern
+
+**STRICT HIERARCHY:**
+```
+Controller → Service → Action(s)
+   ↓           ↓          ↓
+  HTTP    Orchestration  Logic
+```
+
+### 📁 Action Organization (MANDATORY)
+
+**✅ DO: Organize Actions by Domain**
+```
+app/Actions/
+├── Instructor/
+│   ├── GetInstructorPackagesAction.php
+│   ├── CreateInstructorAction.php
+│   └── UpdateInstructorAvailabilityAction.php
+├── Student/
+│   ├── EnrollStudentAction.php
+│   └── CalculateStudentProgressAction.php
+├── Package/
+│   └── CreateBespokePackageAction.php
+└── Shared/
+    ├── FetchPostcodeCoordinatesAction.php
+    └── SendNotificationAction.php
+```
+
+**❌ DON'T: Put Domain Actions in Root**
+```
+app/Actions/
+├── GetInstructorPackagesAction.php  ❌ Wrong!
+└── CreateInstructorAction.php       ❌ Wrong!
+```
+
+**Rules:**
+1. **Domain Actions**: Place in `app/Actions/{Domain}/` (e.g., `Instructor/`, `Student/`)
+2. **Shared Actions**: Place in `app/Actions/Shared/` if used across multiple domains
+3. **Namespace**: Must match folder structure (e.g., `App\Actions\Instructor`)
+
+### 🏗️ Pattern Implementation
+
+**1. Actions (Single Responsibility)**
+- ✅ Atomic, reusable business logic
+- ✅ No HTTP concerns (no Request, Response, redirect)
+- ✅ Invokable class with `__invoke()` method
+- ✅ Type-hinted parameters and return types
+- ✅ Organized by domain in subfolders
+
+**Example:**
+```php
+<?php
+
+namespace App\Actions\Instructor;
+
+use App\Models\Instructor;
+use Illuminate\Support\Collection;
+
+class GetInstructorPackagesAction
+{
+    public function __invoke(Instructor $instructor, bool $onlyActive = true): Collection
+    {
+        // Pure business logic - no HTTP, no redirects
+        return Package::where('instructor_id', $instructor->id)
+            ->when($onlyActive, fn($q) => $q->where('active', true))
+            ->get();
+    }
+}
+```
+
+**2. Services (Orchestration)**
+- ✅ Inject Actions via constructor
+- ✅ Orchestrate multiple Actions
+- ✅ Handle transactions & caching
+- ✅ Invoke Actions using: `($this->actionName)($params)`
+- ✅ Return domain data (Collections, Models, DTOs)
+
+**Example:**
+```php
+<?php
+
+namespace App\Services;
+
+use App\Actions\Instructor\GetInstructorPackagesAction;
+use App\Actions\Instructor\CreateInstructorAction;
+
+class InstructorService
+{
+    public function __construct(
+        protected GetInstructorPackagesAction $getInstructorPackages,
+        protected CreateInstructorAction $createInstructor
+    ) {}
+
+    public function getPackages(Instructor $instructor): Collection
+    {
+        return ($this->getInstructorPackages)($instructor);
+    }
+}
+```
+
+**3. Controllers (HTTP Layer)**
+- ✅ Inject Service via constructor
+- ✅ Handle HTTP requests/responses only
+- ✅ Use FormRequests for validation
+- ✅ Keep methods under 20 lines
+- ✅ No business logic - delegate to Service
+
+**Example:**
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Services\InstructorService;
+use Illuminate\Http\JsonResponse;
+
+class InstructorController extends Controller
+{
+    public function __construct(
+        protected InstructorService $instructorService
+    ) {}
+
+    public function packages(Instructor $instructor): JsonResponse
+    {
+        $packages = $this->instructorService->getPackages($instructor);
+
+        return response()->json(['packages' => $packages]);
+    }
+}
+```
+
+### 🚨 Pattern Violations
+
+**DON'T:**
+- ❌ Put business logic in Controllers
+- ❌ Make HTTP calls from Actions
+- ❌ Query models directly in Controllers
+- ❌ Skip Services and call Actions from Controllers
+- ❌ Put Actions in root `app/Actions/` folder without domain organization
+
+### 📋 Checklist for New Features
+
+When adding a new feature:
+1. [ ] Create Action in `app/Actions/{Domain}/`
+2. [ ] Add Action to Service constructor
+3. [ ] Create Service method that invokes Action
+4. [ ] Inject Service into Controller
+5. [ ] Controller calls Service method only
+
+**Why This Pattern?**
+- ✅ **Reusability**: Actions can be used in Web, API, CLI, Jobs
+- ✅ **Testability**: Test Actions independently of HTTP
+- ✅ **Maintainability**: Clear separation of concerns
+- ✅ **Domain Organization**: Easy to find related functionality
+
+---
+
+### Other Backend Standards
+
 - **Caching**: All Service reads must use `BaseService::remember()`. Writes must `invalidate()`.
 - **Models**: Use `app/Models`. Always add `casts()` method.
-- **Controllers**: Keep skinny. Use `FormRequest` for validation.
 - **DB**: Prefer Eloquent relationships over `DB::table`.
 - **API**: Use Eloquent Resources for JSON responses.
 

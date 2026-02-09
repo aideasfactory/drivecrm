@@ -6,10 +6,13 @@ namespace App\Http\Controllers;
 
 use App\Enums\UserRole;
 use App\Http\Requests\StoreInstructorRequest;
+use App\Http\Requests\StorePackageRequest;
 use App\Http\Requests\UpdateInstructorRequest;
 use App\Models\Instructor;
 use App\Models\Student;
 use App\Models\User;
+use App\Services\InstructorService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -18,6 +21,10 @@ use Inertia\Response;
 
 class InstructorController extends Controller
 {
+    public function __construct(
+        protected InstructorService $instructorService
+    ) {}
+
     /**
      * Display the instructors index page.
      */
@@ -153,5 +160,41 @@ class InstructorController extends Controller
         });
 
         return redirect()->back();
+    }
+
+    /**
+     * Get instructor's packages (both platform and bespoke).
+     */
+    public function packages(Instructor $instructor): JsonResponse
+    {
+        $packages = $this->instructorService->getPackages($instructor);
+
+        return response()->json([
+            'packages' => $packages,
+        ]);
+    }
+
+    /**
+     * Create a new bespoke package for the instructor.
+     */
+    public function createPackage(StorePackageRequest $request, Instructor $instructor): JsonResponse
+    {
+        $package = $this->instructorService->createPackage($instructor, $request->validated());
+
+        return response()->json([
+            'package' => [
+                'id' => $package->id,
+                'name' => $package->name,
+                'description' => $package->description,
+                'total_price_pence' => $package->total_price_pence,
+                'lessons_count' => $package->lessons_count,
+                'lesson_price_pence' => $package->lesson_price_pence,
+                'formatted_total_price' => $package->formatted_total_price,
+                'formatted_lesson_price' => $package->formatted_lesson_price,
+                'active' => $package->active,
+                'is_platform_package' => $package->isPlatformPackage(),
+                'is_bespoke_package' => $package->isBespokePackage(),
+            ],
+        ], 201);
     }
 }
