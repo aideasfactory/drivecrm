@@ -169,7 +169,11 @@
                                 v-model="form.learner_first_name"
                                 id="learner-first-name"
                                 type="text"
+                                :class="{ 'border-destructive': form.errors.learner_first_name }"
                               />
+                              <p v-if="form.errors.learner_first_name" class="text-sm text-destructive mt-1">
+                                {{ form.errors.learner_first_name }}
+                              </p>
                             </div>
                             <div>
                               <Label for="learner-last-name">Last Name</Label>
@@ -177,7 +181,11 @@
                                 v-model="form.learner_last_name"
                                 id="learner-last-name"
                                 type="text"
+                                :class="{ 'border-destructive': form.errors.learner_last_name }"
                               />
+                              <p v-if="form.errors.learner_last_name" class="text-sm text-destructive mt-1">
+                                {{ form.errors.learner_last_name }}
+                              </p>
                             </div>
                             <div>
                               <Label for="learner-phone">Phone</Label>
@@ -185,7 +193,11 @@
                                 v-model="form.learner_phone"
                                 id="learner-phone"
                                 type="tel"
+                                :class="{ 'border-destructive': form.errors.learner_phone }"
                               />
+                              <p v-if="form.errors.learner_phone" class="text-sm text-destructive mt-1">
+                                {{ form.errors.learner_phone }}
+                              </p>
                             </div>
                             <div>
                               <Label for="learner-email">Email</Label>
@@ -193,7 +205,11 @@
                                 v-model="form.learner_email"
                                 id="learner-email"
                                 type="email"
+                                :class="{ 'border-destructive': form.errors.learner_email }"
                               />
+                              <p v-if="form.errors.learner_email" class="text-sm text-destructive mt-1">
+                                {{ form.errors.learner_email }}
+                              </p>
                             </div>
                             <div>
                               <Label for="learner-dob">Date of Birth</Label>
@@ -201,7 +217,11 @@
                                 v-model="form.learner_dob"
                                 id="learner-dob"
                                 type="date"
+                                :class="{ 'border-destructive': form.errors.learner_dob }"
                               />
+                              <p v-if="form.errors.learner_dob" class="text-sm text-destructive mt-1">
+                                {{ form.errors.learner_dob }}
+                              </p>
                             </div>
                           </div>
                         </CardContent>
@@ -427,11 +447,17 @@ function autoSave() {
 }
 
 // Watch for changes and auto-save
-watch(isBookingForSomeoneElse, () => {
-  autoSave()
+// Note: We don't auto-save when checkbox changes to avoid premature validation
+// Only auto-save when user actually fills in learner fields
+watch(isBookingForSomeoneElse, (newValue) => {
+  // Only auto-save if unchecking (clearing learner data)
+  // Don't auto-save when checking to avoid premature validation
+  if (!newValue) {
+    autoSave()
+  }
 })
 
-// Watch learner fields only if booking for someone else
+// Watch learner fields - only auto-save if actually booking for someone else
 watch(() => form.learner_first_name, () => {
   if (isBookingForSomeoneElse.value) autoSave()
 })
