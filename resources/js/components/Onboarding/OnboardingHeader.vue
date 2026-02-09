@@ -5,7 +5,7 @@
         <div class="flex items-center justify-between h-16 w-full">
           <div class="flex-shrink-0 min-w-[200px]">
             <span class="flex items-center cursor-pointer">
-              <Car class="h-6 w-6 mr-2" />
+              <Car class="h-6 w-6 mr-2 text-red-600" />
               <span class="text-xl font-bold">DRIVE</span>
             </span>
           </div>

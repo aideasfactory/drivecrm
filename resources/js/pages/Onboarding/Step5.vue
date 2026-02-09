@@ -447,36 +447,16 @@ function autoSave() {
 }
 
 // Watch for changes and auto-save
-// Note: We don't auto-save when checkbox changes to avoid premature validation
-// Only auto-save when user actually fills in learner fields
+// Note: We don't auto-save learner fields to avoid premature validation
+// Learner fields are only validated on explicit form submission
 watch(isBookingForSomeoneElse, (newValue) => {
-  // Only auto-save if unchecking (clearing learner data)
-  // Don't auto-save when checking to avoid premature validation
-  if (!newValue) {
-    autoSave()
-  }
+  // Sync the checkbox state but don't auto-save to avoid validation
+  // Validation will happen on explicit submit
 })
 
-// Watch learner fields - only auto-save if actually booking for someone else
-watch(() => form.learner_first_name, () => {
-  if (isBookingForSomeoneElse.value) autoSave()
-})
-
-watch(() => form.learner_last_name, () => {
-  if (isBookingForSomeoneElse.value) autoSave()
-})
-
-watch(() => form.learner_email, () => {
-  if (isBookingForSomeoneElse.value) autoSave()
-})
-
-watch(() => form.learner_phone, () => {
-  if (isBookingForSomeoneElse.value) autoSave()
-})
-
-watch(() => form.learner_dob, () => {
-  if (isBookingForSomeoneElse.value) autoSave()
-})
+// Removed auto-save watchers for learner fields
+// These fields will only be validated when user clicks "Confirm & Continue to Payment"
+// This prevents showing validation errors while user is still filling out the form
 
 // Watch address fields
 watch(() => form.pickup_address_line_1, () => autoSave())
