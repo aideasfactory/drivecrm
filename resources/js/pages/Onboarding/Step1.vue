@@ -198,12 +198,7 @@
                       required
                     />
                     <Label for="privacy_consent" class="text-sm leading-relaxed cursor-pointer">
-                      I agree to the
-                      <span class="font-medium hover:underline">Terms & Conditions</span>
-                      and
-                      <span class="font-medium hover:underline">Privacy Policy</span>,
-                      and consent to my data being used to process my booking.
-                      <span class="text-destructive">*</span>
+                      I agree to the Terms & Conditions and Privacy Policy, and consent to my data being used to process my booking.
                     </Label>
                   </div>
                   <p v-if="form.errors.privacy_consent" class="text-sm text-destructive flex items-center ml-7">

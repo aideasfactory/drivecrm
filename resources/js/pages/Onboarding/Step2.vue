@@ -5,10 +5,12 @@
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <!-- Left Sidebar -->
-        <OnboardingLeftSidebar />
+        <div class="lg:col-span-1 order-2 lg:order-1">
+          <OnboardingLeftSidebar />
+        </div>
 
         <!-- Main Content -->
-        <div class="lg:col-span-2">
+        <div class="lg:col-span-2 order-1 lg:order-2">
           <Card>
             <CardHeader>
               <CardTitle class="text-3xl">Select your instructor</CardTitle>
@@ -33,7 +35,7 @@
                     />
                     <div v-else class="absolute inset-0 flex items-center justify-center">
                       <div class="text-center">
-                        <i class="fa-solid fa-map-marked-alt text-6xl mb-4"></i>
+                        <MapPin class="h-16 w-16 mx-auto mb-4" />
                         <p>Map unavailable</p>
                         <p class="text-sm text-muted-foreground">Google Maps API key not configured</p>
                       </div>
@@ -99,22 +101,18 @@
                                     size="sm"
                                     class="h-auto p-1"
                                   >
-                                    <i class="fa-solid fa-info-circle text-sm"></i>
+                                    <Info class="h-4 w-4" />
                                   </Button>
                                 </div>
                                 <div class="flex items-center space-x-2 mt-1">
                                   <div class="flex items-center">
                                     <div class="flex">
-                                      <i
+                                      <Star
                                         v-for="i in 5"
                                         :key="i"
-                                        :class="[
-                                          'fa-star text-xs',
-                                          i <= Math.floor(instructor.rating)
-                                            ? 'fa-solid text-yellow-400'
-                                            : 'fa-regular'
-                                        ]"
-                                      ></i>
+                                        class="h-3 w-3"
+                                        :class="i <= Math.floor(instructor.rating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'"
+                                      />
                                     </div>
                                     <span class="text-xs ml-1">{{ instructor.rating }}</span>
                                   </div>
@@ -141,11 +139,11 @@
 
                             <div class="space-y-1 text-sm">
                               <div class="flex items-center">
-                                <i class="fa-solid fa-map-marker-alt mr-2 text-xs"></i>
+                                <MapPin class="mr-2 h-3 w-3" />
                                 <span>{{ instructor.address }} • {{ instructor.postcode }}</span>
                               </div>
                               <div class="flex items-center font-medium">
-                                <i class="fa-solid fa-calendar-check mr-2 text-xs"></i>
+                                <Calendar class="mr-2 h-3 w-3" />
                                 <span>Next: {{ instructor.next_available }}</span>
                               </div>
                             </div>
@@ -156,7 +154,7 @@
                               class="w-full mt-3"
                               size="sm"
                             >
-                              <i v-if="selectedInstructor === instructor.id" class="fa-solid fa-check mr-1"></i>
+                              <Check v-if="selectedInstructor === instructor.id" class="mr-1 h-4 w-4" />
                               {{ selectedInstructor === instructor.id ? 'Selected' : 'Select Instructor' }}
                             </Button>
                           </div>
@@ -179,8 +177,8 @@
               </div>
 
               <!-- Form Actions -->
-              <div class="flex justify-between items-center mt-8 pt-6">
-                <Separator class="mb-6" />
+              <Separator class="mt-8" />
+              <div class="flex justify-between items-center pt-6">
                 <Button
                   @click="goBack"
                   variant="outline"
@@ -189,17 +187,15 @@
                   <ArrowLeft class="mr-2 h-4 w-4" />
                   Back
                 </Button>
-                <div class="flex items-center space-x-4">
-                  <Button
-                    @click="submit"
-                    :disabled="!selectedInstructor || form.processing"
-                    class="cursor-pointer"
-                  >
-                    <Spinner v-if="form.processing" class="mr-2 h-4 w-4 animate-spin" />
-                    Next
-                    <ArrowRight v-if="!form.processing" class="ml-2 h-4 w-4" />
-                  </Button>
-                </div>
+                <Button
+                  @click="submit"
+                  :disabled="!selectedInstructor || form.processing"
+                  class="cursor-pointer"
+                >
+                  Next
+                  <Spinner v-if="form.processing" class="ml-2 h-4 w-4 animate-spin" />
+                  <ArrowRight v-if="!form.processing" class="ml-2 h-4 w-4" />
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -220,11 +216,11 @@
               <span class="text-sm cursor-pointer hover:underline">Cookies</span>
             </div>
             <div class="flex items-center space-x-2">
-              <i class="fa-brands fa-cc-visa text-2xl"></i>
-              <i class="fa-brands fa-cc-mastercard text-2xl"></i>
-              <i class="fa-brands fa-cc-amex text-2xl"></i>
-              <i class="fa-brands fa-apple-pay text-2xl"></i>
-              <i class="fa-brands fa-google-pay text-2xl"></i>
+              <CreditCard class="h-6 w-6" />
+              <CreditCard class="h-6 w-6" />
+              <CreditCard class="h-6 w-6" />
+              <CreditCard class="h-6 w-6" />
+              <CreditCard class="h-6 w-6" />
             </div>
           </div>
         </CardContent>
@@ -249,30 +245,26 @@
               <h4 class="text-2xl font-bold mb-1">{{ modalInstructor.name }}</h4>
               <div class="flex items-center mb-3">
                 <div class="flex">
-                  <i
+                  <Star
                     v-for="i in 5"
                     :key="i"
-                    :class="[
-                      'fa-star text-sm',
-                      i <= Math.floor(modalInstructor.rating)
-                        ? 'fa-solid text-yellow-400'
-                        : 'fa-regular'
-                    ]"
-                  ></i>
+                    class="h-4 w-4"
+                    :class="i <= Math.floor(modalInstructor.rating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'"
+                  />
                 </div>
                 <span class="text-sm ml-2">{{ modalInstructor.rating }}</span>
               </div>
               <div class="flex flex-wrap gap-2">
                 <Badge variant="secondary">
-                  <i class="fa-solid fa-clock mr-1"></i>
+                  <Clock class="mr-1 h-3 w-3" />
                   {{ modalInstructor.experience }} experience
                 </Badge>
                 <Badge variant="secondary">
-                  <i class="fa-solid fa-chart-line mr-1"></i>
+                  <TrendingUp class="mr-1 h-3 w-3" />
                   {{ modalInstructor.passRate }} pass rate
                 </Badge>
                 <Badge variant="secondary">
-                  <i class="fa-solid fa-users mr-1"></i>
+                  <Users class="mr-1 h-3 w-3" />
                   {{ modalInstructor.totalStudents }} students
                 </Badge>
               </div>
@@ -281,7 +273,7 @@
 
           <div>
             <h5 class="font-semibold mb-3 flex items-center">
-              <i class="fa-solid fa-user-tie mr-2"></i>
+              <User class="mr-2 h-4 w-4" />
               About
             </h5>
             <p class="leading-relaxed">{{ modalInstructor.bio }}</p>
@@ -289,7 +281,7 @@
 
           <div>
             <h5 class="font-semibold mb-3 flex items-center">
-              <i class="fa-solid fa-star mr-2"></i>
+              <Star class="mr-2 h-4 w-4" />
               Specialties
             </h5>
             <div class="flex flex-wrap gap-2">
@@ -305,7 +297,7 @@
 
           <div>
             <h5 class="font-semibold mb-3 flex items-center">
-              <i class="fa-solid fa-certificate mr-2"></i>
+              <Award class="mr-2 h-4 w-4" />
               Qualifications
             </h5>
             <ul class="space-y-2">
@@ -314,7 +306,7 @@
                 :key="qualification"
                 class="flex items-start"
               >
-                <i class="fa-solid fa-check-circle mr-2 mt-0.5 flex-shrink-0"></i>
+                <CircleCheck class="mr-2 mt-0.5 h-4 w-4 flex-shrink-0" />
                 <span>{{ qualification }}</span>
               </li>
             </ul>
@@ -322,7 +314,7 @@
 
           <div>
             <h5 class="font-semibold mb-3 flex items-center">
-              <i class="fa-solid fa-language mr-2"></i>
+              <Languages class="mr-2 h-4 w-4" />
               Languages
             </h5>
             <div class="flex flex-wrap gap-2">
@@ -358,7 +350,23 @@ import { Sonner, toast } from '@/components/ui/sonner'
 import InstructorMap from '@/components/Onboarding/InstructorMap.vue'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
-import { ArrowLeft, ArrowRight } from 'lucide-vue-next'
+import {
+  ArrowLeft,
+  ArrowRight,
+  MapPin,
+  Info,
+  Star,
+  Calendar,
+  Check,
+  CreditCard,
+  Clock,
+  TrendingUp,
+  Users,
+  User,
+  Award,
+  CircleCheck,
+  Languages
+} from 'lucide-vue-next'
 
 const props = defineProps({
   uuid: String,

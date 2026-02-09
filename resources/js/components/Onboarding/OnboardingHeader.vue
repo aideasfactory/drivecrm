@@ -2,10 +2,10 @@
   <header class="sticky top-0 z-50">
     <Card class="rounded-none border-b border-t-0 border-x-0">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between h-16">
+        <div class="flex items-center justify-between h-16 w-full">
           <div class="flex-shrink-0 min-w-[200px]">
             <span class="flex items-center cursor-pointer">
-              <i class="fa-solid fa-car text-2xl mr-2"></i>
+              <Car class="h-6 w-6 mr-2" />
               <span class="text-xl font-bold">DRIVE</span>
             </span>
           </div>
@@ -63,13 +63,13 @@
           <!-- Mobile Progress -->
           <div class="lg:hidden flex items-center justify-center flex-1">
             <div class="flex items-center space-x-2">
-              <div class="w-24 h-2 rounded-full overflow-hidden">
+              <div class="w-24 h-2 bg-secondary rounded-full overflow-hidden">
                 <div
-                  class="h-2 rounded-full transition-all duration-300"
+                  class="h-2 bg-primary rounded-full transition-all duration-300"
                   :style="`width: ${(currentStep / totalSteps) * 100}%`"
                 ></div>
               </div>
-              <span class="text-sm">{{ currentStep }}/{{ totalSteps }}</span>
+              <span class="text-sm font-medium">{{ currentStep }}/{{ totalSteps }}</span>
             </div>
           </div>
 
@@ -87,6 +87,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { step1, step2, step3, step4, step5, step6 } from '@/routes/onboarding'
+import { Car } from 'lucide-vue-next'
 
 const props = defineProps({
   currentStep: {
