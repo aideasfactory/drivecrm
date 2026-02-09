@@ -21,7 +21,7 @@ type SubTabType = 'summary' | 'edit' | 'coverage' | 'activity' | 'emergency'
 
 const subTabs: { key: SubTabType; label: string }[] = [
     { key: 'summary', label: 'Summary' },
-    { key: 'edit', label: 'Edit Details / Packages' },
+    { key: 'edit', label: 'Packages' },
     { key: 'coverage', label: 'Coverage' },
     { key: 'activity', label: 'Activity' },
     { key: 'emergency', label: 'Emergency Contact' },
