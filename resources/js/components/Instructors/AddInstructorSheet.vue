@@ -143,7 +143,7 @@ const handleOpenChange = (value: boolean) => {
 
 <template>
     <Sheet :open="props.open" @update:open="handleOpenChange">
-        <SheetContent side="left" class="overflow-y-auto sm:max-w-xl px-6 py-4">
+        <SheetContent class="overflow-y-auto sm:max-w-xl px-6 py-4">
             <SheetHeader>
                 <SheetTitle>{{
                     isEditMode ? 'Edit Instructor' : 'Add New Instructor'
