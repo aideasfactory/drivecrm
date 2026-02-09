@@ -1,102 +1,93 @@
 <template>
-  <header class="sticky top-0 bg-white border-b border-gray-200 z-50">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex items-center justify-between h-16">
-        <div class="flex-shrink-0 min-w-[200px]">
-          <span class="flex items-center cursor-pointer">
-            <i class="fa-solid fa-car text-blue-600 text-2xl mr-2"></i>
-            <span class="text-xl font-bold text-gray-900">DRIVE</span>
-          </span>
-        </div>
-        
-        <div class="hidden lg:flex items-center justify-center flex-1 px-8">
-          <div class="flex items-center">
-            <div 
-              v-for="(step, index) in steps" 
-              :key="index"
-              class="flex items-center"
-            >
-              <Link
-                v-if="canNavigateToStep(index + 1)"
-                :href="getStepRoute(index + 1)"
-                :class="[
-                  'flex items-center text-sm cursor-pointer hover:opacity-80 transition-opacity',
-                  getStepStatus(index + 1) === 'completed' ? 'text-green-600' : 
-                  getStepStatus(index + 1) === 'current' ? 'text-gray-900' : 
-                  'text-gray-400'
-                ]"
-              >
-                <span 
-                  :class="[
-                    'rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium mr-2',
-                    getStepStatus(index + 1) === 'completed' ? 'bg-green-500 text-white' : 
-                    getStepStatus(index + 1) === 'current' ? 'bg-blue-600 text-white' : 
-                    'bg-gray-300 text-gray-500'
-                  ]"
-                >
-                  {{ getStepStatus(index + 1) === 'completed' ? '✓' : index + 1 }}
-                </span>
-                <span :class="getStepStatus(index + 1) === 'current' ? 'font-medium' : ''">
-                  {{ step }}
-                </span>
-              </Link>
-              <div
-                v-else
-                :class="[
-                  'flex items-center text-sm cursor-not-allowed opacity-60',
-                  getStepStatus(index + 1) === 'completed' ? 'text-green-600' : 
-                  getStepStatus(index + 1) === 'current' ? 'text-gray-900' : 
-                  'text-gray-400'
-                ]"
-              >
-                <span 
-                  :class="[
-                    'rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium mr-2',
-                    getStepStatus(index + 1) === 'completed' ? 'bg-green-500 text-white' : 
-                    getStepStatus(index + 1) === 'current' ? 'bg-blue-600 text-white' : 
-                    'bg-gray-300 text-gray-500'
-                  ]"
-                >
-                  {{ getStepStatus(index + 1) === 'completed' ? '✓' : index + 1 }}
-                </span>
-                <span :class="getStepStatus(index + 1) === 'current' ? 'font-medium' : ''">
-                  {{ step }}
-                </span>
-              </div>
-              <div 
-                v-if="index < steps.length - 1"
-                :class="[
-                  'w-12 h-px mx-3',
-                  getStepStatus(index + 1) === 'completed' ? 'bg-green-500' : 'bg-gray-300'
-                ]"
-              ></div>
-            </div>
+  <header class="sticky top-0 z-50">
+    <Card class="rounded-none border-b border-t-0 border-x-0">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16 w-full">
+          <div class="flex-shrink-0 min-w-[200px]">
+            <span class="flex items-center cursor-pointer">
+              <Car class="h-6 w-6 mr-2" />
+              <span class="text-xl font-bold">DRIVE</span>
+            </span>
           </div>
-        </div>
 
-        <div class="lg:hidden flex items-center justify-center flex-1">
-          <div class="flex items-center space-x-2">
-            <div class="w-24 bg-gray-200 rounded-full h-2">
-              <div 
-                class="bg-blue-600 h-2 rounded-full" 
-                :style="`width: ${(currentStep / totalSteps) * 100}%`"
-              ></div>
+          <!-- Desktop Stepper -->
+          <div class="hidden lg:flex items-center justify-center flex-1 px-8">
+            <div class="flex items-center">
+              <div
+                v-for="(step, index) in steps"
+                :key="index"
+                class="flex items-center"
+              >
+                <Link
+                  v-if="canNavigateToStep(index + 1)"
+                  :href="getStepRoute(index + 1)"
+                  class="flex items-center text-sm cursor-pointer hover:opacity-80 transition-opacity"
+                >
+                  <Badge
+                    :variant="getStepStatus(index + 1) === 'completed' ? 'default' :
+                             getStepStatus(index + 1) === 'current' ? 'default' :
+                             'secondary'"
+                    class="rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium mr-2"
+                  >
+                    {{ getStepStatus(index + 1) === 'completed' ? '✓' : index + 1 }}
+                  </Badge>
+                  <span :class="getStepStatus(index + 1) === 'current' ? 'font-medium' : ''">
+                    {{ step }}
+                  </span>
+                </Link>
+                <div
+                  v-else
+                  class="flex items-center text-sm cursor-not-allowed opacity-60"
+                >
+                  <Badge
+                    :variant="getStepStatus(index + 1) === 'completed' ? 'default' :
+                             getStepStatus(index + 1) === 'current' ? 'default' :
+                             'secondary'"
+                    class="rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium mr-2"
+                  >
+                    {{ getStepStatus(index + 1) === 'completed' ? '✓' : index + 1 }}
+                  </Badge>
+                  <span :class="getStepStatus(index + 1) === 'current' ? 'font-medium' : ''">
+                    {{ step }}
+                  </span>
+                </div>
+                <Separator
+                  v-if="index < steps.length - 1"
+                  class="w-12 mx-3"
+                  orientation="horizontal"
+                />
+              </div>
             </div>
-            <span class="text-sm text-gray-600">{{ currentStep }}/{{ totalSteps }}</span>
           </div>
+
+          <!-- Mobile Progress -->
+          <div class="lg:hidden flex items-center justify-center flex-1">
+            <div class="flex items-center space-x-2">
+              <div class="w-24 h-2 bg-secondary rounded-full overflow-hidden">
+                <div
+                  class="h-2 bg-primary rounded-full transition-all duration-300"
+                  :style="`width: ${(currentStep / totalSteps) * 100}%`"
+                ></div>
+              </div>
+              <span class="text-sm font-medium">{{ currentStep }}/{{ totalSteps }}</span>
+            </div>
+          </div>
+
+          <div class="flex-shrink-0 min-w-[200px]"></div>
         </div>
-        
-        <div class="flex-shrink-0 min-w-[200px]"></div>
       </div>
-    </div>
+    </Card>
   </header>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { Link } from '@inertiajs/vue3'
 import { usePage } from '@inertiajs/vue3'
-import { computed } from 'vue'
+import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 import { step1, step2, step3, step4, step5, step6 } from '@/routes/onboarding'
+import { Car } from 'lucide-vue-next'
 
 const props = defineProps({
   currentStep: {
@@ -117,18 +108,18 @@ const page = usePage()
 
 const steps = ['Details', 'Instructor', 'Package', 'Schedule', 'Review', 'Payment']
 
-const getStepStatus = (stepNumber) => {
+const getStepStatus = (stepNumber: number) => {
   if (stepNumber < props.currentStep) return 'completed'
   if (stepNumber === props.currentStep) return 'current'
   return 'pending'
 }
 
-const canNavigateToStep = (stepNumber) => {
+const canNavigateToStep = (stepNumber: number) => {
   // Can only navigate to steps that have been reached before
   return stepNumber <= props.maxStepReached
 }
 
-const getStepRoute = (stepNumber) => {
+const getStepRoute = (stepNumber: number) => {
   const uuid = page.props.enquiry?.id || page.props.uuid
   if (!uuid) return '#'
 

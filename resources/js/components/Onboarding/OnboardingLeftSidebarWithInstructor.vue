@@ -1,9 +1,11 @@
 <template>
   <div class="lg:col-span-1">
     <!-- Instructor Card (if provided) -->
-    <div v-if="showInstructorCard" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-      <slot name="instructor-card"></slot>
-    </div>
+    <Card v-if="showInstructorCard" class="mb-6">
+      <CardContent class="pt-6">
+        <slot name="instructor-card"></slot>
+      </CardContent>
+    </Card>
 
     <!-- Main School Info Card -->
     <OnboardingLeftSidebar>
@@ -14,7 +16,8 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
+import { Card, CardContent } from '@/components/ui/card'
 import OnboardingLeftSidebar from './OnboardingLeftSidebar.vue'
 
 defineProps({
