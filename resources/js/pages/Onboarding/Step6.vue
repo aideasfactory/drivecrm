@@ -5,7 +5,7 @@
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1">
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <!-- Left Sidebar -->
-        <div class="lg:col-span-1">
+        <div class="lg:col-span-1 order-2 lg:order-1">
           <OnboardingLeftSidebar>
             <template #extra-content>
               <Separator class="my-6" />
@@ -44,7 +44,7 @@
         </div>
 
         <!-- Payment Form -->
-        <div class="lg:col-span-2">
+        <div class="lg:col-span-2 order-1 lg:order-2">
           <Card>
             <CardHeader>
               <CardTitle class="text-2xl">Complete your booking</CardTitle>
@@ -110,7 +110,7 @@
 
                     <!-- Weekly Schedule Info -->
                     <Alert v-if="form.payment_mode === 'weekly'" class="mt-4" variant="default">
-                      <i class="fa-solid fa-calendar-alt"></i>
+                      <Calendar class="h-4 w-4" />
                       <AlertTitle>Weekly Payment Schedule</AlertTitle>
                       <AlertDescription>
                         <p class="mb-2">You will receive {{ package?.lessons_count || 0 }} invoices via email, one for each lesson 24 hours before it's scheduled.</p>
@@ -122,7 +122,7 @@
 
                   <!-- Secure Payment Info -->
                   <Alert>
-                    <i class="fa-solid fa-shield-halved"></i>
+                    <ShieldCheck class="h-4 w-4" />
                     <AlertTitle>Secure Payment via Stripe</AlertTitle>
                     <AlertDescription>
                       <p v-if="form.payment_mode === 'upfront'">
@@ -137,16 +137,16 @@
 
                   <!-- Terms -->
                   <Card>
-                    <CardContent class="pt-6">
+                    <CardContent class="pt-0">
                       <div class="flex items-start space-x-3">
-                        <Checkbox
-                          v-model:checked="form.terms_accepted"
+                        <input
+                          type="checkbox"
+                          v-model="termsAccepted"
                           id="terms"
+                          class="h-4 w-4 mt-1 rounded border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
                         />
                         <Label for="terms" class="cursor-pointer">
-                          I agree to the <span class="text-primary hover:underline cursor-pointer">Terms & Conditions</span>
-                          and <span class="text-primary hover:underline cursor-pointer">Privacy Policy</span>.
-                          I understand the cancellation policy and payment terms.
+                          I agree to the Terms & Conditions and Privacy Policy. I understand the cancellation policy and payment terms.
                         </Label>
                       </div>
                     </CardContent>
@@ -161,7 +161,7 @@
                       </Button>
                     </Link>
 
-                    <Button type="submit" :disabled="!form.terms_accepted || form.processing" class="cursor-pointer">
+                    <Button type="submit" :disabled="!termsAccepted || form.processing" class="cursor-pointer">
                       <Spinner v-if="form.processing" class="mr-2 h-4 w-4 animate-spin" />
                       <Lock v-if="!form.processing" class="mr-2 h-4 w-4" />
                       {{ paymentButtonText }}
@@ -205,7 +205,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Link, useForm, usePage } from '@inertiajs/vue3'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -218,7 +218,7 @@ import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
 import { step5 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step6'
-import { ArrowLeft, Lock } from 'lucide-vue-next'
+import { ArrowLeft, Lock, Calendar, ShieldCheck } from 'lucide-vue-next'
 
 const props = defineProps({
   uuid: String,
@@ -237,6 +237,14 @@ const page = usePage()
 const form = useForm({
   payment_mode: 'upfront',  // 'upfront' or 'weekly'
   terms_accepted: false
+})
+
+// Local ref for checkbox to handle reactivity
+const termsAccepted = ref(form.terms_accepted)
+
+// Watch and sync the local ref with the form
+watch(termsAccepted, (newValue) => {
+  form.terms_accepted = newValue
 })
 
 const uuid = computed(() => props.uuid || page.props.enquiry?.id)

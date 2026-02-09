@@ -5,7 +5,7 @@
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <!-- Left Sidebar -->
-        <div class="lg:col-span-1 space-y-6">
+        <div class="lg:col-span-1 space-y-6 order-2 lg:order-1">
           <!-- Instructor Card -->
           <Card>
             <CardHeader>
@@ -17,7 +17,7 @@
                   variant="ghost"
                   size="sm"
                 >
-                  <i class="fa-solid fa-rotate mr-1"></i>
+                  <RefreshCw class="mr-1 h-4 w-4" />
                   Change
                 </Button>
               </div>
@@ -34,8 +34,11 @@
                     <h4 class="font-semibold mb-1">{{ selectedInstructor.name }}</h4>
                     <div class="flex items-center space-x-1 mb-2">
                       <div class="flex">
-                        <i v-for="i in 5" :key="i"
-                           :class="['fa-star text-xs', i <= Math.floor(selectedInstructor.rating) ? 'fa-solid text-yellow-400' : 'fa-regular']"></i>
+                        <Star
+                          v-for="i in 5"
+                          :key="i"
+                          :class="['h-3 w-3', i <= Math.floor(selectedInstructor.rating) ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground']"
+                        />
                       </div>
                       <span class="text-xs ml-1">{{ selectedInstructor.rating }}</span>
                     </div>
@@ -53,7 +56,7 @@
               <div v-else class="text-center py-8">
                 <Avatar class="h-16 w-16 mx-auto mb-4">
                   <AvatarFallback>
-                    <i class="fa-solid fa-user-graduate text-2xl"></i>
+                    <GraduationCap class="h-8 w-8" />
                   </AvatarFallback>
                 </Avatar>
                 <p class="text-muted-foreground text-sm">No instructor assigned yet</p>
@@ -99,8 +102,11 @@
                     </div>
                     <div class="flex items-center space-x-1">
                       <div class="flex">
-                        <i v-for="i in 5" :key="i"
-                           :class="['fa-star text-xs', i <= Math.floor(instructor.rating) ? 'fa-solid text-yellow-400' : 'fa-regular']"></i>
+                        <Star
+                          v-for="i in 5"
+                          :key="i"
+                          :class="['h-3 w-3', i <= Math.floor(instructor.rating) ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground']"
+                        />
                       </div>
                       <span class="text-xs ml-1">{{ instructor.rating }}</span>
                     </div>
@@ -123,7 +129,7 @@
         </div>
 
         <!-- Main Content -->
-        <div class="lg:col-span-2">
+        <div class="lg:col-span-2 order-1 lg:order-2">
           <Card>
             <CardHeader>
               <CardTitle class="text-3xl">Choose your lesson start date</CardTitle>
@@ -139,7 +145,7 @@
                   <div class="absolute inset-0 bg-background/75 z-10 flex items-center justify-center rounded-lg">
                     <div class="text-center">
                       <Spinner class="h-8 w-8 mb-2 mx-auto" />
-                      <p class="text-sm">Loading calendar for {{ selectedInstructor?.firstName }}...</p>
+                      <p class="text-sm">Loading calendar for {{ selectedInstructor?.first_name }}...</p>
                     </div>
                   </div>
                 </div>
@@ -155,7 +161,7 @@
                       variant="outline"
                       size="sm"
                     >
-                      <i class="fa-regular fa-calendar mr-2"></i>
+                      <Calendar class="mr-2 h-4 w-4" />
                       Month View
                     </Button>
                   </div>
@@ -169,7 +175,7 @@
                       size="icon"
                       class="mr-2"
                     >
-                      <i class="fa-solid fa-chevron-left"></i>
+                      <ChevronLeft class="h-4 w-4" />
                     </Button>
 
                     <div class="flex-1 overflow-hidden">
@@ -194,7 +200,7 @@
                       size="icon"
                       class="ml-2"
                     >
-                      <i class="fa-solid fa-chevron-right"></i>
+                      <ChevronRight class="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
@@ -202,7 +208,7 @@
                 <!-- Time Slots -->
                 <div v-if="form.date">
                   <h3 class="text-lg font-semibold mb-2">
-                    Available time slots{{ selectedInstructor ? ' with ' + selectedInstructor.firstName : '' }}
+                    Available time slots{{ selectedInstructor ? ' with ' + selectedInstructor.first_name : '' }}
                   </h3>
                   <p class="text-sm text-muted-foreground mb-4">{{ formatSelectedDate }} • Select your preferred lesson times</p>
 
@@ -228,16 +234,16 @@
 
                 <!-- Reservation Info -->
                 <Alert>
-                  <i class="fa-solid fa-info-circle"></i>
+                  <Info class="h-4 w-4" />
                   <AlertTitle>Lesson slots reserved</AlertTitle>
                   <AlertDescription>
-                    We'll hold your lesson slots for up to 24 hours while you complete payment.{{ selectedInstructor ? ' Your instructor ' + selectedInstructor.firstName + ' will coordinate exact times with you after booking confirmation.' : '' }}
+                    We'll hold your lesson slots for up to 24 hours while you complete payment.{{ selectedInstructor ? ' Your instructor ' + selectedInstructor.first_name + ' will coordinate exact times with you after booking confirmation.' : '' }}
                   </AlertDescription>
                 </Alert>
 
                 <!-- Error Messages -->
                 <Alert v-if="form.errors.date || form.errors.calendar_item_id || form.errors.start_time || form.errors.end_time || form.errors.instructor_id" variant="destructive">
-                  <i class="fa-solid fa-times-circle"></i>
+                  <XCircle class="h-4 w-4" />
                   <AlertTitle>There were errors with your submission</AlertTitle>
                   <AlertDescription>
                     <ul class="list-disc pl-5 space-y-1">
@@ -264,8 +270,8 @@
                     :disabled="!form.date || !form.calendar_item_id || form.processing"
                     class="cursor-pointer"
                   >
-                    <Spinner v-if="form.processing" class="mr-2 h-4 w-4 animate-spin" />
-                    Continue
+                    Next
+                    <Spinner v-if="form.processing" class="ml-2 h-4 w-4 animate-spin" />
                     <ArrowRight v-if="!form.processing" class="ml-2 h-4 w-4" />
                   </Button>
                 </div>
@@ -307,11 +313,11 @@
           <SheetTitle>Select a date</SheetTitle>
           <div class="flex items-center justify-between mt-4">
             <Button @click="previousMonth" variant="ghost" size="icon">
-              <i class="fa-solid fa-chevron-left"></i>
+              <ChevronLeft class="h-4 w-4" />
             </Button>
             <h4 class="text-lg font-semibold">{{ currentMonthYear }}</h4>
             <Button @click="nextMonth" variant="ghost" size="icon">
-              <i class="fa-solid fa-chevron-right"></i>
+              <ChevronRight class="h-4 w-4" />
             </Button>
           </div>
         </SheetHeader>
@@ -361,7 +367,7 @@ import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
 import { step3 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step4'
-import { ArrowLeft, ArrowRight } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, RefreshCw, Star, GraduationCap, Calendar, ChevronLeft, ChevronRight, Info, XCircle } from 'lucide-vue-next'
 
 const props = defineProps({
   uuid: String,

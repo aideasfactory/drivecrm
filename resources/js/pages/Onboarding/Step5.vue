@@ -5,12 +5,12 @@
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <!-- Left Sidebar -->
-        <div class="lg:col-span-1">
+        <div class="lg:col-span-1 order-2 lg:order-1">
           <OnboardingLeftSidebar />
         </div>
 
         <!-- Main Content -->
-        <div class="lg:col-span-2">
+        <div class="lg:col-span-2 order-1 lg:order-2">
           <Card>
             <CardHeader>
               <CardTitle class="text-3xl">Review your booking</CardTitle>
@@ -46,15 +46,15 @@
                         <h4 class="font-semibold">{{ instructor?.name || 'No instructor selected' }}</h4>
                         <div class="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
                           <span class="flex items-center">
-                            <i class="fa-solid fa-car mr-1"></i>
+                            <Car class="mr-1 h-4 w-4" />
                             {{ instructor?.transmission || 'Manual' }}
                           </span>
                           <span class="flex items-center">
-                            <i class="fa-solid fa-map-marker-alt mr-1"></i>
+                            <MapPin class="mr-1 h-4 w-4" />
                             {{ postcode || 'Area not set' }}
                           </span>
                           <span class="flex items-center">
-                            <i class="fa-solid fa-star text-yellow-400 mr-1"></i>
+                            <Star class="mr-1 h-4 w-4 fill-yellow-400 text-yellow-400" />
                             {{ instructor?.rating || '4.9' }} ({{ instructor?.reviews || '127' }} reviews)
                           </span>
                         </div>
@@ -145,16 +145,18 @@
                     <Separator />
 
                     <div class="flex items-start space-x-3">
-                      <Checkbox
-                        v-model:checked="form.booking_for_someone_else"
+                      <input
+                        type="checkbox"
+                        v-model="isBookingForSomeoneElse"
                         id="booking-for-someone-else"
+                        class="h-4 w-4 mt-1 rounded border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
                       />
-                      <Label for="booking-for-someone-else" class="font-medium cursor-pointer">
+                      <Label for="booking-for-someone-else" class="font-medium cursor-pointer pt-1.5">
                         I'm booking for someone else
                       </Label>
                     </div>
 
-                    <div v-if="form.booking_for_someone_else">
+                    <div v-if="isBookingForSomeoneElse">
                       <Card>
                         <CardHeader>
                           <CardTitle class="text-base">Learner Details</CardTitle>
@@ -228,7 +230,7 @@
                 <Alert>
                   <AlertTitle class="text-lg">Pricing Summary</AlertTitle>
                   <AlertDescription>
-                    <div class="space-y-3 mt-4">
+                    <div class="space-y-3 mt-4 w-full">
                       <div class="flex items-center justify-between">
                         <span>{{ package?.name }} ({{ package?.lessons_count }} lessons)</span>
                         <span class="font-medium">{{ package?.formatted_total_price || '0.00' }}</span>
@@ -325,7 +327,7 @@ import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
 import { step1, step2, step3, step4 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step5'
-import { ArrowLeft, ArrowRight } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, Car, MapPin, Star } from 'lucide-vue-next'
 
 const props = defineProps({
   uuid: String,
@@ -369,6 +371,14 @@ const editingAddress = ref(false)
 const promoCode = ref('')
 const promoDiscount = ref(0)
 const bookingFee = 5
+
+// Local ref for checkbox to handle reactivity
+const isBookingForSomeoneElse = ref(form.booking_for_someone_else)
+
+// Watch and sync the local ref with the form
+watch(isBookingForSomeoneElse, (newValue) => {
+  form.booking_for_someone_else = newValue
+})
 
 const uuid = computed(() => props.uuid || page.props.enquiry?.id)
 
@@ -438,29 +448,29 @@ function autoSave() {
 }
 
 // Watch for changes and auto-save
-watch(() => form.booking_for_someone_else, () => {
+watch(isBookingForSomeoneElse, () => {
   autoSave()
 })
 
 // Watch learner fields only if booking for someone else
 watch(() => form.learner_first_name, () => {
-  if (form.booking_for_someone_else) autoSave()
+  if (isBookingForSomeoneElse.value) autoSave()
 })
 
 watch(() => form.learner_last_name, () => {
-  if (form.booking_for_someone_else) autoSave()
+  if (isBookingForSomeoneElse.value) autoSave()
 })
 
 watch(() => form.learner_email, () => {
-  if (form.booking_for_someone_else) autoSave()
+  if (isBookingForSomeoneElse.value) autoSave()
 })
 
 watch(() => form.learner_phone, () => {
-  if (form.booking_for_someone_else) autoSave()
+  if (isBookingForSomeoneElse.value) autoSave()
 })
 
 watch(() => form.learner_dob, () => {
-  if (form.booking_for_someone_else) autoSave()
+  if (isBookingForSomeoneElse.value) autoSave()
 })
 
 // Watch address fields
