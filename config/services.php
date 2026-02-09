@@ -35,4 +35,18 @@ return [
         ],
     ],
 
+    'stripe' => [
+        'key' => env('STRIPE_KEY'),
+        'secret' => env('STRIPE_SECRET'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+    ],
+
+    'google' => [
+        'maps_api_key' => env('GOOGLE_MAPS_API_KEY'),
+    ],
+
+    'instructor' => [
+        'search_radius_miles' => env('INSTRUCTOR_SEARCH_RADIUS_MILES', 10),
+    ],
+
 ];

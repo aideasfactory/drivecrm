@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\Calendar;
-use Carbon\Carbon;
+use Carbon\CarbonInterface;
 
 class CalendarService
 {
@@ -12,8 +12,8 @@ class CalendarService
      */
     public function getAvailability(
         string $instructorId,
-        Carbon $fromDate,
-        Carbon $toDate
+        CarbonInterface $fromDate,
+        CarbonInterface $toDate
     ): array {
         // Ensure we're starting from at least 2 days ahead
         $minimumDate = now()->addDays(2)->startOfDay();
