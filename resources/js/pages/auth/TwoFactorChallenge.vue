@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { Head, useForm } from '@inertiajs/vue3';
+import { computed, ref, watch } from 'vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,7 @@ import {
     InputOTPSlot,
 } from '@/components/ui/input-otp';
 import AuthLayout from '@/layouts/AuthLayout.vue';
-import { store } from '@/routes/two-factor/login';
+import { store } from '@/actions/Laravel/Fortify/Http/Controllers/TwoFactorAuthenticatedSessionController';
 import type { TwoFactorConfigContent } from '@/types';
 
 const authConfigContent = computed<TwoFactorConfigContent>(() => {
@@ -32,14 +32,34 @@ const authConfigContent = computed<TwoFactorConfigContent>(() => {
 });
 
 const showRecoveryInput = ref<boolean>(false);
+const code = ref<string>('');
 
-const toggleRecoveryMode = (clearErrors: () => void): void => {
+const form = useForm({
+    code: '',
+    recovery_code: '',
+});
+
+const toggleRecoveryMode = (): void => {
     showRecoveryInput.value = !showRecoveryInput.value;
-    clearErrors();
+    form.clearErrors();
     code.value = '';
+    form.code = '';
+    form.recovery_code = '';
 };
 
-const code = ref<string>('');
+// Watch code ref and update form
+watch(code, (newValue) => {
+    form.code = newValue;
+});
+
+const submit = () => {
+    form.post(store.url(), {
+        onError: () => {
+            code.value = '';
+            form.code = '';
+        },
+    });
+};
 </script>
 
 <template>
@@ -51,14 +71,7 @@ const code = ref<string>('');
 
         <div class="space-y-6">
             <template v-if="!showRecoveryInput">
-                <Form
-                    v-bind="store.form()"
-                    class="space-y-4"
-                    reset-on-error
-                    @error="code = ''"
-                    #default="{ errors, processing, clearErrors }"
-                >
-                    <input type="hidden" name="code" :value="code" />
+                <form @submit.prevent="submit" class="space-y-4">
                     <div
                         class="flex flex-col items-center justify-center space-y-3 text-center"
                     >
@@ -67,7 +80,7 @@ const code = ref<string>('');
                                 id="otp"
                                 v-model="code"
                                 :maxlength="6"
-                                :disabled="processing"
+                                :disabled="form.processing"
                                 autofocus
                             >
                                 <InputOTPGroup>
@@ -79,9 +92,12 @@ const code = ref<string>('');
                                 </InputOTPGroup>
                             </InputOTP>
                         </div>
-                        <InputError :message="errors.code" />
+                        <InputError :message="form.errors.code" />
                     </div>
-                    <Button type="submit" class="w-full" :disabled="processing"
+                    <Button
+                        type="submit"
+                        class="w-full"
+                        :disabled="form.processing"
                         >Continue</Button
                     >
                     <div class="text-center text-sm text-muted-foreground">
@@ -89,30 +105,28 @@ const code = ref<string>('');
                         <button
                             type="button"
                             class="text-foreground underline decoration-neutral-300 underline-offset-4 transition-colors duration-300 ease-out hover:decoration-current! dark:decoration-neutral-500"
-                            @click="() => toggleRecoveryMode(clearErrors)"
+                            @click="toggleRecoveryMode"
                         >
                             {{ authConfigContent.buttonText }}
                         </button>
                     </div>
-                </Form>
+                </form>
             </template>
 
             <template v-else>
-                <Form
-                    v-bind="store.form()"
-                    class="space-y-4"
-                    reset-on-error
-                    #default="{ errors, processing, clearErrors }"
-                >
+                <form @submit.prevent="submit" class="space-y-4">
                     <Input
-                        name="recovery_code"
+                        v-model="form.recovery_code"
                         type="text"
                         placeholder="Enter recovery code"
                         :autofocus="showRecoveryInput"
                         required
                     />
-                    <InputError :message="errors.recovery_code" />
-                    <Button type="submit" class="w-full" :disabled="processing"
+                    <InputError :message="form.errors.recovery_code" />
+                    <Button
+                        type="submit"
+                        class="w-full"
+                        :disabled="form.processing"
                         >Continue</Button
                     >
 
@@ -121,12 +135,12 @@ const code = ref<string>('');
                         <button
                             type="button"
                             class="text-foreground underline decoration-neutral-300 underline-offset-4 transition-colors duration-300 ease-out hover:decoration-current! dark:decoration-neutral-500"
-                            @click="() => toggleRecoveryMode(clearErrors)"
+                            @click="toggleRecoveryMode"
                         >
                             {{ authConfigContent.buttonText }}
                         </button>
                     </div>
-                </Form>
+                </form>
             </template>
         </div>
     </AuthLayout>
