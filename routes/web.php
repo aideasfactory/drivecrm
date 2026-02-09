@@ -29,6 +29,12 @@ Route::get('dashboard', function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/instructors', [\App\Http\Controllers\InstructorController::class, 'index'])
         ->name('instructors.index');
+    Route::post('/instructors', [\App\Http\Controllers\InstructorController::class, 'store'])
+        ->name('instructors.store');
+    Route::get('/instructors/{instructor}', [\App\Http\Controllers\InstructorController::class, 'show'])
+        ->name('instructors.show');
+    Route::put('/instructors/{instructor}', [\App\Http\Controllers\InstructorController::class, 'update'])
+        ->name('instructors.update');
     Route::get('/pupils', [\App\Http\Controllers\PupilController::class, 'index'])
         ->name('pupils.index');
     Route::get('/teams', [\App\Http\Controllers\TeamController::class, 'index'])
