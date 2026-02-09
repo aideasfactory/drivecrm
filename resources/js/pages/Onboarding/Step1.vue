@@ -192,10 +192,12 @@
                   <Separator />
 
                   <div class="flex items-start space-x-3">
-                    <Checkbox
+                    <input
+                      type="checkbox"
                       id="privacy_consent"
-                      v-model:checked="form.privacy_consent"
+                      v-model="privacyConsent"
                       required
+                      class="h-4 w-4 mt-1 rounded border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
                     />
                     <Label for="privacy_consent" class="text-sm leading-relaxed cursor-pointer">
                       I agree to the Terms & Conditions and Privacy Policy, and consent to my data being used to process my booking.
@@ -266,7 +268,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { usePage, useForm } from '@inertiajs/vue3'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -307,13 +309,21 @@ const form = useForm({
   booking_for_other: existingData.booking_for_other || false
 })
 
+// Local ref for checkbox to handle reactivity
+const privacyConsent = ref(form.privacy_consent)
+
+// Watch and sync the local ref with the form
+watch(privacyConsent, (newValue) => {
+  form.privacy_consent = newValue
+})
+
 const isFormValid = computed(() => {
   const hasRequiredFields = form.first_name.trim() &&
                            form.last_name.trim() &&
                            form.email.trim() &&
                            form.phone.trim() &&
                            form.postcode.trim() &&
-                           form.privacy_consent;
+                           privacyConsent.value;
 
   if (!hasRequiredFields) return false;
 
