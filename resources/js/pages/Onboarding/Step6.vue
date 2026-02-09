@@ -176,31 +176,7 @@
     </main>
 
     <!-- Footer -->
-    <footer class="mt-auto">
-      <Card class="rounded-none border-x-0 border-b-0">
-        <CardContent class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div class="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div class="text-sm">
-              © 2024 DRIVE Academy
-            </div>
-
-            <div class="flex items-center space-x-6">
-              <span class="text-sm cursor-pointer hover:underline">Terms & Conditions</span>
-              <span class="text-sm cursor-pointer hover:underline">Privacy Policy</span>
-              <span class="text-sm cursor-pointer hover:underline">Cookies</span>
-            </div>
-
-            <div class="flex items-center space-x-2">
-              <i class="fa-brands fa-cc-visa text-2xl"></i>
-              <i class="fa-brands fa-cc-mastercard text-2xl"></i>
-              <i class="fa-brands fa-cc-amex text-2xl"></i>
-              <i class="fa-brands fa-apple-pay text-2xl"></i>
-              <i class="fa-brands fa-google-pay text-2xl"></i>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </footer>
+    <OnboardingFooter margin-class="mt-auto" />
   </div>
 </template>
 
@@ -216,6 +192,7 @@ import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
+import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 import { step5 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step6'
 import { ArrowLeft, Lock, Calendar, ShieldCheck } from 'lucide-vue-next'

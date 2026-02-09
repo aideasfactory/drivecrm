@@ -83,23 +83,7 @@
     </main>
 
     <!-- Footer -->
-    <footer class="mt-auto">
-      <Card class="rounded-none border-x-0 border-b-0">
-        <CardContent class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div class="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div class="text-sm">
-              © 2024 DRIVE Academy
-            </div>
-
-            <div class="flex items-center space-x-6">
-              <a href="#" class="text-sm hover:underline">Terms & Conditions</a>
-              <a href="#" class="text-sm hover:underline">Privacy Policy</a>
-              <a href="#" class="text-sm hover:underline">Contact Us</a>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </footer>
+    <OnboardingFooter margin-class="mt-auto" :links="['Terms & Conditions', 'Privacy Policy', 'Contact Us']" />
   </div>
 </template>
 
@@ -108,6 +92,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
+import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 
 defineProps({
   enquiry: Object

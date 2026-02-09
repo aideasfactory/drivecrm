@@ -203,29 +203,7 @@
       </div>
     </main>
 
-    <footer>
-      <Card class="rounded-none border-x-0 border-b-0 mt-16">
-        <CardContent class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div class="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div class="text-sm">
-              © 2024 DRIVE Driving School
-            </div>
-            <div class="flex items-center space-x-6">
-              <span class="text-sm cursor-pointer hover:underline">Terms & Conditions</span>
-              <span class="text-sm cursor-pointer hover:underline">Privacy Policy</span>
-              <span class="text-sm cursor-pointer hover:underline">Cookies</span>
-            </div>
-            <div class="flex items-center space-x-2">
-              <CreditCard class="h-6 w-6" />
-              <CreditCard class="h-6 w-6" />
-              <CreditCard class="h-6 w-6" />
-              <CreditCard class="h-6 w-6" />
-              <CreditCard class="h-6 w-6" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </footer>
+    <OnboardingFooter copyright-text="© 2024 DRIVE Driving School" />
 
     <!-- Instructor Info Dialog -->
     <Dialog v-model:open="showModal">
@@ -350,6 +328,7 @@ import { Sonner, toast } from '@/components/ui/sonner'
 import InstructorMap from '@/components/Onboarding/InstructorMap.vue'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
+import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 import {
   ArrowLeft,
   ArrowRight,
@@ -358,7 +337,6 @@ import {
   Star,
   Calendar,
   Check,
-  CreditCard,
   Clock,
   TrendingUp,
   Users,

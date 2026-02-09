@@ -282,29 +282,7 @@
       </div>
     </main>
 
-    <footer>
-      <Card class="rounded-none border-x-0 border-b-0 mt-16">
-        <CardContent class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div class="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div class="text-sm">
-              © 2024 DRIVE Academy
-            </div>
-            <div class="flex items-center space-x-6">
-              <span class="text-sm cursor-pointer hover:underline">Terms & Conditions</span>
-              <span class="text-sm cursor-pointer hover:underline">Privacy Policy</span>
-              <span class="text-sm cursor-pointer hover:underline">Cookies</span>
-            </div>
-            <div class="flex items-center space-x-2">
-              <i class="fa-brands fa-cc-visa text-2xl"></i>
-              <i class="fa-brands fa-cc-mastercard text-2xl"></i>
-              <i class="fa-brands fa-cc-amex text-2xl"></i>
-              <i class="fa-brands fa-apple-pay text-2xl"></i>
-              <i class="fa-brands fa-google-pay text-2xl"></i>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </footer>
+    <OnboardingFooter />
 
     <!-- Calendar Sheet Modal -->
     <Sheet :open="showCalendarSheet" @update:open="showCalendarSheet = $event">
@@ -365,6 +343,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Sonner, toast } from '@/components/ui/sonner'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
+import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 import { step3 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step4'
 import { ArrowLeft, ArrowRight, RefreshCw, Star, GraduationCap, Calendar, ChevronLeft, ChevronRight, Info, XCircle } from 'lucide-vue-next'
