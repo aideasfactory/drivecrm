@@ -74,9 +74,9 @@
                       :class="[
                         'cursor-pointer transition-all',
                         selectedInstructor === instructor.id
-                          ? 'border-primary ring-2 ring-primary'
+                          ? 'border-primary ring-2 ring-primary bg-red-500/30'
                           : instructor.priority
-                            ? 'border-2 border-orange-300'
+                            ? 'border-2 border-orange-300 bg-orange-900/40'
                             : ''
                       ]"
                       @click="selectInstructor(instructor.id)"
@@ -131,7 +131,7 @@
                               <Badge
                                 v-if="instructor.priority"
                                 variant="default"
-                                class="ml-2"
+                                class="ml-2 bg-red-600 text-white hover:bg-red-700"
                               >
                                 Top Pick
                               </Badge>

@@ -164,7 +164,7 @@
                         <CardContent class="space-y-4">
                           <div class="grid grid-cols-2 gap-4">
                             <div>
-                              <Label for="learner-first-name">First Name</Label>
+                              <Label for="learner-first-name mb-4">First Name</Label>
                               <Input
                                 v-model="form.learner_first_name"
                                 id="learner-first-name"

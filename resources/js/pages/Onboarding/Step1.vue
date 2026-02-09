@@ -27,11 +27,11 @@
 
             <CardContent class="space-y-6">
               <div class="flex items-center flex-wrap gap-3">
-                <Badge variant="secondary" class="flex items-center">
+                <Badge variant="secondary" class="flex items-center bg-red-600 text-white hover:bg-red-700">
                   <Shield class="mr-1 h-3 w-3" />
                   DVSA Approved
                 </Badge>
-                <Badge variant="secondary" class="flex items-center">
+                <Badge variant="secondary" class="flex items-center bg-red-600 text-white hover:bg-red-700">
                   <Lock class="mr-1 h-3 w-3" />
                   Secure Checkout
                 </Badge>

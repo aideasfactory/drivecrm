@@ -27,7 +27,10 @@
                     :variant="getStepStatus(index + 1) === 'completed' ? 'default' :
                              getStepStatus(index + 1) === 'current' ? 'default' :
                              'secondary'"
-                    class="rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium mr-2"
+                    :class="[
+                      'rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium mr-2',
+                      getStepStatus(index + 1) === 'completed' ? 'bg-red-600 text-white hover:bg-red-700' : ''
+                    ]"
                   >
                     {{ getStepStatus(index + 1) === 'completed' ? '✓' : index + 1 }}
                   </Badge>
@@ -43,7 +46,10 @@
                     :variant="getStepStatus(index + 1) === 'completed' ? 'default' :
                              getStepStatus(index + 1) === 'current' ? 'default' :
                              'secondary'"
-                    class="rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium mr-2"
+                    :class="[
+                      'rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium mr-2',
+                      getStepStatus(index + 1) === 'completed' ? 'bg-red-600 text-white hover:bg-red-700' : ''
+                    ]"
                   >
                     {{ getStepStatus(index + 1) === 'completed' ? '✓' : index + 1 }}
                   </Badge>
