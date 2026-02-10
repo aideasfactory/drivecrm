@@ -5,9 +5,12 @@ namespace App\Services;
 use App\Actions\CreateInstructorCalendarDataAction;
 use App\Actions\FetchPostcodeCoordinatesAction;
 use App\Actions\FindInstructorsByPostcodeSectorAction;
+use App\Actions\Instructor\CreateCalendarItemAction;
 use App\Actions\Instructor\CreateInstructorLocationAction;
 use App\Actions\Instructor\CreateInstructorPackageAction;
+use App\Actions\Instructor\DeleteCalendarItemAction;
 use App\Actions\Instructor\DeleteInstructorLocationAction;
+use App\Actions\Instructor\GetInstructorCalendarAction;
 use App\Actions\Instructor\GetInstructorLocationsAction;
 use App\Actions\Instructor\GetInstructorPackagesAction;
 use App\Enums\UserRole;
@@ -16,6 +19,7 @@ use App\Models\CalendarItem;
 use App\Models\Instructor;
 use App\Models\Location;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -30,7 +34,10 @@ class InstructorService
         protected CreateInstructorPackageAction $createInstructorPackage,
         protected GetInstructorLocationsAction $getInstructorLocations,
         protected CreateInstructorLocationAction $createInstructorLocation,
-        protected DeleteInstructorLocationAction $deleteInstructorLocation
+        protected DeleteInstructorLocationAction $deleteInstructorLocation,
+        protected GetInstructorCalendarAction $getInstructorCalendar,
+        protected CreateCalendarItemAction $createCalendarItem,
+        protected DeleteCalendarItemAction $deleteCalendarItem
     ) {}
 
     /**
@@ -214,5 +221,47 @@ class InstructorService
     public function removeLocation(Location $location): bool
     {
         return ($this->deleteInstructorLocation)($location);
+    }
+
+    /**
+     * Get instructor's calendar with all calendar items for specified date range.
+     *
+     * @param  Carbon|null  $startDate  Start date (defaults to current week start)
+     * @param  Carbon|null  $endDate  End date (defaults to current week end)
+     * @return Collection Collection of calendar dates with their items
+     */
+    public function getCalendar(
+        Instructor $instructor,
+        ?Carbon $startDate = null,
+        ?Carbon $endDate = null
+    ): Collection {
+        return ($this->getInstructorCalendar)($instructor, $startDate, $endDate);
+    }
+
+    /**
+     * Add a new calendar item (time slot) for an instructor.
+     *
+     * @param  string  $date  Date in Y-m-d format
+     * @param  string  $startTime  Start time in H:i format
+     * @param  string  $endTime  End time in H:i format
+     * @return CalendarItem The created calendar item
+     */
+    public function addCalendarItem(
+        Instructor $instructor,
+        string $date,
+        string $startTime,
+        string $endTime
+    ): CalendarItem {
+        return ($this->createCalendarItem)($instructor, $date, $startTime, $endTime);
+    }
+
+    /**
+     * Remove a calendar item (time slot).
+     *
+     * @return bool Whether the deletion was successful
+     */
+    public function removeCalendarItem(CalendarItem $calendarItem): bool
+    {
+        return ($this->deleteCalendarItem)($calendarItem);
     }
 }

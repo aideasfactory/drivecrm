@@ -45,6 +45,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('instructors.locations.store');
     Route::delete('/instructors/{instructor}/locations/{location}', [\App\Http\Controllers\InstructorController::class, 'destroyLocation'])
         ->name('instructors.locations.destroy');
+    Route::get('/instructors/{instructor}/calendar', [\App\Http\Controllers\InstructorController::class, 'calendar'])
+        ->name('instructors.calendar');
+    Route::post('/instructors/{instructor}/calendar/items', [\App\Http\Controllers\InstructorController::class, 'storeCalendarItem'])
+        ->name('instructors.calendar.items.store');
+    Route::delete('/instructors/{instructor}/calendar/items/{calendarItem}', [\App\Http\Controllers\InstructorController::class, 'destroyCalendarItem'])
+        ->name('instructors.calendar.items.destroy');
     Route::put('/packages/{package}', [\App\Http\Controllers\PackageController::class, 'update'])
         ->name('packages.update');
     Route::get('/pupils', [\App\Http\Controllers\PupilController::class, 'index'])

@@ -5,15 +5,18 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Enums\UserRole;
+use App\Http\Requests\StoreCalendarItemRequest;
 use App\Http\Requests\StoreInstructorRequest;
 use App\Http\Requests\StoreLocationRequest;
 use App\Http\Requests\StorePackageRequest;
 use App\Http\Requests\UpdateInstructorRequest;
+use App\Models\CalendarItem;
 use App\Models\Instructor;
 use App\Models\Location;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\InstructorService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
@@ -251,5 +254,76 @@ class InstructorController extends Controller
         return response()->json([
             'message' => 'Location removed successfully.',
         ]);
+    }
+
+    /**
+     * Get instructor's calendar with all calendar items for specified date range.
+     */
+    public function calendar(Instructor $instructor): JsonResponse
+    {
+        // Parse optional date range from query params
+        $startDate = request()->query('start_date')
+            ? Carbon::parse(request()->query('start_date'))
+            : null;
+
+        $endDate = request()->query('end_date')
+            ? Carbon::parse(request()->query('end_date'))
+            : null;
+
+        $calendar = $this->instructorService->getCalendar($instructor, $startDate, $endDate);
+
+        return response()->json([
+            'calendar' => $calendar,
+        ]);
+    }
+
+    /**
+     * Create a new calendar item (time slot) for the instructor.
+     */
+    public function storeCalendarItem(StoreCalendarItemRequest $request, Instructor $instructor): JsonResponse
+    {
+        $calendarItem = $this->instructorService->addCalendarItem(
+            $instructor,
+            $request->input('date'),
+            $request->input('start_time'),
+            $request->input('end_time')
+        );
+
+        return response()->json([
+            'calendar_item' => [
+                'id' => $calendarItem->id,
+                'calendar_id' => $calendarItem->calendar_id,
+                'date' => $calendarItem->calendar->date->format('Y-m-d'),
+                'start_time' => $calendarItem->start_time,
+                'end_time' => $calendarItem->end_time,
+                'is_available' => $calendarItem->is_available,
+                'status' => $calendarItem->status ?? 'available',
+            ],
+        ], 201);
+    }
+
+    /**
+     * Delete a calendar item (time slot).
+     */
+    public function destroyCalendarItem(Instructor $instructor, CalendarItem $calendarItem): JsonResponse
+    {
+        // Verify the calendar item belongs to this instructor
+        if ($calendarItem->calendar->instructor_id !== $instructor->id) {
+            return response()->json([
+                'message' => 'Calendar item not found for this instructor.',
+            ], 404);
+        }
+
+        try {
+            $this->instructorService->removeCalendarItem($calendarItem);
+
+            return response()->json([
+                'message' => 'Calendar item removed successfully.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 400);
+        }
     }
 }

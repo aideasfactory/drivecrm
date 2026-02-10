@@ -68,3 +68,29 @@ export interface Package {
   is_platform_package: boolean
   is_bespoke_package: boolean
 }
+
+export interface Calendar {
+  id: number
+  instructor_id: number
+  date: string
+  calendar_items: CalendarItem[]
+  created_at: string
+  updated_at: string
+}
+
+export interface CalendarItem {
+  id: number
+  calendar_id: number
+  start_time: string
+  end_time: string
+  is_available: boolean
+  status: 'draft' | 'reserved' | 'booked' | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CalendarItemFormData {
+  date: string
+  start_time: string
+  end_time: string
+}

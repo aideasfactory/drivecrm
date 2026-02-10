@@ -83,7 +83,7 @@ const breadcrumbs = [
             <!-- Tab Content -->
             <div class="flex flex-col gap-6">
                 <!-- Schedule Tab -->
-                <ScheduleTab v-if="activeTab === 'schedule'" />
+                <ScheduleTab v-if="activeTab === 'schedule'" :instructor-id="instructor.id" />
 
                 <!-- Details Tab -->
                 <DetailsTab
