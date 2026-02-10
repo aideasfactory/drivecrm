@@ -293,34 +293,7 @@ const handleSheetOpenChange = (open: boolean) => {
         </Card>
 
         <!-- Calendar Card -->
-        <Card>
-            <CardContent class="p-6">
-                <!-- Loading State -->
-                <div v-if="loading" class="space-y-4">
-                    <Skeleton class="h-12 w-full" />
-                    <Skeleton class="h-96 w-full" />
-                    <Skeleton class="h-12 w-full" />
-                </div>
-
-                <!-- Empty State -->
-                <div
-                    v-else-if="!hasCalendarItems"
-                    class="flex flex-col items-center justify-center py-16 text-center"
-                >
-                    <CalendarIcon class="h-16 w-16 text-muted-foreground mb-4" />
-                    <h3 class="text-lg font-semibold mb-2">No schedule set up yet</h3>
-                    <p class="text-sm text-muted-foreground mb-6">
-                        Click the "Add Time Slot" button above to start adding available time slots
-                    </p>
-                </div>
-
-                <!-- Calendar View -->
-                <div v-else class="schedule-x-calendar-wrapper">
-                    <ScheduleXCalendar :calendar-app="calendar" />
-                </div>
-            </CardContent>
-        </Card>
-
+       
         <!-- Delete Confirmation Dialog -->
         <Dialog :open="isDeleteDialogOpen" @update:open="isDeleteDialogOpen">
             <DialogContent>
