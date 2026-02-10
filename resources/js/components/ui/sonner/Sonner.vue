@@ -14,7 +14,7 @@ const props = withDefaults(
     position: 'top-right',
     expand: false,
     richColors: false,
-    closeButton: false,
+    closeButton: true,
   }
 )
 </script>
@@ -26,5 +26,6 @@ const props = withDefaults(
     :expand="expand"
     :rich-colors="richColors"
     :close-button="closeButton"
+    class="z-[9999]"
   />
 </template>

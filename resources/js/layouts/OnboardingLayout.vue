@@ -46,7 +46,7 @@
     </footer>
 
     <!-- Sonner Toast -->
-    <Sonner position="top-right" rich-colors />
+    <Sonner position="top-right" rich-colors close-button />
   </div>
 </template>
 
