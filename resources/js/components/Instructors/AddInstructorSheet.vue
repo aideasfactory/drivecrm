@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2 } from 'lucide-vue-next'
+import { Loader2, UserPlus, UserPen } from 'lucide-vue-next'
 import type { CreateInstructorData, InstructorDetail } from '@/types/instructor'
 
 interface Props {
@@ -143,11 +143,13 @@ const handleOpenChange = (value: boolean) => {
 
 <template>
     <Sheet :open="props.open" @update:open="handleOpenChange">
-        <SheetContent class="overflow-y-auto sm:max-w-xl px-6 py-4">
+        <SheetContent class="overflow-y-auto sm:max-w-xl">
             <SheetHeader>
-                <SheetTitle>{{
-                    isEditMode ? 'Edit Instructor' : 'Add New Instructor'
-                }}</SheetTitle>
+                <SheetTitle class="flex items-center gap-2">
+                    <UserPen v-if="isEditMode" class="h-5 w-5" />
+                    <UserPlus v-else class="h-5 w-5" />
+                    {{ isEditMode ? 'Edit Instructor' : 'Add New Instructor' }}
+                </SheetTitle>
                 <SheetDescription>
                     {{
                         isEditMode
@@ -157,7 +159,7 @@ const handleOpenChange = (value: boolean) => {
                 </SheetDescription>
             </SheetHeader>
 
-            <form @submit.prevent="handleSubmit" class="mt-6 space-y-6">
+            <form @submit.prevent="handleSubmit" class="mt-6 space-y-6 px-6 py-4">
                 <!-- Basic Information -->
                 <div class="space-y-4">
                     <h3 class="text-sm font-semibold">Basic Information</h3>

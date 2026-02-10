@@ -19,14 +19,24 @@ npm run build
 
 ### Mandatory UI Patterns (Strict Enforcement)
 - **1. Shadcn First**: Always use components from `@/components/ui/**`. Never build raw HTML/Tailwind replacements for existing UI components.
-- **2. Button Styling**:
+- **2. Sheet for Forms (MANDATORY)**:
+  - ✅ DO: Use `Sheet` component (slideout from right/left) for ALL create/edit/update forms
+  - ✅ DO: Sheet slides from right side by default: `<SheetContent side="right">`
+  - ✅ DO: Add padding classes `px-6 py-4` to ALL forms inside sheets
+  - ✅ DO: ALWAYS add an accompanying icon to SheetTitle (e.g., `<SheetTitle class="flex items-center gap-2"><Menu class="h-5 w-5" />Title</SheetTitle>`)
+  - ❌ DON'T: Use Dialog/Modal for forms - only use Dialog for confirmations/alerts
+  - ❌ DON'T: Forget form padding - forms without `px-6 py-4` are incorrect
+  - ❌ DON'T: Create SheetTitle without an icon
+  - Pattern: `<Sheet v-model:open="isOpen"><SheetContent side="right"><SheetHeader><SheetTitle class="flex items-center gap-2"><Icon class="h-5 w-5" />Title</SheetTitle></SheetHeader><form @submit.prevent="handleSubmit" class="mt-6 space-y-6 px-6 py-4">...</form></SheetContent></Sheet>`
+- **3. Button Styling**:
   - ✅ DO: Use `variant` prop (default, secondary, destructive, outline, ghost, link).
   - ❌ DON'T: Override colors with utility classes like `bg-blue-500` or `text-red-600`.
-- **3. Button Preloaders**:
+- **4. Button Preloaders**:
   - All buttons triggering async actions MUST show a loading state.
   - Pattern: `<Button :disabled="form.processing"><Loader2 v-if="form.processing" class="animate-spin mr-2" /> Save</Button>`
   - Always give buttons icons
-- **4. API Feedback (Toasts)**:
+  - Use `min-w-[...]` classes to prevent button size changes when loading
+- **5. API Feedback (Toasts)**:
   - All API interactions (creates/updates/deletes) MUST trigger a toast notification.
   - Use a Toast library (e.g., `sonner`). If missing, install it immediately.
 
@@ -47,10 +57,10 @@ const handleSubmit = async () => {
 </script>
 ```
 
-- **5. Custom Components**:
+- **6. Custom Components**:
   - Check for specialized variations before styling generic ones.
   - Example: Use `CardGradient` (if available) instead of adding gradient classes to a standard `Card`.
-- **6. Tables**:
+- **7. Tables**:
   - ALWAYS use Shadcn Table components (`Table`, `TableHeader`, `TableRow`, `TableCell`, etc.) from `@/components/ui/table`, never `<table>` tags or div-soups.
 
 ### Component Architecture
@@ -139,6 +149,102 @@ onMounted(() => {
       </Form>
     </template>
     ```
+
+### API Calls (MANDATORY - No Manual CSRF!)
+- **NEVER use fetch() with manual CSRF tokens** - Laravel handles CSRF automatically
+- **Two Accepted Patterns** - Choose based on context:
+
+**Pattern 1: Inertia Router**
+**When to use:** Form submissions that affect **page-level state** or need navigation
+- Creating/updating main resources (instructors, students, bookings)
+- Actions that redirect to new pages
+- When you want Inertia to auto-refresh page props
+- Full-page forms in Sheets/Modals
+
+```vue
+<script setup lang="ts">
+import { router } from '@inertiajs/vue3'
+
+// ✅ Example: Creating an instructor (affects page-level state)
+router.post('/instructors', formData, {
+    preserveScroll: true,
+    onSuccess: () => {
+        toast.success('Instructor created!')
+        // Inertia automatically updates page props
+    },
+    onError: (errors) => {
+        // Handle validation errors
+    },
+})
+
+router.put(`/instructors/${id}`, formData, { ... })
+router.delete(`/instructors/${id}`, { ... })
+</script>
+```
+
+**Pattern 2: Axios**
+**When to use:** Self-loading components with **local state management**
+- Tab components that fetch their own data (coverage areas, packages, etc.)
+- Nested CRUD operations within tabs (add/delete items in a list)
+- API calls that don't need page navigation
+- When component manages its own `ref()` state
+
+```vue
+<script setup lang="ts">
+import axios from 'axios'
+
+// ✅ Example: Self-loading tab managing locations
+const locations = ref<Location[]>([])
+const loading = ref(true)
+
+onMounted(async () => {
+    const response = await axios.get(`/instructors/${id}/locations`)
+    locations.value = response.data.locations
+    loading.value = false
+})
+
+// ✅ Example: Adding location (updates local state)
+const response = await axios.post(`/instructors/${id}/locations`, {
+    postcode_sector: 'TS7'
+})
+locations.value.push(response.data.location) // Update local state
+
+// Error handling
+try {
+    const response = await axios.post('/endpoint', data)
+    toast.success('Saved!')
+} catch (error: any) {
+    const message = error.response?.data?.message || 'Failed'
+    toast.error(message)
+}
+</script>
+```
+
+**Quick Decision Guide:**
+- 📄 **Page-level form** (Sheet creating main resource)? → Use **Inertia Router**
+- 🔄 **Self-loading tab** (manages own data)? → Use **Axios**
+- 🚀 **Need to redirect** after action? → Use **Inertia Router**
+- 📊 **Updating local state** only? → Use **Axios**
+
+**❌ NEVER DO THIS:**
+```vue
+// ❌ DON'T: Manual CSRF tokens
+fetch(url, {
+    headers: {
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')...
+    }
+})
+
+// ❌ DON'T: Manual headers with fetch
+fetch(url, {
+    headers: {
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+    }
+})
+```
+
+**Why?** Laravel automatically configures both Inertia and Axios with CSRF tokens. Manual handling is unnecessary and error-prone.
 
 ### Styling (Tailwind v4)
 - **Config**: No `tailwind.config.js`. Theme is in CSS variables.

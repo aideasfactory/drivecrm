@@ -39,6 +39,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('instructors.packages');
     Route::post('/instructors/{instructor}/packages', [\App\Http\Controllers\InstructorController::class, 'createPackage'])
         ->name('instructors.packages.store');
+    Route::get('/instructors/{instructor}/locations', [\App\Http\Controllers\InstructorController::class, 'locations'])
+        ->name('instructors.locations');
+    Route::post('/instructors/{instructor}/locations', [\App\Http\Controllers\InstructorController::class, 'storeLocation'])
+        ->name('instructors.locations.store');
+    Route::delete('/instructors/{instructor}/locations/{location}', [\App\Http\Controllers\InstructorController::class, 'destroyLocation'])
+        ->name('instructors.locations.destroy');
     Route::put('/packages/{package}', [\App\Http\Controllers\PackageController::class, 'update'])
         ->name('packages.update');
     Route::get('/pupils', [\App\Http\Controllers\PupilController::class, 'index'])

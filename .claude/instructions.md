@@ -12,6 +12,8 @@
 
 **NEVER** proceed to the next phase without explicit human approval.
 
+**ALWAYS** confirm you have read and understood the above files before continuing
+
 ---
 
 ## 📋 Task Management Workflow

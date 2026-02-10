@@ -5,7 +5,10 @@ namespace App\Services;
 use App\Actions\CreateInstructorCalendarDataAction;
 use App\Actions\FetchPostcodeCoordinatesAction;
 use App\Actions\FindInstructorsByPostcodeSectorAction;
+use App\Actions\Instructor\CreateInstructorLocationAction;
 use App\Actions\Instructor\CreateInstructorPackageAction;
+use App\Actions\Instructor\DeleteInstructorLocationAction;
+use App\Actions\Instructor\GetInstructorLocationsAction;
 use App\Actions\Instructor\GetInstructorPackagesAction;
 use App\Enums\UserRole;
 use App\Models\Calendar;
@@ -24,7 +27,10 @@ class InstructorService
         protected FindInstructorsByPostcodeSectorAction $findInstructorsByPostcodeSector,
         protected CreateInstructorCalendarDataAction $createInstructorCalendarData,
         protected GetInstructorPackagesAction $getInstructorPackages,
-        protected CreateInstructorPackageAction $createInstructorPackage
+        protected CreateInstructorPackageAction $createInstructorPackage,
+        protected GetInstructorLocationsAction $getInstructorLocations,
+        protected CreateInstructorLocationAction $createInstructorLocation,
+        protected DeleteInstructorLocationAction $deleteInstructorLocation
     ) {}
 
     /**
@@ -177,5 +183,36 @@ class InstructorService
     public function createPackage(Instructor $instructor, array $data): \App\Models\Package
     {
         return ($this->createInstructorPackage)($instructor, $data);
+    }
+
+    /**
+     * Get all coverage locations for an instructor.
+     *
+     * @return Collection Formatted location data
+     */
+    public function getLocations(Instructor $instructor): Collection
+    {
+        return ($this->getInstructorLocations)($instructor);
+    }
+
+    /**
+     * Add a new coverage location for an instructor.
+     *
+     * @param  string  $postcodeSector  Postcode sector (e.g., "TS7", "WR14")
+     * @return Location The created location
+     */
+    public function addLocation(Instructor $instructor, string $postcodeSector): Location
+    {
+        return ($this->createInstructorLocation)($instructor, $postcodeSector);
+    }
+
+    /**
+     * Remove a coverage location.
+     *
+     * @return bool Whether the deletion was successful
+     */
+    public function removeLocation(Location $location): bool
+    {
+        return ($this->deleteInstructorLocation)($location);
     }
 }

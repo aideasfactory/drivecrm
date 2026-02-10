@@ -6,6 +6,7 @@ import SheetDescription from '@/components/ui/sheet/SheetDescription.vue'
 import SheetHeader from '@/components/ui/sheet/SheetHeader.vue'
 import SheetTitle from '@/components/ui/sheet/SheetTitle.vue'
 import { SIDEBAR_WIDTH_MOBILE, useSidebar } from "./utils"
+import { PanelLeft } from 'lucide-vue-next'
 
 defineOptions({
   inheritAttrs: false,
@@ -42,7 +43,10 @@ const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
       }"
     >
       <SheetHeader class="sr-only">
-        <SheetTitle>Sidebar</SheetTitle>
+        <SheetTitle class="flex items-center gap-2">
+          <PanelLeft class="h-5 w-5" />
+          Sidebar
+        </SheetTitle>
         <SheetDescription>Displays the mobile sidebar.</SheetDescription>
       </SheetHeader>
       <div class="flex h-full w-full flex-col">

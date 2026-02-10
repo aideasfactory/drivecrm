@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { Edit, Package as PackageIcon, Plus } from 'lucide-vue-next'
+import { Edit, Package as PackageIcon, Plus, PackagePlus, PackageOpen } from 'lucide-vue-next'
 import PackageForm, { type PackageFormData } from '@/components/Instructors/PackageForm.vue'
 import type { Package } from '@/types/instructor'
 import type { InstructorDetail } from '@/types/instructor'
@@ -219,7 +219,9 @@ const savePackage = async (formData: PackageFormData) => {
         <Sheet :open="isSheetOpen" @update:open="closeSheet">
             <SheetContent class="w-full sm:max-w-xl overflow-y-auto">
                 <SheetHeader>
-                    <SheetTitle>
+                    <SheetTitle class="flex items-center gap-2">
+                        <PackagePlus v-if="isCreating" class="h-5 w-5" />
+                        <PackageOpen v-else class="h-5 w-5" />
                         {{ isCreating ? 'Create Package' : 'Edit Package' }}
                     </SheetTitle>
                 </SheetHeader>

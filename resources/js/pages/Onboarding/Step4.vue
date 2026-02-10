@@ -288,7 +288,10 @@
     <Sheet :open="showCalendarSheet" @update:open="showCalendarSheet = $event">
       <SheetContent side="bottom" class="max-h-[80vh] overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Select a date</SheetTitle>
+          <SheetTitle class="flex items-center gap-2">
+            <Calendar class="h-5 w-5" />
+            Select a date
+          </SheetTitle>
           <div class="flex items-center justify-between mt-4">
             <Button @click="previousMonth" variant="ghost" size="icon">
               <ChevronLeft class="h-4 w-4" />

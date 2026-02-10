@@ -71,7 +71,10 @@ const isActiveSubTab = (subTabKey: SubTabType) => {
                 v-if="activeSubTab === 'edit'"
                 :instructor="instructor"
             />
-            <CoverageSubTab v-if="activeSubTab === 'coverage'" />
+            <CoverageSubTab
+                v-if="activeSubTab === 'coverage'"
+                :instructor="instructor"
+            />
             <ActivitySubTab v-if="activeSubTab === 'activity'" />
             <EmergencyContactSubTab v-if="activeSubTab === 'emergency'" />
         </div>

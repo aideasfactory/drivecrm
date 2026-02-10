@@ -6,9 +6,11 @@ namespace App\Http\Controllers;
 
 use App\Enums\UserRole;
 use App\Http\Requests\StoreInstructorRequest;
+use App\Http\Requests\StoreLocationRequest;
 use App\Http\Requests\StorePackageRequest;
 use App\Http\Requests\UpdateInstructorRequest;
 use App\Models\Instructor;
+use App\Models\Location;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\InstructorService;
@@ -61,7 +63,7 @@ class InstructorController extends Controller
      */
     public function show(Instructor $instructor): Response
     {
-        $instructor->load('user');
+        $instructor->load('user', 'locations');
 
         // Calculate statistics
         $stats = [
@@ -78,6 +80,9 @@ class InstructorController extends Controller
             'next_week' => 0, // TODO: Calculate from lessons/calendar
         ];
 
+        // Get locations
+        $locations = $this->instructorService->getLocations($instructor);
+
         return Inertia::render('Instructors/Show', [
             'instructor' => [
                 'id' => $instructor->id,
@@ -91,6 +96,7 @@ class InstructorController extends Controller
                 'status' => $instructor->status,
                 'stats' => $stats,
                 'booking_hours' => $bookingHours,
+                'locations' => $locations,
             ],
             'tab' => request()->query('tab', 'schedule'),
             'subtab' => request()->query('subtab', 'summary'),
@@ -196,5 +202,54 @@ class InstructorController extends Controller
                 'is_bespoke_package' => $package->isBespokePackage(),
             ],
         ], 201);
+    }
+
+    /**
+     * Get instructor's coverage locations.
+     */
+    public function locations(Instructor $instructor): JsonResponse
+    {
+        $locations = $this->instructorService->getLocations($instructor);
+
+        return response()->json([
+            'locations' => $locations,
+        ]);
+    }
+
+    /**
+     * Add a new coverage location for the instructor.
+     */
+    public function storeLocation(StoreLocationRequest $request, Instructor $instructor): JsonResponse
+    {
+        $location = $this->instructorService->addLocation(
+            $instructor,
+            $request->input('postcode_sector')
+        );
+
+        return response()->json([
+            'location' => [
+                'id' => $location->id,
+                'postcode_sector' => $location->postcode_sector,
+            ],
+        ], 201);
+    }
+
+    /**
+     * Delete a coverage location.
+     */
+    public function destroyLocation(Instructor $instructor, Location $location): JsonResponse
+    {
+        // Verify the location belongs to this instructor
+        if ($location->instructor_id !== $instructor->id) {
+            return response()->json([
+                'message' => 'Location not found for this instructor.',
+            ], 404);
+        }
+
+        $this->instructorService->removeLocation($location);
+
+        return response()->json([
+            'message' => 'Location removed successfully.',
+        ]);
     }
 }

@@ -19,6 +19,7 @@ export interface InstructorDetail {
   status: string
   stats: InstructorStats
   booking_hours: BookingHours
+  locations: Location[]
 }
 
 export interface InstructorStats {
@@ -47,6 +48,11 @@ export interface CreateInstructorData {
   postcode?: string
   latitude?: number
   longitude?: number
+}
+
+export interface Location {
+  id: number
+  postcode_sector: string
 }
 
 export interface Package {
