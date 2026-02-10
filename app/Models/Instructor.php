@@ -167,7 +167,7 @@ class Instructor extends Model
     protected function avatar(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->meta['meta']['avatar'] ?? null,
+            get: fn () => $this->meta['avatar'] ?? null,
         );
     }
 
@@ -177,7 +177,7 @@ class Instructor extends Model
     protected function experience(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->meta['meta']['experience'] ?? null
+            get: fn () => $this->meta['experience'] ?? null
         );
     }
 
@@ -187,7 +187,7 @@ class Instructor extends Model
     protected function passRate(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->meta['meta']['pass_rate'] ?? null
+            get: fn () => $this->meta['pass_rate'] ?? null
         );
     }
 
@@ -197,7 +197,7 @@ class Instructor extends Model
     protected function totalStudents(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->meta['meta']['total_students'] ?? null
+            get: fn () => $this->meta['total_students'] ?? null
         );
     }
 
@@ -207,7 +207,7 @@ class Instructor extends Model
     protected function specialties(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->meta['meta']['specialties'] ?? []
+            get: fn () => $this->meta['specialties'] ?? []
         );
     }
 
@@ -217,7 +217,7 @@ class Instructor extends Model
     protected function qualifications(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->meta['meta']['qualifications'] ?? []
+            get: fn () => $this->meta['qualifications'] ?? []
         );
     }
 
@@ -227,7 +227,7 @@ class Instructor extends Model
     protected function languages(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->meta['meta']['languages'] ?? []
+            get: fn () => $this->meta['languages'] ?? []
         );
     }
 
@@ -237,7 +237,7 @@ class Instructor extends Model
     protected function reviews(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->meta['meta']['reviews'] ?? null
+            get: fn () => $this->meta['reviews'] ?? null
         );
     }
 
@@ -247,7 +247,7 @@ class Instructor extends Model
     protected function isTopPick(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->meta['meta']['is_top_pick'] ?? false
+            get: fn () => $this->meta['is_top_pick'] ?? false
         );
     }
 
@@ -257,7 +257,7 @@ class Instructor extends Model
     protected function specialOffer(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->meta['meta']['special_offer'] ?? null
+            get: fn () => $this->meta['special_offer'] ?? null
         );
     }
 
@@ -267,7 +267,7 @@ class Instructor extends Model
     protected function transmissions(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->meta['meta']['transmissions'] ?? []
+            get: fn () => $this->meta['transmissions'] ?? []
         );
     }
 }

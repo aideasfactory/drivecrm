@@ -56,11 +56,6 @@ const allNavItems: NavItem[] = [
         icon: Users,
     },
     {
-        title: 'Teams',
-        href: teamsIndex(),
-        icon: UsersRound,
-    },
-    {
         title: 'Reports',
         href: reportsIndex(),
         icon: FileText,
