@@ -335,19 +335,9 @@ const handleOpenChange = (value: boolean) => {
                         Cancel
                     </Button>
                     <Button type="submit" :disabled="isSubmitting">
-                        <Loader2
-                            v-if="isSubmitting"
-                            class="mr-2 h-4 w-4 animate-spin"
-                        />
-                        {{
-                            isSubmitting
-                                ? isEditMode
-                                    ? 'Updating...'
-                                    : 'Creating...'
-                                : isEditMode
-                                  ? 'Update Instructor'
-                                  : 'Create Instructor'
-                        }}
+                        <Loader2 v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
+                        <Save v-else class="mr-2 h-4 w-4" />
+                        {{ isEditMode ? 'Save Changes' : 'Create Instructor' }}
                     </Button>
                 </div>
             </form>
