@@ -69,10 +69,12 @@ class InstructorService
                 'role' => UserRole::INSTRUCTOR,
             ]);
 
+            //random number between 1 and 5
+            $avatarNumber = rand(1, 5);
+
             // 3. Create instructor profile
             $instructor = Instructor::create([
                 'user_id' => $user->id,
-                'transmission_type' => $data['transmission_type'],
                 'bio' => $data['bio'] ?? null,
                 'address' => $data['address'] ?? null,
                 'postcode' => $data['postcode'],
@@ -80,9 +82,14 @@ class InstructorService
                 'longitude' => $coordinates['longitude'],
                 'status' => 'active',
                 'priority' => false,
+                'rating' => 1,
                 'onboarding_complete' => false,
                 'charges_enabled' => false,
                 'payouts_enabled' => false,
+                'meta' => [
+                    'transmission_type' => $data['transmission_type'] ?? null,
+                    'avatar' => 'https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-'.$avatarNumber.'.jpg',
+                ],
             ]);
 
             // 4. Create instructor locations (postcode sectors)

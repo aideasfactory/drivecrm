@@ -113,28 +113,7 @@ class InstructorController extends Controller
     {
         DB::transaction(function () use ($request) {
             // Create user with instructor role
-            $user = User::create([
-                'name' => $request->input('name'),
-                'email' => $request->input('email'),
-                'password' => Hash::make($request->input('password', 'password123')),
-                'role' => UserRole::INSTRUCTOR,
-            ]);
-
-            // Create instructor profile
-            Instructor::create([
-                'user_id' => $user->id,
-                'bio' => $request->input('bio'),
-                'transmission_type' => $request->input('transmission_type'),
-                'status' => $request->input('status', 'active'),
-                'pdi_status' => $request->input('pdi_status'),
-                'address' => $request->input('address'),
-                'postcode' => $request->input('postcode'),
-                'latitude' => $request->input('latitude'),
-                'longitude' => $request->input('longitude'),
-                'meta' => [
-                    'phone' => $request->input('phone'),
-                ],
-            ]);
+            $instructor = $this->instructorService->createInstructor($request->validated());
         });
 
         return redirect()->route('instructors.index');
@@ -152,20 +131,7 @@ class InstructorController extends Controller
                 'email' => $request->input('email'),
             ]);
 
-            // Update instructor profile
-            $instructor->update([
-                'bio' => $request->input('bio'),
-                'transmission_type' => $request->input('transmission_type'),
-                'status' => $request->input('status', 'active'),
-                'pdi_status' => $request->input('pdi_status'),
-                'address' => $request->input('address'),
-                'postcode' => $request->input('postcode'),
-                'latitude' => $request->input('latitude'),
-                'longitude' => $request->input('longitude'),
-                'meta' => array_merge($instructor->meta ?? [], [
-                    'phone' => $request->input('phone'),
-                ]),
-            ]);
+            $instructor = $this->instructorService->updateInstructor($instructor, $request->validated());
         });
 
         return redirect()->back();
