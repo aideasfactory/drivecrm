@@ -51,6 +51,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('instructors.calendar.items.store');
     Route::delete('/instructors/{instructor}/calendar/items/{calendarItem}', [\App\Http\Controllers\InstructorController::class, 'destroyCalendarItem'])
         ->name('instructors.calendar.items.destroy');
+
+    // Stripe Connect Onboarding Routes
+    Route::post('/instructors/{instructor}/stripe/onboarding/start', [\App\Http\Controllers\InstructorController::class, 'startStripeOnboarding'])
+        ->name('instructors.stripe.onboarding.start');
+    Route::post('/instructors/{instructor}/stripe/onboarding/refresh', [\App\Http\Controllers\InstructorController::class, 'refreshStripeOnboarding'])
+        ->name('instructors.stripe.onboarding.refresh');
+    Route::get('/instructors/{instructor}/stripe/onboarding/return', [\App\Http\Controllers\InstructorController::class, 'returnFromStripeOnboarding'])
+        ->name('instructors.stripe.onboarding.return');
+    Route::get('/instructors/{instructor}/stripe/status', [\App\Http\Controllers\InstructorController::class, 'stripeStatus'])
+        ->name('instructors.stripe.status');
+
     Route::put('/packages/{package}', [\App\Http\Controllers\PackageController::class, 'update'])
         ->name('packages.update');
     Route::get('/pupils', [\App\Http\Controllers\PupilController::class, 'index'])

@@ -64,7 +64,7 @@ const breadcrumbs = [
             />
 
             <!-- Tab Navigation -->
-            <div class="flex gap-1 border-b">
+            <div class="flex gap-1 border-b" v-if="instructor.onboarding_complete">
                 <button
                     v-for="tab in tabs"
                     :key="tab.key"
@@ -81,7 +81,7 @@ const breadcrumbs = [
             </div>
 
             <!-- Tab Content -->
-            <div class="flex flex-col gap-6">
+            <div class="flex flex-col gap-6" v-if="instructor.onboarding_complete">
                 <!-- Schedule Tab -->
                 <ScheduleTab v-if="activeTab === 'schedule'" :instructor-id="instructor.id" />
 

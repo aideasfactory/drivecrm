@@ -69,7 +69,7 @@ class InstructorService
                 'role' => UserRole::INSTRUCTOR,
             ]);
 
-            //random number between 1 and 5
+            // random number between 1 and 5
             $avatarNumber = rand(1, 5);
 
             // 3. Create instructor profile

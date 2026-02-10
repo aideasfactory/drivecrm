@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Enums\UserRole;
 use App\Http\Requests\StoreCalendarItemRequest;
 use App\Http\Requests\StoreInstructorRequest;
 use App\Http\Requests\StoreLocationRequest;
@@ -16,18 +15,19 @@ use App\Models\Location;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\InstructorService;
+use App\Services\StripeService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class InstructorController extends Controller
 {
     public function __construct(
-        protected InstructorService $instructorService
+        protected InstructorService $instructorService,
+        protected StripeService $stripeService
     ) {}
 
     /**
@@ -91,6 +91,9 @@ class InstructorController extends Controller
                 'id' => $instructor->id,
                 'name' => $instructor->user->name,
                 'email' => $instructor->user->email,
+                'onboarding_complete' => $instructor->onboarding_complete,
+                'charges_enabled' => $instructor->charges_enabled,
+                'payouts_enabled' => $instructor->payouts_enabled,
                 'phone' => $instructor->meta['phone'] ?? null,
                 'postcode' => $instructor->postcode,
                 'bio' => $instructor->bio,
@@ -291,5 +294,166 @@ class InstructorController extends Controller
                 'message' => $e->getMessage(),
             ], 400);
         }
+    }
+
+    /**
+     * Start the Stripe Connect onboarding process for an instructor.
+     */
+    public function startStripeOnboarding(Instructor $instructor): JsonResponse
+    {
+        // If already has a Stripe account, redirect to refresh
+        if ($instructor->stripe_account_id) {
+            return response()->json([
+                'message' => 'Instructor already has a Stripe account. Use refresh instead.',
+                'action' => 'refresh',
+            ], 400);
+        }
+
+        try {
+            // Create Stripe Connect Account
+            $accountResult = $this->stripeService->createConnectAccount($instructor);
+
+            if (! $accountResult['success']) {
+                return response()->json([
+                    'message' => 'Failed to create Stripe account: '.$accountResult['error'],
+                ], 500);
+            }
+
+            $instructor->stripe_account_id = $accountResult['account_id'];
+            $instructor->save();
+
+            // Create Account Link
+            $returnUrl = route('instructors.stripe.onboarding.return', $instructor);
+            $refreshUrl = route('instructors.stripe.onboarding.refresh', $instructor);
+
+            $linkResult = $this->stripeService->createAccountLink(
+                $instructor,
+                $returnUrl,
+                $refreshUrl
+            );
+
+            if (! $linkResult['success']) {
+                return response()->json([
+                    'message' => 'Failed to create account link: '.$linkResult['error'],
+                ], 500);
+            }
+
+            return response()->json([
+                'url' => $linkResult['url'],
+                'stripe_account_id' => $accountResult['account_id'],
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to start onboarding: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Refresh the Stripe Connect onboarding link for an instructor.
+     */
+    public function refreshStripeOnboarding(Instructor $instructor): JsonResponse
+    {
+        if (! $instructor->stripe_account_id) {
+            return response()->json([
+                'message' => 'No Stripe account found. Please start onboarding first.',
+            ], 400);
+        }
+
+        try {
+            $returnUrl = route('instructors.stripe.onboarding.return', $instructor);
+            $refreshUrl = route('instructors.stripe.onboarding.refresh', $instructor);
+
+            $linkResult = $this->stripeService->createAccountLink(
+                $instructor,
+                $returnUrl,
+                $refreshUrl
+            );
+
+            if (! $linkResult['success']) {
+                return response()->json([
+                    'message' => 'Failed to refresh onboarding link: '.$linkResult['error'],
+                ], 500);
+            }
+
+            return response()->json([
+                'url' => $linkResult['url'],
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to refresh onboarding: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Handle return from Stripe Connect onboarding.
+     */
+    public function returnFromStripeOnboarding(Instructor $instructor): RedirectResponse
+    {
+        if (! $instructor->stripe_account_id) {
+            return redirect()
+                ->route('instructors.show', $instructor)
+                ->with('error', 'No Stripe account found. Please start onboarding again.');
+        }
+
+        try {
+            // Retrieve the Stripe account to check status
+            $accountResult = $this->stripeService->retrieveAccount($instructor->stripe_account_id);
+
+            if (! $accountResult['success']) {
+                return redirect()
+                    ->route('instructors.show', $instructor)
+                    ->with('error', 'Failed to verify Stripe account status.');
+            }
+
+            $account = $accountResult['account'];
+
+            // Update instructor record with current status
+            $instructor->onboarding_complete = $account->details_submitted ?? false;
+            $instructor->charges_enabled = $account->charges_enabled ?? false;
+            $instructor->payouts_enabled = $account->payouts_enabled ?? false;
+            $instructor->save();
+
+            if ($instructor->onboarding_complete && $instructor->charges_enabled) {
+                return redirect()
+                    ->route('instructors.show', $instructor)
+                    ->with('success', 'Stripe Connect onboarding completed successfully! Instructor can now create packages and receive payments.');
+            }
+
+            return redirect()
+                ->route('instructors.show', $instructor)
+                ->with('warning', 'Onboarding is not yet complete. Please complete all required information in Stripe.');
+
+        } catch (\Exception $e) {
+            return redirect()
+                ->route('instructors.show', $instructor)
+                ->with('error', 'Failed to verify onboarding status: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Get Stripe account status for an instructor.
+     */
+    public function stripeStatus(Instructor $instructor): JsonResponse
+    {
+        if (! $instructor->stripe_account_id) {
+            return response()->json([
+                'connected' => false,
+                'onboarding_complete' => false,
+                'charges_enabled' => false,
+                'payouts_enabled' => false,
+            ]);
+        }
+
+        return response()->json([
+            'connected' => true,
+            'stripe_account_id' => $instructor->stripe_account_id,
+            'onboarding_complete' => $instructor->onboarding_complete,
+            'charges_enabled' => $instructor->charges_enabled,
+            'payouts_enabled' => $instructor->payouts_enabled,
+        ]);
     }
 }
