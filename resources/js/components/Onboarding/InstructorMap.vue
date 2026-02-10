@@ -111,7 +111,7 @@ const initializeMap = async () => {
     
     // Create the map
     map.value = new google.maps.Map(mapContainer.value, {
-      zoom: 13,
+      zoom: 8,
       center: { lat: 51.5074, lng: -0.1278 }, // Default to London
       mapTypeControl: false,
       fullscreenControl: false,
