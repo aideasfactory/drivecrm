@@ -27,7 +27,7 @@ import {
     ItemTitle,
 } from '@/components/ui/item'
 import { MapPin, Plus, Trash2, Loader2 } from 'lucide-vue-next'
-import { toast } from '@/components/ui/sonner'
+import { toast } from '@/components/ui/toast'
 import type { InstructorDetail, Location } from '@/types/instructor'
 
 const props = defineProps<{
@@ -56,7 +56,7 @@ const loadLocations = async () => {
         locations.value = response.data.locations || []
     } catch (error) {
         console.error('Error loading locations:', error)
-        toast.error('Failed to load coverage areas')
+        toast({ title: 'Failed to load coverage areas', variant: 'destructive' })
     } finally {
         isLoading.value = false
     }
@@ -114,7 +114,7 @@ const handleAddLocation = async () => {
         locations.value.sort((a, b) => a.postcode_sector.localeCompare(b.postcode_sector))
 
         // Show success toast
-        toast.success(`Location ${response.data.location.postcode_sector} added successfully`)
+        toast({ title: `Location ${response.data.location.postcode_sector} added successfully` })
 
         // Reset form
         newPostcodeSector.value = ''
@@ -129,7 +129,7 @@ const handleAddLocation = async () => {
         } else {
             const message = error.response?.data?.message || 'Failed to add location'
             formError.value = message
-            toast.error(message)
+            toast({ title: message, variant: 'destructive' })
         }
     } finally {
         isSubmitting.value = false
@@ -154,7 +154,7 @@ const handleDeleteLocation = async () => {
         locations.value = locations.value.filter(loc => loc.id !== deleteLocationId.value)
 
         // Show success toast
-        toast.success(`Location ${locationToDelete.postcode_sector} removed`)
+        toast({ title: `Location ${locationToDelete.postcode_sector} removed` })
 
         // Close dialog
         closeDeleteDialog()
@@ -162,7 +162,7 @@ const handleDeleteLocation = async () => {
     } catch (error: any) {
         console.error('Error deleting location:', error)
         const message = error.response?.data?.message || 'Failed to remove location'
-        toast.error(message)
+        toast({ title: message, variant: 'destructive' })
     } finally {
         isDeleting.value = false
     }

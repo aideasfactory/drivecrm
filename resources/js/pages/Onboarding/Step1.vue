@@ -240,8 +240,7 @@
 
     <OnboardingFooter copyright-text="© 2024 DRIVE Driving School" />
 
-    <!-- Sonner Toast -->
-    <Sonner position="top-right" rich-colors />
+    <Toaster />
   </div>
 </template>
 
@@ -257,7 +256,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Spinner } from '@/components/ui/spinner'
-import { Sonner } from '@/components/ui/sonner'
+import { Toaster } from '@/components/ui/toast'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 import {

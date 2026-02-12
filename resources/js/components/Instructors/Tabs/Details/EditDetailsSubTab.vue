@@ -22,7 +22,7 @@ import { Edit, Package as PackageIcon, Plus, PackagePlus, PackageOpen } from 'lu
 import PackageForm, { type PackageFormData } from '@/components/Instructors/PackageForm.vue'
 import type { Package } from '@/types/instructor'
 import type { InstructorDetail } from '@/types/instructor'
-import { toast } from '@/components/ui/sonner'
+import { toast } from '@/components/ui/toast'
 
 interface Props {
     instructor: InstructorDetail
@@ -48,7 +48,7 @@ const loadPackages = async () => {
         packages.value = response.data.packages
     } catch (error) {
         console.error('Failed to load packages:', error)
-        toast.error('Failed to load packages')
+        toast({ title: 'Failed to load packages', variant: 'destructive' })
     } finally {
         loading.value = false
     }
@@ -94,14 +94,14 @@ const savePackage = async (formData: PackageFormData) => {
                 `/instructors/${props.instructor.id}/packages`,
                 formData
             )
-            toast.success('Package created successfully!')
+            toast({ title: 'Package created successfully!' })
         } else if (selectedPackage.value) {
             // Update existing package
             await axios.put(
                 `/packages/${selectedPackage.value.id}`,
                 formData
             )
-            toast.success('Package updated successfully!')
+            toast({ title: 'Package updated successfully!' })
         }
 
         // Reload packages after save
@@ -110,7 +110,7 @@ const savePackage = async (formData: PackageFormData) => {
     } catch (error: any) {
         console.error('Failed to save package:', error)
         const message = error.response?.data?.message || 'Failed to save package'
-        toast.error(message)
+        toast({ title: message, variant: 'destructive' })
     } finally {
         saving.value = false
     }

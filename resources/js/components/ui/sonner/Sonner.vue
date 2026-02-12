@@ -11,7 +11,7 @@ const props = withDefaults(
   }>(),
   {
     theme: 'light',
-    position: 'top-right',
+    position: 'top-center',
     expand: false,
     richColors: false,
     closeButton: true,

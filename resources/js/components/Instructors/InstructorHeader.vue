@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Mail, Phone, MapPin, Edit, CreditCard, Loader2, CheckCircle } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
+import { toast } from '@/components/ui/toast'
 import type { InstructorDetail } from '@/types/instructor'
 import { stripeStatus, startStripeOnboarding, refreshStripeOnboarding } from '@/actions/App/Http/Controllers/InstructorController'
 
@@ -78,12 +78,12 @@ const handleStripeConnect = async () => {
             // Start new onboarding
             const url = startStripeOnboarding.url(props.instructor.id)
             response = await axios.post(url)
-            toast.success('Redirecting to Stripe...')
+            toast({ title: 'Redirecting to Stripe...' })
         } else if (!status.value.onboarding_complete) {
             // Refresh incomplete onboarding
             const url = refreshStripeOnboarding.url(props.instructor.id)
             response = await axios.post(url)
-            toast.success('Redirecting to Stripe...')
+            toast({ title: 'Redirecting to Stripe...' })
         }
 
         if (response?.data?.url) {
@@ -92,7 +92,7 @@ const handleStripeConnect = async () => {
         }
     } catch (error: any) {
         const message = error.response?.data?.message || 'Failed to start Stripe onboarding'
-        toast.error(message)
+        toast({ title: message, variant: 'destructive' })
         loading.value = false
     }
 }

@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instructor Profile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#DC2626',
+                        'primary-light': '#FEE2E2',
+                    }
+                }
+            }
+        }
+    </script>
+    <script> window.FontAwesomeConfig = { autoReplaceSvg: 'nest'};</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { display: none; }
+        .nav-item { transition: all 0.2s; }
+        .nav-item:hover { background-color: #FEE2E2; }
+        .nav-item.active { background-color: #FEE2E2; color: #DC2626; }
+        .tab-item { transition: all 0.2s; border-bottom: 2px solid transparent; }
+        .tab-item:hover { color: #DC2626; }
+        .tab-item.active { color: #DC2626; border-bottom-color: #DC2626; }
+        .sub-tab-item { transition: all 0.2s; border-bottom: 2px solid transparent; }
+        .sub-tab-item:hover { color: #DC2626; }
+        .sub-tab-item.active { color: #DC2626; border-bottom-color: #DC2626; }
+        .lesson-block { cursor: pointer; transition: all 0.2s; }
+        .lesson-block:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .time-slot { border-bottom: 1px solid #E5E7EB; }
+        .calendar-grid { display: grid; grid-template-columns: 80px repeat(7, 1fr); }
+        .stat-card { transition: all 0.2s; }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
+        .package-card { transition: all 0.2s; }
+        .package-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .timeline-item { position: relative; padding-left: 2rem; margin-bottom: 1.5rem; }
+        .timeline-item::before { content: ''; position: absolute; left: 0.5rem; top: 0; bottom: -1.5rem; width: 2px; background-color: #E5E7EB; }
+        .timeline-item::after { content: ''; position: absolute; left: 0.25rem; top: 0.5rem; width: 0.75rem; height: 0.75rem; border-radius: 50%; background-color: #DC2626; }
+        .timeline-item:last-child::before { display: none; }
+        .filter-badge { transition: all 0.2s; }
+        .filter-badge:hover { transform: translateY(-1px); }
+        .filter-badge.active { background-color: #DC2626; color: white; }
+        .contact-card { transition: all 0.2s; }
+        .contact-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+        .modal.show { display: flex; align-items: center; justify-content: center; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="flex h-[900px]">
+        <aside id="sidebar" class="w-64 bg-white border-r border-gray-200 flex flex-col">
+            <div class="p-6 border-b border-gray-200">
+                <h1 class="text-xl font-bold text-gray-900">GoRoadie Driving School</h1>
+            </div>
+            <nav class="flex-1 p-4 space-y-1">
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700">
+                    <i class="fa-solid fa-chart-line w-5"></i>
+                    <span class="font-medium">Dashboard</span>
+                </a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700">
+                    <i class="fa-solid fa-graduation-cap w-5"></i>
+                    <span class="font-medium">Pupils</span>
+                </a>
+                <a href="#" class="nav-item active flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700">
+                    <i class="fa-solid fa-users w-5"></i>
+                    <span class="font-medium">Team</span>
+                </a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700">
+                    <i class="fa-solid fa-chart-bar w-5"></i>
+                    <span class="font-medium">Reports</span>
+                </a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700">
+                    <i class="fa-solid fa-folder w-5"></i>
+                    <span class="font-medium">Resources</span>
+                </a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700">
+                    <i class="fa-solid fa-gear w-5"></i>
+                    <span class="font-medium">Settings</span>
+                </a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700">
+                    <i class="fa-solid fa-grid-2 w-5"></i>
+                    <span class="font-medium">Apps</span>
+                </a>
+            </nav>
+        </aside>
+
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <header id="header" class="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-end">
+                <div class="flex items-center gap-3">
+                    <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-2.jpg" alt="User" class="w-10 h-10 rounded-full">
+                    <div class="flex items-center gap-2">
+                        <span class="font-medium text-gray-900">Admin User</span>
+                        <i class="fa-solid fa-chevron-down text-gray-500 text-sm"></i>
+                    </div>
+                </div>
+            </header>
+
+            <main id="main-content" class="flex-1 overflow-y-auto">
+                <div class="p-8">
+                    <div id="instructor-header" class="mb-8">
+                        <div class="flex items-start justify-between mb-6">
+                            <div class="flex items-center gap-4">
+                                <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-2.jpg" alt="James Mitchell" class="w-20 h-20 rounded-full">
+                                <div>
+                                    <h2 class="text-3xl font-bold text-gray-900 mb-2">James Mitchell</h2>
+                                    <div class="flex items-center gap-6 text-gray-600">
+                                        <div class="flex items-center gap-2">
+                                            <i class="fa-solid fa-phone text-primary"></i>
+                                            <span>07700 900123</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <i class="fa-solid fa-envelope text-primary"></i>
+                                            <span>james.mitchell@goroadie.com</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <i class="fa-solid fa-location-dot text-primary"></i>
+                                            <span>M1 1AA</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button class="px-6 py-3 bg-white border-2 border-primary text-primary rounded-lg font-semibold hover:bg-primary-light transition-colors">
+                                <i class="fa-solid fa-pen mr-2"></i>Edit Profile
+                            </button>
+                        </div>
+
+                        <div id="tabs-navigation" class="flex items-center gap-8 border-b border-gray-200">
+                            <button class="tab-item px-1 py-4 font-semibold text-gray-700" data-tab="schedule">Schedule</button>
+                            <button class="tab-item active px-1 py-4 font-semibold text-gray-700" data-tab="details">Details</button>
+                            <button class="tab-item px-1 py-4 font-semibold text-gray-700" data-tab="pupils">Active Pupils</button>
+                            <button class="tab-item px-1 py-4 font-semibold text-gray-700" data-tab="actions">Actions</button>
+                        </div>
+                    </div>
+
+                    <div id="details-tab-content" class="tab-content">
+                        <div id="details-sub-tabs" class="flex items-center gap-6 border-b border-gray-200 mb-6">
+                            <button class="sub-tab-item px-1 py-3 font-medium text-gray-700" data-subtab="summary">Summary</button>
+                            <button class="sub-tab-item px-1 py-3 font-medium text-gray-700" data-subtab="edit">Edit Details / Packages</button>
+                            <button class="sub-tab-item px-1 py-3 font-medium text-gray-700" data-subtab="coverage">Coverage</button>
+                            <button class="sub-tab-item px-1 py-3 font-medium text-gray-700" data-subtab="activity">Activity</button>
+                            <button class="sub-tab-item active px-1 py-3 font-medium text-gray-700" data-subtab="emergency">Emergency Contact</button>
+                        </div>
+
+                        <div id="summary-subtab" class="subtab-content hidden">
+                        </div>
+
+                        <div id="edit-subtab" class="subtab-content hidden">
+                        </div>
+
+                        <div id="coverage-subtab" class="subtab-content hidden">
+                            <div id="coverage-layout" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                <div id="zones-list" class="lg:col-span-1">
+                                    <h3 class="text-md font-semibold text-gray-800 mb-4">Zones:</h3>
+                                    <div class="space-y-3 max-h-[600px] overflow-y-auto pr-2">
+                                        <div class="flex items-center gap-3 p-3 bg-white border border-gray-300 rounded-lg">
+                                            <span class="w-4 h-4 rounded-full bg-purple-400"></span>
+                                            <span class="font-medium text-gray-700">GL20</span>
+                                        </div>
+                                        <div class="flex items-center gap-3 p-3 bg-white border border-gray-300 rounded-lg">
+                                            <span class="w-4 h-4 rounded-full" style="background-color: #B91C1C;"></span>
+                                            <span class="font-medium text-gray-700">HR8</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="map-container" class="lg:col-span-2 relative h-[650px] rounded-lg overflow-hidden border border-gray-200">
+                                    <img class="w-full h-full object-cover" src="https://storage.googleapis.com/uxpilot-auth.appspot.com/0ee7ff94a1-bf9d439402d6570a0b02.png" alt="a detailed map of the United Kingdom and surrounding areas, satellite view with labels for cities and countries, for a logistics application" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="activity-subtab" class="subtab-content hidden">
+                            <div id="activity-header" class="mb-6">
+                                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+                                    <h3 class="text-lg font-bold text-gray-900">Activity Timeline</h3>
+                                    <div class="flex items-center gap-4">
+                                        <div class="relative">
+                                            <input type="text" id="activity-search" placeholder="Search activity..." class="w-64 px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                                            <i class="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div id="activity-filters" class="flex flex-wrap gap-3 mb-6">
+                                    <button class="filter-badge active px-4 py-2 bg-gray-200 text-gray-700 rounded-full text-sm font-medium" data-filter="all">All</button>
+                                    <button class="filter-badge px-4 py-2 bg-gray-200 text-gray-700 rounded-full text-sm font-medium" data-filter="lesson">
+                                        <i class="fa-solid fa-car mr-2"></i>Lessons
+                                    </button>
+                                    <button class="filter-badge px-4 py-2 bg-gray-200 text-gray-700 rounded-full text-sm font-medium" data-filter="booking">
+                                        <i class="fa-solid fa-calendar mr-2"></i>Bookings
+                                    </button>
+                                    <button class="filter-badge px-4 py-2 bg-gray-200 text-gray-700 rounded-full text-sm font-medium" data-filter="message">
+                                        <i class="fa-solid fa-message mr-2"></i>Messages
+                                    </button>
+                                    <button class="filter-badge px-4 py-2 bg-gray-200 text-gray-700 rounded-full text-sm font-medium" data-filter="payment">
+                                        <i class="fa-solid fa-credit-card mr-2"></i>Payments
+                                    </button>
+                                    <button class="filter-badge px-4 py-2 bg-gray-200 text-gray-700 rounded-full text-sm font-medium" data-filter="profile">
+                                        <i class="fa-solid fa-user mr-2"></i>Profile
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="activity-timeline" class="bg-white rounded-lg border border-gray-200 p-6 max-h-[600px] overflow-y-auto">
+                                <div class="timeline-item" data-category="lesson">
+                                    <div class="bg-gray-50 rounded-lg p-4">
+                                        <div class="flex items-start justify-between mb-2">
+                                            <div class="flex items-center gap-3">
+                                                <i class="fa-solid fa-car text-blue-600"></i>
+                                                <span class="font-semibold text-gray-900">Lesson Completed</span>
+                                            </div>
+                                            <span class="text-sm text-gray-500">2 hours ago</span>
+                                        </div>
+                                        <p class="text-gray-700 mb-2">Completed 2-hour lesson with Sarah Johnson</p>
+                                        <div class="text-sm text-gray-500">
+                                            <span>Duration: 2 hours</span> • <span>Location: Manchester City Centre</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="timeline-item" data-category="message">
+                                    <div class="bg-gray-50 rounded-lg p-4">
+                                        <div class="flex items-start justify-between mb-2">
+                                            <div class="flex items-center gap-3">
+                                                <i class="fa-solid fa-message text-green-600"></i>
+                                                <span class="font-semibold text-gray-900">Message Received</span>
+                                            </div>
+                                            <span class="text-sm text-gray-500">5 hours ago</span>
+                                        </div>
+                                        <p class="text-gray-700 mb-2">New message from Tom Wilson regarding lesson rescheduling</p>
+                                        <div class="text-sm text-gray-500">
+                                            <span>Pupil: Tom Wilson</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="timeline-item" data-category="booking">
+                                    <div class="bg-gray-50 rounded-lg p-4">
+                                        <div class="flex items-start justify-between mb-2">
+                                            <div class="flex items-center gap-3">
+                                                <i class="fa-solid fa-calendar text-purple-600"></i>
+                                                <span class="font-semibold text-gray-900">Lesson Booked</span>
+                                            </div>
+                                            <span class="text-sm text-gray-500">1 day ago</span>
+                                        </div>
+                                        <p class="text-gray-700 mb-2">New lesson booked by Emma Clarke</p>
+                                        <div class="text-sm text-gray-500">
+                                            <span>Date: Tomorrow 2:00 PM</span> • <span>Duration: 1.5 hours</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="emergency-subtab" class="subtab-content">
+                            <div id="emergency-contacts-header" class="flex items-center justify-between mb-6">
+                                <h3 class="text-lg font-bold text-gray-900">Emergency Contacts</h3>
+                                <button id="add-contact-btn" class="px-4 py-2 bg-primary text-white rounded-lg font-medium hover:bg-red-700 transition-colors">
+                                    <i class="fa-solid fa-plus mr-2"></i>Add Contact
+                                </button>
+                            </div>
+
+                            <div id="emergency-contacts-list" class="space-y-4 max-h-[600px] overflow-y-auto">
+                                <div class="contact-card bg-white rounded-lg border border-gray-200 p-6" data-contact-id="1">
+                                    <div class="flex items-start justify-between">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-3 mb-3">
+                                                <h4 class="text-lg font-semibold text-gray-900">Sarah Mitchell</h4>
+                                                <span class="px-3 py-1 bg-primary text-white text-sm rounded-full font-medium">Primary</span>
+                                            </div>
+                                            <div class="space-y-2 text-gray-600">
+                                                <div class="flex items-center gap-3">
+                                                    <i class="fa-solid fa-user-tag w-4 text-gray-400"></i>
+                                                    <span>Spouse</span>
+                                                </div>
+                                                <div class="flex items-center gap-3">
+                                                    <i class="fa-solid fa-phone w-4 text-gray-400"></i>
+                                                    <span>07700 900456</span>
+                                                </div>
+                                                <div class="flex items-center gap-3">
+                                                    <i class="fa-solid fa-envelope w-4 text-gray-400"></i>
+                                                    <span>sarah.mitchell@email.com</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button class="edit-contact-btn p-2 text-gray-400 hover:text-primary transition-colors" data-contact-id="1">
+                                                <i class="fa-solid fa-pen"></i>
+                                            </button>
+                                            <button class="delete-contact-btn p-2 text-gray-400 hover:text-red-600 transition-colors" data-contact-id="1">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="contact-card bg-white rounded-lg border border-gray-200 p-6" data-contact-id="2">
+                                    <div class="flex items-start justify-between">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-3 mb-3">
+                                                <h4 class="text-lg font-semibold text-gray-900">Robert Mitchell</h4>
+                                                <button class="set-primary-btn px-3 py-1 bg-gray-200 text-gray-700 text-sm rounded-full font-medium hover:bg-gray-300 transition-colors" data-contact-id="2">
+                                                    Set as Primary
+                                                </button>
+                                            </div>
+                                            <div class="space-y-2 text-gray-600">
+                                                <div class="flex items-center gap-3">
+                                                    <i class="fa-solid fa-user-tag w-4 text-gray-400"></i>
+                                                    <span>Brother</span>
+                                                </div>
+                                                <div class="flex items-center gap-3">
+                                                    <i class="fa-solid fa-phone w-4 text-gray-400"></i>
+                                                    <span>07700 900789</span>
+                                                </div>
+                                                <div class="flex items-center gap-3">
+                                                    <i class="fa-solid fa-envelope w-4 text-gray-400"></i>
+                                                    <span>robert.mitchell@email.com</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button class="edit-contact-btn p-2 text-gray-400 hover:text-primary transition-colors" data-contact-id="2">
+                                                <i class="fa-solid fa-pen"></i>
+                                            </button>
+                                            <button class="delete-contact-btn p-2 text-gray-400 hover:text-red-600 transition-colors" data-contact-id="2">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="contact-card bg-white rounded-lg border border-gray-200 p-6" data-contact-id="3">
+                                    <div class="flex items-start justify-between">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-3 mb-3">
+                                                <h4 class="text-lg font-semibold text-gray-900">Dr. Emily Watson</h4>
+                                                <button class="set-primary-btn px-3 py-1 bg-gray-200 text-gray-700 text-sm rounded-full font-medium hover:bg-gray-300 transition-colors" data-contact-id="3">
+                                                    Set as Primary
+                                                </button>
+                                            </div>
+                                            <div class="space-y-2 text-gray-600">
+                                                <div class="flex items-center gap-3">
+                                                    <i class="fa-solid fa-user-tag w-4 text-gray-400"></i>
+                                                    <span>Family Doctor</span>
+                                                </div>
+                                                <div class="flex items-center gap-3">
+                                                    <i class="fa-solid fa-phone w-4 text-gray-400"></i>
+                                                    <span>0161 234 5678</span>
+                                                </div>
+                                                <div class="flex items-center gap-3">
+                                                    <i class="fa-solid fa-envelope w-4 text-gray-400"></i>
+                                                    <span>reception@manchestermedical.nhs.uk</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button class="edit-contact-btn p-2 text-gray-400 hover:text-primary transition-colors" data-contact-id="3">
+                                                <i class="fa-solid fa-pen"></i>
+                                            </button>
+                                            <button class="delete-contact-btn p-2 text-gray-400 hover:text-red-600 transition-colors" data-contact-id="3">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="schedule-tab-content" class="tab-content hidden">
+                    </div>
+                </div>
+            </main>
+
+            <footer id="footer" class="bg-white border-t border-gray-200 px-8 py-4 text-center text-sm text-gray-500">
+                <p>&copy; GoRoadie 2025 | <a href="#" class="hover:underline">Privacy Policy</a> | <a href="#" class="hover:underline">Cookie Settings</a></p>
+            </footer>
+        </div>
+    </div>
+
+    <div id="contact-modal" class="modal">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div class="flex items-center justify-between mb-6">
+                <h3 id="modal-title" class="text-lg font-bold text-gray-900">Add Emergency Contact</h3>
+                <button id="close-modal" class="text-gray-400 hover:text-gray-600">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <form id="contact-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
+                    <input type="text" id="contact-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Relationship</label>
+                    <select id="contact-relationship" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" required>
+                        <option value="">Select relationship</option>
+                        <option value="Spouse">Spouse</option>
+                        <option value="Parent">Parent</option>
+                        <option value="Child">Child</option>
+                        <option value="Sibling">Sibling</option>
+                        <option value="Friend">Friend</option>
+                        <option value="Doctor">Doctor</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+                    <input type="tel" id="contact-phone" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+                    <input type="email" id="contact-email" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="contact-primary" class="rounded border-gray-300 text-primary focus:ring-primary">
+                    <label for="contact-primary" class="text-sm text-gray-700">Set as primary contact</label>
+                </div>
+                <div class="flex gap-3 pt-4">
+                    <button type="submit

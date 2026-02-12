@@ -45,8 +45,7 @@
       </Card>
     </footer>
 
-    <!-- Sonner Toast -->
-    <Sonner position="top-right" rich-colors close-button />
+    <Toaster />
   </div>
 </template>
 
@@ -55,7 +54,7 @@ import { computed } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Sonner } from '@/components/ui/sonner'
+import { Toaster } from '@/components/ui/toast'
 import Stepper from '@/components/Onboarding/Stepper.vue'
 
 const page = usePage()

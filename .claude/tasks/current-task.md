@@ -1,400 +1,313 @@
-# Task: Stripe Package Creation & Instructor Onboarding - COMPLETE ✅
+# Task: Emergency Contacts System (Morphable for Instructors & Students)
 
-**Created:** 2026-02-10
-**Last Updated:** 2026-02-10
-**Status:** ✅ Complete - Backend Implementation Done
+**Created:** 2026-02-12
+**Last Updated:** 2026-02-12
+**Status:** 🔄 Phase 1 - Planning
 
 ---
 
-## 📋 Overview
+## Overview
 
 ### Goal
-Implement two critical Stripe features:
-1. ✅ **Package Sync to Stripe:** Create Stripe Products & Prices when packages are created
-2. ✅ **Instructor Onboarding:** Enable instructors to create Stripe Connect accounts for receiving payouts
+Implement a polymorphic emergency contacts system that allows storing emergency contact information for both instructors and students, with:
+- Morphable `contacts` table (works for both Instructors and Students)
+- Primary contact designation (only one primary per entity)
+- Full CRUD operations (add, edit, delete, set as primary)
+- Frontend UI matching wireframe layout (emergency contact section only)
+- Sheet-based forms for add/edit using ShadCN components
 
-### Implementation Complete ✅
+### Requirements Summary
+1. Polymorphic `contacts` table with emergency contact fields
+2. Contact model with `is_primary` column
+3. Migration with proper indexes
+4. Update Instructor and Student models with `contacts()` morphMany relationship
+5. CRUD Actions in `App\Actions\Shared\Contact\` folder
+6. Controller methods on InstructorController and PupilController
+7. API routes for contacts CRUD + set-primary
+8. Frontend EmergencyContactSubTab.vue (self-loading pattern)
+9. Add/Edit Sheet form with ShadCN components
+10. Delete confirmation Dialog
 
-**Backend implementation is complete!** The following has been successfully implemented:
-
----
-
-## ✅ What Was Implemented
-
-### Feature 1: Package Creation → Stripe Sync
-
-**File Modified:** `app/Actions/Instructor/CreateInstructorPackageAction.php`
-
-**What it does:**
-1. ✅ Validates instructor has completed Stripe onboarding
-2. ✅ Creates package in database
-3. ✅ Creates Stripe Product (`prod_xxxxx`)
-4. ✅ Creates Stripe Price (`price_xxxxx`)
-5. ✅ Stores `stripe_product_id` and `stripe_price_id` in database
-6. ✅ Transaction safety (rolls back if Stripe fails)
-7. ✅ Comprehensive error handling and logging
-
-**Code Added:**
-- Injected `StripeService` into action
-- Added onboarding check before package creation
-- Wrapped in `DB::beginTransaction()`
-- Calls `StripeService::createProduct()` and `StripeService::createPrice()`
-- Saves Stripe IDs to package record
-- Logs all Stripe operations
-- Throws exceptions on failure (caught by controller)
+### Reference
+- Wireframe: `wireframes/instructor-Emergency-contact.html` (emergency section only, lines 264-376)
+- Use ShadCN components for ALL UI elements
+- Follow Controller -> Service -> Action pattern
+- Follow self-loading sub-tab pattern (like CoverageSubTab / ActivitySubTab)
 
 ---
 
-### Feature 2: Instructor Stripe Connect Onboarding
+## Phase 1: Planning (**CURRENT**)
 
-**Files Modified:**
-- `app/Http/Controllers/InstructorController.php` (added 4 new methods)
-- `routes/web.php` (added 4 new routes)
+**Objective:** Design the database schema, model relationships, and implementation approach.
 
-**New Controller Methods:**
+### Tasks
 
-#### 1. `startStripeOnboarding(Instructor $instructor): JsonResponse`
-- Creates Stripe Connect Express account
-- Stores `stripe_account_id` in database
-- Generates Account Link for Stripe-hosted onboarding
-- Returns onboarding URL to frontend
-- **Route:** `POST /instructors/{instructor}/stripe/onboarding/start`
+#### Database Design
+- [ ] Design `contacts` table structure
+  - [ ] Polymorphic columns (contactable_type, contactable_id)
+  - [ ] name (string) - Full name of emergency contact
+  - [ ] relationship (string) - Relationship type (Spouse, Parent, Child, Sibling, Friend, Doctor, Other)
+  - [ ] phone (string) - Phone number
+  - [ ] email (string, nullable) - Email address
+  - [ ] is_primary (boolean, default false) - Primary contact flag
+  - [ ] Timestamps
+- [ ] Plan indexes for performance (contactable composite, is_primary)
 
-#### 2. `refreshStripeOnboarding(Instructor $instructor): JsonResponse`
-- Generates new Account Link if previous one expired
-- Returns fresh onboarding URL
-- **Route:** `POST /instructors/{instructor}/stripe/onboarding/refresh`
+#### Model Design
+- [ ] Plan Contact model structure
+  - [ ] Morphable relationship setup (`contactable` morphTo)
+  - [ ] `$fillable` array
+  - [ ] `$casts` array (is_primary as boolean)
+  - [ ] Scopes: `primary()`, `forEntity()`
+- [ ] Plan Instructor model updates (add `contacts()` morphMany)
+- [ ] Plan Student model updates (add `contacts()` morphMany)
 
-#### 3. `returnFromStripeOnboarding(Instructor $instructor): RedirectResponse`
-- Handles return from Stripe onboarding
-- Retrieves account status from Stripe
-- Updates instructor record:
-  - `onboarding_complete`
-  - `charges_enabled`
-  - `payouts_enabled`
-- Redirects to instructor show page with success/warning message
-- **Route:** `GET /instructors/{instructor}/stripe/onboarding/return`
+#### Action Design
+- [ ] Design CRUD Actions in `App\Actions\Shared\Contact\`
+  - [ ] `CreateContactAction` - Create new contact, handle primary logic
+  - [ ] `UpdateContactAction` - Update contact details
+  - [ ] `DeleteContactAction` - Delete a contact
+  - [ ] `SetPrimaryContactAction` - Set a contact as primary (unset others)
 
-#### 4. `stripeStatus(Instructor $instructor): JsonResponse`
-- Returns current Stripe connection status
-- Used by frontend to show connection state
-- **Route:** `GET /instructors/{instructor}/stripe/status`
+#### Controller & Route Design
+- [ ] Plan InstructorController methods:
+  - [ ] `contacts(Instructor)` - GET list all contacts
+  - [ ] `storeContact(Request, Instructor)` - POST create contact
+  - [ ] `updateContact(Request, Instructor, Contact)` - PUT update contact
+  - [ ] `deleteContact(Instructor, Contact)` - DELETE remove contact
+  - [ ] `setPrimaryContact(Instructor, Contact)` - PATCH set as primary
+- [ ] Plan PupilController methods (same pattern for Student)
+- [ ] Plan routes for both instructor and student contacts
 
-**Routes Added:**
-```php
-POST   /instructors/{instructor}/stripe/onboarding/start
-POST   /instructors/{instructor}/stripe/onboarding/refresh
-GET    /instructors/{instructor}/stripe/onboarding/return
-GET    /instructors/{instructor}/stripe/status
+#### Frontend Design
+- [ ] Analyze wireframe emergency section (lines 264-376)
+- [ ] Layout structure:
+  - [ ] Header: title + "Add Contact" button (flex, justify-between)
+  - [ ] Contact cards list (space-y-4, max-h scrollable)
+  - [ ] Each card: name + primary badge/button, relationship, phone, email, edit/delete buttons
+- [ ] Plan ShadCN components:
+  - [ ] Card for each contact
+  - [ ] Badge for "Primary" indicator
+  - [ ] Button for "Set as Primary", "Add Contact", edit, delete
+  - [ ] Sheet for add/edit form (slides from right)
+  - [ ] Dialog for delete confirmation
+  - [ ] Input, Label, Select for form fields
+  - [ ] Skeleton for loading states
+- [ ] Plan Vue component structure:
+  - [ ] `EmergencyContactSubTab.vue` - Main self-loading component
+  - [ ] Inline Sheet for add/edit (like CoverageSubTab pattern)
+  - [ ] Inline Dialog for delete confirmation
+
+#### Documentation Plan
+- [ ] Plan database-schema.md updates for contacts table
+- [ ] Update relationship diagrams
+
+### Reflection
+**What went well:** (To be filled after phase completion)
+**What could be improved:** (To be filled after phase completion)
+**Blockers:** None currently
+
+---
+
+## Phase 2: Backend Implementation
+
+**Objective:** Create database migration, model, actions, controller methods, and routes.
+
+### Tasks
+
+#### Database Migration
+- [ ] Create migration: `create_contacts_table`
+- [ ] Add polymorphic columns (contactable_type, contactable_id)
+- [ ] Add name (string), relationship (string), phone (string), email (string nullable)
+- [ ] Add is_primary (boolean, default false)
+- [ ] Add timestamps
+- [ ] Add composite index on (contactable_type, contactable_id)
+- [ ] **IMMEDIATELY update `.claude/database-schema.md`**
+
+#### Model Creation
+- [ ] Create `App\Models\Contact` model
+  - [ ] Define `contactable()` morphTo relationship
+  - [ ] Add `$fillable` array
+  - [ ] Add `$casts` array
+  - [ ] Add `scopePrimary()` scope
+- [ ] Update `App\Models\Instructor`
+  - [ ] Add `contacts()` morphMany relationship
+- [ ] Update `App\Models\Student`
+  - [ ] Add `contacts()` morphMany relationship
+
+#### Action Creation
+- [ ] Create `App\Actions\Shared\Contact\CreateContactAction`
+  - [ ] Parameters: Model $contactable, array $data
+  - [ ] Handle primary logic (if is_primary, unset others first)
+  - [ ] Return Contact
+- [ ] Create `App\Actions\Shared\Contact\UpdateContactAction`
+  - [ ] Parameters: Contact $contact, array $data
+  - [ ] Handle primary logic
+  - [ ] Return Contact
+- [ ] Create `App\Actions\Shared\Contact\DeleteContactAction`
+  - [ ] Parameters: Contact $contact
+  - [ ] Return void
+- [ ] Create `App\Actions\Shared\Contact\SetPrimaryContactAction`
+  - [ ] Parameters: Contact $contact
+  - [ ] Unset all other primary contacts for the same entity
+  - [ ] Set this contact as primary
+  - [ ] Return Contact
+
+#### Controller Methods
+- [ ] Add to `InstructorController`:
+  - [ ] `contacts(Instructor)` - List contacts
+  - [ ] `storeContact(Request, Instructor)` - Create contact
+  - [ ] `updateContact(Request, Instructor, Contact)` - Update contact
+  - [ ] `deleteContact(Instructor, Contact)` - Delete contact
+  - [ ] `setPrimaryContact(Instructor, Contact)` - Set primary
+- [ ] Add to `PupilController`:
+  - [ ] Same 5 methods for Student
+
+#### Routes
+- [ ] Add instructor contact routes
+- [ ] Add student contact routes
+
+### Reflection
+**What went well:** (To be filled after phase completion)
+**What could be improved:** (To be filled after phase completion)
+**Blockers:** None currently
+
+---
+
+## Phase 3: Frontend Implementation
+
+**Objective:** Create Vue component matching wireframe layout using ShadCN components.
+
+### Tasks
+
+#### Component Creation
+- [ ] Implement `EmergencyContactSubTab.vue`
+  - [ ] Self-loading pattern (fetch contacts in onMounted)
+  - [ ] Loading skeleton state
+  - [ ] Header with title + "Add Contact" button
+  - [ ] Contact cards list with scroll
+  - [ ] Each card: name, primary badge/button, relationship, phone, email
+  - [ ] Edit and delete action buttons per card
+  - [ ] Empty state when no contacts
+- [ ] Implement Add/Edit Sheet form
+  - [ ] Sheet from right side
+  - [ ] Form fields: name, relationship (Select), phone, email
+  - [ ] Primary contact checkbox
+  - [ ] Submit button with loading state
+  - [ ] Validation error display
+- [ ] Implement Delete confirmation Dialog
+  - [ ] Confirmation message
+  - [ ] Cancel / Confirm buttons
+
+#### Integration
+- [ ] Verify EmergencyContactSubTab is wired into DetailsTab.vue
+- [ ] Pass `instructor` prop
+- [ ] Test self-loading data flow
+
+#### Styling Verification
+- [ ] NO custom colors used (ShadCN defaults only)
+- [ ] Layout matches wireframe structure
+- [ ] All icons from lucide-vue-next
+- [ ] Responsive design
+
+### Reflection
+**What went well:** (To be filled after phase completion)
+**What could be improved:** (To be filled after phase completion)
+**Blockers:** None currently
+
+---
+
+## Phase 4: Review & Documentation
+
+**Objective:** Final review and documentation updates.
+
+### Tasks
+- [ ] Verify database-schema.md is fully updated
+- [ ] Verify all CRUD operations work end-to-end
+- [ ] Verify primary contact logic (only one primary per entity)
+- [ ] Review code for pattern adherence
+- [ ] Summary of changes and score
+
+### Reflection
+**What went well:** (To be filled after phase completion)
+**What could be improved:** (To be filled after phase completion)
+**Blockers:** None currently
+
+---
+
+## Database Schema Preview
+
+### contacts Table (To Be Created)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique contact identifier |
+| `contactable_type` | varchar(255) | NOT NULL | Model type (Instructor/Student) |
+| `contactable_id` | bigint unsigned | NOT NULL | Model ID |
+| `name` | varchar(255) | NOT NULL | Emergency contact full name |
+| `relationship` | varchar(100) | NOT NULL | Relationship to the person |
+| `phone` | varchar(50) | NOT NULL | Phone number |
+| `email` | varchar(255) | NULLABLE | Email address |
+| `is_primary` | boolean | DEFAULT false | Whether this is the primary contact |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Indexes:**
+- Composite index on `(contactable_type, contactable_id)`
+
+**Relationships:**
+- Morphable to `Instructor` or `Student`
+
+**Relationship Values:**
+- Spouse, Parent, Child, Sibling, Friend, Doctor, Other
+
+---
+
+## Technical Architecture
+
+### Backend
+```
+app/
+├── Models/
+│   ├── Contact.php (NEW)
+│   ├── Instructor.php (UPDATE - add contacts relationship)
+│   └── Student.php (UPDATE - add contacts relationship)
+├── Actions/
+│   └── Shared/
+│       └── Contact/
+│           ├── CreateContactAction.php (NEW)
+│           ├── UpdateContactAction.php (NEW)
+│           ├── DeleteContactAction.php (NEW)
+│           └── SetPrimaryContactAction.php (NEW)
+
+routes/web.php (UPDATE - add contact routes)
 ```
 
-**Wayfinder Generated TypeScript Functions:**
-- `startStripeOnboarding(instructorId)`
-- `refreshStripeOnboarding(instructorId)`
-- `returnFromStripeOnboarding(instructorId)`
-- `stripeStatus(instructorId)`
-
----
-
-## 🔄 How It Works
-
-### Package Creation Flow (Now with Stripe Sync)
-
+### Frontend
 ```
-User creates package:
-├─> POST /instructors/{instructor}/packages
-├─> InstructorController::createPackage()
-├─> InstructorService::createPackage()
-├─> CreateInstructorPackageAction (UPDATED)
-    ├─> Check: Instructor onboarding complete? ✓
-    ├─> Begin transaction
-    ├─> Create Package in DB
-    ├─> Call StripeService::createProduct()
-    │   └─> Stripe API: Create Product → prod_xxxxx
-    ├─> Save stripe_product_id to package
-    ├─> Call StripeService::createPrice()
-    │   └─> Stripe API: Create Price → price_xxxxx
-    ├─> Save stripe_price_id to package
-    ├─> Commit transaction
-    └─> Return package with Stripe IDs ✅
-
-If any step fails:
-    └─> Rollback transaction
-    └─> Log error
-    └─> Throw exception
-    └─> Controller returns error to frontend
-```
-
-### Instructor Onboarding Flow (New)
-
-```
-1. Start Onboarding:
-   POST /instructors/{instructor}/stripe/onboarding/start
-   ├─> Create Stripe Connect Account (Express)
-   ├─> Save stripe_account_id to instructor
-   ├─> Generate Account Link
-   └─> Return onboarding URL
-
-2. Redirect to Stripe:
-   Frontend → window.location.href = onboardingUrl
-   User completes bank details, identity verification
-
-3. Return from Stripe:
-   GET /instructors/{instructor}/stripe/onboarding/return
-   ├─> Retrieve account status from Stripe
-   ├─> Update instructor:
-   │   - onboarding_complete = true/false
-   │   - charges_enabled = true/false
-   │   - payouts_enabled = true/false
-   └─> Redirect to instructor show page with message
-
-4. Check Status (Anytime):
-   GET /instructors/{instructor}/stripe/status
-   └─> Return current connection status
-```
-
----
-
-## 📊 Database Fields Used
-
-### `packages` table:
-- ✅ `stripe_product_id` (string, nullable) - Now populated
-- ✅ `stripe_price_id` (string, nullable) - Now populated
-
-### `instructors` table:
-- ✅ `stripe_account_id` (string, nullable) - Now populated by onboarding
-- ✅ `onboarding_complete` (boolean) - Updated by return handler
-- ✅ `charges_enabled` (boolean) - Updated by return handler
-- ✅ `payouts_enabled` (boolean) - Updated by return handler
-
----
-
-## 🎯 Frontend Integration Needed
-
-**The backend is complete and ready!** Frontend needs to:
-
-### For Package Creation:
-1. **No changes needed** - Existing package creation form will now automatically sync to Stripe
-2. **Optional:** Add loading indicator during Stripe sync
-3. **Optional:** Display Stripe IDs in package details
-
-### For Instructor Onboarding:
-Frontend developers should create:
-
-1. **Onboarding Button/Card** (on Instructor show page):
-   ```javascript
-   // Check if instructor needs onboarding
-   const stripeStatus = await axios.get(`/instructors/${instructorId}/stripe/status`)
-
-   if (!stripeStatus.data.connected) {
-       // Show "Connect Stripe Account" button
-       <Button onClick={startOnboarding}>
-           Connect Stripe Account
-       </Button>
-   } else if (!stripeStatus.data.onboarding_complete) {
-       // Show "Complete Onboarding" button
-       <Button onClick={refreshOnboarding}>
-           Complete Stripe Onboarding
-       </Button>
-   } else {
-       // Show connected status
-       <Badge>Stripe Connected ✓</Badge>
-   }
-   ```
-
-2. **Start Onboarding Function**:
-   ```javascript
-   async function startOnboarding() {
-       const response = await axios.post(
-           `/instructors/${instructorId}/stripe/onboarding/start`
-       )
-
-       // Redirect to Stripe
-       window.location.href = response.data.url
-   }
-   ```
-
-3. **Refresh Onboarding Function**:
-   ```javascript
-   async function refreshOnboarding() {
-       const response = await axios.post(
-           `/instructors/${instructorId}/stripe/onboarding/refresh`
-       )
-
-       // Redirect to Stripe
-       window.location.href = response.data.url
-   }
-   ```
-
-4. **Status Display**:
-   ```javascript
-   // After page load, check status
-   const stripeStatus = await axios.get(`/instructors/${instructorId}/stripe/status`)
-
-   // Show connection status with badges
-   - Stripe Account: {connected ? '✓ Connected' : '✗ Not Connected'}
-   - Onboarding: {onboarding_complete ? '✓ Complete' : '⚠ Incomplete'}
-   - Charges: {charges_enabled ? '✓ Enabled' : '✗ Disabled'}
-   - Payouts: {payouts_enabled ? '✓ Enabled' : '✗ Disabled'}
-   ```
-
----
-
-## 🧪 Testing the Implementation
-
-### Test Package Creation with Stripe Sync:
-
-1. **Ensure instructor has completed onboarding first** (or it will fail)
-2. Create a package via existing UI/API
-3. Check database: `stripe_product_id` and `stripe_price_id` should be populated
-4. Check Stripe Dashboard → Products → Should see new product
-5. Check logs: Should see "Stripe Product created" and "Stripe Price created"
-
-**Error Scenario Test:**
-- Try creating package before instructor onboarding → Should return error: "Instructor must complete Stripe Connect onboarding before creating packages"
-
-### Test Instructor Onboarding:
-
-1. **Start Onboarding:**
-   ```bash
-   curl -X POST http://localhost/instructors/1/stripe/onboarding/start \
-     -H "Content-Type: application/json"
-   ```
-   - Should return: `{ "url": "https://connect.stripe.com/setup/...", "stripe_account_id": "acct_..." }`
-   - Check database: `stripe_account_id` should be saved
-
-2. **Visit Onboarding URL:**
-   - Open the returned URL in browser
-   - Complete Stripe onboarding (bank details, identity)
-   - Stripe redirects to: `/instructors/1/stripe/onboarding/return`
-
-3. **After Return:**
-   - Check database: `onboarding_complete`, `charges_enabled`, `payouts_enabled` should be true
-   - Should redirect to instructor show page with success message
-
-4. **Check Status:**
-   ```bash
-   curl http://localhost/instructors/1/stripe/status
-   ```
-   - Should return connection status
-
-**Using Wayfinder (TypeScript):**
-```typescript
-import { startStripeOnboarding } from '@/actions/...'
-
-const response = await startStripeOnboarding(instructorId)
-window.location.href = response.data.url
-```
-
----
-
-## 📝 Implementation Notes
-
-### What Works Now:
-✅ Package creation automatically creates Stripe Product & Price
-✅ Stripe IDs stored in database
-✅ Transaction rollback if Stripe fails
-✅ Instructor onboarding creates Stripe Connect account
-✅ Account status updates after onboarding
-✅ Onboarding link refresh if expired
-✅ All routes registered and Wayfinder generated
-
-### Error Handling:
-✅ Logs all Stripe operations with context
-✅ Returns user-friendly error messages
-✅ Database rollback on Stripe failures
-✅ Handles Stripe API errors gracefully
-
-### Security:
-✅ All routes under auth middleware
-✅ Instructor ownership verified
-✅ Stripe webhook signature verification (already exists)
-
----
-
-## 🚀 Next Steps (Frontend)
-
-**For Package Creation:**
-1. ✅ Backend complete - no frontend changes required
-2. Optional: Add loading spinner during package creation
-3. Optional: Show success message mentioning Stripe sync
-
-**For Instructor Onboarding:**
-1. Create Stripe connection status component
-2. Add "Connect Stripe Account" button
-3. Implement `startOnboarding()` function
-4. Implement `refreshOnboarding()` function
-5. Display connection status with badges
-6. Handle return from Stripe (should auto-redirect to show page)
-
----
-
-## 📚 Reference
-
-### Files Modified:
-- ✅ `app/Actions/Instructor/CreateInstructorPackageAction.php` (Stripe sync)
-- ✅ `app/Http/Controllers/InstructorController.php` (4 new methods)
-- ✅ `routes/web.php` (4 new routes)
-- ✅ Wayfinder TypeScript routes generated
-
-### Files Already Existing (Used):
-- ✅ `app/Services/StripeService.php` (all methods ready)
-- ✅ `app/Models/Package.php` (Stripe fields exist)
-- ✅ `app/Models/Instructor.php` (Stripe fields exist, methods exist)
-
-### Routes Added:
-```
-POST   /instructors/{instructor}/stripe/onboarding/start
-POST   /instructors/{instructor}/stripe/onboarding/refresh
-GET    /instructors/{instructor}/stripe/onboarding/return
-GET    /instructors/{instructor}/stripe/status
-```
-
-### Wayfinder Actions Generated:
-```typescript
-startStripeOnboarding(instructorId: number)
-refreshStripeOnboarding(instructorId: number)
-returnFromStripeOnboarding(instructorId: number)
-stripeStatus(instructorId: number)
+resources/js/
+└── components/
+    └── Instructors/
+        └── Tabs/
+            └── Details/
+                └── EmergencyContactSubTab.vue (UPDATE - implement)
 ```
 
 ---
 
-## ✅ Success Criteria - All Met!
+## Progress Summary
 
-### Package Creation:
-- [✅] When instructor creates package → Create Stripe Product
-- [✅] After Product created → Create Stripe Price
-- [✅] Store `stripe_product_id` and `stripe_price_id` in packages table
-- [✅] Handle errors gracefully with rollback
-- [✅] Show success/error messages (ready for frontend)
+### Completion Status
+- **Phase 1:** 🔄 In Progress (Planning)
+- **Phase 2:** Not Started
+- **Phase 3:** Not Started
+- **Phase 4:** Not Started
 
-### Instructor Onboarding:
-- [✅] Instructor can start Stripe Connect onboarding
-- [✅] System creates Stripe Connect Express account
-- [✅] Redirect to Stripe-hosted onboarding
-- [✅] Handle return from Stripe onboarding
-- [✅] Store `stripe_account_id` and onboarding status
-- [✅] Handle refresh/retry if onboarding incomplete
-- [✅] API endpoint to check status
+### Currently Working On
+- Phase 1: Planning the implementation
 
----
-
-## 🎉 Implementation Complete!
-
-**Backend implementation is 100% complete and ready for frontend integration.**
-
-All Stripe integrations are working:
-- ✅ Package creation syncs to Stripe automatically
-- ✅ Instructor onboarding flow fully functional
-- ✅ All routes registered
-- ✅ TypeScript route functions generated
-- ✅ Error handling comprehensive
-- ✅ Transaction safety ensured
-
-**Frontend developers can now:**
-1. Use existing package creation (will automatically sync to Stripe)
-2. Add UI for Stripe onboarding (backend ready)
-3. Test the complete flow end-to-end
-
-**Status:** ✅ Ready for frontend development and testing!
+### Next Steps
+1. Get approval for Phase 1 plan
+2. Implement backend (Phase 2)
+3. Implement frontend (Phase 3)
+4. Review and document (Phase 4)

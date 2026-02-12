@@ -324,7 +324,7 @@ import { Avatar } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
-import { Sonner, toast } from '@/components/ui/sonner'
+import { toast } from '@/components/ui/toast'
 import InstructorMap from '@/components/Onboarding/InstructorMap.vue'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
@@ -400,9 +400,7 @@ function selectInstructor(instructorId) {
   form.instructor_id = instructorId
 
   // Show success toast using Sonner
-  toast.success('Instructor selected', {
-    description: 'You can continue to the next step'
-  })
+  toast({ title: 'Instructor selected', description: 'You can continue to the next step' })
 }
 
 function showInstructorInfo(instructor) {
@@ -427,21 +425,16 @@ function goBack() {
 
 function submit() {
   if (!selectedInstructor.value) {
-    toast.error('Please select an instructor', {
-      description: 'You must select an instructor before continuing'
-    })
+    toast({ title: 'Please select an instructor', description: 'You must select an instructor before continuing', variant: 'destructive' })
     return
   }
 
   form.post(`/onboarding/${props.uuid}/step/2`, {
     onSuccess: () => {
-      toast.success('Instructor saved!', {
-        description: 'Moving to the next step...'
-      })
+      toast({ title: 'Instructor saved!', description: 'Moving to the next step...' })
     },
     onError: (errors) => {
-      toast.error('Failed to save instructor', {
-        description: JSON.stringify(errors)
+      toast({ title: 'Failed to save instructor', description: JSON.stringify(errors), variant: 'destructive'
       })
     }
   })

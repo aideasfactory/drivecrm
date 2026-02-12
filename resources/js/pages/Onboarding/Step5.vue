@@ -320,7 +320,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
-import { Sonner, toast } from '@/components/ui/sonner'
+import { toast } from '@/components/ui/toast'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
@@ -416,13 +416,13 @@ function applyPromoCode() {
   // Simulate promo code application
   if (promoCode.value.toLowerCase() === 'save10') {
     promoDiscount.value = 10
-    toast.success('Promo code applied!')
+    toast({ title: 'Promo code applied!' })
   } else if (promoCode.value.toLowerCase() === 'save20') {
     promoDiscount.value = 20
-    toast.success('Promo code applied!')
+    toast({ title: 'Promo code applied!' })
   } else {
     promoDiscount.value = 0
-    toast.error('Invalid promo code')
+    toast({ title: 'Invalid promo code', variant: 'destructive' })
   }
 }
 
@@ -437,7 +437,7 @@ function autoSave() {
       preserveScroll: true,
       preserveState: true,
       onSuccess: () => {
-        toast.success('Saved')
+        toast({ title: 'Saved' })
       },
       onError: () => {
         // Silently handle errors for auto-save

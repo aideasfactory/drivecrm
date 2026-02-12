@@ -2,6 +2,7 @@
 
 namespace App\Actions\Instructor;
 
+use App\Actions\Shared\LogActivityAction;
 use App\Models\Instructor;
 use App\Models\Package;
 use App\Services\StripeService;
@@ -68,6 +69,12 @@ class CreateInstructorPackageAction
             ]);
 
             DB::commit();
+
+            (new LogActivityAction)($instructor, "Package '{$package->name}' created", 'package', [
+                'package_id' => $package->id,
+                'lessons' => $package->lessons_count,
+                'price_pence' => $package->total_price_pence,
+            ]);
 
             return $package;
 

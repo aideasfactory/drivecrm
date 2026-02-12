@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Instructor extends Model
 {
@@ -103,6 +104,30 @@ class Instructor extends Model
     public function lessons(): HasMany
     {
         return $this->hasMany(Lesson::class);
+    }
+
+    /**
+     * Get emergency contacts for this instructor.
+     */
+    public function contacts(): MorphMany
+    {
+        return $this->morphMany(Contact::class, 'contactable');
+    }
+
+    /**
+     * Get activity logs for this instructor.
+     */
+    public function activityLogs(): MorphMany
+    {
+        return $this->morphMany(ActivityLog::class, 'loggable');
+    }
+
+    /**
+     * Helper method to log activity.
+     */
+    public function logActivity(string $message, string $category, ?array $metadata = null): void
+    {
+        app(\App\Actions\Shared\LogActivityAction::class)($this, $message, $category, $metadata);
     }
 
     /**

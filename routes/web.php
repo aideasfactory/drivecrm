@@ -61,11 +61,41 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('instructors.stripe.onboarding.return');
     Route::get('/instructors/{instructor}/stripe/status', [\App\Http\Controllers\InstructorController::class, 'stripeStatus'])
         ->name('instructors.stripe.status');
+    Route::post('/instructors/{instructor}/request-deletion', [\App\Http\Controllers\InstructorController::class, 'requestDeletion'])
+        ->name('instructors.request-deletion');
+    Route::get('/instructors/{instructor}/activity-logs', [\App\Http\Controllers\InstructorController::class, 'activityLogs'])
+        ->name('instructors.activity-logs');
+
+    // Instructor Emergency Contacts
+    Route::get('/instructors/{instructor}/contacts', [\App\Http\Controllers\InstructorController::class, 'contacts'])
+        ->name('instructors.contacts');
+    Route::post('/instructors/{instructor}/contacts', [\App\Http\Controllers\InstructorController::class, 'storeContact'])
+        ->name('instructors.contacts.store');
+    Route::put('/instructors/{instructor}/contacts/{contact}', [\App\Http\Controllers\InstructorController::class, 'updateContact'])
+        ->name('instructors.contacts.update');
+    Route::delete('/instructors/{instructor}/contacts/{contact}', [\App\Http\Controllers\InstructorController::class, 'deleteContact'])
+        ->name('instructors.contacts.destroy');
+    Route::patch('/instructors/{instructor}/contacts/{contact}/primary', [\App\Http\Controllers\InstructorController::class, 'setPrimaryContact'])
+        ->name('instructors.contacts.primary');
 
     Route::put('/packages/{package}', [\App\Http\Controllers\PackageController::class, 'update'])
         ->name('packages.update');
     Route::get('/pupils', [\App\Http\Controllers\PupilController::class, 'index'])
         ->name('pupils.index');
+    Route::get('/students/{student}/activity-logs', [\App\Http\Controllers\PupilController::class, 'activityLogs'])
+        ->name('students.activity-logs');
+
+    // Student Emergency Contacts
+    Route::get('/students/{student}/contacts', [\App\Http\Controllers\PupilController::class, 'contacts'])
+        ->name('students.contacts');
+    Route::post('/students/{student}/contacts', [\App\Http\Controllers\PupilController::class, 'storeContact'])
+        ->name('students.contacts.store');
+    Route::put('/students/{student}/contacts/{contact}', [\App\Http\Controllers\PupilController::class, 'updateContact'])
+        ->name('students.contacts.update');
+    Route::delete('/students/{student}/contacts/{contact}', [\App\Http\Controllers\PupilController::class, 'deleteContact'])
+        ->name('students.contacts.destroy');
+    Route::patch('/students/{student}/contacts/{contact}/primary', [\App\Http\Controllers\PupilController::class, 'setPrimaryContact'])
+        ->name('students.contacts.primary');
     Route::get('/teams', [\App\Http\Controllers\TeamController::class, 'index'])
         ->name('teams.index');
     Route::get('/reports', [\App\Http\Controllers\ReportController::class, 'index'])

@@ -40,14 +40,18 @@ Users (1) ──┬── (1) Instructors ──┬── (Many) Packages
             │                     │                      │
             │                     ├── (Many) Payouts     │
             │                     │                      │
-            │                     └── (Many) Calendars ──┼── (Many) CalendarItems
+            │                     ├── (Many) Calendars ──┼── (Many) CalendarItems
+            │                     │                      │
+            │                     └── (Many) Contacts    │
             │                                            │
             └── (1) Students ──── (Many) Orders ──── (Many) Lessons ──┬── (1) LessonPayments
                       │                  │              │              │
                       │                  │              └──────────────┤
                       │                  │                             └── (1) Payouts
                       │                  │
-                      └─────────────┐    └── (1) Packages
+                      ├── (Many) Contacts└── (1) Packages
+                      │
+                      └─────────────┐
                                     │
                           Instructors (Many)
 ```
@@ -98,13 +102,17 @@ Users (1) ──┬── (1) Instructors ──┬── (Many) Packages
    - One-to-one with `lessons` (payout for completed lesson)
    - Many-to-one with `instructors` (recipient)
 
+9. **activity_logs** - Activity tracking (polymorphic)
+   - Morphs to `instructors` or `students`
+   - Tracks all significant activities with categories
+
 ### Support Tables
 
-9. **webhook_events** - Stripe webhook logging
-10. **password_reset_tokens** - Laravel password resets
-11. **sessions** - Laravel session storage
-12. **cache** - Laravel cache
-13. **jobs** - Laravel queue jobs
+10. **webhook_events** - Stripe webhook logging
+11. **password_reset_tokens** - Laravel password resets
+12. **sessions** - Laravel session storage
+13. **cache** - Laravel cache
+14. **jobs** - Laravel queue jobs
 
 ### Relationship Summary
 
@@ -113,13 +121,20 @@ User (role=instructor) → Instructor → Creates Packages
                                    → Assigned to Orders
                                    → Conducts Lessons
                                    → Receives Payouts
+                                   → Has ActivityLogs (morphMany)
+                                   → Has Contacts (morphMany)
 
 User (role=student) → Student → Purchases Orders → Contains Lessons → Has LessonPayments
                              → Assigned to Instructor                → Has Payouts
+                             → Has ActivityLogs (morphMany)
+                             → Has Contacts (morphMany)
 
 Package → Used in Orders
 
 Order = Student + Instructor + Package → Creates Lessons
+
+ActivityLog → Morphs to Instructor or Student
+Contact → Morphs to Instructor or Student
 ```
 
 ---
@@ -417,7 +432,84 @@ Tracks instructor payouts for completed lessons.
 
 ---
 
-### 9. **webhook_events**
+### 9. **activity_logs**
+
+Polymorphic activity logging for instructors and students. Tracks all significant activities with categorization.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique log identifier |
+| `loggable_type` | varchar(255) | NOT NULL, INDEXED | Model type (App\Models\Instructor or App\Models\Student) |
+| `loggable_id` | bigint unsigned | NOT NULL, INDEXED | Model ID |
+| `category` | varchar(50) | NOT NULL, INDEXED | Activity category |
+| `message` | text | NOT NULL | Human-readable activity message |
+| `metadata` | json | NULLABLE | Additional context data in JSON format |
+| `deleted_at` | timestamp | NULLABLE | Soft delete timestamp |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Indexes:**
+- Composite index on `(loggable_type, loggable_id, deleted_at)` named `activity_logs_loggable_index`
+- Index on `category`
+- Index on `created_at`
+
+**Relationships:**
+- Morphs to one `Instructor` or `Student` (polymorphic)
+
+**Categories:**
+- `lesson` - Lesson-related activities (completed, cancelled, rescheduled)
+- `booking` - Booking changes (new booking, confirmation, updates)
+- `message` - Messages sent/received
+- `payment` - Payment activities (received, refunded, failed)
+- `profile` - Profile updates (details changed, onboarding)
+- `package` - Package activities (created, updated, purchased)
+- `student` - Student-related activities (for instructor logs)
+- `instructor` - Instructor-related activities (for student logs)
+- `system` - System-generated events
+
+**Business Logic:**
+- Soft deletes enabled for audit trail
+- Queued creation via LogActivityJob for performance
+- Searchable by message content
+- Filterable by category
+- Used for activity timelines in UI
+
+---
+
+### 10. **contacts**
+
+Polymorphic emergency contacts for instructors and students. Supports a primary contact designation per entity.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique contact identifier |
+| `contactable_type` | varchar(255) | NOT NULL | Model type (App\Models\Instructor or App\Models\Student) |
+| `contactable_id` | bigint unsigned | NOT NULL | Model ID |
+| `name` | varchar(255) | NOT NULL | Emergency contact full name |
+| `relationship` | varchar(100) | NOT NULL | Relationship to the person |
+| `phone` | varchar(50) | NOT NULL | Phone number |
+| `email` | varchar(255) | NULLABLE | Email address |
+| `is_primary` | boolean | DEFAULT false | Whether this is the primary contact |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Indexes:**
+- Composite index on `(contactable_type, contactable_id)` named `contacts_contactable_index`
+
+**Relationships:**
+- Morphs to one `Instructor` or `Student` (polymorphic)
+
+**Relationship Values:**
+- Spouse, Parent, Child, Sibling, Friend, Doctor, Other
+
+**Business Logic:**
+- Only one contact per entity can be `is_primary = true`
+- When setting a new primary, all others for that entity are unset
+- Used for emergency contact display in UI
+
+---
+
+### 11. **webhook_events**
 
 Logs Stripe webhook events for debugging and idempotency.
 
@@ -440,7 +532,7 @@ Logs Stripe webhook events for debugging and idempotency.
 
 ---
 
-### 10. **password_reset_tokens**
+### 11. **password_reset_tokens**
 
 Laravel's password reset token storage.
 
@@ -452,7 +544,7 @@ Laravel's password reset token storage.
 
 ---
 
-### 11. **enquiries** (New - Phase 1 Onboarding)
+### 12. **enquiries** (New - Phase 1 Onboarding)
 
 Stores all onboarding session data.
 
@@ -472,7 +564,7 @@ Stores all onboarding session data.
 
 ---
 
-### 12. **locations** (New - Phase 1 Onboarding)
+### 13. **locations** (New - Phase 1 Onboarding)
 
 Links instructors to postcode sectors they cover.
 
@@ -496,7 +588,7 @@ Links instructors to postcode sectors they cover.
 
 ---
 
-### 13. **calendars** (New - Phase 1 Onboarding)
+### 14. **calendars** (New - Phase 1 Onboarding)
 
 Defines available dates per instructor.
 
@@ -517,7 +609,7 @@ Defines available dates per instructor.
 
 ---
 
-### 14. **calendar_items** (New - Phase 1 Onboarding)
+### 15. **calendar_items** (New - Phase 1 Onboarding)
 
 Defines time slots within a calendar date.
 
@@ -542,7 +634,7 @@ Defines time slots within a calendar date.
 
 ---
 
-### 15. **sessions**
+### 16. **sessions**
 
 Laravel's session storage.
 
@@ -557,7 +649,7 @@ Laravel's session storage.
 
 ---
 
-### 16. **cache**
+### 17. **cache**
 
 Laravel's cache storage.
 
@@ -569,7 +661,7 @@ Laravel's cache storage.
 
 ---
 
-### 17. **cache_locks**
+### 18. **cache_locks**
 
 Laravel's cache locking mechanism.
 
@@ -581,7 +673,7 @@ Laravel's cache locking mechanism.
 
 ---
 
-### 18. **jobs**
+### 19. **jobs**
 
 Laravel's queue system for background job processing.
 
@@ -597,7 +689,7 @@ Laravel's queue system for background job processing.
 
 ---
 
-### 19. **job_batches**
+### 20. **job_batches**
 
 Laravel's job batching system.
 
@@ -616,7 +708,7 @@ Laravel's job batching system.
 
 ---
 
-### 20. **failed_jobs**
+### 21. **failed_jobs**
 
 Laravel's failed jobs storage.
 
@@ -706,6 +798,8 @@ Laravel's failed jobs storage.
 - **lessons:** `(order_id, status)`, `instructor_id`, `calendar_item_id`
 - **lesson_payments:** `(lesson_id, status)` composite
 - **payouts:** `(instructor_id, status)` composite
+- **activity_logs:** `(loggable_type, loggable_id, deleted_at)` composite named `activity_logs_loggable_index`, `category`, `created_at`
+- **contacts:** `(contactable_type, contactable_id)` composite named `contacts_contactable_index`
 - **webhook_events:** `type`
 - **enquiries:** None (uses UUID primary key)
 - **locations:** `postcode_sector`

@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+        window.FontAwesomeConfig = {
+          autoReplaceSvg: 'nest'
+        };
+      </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pupils</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#DC2626',
+                        primaryLight: '#FEE2E2',
+                        accent: '#F3F4F6'
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { display: none; }
+        body { margin: 0; padding: 0; }
+    </style>
+</head>
+<body class="bg-accent">
+    
+    <header id="header" class="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-50 h-16">
+        <div class="flex items-center justify-between h-full px-6">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                    <i class="fa-solid fa-car text-white text-xl"></i>
+                </div>
+                <span class="text-xl font-bold text-gray-900">GoRoadie Driving School</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <button class="relative p-2 text-gray-600 hover:text-gray-900">
+                    <i class="fa-regular fa-bell text-xl"></i>
+                    <span class="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full"></span>
+                </button>
+                <div class="flex items-center gap-3 cursor-pointer">
+                    <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-2.jpg" alt="User" class="w-10 h-10 rounded-full object-cover">
+                    <div class="flex flex-col">
+                        <span class="text-sm font-semibold text-gray-900">Admin User</span>
+                        <span class="text-xs text-gray-500">Administrator</span>
+                    </div>
+                    <i class="fa-solid fa-chevron-down text-gray-400 text-sm"></i>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <aside id="sidebar" class="fixed left-0 top-16 bottom-0 w-64 bg-white border-r border-gray-200 overflow-y-auto">
+        <nav class="p-4">
+            <ul class="space-y-1">
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-solid fa-chart-line text-lg w-5"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-regular fa-envelope text-lg w-5"></i>
+                        <span>Enquiries</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg bg-primaryLight text-primary font-semibold">
+                        <i class="fa-regular fa-user text-lg w-5"></i>
+                        <span>Pupils</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-solid fa-users text-lg w-5"></i>
+                        <span>Team</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-regular fa-file-lines text-lg w-5"></i>
+                        <span>Reports</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-regular fa-folder-open text-lg w-5"></i>
+                        <span>Resources</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-solid fa-gear text-lg w-5"></i>
+                        <span>Settings</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-solid fa-grid-2 text-lg w-5"></i>
+                        <span>Apps</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </aside>
+
+    <main id="main-content" class="ml-64 mt-16 p-8">
+        
+        <section id="pupils-header" class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Pupils</h1>
+            <p class="text-gray-500">Manage all learner records and track their progress.</p>
+        </section>
+
+        <section id="pupils-controls" class="bg-white rounded-xl p-6 border border-gray-200 mb-6">
+            <div class="flex items-center justify-between gap-4">
+                <div class="flex-1 max-w-md">
+                    <div class="relative">
+                        <i class="fa-solid fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                        <input type="text" placeholder="Search by phone, email or name" class="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                </div>
+                <button class="bg-primary hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center gap-2">
+                    <i class="fa-solid fa-plus"></i>
+                    Add Pupil
+                </button>
+                <button class="bg-primary px-6 py-3 rounded-lg text-white">
+                  Broadcast Message
+                </button>
+            </div>
+        </section>
+
+        <section id="pupils-table" class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                            <th class="text-left px-6 py-4 text-sm font-semibold text-gray-600">Name</th>
+                            <th class="text-left px-6 py-4 text-sm font-semibold text-gray-600">Lessons</th>
+                            <th class="text-left px-6 py-4 text-sm font-semibold text-gray-600">Next Lesson</th>
+                            <th class="text-left px-6 py-4 text-sm font-semibold text-gray-600">Package Time</th>
+                            <th class="text-left px-6 py-4 text-sm font-semibold text-gray-600">Revenue</th>
+                            <th class="text-left px-6 py-4 text-sm font-semibold text-gray-600">Instructor</th>
+                            <th class="text-left px-6 py-4 text-sm font-semibold text-gray-600">App</th>
+                            <th class="text-left px-6 py-4 text-sm font-semibold text-gray-600">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        <tr class="hover:bg-gray-50 cursor-pointer" onclick="viewPupil('sarah-johnson')">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-3">
+                                    <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-5.jpg" alt="Sarah Johnson" class="w-10 h-10 rounded-full object-cover">
+                                    <div>
+                                        <p class="text-sm font-semibold text-gray-900">Sarah Johnson</p>
+                                        <p class="text-xs text-gray-500">sarah@email.com</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">12/20</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm text-gray-900">Tomorrow</div>
+                                <div class="text-xs text-gray-500">10:00 AM</div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">8h remaining</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm font-semibold text-gray-900">£480</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">James Wilson</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <i class="fa-solid fa-check text-green-600"></i>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Active</span>
+                            </td>
+                        </tr>
+
+                        <tr class="hover:bg-gray-50 cursor-pointer" onclick="viewPupil('tom-richards')">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-3">
+                                    <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-3.jpg" alt="Tom Richards" class="w-10 h-10 rounded-full object-cover">
+                                    <div>
+                                        <p class="text-sm font-semibold text-gray-900">Tom Richards</p>
+                                        <p class="text-xs text-gray-500">tom@email.com</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">8/15</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm text-gray-900">Today</div>
+                                <div class="text-xs text-gray-500">9:00 AM</div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">7h remaining</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm font-semibold text-gray-900">£320</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">James Wilson</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <i class="fa-solid fa-check text-green-600"></i>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Active</span>
+                            </td>
+                        </tr>
+
+                        <tr class="hover:bg-gray-50 cursor-pointer" onclick="viewPupil('jessica-moore')">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-3">
+                                    <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-6.jpg" alt="Jessica Moore" class="w-10 h-10 rounded-full object-cover">
+                                    <div>
+                                        <p class="text-sm font-semibold text-gray-900">Jessica Moore</p>
+                                        <p class="text-xs text-gray-500">jessica@email.com</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">15/20</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm text-gray-900">Today</div>
+                                <div class="text-xs text-gray-500">11:00 AM</div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">5h remaining</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm font-semibold text-gray-900">£600</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">Sarah Clarke</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <i class="fa-solid fa-check text-green-600"></i>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Active</span>
+                            </td>
+                        </tr>
+
+                        <tr class="hover:bg-gray-50 cursor-pointer" onclick="viewPupil('mark-davies')">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-3">
+                                    <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-4.jpg" alt="Mark Davies" class="w-10 h-10 rounded-full object-cover">
+                                    <div>
+                                        <p class="text-sm font-semibold text-gray-900">Mark Davies</p>
+                                        <p class="text-xs text-gray-500">mark@email.com</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">20/20</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm text-gray-900">Test Scheduled</div>
+                                <div class="text-xs text-gray-500">Next Week</div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-red-600">Completed</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm font-semibold text-gray-900">£800</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">David Thompson</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <i class="fa-solid fa-xmark text-red-600"></i>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">Test Ready</span>
+                            </td>
+                        </tr>
+
+                        <tr class="hover:bg-gray-50 cursor-pointer" onclick="viewPupil('emma-thompson')">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-3">
+                                    <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-7.jpg" alt="Emma Thompson" class="w-10 h-10 rounded-full object-cover">
+                                    <div>
+                                        <p class="text-sm font-semibold text-gray-900">Emma Thompson</p>
+                                        <p class="text-xs text-gray-500">emma@email.com</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">5/15</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm text-gray-900">Friday</div>
+                                <div class="text-xs text-gray-500">2:00 PM</div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">10h remaining</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm font-semibold text-gray-900">£200</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">Emma Roberts</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <i class="fa-solid fa-check text-green-600"></i>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Active</span>
+                            </td>
+                        </tr>
+
+                        <tr class="hover:bg-gray-50 cursor-pointer" onclick="viewPupil('ryan-mitchell')">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-3">
+                                    <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-8.jpg" alt="Ryan Mitchell" class="w-10 h-10 rounded-full object-cover">
+                                    <div>
+                                        <p class="text-sm font-semibold text-gray-900">Ryan Mitchell</p>
+                                        <p class="text-xs text-gray-500">ryan@email.com</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">3/10</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm text-gray-900">Today</div>
+                                <div class="text-xs text-gray-500">2:00 PM</div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">7h remaining</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm font-semibold text-gray-900">£120</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">David Thompson</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <i class="fa-solid fa-xmark text-red-600"></i>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="px-3 py-1 bg-yellow-100 text-yellow-700 text-xs font-semibold rounded-full">Pending</span>
+                            </td>
+                        </tr>
+
+                        <tr class="hover:bg-gray-50 cursor-pointer" onclick="viewPupil('lucy-adams')">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-3">
+                                    <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-1.jpg" alt="Lucy Adams" class="w-10 h-10 rounded-full object-cover">
+                                    <div>
+                                        <p class="text-sm font-semibold text-gray-900">Lucy Adams</p>
+                                        <p class="text-xs text-gray-500">lucy@email.com</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">25/25</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm text-gray-900">Passed</div>
+                                <div class="text-xs text-gray-500">Yesterday</div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-green-600">Completed</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm font-semibold text-gray-900">£1,000</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">James Wilson</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <i class="fa-solid fa-check text-green-600"></i>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="px-3 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full">Passed</span>
+                            </td>
+                        </tr>
+
+                        <tr class="hover:bg-gray-50 cursor-pointer" onclick="viewPupil('michael-brown')">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-3">
+                                    <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-9.jpg" alt="Michael Brown" class="w-10 h-10 rounded-full object-cover">
+                                    <div>
+                                        <p class="text-sm font-semibold text-gray-900">Michael Brown</p>
+                                        <p class="text-xs text-gray-500">michael@email.com</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">1/10</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm text-gray-900">Monday</div>
+                                <div class="text-xs text-gray-500">9:00 AM</div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">9h remaining</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm font-semibold text-gray-900">£40</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-900">Sarah Clarke</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <i class="fa-solid fa-check text-green-600"></i>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Active</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <footer id="footer" class="ml-64 bg-white border-t border-gray-200 py-6 px-8">
+        <div class="flex items-center justify-between">
+            <p class="text-sm text-gray-500">© GoRoadie 2025. All rights reserved.</p>
+            <div class="flex items-center gap-6">
+                <a href="#" class="text-sm text-gray-500 hover:text-gray-900">Privacy Policy</a>
+                <a href="#" class="text-sm text-gray-500 hover:text-gray-900">Terms of Service</a>
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-cookie-bite text-gray-400"></i>
+                    <span class="text-sm text-gray-500">Cookie Settings</span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        function viewPupil(pupilId) {
+            console.log('Viewing pupil:', pupilId);
+        }
+    </script>
+
+</body>
+</html>

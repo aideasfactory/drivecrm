@@ -192,7 +192,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Spinner } from '@/components/ui/spinner'
-import { Sonner, toast } from '@/components/ui/sonner'
+import { toast } from '@/components/ui/toast'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
@@ -236,9 +236,7 @@ function getPackageIcon(pkg: any) {
 // Show toast when package is selected
 watch(() => form.package_id, (newValue) => {
   if (newValue) {
-    toast.success('Package selected', {
-      description: 'Your package has been saved'
-    })
+    toast({ title: 'Package selected', description: 'Your package has been saved' })
   }
 })
 

@@ -343,7 +343,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Spinner } from '@/components/ui/spinner'
-import { Sonner, toast } from '@/components/ui/sonner'
+import { toast } from '@/components/ui/toast'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
@@ -492,13 +492,13 @@ watch(() => form.date, () => {
     form.calendar_item_id = null
     form.start_time = ''
     form.end_time = ''
-    toast.success('Date selected')
+    toast({ title: 'Date selected' })
   }
 })
 
 watch(() => form.calendar_item_id, () => {
   if (form.calendar_item_id) {
-    toast.success('Time slot selected')
+    toast({ title: 'Time slot selected' })
   }
 })
 
@@ -614,12 +614,12 @@ async function selectInstructor(instructor) {
         }
 
         // Show confirmation toast
-        toast.success('Instructor changed successfully')
+        toast({ title: 'Instructor changed successfully' })
       }
     }
   } catch (error) {
     console.error('Failed to fetch instructor availability:', error)
-    toast.error('Failed to load instructor calendar')
+    toast({ title: 'Failed to load instructor calendar', variant: 'destructive' })
   } finally {
     loadingCalendar.value = false
   }

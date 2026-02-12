@@ -170,8 +170,3 @@
         @apply bg-background text-foreground;
     }
 }
-
-/* Ensure toast notifications appear above all other elements */
-[data-sonner-toaster] {
-    z-index: 9999 !important;
-}

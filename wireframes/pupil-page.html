@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+        window.FontAwesomeConfig = {
+          autoReplaceSvg: 'nest'
+        };
+      </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Pupil</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#DC2626',
+                        primaryLight: '#FEE2E2',
+                        accent: '#F3F4F6'
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.plot.ly/plotly-3.1.1.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { display: none; }
+        body { margin: 0; padding: 0; }
+    </style>
+</head>
+<body class="bg-accent">
+    
+    <header id="header" class="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-50 h-16">
+        <div class="flex items-center justify-between h-full px-6">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                    <i class="fa-solid fa-car text-white text-xl"></i>
+                </div>
+                <span class="text-xl font-bold text-gray-900">GoRoadie Driving School</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <button class="relative p-2 text-gray-600 hover:text-gray-900">
+                    <i class="fa-regular fa-bell text-xl"></i>
+                    <span class="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full"></span>
+                </button>
+                <div class="flex items-center gap-3 cursor-pointer">
+                    <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-2.jpg" alt="User" class="w-10 h-10 rounded-full object-cover">
+                    <div class="flex flex-col">
+                        <span class="text-sm font-semibold text-gray-900">Admin User</span>
+                        <span class="text-xs text-gray-500">Administrator</span>
+                    </div>
+                    <i class="fa-solid fa-chevron-down text-gray-400 text-sm"></i>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <aside id="sidebar" class="fixed left-0 top-16 bottom-0 w-64 bg-white border-r border-gray-200 overflow-y-auto">
+        <nav class="p-4">
+            <ul class="space-y-1">
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-solid fa-chart-line text-lg w-5"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-regular fa-envelope text-lg w-5"></i>
+                        <span>Enquiries</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg bg-primaryLight text-primary font-semibold">
+                        <i class="fa-regular fa-user text-lg w-5"></i>
+                        <span>Pupils</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-solid fa-users text-lg w-5"></i>
+                        <span>Team</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-regular fa-file-lines text-lg w-5"></i>
+                        <span>Reports</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-regular fa-folder-open text-lg w-5"></i>
+                        <span>Resources</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-solid fa-gear text-lg w-5"></i>
+                        <span>Settings</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-solid fa-grid-2 text-lg w-5"></i>
+                        <span>Apps</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </aside>
+
+    <main id="main-content" class="ml-64 mt-16 p-8">
+        
+        <section id="pupil-header" class="mb-8">
+            <div class="flex items-center gap-4 mb-6">
+                <button class="flex items-center gap-2 text-gray-600 hover:text-gray-900">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span class="text-sm font-medium">Back to Pupils</span>
+                </button>
+            </div>
+            
+            <div class="bg-white rounded-xl p-8 border border-gray-200">
+                <div class="flex items-start justify-between">
+                    <div class="flex items-center gap-6">
+                        <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-5.jpg" alt="Sarah Johnson" class="w-24 h-24 rounded-full object-cover">
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-900 mb-2">Sarah Johnson</h1>
+                            <div class="flex items-center gap-6 text-gray-600">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-phone text-sm"></i>
+                                    <span class="text-sm">07912 345 678</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-regular fa-envelope text-sm"></i>
+                                    <span class="text-sm">sarah.johnson@email.com</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-location-dot text-sm"></i>
+                                    <span class="text-sm">Manchester, M1 4BT</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button class="px-4 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-red-700 flex items-center gap-2">
+                            <i class="fa-solid fa-plus"></i>
+                            Add Note
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="pupil-tabs" class="mb-8">
+            <div class="bg-white rounded-xl border border-gray-200">
+                <div class="border-b border-gray-200">
+                    <nav class="flex">
+                        <button id="overview-tab" class="px-6 py-4 text-sm font-semibold text-primary border-b-2 border-primary bg-primaryLight">Overview</button>
+                        <button id="lessons-tab" class="px-6 py-4 text-sm font-medium text-gray-500 hover:text-gray-700">Lessons</button>
+                        <button id="payments-tab" class="px-6 py-4 text-sm font-medium text-gray-500 hover:text-gray-700">Payments</button>
+                        <button id="transfer-tab" class="px-6 py-4 text-sm font-medium text-gray-500 hover:text-gray-700">Transfer</button>
+                        <button id="emergency-tab" class="px-6 py-4 text-sm font-medium text-gray-500 hover:text-gray-700">Emergency Contact</button>
+                        <button id="message-tab" class="px-6 py-4 text-sm font-medium text-gray-500 hover:text-gray-700">Messages</button>
+                        <button id="actions-tab" class="px-6 py-4 text-sm font-medium text-gray-500 hover:text-gray-700">Actions</button>
+                    </nav>
+                </div>
+
+                <div id="overview-content" class="p-8">
+                    <div class="grid grid-cols-3 gap-6 mb-8">
+                        <div class="text-center p-6 bg-blue-50 rounded-xl">
+                            <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i class="fa-solid fa-calendar-check text-blue-600 text-xl"></i>
+                            </div>
+                            <h3 class="text-2xl font-bold text-gray-900 mb-1">24</h3>
+                            <p class="text-sm text-gray-500">Total Lessons</p>
+                        </div>
+                        
+                        <div class="text-center p-6 bg-green-50 rounded-xl">
+                            <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i class="fa-solid fa-sterling-sign text-green-600 text-xl"></i>
+                            </div>
+                            <h3 class="text-2xl font-bold text-gray-900 mb-1">£960</h3>
+                            <p class="text-sm text-gray-500">Total Revenue</p>
+                        </div>
+                        
+                        <div class="text-center p-6 bg-orange-50 rounded-xl">
+                            <div class="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i class="fa-solid fa-mobile-screen text-orange-600 text-xl"></i>
+                            </div>
+                            <h3 class="text-2xl font-bold text-gray-900 mb-1">Yes</h3>
+                            <p class="text-sm text-gray-500">App Installed</p>
+                        </div>
+                    </div>
+
+                    <div class="mb-8">
+                        <h3 class="text-lg font-bold text-gray-900 mb-4">Latest Note</h3>
+                        <div class="bg-gray-50 rounded-lg p-6">
+                            <div class="flex items-start justify-between mb-4">
+                                <div class="flex items-center gap-3">
+                                    <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-2.jpg" alt="Instructor" class="w-10 h-10 rounded-full object-cover">
+                                    <div>
+                                        <p class="text-sm font-semibold text-gray-900">James Wilson</p>
+                                        <p class="text-xs text-gray-500">Instructor</p>
+                                    </div>
+                                </div>
+                                <span class="text-xs text-gray-500">2 days ago</span>
+                            </div>
+                            <p class="text-sm text-gray-700">Sarah showed excellent improvement in roundabout navigation today. Her confidence has grown significantly, and she's now ready to tackle more complex junction scenarios. We practiced parallel parking which she mastered after 3 attempts. Next lesson will focus on dual carriageways.</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-bold text-gray-900">Progress Overview</h3>
+                            <button onclick="openAddSectionModal()" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 flex items-center gap-2">
+                                <i class="fa-solid fa-plus"></i>
+                                Add Section
+                            </button>
+                        </div>
+                        <div class="space-y-4" id="progress-sections">
+                            <div class="cursor-pointer hover:bg-gray-50 p-4 rounded-lg transition" onclick="openProgressModal('Overall Progress', 78)">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm font-medium text-gray-700">Overall Progress</span>
+                                    <span class="text-sm font-semibold text-gray-900">78%</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-3">
+                                    <div class="bg-primary h-3 rounded-full" style="width: 78%"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="cursor-pointer hover:bg-gray-50 p-4 rounded-lg transition" onclick="openProgressModal('Preparation & Safety', 85)">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm font-medium text-gray-700">Preparation & Safety</span>
+                                    <span class="text-sm font-semibold text-gray-900">85%</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2">
+                                    <div class="bg-green-500 h-2 rounded-full" style="width: 85%"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="cursor-pointer hover:bg-gray-50 p-4 rounded-lg transition" onclick="openProgressModal('Traffic & Road Awareness', 72)">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm font-medium text-gray-700">Traffic & Road Awareness</span>
+                                    <span class="text-sm font-semibold text-gray-900">72%</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2">
+                                    <div class="bg-blue-500 h-2 rounded-full" style="width: 72%"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="cursor-pointer hover:bg-gray-50 p-4 rounded-lg transition" onclick="openProgressModal('Junctions & Roundabouts', 68)">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm font-medium text-gray-700">Junctions & Roundabouts</span>
+                                    <span class="text-sm font-semibold text-gray-900">68%</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2">
+                                    <div class="bg-yellow-500 h-2 rounded-full" style="width: 68%"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="cursor-pointer hover:bg-gray-50 p-4 rounded-lg transition" onclick="openProgressModal('Manoeuvres', 80)">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm font-medium text-gray-700">Manoeuvres</span>
+                                    <span class="text-sm font-semibold text-gray-900">80%</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2">
+                                    <div class="bg-purple-500 h-2 rounded-full" style="width: 80%"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="cursor-pointer hover:bg-gray-50 p-4 rounded-lg transition" onclick="openProgressModal('Vehicle Controls', 90)">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm font-medium text-gray-700">Vehicle Controls</span>
+                                    <span class="text-sm font-semibold text-gray-900">90%</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2">
+                                    <div class="bg-green-600 h-2 rounded-full" style="width: 90%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="lessons-content" class="p-8 hidden">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-lg font-bold text-gray-900">Lesson History</h3>
+                        <button class="px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-red-700 flex items-center gap-2">
+                            <i class="fa-solid fa-plus"></i>
+                            Add Lesson
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="border-b-2 border-gray-200">
+                                    <th class="text-left py-4 px-4 text-sm font-semibold text-gray-900">Date</th>
+                                    <th class="text-left py-4 px-4 text-sm font-semibold text-gray-900">Time</th>
+                                    <th class="text-left py-4 px-4 text-sm font-semibold text-gray-900">Instructor</th>
+                                    <th class="text-left py-4 px-4 text-sm font-semibold text-gray-900">Duration</th>
+                                    <th class="text-left py-4 px-4 text-sm font-semibold text-gray-900">Amount</th>
+                                    <th class="text-left py-4 px-4 text-sm font-semibold text-gray-900">Status</th>
+                                    <th class="text-left py-4 px-4 text-sm font-semibold text-gray-900">Notes</th>
+                                    <th class="text-left py-4 px-4 text-sm font-semibold text-gray-900">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr class="hover:bg-gray-50">
+                                    <td class="py-4 px-4 text-sm font-medium text-gray-900">15 Nov 2024</td>
+                                    <td class="py-4 px-4 text-sm text-gray-600">14:00</td>
+                                    <td class="py-4 px-4">
+                                        <div class="flex items-center gap-2">
+                                            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-2.jpg" alt="James" class="w-6 h-6 rounded-full object-cover">
+                                            <span class="text-sm text-gray-900">James Wilson</span>
+                                        </div>
+                                    </td>
+                                    <td class="py-4 px-4 text-sm text-gray-600">1.5h</td>
+                                    <td class="py-4 px-4 text-sm font-semibold text-gray-900">£60</td>
+                                    <td class="py-4 px-4"><span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Completed</span></td>
+                                    <td class="py-4 px-4 text-sm text-gray-600 max-w-xs truncate">Roundabouts practice and progress review</td>
+                                    <td class="py-4 px-4">
+                                        <button class="text-gray-400 hover:text-gray-600">
+                                            <i class="fa-solid fa-ellipsis-vertical"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr class="hover:bg-gray-50">
+                                    <td class="py-4 px-4 text-sm font-medium text-gray-900">12 Nov 2024</td>
+                                    <td class="py-4 px-4 text-sm text-gray-600">10:00</td>
+                                    <td class="py-4 px-4">
+                                        <div class="flex items-center gap-2">
+                                            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-2.jpg" alt="James" class="w-6 h-6 rounded-full object-cover">
+                                            <span class="text-sm text-gray-900">James Wilson</span>
+                                        </div>
+                                    </td>
+                                    <td class="py-4 px-4 text-sm text-gray-600">2h</td>
+                                    <td class="py-4 px-4 text-sm font-semibold text-gray-900">£80</td>
+                                    <td class="py-4 px-4"><span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Completed</span></td>
+                                    <td class="py-4 px-4 text-sm text-gray-600 max-w-xs truncate">Parallel parking mastered after practice</td>
+                                    <td class="py-4 px-4">
+                                        <button class="text-gray-400 hover:text-gray-600">
+                                            <i class="fa-solid fa-ellipsis-vertical"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr class="hover:bg-gray-50">
+                                    <td class="py-4 px-4 text-sm font-medium text-gray-900">08 Nov 2024</td>
+                                    <td class="py-4 px-4 text-sm text-gray-600">15:30</td>
+                                    <td class="py-4 px-4">
+                                        <div class="flex items-center gap-2">
+                                            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-2.jpg" alt="James" class="w-6 h-6 rounded-full object-cover">
+                                            <span class="text-sm text-gray-900">James Wilson</span>
+                                        </div>
+                                    </td>
+                                    <td class="py-4 px-4 text-sm text-gray-600">1.5h</td>
+                                    <td class="py-4 px-4 text-sm font-semibold text-gray-900">£60</td>
+                                    <td class="py-4 px-4"><span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Completed</span></td>
+                                    <td class="py-4 px-4 text-sm text-gray-600 max-w-xs truncate">Junction navigation and traffic awareness</td>
+                                    <td class="py-4 px-4">
+                                        <button class="text-gray-400 hover:text-gray-600">
+                                            <i class="fa-solid fa-ellipsis-vertical"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr class="hover:bg-gray-50">
+                                    <td class="py-4 px-4 text-sm font-medium text-gray-900">05 Nov 2024</td>
+                                    <td class="py-4 px-4 text-sm text-gray-600">13:00</td>
+                                    <td class="py-4 px-4">
+                                        <div class="flex items-center gap-2">
+                                            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-2.jpg" alt="James" class="w-6 h-6 rounded-full object-cover">
+                                            <span class="text-sm text-gray-900">James Wilson</span>
+                                        </div>
+                                    </td>
+                                    <td class="py-4 px-4 text-sm text-gray-600">2h</td>
+                                    <td class="py-4 px-4 text-sm font-semibold text-gray-900">£80</td>
+                                    <td class="py-4 px-4"><span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Completed</span></td>
+                                    <td class="py-4 px-4 text-sm text-gray-600 max-w-xs truncate">Emergency stop practice and control</td>
+                                    <td class="py-4 px-4">
+                                        <button class="text-gray-400 hover:text-gray-600">
+                                            <i class="fa-solid fa-ellipsis-vertical"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr class="hover:bg-gray-50">
+                                    <td class="py-4 px-4 text-sm font-medium text-gray-900">01 Nov 2024</td>
+                                    <td class="py-4 px-4 text-sm text-gray-600">11:00</td>
+                                    <td class="py-4 px-4">
+                                        <div class="flex items-center gap-2">
+                                            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-2.jpg" alt="James" class="w-6 h-6 rounded-full object-cover">
+                                            <span class="text-sm text-gray-900">James Wilson</span>
+                                        </div>
+                                    </td>
+                                    <td class="py-4 px-4 text-sm text-gray-600">1.5h</td>
+                                    <td class="py-4 px-4 text-sm font-semibold text-gray-900">£60</td>
+                                    <td class="py-4 px-4"><span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Completed</span></td>
+                                    <td class="py-4 px-4 text-sm text-gray-600 max-w-xs truncate">Bay parking and vehicle positioning</td>
+                                    <td class="py-4 px-4">
+                                        <button class="text-gray-400 hover:text-gray-600">
+                                            <i class="fa-solid fa-ellipsis-vertical"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr class="hover:bg-gray-50">
+                                    <td class="py-4 px-4 text-sm font-medium text-gray-900">29 Oct 2024</td>
+                                    <td class="py-4 px-4 text-sm text-gray-600">16:00</td>
+                                    <td class="py-4 px-4">
+                                        <div class="flex items-center gap-2">
+                                            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-2.jpg" alt="James" class="w-6 h-6 rounded-full object-cover">
+                                            <span class="text-sm text-gray-900">James Wilson</span>
+                                        </div>
+                                    </td>
+                                    <td class="py-4 px-4 text-sm text-gray-600">2h</td>
+                                    <td class="py-4 px-4 text-sm font-semibold text-gray-900">£80</td>
+                                    <td class="py-4 px-4"><span class="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">Scheduled</span></td>
+                                    <td class="py-4 px-4 text-sm text-gray-600 max-w-xs truncate">Dual carriageway driving session</td>
+                                    <td class="py-4 px-4">
+                                        <button class="text-gray-400 hover:text-gray-600">
+                                            <i class="fa-solid fa-ellipsis-vertical"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr class="hover:bg-gray-50">
+                                    <td class="py-4 px-4 text-sm font-medium text-gray-900">26 Oct 2024</td>
+                                    <td class="py-4 px-4 text-sm text-gray-600">09:30</td>
+                                    <td class="py-4 px-4">
+                                        <div class="flex items-center gap-2">
+                                            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-2.jpg" alt="James" class="w-6 h-6 rounded-full object-cover">
+                                            <span class="text-sm text-gray-900">James Wilson</span>
+                                        </div>
+                                    </td>
+                                    <td class="py-4 px-4 text-sm text-gray-600">1.5h</td>
+                                    <td class="py-4 px-4 text-sm font-semibold text-gray-900">£60</td>
+                                    <td class="py-4 px-4"><span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Completed</span></td>
+                                    <td class="py-4 px-4 text-sm text-gray-600 max-w-xs truncate">Town driving and pedestrian awareness</td>
+                                    <td class="py-4 px-4">
+                                        <button class="text-gray-400 hover:text-gray-600">
+                                            <i class="fa-solid fa-ellipsis-vertical"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr class="hover:bg-gray-50">
+                                    <td class="py-4 px-4 text-sm font-medium text-gray-900">22 Oct 2024</td>
+                                    <td class="py-4 px-4 text-sm text-gray-600">14:30</td>
+                                    <td class="py-4 px-4">
+                                        <div class="flex items-center gap-2">
+                                            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-2.jpg" alt="James" class="w-6 h-6 rounded-full object-cover">
+                                            <span class="text-sm text-gray-900">James Wilson</span>
+                                        </div>
+                                    </td>
+                                    <td class="py-4 px-4 text-sm text-gray-600">2h</td>
+                                    <td class="py-4 px-4 text-sm font-semibold text-gray-900">£80</td>
+                                    <td class="py-4 px-4"><span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Completed</span></td>
+                                    <td class="py-4 px-4 text-sm text-gray-600 max-w-xs truncate">Roundabout confidence building</td>
+                                    <td class="py-4 px-4">
+                                        <button class="text-gray-400 hover:text-gray-600">
+                                            <i class="fa-solid fa-ellipsis-vertical"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-6 flex items-center justify-between">
+                        <p class="text-sm text-gray-500">Showing 8 of 24 lessons</p>
+                        <div class="flex gap-2">
+                            <button class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Previous</button>
+                            <button class="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-red-700">Next</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="payments-content" class="p-8 hidden">
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-lg font-bold text-gray-900">Payment History</h3>
+                            <div class="flex gap-4">
+                                <div class="text-center px-6 py-4 bg-green-50 rounded-lg border border-green-200">
+                                    <p class="text-xs text-gray-500 mb-1">Total Paid</p>
+                                    <p class="text-2xl font-bold text-green-600">£720</p>
+                                </div>
+                                <div class="text-center px-6 py-4 bg-orange-50 rounded-lg border border-orange-200">
+                                    <p class="text-xs text-gray-500 mb-1">Outstanding</p>
+                                    <p class="text-2xl font-bold text-orange-600">£240</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="border-b-2 border-gray-200">
+                                    <th class="text-left py-4 px-4 text-sm font-semibold text-gray-900">Date</th>
+                                    <th class="text-left py-4 px-4 text-sm font-semibold text-gray-900">Description</th>
+                                    <th class="text-left py-4 px-4 text-sm font-semibold text-gray-900">Payment Method</th>
+                                    <th class="text-left py-4 px-4 text-sm font-semibold text-gray-900">Amount</th>
+                                    <th class="text-left py-4 px-4 text-sm font-semibold text-gray-900">Status</th>
+                                    <th class="text-left py-4 px-4 text-sm font-semibold text-gray-900">Invoice</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr class="hover:bg-gray-50">
+                                    <td class="py-4 px-4 text-sm font-medium text-gray-900">15 Nov 2024</td>
+                                    <td class="py-4 px-4 text-sm text-gray-700">10-Hour Package Payment</td>
+                                    <td class="py-4 px-4">
+                                        <div class="flex items-center gap-2">
+                                            <i class="fa-brands fa-cc-stripe text-purple-600"></i>
+                                            <span class="text-sm text-gray-600">Stripe</span>
+                                        </div>
+                                    </td>
+                                    <td class="py-4 px-4 text-sm font-bold text-gray-900">£240</td>
+                                    <td class="py-4 px-4"><span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Paid</span></td>
+                                    <td class="py-4 px-4">
+                                        <button class="text-primary hover:text-red-700 text-sm font-medium flex items-center gap-1">
+                                            <i class="fa-solid fa-download"></i>
+                                            Download
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr class="hover:bg-gray-50">
+                                    <td class="py-4 px-4 text-sm font-medium text-gray-900">01 Nov 2024</td>
+                                    <td class="py-4 px-4 text-sm text-gray-700">20-Hour Package Payment</td>
+                                    <td class="py-4 px-4">
+                                        <div class="flex items-center gap-2">
+                                            <i class="fa-brands fa-cc-stripe text-purple-600"></i>
+                                            <span class="text-sm text-gray-600">Stripe</span>
+                                        </div>
+                                    </td>
+                                    <td class="py-4 px-4 text-sm font-bold text-gray-900">£480</td>
+                                    <td class="py-4 px-4"><span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Paid</span></td>
+                                    <td class="py-4 px-4">
+                                        <button class="text-primary hover:text-red-700 text-sm font-medium flex items-center gap-1">
+                                            <i class="fa-solid fa-download"></i>
+                                            Download
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr class="hover:bg-gray-50">
+                                    <td class="py-4 px-4 text-sm font-medium text-gray-900">20 Dec 2024</td>
+                                    <td class="py-4 px-4 text-sm text-gray-700">10-Hour Package Payment</td>
+                                    <td class="py-4 px-4">
+                                        <div class="flex items-center gap-2">
+                                            <i class="fa-brands fa-cc-stripe text-purple-600"></i>
+                                            <span class="text-sm text-gray-600">Stripe</span>
+                                        </div>
+                                    </td>
+                                    <td class="py-4 px-4 text-sm font-bold text-gray-900">£240</td>
+                                    <td class="py-4 px-4"><span class="px-3 py-1 bg-orange-100 text-orange-700 text-xs font-semibold rounded-full">Pending</span></td>
+                                    <td class="py-4 px-4">
+                                        <button class="text-gray-400 text-sm font-medium flex items-center gap-1" disabled>
+                                            <i class="fa-solid fa-download"></i>
+                                            Unavailable
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr class="hover:bg-gray-50">
+                                    <td class="py-4 px-4 text-sm font-medium text-gray-900">15 Oct 2024</td>
+                                    <td class="py-4 px-4 text-sm text-gray-700">Single Lesson Payment</td>
+                                    <td class="py-4 px-4">
+                                        <div class="flex items-center gap-2">
+                                            <i class="fa-solid fa-money-bill-wave text-green-600"></i>
+                                            <span class="text-sm text-gray-600">Cash</span>
+                                        </div>
+                                    </td>
+                                    <td class="py-4 px-4 text-sm font-bold text-gray-900">£40</td>
+                                    <td class="py-4 px-4"><span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Paid</span></td>
+                                    <td class="py-4 px-4">
+                                        <button class="text-primary hover:text-red-700 text-sm font-medium flex items-center gap-1">
+                                            <i class="fa-solid fa-download"></i>
+                                            Download
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr class="hover:bg-gray-50">
+                                    <td class="py-4 px-4 text-sm font-medium text-gray-900">01 Oct 2024</td>
+                                    <td class="py-4 px-4 text-sm text-gray-700">Initial Assessment Payment</td>
+                                    <td class="py-4 px-4">
+                                        <div class="flex items-center gap-2">
+                                            <i class="fa-brands fa-cc-stripe text-purple-600"></i>
+                                            <span class="text-sm text-gray-600">Stripe</span>
+                                        </div>
+                                    </td>
+                                    <td class="py-4 px-4 text-sm font-bold text-gray-900">£50</td>
+                                    <td class="py-4 px-4"><span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Paid</span></td>
+                                    <td class="py-4 px-4">
+                                        <button class="text-primary hover:text-red-700 text-sm font-medium flex items-center gap-1">
+                                            <i class="fa-solid fa-download"></i>
+                                            Download
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="transfer-content" class="p-8 hidden">
+                    <div class="max-w-md">
+                        <h3 class="text-lg font-bold text-gray-900 mb-4">Transfer Pupil</h3>
+                        <p class="text-sm text-gray-600 mb-6">Transfer this pupil to another instructor. This action requires confirmation.</p>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Select New Instructor</label>
+                                <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    <option>Choose instructor...</option>
+                                    <option>Sarah Clarke</option>
+                                    <option>David Thompson</option>
+                                    <option>Emma Roberts</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Transfer Reason</label>
+                                <textarea class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" rows="3" placeholder="Reason for transfer..."></textarea>
+                            </div>
+                            <button class="w-full px-4 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-red-700">
+                                Transfer Pupil
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="emergency-content" class="p-8 hidden">
+                    <h3 class="text-lg font-bold text-gray-900 mb-6">Emergency Contact</h3>
+                    <div class="bg-gray-50 rounded-lg p-6">
+                        <div class="flex items-center gap-4 mb-4">
+                            <div class="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
+                                <i class="fa-solid fa-user text-gray-400 text-xl"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-lg font-semibold text-gray-900">Margaret Johnson</h4>
+                                <p class="text-sm text-gray-600">Mother</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 text-gray-600">
+                            <i class="fa-solid fa-phone text-sm"></i>
+                            <span class="text-sm">07823 456 789</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="message-content" class="p-8 hidden">
+                    <h3 class="text-lg font-bold text-gray-900 mb-6">Messages</h3>
+                    <div class="space-y-4 mb-6">
+                        <div class="flex gap-4">
+                            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-5.jpg" alt="Sarah" class="w-10 h-10 rounded-full object-cover">
+                            <div class="flex-1">
+                                <div class="bg-gray-100 rounded-lg p-4">
+                                    <p class="text-sm text-gray-900">Hi James, I wanted to check if we could reschedule tomorrow's lesson to 3pm instead of 2pm?</p>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">2 hours ago</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-4 justify-end">
+                            <div class="flex-1 max-w-md">
+                                <div class="bg-primary text-white rounded-lg p-4">
+                                    <p class="text-sm">Hi Sarah, yes that's fine. I'll update the booking for 3pm tomorrow. See you then!</p>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1 text-right">1 hour ago</p>
+                            </div>
+                            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-2.jpg" alt="James" class="w-10 h-10 rounded-full object-cover">
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <input type="text" class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Type a message...">
+                        <button class="px-6 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-red-700">
+                            Send
+                        </button>
+                    </div>
+                </div>
+
+                <div id="actions-content" class="p-8 hidden">
+                    <h3 class="text-lg font-bold text-gray-900 mb-6">Account Actions</h3>
+                    <div class="space-y-4 max-w-md">
+                        <button class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 flex items-center gap-2">
+                            <i class="fa-solid fa-download"></i>
+                            Export Pupil Data
+                        </button>
+                        <button class="w-full px-4 py-3 bg-yellow-600 text-white rounded-lg font-semibold hover:bg-yellow-700 flex items-center gap-2">
+                            <i class="fa-solid fa-archive"></i>
+                            Archive Account
+                        </button>
+                        <button class="w-full px-4 py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 flex items-center gap-2">
+                            <i class="fa-solid fa-trash"></i>
+                            Delete Account
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <footer id="footer" class="ml-64 bg-white border-t border-gray-200 py-6 px-8">
+        <div class="flex items-center justify-between">
+            <p class="text-sm text-gray-500">© GoRoadie 2025. All rights reserved.</p>
+            <div class="flex items-center gap-6">
+                <a href="#" class="text-sm text-gray-500 hover:text-gray-900">Privacy Policy</a>
+                <a href="#" class="text-sm text-gray-500 hover:text-gray-900">Terms of Service</a>
+                <p class="text-xs text-gray-400">🍪 We use cookies to improve your experience</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        window.addEventListener('load', function() {
+            const tabs = ['overview', 'lessons', 'payments', 'transfer', 'emergency', 'message', 'actions'];
+            
+            tabs.forEach(tab => {
+                document.getElementById(`${tab}-tab`).addEventListener('click', function() {
+                    tabs.forEach(t => {
+                        document.getElementById(`${t}-tab`).classList.remove('text-primary', 'border-b-2', 'border-primary', 'bg-primaryLight');
+                        document.getElementById(`${t}-tab`).classList.add('text-gray-500');
+                        document.getElementById(`${t}-content`).classList.add('hidden');
+                    });
+                    
+                    this.classList.remove('text-gray-500');
+                    this.classList.add('text-primary', 'border-b-2', 'border-primary', 'bg-primaryLight');
+                    document.getElementById(`${tab}-content`).classList.remove('hidden');
+                });
+            });
+        });
+    </script>
+
+    <script>
+        function openProgressModal(sectionName, percentage) {
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            
+            const modalContent = document.createElement('div');
+            modalContent.className = 'bg-white rounded-xl p-8 max-w-md w-full mx-4';
+            
+            modalContent.innerHTML = `
+                <div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-6">${sectionName}</h3>
+                    <div class="mb-6">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-medium text-gray-700">Current Progress</span>
+                            <span class="text-2xl font-bold text-gray-900">${percentage}%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-3">
+                            <div class="bg-primary h-3 rounded-full transition-all" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Add Points (1 point = 1%)</label>
+                        <input type="number" id="points-input" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter points to add" min="1" max="${100 - percentage}">
+                        <p class="text-xs text-gray-500 mt-1">Maximum: ${100 - percentage} points</p>
+                    </div>
+                    <div class="flex gap-4">
+                        <button onclick="this.closest('.fixed').remove()" class="flex-1 px-6 py-3 bg-gray-600 text-white rounded-lg font-semibold hover:bg-gray-700">
+                            Cancel
+                        </button>
+                        <button onclick="updateProgress('${sectionName}', ${percentage})" class="flex-1 px-6 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-red-700">
+                            Update Progress
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            modal.appendChild(modalContent);
+            document.body.appendChild(modal);
+            
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+        }
+        
+        function updateProgress(sectionName, currentPercentage) {
+            const pointsInput = document.getElementById('points-input');
+            const pointsToAdd = parseInt(pointsInput.value) || 0;
+            const newPercentage = Math.min(100, currentPercentage + pointsToAdd);
+            
+            if (pointsToAdd > 0) {
+                alert(`Progress updated! ${sectionName} is now at ${newPercentage}%`);
+                document.querySelector('.fixed').remove();
+            } else {
+                alert('Please enter a valid number of points to add.');
+            }
+        }
+        
+        function openAddSectionModal() {
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            
+            const modalContent = document.createElement('div');
+            modalContent.className = 'bg-white rounded-xl p-8 max-w-md w-full mx-4';
+            
+            modalContent.innerHTML = `
+                <div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-6">Add Progress Section</h3>
+                    <div class="space-y-4 mb-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Section Name</label>
+                            <input type="text" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="e.g. Night Driving">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Initial Progress Percentage</label>
+                            <input type="number" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="0-100" min="0" max="100">
+                        </div>
+                    </div>
+                    <div class="flex gap-4">
+                        <button onclick="this.closest('.fixed').remove()" class="flex-1 px-6 py-3 bg-gray-600 text-white rounded-lg font-semibold hover:bg-gray-700">
+                            Cancel
+                        </button>
+                        <button class="flex-1 px-6 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-red-700">
+                            Add Section
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            modal.appendChild(modalContent);
+            document.body.appendChild(modal);
+            
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+        }
+    </script>
+
+</body>
+</html>

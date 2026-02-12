@@ -3,7 +3,7 @@ import AppContent from '@/components/AppContent.vue';
 import AppShell from '@/components/AppShell.vue';
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppSidebarHeader from '@/components/AppSidebarHeader.vue';
-import { Sonner } from '@/components/ui/sonner';
+import { Toaster } from '@/components/ui/toast';
 import type { BreadcrumbItem } from '@/types';
 
 type Props = {
@@ -23,7 +23,7 @@ withDefaults(defineProps<Props>(), {
             <slot />
         </AppContent>
 
-        <!-- Sonner Toast -->
-        <Sonner position="top-right" rich-colors close-button />
     </AppShell>
+
+    <Toaster />
 </template>

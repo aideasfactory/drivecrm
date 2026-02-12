@@ -8,10 +8,18 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet'
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, UserPlus, UserPen } from 'lucide-vue-next'
+import { Loader2, UserPlus, UserPen, Save, Trash2, AlertTriangle } from 'lucide-vue-next'
 import type { CreateInstructorData, InstructorDetail } from '@/types/instructor'
 
 interface Props {
@@ -33,6 +41,8 @@ const emit = defineEmits<Emits>()
 const isEditMode = computed(() => props.instructor !== null)
 
 const isSubmitting = ref(false)
+const isRequestingDeletion = ref(false)
+const showDeleteDialog = ref(false)
 const form = ref<CreateInstructorData>({
     name: '',
     email: '',
@@ -138,6 +148,25 @@ const handleOpenChange = (value: boolean) => {
     if (!isSubmitting.value) {
         emit('update:open', value)
     }
+}
+
+const handleRequestDeletion = () => {
+    if (!props.instructor) return
+
+    isRequestingDeletion.value = true
+
+    router.post(`/instructors/${props.instructor.id}/request-deletion`, {}, {
+        preserveScroll: true,
+        onSuccess: () => {
+            showDeleteDialog.value = false
+        },
+        onError: () => {
+            // Error handling - the error will be displayed via toast/notification
+        },
+        onFinish: () => {
+            isRequestingDeletion.value = false
+        },
+    })
 }
 </script>
 
@@ -341,6 +370,66 @@ const handleOpenChange = (value: boolean) => {
                     </Button>
                 </div>
             </form>
+
+            <!-- Danger Zone -->
+            <div v-if="isEditMode && instructor" class="mt-8 border-t border-destructive/20 px-6 py-6">
+                <div class="rounded-lg border border-destructive/50 bg-destructive/5 p-4">
+                    <div class="flex items-center gap-2">
+                        <AlertTriangle class="h-5 w-5 text-destructive" />
+                        <h3 class="font-semibold text-destructive">Danger Zone</h3>
+                    </div>
+                    <p class="mt-2 text-sm text-destructive/80">
+                        Once you request account deletion, an administrator will review your request.
+                        This action cannot be undone.
+                    </p>
+                    <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        class="mt-4"
+                        @click="showDeleteDialog = true"
+                    >
+                        <Trash2 class="mr-2 h-4 w-4" />
+                        Request Account Deletion
+                    </Button>
+                </div>
+            </div>
         </SheetContent>
     </Sheet>
+
+    <!-- Confirmation Dialog -->
+    <Dialog v-model:open="showDeleteDialog">
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle class="flex items-center gap-2 text-destructive">
+                    <AlertTriangle class="h-5 w-5" />
+                    Request Account Deletion
+                </DialogTitle>
+                <DialogDescription>
+                    Are you sure you want to request deletion of your account?
+                    An administrator will review this request and contact you if needed.
+                </DialogDescription>
+            </DialogHeader>
+            <DialogFooter class="mt-4">
+                <Button
+                    type="button"
+                    variant="outline"
+                    @click="showDeleteDialog = false"
+                    :disabled="isRequestingDeletion"
+                >
+                    Cancel
+                </Button>
+                <Button
+                    type="button"
+                    variant="destructive"
+                    @click="handleRequestDeletion"
+                    :disabled="isRequestingDeletion"
+                >
+                    <Loader2 v-if="isRequestingDeletion" class="mr-2 h-4 w-4 animate-spin" />
+                    <Trash2 v-else class="mr-2 h-4 w-4" />
+                    Request Deletion
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
 </template>

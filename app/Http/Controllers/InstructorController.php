@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\Shared\Contact\CreateContactAction;
+use App\Actions\Shared\Contact\DeleteContactAction;
+use App\Actions\Shared\Contact\SetPrimaryContactAction;
+use App\Actions\Shared\Contact\UpdateContactAction;
+use App\Actions\Shared\LogActivityAction;
 use App\Http\Requests\StoreCalendarItemRequest;
 use App\Http\Requests\StoreInstructorRequest;
 use App\Http\Requests\StoreLocationRequest;
 use App\Http\Requests\StorePackageRequest;
 use App\Http\Requests\UpdateInstructorRequest;
 use App\Models\CalendarItem;
+use App\Models\Contact;
 use App\Models\Instructor;
 use App\Models\Location;
 use App\Models\Student;
@@ -20,6 +26,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -197,6 +204,10 @@ class InstructorController extends Controller
             $instructor,
             $request->input('postcode_sector')
         );
+
+        (new LogActivityAction)($instructor, "Coverage area '{$location->postcode_sector}' added", 'profile', [
+            'postcode_sector' => $location->postcode_sector,
+        ]);
 
         return response()->json([
             'location' => [
@@ -454,6 +465,151 @@ class InstructorController extends Controller
             'onboarding_complete' => $instructor->onboarding_complete,
             'charges_enabled' => $instructor->charges_enabled,
             'payouts_enabled' => $instructor->payouts_enabled,
+        ]);
+    }
+
+    /**
+     * Handle instructor account deletion request.
+     */
+    public function requestDeletion(Instructor $instructor): JsonResponse
+    {
+        $adminEmail = config('mail.admin_address', config('mail.from.address'));
+        $instructorName = $instructor->user->name;
+        $instructorEmail = $instructor->user->email;
+
+        Mail::raw(
+            "Instructor Account Deletion Request\n\n".
+            "Name: {$instructorName}\n".
+            "Email: {$instructorEmail}\n".
+            "Instructor ID: {$instructor->id}\n\n".
+            'This instructor has requested their account be deleted. Please review and process this request.',
+            function ($message) use ($adminEmail, $instructorName) {
+                $message->to($adminEmail)
+                    ->subject("Account Deletion Request: {$instructorName}");
+            }
+        );
+
+        return response()->json([
+            'message' => 'Account deletion request has been submitted. An administrator will review your request.',
+        ]);
+    }
+
+    /**
+     * Get emergency contacts for an instructor.
+     */
+    public function contacts(Instructor $instructor): JsonResponse
+    {
+        $contacts = $instructor->contacts()->orderByDesc('is_primary')->orderBy('name')->get();
+
+        return response()->json([
+            'contacts' => $contacts,
+        ]);
+    }
+
+    /**
+     * Store a new emergency contact for an instructor.
+     */
+    public function storeContact(Instructor $instructor): JsonResponse
+    {
+        $data = request()->validate([
+            'name' => 'required|string|max:255',
+            'relationship' => 'required|string|max:100',
+            'phone' => 'required|string|max:50',
+            'email' => 'nullable|email|max:255',
+            'is_primary' => 'boolean',
+        ]);
+
+        $contact = (new CreateContactAction)($instructor, $data);
+
+        return response()->json([
+            'contact' => $contact,
+        ], 201);
+    }
+
+    /**
+     * Update an emergency contact for an instructor.
+     */
+    public function updateContact(Instructor $instructor, Contact $contact): JsonResponse
+    {
+        if ($contact->contactable_id !== $instructor->id || $contact->contactable_type !== Instructor::class) {
+            return response()->json(['message' => 'Contact not found for this instructor.'], 404);
+        }
+
+        $data = request()->validate([
+            'name' => 'required|string|max:255',
+            'relationship' => 'required|string|max:100',
+            'phone' => 'required|string|max:50',
+            'email' => 'nullable|email|max:255',
+            'is_primary' => 'boolean',
+        ]);
+
+        $contact = (new UpdateContactAction)($contact, $data);
+
+        return response()->json([
+            'contact' => $contact,
+        ]);
+    }
+
+    /**
+     * Delete an emergency contact for an instructor.
+     */
+    public function deleteContact(Instructor $instructor, Contact $contact): JsonResponse
+    {
+        if ($contact->contactable_id !== $instructor->id || $contact->contactable_type !== Instructor::class) {
+            return response()->json(['message' => 'Contact not found for this instructor.'], 404);
+        }
+
+        (new DeleteContactAction)($contact);
+
+        return response()->json([
+            'message' => 'Contact deleted successfully.',
+        ]);
+    }
+
+    /**
+     * Set an emergency contact as primary for an instructor.
+     */
+    public function setPrimaryContact(Instructor $instructor, Contact $contact): JsonResponse
+    {
+        if ($contact->contactable_id !== $instructor->id || $contact->contactable_type !== Instructor::class) {
+            return response()->json(['message' => 'Contact not found for this instructor.'], 404);
+        }
+
+        $contact = (new SetPrimaryContactAction)($contact);
+
+        return response()->json([
+            'contact' => $contact,
+        ]);
+    }
+
+    /**
+     * Get activity logs for an instructor.
+     */
+    public function activityLogs(Instructor $instructor): JsonResponse
+    {
+        $query = $instructor->activityLogs()->recent();
+
+        // Filter by category
+        if (request()->has('category') && request('category') !== 'all') {
+            $query->category(request('category'));
+        }
+
+        // Search by message
+        if (request()->has('search') && request('search')) {
+            $query->where('message', 'like', '%'.request('search').'%');
+        }
+
+        // Paginate
+        $logs = $query->paginate(20);
+
+        return response()->json([
+            'logs' => $logs->items(),
+            'meta' => [
+                'current_page' => $logs->currentPage(),
+                'total' => $logs->total(),
+                'per_page' => $logs->perPage(),
+                'last_page' => $logs->lastPage(),
+            ],
         ]);
     }
 }

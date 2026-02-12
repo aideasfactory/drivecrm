@@ -30,7 +30,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
-import { toast } from 'vue-sonner'
+import { toast } from '@/components/ui/toast'
 import type { Calendar as CalendarType, CalendarItem, CalendarItemFormData } from '@/types/instructor'
 
 interface Props {
@@ -99,7 +99,7 @@ const loadCalendar = async () => {
         calendar.events.set(calendarEvents.value)
     } catch (error: any) {
         const message = error.response?.data?.message || 'Failed to load calendar'
-        toast.error(message)
+        toast({ title: message, variant: 'destructive' })
     } finally {
         loading.value = false
     }
@@ -109,12 +109,12 @@ const loadCalendar = async () => {
 const handleAddSubmit = async () => {
     // Client-side validation
     if (!formData.value.date || !formData.value.start_time || !formData.value.end_time) {
-        toast.error('Please fill in all fields')
+        toast({ title: 'Please fill in all fields', variant: 'destructive' })
         return
     }
 
     if (formData.value.end_time <= formData.value.start_time) {
-        toast.error('End time must be after start time')
+        toast({ title: 'End time must be after start time', variant: 'destructive' })
         return
     }
 
@@ -143,14 +143,14 @@ const handleAddSubmit = async () => {
         // Update calendar events
         calendar.events.set(calendarEvents.value)
 
-        toast.success('Time slot added successfully!')
+        toast({ title: 'Time slot added successfully!' })
 
         // Reset form and close sheet
         formData.value = { date: '', start_time: '', end_time: '' }
         isAddSheetOpen.value = false
     } catch (error: any) {
         const message = error.response?.data?.message || 'Failed to add time slot'
-        toast.error(message)
+        toast({ title: message, variant: 'destructive' })
     } finally {
         formLoading.value = false
     }
@@ -179,13 +179,13 @@ const handleDelete = async () => {
         // Update calendar events
         calendar.events.set(calendarEvents.value)
 
-        toast.success('Time slot removed successfully!')
+        toast({ title: 'Time slot removed successfully!' })
 
         isDeleteDialogOpen.value = false
         itemToDelete.value = null
     } catch (error: any) {
         const message = error.response?.data?.message || 'Failed to delete time slot'
-        toast.error(message)
+        toast({ title: message, variant: 'destructive' })
     } finally {
         formLoading.value = false
     }
