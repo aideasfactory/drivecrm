@@ -88,6 +88,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('packages.update');
     Route::get('/pupils', [\App\Http\Controllers\PupilController::class, 'index'])
         ->name('pupils.index');
+    Route::get('/students/{student}', [\App\Http\Controllers\PupilController::class, 'show'])
+        ->name('students.show');
     Route::get('/students/{student}/activity-logs', [\App\Http\Controllers\PupilController::class, 'activityLogs'])
         ->name('students.activity-logs');
 

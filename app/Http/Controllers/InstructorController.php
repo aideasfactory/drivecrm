@@ -113,6 +113,7 @@ class InstructorController extends Controller
             ],
             'tab' => request()->query('tab', 'schedule'),
             'subtab' => request()->query('subtab', 'summary'),
+            'student' => request()->query('student') ? (int) request()->query('student') : null,
         ]);
     }
 

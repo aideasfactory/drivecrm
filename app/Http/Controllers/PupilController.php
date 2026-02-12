@@ -8,6 +8,7 @@ use App\Actions\Shared\Contact\CreateContactAction;
 use App\Actions\Shared\Contact\DeleteContactAction;
 use App\Actions\Shared\Contact\SetPrimaryContactAction;
 use App\Actions\Shared\Contact\UpdateContactAction;
+use App\Actions\Student\GetStudentDetailAction;
 use App\Models\Contact;
 use App\Models\Student;
 use Illuminate\Http\JsonResponse;
@@ -22,6 +23,18 @@ class PupilController extends Controller
     public function index(): Response
     {
         return Inertia::render('Pupils/Index');
+    }
+
+    /**
+     * Get student detail data for the pupil detail page header.
+     */
+    public function show(Student $student): JsonResponse
+    {
+        $data = (new GetStudentDetailAction)($student);
+
+        return response()->json([
+            'student' => $data,
+        ]);
     }
 
     /**

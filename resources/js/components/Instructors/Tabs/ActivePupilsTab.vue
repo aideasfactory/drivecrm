@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { router } from '@inertiajs/vue3'
 import axios from 'axios'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -167,6 +168,14 @@ const getStatusLabel = (status: string) => {
     return status.charAt(0).toUpperCase() + status.slice(1)
 }
 
+const viewPupil = (pupilId: number) => {
+    router.visit(`/instructors/${props.instructor.id}`, {
+        data: { tab: 'student', student: pupilId, subtab: 'overview' },
+        preserveState: true,
+        preserveScroll: true,
+    })
+}
+
 const handleSendBroadcast = async () => {
     broadcastErrors.value = {}
 
@@ -326,6 +335,7 @@ const handleCreatePupil = async () => {
                             v-for="pupil in filteredPupils"
                             :key="pupil.id"
                             class="cursor-pointer hover:bg-muted/50"
+                            @click="viewPupil(pupil.id)"
                         >
                             <TableCell>
                                 <div class="flex items-center gap-3">

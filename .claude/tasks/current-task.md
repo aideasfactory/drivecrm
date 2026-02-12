@@ -1,96 +1,92 @@
-# Task: Pupil Pages - ActivePupilsTab & Broadcast Messaging
+# Task: Pupil Detail Page - Layout & Sub-Navigation Scaffolding
 
 **Created:** 2026-02-12
 **Last Updated:** 2026-02-12
-**Status:** 🔄 Phase 1 - Planning
+**Status:** ✅ All Phases Complete
 
 ---
 
 ## Overview
 
 ### Goal
-Implement the pupils list within the ActivePupilsTab.vue (instructor show page) matching the wireframe layout, with:
-- Table of all students belonging to the instructor (self-loading pattern)
-- Search functionality (by name, email, phone)
-- "Add Pupil" button (scaffolded, placeholder for now)
-- "Broadcast Message" button with Sheet form
-- New `messages` table (migration + model) for storing broadcast messages
-- Activity log entry when broadcast message is sent
-- All required backend: controllers, services, actions, routes
+Create the pupil detail page layout when clicking on a pupil row in ActivePupilsTab. This includes:
+- Pupil header (back button, avatar, name, phone, email)
+- Sub-navigation tabs (Overview, Lessons, Payments, Transfer, Emergency Contact, Messages, Actions)
+- Placeholder Vue components for each sub-tab
+- Working navigation between all sub-tabs
+- All components live in the `Instructors/Tabs/Student/` domain
 
 ### Requirements Summary
-1. Redesign `ActivePupilsTab.vue` matching wireframe `pupil-list.html` layout
-2. Self-loading pattern: fetch instructor's students via axios
-3. ShadCN Table with columns: Name, Lessons, Next Lesson, Package Time, Revenue, App, Status
-4. Search input filtering students by name/email/phone
-5. "Add Pupil" button (scaffold only - opens empty sheet)
-6. "Broadcast Message" button -> Sheet form -> saves to `messages` table
-7. `messages` table: id, message (text), to (user_id FK), from (user_id FK), soft_deletes, timestamps
-8. Log activity using `LogActivityAction` when broadcast message is sent
-9. Backend: Action(s), Service method(s), Controller endpoint(s), Route(s)
+1. Header layout matching wireframe `pupil-page.html` (structure only, ShadCN styling)
+2. Back button to return to pupils list
+3. Sub-navigation with 7 tabs: Overview, Lessons, Payments, Transfer, Emergency Contact, Messages, Actions
+4. Placeholder content in each sub-tab
+5. Working click-through from ActivePupilsTab pupil rows
+6. Self-loading pattern for student data
+7. All files under `resources/js/components/Instructors/Tabs/Student/`
+8. Backend endpoint to fetch single student data
 
 ### Reference
-- Wireframe: `wireframes/pupil-list.html` (table structure and controls)
-- Pattern reference: `Instructors/Index.vue` (search + button + table layout)
-- Self-loading pattern: `EmergencyContactSubTab.vue` / `ActivitySubTab.vue`
-- ShadCN components for ALL UI elements
-- Controller -> Service -> Action pattern
-- Axios for self-loading tab data
+- Wireframe: `wireframes/pupil-page.html` (header + tab structure)
+- Tab navigation pattern: `Instructors/Show.vue` (main tabs)
+- Sub-tab pattern: `Instructors/Tabs/DetailsTab.vue` (sub-tab navigation)
+- Header pattern: `Instructors/InstructorHeader.vue` (avatar + info layout)
+- Self-loading pattern: `ActivePupilsTab.vue` (axios + loading state)
 
 ---
 
-## Phase 1: Planning (**CURRENT**) ✅
+## Phase 1: Planning (**CURRENT**)
 
-**Objective:** Design the database schema, endpoints, and implementation approach.
+**Objective:** Design the component architecture and navigation approach.
 
 ### Tasks
 
-#### Database Design
-- [x] Design `messages` table structure
-  - `id` (bigint unsigned, PK, AUTO_INCREMENT)
-  - `from` (bigint unsigned, FK -> users.id, NOT NULL) - sender user ID
-  - `to` (bigint unsigned, FK -> users.id, NOT NULL) - recipient user ID
-  - `message` (text, NOT NULL) - message content
-  - `deleted_at` (timestamp, NULLABLE) - soft delete
-  - `created_at` / `updated_at` (timestamps)
+#### Architecture Design
+- [x] Analyse wireframe `pupil-page.html` for layout structure
+- [x] Analyse existing tab/sub-tab navigation pattern
+- [x] Plan component file structure
+- [x] Plan backend endpoint for student data
+- [x] Plan navigation flow (pupil click -> student tab -> sub-tabs)
 
-#### Backend Design
-- [x] Plan Action: `App\Actions\Shared\Message\SendBroadcastMessageAction`
-  - Parameters: User $from, array $recipientUserIds, string $message
-  - Creates a message record for each recipient
-  - Logs activity for the instructor
-  - Returns Collection of created messages
-- [x] Plan Action: `App\Actions\Instructor\GetInstructorPupilsAction`
-  - Parameters: Instructor $instructor, ?string $search
-  - Returns students with user data, order stats, lesson counts
-- [x] Plan Service method: `InstructorService::getPupils()`
-- [x] Plan Service method: `InstructorService::broadcastMessage()`
-- [x] Plan Controller methods on `InstructorController`:
-  - `pupils(Instructor)` - GET instructor's students list
-  - `broadcastMessage(Request, Instructor)` - POST send broadcast message
-- [x] Plan Routes:
-  - `GET /instructors/{instructor}/pupils` -> `InstructorController@pupils`
-  - `POST /instructors/{instructor}/broadcast-message` -> `InstructorController@broadcastMessage`
+#### Component Plan
 
-#### Frontend Design
-- [x] ActivePupilsTab.vue layout:
-  - Search input (left) + Add Pupil button + Broadcast Message button (right)
-  - ShadCN Table with columns from wireframe
-  - Self-loading pattern (axios GET on mount)
-  - Search filters client-side on loaded data
-  - Loading skeleton state
-  - Empty state when no pupils
-- [x] Broadcast Message Sheet:
-  - Sheet from right side
-  - Textarea for message
-  - Info text showing "Message will be sent to X pupils"
-  - Submit button with loading state
-  - Toast on success
-- [x] Add Pupil Sheet (scaffold only):
-  - Empty Sheet with "Coming soon" placeholder
+**Navigation Flow:**
+1. User clicks pupil row in `ActivePupilsTab`
+2. `router.visit()` to instructor show page with `tab=student&student={id}&subtab=overview`
+3. `Show.vue` renders `StudentTab.vue` when `tab === 'student'`
+4. `StudentTab.vue` self-loads student data, shows header + sub-navigation
+5. Sub-tabs render based on `subtab` query parameter
+
+**File Structure:**
+```
+resources/js/components/Instructors/Tabs/
+├── StudentTab.vue (header + sub-nav wrapper, self-loads student data)
+└── Student/
+    ├── OverviewSubTab.vue (placeholder)
+    ├── LessonsSubTab.vue (placeholder)
+    ├── PaymentsSubTab.vue (placeholder)
+    ├── TransferSubTab.vue (placeholder)
+    ├── EmergencyContactSubTab.vue (placeholder)
+    ├── MessagesSubTab.vue (placeholder)
+    └── ActionsSubTab.vue (placeholder)
+```
+
+**Backend:**
+- New route: `GET /students/{student}` -> `PupilController@show` (returns student detail JSON)
+- New action: `GetStudentDetailAction` (fetches student with user data)
+- New service method: `PupilService::getStudentDetail()`
+
+**Show.vue Changes:**
+- Add `student` prop from query params
+- Add `'student'` to TabType union
+- Conditionally render `StudentTab` (NOT in main tab navigation bar - accessed only via pupil click)
+- Pass `student` ID and `subtab` to `StudentTab`
+
+**ActivePupilsTab.vue Changes:**
+- Add `@click` on pupil TableRow to navigate to student tab
 
 ### Reflection
-**What went well:** Comprehensive analysis of existing patterns ensures consistency
+**What went well:** Clear architecture following established patterns
 **What could be improved:** N/A
 **Blockers:** None
 
@@ -98,199 +94,121 @@ Implement the pupils list within the ActivePupilsTab.vue (instructor show page) 
 
 ## Phase 2: Backend Implementation ✅
 
-**Objective:** Create messages migration, model, actions, service methods, controller endpoints, and routes.
+**Objective:** Create the endpoint to fetch single student data for the header.
 
 ### Tasks
 
-#### Database Migration
-- [x] Create migration: `create_messages_table`
-  - `id` bigint unsigned PK
-  - `from` bigint unsigned FK (users.id) NOT NULL
-  - `to` bigint unsigned FK (users.id) NOT NULL
-  - `message` text NOT NULL
-  - `deleted_at` timestamp NULLABLE (soft deletes)
-  - `created_at` / `updated_at` timestamps
-  - Index on `from`
-  - Index on `to`
-- [x] **IMMEDIATELY update `.claude/database-schema.md`**
+#### Route & Controller
+- [x] Add `GET /students/{student}` route to `routes/web.php`
+- [x] Add `show()` method to `PupilController`
 
-#### Model Creation
-- [x] Create `App\Models\Message` model
-  - `$fillable`: from, to, message
-  - SoftDeletes trait
-  - `sender()` belongsTo User (foreignKey: 'from')
-  - `recipient()` belongsTo User (foreignKey: 'to')
-  - `$casts` array
+#### Action
+- [x] Create `App\Actions\Student\GetStudentDetailAction`
+  - Load student with `user`, `instructor`, `orders.package`, `orders.lessons` relations
+  - Return formatted data: id, name, first_name, surname, email, phone, user_id, status, instructor_id, has_app, lessons stats, revenue
 
-#### Action Creation
-- [x] Create `App\Actions\Instructor\GetInstructorPupilsAction`
-  - Query students where instructor_id = instructor.id
-  - Eager load `user`, `orders.package`, `orders.lessons`
-  - Optional search parameter (filter by name, email, phone)
-  - Return formatted collection with: id, name, email, lessons_completed, lessons_total, next_lesson, revenue, status
-- [x] Create `App\Actions\Shared\Message\SendBroadcastMessageAction`
-  - Parameters: User $sender, array $recipientUserIds, string $message
-  - Create Message record for each recipient
-  - Return Collection of created Messages
-
-#### Service Methods
-- [x] Add to `InstructorService`:
-  - Inject `GetInstructorPupilsAction` in constructor
-  - `getPupils(Instructor $instructor, ?string $search): Collection`
-  - `broadcastMessage(Instructor $instructor, string $message): Collection`
-    - Gets all students for instructor
-    - Calls `SendBroadcastMessageAction` with student user IDs
-    - Calls `LogActivityAction` with category 'message'
-    - Returns created messages
-
-#### Controller Methods
-- [x] Add to `InstructorController`:
-  - `pupils(Instructor $instructor): JsonResponse` - GET list students
-  - `broadcastMessage(Instructor $instructor): JsonResponse` - POST send broadcast
-
-#### Routes
-- [x] Add routes to `routes/web.php`:
-  - `GET /instructors/{instructor}/pupils`
-  - `POST /instructors/{instructor}/broadcast-message`
-
-### Reflection
-**What went well:** Clean separation of concerns following Controller -> Service -> Action pattern. Activity logging integrated in service layer.
-**What could be improved:** Could add FormRequest classes for validation instead of inline validation
-**Blockers:** None
+#### Service
+- [x] Skipped separate service layer - action called directly from controller (follows existing PupilController pattern)
 
 ---
 
 ## Phase 3: Frontend Implementation ✅
 
-**Objective:** Implement ActivePupilsTab.vue matching wireframe layout with ShadCN components.
+**Objective:** Create all Vue components with working navigation.
 
 ### Tasks
 
-#### TypeScript Types
-- [x] Create pupil types in `resources/js/types/pupil.ts`
-  - `Pupil` interface: id, name, email, phone, lessons_completed, lessons_total, next_lesson_date, next_lesson_time, revenue_pence, has_app, status
+#### StudentTab.vue (Main Wrapper)
+- [x] Create `StudentTab.vue` at `Instructors/Tabs/`
+- [x] Props: `instructor`, `studentId`, `subtab`
+- [x] Self-loading: fetch student data via axios `GET /students/{studentId}`
+- [x] Back button: navigate to `?tab=active-pupils`
+- [x] Header: Avatar + Name + Phone + Email + Status Badge (matching wireframe structure)
+- [x] Sub-navigation: 7 tabs following DetailsTab pattern
+- [x] Loading skeleton for header
+- [x] Sub-tab content rendering via `v-if`
+- [x] "Add Note" button in header (matching wireframe)
 
-#### ActivePupilsTab.vue Redesign
-- [x] Remove placeholder content
-- [x] Implement self-loading pattern (axios GET `/instructors/{id}/pupils`)
-- [x] Search input with Search icon (left side)
-- [x] "Add Pupil" Button with Plus icon (right side)
-- [x] "Broadcast Message" Button with Megaphone icon (right side)
-- [x] ShadCN Table with columns:
-  - Name (Avatar + name + email)
-  - Lessons (completed/total)
-  - Next Lesson (date + time with smart formatting)
-  - Revenue (formatted from pence)
-  - App (Check/X icon)
-  - Status (Badge with variant)
-- [x] Client-side search filtering (name, email, phone)
-- [x] Loading skeleton state (5 rows)
-- [x] Empty state with Users icon (search vs no data)
+#### Placeholder Sub-Tab Components (7 files)
+- [x] `Student/OverviewSubTab.vue` - placeholder with LayoutDashboard icon
+- [x] `Student/LessonsSubTab.vue` - placeholder with BookOpen icon
+- [x] `Student/PaymentsSubTab.vue` - placeholder with CreditCard icon
+- [x] `Student/TransferSubTab.vue` - placeholder with ArrowRightLeft icon
+- [x] `Student/EmergencyContactSubTab.vue` - placeholder with ShieldAlert icon
+- [x] `Student/MessagesSubTab.vue` - placeholder with MessageSquare icon
+- [x] `Student/ActionsSubTab.vue` - placeholder with Settings icon
 
-#### Broadcast Message Sheet
-- [x] Sheet component (slides from right, max-w-md)
-- [x] SheetTitle with Megaphone icon
-- [x] Textarea for message content with validation
-- [x] Info text: "This message will be sent to X pupils"
-- [x] Submit button with Loader2 spinner + min-width
-- [x] Axios POST to `/instructors/{id}/broadcast-message`
-- [x] Toast notification on success (with recipient count) / error
-- [x] Close sheet and reset form on success
+#### Show.vue Updates
+- [x] Import `StudentTab`
+- [x] Add `student` to Props interface (optional number)
+- [x] Add `'student'` to TabType
+- [x] Hide main tab bar when viewing student (`activeTab !== 'student'`)
+- [x] Add conditional render for `StudentTab` (NOT in tab bar buttons)
+- [x] Pass `studentId` and `subtab` to `StudentTab`
 
-#### Add Pupil Sheet (Scaffold)
-- [x] Sheet with "Add Pupil" title + UserPlus icon
-- [x] Placeholder content "Coming Soon"
+#### ActivePupilsTab.vue Updates
+- [x] Import `router` from `@inertiajs/vue3`
+- [x] Add `viewPupil()` function using `router.visit()`
+- [x] Add `@click="viewPupil(pupil.id)"` on pupil `TableRow`
 
-#### Styling Verification
-- [x] NO custom colors (ShadCN defaults only)
-- [x] Layout matches wireframe structure
-- [x] All icons from lucide-vue-next
-- [x] Button preloaders on async actions (broadcast send)
-- [x] Toast notifications on all API calls (load error, broadcast success/error)
+#### InstructorController Update
+- [x] Pass `student` query param (cast to int) to Inertia render
 
 ### Reflection
-**What went well:** Clean implementation following all existing patterns (self-loading, Sheet forms, toast feedback). Consistent with Instructors/Index.vue table layout.
-**What could be improved:** Could add row click navigation to pupil detail page when it exists
+**What went well:** Clean implementation following DetailsTab sub-tab pattern. All ShadCN components used correctly. Self-loading with skeleton state for header.
+**What could be improved:** "Add Note" button is scaffolded but not functional yet (future task).
 **Blockers:** None
 
 ---
 
 ## Phase 4: Review & Documentation ✅
 
-**Objective:** Final review and documentation updates.
+**Objective:** Final review of navigation and component structure.
 
 ### Tasks
-- [x] Verify database-schema.md is fully updated (messages table #16, indexes, relationships)
-- [x] Verify pupils endpoint wired: Route -> Controller -> Service -> Action
-- [x] Verify broadcast endpoint wired: Route -> Controller -> Service -> Action + LogActivityAction
-- [x] Verify activity log is created on broadcast (via InstructorService.broadcastMessage)
-- [x] Verify search filtering works (client-side in Vue + server-side in Action)
-- [x] Review code for pattern adherence (Controller -> Service -> Action)
-- [x] Summary of changes and score
+- [x] Verify pupil row click navigates to student tab (ActivePupilsTab.vue:329 @click -> viewPupil -> router.visit)
+- [x] Verify back button returns to pupils list (StudentTab.vue:76-82 goBack -> tab: 'active-pupils')
+- [x] Verify all 7 sub-tabs render and navigate correctly (StudentTab.vue:52-59 + v-if at 211-238)
+- [x] Verify ShadCN components used throughout - Card, Button, Avatar, Badge, Skeleton, toast - no custom styling
+- [x] Verify self-loading pattern with skeleton states (StudentTab.vue:93-104 axios + loading + skeleton)
+- [x] Verify main tab bar hidden when viewing student (Show.vue:71)
+- [x] Verify student query param passed from backend (InstructorController cast to int)
 
 ### Reflection
-**What went well:** Full end-to-end implementation with clean pattern adherence. All ShadCN components used correctly. Self-loading pattern consistent with existing tabs.
-**What could be improved:** Could extract FormRequest for broadcast validation. Row click navigation to pupil detail page when that page exists.
+**What went well:** All wiring verified. Pattern is consistent with DetailsTab sub-tabs. ShadCN-only components. Self-loading with proper error handling.
+**What could be improved:** Future tasks will implement actual content in each sub-tab.
 **Blockers:** None
-
----
-
-## Database Schema Preview
-
-### messages Table (To Be Created)
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique message identifier |
-| `from` | bigint unsigned | FK -> users.id, NOT NULL | Sender user ID |
-| `to` | bigint unsigned | FK -> users.id, NOT NULL | Recipient user ID |
-| `message` | text | NOT NULL | Message content |
-| `deleted_at` | timestamp | NULLABLE | Soft delete timestamp |
-| `created_at` | timestamp | - | Record creation timestamp |
-| `updated_at` | timestamp | - | Record update timestamp |
-
-**Indexes:**
-- Index on `from`
-- Index on `to`
-
-**Relationships:**
-- `from` belongs to `User` (sender)
-- `to` belongs to `User` (recipient)
 
 ---
 
 ## Technical Architecture
 
-### Backend
-```
-app/
-├── Models/
-│   └── Message.php (NEW)
-├── Actions/
-│   ├── Instructor/
-│   │   └── GetInstructorPupilsAction.php (NEW)
-│   └── Shared/
-│       └── Message/
-│           └── SendBroadcastMessageAction.php (NEW)
-├── Services/
-│   └── InstructorService.php (UPDATE - add getPupils, broadcastMessage)
-├── Http/
-│   └── Controllers/
-│       └── InstructorController.php (UPDATE - add pupils, broadcastMessage)
-
-routes/web.php (UPDATE - add 2 new routes)
-database/migrations/xxxx_create_messages_table.php (NEW)
-```
-
 ### Frontend
 ```
 resources/js/
-├── types/
-│   └── pupil.ts (NEW)
-└── components/
-    └── Instructors/
-        └── Tabs/
-            └── ActivePupilsTab.vue (REDESIGN)
+├── pages/Instructors/
+│   └── Show.vue (UPDATE - add student tab handling)
+└── components/Instructors/Tabs/
+    ├── ActivePupilsTab.vue (UPDATE - add row click)
+    ├── StudentTab.vue (NEW - header + sub-nav wrapper)
+    └── Student/ (NEW directory)
+        ├── OverviewSubTab.vue (NEW - placeholder)
+        ├── LessonsSubTab.vue (NEW - placeholder)
+        ├── PaymentsSubTab.vue (NEW - placeholder)
+        ├── TransferSubTab.vue (NEW - placeholder)
+        ├── EmergencyContactSubTab.vue (NEW - placeholder)
+        ├── MessagesSubTab.vue (NEW - placeholder)
+        └── ActionsSubTab.vue (NEW - placeholder)
+```
+
+### Backend
+```
+app/
+├── Actions/Student/
+│   └── GetStudentDetailAction.php (NEW)
+├── Http/Controllers/
+│   └── PupilController.php (UPDATE - add show method)
+routes/web.php (UPDATE - add GET /students/{student})
 ```
 
 ---
@@ -304,10 +222,10 @@ resources/js/
 - **Phase 4:** ✅ Complete (Review)
 
 ### Currently Working On
-- All phases complete
+- Phase 1: Planning complete, awaiting approval
 
 ### Next Steps
 1. Get approval for Phase 1 plan
 2. Implement backend (Phase 2)
 3. Implement frontend (Phase 3)
-4. Review and document (Phase 4)
+4. Review (Phase 4)

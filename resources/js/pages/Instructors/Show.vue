@@ -8,6 +8,7 @@ import DetailsTab from '@/components/Instructors/Tabs/DetailsTab.vue'
 import ActivePupilsTab from '@/components/Instructors/Tabs/ActivePupilsTab.vue'
 import ActionsTab from '@/components/Instructors/Tabs/ActionsTab.vue'
 import ReportsTab from '@/components/Instructors/Tabs/ReportsTab.vue'
+import StudentTab from '@/components/Instructors/Tabs/StudentTab.vue'
 import AddInstructorSheet from '@/components/Instructors/AddInstructorSheet.vue'
 import type { InstructorDetail } from '@/types/instructor'
 
@@ -15,6 +16,7 @@ interface Props {
     instructor: InstructorDetail
     tab?: string
     subtab?: string
+    student?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -24,7 +26,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const isEditSheetOpen = ref(false)
 
-type TabType = 'schedule' | 'details' | 'active-pupils' | 'reports' | 'actions'
+type TabType = 'schedule' | 'details' | 'active-pupils' | 'reports' | 'actions' | 'student'
 
 const tabs: { key: TabType; label: string }[] = [
     { key: 'schedule', label: 'Schedule' },
@@ -65,8 +67,8 @@ const breadcrumbs = [
                 @edit="isEditSheetOpen = true"
             />
 
-            <!-- Tab Navigation -->
-            <div class="flex gap-1 border-b" v-if="instructor.onboarding_complete">
+            <!-- Tab Navigation (hidden when viewing a student) -->
+            <div class="flex gap-1 border-b" v-if="instructor.onboarding_complete && activeTab !== 'student'">
                 <button
                     v-for="tab in tabs"
                     :key="tab.key"
@@ -108,6 +110,14 @@ const breadcrumbs = [
 
                 <!-- Actions Tab -->
                 <ActionsTab v-if="activeTab === 'actions'" />
+
+                <!-- Student Detail Tab -->
+                <StudentTab
+                    v-if="activeTab === 'student' && student"
+                    :instructor="instructor"
+                    :student-id="student"
+                    :subtab="subtab"
+                />
             </div>
         </div>
 
