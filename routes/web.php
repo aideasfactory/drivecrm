@@ -65,6 +65,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('instructors.request-deletion');
     Route::get('/instructors/{instructor}/activity-logs', [\App\Http\Controllers\InstructorController::class, 'activityLogs'])
         ->name('instructors.activity-logs');
+    Route::get('/instructors/{instructor}/pupils', [\App\Http\Controllers\InstructorController::class, 'pupils'])
+        ->name('instructors.pupils');
+    Route::post('/instructors/{instructor}/broadcast-message', [\App\Http\Controllers\InstructorController::class, 'broadcastMessage'])
+        ->name('instructors.broadcast-message');
+    Route::post('/instructors/{instructor}/pupils', [\App\Http\Controllers\InstructorController::class, 'storePupil'])
+        ->name('instructors.pupils.store');
 
     // Instructor Emergency Contacts
     Route::get('/instructors/{instructor}/contacts', [\App\Http\Controllers\InstructorController::class, 'contacts'])

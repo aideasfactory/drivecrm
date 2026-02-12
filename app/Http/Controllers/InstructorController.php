@@ -583,6 +583,61 @@ class InstructorController extends Controller
     }
 
     /**
+     * Get all students (pupils) belonging to an instructor.
+     */
+    public function pupils(Instructor $instructor): JsonResponse
+    {
+        $search = request()->query('search');
+        $pupils = $this->instructorService->getPupils($instructor, $search);
+
+        return response()->json([
+            'pupils' => $pupils,
+        ]);
+    }
+
+    /**
+     * Send a broadcast message to all of an instructor's students.
+     */
+    public function broadcastMessage(Instructor $instructor): JsonResponse
+    {
+        $data = request()->validate([
+            'message' => 'required|string|max:5000',
+        ]);
+
+        $messages = $this->instructorService->broadcastMessage($instructor, $data['message']);
+
+        return response()->json([
+            'message' => 'Broadcast message sent successfully.',
+            'recipients_count' => $messages->count(),
+        ]);
+    }
+
+    /**
+     * Store a new pupil for an instructor.
+     */
+    public function storePupil(Instructor $instructor): JsonResponse
+    {
+        $data = request()->validate([
+            'first_name' => 'required|string|max:255',
+            'surname' => 'required|string|max:255',
+            'email' => 'required|email|max:255|unique:users,email',
+            'phone' => 'nullable|string|max:50',
+            'owns_account' => 'boolean',
+        ]);
+
+        $student = $this->instructorService->addPupil($instructor, $data);
+
+        return response()->json([
+            'message' => 'Pupil created successfully.',
+            'student' => [
+                'id' => $student->id,
+                'name' => $student->first_name.' '.$student->surname,
+                'email' => $student->email,
+            ],
+        ], 201);
+    }
+
+    /**
      * Get activity logs for an instructor.
      */
     public function activityLogs(Instructor $instructor): JsonResponse

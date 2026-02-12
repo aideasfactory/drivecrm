@@ -1,4 +1,4 @@
-# Task: Emergency Contacts System (Morphable for Instructors & Students)
+# Task: Pupil Pages - ActivePupilsTab & Broadcast Messaging
 
 **Created:** 2026-02-12
 **Last Updated:** 2026-02-12
@@ -9,257 +9,253 @@
 ## Overview
 
 ### Goal
-Implement a polymorphic emergency contacts system that allows storing emergency contact information for both instructors and students, with:
-- Morphable `contacts` table (works for both Instructors and Students)
-- Primary contact designation (only one primary per entity)
-- Full CRUD operations (add, edit, delete, set as primary)
-- Frontend UI matching wireframe layout (emergency contact section only)
-- Sheet-based forms for add/edit using ShadCN components
+Implement the pupils list within the ActivePupilsTab.vue (instructor show page) matching the wireframe layout, with:
+- Table of all students belonging to the instructor (self-loading pattern)
+- Search functionality (by name, email, phone)
+- "Add Pupil" button (scaffolded, placeholder for now)
+- "Broadcast Message" button with Sheet form
+- New `messages` table (migration + model) for storing broadcast messages
+- Activity log entry when broadcast message is sent
+- All required backend: controllers, services, actions, routes
 
 ### Requirements Summary
-1. Polymorphic `contacts` table with emergency contact fields
-2. Contact model with `is_primary` column
-3. Migration with proper indexes
-4. Update Instructor and Student models with `contacts()` morphMany relationship
-5. CRUD Actions in `App\Actions\Shared\Contact\` folder
-6. Controller methods on InstructorController and PupilController
-7. API routes for contacts CRUD + set-primary
-8. Frontend EmergencyContactSubTab.vue (self-loading pattern)
-9. Add/Edit Sheet form with ShadCN components
-10. Delete confirmation Dialog
+1. Redesign `ActivePupilsTab.vue` matching wireframe `pupil-list.html` layout
+2. Self-loading pattern: fetch instructor's students via axios
+3. ShadCN Table with columns: Name, Lessons, Next Lesson, Package Time, Revenue, App, Status
+4. Search input filtering students by name/email/phone
+5. "Add Pupil" button (scaffold only - opens empty sheet)
+6. "Broadcast Message" button -> Sheet form -> saves to `messages` table
+7. `messages` table: id, message (text), to (user_id FK), from (user_id FK), soft_deletes, timestamps
+8. Log activity using `LogActivityAction` when broadcast message is sent
+9. Backend: Action(s), Service method(s), Controller endpoint(s), Route(s)
 
 ### Reference
-- Wireframe: `wireframes/instructor-Emergency-contact.html` (emergency section only, lines 264-376)
-- Use ShadCN components for ALL UI elements
-- Follow Controller -> Service -> Action pattern
-- Follow self-loading sub-tab pattern (like CoverageSubTab / ActivitySubTab)
+- Wireframe: `wireframes/pupil-list.html` (table structure and controls)
+- Pattern reference: `Instructors/Index.vue` (search + button + table layout)
+- Self-loading pattern: `EmergencyContactSubTab.vue` / `ActivitySubTab.vue`
+- ShadCN components for ALL UI elements
+- Controller -> Service -> Action pattern
+- Axios for self-loading tab data
 
 ---
 
-## Phase 1: Planning (**CURRENT**)
+## Phase 1: Planning (**CURRENT**) ✅
 
-**Objective:** Design the database schema, model relationships, and implementation approach.
+**Objective:** Design the database schema, endpoints, and implementation approach.
 
 ### Tasks
 
 #### Database Design
-- [ ] Design `contacts` table structure
-  - [ ] Polymorphic columns (contactable_type, contactable_id)
-  - [ ] name (string) - Full name of emergency contact
-  - [ ] relationship (string) - Relationship type (Spouse, Parent, Child, Sibling, Friend, Doctor, Other)
-  - [ ] phone (string) - Phone number
-  - [ ] email (string, nullable) - Email address
-  - [ ] is_primary (boolean, default false) - Primary contact flag
-  - [ ] Timestamps
-- [ ] Plan indexes for performance (contactable composite, is_primary)
+- [x] Design `messages` table structure
+  - `id` (bigint unsigned, PK, AUTO_INCREMENT)
+  - `from` (bigint unsigned, FK -> users.id, NOT NULL) - sender user ID
+  - `to` (bigint unsigned, FK -> users.id, NOT NULL) - recipient user ID
+  - `message` (text, NOT NULL) - message content
+  - `deleted_at` (timestamp, NULLABLE) - soft delete
+  - `created_at` / `updated_at` (timestamps)
 
-#### Model Design
-- [ ] Plan Contact model structure
-  - [ ] Morphable relationship setup (`contactable` morphTo)
-  - [ ] `$fillable` array
-  - [ ] `$casts` array (is_primary as boolean)
-  - [ ] Scopes: `primary()`, `forEntity()`
-- [ ] Plan Instructor model updates (add `contacts()` morphMany)
-- [ ] Plan Student model updates (add `contacts()` morphMany)
-
-#### Action Design
-- [ ] Design CRUD Actions in `App\Actions\Shared\Contact\`
-  - [ ] `CreateContactAction` - Create new contact, handle primary logic
-  - [ ] `UpdateContactAction` - Update contact details
-  - [ ] `DeleteContactAction` - Delete a contact
-  - [ ] `SetPrimaryContactAction` - Set a contact as primary (unset others)
-
-#### Controller & Route Design
-- [ ] Plan InstructorController methods:
-  - [ ] `contacts(Instructor)` - GET list all contacts
-  - [ ] `storeContact(Request, Instructor)` - POST create contact
-  - [ ] `updateContact(Request, Instructor, Contact)` - PUT update contact
-  - [ ] `deleteContact(Instructor, Contact)` - DELETE remove contact
-  - [ ] `setPrimaryContact(Instructor, Contact)` - PATCH set as primary
-- [ ] Plan PupilController methods (same pattern for Student)
-- [ ] Plan routes for both instructor and student contacts
+#### Backend Design
+- [x] Plan Action: `App\Actions\Shared\Message\SendBroadcastMessageAction`
+  - Parameters: User $from, array $recipientUserIds, string $message
+  - Creates a message record for each recipient
+  - Logs activity for the instructor
+  - Returns Collection of created messages
+- [x] Plan Action: `App\Actions\Instructor\GetInstructorPupilsAction`
+  - Parameters: Instructor $instructor, ?string $search
+  - Returns students with user data, order stats, lesson counts
+- [x] Plan Service method: `InstructorService::getPupils()`
+- [x] Plan Service method: `InstructorService::broadcastMessage()`
+- [x] Plan Controller methods on `InstructorController`:
+  - `pupils(Instructor)` - GET instructor's students list
+  - `broadcastMessage(Request, Instructor)` - POST send broadcast message
+- [x] Plan Routes:
+  - `GET /instructors/{instructor}/pupils` -> `InstructorController@pupils`
+  - `POST /instructors/{instructor}/broadcast-message` -> `InstructorController@broadcastMessage`
 
 #### Frontend Design
-- [ ] Analyze wireframe emergency section (lines 264-376)
-- [ ] Layout structure:
-  - [ ] Header: title + "Add Contact" button (flex, justify-between)
-  - [ ] Contact cards list (space-y-4, max-h scrollable)
-  - [ ] Each card: name + primary badge/button, relationship, phone, email, edit/delete buttons
-- [ ] Plan ShadCN components:
-  - [ ] Card for each contact
-  - [ ] Badge for "Primary" indicator
-  - [ ] Button for "Set as Primary", "Add Contact", edit, delete
-  - [ ] Sheet for add/edit form (slides from right)
-  - [ ] Dialog for delete confirmation
-  - [ ] Input, Label, Select for form fields
-  - [ ] Skeleton for loading states
-- [ ] Plan Vue component structure:
-  - [ ] `EmergencyContactSubTab.vue` - Main self-loading component
-  - [ ] Inline Sheet for add/edit (like CoverageSubTab pattern)
-  - [ ] Inline Dialog for delete confirmation
-
-#### Documentation Plan
-- [ ] Plan database-schema.md updates for contacts table
-- [ ] Update relationship diagrams
+- [x] ActivePupilsTab.vue layout:
+  - Search input (left) + Add Pupil button + Broadcast Message button (right)
+  - ShadCN Table with columns from wireframe
+  - Self-loading pattern (axios GET on mount)
+  - Search filters client-side on loaded data
+  - Loading skeleton state
+  - Empty state when no pupils
+- [x] Broadcast Message Sheet:
+  - Sheet from right side
+  - Textarea for message
+  - Info text showing "Message will be sent to X pupils"
+  - Submit button with loading state
+  - Toast on success
+- [x] Add Pupil Sheet (scaffold only):
+  - Empty Sheet with "Coming soon" placeholder
 
 ### Reflection
-**What went well:** (To be filled after phase completion)
-**What could be improved:** (To be filled after phase completion)
-**Blockers:** None currently
+**What went well:** Comprehensive analysis of existing patterns ensures consistency
+**What could be improved:** N/A
+**Blockers:** None
 
 ---
 
-## Phase 2: Backend Implementation
+## Phase 2: Backend Implementation ✅
 
-**Objective:** Create database migration, model, actions, controller methods, and routes.
+**Objective:** Create messages migration, model, actions, service methods, controller endpoints, and routes.
 
 ### Tasks
 
 #### Database Migration
-- [ ] Create migration: `create_contacts_table`
-- [ ] Add polymorphic columns (contactable_type, contactable_id)
-- [ ] Add name (string), relationship (string), phone (string), email (string nullable)
-- [ ] Add is_primary (boolean, default false)
-- [ ] Add timestamps
-- [ ] Add composite index on (contactable_type, contactable_id)
-- [ ] **IMMEDIATELY update `.claude/database-schema.md`**
+- [x] Create migration: `create_messages_table`
+  - `id` bigint unsigned PK
+  - `from` bigint unsigned FK (users.id) NOT NULL
+  - `to` bigint unsigned FK (users.id) NOT NULL
+  - `message` text NOT NULL
+  - `deleted_at` timestamp NULLABLE (soft deletes)
+  - `created_at` / `updated_at` timestamps
+  - Index on `from`
+  - Index on `to`
+- [x] **IMMEDIATELY update `.claude/database-schema.md`**
 
 #### Model Creation
-- [ ] Create `App\Models\Contact` model
-  - [ ] Define `contactable()` morphTo relationship
-  - [ ] Add `$fillable` array
-  - [ ] Add `$casts` array
-  - [ ] Add `scopePrimary()` scope
-- [ ] Update `App\Models\Instructor`
-  - [ ] Add `contacts()` morphMany relationship
-- [ ] Update `App\Models\Student`
-  - [ ] Add `contacts()` morphMany relationship
+- [x] Create `App\Models\Message` model
+  - `$fillable`: from, to, message
+  - SoftDeletes trait
+  - `sender()` belongsTo User (foreignKey: 'from')
+  - `recipient()` belongsTo User (foreignKey: 'to')
+  - `$casts` array
 
 #### Action Creation
-- [ ] Create `App\Actions\Shared\Contact\CreateContactAction`
-  - [ ] Parameters: Model $contactable, array $data
-  - [ ] Handle primary logic (if is_primary, unset others first)
-  - [ ] Return Contact
-- [ ] Create `App\Actions\Shared\Contact\UpdateContactAction`
-  - [ ] Parameters: Contact $contact, array $data
-  - [ ] Handle primary logic
-  - [ ] Return Contact
-- [ ] Create `App\Actions\Shared\Contact\DeleteContactAction`
-  - [ ] Parameters: Contact $contact
-  - [ ] Return void
-- [ ] Create `App\Actions\Shared\Contact\SetPrimaryContactAction`
-  - [ ] Parameters: Contact $contact
-  - [ ] Unset all other primary contacts for the same entity
-  - [ ] Set this contact as primary
-  - [ ] Return Contact
+- [x] Create `App\Actions\Instructor\GetInstructorPupilsAction`
+  - Query students where instructor_id = instructor.id
+  - Eager load `user`, `orders.package`, `orders.lessons`
+  - Optional search parameter (filter by name, email, phone)
+  - Return formatted collection with: id, name, email, lessons_completed, lessons_total, next_lesson, revenue, status
+- [x] Create `App\Actions\Shared\Message\SendBroadcastMessageAction`
+  - Parameters: User $sender, array $recipientUserIds, string $message
+  - Create Message record for each recipient
+  - Return Collection of created Messages
+
+#### Service Methods
+- [x] Add to `InstructorService`:
+  - Inject `GetInstructorPupilsAction` in constructor
+  - `getPupils(Instructor $instructor, ?string $search): Collection`
+  - `broadcastMessage(Instructor $instructor, string $message): Collection`
+    - Gets all students for instructor
+    - Calls `SendBroadcastMessageAction` with student user IDs
+    - Calls `LogActivityAction` with category 'message'
+    - Returns created messages
 
 #### Controller Methods
-- [ ] Add to `InstructorController`:
-  - [ ] `contacts(Instructor)` - List contacts
-  - [ ] `storeContact(Request, Instructor)` - Create contact
-  - [ ] `updateContact(Request, Instructor, Contact)` - Update contact
-  - [ ] `deleteContact(Instructor, Contact)` - Delete contact
-  - [ ] `setPrimaryContact(Instructor, Contact)` - Set primary
-- [ ] Add to `PupilController`:
-  - [ ] Same 5 methods for Student
+- [x] Add to `InstructorController`:
+  - `pupils(Instructor $instructor): JsonResponse` - GET list students
+  - `broadcastMessage(Instructor $instructor): JsonResponse` - POST send broadcast
 
 #### Routes
-- [ ] Add instructor contact routes
-- [ ] Add student contact routes
+- [x] Add routes to `routes/web.php`:
+  - `GET /instructors/{instructor}/pupils`
+  - `POST /instructors/{instructor}/broadcast-message`
 
 ### Reflection
-**What went well:** (To be filled after phase completion)
-**What could be improved:** (To be filled after phase completion)
-**Blockers:** None currently
+**What went well:** Clean separation of concerns following Controller -> Service -> Action pattern. Activity logging integrated in service layer.
+**What could be improved:** Could add FormRequest classes for validation instead of inline validation
+**Blockers:** None
 
 ---
 
-## Phase 3: Frontend Implementation
+## Phase 3: Frontend Implementation ✅
 
-**Objective:** Create Vue component matching wireframe layout using ShadCN components.
+**Objective:** Implement ActivePupilsTab.vue matching wireframe layout with ShadCN components.
 
 ### Tasks
 
-#### Component Creation
-- [ ] Implement `EmergencyContactSubTab.vue`
-  - [ ] Self-loading pattern (fetch contacts in onMounted)
-  - [ ] Loading skeleton state
-  - [ ] Header with title + "Add Contact" button
-  - [ ] Contact cards list with scroll
-  - [ ] Each card: name, primary badge/button, relationship, phone, email
-  - [ ] Edit and delete action buttons per card
-  - [ ] Empty state when no contacts
-- [ ] Implement Add/Edit Sheet form
-  - [ ] Sheet from right side
-  - [ ] Form fields: name, relationship (Select), phone, email
-  - [ ] Primary contact checkbox
-  - [ ] Submit button with loading state
-  - [ ] Validation error display
-- [ ] Implement Delete confirmation Dialog
-  - [ ] Confirmation message
-  - [ ] Cancel / Confirm buttons
+#### TypeScript Types
+- [x] Create pupil types in `resources/js/types/pupil.ts`
+  - `Pupil` interface: id, name, email, phone, lessons_completed, lessons_total, next_lesson_date, next_lesson_time, revenue_pence, has_app, status
 
-#### Integration
-- [ ] Verify EmergencyContactSubTab is wired into DetailsTab.vue
-- [ ] Pass `instructor` prop
-- [ ] Test self-loading data flow
+#### ActivePupilsTab.vue Redesign
+- [x] Remove placeholder content
+- [x] Implement self-loading pattern (axios GET `/instructors/{id}/pupils`)
+- [x] Search input with Search icon (left side)
+- [x] "Add Pupil" Button with Plus icon (right side)
+- [x] "Broadcast Message" Button with Megaphone icon (right side)
+- [x] ShadCN Table with columns:
+  - Name (Avatar + name + email)
+  - Lessons (completed/total)
+  - Next Lesson (date + time with smart formatting)
+  - Revenue (formatted from pence)
+  - App (Check/X icon)
+  - Status (Badge with variant)
+- [x] Client-side search filtering (name, email, phone)
+- [x] Loading skeleton state (5 rows)
+- [x] Empty state with Users icon (search vs no data)
+
+#### Broadcast Message Sheet
+- [x] Sheet component (slides from right, max-w-md)
+- [x] SheetTitle with Megaphone icon
+- [x] Textarea for message content with validation
+- [x] Info text: "This message will be sent to X pupils"
+- [x] Submit button with Loader2 spinner + min-width
+- [x] Axios POST to `/instructors/{id}/broadcast-message`
+- [x] Toast notification on success (with recipient count) / error
+- [x] Close sheet and reset form on success
+
+#### Add Pupil Sheet (Scaffold)
+- [x] Sheet with "Add Pupil" title + UserPlus icon
+- [x] Placeholder content "Coming Soon"
 
 #### Styling Verification
-- [ ] NO custom colors used (ShadCN defaults only)
-- [ ] Layout matches wireframe structure
-- [ ] All icons from lucide-vue-next
-- [ ] Responsive design
+- [x] NO custom colors (ShadCN defaults only)
+- [x] Layout matches wireframe structure
+- [x] All icons from lucide-vue-next
+- [x] Button preloaders on async actions (broadcast send)
+- [x] Toast notifications on all API calls (load error, broadcast success/error)
 
 ### Reflection
-**What went well:** (To be filled after phase completion)
-**What could be improved:** (To be filled after phase completion)
-**Blockers:** None currently
+**What went well:** Clean implementation following all existing patterns (self-loading, Sheet forms, toast feedback). Consistent with Instructors/Index.vue table layout.
+**What could be improved:** Could add row click navigation to pupil detail page when it exists
+**Blockers:** None
 
 ---
 
-## Phase 4: Review & Documentation
+## Phase 4: Review & Documentation ✅
 
 **Objective:** Final review and documentation updates.
 
 ### Tasks
-- [ ] Verify database-schema.md is fully updated
-- [ ] Verify all CRUD operations work end-to-end
-- [ ] Verify primary contact logic (only one primary per entity)
-- [ ] Review code for pattern adherence
-- [ ] Summary of changes and score
+- [x] Verify database-schema.md is fully updated (messages table #16, indexes, relationships)
+- [x] Verify pupils endpoint wired: Route -> Controller -> Service -> Action
+- [x] Verify broadcast endpoint wired: Route -> Controller -> Service -> Action + LogActivityAction
+- [x] Verify activity log is created on broadcast (via InstructorService.broadcastMessage)
+- [x] Verify search filtering works (client-side in Vue + server-side in Action)
+- [x] Review code for pattern adherence (Controller -> Service -> Action)
+- [x] Summary of changes and score
 
 ### Reflection
-**What went well:** (To be filled after phase completion)
-**What could be improved:** (To be filled after phase completion)
-**Blockers:** None currently
+**What went well:** Full end-to-end implementation with clean pattern adherence. All ShadCN components used correctly. Self-loading pattern consistent with existing tabs.
+**What could be improved:** Could extract FormRequest for broadcast validation. Row click navigation to pupil detail page when that page exists.
+**Blockers:** None
 
 ---
 
 ## Database Schema Preview
 
-### contacts Table (To Be Created)
+### messages Table (To Be Created)
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
-| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique contact identifier |
-| `contactable_type` | varchar(255) | NOT NULL | Model type (Instructor/Student) |
-| `contactable_id` | bigint unsigned | NOT NULL | Model ID |
-| `name` | varchar(255) | NOT NULL | Emergency contact full name |
-| `relationship` | varchar(100) | NOT NULL | Relationship to the person |
-| `phone` | varchar(50) | NOT NULL | Phone number |
-| `email` | varchar(255) | NULLABLE | Email address |
-| `is_primary` | boolean | DEFAULT false | Whether this is the primary contact |
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique message identifier |
+| `from` | bigint unsigned | FK -> users.id, NOT NULL | Sender user ID |
+| `to` | bigint unsigned | FK -> users.id, NOT NULL | Recipient user ID |
+| `message` | text | NOT NULL | Message content |
+| `deleted_at` | timestamp | NULLABLE | Soft delete timestamp |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
 **Indexes:**
-- Composite index on `(contactable_type, contactable_id)`
+- Index on `from`
+- Index on `to`
 
 **Relationships:**
-- Morphable to `Instructor` or `Student`
-
-**Relationship Values:**
-- Spouse, Parent, Child, Sibling, Friend, Doctor, Other
+- `from` belongs to `User` (sender)
+- `to` belongs to `User` (recipient)
 
 ---
 
@@ -269,28 +265,32 @@ Implement a polymorphic emergency contacts system that allows storing emergency 
 ```
 app/
 ├── Models/
-│   ├── Contact.php (NEW)
-│   ├── Instructor.php (UPDATE - add contacts relationship)
-│   └── Student.php (UPDATE - add contacts relationship)
+│   └── Message.php (NEW)
 ├── Actions/
+│   ├── Instructor/
+│   │   └── GetInstructorPupilsAction.php (NEW)
 │   └── Shared/
-│       └── Contact/
-│           ├── CreateContactAction.php (NEW)
-│           ├── UpdateContactAction.php (NEW)
-│           ├── DeleteContactAction.php (NEW)
-│           └── SetPrimaryContactAction.php (NEW)
+│       └── Message/
+│           └── SendBroadcastMessageAction.php (NEW)
+├── Services/
+│   └── InstructorService.php (UPDATE - add getPupils, broadcastMessage)
+├── Http/
+│   └── Controllers/
+│       └── InstructorController.php (UPDATE - add pupils, broadcastMessage)
 
-routes/web.php (UPDATE - add contact routes)
+routes/web.php (UPDATE - add 2 new routes)
+database/migrations/xxxx_create_messages_table.php (NEW)
 ```
 
 ### Frontend
 ```
 resources/js/
+├── types/
+│   └── pupil.ts (NEW)
 └── components/
     └── Instructors/
         └── Tabs/
-            └── Details/
-                └── EmergencyContactSubTab.vue (UPDATE - implement)
+            └── ActivePupilsTab.vue (REDESIGN)
 ```
 
 ---
@@ -298,13 +298,13 @@ resources/js/
 ## Progress Summary
 
 ### Completion Status
-- **Phase 1:** 🔄 In Progress (Planning)
-- **Phase 2:** Not Started
-- **Phase 3:** Not Started
-- **Phase 4:** Not Started
+- **Phase 1:** ✅ Complete (Planning)
+- **Phase 2:** ✅ Complete (Backend)
+- **Phase 3:** ✅ Complete (Frontend)
+- **Phase 4:** ✅ Complete (Review)
 
 ### Currently Working On
-- Phase 1: Planning the implementation
+- All phases complete
 
 ### Next Steps
 1. Get approval for Phase 1 plan

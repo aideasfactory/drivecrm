@@ -135,6 +135,8 @@ Order = Student + Instructor + Package → Creates Lessons
 
 ActivityLog → Morphs to Instructor or Student
 Contact → Morphs to Instructor or Student
+
+Message → Belongs to User (sender via 'from') + Belongs to User (recipient via 'to')
 ```
 
 ---
@@ -632,9 +634,36 @@ Defines time slots within a calendar date.
 
 ---
 
+### 16. **messages**
+
+Stores broadcast and direct messages between users. Supports soft deletes for audit trail.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique message identifier |
+| `from` | bigint unsigned | FOREIGN KEY (users.id), ON DELETE CASCADE, INDEXED | Sender user ID |
+| `to` | bigint unsigned | FOREIGN KEY (users.id), ON DELETE CASCADE, INDEXED | Recipient user ID |
+| `message` | text | NOT NULL | Message content |
+| `deleted_at` | timestamp | NULLABLE | Soft delete timestamp |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Indexes:**
+- Index on `from`
+- Index on `to`
+
+**Relationships:**
+- Belongs to one `User` as sender (via `from`)
+- Belongs to one `User` as recipient (via `to`)
+
+**Business Logic:**
+- Used for broadcast messages from instructors to their students
+- Soft deletes enabled for audit trail
+- One record created per recipient in a broadcast
+
 ---
 
-### 16. **sessions**
+### 17. **sessions**
 
 Laravel's session storage.
 
@@ -649,7 +678,7 @@ Laravel's session storage.
 
 ---
 
-### 17. **cache**
+### 18. **cache**
 
 Laravel's cache storage.
 
@@ -661,7 +690,7 @@ Laravel's cache storage.
 
 ---
 
-### 18. **cache_locks**
+### 19. **cache_locks**
 
 Laravel's cache locking mechanism.
 
@@ -673,7 +702,7 @@ Laravel's cache locking mechanism.
 
 ---
 
-### 19. **jobs**
+### 20. **jobs**
 
 Laravel's queue system for background job processing.
 
@@ -689,7 +718,7 @@ Laravel's queue system for background job processing.
 
 ---
 
-### 20. **job_batches**
+### 21. **job_batches**
 
 Laravel's job batching system.
 
@@ -708,7 +737,7 @@ Laravel's job batching system.
 
 ---
 
-### 21. **failed_jobs**
+### 22. **failed_jobs**
 
 Laravel's failed jobs storage.
 
@@ -805,6 +834,7 @@ Laravel's failed jobs storage.
 - **locations:** `postcode_sector`
 - **calendars:** Unique constraint on `(instructor_id, date)`
 - **calendar_items:** None
+- **messages:** `from`, `to`
 - **sessions:** `user_id`, `last_activity`
 - **jobs:** `queue`
 

@@ -8,11 +8,15 @@ use App\Actions\FindInstructorsByPostcodeSectorAction;
 use App\Actions\Instructor\CreateCalendarItemAction;
 use App\Actions\Instructor\CreateInstructorLocationAction;
 use App\Actions\Instructor\CreateInstructorPackageAction;
+use App\Actions\Instructor\CreatePupilAction;
 use App\Actions\Instructor\DeleteCalendarItemAction;
 use App\Actions\Instructor\DeleteInstructorLocationAction;
 use App\Actions\Instructor\GetInstructorCalendarAction;
 use App\Actions\Instructor\GetInstructorLocationsAction;
 use App\Actions\Instructor\GetInstructorPackagesAction;
+use App\Actions\Instructor\GetInstructorPupilsAction;
+use App\Actions\Shared\LogActivityAction;
+use App\Actions\Shared\Message\SendBroadcastMessageAction;
 use App\Enums\UserRole;
 use App\Models\Calendar;
 use App\Models\CalendarItem;
@@ -37,7 +41,11 @@ class InstructorService
         protected DeleteInstructorLocationAction $deleteInstructorLocation,
         protected GetInstructorCalendarAction $getInstructorCalendar,
         protected CreateCalendarItemAction $createCalendarItem,
-        protected DeleteCalendarItemAction $deleteCalendarItem
+        protected DeleteCalendarItemAction $deleteCalendarItem,
+        protected CreatePupilAction $createPupil,
+        protected GetInstructorPupilsAction $getInstructorPupils,
+        protected SendBroadcastMessageAction $sendBroadcastMessage,
+        protected LogActivityAction $logActivity
     ) {}
 
     /**
@@ -270,5 +278,59 @@ class InstructorService
     public function removeCalendarItem(CalendarItem $calendarItem): bool
     {
         return ($this->deleteCalendarItem)($calendarItem);
+    }
+
+    /**
+     * Get all students (pupils) belonging to an instructor.
+     *
+     * @param  string|null  $search  Optional search term
+     * @return Collection Formatted pupil data
+     */
+    public function getPupils(Instructor $instructor, ?string $search = null): Collection
+    {
+        return ($this->getInstructorPupils)($instructor, $search);
+    }
+
+    /**
+     * Send a broadcast message to all of an instructor's students.
+     *
+     * @return Collection Created messages
+     */
+    public function broadcastMessage(Instructor $instructor, string $message): Collection
+    {
+        $students = \App\Models\Student::where('instructor_id', $instructor->id)
+            ->whereNotNull('user_id')
+            ->pluck('user_id')
+            ->toArray();
+
+        $messages = ($this->sendBroadcastMessage)($instructor->user, $students, $message);
+
+        ($this->logActivity)(
+            $instructor,
+            'Broadcast message sent to '.count($students).' pupils',
+            'message',
+            ['message' => $message, 'recipient_count' => count($students)]
+        );
+
+        return $messages;
+    }
+
+    /**
+     * Create a new pupil assigned to an instructor.
+     *
+     * @return \App\Models\Student The created student
+     */
+    public function addPupil(Instructor $instructor, array $data): \App\Models\Student
+    {
+        $student = ($this->createPupil)($instructor, $data);
+
+        ($this->logActivity)(
+            $instructor,
+            'Pupil '.$data['first_name'].' '.$data['surname'].' added',
+            'student',
+            ['student_id' => $student->id, 'email' => $data['email']]
+        );
+
+        return $student;
     }
 }
