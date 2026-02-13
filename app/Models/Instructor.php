@@ -115,6 +115,14 @@ class Instructor extends Model
     }
 
     /**
+     * Get notes for this instructor.
+     */
+    public function notes(): MorphMany
+    {
+        return $this->morphMany(Note::class, 'noteable');
+    }
+
+    /**
      * Get activity logs for this instructor.
      */
     public function activityLogs(): MorphMany

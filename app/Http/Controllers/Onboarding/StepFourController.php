@@ -49,7 +49,6 @@ class StepFourController extends Controller
             toDate: now()->addDays(10),  // 10 days maximum
         ) : ['dates' => [], 'default_selected_index' => null];
 
-        
         return Inertia::render('Onboarding/Step4', [
             'uuid' => $enquiry->id,
             'currentStep' => 4,

@@ -8,8 +8,14 @@ use App\Actions\Shared\Contact\CreateContactAction;
 use App\Actions\Shared\Contact\DeleteContactAction;
 use App\Actions\Shared\Contact\SetPrimaryContactAction;
 use App\Actions\Shared\Contact\UpdateContactAction;
+use App\Actions\Shared\Message\GetConversationAction;
+use App\Actions\Shared\Message\SendMessageAction;
+use App\Actions\Shared\Note\CreateNoteAction;
+use App\Actions\Shared\Note\DeleteNoteAction;
+use App\Actions\Shared\Note\GetNotesAction;
 use App\Actions\Student\GetStudentDetailAction;
 use App\Models\Contact;
+use App\Models\Note;
 use App\Models\Student;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
@@ -123,6 +129,124 @@ class PupilController extends Controller
         return response()->json([
             'contact' => $contact,
         ]);
+    }
+
+    /**
+     * Get notes for a student.
+     */
+    public function notes(Student $student): JsonResponse
+    {
+        $notes = (new GetNotesAction)($student);
+
+        return response()->json([
+            'notes' => $notes->items(),
+            'meta' => [
+                'current_page' => $notes->currentPage(),
+                'total' => $notes->total(),
+                'per_page' => $notes->perPage(),
+                'last_page' => $notes->lastPage(),
+            ],
+        ]);
+    }
+
+    /**
+     * Store a new note for a student.
+     */
+    public function storeNote(Student $student): JsonResponse
+    {
+        $data = request()->validate([
+            'note' => 'required|string|max:5000',
+        ]);
+
+        $note = app(CreateNoteAction::class)($student, $data['note']);
+
+        return response()->json([
+            'note' => $note,
+        ], 201);
+    }
+
+    /**
+     * Delete a note for a student.
+     */
+    public function deleteNote(Student $student, Note $note): JsonResponse
+    {
+        if ($note->noteable_id !== $student->id || $note->noteable_type !== Student::class) {
+            return response()->json(['message' => 'Note not found for this student.'], 404);
+        }
+
+        (new DeleteNoteAction)($note);
+
+        return response()->json([
+            'message' => 'Note deleted successfully.',
+        ]);
+    }
+
+    /**
+     * Get conversation messages between student and their instructor.
+     */
+    public function messages(Student $student): JsonResponse
+    {
+        if (! $student->user_id) {
+            return response()->json(['message' => 'Student does not have a user account.'], 422);
+        }
+
+        if (! $student->instructor_id) {
+            return response()->json(['message' => 'Student does not have an assigned instructor.'], 422);
+        }
+
+        $instructor = $student->instructor;
+        $studentUser = $student->user;
+        $instructorUser = $instructor->user;
+
+        $messages = (new GetConversationAction)($instructorUser, $studentUser);
+
+        return response()->json([
+            'messages' => $messages->items(),
+            'meta' => [
+                'current_page' => $messages->currentPage(),
+                'total' => $messages->total(),
+                'per_page' => $messages->perPage(),
+                'last_page' => $messages->lastPage(),
+            ],
+            'context' => [
+                'instructor_user_id' => $instructorUser->id,
+                'instructor_name' => $instructorUser->name,
+                'student_user_id' => $studentUser->id,
+                'student_name' => $student->first_name.' '.$student->surname,
+            ],
+        ]);
+    }
+
+    /**
+     * Send a message from the instructor to the student.
+     */
+    public function sendMessage(Student $student): JsonResponse
+    {
+        if (! $student->user_id) {
+            return response()->json(['message' => 'Student does not have a user account.'], 422);
+        }
+
+        if (! $student->instructor_id) {
+            return response()->json(['message' => 'Student does not have an assigned instructor.'], 422);
+        }
+
+        $data = request()->validate([
+            'message' => 'required|string|max:5000',
+        ]);
+
+        $instructor = $student->instructor;
+
+        $message = app(SendMessageAction::class)(
+            $instructor->user,
+            $student->user,
+            $data['message'],
+            $student,
+            $instructor
+        );
+
+        return response()->json([
+            'message' => $message->load('sender:id,name'),
+        ], 201);
     }
 
     /**

@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+        window.FontAwesomeConfig = {
+          autoReplaceSvg: 'nest'
+        };
+      </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Pupil</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#DC2626',
+                        primaryLight: '#FEE2E2',
+                        accent: '#F3F4F6'
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.plot.ly/plotly-3.1.1.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { display: none; }
+        body { margin: 0; padding: 0; }
+    </style>
+</head>
+<body class="bg-accent">
+    
+    <header id="header" class="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-50 h-16">
+        <div class="flex items-center justify-between h-full px-6">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                    <i class="fa-solid fa-car text-white text-xl"></i>
+                </div>
+                <span class="text-xl font-bold text-gray-900">GoRoadie Driving School</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <button class="relative p-2 text-gray-600 hover:text-gray-900">
+                    <i class="fa-regular fa-bell text-xl"></i>
+                    <span class="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full"></span>
+                </button>
+                <div class="flex items-center gap-3 cursor-pointer">
+                    <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-2.jpg" alt="User" class="w-10 h-10 rounded-full object-cover">
+                    <div class="flex flex-col">
+                        <span class="text-sm font-semibold text-gray-900">Admin User</span>
+                        <span class="text-xs text-gray-500">Administrator</span>
+                    </div>
+                    <i class="fa-solid fa-chevron-down text-gray-400 text-sm"></i>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <aside id="sidebar" class="fixed left-0 top-16 bottom-0 w-64 bg-white border-r border-gray-200 overflow-y-auto">
+        <nav class="p-4">
+            <ul class="space-y-1">
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-solid fa-chart-line text-lg w-5"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-regular fa-envelope text-lg w-5"></i>
+                        <span>Enquiries</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg bg-primaryLight text-primary font-semibold">
+                        <i class="fa-regular fa-user text-lg w-5"></i>
+                        <span>Pupils</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-solid fa-users text-lg w-5"></i>
+                        <span>Team</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-regular fa-file-lines text-lg w-5"></i>
+                        <span>Reports</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-regular fa-folder-open text-lg w-5"></i>
+                        <span>Resources</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-solid fa-gear text-lg w-5"></i>
+                        <span>Settings</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-solid fa-grid-2 text-lg w-5"></i>
+                        <span>Apps</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </aside>
+
+    <main id="main-content" class="ml-64 mt-16 p-8">
+        
+        <section id="pupil-header" class="mb-8">
+            <div class="flex items-center gap-4 mb-6">
+                <button class="flex items-center gap-2 text-gray-600 hover:text-gray-900">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span class="text-sm font-medium">Back to Pupils</span>
+                </button>
+            </div>
+            
+            <div class="bg-white rounded-xl p-8 border border-gray-200">
+                <div class="flex items-start justify-between">
+                    <div class="flex items-center gap-6">
+                        <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-5.jpg" alt="Sarah Johnson" class="w-24 h-24 rounded-full object-cover">
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-900 mb-2">Sarah Johnson</h1>
+                            <div class="flex items-center gap-6 text-gray-600">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-phone text-sm"></i>
+                                    <span class="text-sm">07912 345 678</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-regular fa-envelope text-sm"></i>
+                                    <span class="text-sm">sarah.johnson@email.com</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-location-dot text-sm"></i>
+                                    <span class="text-sm">Manchester, M1 4BT</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button class="px-4 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-red-700 flex items-center gap-2">
+                            <i class="fa-solid fa-plus"></i>
+                            Add Booking
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="pupil-tabs" class="mb-8">
+            <div class="bg-white rounded-xl border border-gray-200">
+                <div class="border-b border-gray-200">
+                    <nav class="flex">
+                        <button id="overview-tab" class="px-6 py-4 text-sm font-medium text-gray-500 hover:text-gray-700">Overview</button>
+                        <button id="lessons-tab" class="px-6 py-4 text-sm font-semibold text-primary border-b-2 border-primary bg-primaryLight">Lessons</button>
+
+                        <button id="message-tab" class="px-6 py-4 text-sm font-medium text-gray-500 hover:text-gray-700">Messages</button>
+                        <button id="actions-tab" class="px-6 py-4 text-sm font-medium text-gray-500 hover:text-gray-700">Actions</button>
+                    </nav>
+                </div>
+
+                <div id="overview-content" class="p-8 hidden">
+                    <div class="grid grid-cols-3 gap-6 mb-8">
+                        <div class="text-center p-6 bg-blue-50 rounded-xl">
+                            <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i class="fa-solid fa-calendar-check text-blue-600 text-xl"></i>
+                            </div>
+                            <h3 class="text-2xl font-bold text-gray-900 mb-1">24</h3>
+                            <p class="text-sm text-gray-500">Total Lessons</p>
+                        </div>
+                        
+                        <div class="text-center p-6 bg-green-50 rounded-xl">
+                            <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i class="fa-solid fa-sterling-sign text-green-600 text-xl"></i>
+                            </div>
+                            <h3 class="text-2xl font-bold text-gray-900 mb-1">£960</h3>
+                            <p class="text-sm text-gray-500">Total Revenue</p>
+                        </div>
+                        
+                        
+                        <div class="text-center p-6 bg-orange-50 rounded-xl">
+                            <div class="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i class="fa-solid fa-mobile-screen text-orange-600 text-xl"></i>
+                            </div>
+                            <h3 class="text-2xl font-bold text-gray-900 mb-1">Yes</h3>
+                            <p class="text-sm text-gray-500">App Installed</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-8">
+                        <div class="col-span-2">
+                            <div class="mb-8">
+                                <h3 class="text-lg font-bold text-gray-900 mb-4">Latest Note</h3>
+                                <div class="bg-gray-50 rounded-lg p-6">
+                                    <div class="flex items-start justify-between mb-4">
+                                        <div class="flex items-center gap-3">
+                                            <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-2.jpg" alt="Instructor" class="w-10 h-10 rounded-full object-cover">
+                                            <div>
+                                                <p class="text-sm font-semibold text-gray-900">James Wilson</p>
+                                                <p class="text-xs text-gray-500">Instructor</p>
+                                            </div>
+                                        </div>
+                                        <span class="text-xs text-gray-500">2 days ago</span>
+                                    </div>
+                                    <p class="text-sm text-gray-700">Sarah showed excellent improvement in roundabout navigation today. Her confidence has grown significantly, and she's now ready to tackle more complex junction scenarios. We practiced parallel parking which she mastered after 3 attempts. Next lesson will focus on dual carriageways.</p>
+                                </div>
+                            </div>
+
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-900 mb-4">Progress Overview</h3>
+                                <div class="space-y-4">
+                                    <div>
+                                        <div class="flex justify-between items-center mb-2">
+                                            <span class="text-sm font-medium text-gray-700">Overall Progress</span>
+                                            <span class="text-sm font-semibold text-gray-900">78%</span>
+                                        </div>
+                                        <div class="w-full bg-gray-200 rounded-full h-3">
+                                            <div class="bg-primary h-3 rounded-full" style="width: 78%"></div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <div class="flex justify-between items-center mb-2">
+                                            <span class="text-sm font-medium text-gray-700">Preparation & Safety</span>
+                                            <span class="text-sm font-semibold text-gray-900">85%</span>
+                                        </div>
+                                        <div class="w-full bg-gray-200 rounded-full h-2">
+                                            <div class="bg-green-500 h-2 rounded-full" style="width: 85%"></div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <div class="flex justify-between items-center mb-2">
+                                            <span class="text-sm font-medium text-gray-700">Traffic & Road Awareness</span>
+                                            <span class="text-sm font-semibold text-gray-900">72%</span>
+                                        </div>
+                                        <div class="w-full bg-gray-200 rounded-full h-2">
+                                            <div class="bg-blue-500 h-2 rounded-full" style="width: 72%"></div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <div class="flex justify-between items-center mb-2">
+                                            <span class="text-sm font-medium text-gray-700">Junctions & Roundabouts</span>
+                                            <span class="text-sm font-semibold text-gray-900">68%</span>
+                                        </div>
+                                        <div class="w-full bg-gray-200 rounded-full h-2">
+                                            <div class="bg-yellow-500 h-2 rounded-full" style="width: 68%"></div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <div class="flex justify-between items-center mb-2">
+                                            <span class="text-sm font-medium text-gray-700">Manoeuvres</span>
+                                            <span class="text-sm font-semibold text-gray-900">80%</span>
+                                        </div>
+                                        <div class="w-full bg-gray-200 rounded-full h-2">
+                                            <div class="bg-purple-500 h-2 rounded-full" style="width: 80%"></div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <div class="flex justify-between items-center mb-2">
+                                            <span class="text-sm font-medium text-gray-700">Vehicle Controls</span>
+                                            <span class="text-sm font-semibold text-gray-900">90%</span>
+                                        </div>
+                                        <div class="w-full bg-gray-200 rounded-full h-2">
+                                            <div class="bg-green-600 h-2 rounded-full" style="width: 90%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-900 mb-4">Reflective Log</h3>
+                            <div class="bg-gray-50 rounded-lg p-6 text-center">
+                                <i class="fa-regular fa-file-lines text-4xl text-gray-400 mb-4"></i>
+                                <p class="text-sm text-gray-500 mb-4">No reflective log entries yet</p>
+                                <button class="px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-red-700">
+                                    Add Entry
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="lessons-content" class="p-8">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-lg font-bold text-gray-900">Lesson History</h3>
+                        <div class="flex items-center gap-4">
+                            <div class="flex items-center gap-2">
+                                <span class="w-3 h-3 bg-green-500 rounded-full"></span>
+                                <span class="text-sm text-gray-600">Completed</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="w-3 h-3 bg-blue-500 rounded-full"></span>
+                                <span class="text-sm text-gray-600">Upcoming</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="w-3 h-3 bg-yellow-500 rounded-full"></span>
+                                <span class="text-sm text-gray-600">Awaiting Payment</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="bg-gray-50 rounded-lg p-6 border-l-4 border-green-500">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-6">
+                                    <div>
+                                        <div class="flex items-center gap-3 mb-1">
+                                            <h4 class="text-lg font-semibold text-gray-900">Lesson #24</h4>
+                                            <div class="flex items-center gap-1">
+                                                <i class="fa-solid fa-star text-yellow-400 text-sm"></i>
+                                                <i class="fa-solid fa-star text-yellow-400 text-sm"></i>
+                                                <i class="fa-solid fa-star text-yellow-400 text-sm"></i>
+                                                <i class="fa-solid fa-star text-yellow-400 text-sm"></i>
+                                                <i class="fa-solid fa-star text-yellow-400 text-sm"></i>
+                                            </div>
+                                        </div>
+                                        <p class="text-sm text-gray-600">15 November 2024 • 14:00-15:30 • James Wilson</p>
+                                        <p class="text-sm text-gray-500 mt-1">Roundabouts & Traffic Navigation</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Paid</span>
+                                    <span class="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">Paid Out</span>
+                                    <button onclick="openLessonModal('lesson-24', true)" class="px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-red-700">
+                                        View Details
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-gray-50 rounded-lg p-6 border-l-4 border-green-500">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-6">
+                                    <div>
+                                        <div class="flex items-center gap-3 mb-1">
+                                            <h4 class="text-lg font-semibold text-gray-900">Lesson #23</h4>
+                                            <div class="flex items-center gap-1">
+                                                <i class="fa-solid fa-star text-yellow-400 text-sm"></i>
+                                                <i class="fa-solid fa-star text-yellow-400 text-sm"></i>
+                                                <i class="fa-solid fa-star text-yellow-400 text-sm"></i>
+                                                <i class="fa-solid fa-star text-yellow-400 text-sm"></i>
+                                                <i class="fa-regular fa-star text-gray-300 text-sm"></i>
+                                            </div>
+                                        </div>
+                                        <p class="text-sm text-gray-600">12 November 2024 • 10:00-12:00 • James Wilson</p>
+                                        <p class="text-sm text-gray-500 mt-1">Parallel Parking & Manoeuvres</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Paid</span>
+                                    <span class="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">Paid Out</span>
+                                    <button onclick="openLessonModal('lesson-23', true)" class="px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-red-700">
+                                        View Details
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-gray-50 rounded-lg p-6 border-l-4 border-yellow-500">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-6">
+                                    <div>
+                                        <div class="flex items-center gap-3 mb-1">
+                                            <h4 class="text-lg font-semibold text-gray-900">Lesson #22</h4>
+                                            <div class="flex items-center gap-1">
+                                                <i class="fa-regular fa-star text-gray-300 text-sm"></i>
+                                                <i class="fa-regular fa-star text-gray-300 text-sm"></i>
+                                                <i class="fa-regular fa-star text-gray-300 text-sm"></i>
+                                                <i class="fa-regular fa-star text-gray-300 text-sm"></i>
+                                                <i class="fa-regular fa-star text-gray-300 text-sm"></i>
+                                            </div>
+                                            <span class="text-xs text-gray-400 italic">Not rated yet</span>
+                                        </div>
+                                        <p class="text-sm text-gray-600">08 November 2024 • 16:00-17:30 • James Wilson</p>
+                                        <p class="text-sm text-gray-500 mt-1">Night Driving Practice</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <span class="px-3 py-1 bg-yellow-100 text-yellow-700 text-xs font-semibold rounded-full">Awaiting Payment</span>
+                                    <button onclick="openLessonModal('lesson-22', true)" class="px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-red-700">
+                                        View Details
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-blue-50 rounded-lg p-6 border-l-4 border-blue-500">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-6">
+                                    <div>
+                                        <h4 class="text-lg font-semibold text-gray-900 mb-1">Lesson #25</h4>
+                                        <p class="text-sm text-gray-600">18 November 2024 • 15:00-16:30 • James Wilson</p>
+                                        <p class="text-sm text-gray-500 mt-1">Dual Carriageways & Motorway Prep</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <span class="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">Upcoming</span>
+                                    <button onclick="openLessonModal('lesson-25', false)" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700">
+                                        Add Resources
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-blue-50 rounded-lg p-6 border-l-4 border-blue-500">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-6">
+                                    <div>
+                                        <h4 class="text-lg font-semibold text-gray-900 mb-1">Lesson #26</h4>
+                                        <p class="text-sm text-gray-600">22 November 2024 • 14:00-15:30 • James Wilson</p>
+                                        <p class="text-sm text-gray-500 mt-1">Test Route Practice</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <span class="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">Upcoming</span>
+                                    <button onclick="openLessonModal('lesson-26', false)" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700">
+                                        Add Resources
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="payments-content" class="p-8 hidden">
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-lg font-bold text-gray-900">Payment History</h3>
+                            <div class="flex gap-4">
+                                <div class="text-center">
+                                    <p class="text-sm text-gray-500">Total Paid</p>
+                                    <p class="text-xl font-bold text-green-600">£720</p>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-sm text-gray-500">Outstanding</p>
+                                    <p class="text-xl font-bold text-orange-600">£240</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between p-4 bg-green-50 rounded-lg border border-green-200">
+                            <div>
+                                <p class="text-sm font-semibold text-gray-900">Package Payment</p>
+                                <p class="text-xs text-gray-500">15 Nov 2024 - Stripe</p>
+                            </div>
+                            <span class="text-lg font-bold text-green-600">£240</span>
+                        </div>
+                        <div class="flex items-center justify-between p-4 bg-green-50 rounded-lg border border-green-200">
+                            <div>
+                                <p class="text-sm font-semibold text-gray-900">Package Payment</p>
+                                <p class="text-xs text-gray-500">01 Nov 2024 - Stripe</p>
+                            </div>
+                            <span class="text-lg font-bold text-green-600">£480</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="transfer-content" class="p-8 hidden">
+                    <div class="max-w-md">
+                        <h3 class="text-lg font-bold text-gray-900 mb-4">Transfer Pupil</h3>
+                        <p class="text-sm text-gray-600 mb-6">Transfer this pupil to another instructor. This action requires confirmation.</p>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Select New Instructor</label>
+                                <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    <option>Choose instructor...</option>
+                                    <option>Sarah Clarke</option>
+                                    <option>David Thompson</option>
+                                    <option>Emma Roberts</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Transfer Reason</label>
+                                <textarea class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" rows="3" placeholder="Reason for transfer..."></textarea>
+                            </div>
+                            <button class="w-full px-4 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-red-700">
+                                Transfer Pupil
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="emergency-content" class="p-8 hidden">
+                    <h3 class="text-lg font-bold text-gray-900 mb-6">Emergency Contact</h3>
+                    <div class="bg-gray-50 rounded-lg p-6">
+                        <div class="flex items-center gap-4 mb-4">
+                            <div class="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
+                                <i class="fa-solid fa-user text-gray-400 text-2xl"></i>
+                            </div>
+                            <div>
+                                <p class="text-lg font-semibold text-gray-900">Margaret Johnson</p>
+                                <p class="text-sm text-gray-500">Mother</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 text-gray-600">
+                            <i class="fa-solid fa-phone text-sm"></i>
+                            <span class="text-sm">07912 987 654</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="message-content" class="p-8 hidden">
+                    <h3 class="text-lg font-bold text-gray-900 mb-6">Messages</h3>
+                    <div class="bg-gray-50 rounded-lg p-8 text-center">
+                        <i class="fa-regular fa-comment text-4xl text-gray-400 mb-4"></i>
+                        <p class="text-sm text-gray-500 mb-4">No messages yet</p>
+                        <button class="px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-red-700">
+                            Send Message
+                        </button>
+                    </div>
+                </div>
+
+                <div id="actions-content" class="p-8 hidden">
+                    <h3 class="text-lg font-bold text-gray-900 mb-6">Actions</h3>
+                    <div class="space-y-4 max-w-md">
+                        <button class="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-download"></i>
+                            Export Pupil Data
+                        </button>
+                        <button class="w-full px-4 py-3 bg-orange-100 text-orange-700 rounded-lg font-semibold hover:bg-orange-200 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-archive"></i>
+                            Archive Pupil
+                        </button>
+                        <button class="w-full px-4 py-3 bg-red-100 text-red-700 rounded-lg font-semibold hover:bg-red-200 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-trash"></i>
+                            Delete Pupil
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <div id="lessonModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div class="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
+                <div class="flex-1 text-center">
+                    <div class="w-10 h-1.5 bg-gray-200 rounded-full mx-auto mb-2"></div>
+                    <h3 class="text-lg font-bold text-gray-900" id="modalTitle">Lesson Details</h3>
+                </div>
+                <button onclick="closeLessonModal()" class="text-gray-400 hover:text-gray-600 absolute right-4 top-6">
+                    <i class="fa-solid fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6" id="modalContent"></div>
+        </div>
+    </div>
+
+    <footer id="footer" class="ml-64 mt-16 bg-white border-t border-gray-200 py-6 px-8">
+        <div class="flex items-center justify-between text-sm text-gray-600">
+            <p>© GoRoadie 2025. All rights reserved.</p>
+            <div class="flex items-center gap-4">
+                <a href="#" class="hover:text-gray-900">Privacy Policy</a>
+                <a href="#" class="hover:text-gray-900">Terms of Service</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        function openLessonModal(lessonId, isPast) {
+            const modal = document.getElementById('lessonModal');
+            const modalContent = document.getElementById('modalContent');
+            
+            // This is a simplified example. In a real app, you'd fetch lesson data based on lessonId.
+            const isPendingPayment = lessonId === 'lesson-22';
+            
+            if (isPast) {
+                modalContent.innerHTML = `
+                    <div class="space-y-6">
+                        <!-- Pupil Info -->
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-5.jpg" alt="Sarah Johnson" class="w-12 h-12 rounded-full object-cover">
+                                <div>
+                                    <p class="font-bold text-gray-900">Sarah Johnson</p>
+                                    <p class="text-sm text-gray-500">Learner Driver</p>
+                                </div>
+                            </div>
+                            <button class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-100 flex items-center gap-2">
+                                <i class="fa-regular fa-user"></i> View Pupil
+                            </button>
+                        </div>
+                        
+                        <!-- Lessons Remaining Warning -->
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                            <div class="flex items-start gap-3">
+                                <i class="fa-solid fa-triangle-exclamation text-yellow-500 mt-1"></i>
+                                <div>
+                                    <p class="font-semibold text-yellow-800">Only 2 lessons remaining</p>
+                                    <p class="text-sm text-yellow-700 mb-3">Book more lessons to continue learning.</p>
+                                    <button class="px-4 py-2 bg-yellow-500 text-white rounded-lg text-sm font-semibold hover:bg-yellow-600 flex items-center gap-2">
+                                        <i class="fa-solid fa-calendar-plus"></i> Book Now
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Payment Status -->
+                        ${isPendingPayment ? `
+                        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="font-semibold text-gray-900">Payment Status</h4>
+                                <span class="px-3 py-1 bg-yellow-100 text-yellow-700 text-xs font-semibold rounded-full">PENDING</span>
+                            </div>
+                            <div class="bg-red-50 border border-red-200 text-red-700 text-sm p-3 rounded-lg mb-3 flex items-start gap-2">
+                                <i class="fa-solid fa-info-circle mt-1"></i>
+                                <p>This lesson has not been paid. Signing off will waive the payment and cancel the charge in Stripe.</p>
+                            </div>
+                            <label class="flex items-center gap-3 p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100">
+                                <input type="checkbox" class="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary">
+                                <span class="text-sm font-medium text-gray-700">Paid in Cash</span>
+                            </label>
+                        </div>
+                        ` : ''}
+
+                        <!-- Reflection Notes -->
+                        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <h4 class="font-semibold text-gray-900 mb-2">Reflection Notes</h4>
+                            <textarea class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-sm" rows="4" placeholder="Add your reflection notes about this lesson..."></textarea>
+                        </div>
+
+                        <!-- Resources -->
+                        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <h4 class="font-semibold text-gray-900 mb-3">Resources for Student</h4>
+                            <div class="space-y-2 mb-4">
+                                <div class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
+                                    <div class="flex items-center gap-3">
+                                        <i class="fa-solid fa-file-pdf text-red-500 text-2xl"></i>
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-800">Roundabout Guide.pdf</p>
+                                            <p class="text-xs text-gray-500">1.2 MB</p>
+                                        </div>
+                                    </div>
+                                    <button class="text-gray-400 hover:text-red-600"><i class="fa-solid fa-trash"></i></button>
+                                </div>
+                                <div class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
+                                    <div class="flex items-center gap-3">
+                                        <i class="fa-brands fa-youtube text-red-500 text-2xl"></i>
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-800">Advanced Mirroring Techniques</p>
+                                            <p class="text-xs text-gray-500">Video link</p>
+                                        </div>
+                                    </div>
+                                    <button class="text-gray-400 hover:text-red-600"><i class="fa-solid fa-trash"></i></button>
+                                </div>
+                            </div>
+                            <button class="w-full px-4 py-2 border-2 border-dashed border-gray-300 text-gray-600 rounded-lg text-sm font-semibold hover:bg-gray-100 hover:border-gray-400">
+                                <i class="fa-solid fa-plus mr-2"></i>Add Resource
+                            </button>
+                        </div>
+                        
+                        <!-- Actions -->
+                        <div class="flex gap-3 pt-4 border-t border-gray-200">
+                            <button class="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-check-circle"></i> Sign Off Lesson
+                            </button>
+                            <button onclick="closeLessonModal()" class="w-full px-4 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else {
+                modalContent.innerHTML = `
+                     <div class="space-y-6">
+                        <!-- Pupil Info -->
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-5.jpg" alt="Sarah Johnson" class="w-12 h-12 rounded-full object-cover">
+                                <div>
+                                    <p class="font-bold text-gray-900">Sarah Johnson</p>
+                                    <p class="text-sm text-gray-500">Learner Driver</p>
+                                </div>
+                            </div>
+                            <button class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-100 flex items-center gap-2">
+                                <i class="fa-regular fa-user"></i> View Pupil
+                            </button>
+                        </div>
+                        
+                        <div class="bg-blue-50 rounded-lg p-4 border border-blue-200 text-center">
+                            <h4 class="font-semibold text-blue-900 mb-1">Upcoming Lesson</h4>
+                            <p class="text-sm text-blue-800">Date: 18 November 2024 • Time: 15:00-16:30</p>
+                        </div>
+
+                        <!-- Resources -->
+                        <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <h4 class="font-semibold text-gray-900 mb-3">Resources for Student</h4>
+                            <div class="space-y-2 mb-4 text-center text-gray-500 py-4">
+                                <i class="fa-regular fa-folder-open text-3xl mb-2"></i>
+                                <p class="text-sm">No resources added yet.</p>
+                            </div>
+                            <button class="w-full px-4 py-2 border-2 border-dashed border-gray-300 text-gray-600 rounded-lg text-sm font-semibold hover:bg-gray-100 hover:border-gray-400">
+                                <i class="fa-solid fa-plus mr-2"></i>Add Resource
+                            </button>
+                        </div>
+                        
+                        <button onclick="closeLessonModal()" class="w-full px-4 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300">
+                            Close
+                        </button>
+                    </div>
+                `;
+            }
+            
+            modal.classList.remove('hidden');
+        }
+        
+        function closeLessonModal() {
+            document.getElementById('lessonModal').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>

@@ -109,6 +109,14 @@ class Student extends Model
     }
 
     /**
+     * Get notes for this student.
+     */
+    public function notes(): MorphMany
+    {
+        return $this->morphMany(Note::class, 'noteable');
+    }
+
+    /**
      * Get activity logs for this student.
      */
     public function activityLogs(): MorphMany

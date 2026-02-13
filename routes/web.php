@@ -106,6 +106,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('students.contacts.destroy');
     Route::patch('/students/{student}/contacts/{contact}/primary', [\App\Http\Controllers\PupilController::class, 'setPrimaryContact'])
         ->name('students.contacts.primary');
+
+    // Student Notes
+    Route::get('/students/{student}/notes', [\App\Http\Controllers\PupilController::class, 'notes'])
+        ->name('students.notes');
+    Route::post('/students/{student}/notes', [\App\Http\Controllers\PupilController::class, 'storeNote'])
+        ->name('students.notes.store');
+    Route::delete('/students/{student}/notes/{note}', [\App\Http\Controllers\PupilController::class, 'deleteNote'])
+        ->name('students.notes.destroy');
+
+    // Student Messages
+    Route::get('/students/{student}/messages', [\App\Http\Controllers\PupilController::class, 'messages'])
+        ->name('students.messages');
+    Route::post('/students/{student}/messages', [\App\Http\Controllers\PupilController::class, 'sendMessage'])
+        ->name('students.messages.store');
+
     Route::get('/teams', [\App\Http\Controllers\TeamController::class, 'index'])
         ->name('teams.index');
     Route::get('/reports', [\App\Http\Controllers\ReportController::class, 'index'])

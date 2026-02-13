@@ -53,7 +53,6 @@ const subTabs: { key: SubTabType; label: string }[] = [
     { key: 'overview', label: 'Overview' },
     { key: 'lessons', label: 'Lessons' },
     { key: 'payments', label: 'Payments' },
-    { key: 'transfer', label: 'Transfer' },
     { key: 'emergency', label: 'Emergency Contact' },
     { key: 'messages', label: 'Messages' },
     { key: 'actions', label: 'Actions' },
@@ -175,14 +174,7 @@ onMounted(() => {
                             </div>
                         </div>
                     </div>
-
-                    <!-- Action Button -->
-                    <div class="flex items-center gap-2">
-                        <Button>
-                            <StickyNote class="mr-2 h-4 w-4" />
-                            Add Note
-                        </Button>
-                    </div>
+ 
                 </div>
             </CardContent>
         </Card>

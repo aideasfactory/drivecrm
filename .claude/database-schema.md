@@ -123,11 +123,13 @@ User (role=instructor) → Instructor → Creates Packages
                                    → Receives Payouts
                                    → Has ActivityLogs (morphMany)
                                    → Has Contacts (morphMany)
+                                   → Has Notes (morphMany)
 
 User (role=student) → Student → Purchases Orders → Contains Lessons → Has LessonPayments
                              → Assigned to Instructor                → Has Payouts
                              → Has ActivityLogs (morphMany)
                              → Has Contacts (morphMany)
+                             → Has Notes (morphMany)
 
 Package → Used in Orders
 
@@ -135,6 +137,7 @@ Order = Student + Instructor + Package → Creates Lessons
 
 ActivityLog → Morphs to Instructor or Student
 Contact → Morphs to Instructor or Student
+Note → Morphs to Instructor or Student
 
 Message → Belongs to User (sender via 'from') + Belongs to User (recipient via 'to')
 ```
@@ -516,7 +519,34 @@ Polymorphic emergency contacts for instructors and students. Supports a primary 
 
 ---
 
-### 11. **webhook_events**
+### 11. **notes**
+
+Polymorphic notes for instructors and students. Supports soft deletes for audit trail.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique note identifier |
+| `noteable_type` | varchar(255) | NOT NULL | Model type (App\Models\Instructor or App\Models\Student) |
+| `noteable_id` | bigint unsigned | NOT NULL | Model ID |
+| `note` | text | NOT NULL | Note content |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+| `deleted_at` | timestamp | NULLABLE | Soft delete timestamp |
+
+**Indexes:**
+- Composite index on `(noteable_type, noteable_id, deleted_at)` named `notes_noteable_index`
+
+**Relationships:**
+- Morphs to one `Instructor` or `Student` (polymorphic)
+
+**Business Logic:**
+- Soft deletes enabled for audit trail
+- Creating a note triggers an activity log entry (category: `note`)
+- Used for internal notes/comments on student or instructor profiles
+
+---
+
+### 12. **webhook_events**
 
 Logs Stripe webhook events for debugging and idempotency.
 
@@ -840,6 +870,7 @@ Laravel's failed jobs storage.
 - **payouts:** `(instructor_id, status)` composite
 - **activity_logs:** `(loggable_type, loggable_id, deleted_at)` composite named `activity_logs_loggable_index`, `category`, `created_at`
 - **contacts:** `(contactable_type, contactable_id)` composite named `contacts_contactable_index`
+- **notes:** `(noteable_type, noteable_id, deleted_at)` composite named `notes_noteable_index`
 - **webhook_events:** `type`
 - **enquiries:** None (uses UUID primary key)
 - **locations:** `postcode_sector`

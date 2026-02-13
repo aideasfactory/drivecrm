@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\UserRole;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -74,6 +75,22 @@ class User extends Authenticatable
     public function orders(): HasManyThrough
     {
         return $this->hasManyThrough(Order::class, Student::class, 'user_id', 'student_id');
+    }
+
+    /**
+     * Get messages sent by this user.
+     */
+    public function sentMessages(): HasMany
+    {
+        return $this->hasMany(Message::class, 'from');
+    }
+
+    /**
+     * Get messages received by this user.
+     */
+    public function receivedMessages(): HasMany
+    {
+        return $this->hasMany(Message::class, 'to');
     }
 
     /**
