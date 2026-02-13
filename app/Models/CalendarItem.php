@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CalendarItemStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -18,11 +19,13 @@ class CalendarItem extends Model
         'status',
     ];
 
-    protected $casts = [
-        'is_available' => 'boolean',
-        'start_time' => 'datetime:H:i:s',
-        'end_time' => 'datetime:H:i:s',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'is_available' => 'boolean',
+            'status' => CalendarItemStatus::class,
+        ];
+    }
 
     public function calendar(): BelongsTo
     {

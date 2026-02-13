@@ -147,6 +147,8 @@ function toCalendarEvent(item: CalendarItemResponse): CalendarEvent {
         startTime: item.start_time,
         endTime: item.end_time,
         isAvailable: item.is_available,
+        status: item.status,
+        studentName: item.student_name,
     }
 }
 
@@ -176,6 +178,7 @@ async function loadCalendarRange(startDate: string, endDate: string) {
                     end_time: item.end_time,
                     is_available: item.is_available,
                     status: item.status,
+                    student_name: item.student_name ?? null,
                 }
                 newItemsMap.set(item.id, calItem)
             }

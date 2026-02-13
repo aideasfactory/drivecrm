@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Onboarding;
 
+use App\Enums\CalendarItemStatus;
 use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
@@ -42,11 +43,15 @@ class CreateOrderFromEnquiryAction
             // Get instructor ID from step 2 or use package instructor
             $instructorId = $step2['instructor_id'] ?? $package->instructor_id;
 
-            // Create Order record
+            // Create Order record with package snapshot
             $order = Order::create([
                 'student_id' => $student->id,
                 'instructor_id' => $instructorId,
                 'package_id' => $package->id,
+                'package_name' => $package->name,
+                'package_total_price_pence' => $package->total_price_pence,
+                'package_lesson_price_pence' => $package->lesson_price_pence,
+                'package_lessons_count' => $package->lessons_count,
                 'status' => OrderStatus::PENDING,
                 'payment_mode' => $paymentMode,
             ]);
@@ -172,7 +177,9 @@ class CreateOrderFromEnquiryAction
         ]);
 
         // Determine calendar item status based on payment mode
-        $calendarItemStatus = $paymentMode === PaymentMode::UPFRONT ? 'booked' : 'reserved';
+        $calendarItemStatus = $paymentMode === PaymentMode::UPFRONT
+            ? CalendarItemStatus::BOOKED
+            : CalendarItemStatus::RESERVED;
 
         Log::info('Calendar items will be updated to status', [
             'status' => $calendarItemStatus,

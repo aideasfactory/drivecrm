@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Instructor;
 
+use App\Enums\CalendarItemStatus;
 use App\Models\Instructor;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -32,7 +33,7 @@ class GetInstructorCalendarAction
             ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->with(['items' => function ($query) {
                 $query->orderBy('start_time');
-            }])
+            }, 'items.lessons.order.student'])
             ->orderBy('date')
             ->get();
 
@@ -42,6 +43,15 @@ class GetInstructorCalendarAction
                 'id' => $calendar->id,
                 'date' => $calendar->date->format('Y-m-d'),
                 'items' => $calendar->items->map(function ($item) use ($calendar) {
+                    $studentName = null;
+                    if ($item->status === CalendarItemStatus::BOOKED || $item->status === CalendarItemStatus::COMPLETED) {
+                        $lesson = $item->lessons->first();
+                        if ($lesson && $lesson->order && $lesson->order->student) {
+                            $student = $lesson->order->student;
+                            $studentName = trim($student->first_name.' '.$student->surname);
+                        }
+                    }
+
                     return [
                         'id' => $item->id,
                         'calendar_id' => $calendar->id,
@@ -49,7 +59,8 @@ class GetInstructorCalendarAction
                         'start_time' => $item->start_time,
                         'end_time' => $item->end_time,
                         'is_available' => $item->is_available,
-                        'status' => $item->status ?? 'available',
+                        'status' => $item->status?->value ?? 'available',
+                        'student_name' => $studentName,
                     ];
                 }),
             ];

@@ -40,8 +40,8 @@ class CalendarService
             $slots = $calendar->items->map(function ($item) {
                 return [
                     'id' => $item->id,
-                    'start_time' => $item->start_time->format('H:i'),
-                    'end_time' => $item->end_time->format('H:i'),
+                    'start_time' => \Illuminate\Support\Carbon::parse($item->start_time)->format('H:i'),
+                    'end_time' => \Illuminate\Support\Carbon::parse($item->end_time)->format('H:i'),
                 ];
             });
 

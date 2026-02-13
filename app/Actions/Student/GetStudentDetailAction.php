@@ -16,7 +16,7 @@ class GetStudentDetailAction
      */
     public function __invoke(Student $student): array
     {
-        $student->load(['user', 'instructor', 'orders.package', 'orders.lessons']);
+        $student->load(['user', 'instructor', 'orders.lessons']);
 
         $name = $student->first_name && $student->surname
             ? $student->first_name.' '.$student->surname
@@ -29,7 +29,7 @@ class GetStudentDetailAction
         foreach ($student->orders as $order) {
             $lessonsTotal += $order->lessons->count();
             $lessonsCompleted += $order->lessons->where('status', 'completed')->count();
-            $revenuePence += $order->package?->total_price_pence ?? 0;
+            $revenuePence += $order->package_total_price_pence ?? 0;
         }
 
         return [

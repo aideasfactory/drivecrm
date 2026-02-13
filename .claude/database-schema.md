@@ -294,7 +294,11 @@ Student enrollments/purchases of lesson packages.
 | `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique order identifier |
 | `student_id` | bigint unsigned | FOREIGN KEY (students.id), ON DELETE CASCADE | Student who made the order |
 | `instructor_id` | bigint unsigned | FOREIGN KEY (instructors.id), NULLABLE, ON DELETE CASCADE | Assigned instructor |
-| `package_id` | bigint unsigned | FOREIGN KEY (packages.id), ON DELETE CASCADE | Purchased package |
+| `package_id` | bigint unsigned | FOREIGN KEY (packages.id), ON DELETE CASCADE | Purchased package (template reference) |
+| `package_name` | varchar(255) | NULLABLE | Snapshot: package name at time of order |
+| `package_total_price_pence` | integer | NULLABLE | Snapshot: total price in pence at time of order |
+| `package_lesson_price_pence` | integer | NULLABLE | Snapshot: per-lesson price in pence at time of order |
+| `package_lessons_count` | integer | NULLABLE | Snapshot: number of lessons at time of order |
 | `payment_mode` | enum('upfront', 'weekly') | DEFAULT 'upfront' | Payment method chosen |
 | `status` | enum('pending', 'active', 'completed', 'cancelled') | DEFAULT 'pending' | Order status |
 | `stripe_payment_intent_id` | varchar(255) | NULLABLE | Stripe Payment Intent ID (for upfront payments) |
@@ -310,7 +314,7 @@ Student enrollments/purchases of lesson packages.
 **Relationships:**
 - Belongs to one `Student`
 - Belongs to one `Instructor`
-- Belongs to one `Package`
+- Belongs to one `Package` (template reference — pricing should be read from snapshot columns)
 - Has many `Lessons`
 - Has many `LessonPayments` (through Lessons)
 
@@ -323,6 +327,7 @@ Student enrollments/purchases of lesson packages.
 - Weekly payment: Recurring subscription for each lesson
 - Order becomes active after successful payment
 - Lessons are created after order activation
+- **Price snapshot:** `package_name`, `package_total_price_pence`, `package_lesson_price_pence`, and `package_lessons_count` are copied from the package at order creation time. Always use these snapshot columns for pricing/display — never read live from `packages` table via the `package` relationship for pricing data.
 
 ---
 
@@ -622,15 +627,21 @@ Defines time slots within a calendar date.
 | `start_time` | time | NOT NULL | Slot start time |
 | `end_time` | time | NOT NULL | Slot end time |
 | `is_available` | boolean | DEFAULT true | Availability flag |
+| `status` | enum('draft', 'reserved', 'booked', 'completed') | NULLABLE | Booking lifecycle status |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
 **Relationships:**
 - Belongs to one `Calendar`
 
+**Enums:**
+- Status: `draft` (tentative hold during onboarding), `reserved` (weekly payment pending), `booked` (fully paid), `completed` (lesson finished)
+
 **Business Logic:**
 - Multiple time slots per calendar date
 - `is_available` allows blocking slots without deletion
+- `status` tracks the booking lifecycle: `draft` → `reserved`/`booked` → `completed`
+- Draft items are cleaned up by `calendar:cleanup-drafts` command if abandoned
 
 ---
 

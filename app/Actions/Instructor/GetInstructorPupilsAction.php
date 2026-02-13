@@ -20,7 +20,7 @@ class GetInstructorPupilsAction
     public function __invoke(Instructor $instructor, ?string $search = null): Collection
     {
         $query = Student::where('instructor_id', $instructor->id)
-            ->with(['user', 'orders.package', 'orders.lessons']);
+            ->with(['user', 'orders.lessons']);
 
         if ($search) {
             $searchTerm = '%'.$search.'%';
@@ -45,7 +45,7 @@ class GetInstructorPupilsAction
             foreach ($student->orders as $order) {
                 $lessonsTotal += $order->lessons->count();
                 $lessonsCompleted += $order->lessons->where('status', 'completed')->count();
-                $revenuePence += $order->package?->total_price_pence ?? 0;
+                $revenuePence += $order->package_total_price_pence ?? 0;
             }
 
             // Find next upcoming lesson

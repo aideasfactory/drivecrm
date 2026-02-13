@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\CalendarItemStatus;
 use App\Models\CalendarItem;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -33,7 +34,7 @@ class CleanupDraftCalendarItems extends Command
         $this->newLine();
 
         // Find all draft calendar items created before today
-        $query = CalendarItem::where('status', 'draft')
+        $query = CalendarItem::where('status', CalendarItemStatus::DRAFT)
             ->where('created_at', '<', now()->startOfDay());
 
         $count = $query->count();

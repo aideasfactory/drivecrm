@@ -39,27 +39,27 @@ class OrderConfirmationNotification extends Notification implements ShouldQueue
      */
     public function toMail(object $notifiable): MailMessage
     {
-        $instructor = $this->order->instructor;
-        $package = $this->order->package;
-        $firstLesson = $this->order->lessons()->orderBy('date')->first();
+        $order = $this->order;
+        $instructor = $order->instructor;
+        $firstLesson = $order->lessons()->orderBy('date')->first();
 
         $message = (new MailMessage)
             ->subject('Your Driving Lessons Have Been Booked!')
             ->greeting($this->getGreeting())
             ->line($this->getIntroLine())
             ->line('**Order Details:**')
-            ->line("Package: {$package->name}")
-            ->line("Number of lessons: {$package->lessons_count}")
+            ->line("Package: {$order->package_name}")
+            ->line("Number of lessons: {$order->package_lessons_count}")
             ->line("Instructor: {$instructor->user->name}");
 
         if ($firstLesson) {
             $message->line('First lesson: '.\Carbon\Carbon::parse($firstLesson->date)->format('l, F j, Y'));
         }
 
-        if ($this->order->isUpfront()) {
-            $message->line('Payment: Paid in full (£'.number_format($package->total_price_pence / 100, 2).')');
+        if ($order->isUpfront()) {
+            $message->line('Payment: Paid in full (£'.number_format($order->package_total_price_pence / 100, 2).')');
         } else {
-            $message->line('Payment: Weekly (£'.number_format($package->lesson_price_pence / 100, 2).' per lesson)');
+            $message->line('Payment: Weekly (£'.number_format($order->package_lesson_price_pence / 100, 2).' per lesson)');
             $message->line('You will receive invoice emails 24 hours before each lesson.');
         }
 
@@ -124,8 +124,8 @@ The Driving School Team');
     {
         return [
             'order_id' => $this->order->id,
-            'package_name' => $this->order->package->name,
-            'lessons_count' => $this->order->package->lessons_count,
+            'package_name' => $this->order->package_name,
+            'lessons_count' => $this->order->package_lessons_count,
         ];
     }
 }

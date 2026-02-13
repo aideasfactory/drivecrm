@@ -17,6 +17,10 @@ class Order extends Model
         'student_id',
         'instructor_id',
         'package_id',
+        'package_name',
+        'package_total_price_pence',
+        'package_lesson_price_pence',
+        'package_lessons_count',
         'payment_mode',
         'status',
         'stripe_payment_intent_id',
@@ -28,6 +32,9 @@ class Order extends Model
         return [
             'payment_mode' => PaymentMode::class,
             'status' => OrderStatus::class,
+            'package_total_price_pence' => 'integer',
+            'package_lesson_price_pence' => 'integer',
+            'package_lessons_count' => 'integer',
         ];
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Onboarding;
 
+use App\Enums\CalendarItemStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Onboarding\StepFourRequest;
 use App\Models\Calendar;
@@ -169,12 +170,12 @@ class StepFourController extends Controller
         // Update selected calendar item
         $selectedCalendarItem->update([
             'is_available' => false,
-            'status' => 'draft',
+            'status' => CalendarItemStatus::DRAFT,
         ]);
 
         Log::info('Updated selected calendar item to draft', [
             'calendar_item_id' => $selectedCalendarItem->id,
-            'status' => 'draft',
+            'status' => CalendarItemStatus::DRAFT,
             'is_available' => false,
             'enquiry_id' => $enquiry->id,
         ]);
@@ -228,7 +229,7 @@ class StepFourController extends Controller
                 'start_time' => $validated['start_time'],
                 'end_time' => $validated['end_time'],
                 'is_available' => false,
-                'status' => 'draft',
+                'status' => CalendarItemStatus::DRAFT,
             ]);
 
             $calendarItemIds[] = $calendarItem->id;

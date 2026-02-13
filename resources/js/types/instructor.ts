@@ -84,7 +84,7 @@ export interface CalendarItem {
   start_time: string
   end_time: string
   is_available: boolean
-  status: 'draft' | 'reserved' | 'booked' | null
+  status: 'draft' | 'reserved' | 'booked' | 'completed' | null
   created_at: string
   updated_at: string
 }
@@ -104,4 +104,5 @@ export interface CalendarItemResponse {
   end_time: string
   is_available: boolean
   status: string | null
+  student_name: string | null
 }

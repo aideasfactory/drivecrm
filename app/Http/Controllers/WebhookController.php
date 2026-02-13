@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Shared\LogActivityAction;
 use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
@@ -155,9 +156,12 @@ class WebhookController extends Controller
 
                     DB::commit();
 
+                    // Log activity for booking confirmation
+                    $this->logBookingConfirmedActivity($order);
+
                     Log::info('Webhook: Upfront order activated', [
                         'order_id' => $order->id,
-                        'lessons_count' => $order->package->lessons_count,
+                        'lessons_count' => $order->package_lessons_count,
                     ]);
 
                 } catch (\Exception $e) {
@@ -423,6 +427,49 @@ class WebhookController extends Controller
         } catch (\Exception $e) {
             // Log but don't throw - calendar update failure shouldn't break webhook
             Log::error('Webhook: Failed to mark calendar item unavailable', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Log activity for both student and instructor when a booking is confirmed.
+     */
+    protected function logBookingConfirmedActivity(Order $order): void
+    {
+        try {
+            $logActivity = app(LogActivityAction::class);
+            $metadata = [
+                'order_id' => $order->id,
+                'package_name' => $order->package_name,
+                'lessons_count' => $order->package_lessons_count,
+                'payment_mode' => $order->payment_mode->value,
+            ];
+
+            // Log for student
+            if ($order->student) {
+                $logActivity(
+                    $order->student,
+                    "Booking confirmed: {$order->package_name} ({$order->package_lessons_count} lessons)",
+                    'booking',
+                    $metadata
+                );
+            }
+
+            // Log for instructor
+            if ($order->instructor) {
+                $studentName = trim(($order->student->first_name ?? '').' '.($order->student->surname ?? ''));
+                $logActivity(
+                    $order->instructor,
+                    "New booking confirmed: {$studentName} — {$order->package_name} ({$order->package_lessons_count} lessons)",
+                    'booking',
+                    $metadata
+                );
+            }
+        } catch (\Exception $e) {
+            // Log but don't throw - activity logging failure shouldn't break webhook
+            Log::error('Webhook: Failed to log booking confirmed activity', [
                 'order_id' => $order->id,
                 'error' => $e->getMessage(),
             ]);
