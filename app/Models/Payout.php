@@ -17,7 +17,7 @@ class Payout extends Model
         'amount_pence',
         'status',
         'stripe_transfer_id',
-        'transferred_at',
+        'paid_at',
     ];
 
     protected function casts(): array
@@ -25,7 +25,7 @@ class Payout extends Model
         return [
             'amount_pence' => 'integer',
             'status' => PayoutStatus::class,
-            'transferred_at' => 'datetime',
+            'paid_at' => 'datetime',
         ];
     }
 
@@ -50,7 +50,7 @@ class Payout extends Model
      */
     public function isCompleted(): bool
     {
-        return $this->status === PayoutStatus::COMPLETED;
+        return $this->status === PayoutStatus::PAID;
     }
 
     /**

@@ -121,6 +121,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/students/{student}/messages', [\App\Http\Controllers\PupilController::class, 'sendMessage'])
         ->name('students.messages.store');
 
+    // Student Lessons
+    Route::get('/students/{student}/lessons', [\App\Http\Controllers\PupilController::class, 'lessons'])
+        ->name('students.lessons');
+    Route::post('/students/{student}/lessons/{lesson}/sign-off', [\App\Http\Controllers\PupilController::class, 'signOffLesson'])
+        ->name('students.lessons.sign-off');
+
     Route::get('/teams', [\App\Http\Controllers\TeamController::class, 'index'])
         ->name('teams.index');
     Route::get('/reports', [\App\Http\Controllers\ReportController::class, 'index'])

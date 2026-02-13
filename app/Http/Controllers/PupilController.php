@@ -14,9 +14,12 @@ use App\Actions\Shared\Note\CreateNoteAction;
 use App\Actions\Shared\Note\DeleteNoteAction;
 use App\Actions\Shared\Note\GetNotesAction;
 use App\Actions\Student\GetStudentDetailAction;
+use App\Jobs\ProcessLessonSignOffJob;
 use App\Models\Contact;
+use App\Models\Lesson;
 use App\Models\Note;
 use App\Models\Student;
+use App\Services\LessonSignOffService;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -247,6 +250,51 @@ class PupilController extends Controller
         return response()->json([
             'message' => $message->load('sender:id,name'),
         ], 201);
+    }
+
+    /**
+     * Get all lessons for a student.
+     */
+    public function lessons(Student $student, LessonSignOffService $service): JsonResponse
+    {
+        $lessons = $service->getStudentLessons($student);
+
+        return response()->json([
+            'lessons' => $lessons,
+        ]);
+    }
+
+    /**
+     * Sign off a lesson as completed, triggering payout and notifications.
+     */
+    public function signOffLesson(Student $student, Lesson $lesson): JsonResponse
+    {
+        // Verify lesson belongs to this student (via order)
+        $lessonBelongsToStudent = $student->orders()
+            ->whereHas('lessons', fn ($q) => $q->where('id', $lesson->id))
+            ->exists();
+
+        if (! $lessonBelongsToStudent) {
+            return response()->json(['message' => 'Lesson not found for this student.'], 404);
+        }
+
+        // Lesson must be pending
+        if ($lesson->isCompleted()) {
+            return response()->json(['message' => 'This lesson has already been completed.'], 422);
+        }
+
+        $instructor = $lesson->instructor;
+
+        if (! $instructor) {
+            return response()->json(['message' => 'No instructor assigned to this lesson.'], 422);
+        }
+
+        // Dispatch sign-off job for async processing
+        ProcessLessonSignOffJob::dispatch($lesson, $instructor);
+
+        return response()->json([
+            'message' => 'Lesson sign-off is being processed.',
+        ]);
     }
 
     /**
