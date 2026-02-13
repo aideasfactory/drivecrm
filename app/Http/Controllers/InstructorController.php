@@ -13,6 +13,7 @@ use App\Http\Requests\StoreCalendarItemRequest;
 use App\Http\Requests\StoreInstructorRequest;
 use App\Http\Requests\StoreLocationRequest;
 use App\Http\Requests\StorePackageRequest;
+use App\Http\Requests\UpdateCalendarItemRequest;
 use App\Http\Requests\UpdateInstructorRequest;
 use App\Models\CalendarItem;
 use App\Models\Contact;
@@ -267,7 +268,8 @@ class InstructorController extends Controller
             $instructor,
             $request->input('date'),
             $request->input('start_time'),
-            $request->input('end_time')
+            $request->input('end_time'),
+            $request->boolean('is_available', true)
         );
 
         return response()->json([
@@ -281,6 +283,40 @@ class InstructorController extends Controller
                 'status' => $calendarItem->status ?? 'available',
             ],
         ], 201);
+    }
+
+    /**
+     * Update a calendar item (time slot) - handles drag-and-drop moves and status changes.
+     */
+    public function updateCalendarItem(UpdateCalendarItemRequest $request, Instructor $instructor, CalendarItem $calendarItem): JsonResponse
+    {
+        // Verify the calendar item belongs to this instructor
+        if ($calendarItem->calendar->instructor_id !== $instructor->id) {
+            return response()->json([
+                'message' => 'Calendar item not found for this instructor.',
+            ], 404);
+        }
+
+        $calendarItem = $this->instructorService->updateCalendarItem(
+            $instructor,
+            $calendarItem,
+            $request->input('date'),
+            $request->input('start_time'),
+            $request->input('end_time'),
+            $request->has('is_available') ? $request->boolean('is_available') : null
+        );
+
+        return response()->json([
+            'calendar_item' => [
+                'id' => $calendarItem->id,
+                'calendar_id' => $calendarItem->calendar_id,
+                'date' => $calendarItem->calendar->date->format('Y-m-d'),
+                'start_time' => $calendarItem->start_time,
+                'end_time' => $calendarItem->end_time,
+                'is_available' => $calendarItem->is_available,
+                'status' => $calendarItem->status ?? 'available',
+            ],
+        ]);
     }
 
     /**

@@ -49,6 +49,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('instructors.calendar');
     Route::post('/instructors/{instructor}/calendar/items', [\App\Http\Controllers\InstructorController::class, 'storeCalendarItem'])
         ->name('instructors.calendar.items.store');
+    Route::put('/instructors/{instructor}/calendar/items/{calendarItem}', [\App\Http\Controllers\InstructorController::class, 'updateCalendarItem'])
+        ->name('instructors.calendar.items.update');
     Route::delete('/instructors/{instructor}/calendar/items/{calendarItem}', [\App\Http\Controllers\InstructorController::class, 'destroyCalendarItem'])
         ->name('instructors.calendar.items.destroy');
 

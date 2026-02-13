@@ -24,7 +24,8 @@ class CreateCalendarItemAction
         Instructor $instructor,
         string $date,
         string $startTime,
-        string $endTime
+        string $endTime,
+        bool $isAvailable = true
     ): CalendarItem {
         // Find or create calendar for this date
         $calendar = Calendar::firstOrCreate(
@@ -39,7 +40,7 @@ class CreateCalendarItemAction
             'calendar_id' => $calendar->id,
             'start_time' => $startTime,
             'end_time' => $endTime,
-            'is_available' => true,
+            'is_available' => $isAvailable,
             'status' => null, // Status is for booking state (draft/reserved/booked), not availability
         ]);
 

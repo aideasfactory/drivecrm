@@ -93,4 +93,15 @@ export interface CalendarItemFormData {
   date: string
   start_time: string
   end_time: string
+  is_available: boolean
+}
+
+export interface CalendarItemResponse {
+  id: number
+  calendar_id: number
+  date: string
+  start_time: string
+  end_time: string
+  is_available: boolean
+  status: string | null
 }

@@ -15,6 +15,7 @@ use App\Actions\Instructor\GetInstructorCalendarAction;
 use App\Actions\Instructor\GetInstructorLocationsAction;
 use App\Actions\Instructor\GetInstructorPackagesAction;
 use App\Actions\Instructor\GetInstructorPupilsAction;
+use App\Actions\Instructor\UpdateCalendarItemAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Shared\Message\SendBroadcastMessageAction;
 use App\Enums\UserRole;
@@ -42,6 +43,7 @@ class InstructorService
         protected GetInstructorCalendarAction $getInstructorCalendar,
         protected CreateCalendarItemAction $createCalendarItem,
         protected DeleteCalendarItemAction $deleteCalendarItem,
+        protected UpdateCalendarItemAction $updateCalendarItem,
         protected CreatePupilAction $createPupil,
         protected GetInstructorPupilsAction $getInstructorPupils,
         protected SendBroadcastMessageAction $sendBroadcastMessage,
@@ -265,9 +267,24 @@ class InstructorService
         Instructor $instructor,
         string $date,
         string $startTime,
-        string $endTime
+        string $endTime,
+        bool $isAvailable = true
     ): CalendarItem {
-        return ($this->createCalendarItem)($instructor, $date, $startTime, $endTime);
+        return ($this->createCalendarItem)($instructor, $date, $startTime, $endTime, $isAvailable);
+    }
+
+    /**
+     * Update a calendar item (time slot) - handles moves and status changes.
+     */
+    public function updateCalendarItem(
+        Instructor $instructor,
+        CalendarItem $calendarItem,
+        string $date,
+        string $startTime,
+        string $endTime,
+        ?bool $isAvailable = null
+    ): CalendarItem {
+        return ($this->updateCalendarItem)($instructor, $calendarItem, $date, $startTime, $endTime, $isAvailable);
     }
 
     /**

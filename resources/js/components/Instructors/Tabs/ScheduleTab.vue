@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { ScheduleXCalendar } from '@schedule-x/vue'
-import {
-    createCalendar,
-    createViewWeek,
-    type CalendarEvent,
-} from '@schedule-x/calendar'
-import '@schedule-x/theme-default/dist/index.css'
-import { Temporal } from 'temporal-polyfill'
+import { ref, watch, onMounted } from 'vue'
 import axios from 'axios'
-import { Plus, Trash2, Loader2, Calendar as CalendarIcon, Clock } from 'lucide-vue-next'
+import {
+    Plus,
+    Trash2,
+    Loader2,
+    Calendar as CalendarIcon,
+    Clock,
+    Check,
+    X,
+    ChevronLeft,
+    ChevronRight,
+} from 'lucide-vue-next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,7 +19,6 @@ import {
     SheetContent,
     SheetHeader,
     SheetTitle,
-    SheetTrigger,
 } from '@/components/ui/sheet'
 import {
     Dialog,
@@ -31,7 +32,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/toast'
-import type { Calendar as CalendarType, CalendarItem, CalendarItemFormData } from '@/types/instructor'
+import WeeklyCalendarGrid from './Schedule/WeeklyCalendarGrid.vue'
+import type { CalendarEvent } from './Schedule/CalendarEventBlock.vue'
+import { useCalendarNavigation } from '@/composables/useCalendarNavigation'
+import type { CalendarItemFormData, CalendarItemResponse } from '@/types/instructor'
 
 interface Props {
     instructorId: number
@@ -39,64 +43,108 @@ interface Props {
 
 const props = defineProps<Props>()
 
-// State
-const loading = ref(true)
-const calendars = ref<CalendarType[]>([])
-const isAddSheetOpen = ref(false)
-const isDeleteDialogOpen = ref(false)
-const itemToDelete = ref<CalendarItem | null>(null)
-const formLoading = ref(false)
+// ── Navigation ───────────────────────────────────────────
+const {
+    weekDays,
+    weekStartFormatted,
+    weekEndFormatted,
+    goToNextWeek,
+    goToPreviousWeek,
+    goToToday,
+} = useCalendarNavigation()
 
-// Form data
-const formData = ref<CalendarItemFormData>({
+// ── State ────────────────────────────────────────────────
+const loading = ref(true)
+const isCreateSheetOpen = ref(false)
+const isEditSheetOpen = ref(false)
+const isDeleteDialogOpen = ref(false)
+const formLoading = ref(false)
+const events = ref<CalendarEvent[]>([])
+
+// Map of backend items by ID for quick lookup
+const itemsMap = ref<Map<number, CalendarItemResponse>>(new Map())
+
+// ── Form state ───────────────────────────────────────────
+const createForm = ref<CalendarItemFormData>({
     date: '',
     start_time: '',
     end_time: '',
+    is_available: true,
 })
 
-// Schedule X calendar instance
-const calendar = createCalendar({
-    views: [createViewWeek()],
-    defaultView: 'week',
-    events: [],
-    callbacks: {
-        onEventClick(calendarEvent) {
-            // When event is clicked, show delete confirmation
-            const item = calendars.value
-                .flatMap((cal) => cal.calendar_items)
-                .find((item) => item.id === Number(calendarEvent.id))
-
-            if (item) {
-                itemToDelete.value = item
-                isDeleteDialogOpen.value = true
-            }
-        },
-    },
+const editForm = ref<{
+    id: number
+    date: string
+    start_time: string
+    end_time: string
+    is_available: boolean
+}>({
+    id: 0,
+    date: '',
+    start_time: '',
+    end_time: '',
+    is_available: true,
 })
 
-// Computed
-const calendarEvents = computed((): CalendarEvent[] => {
-    return calendars.value.flatMap((cal) =>
-        cal.calendar_items.map((item) => ({
-            id: String(item.id),
-            title: `${item.start_time.substring(0, 5)} - ${item.end_time.substring(0, 5)}`,
-            start: `${cal.date} ${item.start_time}`,
-            end: `${cal.date} ${item.end_time}`,
-        }))
-    )
-})
+// ── Helpers ──────────────────────────────────────────────
+/** Normalise "HH:MM:SS" or "HH:MM" → "HH:MM" */
+const normaliseTime = (t: string): string => t.substring(0, 5)
 
-const hasCalendarItems = computed(() => calendars.value.some((cal) => cal.calendar_items.length > 0))
+const timeToMinutes = (time: string): number => {
+    const [h, m] = time.split(':').map(Number)
+    return h * 60 + m
+}
 
-// Load calendar data
-const loadCalendar = async () => {
-    loading.value = true
+const minutesToTime = (minutes: number): string => {
+    const h = Math.floor(minutes / 60) % 24
+    const m = minutes % 60
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+/** Convert backend item to grid event */
+function toCalendarEvent(item: CalendarItemResponse): CalendarEvent {
+    return {
+        id: item.id,
+        date: item.date,
+        startTime: item.start_time,
+        endTime: item.end_time,
+        isAvailable: item.is_available,
+    }
+}
+
+/** Rebuild events array from itemsMap */
+function rebuildEvents() {
+    events.value = Array.from(itemsMap.value.values()).map(toCalendarEvent)
+}
+
+// ── Data loading ─────────────────────────────────────────
+async function loadCalendarRange(startDate: string, endDate: string) {
     try {
-        const response = await axios.get(`/instructors/${props.instructorId}/calendar`)
-        calendars.value = response.data.calendars || []
+        const response = await axios.get(
+            `/instructors/${props.instructorId}/calendar`,
+            { params: { start_date: startDate, end_date: endDate } },
+        )
 
-        // Update calendar events
-        calendar.events.set(calendarEvents.value)
+        const calendars = response.data.calendar || []
+        const newItemsMap = new Map<number, CalendarItemResponse>()
+
+        for (const cal of calendars) {
+            for (const item of cal.items) {
+                const calItem: CalendarItemResponse = {
+                    id: item.id,
+                    calendar_id: item.calendar_id ?? cal.id,
+                    date: item.date ?? cal.date,
+                    start_time: item.start_time,
+                    end_time: item.end_time,
+                    is_available: item.is_available,
+                    status: item.status,
+                }
+                newItemsMap.set(item.id, calItem)
+            }
+        }
+
+        itemsMap.value = newItemsMap
+        rebuildEvents()
     } catch (error: any) {
         const message = error.response?.data?.message || 'Failed to load calendar'
         toast({ title: message, variant: 'destructive' })
@@ -105,15 +153,33 @@ const loadCalendar = async () => {
     }
 }
 
-// Add time slot
-const handleAddSubmit = async () => {
-    // Client-side validation
-    if (!formData.value.date || !formData.value.start_time || !formData.value.end_time) {
+// Reload when week changes
+watch(weekStartFormatted, () => {
+    loadCalendarRange(weekStartFormatted.value, weekEndFormatted.value)
+})
+
+// ── Click on empty slot → open create sheet ──────────────
+function handleSlotClick(date: string, time: string) {
+    const startMinutes = timeToMinutes(time)
+    const endMinutes = startMinutes + 60
+
+    createForm.value = {
+        date,
+        start_time: time,
+        end_time: minutesToTime(endMinutes),
+        is_available: true,
+    }
+    isCreateSheetOpen.value = true
+}
+
+// ── Create time slot ─────────────────────────────────────
+async function handleCreateSubmit() {
+    if (!createForm.value.date || !createForm.value.start_time || !createForm.value.end_time) {
         toast({ title: 'Please fill in all fields', variant: 'destructive' })
         return
     }
 
-    if (formData.value.end_time <= formData.value.start_time) {
+    if (createForm.value.end_time <= createForm.value.start_time) {
         toast({ title: 'End time must be after start time', variant: 'destructive' })
         return
     }
@@ -122,32 +188,15 @@ const handleAddSubmit = async () => {
     try {
         const response = await axios.post(
             `/instructors/${props.instructorId}/calendar/items`,
-            formData.value
+            createForm.value,
         )
 
-        // Add new calendar or update existing
-        const newItem = response.data.calendar_item
-        const calendarDate = response.data.calendar
-
-        const existingCalendar = calendars.value.find((cal) => cal.date === calendarDate.date)
-
-        if (existingCalendar) {
-            existingCalendar.calendar_items.push(newItem)
-        } else {
-            calendars.value.push({
-                ...calendarDate,
-                calendar_items: [newItem],
-            })
-        }
-
-        // Update calendar events
-        calendar.events.set(calendarEvents.value)
+        const newItem: CalendarItemResponse = response.data.calendar_item
+        itemsMap.value.set(newItem.id, newItem)
+        rebuildEvents()
 
         toast({ title: 'Time slot added successfully!' })
-
-        // Reset form and close sheet
-        formData.value = { date: '', start_time: '', end_time: '' }
-        isAddSheetOpen.value = false
+        isCreateSheetOpen.value = false
     } catch (error: any) {
         const message = error.response?.data?.message || 'Failed to add time slot'
         toast({ title: message, variant: 'destructive' })
@@ -156,33 +205,105 @@ const handleAddSubmit = async () => {
     }
 }
 
-// Delete time slot
-const handleDelete = async () => {
-    if (!itemToDelete.value) return
+// ── Click on event → open edit sheet ─────────────────────
+function handleEventClick(event: CalendarEvent) {
+    const item = itemsMap.value.get(event.id)
+    if (!item) return
 
+    editForm.value = {
+        id: item.id,
+        date: item.date,
+        start_time: normaliseTime(item.start_time),
+        end_time: normaliseTime(item.end_time),
+        is_available: item.is_available,
+    }
+    isEditSheetOpen.value = true
+}
+
+// ── Edit time slot ───────────────────────────────────────
+async function handleEditSubmit() {
+    formLoading.value = true
+    try {
+        const response = await axios.put(
+            `/instructors/${props.instructorId}/calendar/items/${editForm.value.id}`,
+            {
+                date: editForm.value.date,
+                start_time: editForm.value.start_time,
+                end_time: editForm.value.end_time,
+                is_available: editForm.value.is_available,
+            },
+        )
+
+        const updated: CalendarItemResponse = response.data.calendar_item
+        itemsMap.value.set(updated.id, updated)
+        rebuildEvents()
+
+        toast({ title: 'Time slot updated successfully!' })
+        isEditSheetOpen.value = false
+    } catch (error: any) {
+        const message = error.response?.data?.message || 'Failed to update time slot'
+        toast({ title: message, variant: 'destructive' })
+    } finally {
+        formLoading.value = false
+    }
+}
+
+// ── Drag-and-drop move ───────────────────────────────────
+async function handleEventMove(eventId: number, newDate: string, newStartTime: string, newEndTime: string) {
+    const item = itemsMap.value.get(eventId)
+    if (!item) return
+
+    // Optimistically update
+    const oldItem = { ...item }
+    item.date = newDate
+    item.start_time = newStartTime
+    item.end_time = newEndTime
+    rebuildEvents()
+
+    try {
+        const response = await axios.put(
+            `/instructors/${props.instructorId}/calendar/items/${eventId}`,
+            {
+                date: newDate,
+                start_time: newStartTime,
+                end_time: newEndTime,
+                is_available: item.is_available,
+            },
+        )
+
+        const updated: CalendarItemResponse = response.data.calendar_item
+        itemsMap.value.set(updated.id, updated)
+        rebuildEvents()
+
+        toast({ title: 'Time slot moved successfully!' })
+    } catch (error: any) {
+        // Revert on error
+        itemsMap.value.set(eventId, oldItem as CalendarItemResponse)
+        rebuildEvents()
+
+        const message = error.response?.data?.message || 'Failed to move time slot'
+        toast({ title: message, variant: 'destructive' })
+    }
+}
+
+// ── Delete time slot ─────────────────────────────────────
+function openDeleteDialog() {
+    isEditSheetOpen.value = false
+    isDeleteDialogOpen.value = true
+}
+
+async function handleDelete() {
     formLoading.value = true
     try {
         await axios.delete(
-            `/instructors/${props.instructorId}/calendar/items/${itemToDelete.value.id}`
+            `/instructors/${props.instructorId}/calendar/items/${editForm.value.id}`,
         )
 
-        // Remove from local state
-        calendars.value = calendars.value
-            .map((cal) => ({
-                ...cal,
-                calendar_items: cal.calendar_items.filter(
-                    (item) => item.id !== itemToDelete.value!.id
-                ),
-            }))
-            .filter((cal) => cal.calendar_items.length > 0)
-
-        // Update calendar events
-        calendar.events.set(calendarEvents.value)
+        itemsMap.value.delete(editForm.value.id)
+        rebuildEvents()
 
         toast({ title: 'Time slot removed successfully!' })
-
         isDeleteDialogOpen.value = false
-        itemToDelete.value = null
     } catch (error: any) {
         const message = error.response?.data?.message || 'Failed to delete time slot'
         toast({ title: message, variant: 'destructive' })
@@ -191,111 +312,247 @@ const handleDelete = async () => {
     }
 }
 
-// Cancel delete
-const handleCancelDelete = () => {
-    isDeleteDialogOpen.value = false
-    itemToDelete.value = null
-}
+// ── Week label ───────────────────────────────────────────
+function formatWeekLabel(days: Date[]): string {
+    if (days.length === 0) return ''
+    const first = days[0]
+    const last = days[6]
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-// Load data on mount
-onMounted(() => {
-    loadCalendar()
-})
-
-// Set today as default date when sheet opens
-const handleSheetOpenChange = (open: boolean) => {
-    isAddSheetOpen.value = open
-    if (open && !formData.value.date) {
-        // Set default date to today
-        const today = new Date().toISOString().split('T')[0]
-        formData.value.date = today
+    if (first.getMonth() === last.getMonth()) {
+        return `${first.getDate()} - ${last.getDate()} ${monthNames[first.getMonth()]} ${first.getFullYear()}`
     }
+    return `${first.getDate()} ${monthNames[first.getMonth()]} - ${last.getDate()} ${monthNames[last.getMonth()]} ${first.getFullYear()}`
 }
+
+// ── Mount ────────────────────────────────────────────────
+onMounted(() => {
+    loading.value = true
+    loadCalendarRange(weekStartFormatted.value, weekEndFormatted.value)
+})
 </script>
 
 <template>
     <div class="flex flex-col gap-6">
-        <!-- Calendar Header Card -->
-        <Card>
-            <CardHeader>
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-2">
-                        <CalendarIcon class="h-5 w-5" />
-                        <CardTitle>Weekly Schedule</CardTitle>
-                    </div>
-
-                    <!-- Add Time Slot Button -->
-                    <Sheet :open="isAddSheetOpen" @update:open="handleSheetOpenChange">
-                        <SheetTrigger as-child>
-                            <Button class="min-w-[140px]">
-                                <Plus class="h-4 w-4 mr-2" />
-                                Add Time Slot
-                            </Button>
-                        </SheetTrigger>
-                        <SheetContent side="right">
-                            <SheetHeader>
-                                <SheetTitle class="flex items-center gap-2">
-                                    <Clock class="h-5 w-5" />
-                                    Add Time Slot
-                                </SheetTitle>
-                            </SheetHeader>
-
-                            <form @submit.prevent="handleAddSubmit" class="mt-6 space-y-6 px-6 py-4">
-                                <!-- Date -->
-                                <div class="space-y-2">
-                                    <Label for="date">Date</Label>
-                                    <Input
-                                        id="date"
-                                        v-model="formData.date"
-                                        type="date"
-                                        :min="new Date().toISOString().split('T')[0]"
-                                        required
-                                    />
-                                </div>
-
-                                <!-- Start Time -->
-                                <div class="space-y-2">
-                                    <Label for="start_time">Start Time</Label>
-                                    <Input
-                                        id="start_time"
-                                        v-model="formData.start_time"
-                                        type="time"
-                                        required
-                                    />
-                                </div>
-
-                                <!-- End Time -->
-                                <div class="space-y-2">
-                                    <Label for="end_time">End Time</Label>
-                                    <Input
-                                        id="end_time"
-                                        v-model="formData.end_time"
-                                        type="time"
-                                        required
-                                    />
-                                </div>
-
-                                <!-- Submit Button -->
-                                <Button
-                                    type="submit"
-                                    :disabled="formLoading"
-                                    class="w-full min-w-[120px]"
-                                >
-                                    <Loader2 v-if="formLoading" class="animate-spin mr-2 h-4 w-4" />
-                                    <Plus v-else class="h-4 w-4 mr-2" />
-                                    Add Time Slot
-                                </Button>
-                            </form>
-                        </SheetContent>
-                    </Sheet>
+  
+        <!-- Week Navigation + Calendar Grid -->
+        <Card class="!pb-6 !pt-0">
+            <!-- Navigation Bar -->
+            <div class="flex items-center justify-between border-b border-border px-4 py-3">
+                <div class="flex items-center gap-2">
+                    <Button variant="outline" size="icon" @click="goToPreviousWeek">
+                        <ChevronLeft class="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="sm" @click="goToToday">
+                        Today
+                    </Button>
+                    <Button variant="outline" size="icon" @click="goToNextWeek">
+                        <ChevronRight class="h-4 w-4" />
+                    </Button>
                 </div>
-            </CardHeader>
+
+                <span class="text-sm font-medium text-foreground">
+                    {{ formatWeekLabel(weekDays) }}
+                </span>
+            </div>
+
+            <!-- Calendar Grid -->
+            <CardContent class="p-0">
+                <div v-if="loading" class="space-y-4 p-6">
+                    <Skeleton class="h-8 w-full" />
+                    <Skeleton class="h-[500px] w-full" />
+                </div>
+                <div v-else class="overflow-x-auto">
+                    <div class="min-w-[700px]">
+                        <WeeklyCalendarGrid
+                            :week-days="weekDays"
+                            :events="events"
+                            @click-slot="handleSlotClick"
+                            @event-click="handleEventClick"
+                            @event-move="handleEventMove"
+                        />
+                    </div>
+                </div>
+            </CardContent>
         </Card>
 
-        <!-- Calendar Card -->
-       
+        <!-- Create Time Slot Sheet -->
+        <Sheet v-model:open="isCreateSheetOpen">
+            <SheetContent side="right">
+                <SheetHeader>
+                    <SheetTitle class="flex items-center gap-2">
+                        <Clock class="h-5 w-5" />
+                        Add Time Slot
+                    </SheetTitle>
+                </SheetHeader>
+
+                <form @submit.prevent="handleCreateSubmit" class="mt-6 space-y-6 px-6 py-4">
+                    <div class="space-y-2">
+                        <Label for="create-date">Date</Label>
+                        <Input
+                            id="create-date"
+                            v-model="createForm.date"
+                            type="date"
+                            required
+                        />
+                    </div>
+
+                    <div class="space-y-2">
+                        <Label for="create-start">Start Time</Label>
+                        <Input
+                            id="create-start"
+                            v-model="createForm.start_time"
+                            type="time"
+                            step="900"
+                            required
+                        />
+                    </div>
+
+                    <div class="space-y-2">
+                        <Label for="create-end">End Time</Label>
+                        <Input
+                            id="create-end"
+                            v-model="createForm.end_time"
+                            type="time"
+                            step="900"
+                            required
+                        />
+                    </div>
+
+                    <!-- Status Toggle -->
+                    <div class="space-y-2">
+                        <Label>Status</Label>
+                        <div class="flex gap-2">
+                            <Button
+                                type="button"
+                                :variant="createForm.is_available ? 'default' : 'outline'"
+                                class="flex-1"
+                                @click="createForm.is_available = true"
+                            >
+                                <Check class="mr-2 h-4 w-4" />
+                                Available
+                            </Button>
+                            <Button
+                                type="button"
+                                :variant="!createForm.is_available ? 'destructive' : 'outline'"
+                                class="flex-1"
+                                @click="createForm.is_available = false"
+                            >
+                                <X class="mr-2 h-4 w-4" />
+                                Unavailable
+                            </Button>
+                        </div>
+                    </div>
+
+                    <Button
+                        type="submit"
+                        :disabled="formLoading"
+                        class="w-full min-w-[120px]"
+                    >
+                        <Loader2 v-if="formLoading" class="mr-2 h-4 w-4 animate-spin" />
+                        <Plus v-else class="mr-2 h-4 w-4" />
+                        Add Time Slot
+                    </Button>
+                </form>
+            </SheetContent>
+        </Sheet>
+
+        <!-- Edit Time Slot Sheet -->
+        <Sheet v-model:open="isEditSheetOpen">
+            <SheetContent side="right">
+                <SheetHeader>
+                    <SheetTitle class="flex items-center gap-2">
+                        <Clock class="h-5 w-5" />
+                        Edit Time Slot
+                    </SheetTitle>
+                </SheetHeader>
+
+                <form @submit.prevent="handleEditSubmit" class="mt-6 space-y-6 px-6 py-4">
+                    <div class="space-y-2">
+                        <Label for="edit-date">Date</Label>
+                        <Input
+                            id="edit-date"
+                            v-model="editForm.date"
+                            type="date"
+                            required
+                        />
+                    </div>
+
+                    <div class="space-y-2">
+                        <Label for="edit-start">Start Time</Label>
+                        <Input
+                            id="edit-start"
+                            v-model="editForm.start_time"
+                            type="time"
+                            step="900"
+                            required
+                        />
+                    </div>
+
+                    <div class="space-y-2">
+                        <Label for="edit-end">End Time</Label>
+                        <Input
+                            id="edit-end"
+                            v-model="editForm.end_time"
+                            type="time"
+                            step="900"
+                            required
+                        />
+                    </div>
+
+                    <!-- Status Toggle -->
+                    <div class="space-y-2">
+                        <Label>Status</Label>
+                        <div class="flex gap-2">
+                            <Button
+                                type="button"
+                                :variant="editForm.is_available ? 'default' : 'outline'"
+                                class="flex-1"
+                                @click="editForm.is_available = true"
+                            >
+                                <Check class="mr-2 h-4 w-4" />
+                                Available
+                            </Button>
+                            <Button
+                                type="button"
+                                :variant="!editForm.is_available ? 'destructive' : 'outline'"
+                                class="flex-1"
+                                @click="editForm.is_available = false"
+                            >
+                                <X class="mr-2 h-4 w-4" />
+                                Unavailable
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <Button
+                            type="submit"
+                            :disabled="formLoading"
+                            class="min-w-[120px] flex-1"
+                        >
+                            <Loader2 v-if="formLoading" class="mr-2 h-4 w-4 animate-spin" />
+                            <Check v-else class="mr-2 h-4 w-4" />
+                            Save Changes
+                        </Button>
+
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            :disabled="formLoading"
+                            class="min-w-[100px]"
+                            @click="openDeleteDialog"
+                        >
+                            <Trash2 class="mr-2 h-4 w-4" />
+                            Delete
+                        </Button>
+                    </div>
+                </form>
+            </SheetContent>
+        </Sheet>
+
         <!-- Delete Confirmation Dialog -->
-        <Dialog :open="isDeleteDialogOpen" @update:open="isDeleteDialogOpen">
+        <Dialog v-model:open="isDeleteDialogOpen">
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Remove Time Slot</DialogTitle>
@@ -304,17 +561,22 @@ const handleSheetOpenChange = (open: boolean) => {
                     </DialogDescription>
                 </DialogHeader>
 
-                <div v-if="itemToDelete" class="py-4">
+                <div class="py-4">
                     <p class="text-sm text-muted-foreground">
-                        <strong>Time:</strong>
-                        {{ itemToDelete.start_time.substring(0, 5) }} - {{ itemToDelete.end_time.substring(0, 5) }}
+                        <strong>Date:</strong> {{ editForm.date }}
+                    </p>
+                    <p class="text-sm text-muted-foreground">
+                        <strong>Time:</strong> {{ editForm.start_time }} - {{ editForm.end_time }}
+                    </p>
+                    <p class="text-sm text-muted-foreground">
+                        <strong>Status:</strong> {{ editForm.is_available ? 'Available' : 'Unavailable' }}
                     </p>
                 </div>
 
                 <DialogFooter>
                     <Button
                         variant="outline"
-                        @click="handleCancelDelete"
+                        @click="isDeleteDialogOpen = false"
                         :disabled="formLoading"
                         class="min-w-[80px]"
                     >
@@ -326,8 +588,8 @@ const handleSheetOpenChange = (open: boolean) => {
                         :disabled="formLoading"
                         class="min-w-[100px]"
                     >
-                        <Loader2 v-if="formLoading" class="animate-spin mr-2 h-4 w-4" />
-                        <Trash2 v-else class="h-4 w-4 mr-2" />
+                        <Loader2 v-if="formLoading" class="mr-2 h-4 w-4 animate-spin" />
+                        <Trash2 v-else class="mr-2 h-4 w-4" />
                         {{ formLoading ? 'Removing...' : 'Remove' }}
                     </Button>
                 </DialogFooter>
@@ -335,15 +597,3 @@ const handleSheetOpenChange = (open: boolean) => {
         </Dialog>
     </div>
 </template>
-
-<style scoped>
-.schedule-x-calendar-wrapper {
-    width: 100%;
-    height: 600px;
-}
-
-/* Ensure Schedule X calendar fills the wrapper */
-:deep(.sx__calendar-wrapper) {
-    height: 100%;
-}
-</style>
