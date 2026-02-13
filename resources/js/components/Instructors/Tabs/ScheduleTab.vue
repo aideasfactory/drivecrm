@@ -86,6 +86,16 @@ const editForm = ref<{
     is_available: true,
 })
 
+// ── Time slot options (2-hour blocks within 08:00–18:00) ─
+const SLOT_DURATION_HOURS = 2
+const startTimeOptions = [
+    { value: '08:00', label: '08:00' },
+    { value: '10:00', label: '10:00' },
+    { value: '12:00', label: '12:00' },
+    { value: '14:00', label: '14:00' },
+    { value: '16:00', label: '16:00' },
+]
+
 // ── Helpers ──────────────────────────────────────────────
 /** Normalise "HH:MM:SS" or "HH:MM" → "HH:MM" */
 const normaliseTime = (t: string): string => t.substring(0, 5)
@@ -100,6 +110,34 @@ const minutesToTime = (minutes: number): string => {
     const m = minutes % 60
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
+
+/** Calculate end time from start time (adds SLOT_DURATION_HOURS) */
+function calcEndTime(startTime: string): string {
+    const minutes = timeToMinutes(startTime)
+    return minutesToTime(minutes + SLOT_DURATION_HOURS * 60)
+}
+
+/** Snap a time string to the nearest valid start time option */
+function snapToStartOption(time: string): string {
+    const minutes = timeToMinutes(time)
+    const hour = Math.floor(minutes / 60)
+    const snappedHour = hour % 2 === 0 ? hour : hour - 1
+    const clamped = Math.max(8, Math.min(snappedHour, 16))
+    return `${String(clamped).padStart(2, '0')}:00`
+}
+
+// Auto-calculate end time when start time changes
+watch(() => createForm.value.start_time, (newStart) => {
+    if (newStart) {
+        createForm.value.end_time = calcEndTime(newStart)
+    }
+})
+
+watch(() => editForm.value.start_time, (newStart) => {
+    if (newStart) {
+        editForm.value.end_time = calcEndTime(newStart)
+    }
+})
 
 /** Convert backend item to grid event */
 function toCalendarEvent(item: CalendarItemResponse): CalendarEvent {
@@ -160,13 +198,12 @@ watch(weekStartFormatted, () => {
 
 // ── Click on empty slot → open create sheet ──────────────
 function handleSlotClick(date: string, time: string) {
-    const startMinutes = timeToMinutes(time)
-    const endMinutes = startMinutes + 60
+    const startTime = snapToStartOption(time)
 
     createForm.value = {
         date,
-        start_time: time,
-        end_time: minutesToTime(endMinutes),
+        start_time: startTime,
+        end_time: calcEndTime(startTime),
         is_available: true,
     }
     isCreateSheetOpen.value = true
@@ -210,11 +247,12 @@ function handleEventClick(event: CalendarEvent) {
     const item = itemsMap.value.get(event.id)
     if (!item) return
 
+    const startTime = snapToStartOption(normaliseTime(item.start_time))
     editForm.value = {
         id: item.id,
         date: item.date,
-        start_time: normaliseTime(item.start_time),
-        end_time: normaliseTime(item.end_time),
+        start_time: startTime,
+        end_time: calcEndTime(startTime),
         is_available: item.is_available,
     }
     isEditSheetOpen.value = true
@@ -399,24 +437,28 @@ onMounted(() => {
 
                     <div class="space-y-2">
                         <Label for="create-start">Start Time</Label>
-                        <Input
+                        <select
                             id="create-start"
                             v-model="createForm.start_time"
-                            type="time"
-                            step="900"
                             required
-                        />
+                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                            <option value="" disabled>Select start time</option>
+                            <option
+                                v-for="opt in startTimeOptions"
+                                :key="opt.value"
+                                :value="opt.value"
+                            >
+                                {{ opt.label }}
+                            </option>
+                        </select>
                     </div>
 
                     <div class="space-y-2">
-                        <Label for="create-end">End Time</Label>
-                        <Input
-                            id="create-end"
-                            v-model="createForm.end_time"
-                            type="time"
-                            step="900"
-                            required
-                        />
+                        <Label>End Time</Label>
+                        <div class="flex h-10 w-full items-center rounded-md border border-input bg-muted/50 px-3 text-sm text-muted-foreground">
+                            {{ createForm.end_time || '—' }}
+                        </div>
                     </div>
 
                     <!-- Status Toggle -->
@@ -480,24 +522,28 @@ onMounted(() => {
 
                     <div class="space-y-2">
                         <Label for="edit-start">Start Time</Label>
-                        <Input
+                        <select
                             id="edit-start"
                             v-model="editForm.start_time"
-                            type="time"
-                            step="900"
                             required
-                        />
+                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                            <option value="" disabled>Select start time</option>
+                            <option
+                                v-for="opt in startTimeOptions"
+                                :key="opt.value"
+                                :value="opt.value"
+                            >
+                                {{ opt.label }}
+                            </option>
+                        </select>
                     </div>
 
                     <div class="space-y-2">
-                        <Label for="edit-end">End Time</Label>
-                        <Input
-                            id="edit-end"
-                            v-model="editForm.end_time"
-                            type="time"
-                            step="900"
-                            required
-                        />
+                        <Label>End Time</Label>
+                        <div class="flex h-10 w-full items-center rounded-md border border-input bg-muted/50 px-3 text-sm text-muted-foreground">
+                            {{ editForm.end_time || '—' }}
+                        </div>
                     </div>
 
                     <!-- Status Toggle -->

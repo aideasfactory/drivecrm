@@ -19,8 +19,6 @@ class CalendarItem extends Model
     ];
 
     protected $casts = [
-        'start_time' => 'datetime:H:i',
-        'end_time' => 'datetime:H:i',
         'is_available' => 'boolean',
     ];
 
