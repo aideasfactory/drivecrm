@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Actions\CreateInstructorCalendarDataAction;
 use App\Actions\FetchPostcodeCoordinatesAction;
 use App\Actions\FindInstructorsByPostcodeSectorAction;
 use App\Actions\Instructor\CreateCalendarItemAction;
@@ -19,7 +18,6 @@ use App\Actions\Instructor\UpdateCalendarItemAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Shared\Message\SendBroadcastMessageAction;
 use App\Enums\UserRole;
-use App\Models\Calendar;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
 use App\Models\Location;
@@ -34,7 +32,6 @@ class InstructorService
     public function __construct(
         protected FetchPostcodeCoordinatesAction $fetchPostcodeCoordinates,
         protected FindInstructorsByPostcodeSectorAction $findInstructorsByPostcodeSector,
-        protected CreateInstructorCalendarDataAction $createInstructorCalendarData,
         protected GetInstructorPackagesAction $getInstructorPackages,
         protected CreateInstructorPackageAction $createInstructorPackage,
         protected GetInstructorLocationsAction $getInstructorLocations,
@@ -113,27 +110,6 @@ class InstructorService
                     Location::create([
                         'instructor_id' => $instructor->id,
                         'postcode_sector' => strtoupper(trim($postcodeSector)),
-                    ]);
-                }
-            }
-
-            // 5. Create sample calendar data for testing
-            $calendarData = ($this->createInstructorCalendarData)();
-
-            foreach ($calendarData['calendars'] as $calendarInfo) {
-                // Create calendar for the date
-                $calendar = Calendar::create([
-                    'instructor_id' => $instructor->id,
-                    'date' => $calendarInfo['date'],
-                ]);
-
-                // Create time slots for this calendar
-                foreach ($calendarInfo['items'] as $itemData) {
-                    CalendarItem::create([
-                        'calendar_id' => $calendar->id,
-                        'start_time' => $itemData['start_time'],
-                        'end_time' => $itemData['end_time'],
-                        'is_available' => $itemData['is_available'],
                     ]);
                 }
             }

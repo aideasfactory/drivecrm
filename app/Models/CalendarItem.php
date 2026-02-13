@@ -20,6 +20,8 @@ class CalendarItem extends Model
 
     protected $casts = [
         'is_available' => 'boolean',
+        'start_time' => 'datetime:H:i:s',
+        'end_time' => 'datetime:H:i:s',
     ];
 
     public function calendar(): BelongsTo
