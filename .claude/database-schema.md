@@ -9,6 +9,9 @@ This document provides a comprehensive overview of the database structure for th
 - `Instructor` → Creates `Packages`, Teaches `Lessons`, Receives `Payouts`
 - `Student` → Purchases `Orders` → Contains `Lessons`
 - `Order` = Student + Instructor + Package
+- `ResourceFolder` → Nested folders (self-referencing) → Contains `Resource` items (videos, PDFs)
+- `StudentPickupPoint` → Pickup/drop-off locations per student (geocoded)
+- `StudentChecklistItem` → Progress tracking items per student (theory test, practical test, etc.)
 
 **Key Relationships:**
 ```
@@ -130,6 +133,8 @@ User (role=student) → Student → Purchases Orders → Contains Lessons → Ha
                              → Has ActivityLogs (morphMany)
                              → Has Contacts (morphMany)
                              → Has Notes (morphMany)
+                             → Has StudentPickupPoints (hasMany)
+                             → Has StudentChecklistItems (hasMany)
 
 Package → Used in Orders
 
@@ -140,6 +145,9 @@ Contact → Morphs to Instructor or Student
 Note → Morphs to Instructor or Student
 
 Message → Belongs to User (sender via 'from') + Belongs to User (recipient via 'to')
+
+ResourceFolder → Self-referencing (parent/children) → Has many Resources
+Resource → Belongs to ResourceFolder (videos, PDFs stored on S3)
 ```
 
 ---
@@ -238,6 +246,8 @@ Extended profile for users with student role.
 | `contact_terms` | boolean | NULLABLE | Booker accepted terms |
 | `contact_communications` | boolean | NULLABLE | Booker marketing consent |
 | `owns_account` | boolean | DEFAULT true | Learner owns this account |
+| `status` | varchar(50) | DEFAULT 'active' | Student status (active, inactive, on_hold, passed, failed, completed) |
+| `inactive_reason` | text | NULLABLE | Reason for status change (e.g., why student was made inactive) |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
@@ -248,10 +258,17 @@ Extended profile for users with student role.
 - Belongs to one `User`
 - Belongs to one `Instructor` (optional - assigned instructor)
 - Has many `Orders`
+- Has many `StudentPickupPoints`
+- Has many `StudentChecklistItems`
+
+**Status Values:**
+- `active` (default), `inactive`, `on_hold`, `passed`, `failed`, `completed`
 
 **Business Logic:**
 - Students can be assigned to a specific instructor
 - Students inherit instructor assignments from their orders
+- Status change to `inactive` should include a reason in `inactive_reason`
+- Removing a student from an instructor sets `instructor_id = null` (soft-remove)
 
 ---
 
@@ -349,6 +366,7 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 | `end_time` | time | NULLABLE | Scheduled end time |
 | `calendar_item_id` | bigint unsigned | FOREIGN KEY (calendar_items.id), NULLABLE, ON DELETE SET NULL | Associated calendar slot |
 | `completed_at` | datetime | NULLABLE | When lesson was completed |
+| `summary` | text | NULLABLE | Instructor's summary of the lesson (written at sign-off, used for AI resource matching) |
 | `status` | enum('pending', 'completed', 'cancelled') | DEFAULT 'pending' | Lesson status |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
@@ -374,6 +392,7 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 - Scheduling information (date, start_time, end_time) can be set when booking lesson
 - Links to calendar_item for slot availability tracking
 - Instructor gets paid after lesson is completed
+- `summary` is written by the instructor at sign-off time; used by AI (AWS Bedrock Nova) to match against resource tags and recommend relevant videos/PDFs to the student
 
 ---
 
@@ -499,6 +518,7 @@ Polymorphic emergency contacts for instructors and students. Supports a primary 
 | `relationship` | varchar(100) | NOT NULL | Relationship to the person |
 | `phone` | varchar(50) | NOT NULL | Phone number |
 | `email` | varchar(255) | NULLABLE | Email address |
+| `address` | text | NULLABLE | Contact's address |
 | `is_primary` | boolean | DEFAULT false | Whether this is the primary contact |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
@@ -704,7 +724,143 @@ Stores broadcast and direct messages between users. Supports soft deletes for au
 
 ---
 
-### 17. **sessions**
+### 17. **resource_folders**
+
+Hierarchical folder structure for organising resources (videos, PDFs). Self-referencing `parent_id` enables unlimited nesting depth. Owner-only feature.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique folder identifier |
+| `parent_id` | bigint unsigned | FOREIGN KEY (self), NULLABLE, ON DELETE CASCADE | Parent folder (NULL = root level) |
+| `name` | varchar(255) | NOT NULL | Folder display name |
+| `slug` | varchar(255) | NOT NULL | URL-friendly name (auto-generated) |
+| `sort_order` | integer | DEFAULT 0 | Display ordering within parent |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Indexes:**
+- Index on `parent_id`
+- Unique constraint on `(parent_id, slug)`
+
+**Relationships:**
+- Belongs to one `ResourceFolder` as parent (optional — NULL = root)
+- Has many `ResourceFolder` children (self-referencing)
+- Has many `Resource` items (videos, PDFs)
+
+**Business Logic:**
+- Root folders have `parent_id = NULL`
+- Deleting a folder cascades to all sub-folders and resources within
+- Slug is auto-generated from name on create/update
+- Example hierarchy: `Roundabouts` → `Turning right at roundabout`, `Turning left at roundabout`
+
+---
+
+### 18. **resources**
+
+Stores uploaded files (videos, PDFs) with metadata, descriptions, and tags for AI-powered search. Files stored on S3. Owner-only feature.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique resource identifier |
+| `resource_folder_id` | bigint unsigned | FOREIGN KEY (resource_folders.id), ON DELETE CASCADE | Parent folder |
+| `title` | varchar(255) | NOT NULL | Resource display title |
+| `description` | text | NULLABLE | Text description (used for AI search) |
+| `tags` | json | NULLABLE | Array of tag strings (used for AI search) |
+| `file_path` | varchar(500) | NOT NULL | S3 storage path |
+| `file_name` | varchar(255) | NOT NULL | Original filename at upload |
+| `file_size` | bigint unsigned | NOT NULL | File size in bytes |
+| `mime_type` | varchar(100) | NOT NULL | File MIME type (video/mp4, application/pdf, etc.) |
+| `thumbnail_path` | varchar(500) | NULLABLE | S3 thumbnail path (optional) |
+| `sort_order` | integer | DEFAULT 0 | Display ordering within folder |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Indexes:**
+- Index on `resource_folder_id`
+
+**Relationships:**
+- Belongs to one `ResourceFolder`
+
+**Business Logic:**
+- Supports video files (video/mp4, video/webm, etc.) and PDFs (application/pdf)
+- Files uploaded to S3 disk
+- Tags stored as JSON array of strings, e.g. `["roundabout", "right turn", "signalling"]`
+- Description and tags will be used for AI-powered video/document suggestions at a later date
+- `mime_type` determines rendering: video player for videos, PDF viewer/download for PDFs
+- Deleting a resource also removes the file from S3
+
+---
+
+### 19. **student_pickup_points**
+
+Stores pickup/drop-off locations for students. Each student can have multiple pickup points with one designated as default. Postcode is geocoded to lat/lng via postcodes.io API.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique pickup point identifier |
+| `student_id` | bigint unsigned | FOREIGN KEY (students.id), ON DELETE CASCADE | Reference to student |
+| `label` | varchar(255) | NOT NULL | Location name (e.g., "Home", "School", "Work") |
+| `address` | text | NOT NULL | Full address line |
+| `postcode` | varchar(10) | NOT NULL | UK postcode |
+| `latitude` | decimal(10,8) | NULLABLE | Geocoded latitude from postcode |
+| `longitude` | decimal(11,8) | NULLABLE | Geocoded longitude from postcode |
+| `is_default` | boolean | DEFAULT false | Whether this is the default pickup point |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Indexes:**
+- Index on `student_id`
+
+**Relationships:**
+- Belongs to one `Student`
+
+**Business Logic:**
+- Only one pickup point per student can be `is_default = true`
+- When setting a new default, all others for that student are unset
+- Postcode is geocoded on create/update via postcodes.io API (free, no API key)
+- Used for lesson scheduling and instructor route planning
+
+---
+
+### 20. **student_checklist_items**
+
+Tracks progress through standard checklist items for each student (e.g., theory test booking, practical test, licence checks). Items are lazy-seeded from a default list on first access.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique checklist item identifier |
+| `student_id` | bigint unsigned | FOREIGN KEY (students.id), ON DELETE CASCADE | Reference to student |
+| `key` | varchar(100) | NOT NULL | Unique slug identifier (e.g., "book_theory_test") |
+| `label` | varchar(255) | NOT NULL | Display label (e.g., "Book theory test") |
+| `category` | varchar(100) | NOT NULL | Category grouping (e.g., "Theory Test", "Practical Test", "General") |
+| `is_checked` | boolean | DEFAULT false | Whether the item has been completed |
+| `date` | date | NULLABLE | Associated date (e.g., when theory test is booked for) |
+| `notes` | text | NULLABLE | Optional notes about this item |
+| `sort_order` | integer | DEFAULT 0 | Display ordering |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Indexes:**
+- Unique constraint on `(student_id, key)`
+- Index on `student_id`
+
+**Relationships:**
+- Belongs to one `Student`
+
+**Default Items:**
+- **Theory Test**: Book theory test, Sit theory test
+- **Practical Test**: Schedule mock test, Sit mock test, Book practical test, Sit practical test
+- **General**: Agreed terms, Driving licence number, Eyesight checked
+
+**Business Logic:**
+- Default items are seeded lazily on first access (if student has no checklist items)
+- Checking an item opens a date picker modal; instructor adds a date and optional notes
+- Unchecking an item clears the date and notes
+- Items are grouped by category in the UI (3-column grid)
+
+---
+
+### 21. **sessions**
 
 Laravel's session storage.
 
@@ -719,7 +875,7 @@ Laravel's session storage.
 
 ---
 
-### 18. **cache**
+### 20. **cache**
 
 Laravel's cache storage.
 
@@ -731,7 +887,7 @@ Laravel's cache storage.
 
 ---
 
-### 19. **cache_locks**
+### 21. **cache_locks**
 
 Laravel's cache locking mechanism.
 
@@ -743,7 +899,7 @@ Laravel's cache locking mechanism.
 
 ---
 
-### 20. **jobs**
+### 22. **jobs**
 
 Laravel's queue system for background job processing.
 
@@ -759,7 +915,7 @@ Laravel's queue system for background job processing.
 
 ---
 
-### 21. **job_batches**
+### 23. **job_batches**
 
 Laravel's job batching system.
 
@@ -778,7 +934,7 @@ Laravel's job batching system.
 
 ---
 
-### 22. **failed_jobs**
+### 24. **failed_jobs**
 
 Laravel's failed jobs storage.
 
@@ -877,6 +1033,10 @@ Laravel's failed jobs storage.
 - **calendars:** Unique constraint on `(instructor_id, date)`
 - **calendar_items:** None
 - **messages:** `from`, `to`
+- **resource_folders:** `parent_id`, unique on `(parent_id, slug)`
+- **resources:** `resource_folder_id`
+- **student_pickup_points:** `student_id`
+- **student_checklist_items:** `student_id`, unique on `(student_id, key)`
 - **sessions:** `user_id`, `last_activity`
 - **jobs:** `queue`
 

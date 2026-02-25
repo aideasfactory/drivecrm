@@ -38,12 +38,7 @@ const statsCards = [
         title: 'Waiting List',
         value: props.instructor.stats.waiting_list,
         icon: Clock,
-    },
-    {
-        title: 'Open Enquiries',
-        value: props.instructor.stats.open_enquiries,
-        icon: Mail,
-    },
+    }
 ]
 </script>
 
@@ -99,50 +94,6 @@ const statsCards = [
                 </div>
             </CardContent>
         </Card>
-
-        <!-- Contact Details -->
-        <Card>
-            <CardHeader>
-                <CardTitle>Contact</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div class="flex flex-col gap-4">
-                    <div
-                        v-if="instructor.phone"
-                        class="flex items-center justify-between"
-                    >
-                        <div class="flex items-center gap-3">
-                            <Phone class="h-4 w-4 text-muted-foreground" />
-                            <div>
-                                <p class="text-sm font-medium">Phone</p>
-                                <p class="text-sm text-muted-foreground">
-                                    {{ instructor.phone }}
-                                </p>
-                            </div>
-                        </div>
-                        <Button variant="outline" size="sm">
-                            <Phone class="mr-2 h-4 w-4" />
-                            Call
-                        </Button>
-                    </div>
-
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <Mail class="h-4 w-4 text-muted-foreground" />
-                            <div>
-                                <p class="text-sm font-medium">Email</p>
-                                <p class="text-sm text-muted-foreground">
-                                    {{ instructor.email }}
-                                </p>
-                            </div>
-                        </div>
-                        <Button variant="outline" size="sm">
-                            <MessageSquare class="mr-2 h-4 w-4" />
-                            Message
-                        </Button>
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
+ 
     </div>
 </template>

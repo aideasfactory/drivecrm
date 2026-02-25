@@ -44,6 +44,7 @@ class GetStudentLessonsAction
                     'end_time' => $lesson->end_time?->format('H:i'),
                     'status' => $lesson->status->value,
                     'completed_at' => $lesson->completed_at?->toISOString(),
+                    'summary' => $lesson->summary,
                     'payment_status' => $lesson->lessonPayment?->status?->value ?? ($order->isUpfront() ? 'paid' : null),
                     'payment_mode' => $order->payment_mode->value,
                     'payout_status' => $lesson->payout?->status?->value,

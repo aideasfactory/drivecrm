@@ -13,12 +13,27 @@ use App\Actions\Shared\Message\SendMessageAction;
 use App\Actions\Shared\Note\CreateNoteAction;
 use App\Actions\Shared\Note\DeleteNoteAction;
 use App\Actions\Shared\Note\GetNotesAction;
+use App\Actions\Student\Checklist\GetStudentChecklistAction;
+use App\Actions\Student\Checklist\ToggleChecklistItemAction;
+use App\Actions\Student\Contact\AutoCreateEmergencyContactAction;
 use App\Actions\Student\GetStudentDetailAction;
+use App\Actions\Student\PickupPoint\CreatePickupPointAction;
+use App\Actions\Student\PickupPoint\DeletePickupPointAction;
+use App\Actions\Student\PickupPoint\GetStudentPickupPointsAction;
+use App\Actions\Student\PickupPoint\SetDefaultPickupPointAction;
+use App\Actions\Student\PickupPoint\UpdatePickupPointAction;
+use App\Actions\Student\Status\RemoveStudentFromInstructorAction;
+use App\Actions\Student\Status\UpdateStudentStatusAction;
+use App\Http\Requests\StorePickupPointRequest;
+use App\Http\Requests\UpdatePickupPointRequest;
+use App\Http\Requests\UpdateStudentStatusRequest;
 use App\Jobs\ProcessLessonSignOffJob;
 use App\Models\Contact;
 use App\Models\Lesson;
 use App\Models\Note;
 use App\Models\Student;
+use App\Models\StudentChecklistItem;
+use App\Models\StudentPickupPoint;
 use App\Services\LessonSignOffService;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
@@ -68,6 +83,7 @@ class PupilController extends Controller
             'relationship' => 'required|string|max:100',
             'phone' => 'required|string|max:50',
             'email' => 'nullable|email|max:255',
+            'address' => 'nullable|string|max:1000',
             'is_primary' => 'boolean',
         ]);
 
@@ -92,6 +108,7 @@ class PupilController extends Controller
             'relationship' => 'required|string|max:100',
             'phone' => 'required|string|max:50',
             'email' => 'nullable|email|max:255',
+            'address' => 'nullable|string|max:1000',
             'is_primary' => 'boolean',
         ]);
 
@@ -132,6 +149,26 @@ class PupilController extends Controller
         return response()->json([
             'contact' => $contact,
         ]);
+    }
+
+    /**
+     * Auto-create an emergency contact from the student's third-party contact details.
+     */
+    public function autoCreateEmergencyContact(Student $student): JsonResponse
+    {
+        $contact = app(AutoCreateEmergencyContactAction::class)($student);
+
+        if (! $contact) {
+            return response()->json([
+                'message' => 'No contact details available to auto-create, or contacts already exist.',
+                'created' => false,
+            ]);
+        }
+
+        return response()->json([
+            'contact' => $contact,
+            'created' => true,
+        ], 201);
     }
 
     /**
@@ -269,6 +306,10 @@ class PupilController extends Controller
      */
     public function signOffLesson(Student $student, Lesson $lesson): JsonResponse
     {
+        $data = request()->validate([
+            'summary' => 'required|string|max:5000',
+        ]);
+
         // Verify lesson belongs to this student (via order)
         $lessonBelongsToStudent = $student->orders()
             ->whereHas('lessons', fn ($q) => $q->where('id', $lesson->id))
@@ -290,7 +331,7 @@ class PupilController extends Controller
         }
 
         // Dispatch sign-off job for async processing
-        ProcessLessonSignOffJob::dispatch($lesson, $instructor);
+        ProcessLessonSignOffJob::dispatch($lesson, $instructor, $data['summary']);
 
         return response()->json([
             'message' => 'Lesson sign-off is being processed.',
@@ -325,6 +366,142 @@ class PupilController extends Controller
                 'per_page' => $logs->perPage(),
                 'last_page' => $logs->lastPage(),
             ],
+        ]);
+    }
+
+    /**
+     * Get pickup points for a student.
+     */
+    public function pickupPoints(Student $student): JsonResponse
+    {
+        $pickupPoints = app(GetStudentPickupPointsAction::class)($student);
+
+        return response()->json([
+            'pickup_points' => $pickupPoints,
+        ]);
+    }
+
+    /**
+     * Store a new pickup point for a student.
+     */
+    public function storePickupPoint(Student $student, StorePickupPointRequest $request): JsonResponse
+    {
+        $pickupPoint = app(CreatePickupPointAction::class)($student, $request->validated());
+
+        return response()->json([
+            'pickup_point' => $pickupPoint,
+        ], 201);
+    }
+
+    /**
+     * Update a pickup point for a student.
+     */
+    public function updatePickupPoint(Student $student, StudentPickupPoint $pickupPoint, UpdatePickupPointRequest $request): JsonResponse
+    {
+        if ($pickupPoint->student_id !== $student->id) {
+            return response()->json(['message' => 'Pickup point not found for this student.'], 404);
+        }
+
+        $pickupPoint = app(UpdatePickupPointAction::class)($pickupPoint, $request->validated());
+
+        return response()->json([
+            'pickup_point' => $pickupPoint,
+        ]);
+    }
+
+    /**
+     * Delete a pickup point for a student.
+     */
+    public function deletePickupPoint(Student $student, StudentPickupPoint $pickupPoint): JsonResponse
+    {
+        if ($pickupPoint->student_id !== $student->id) {
+            return response()->json(['message' => 'Pickup point not found for this student.'], 404);
+        }
+
+        app(DeletePickupPointAction::class)($pickupPoint);
+
+        return response()->json([
+            'message' => 'Pickup point deleted successfully.',
+        ]);
+    }
+
+    /**
+     * Set a pickup point as default for a student.
+     */
+    public function setDefaultPickupPoint(Student $student, StudentPickupPoint $pickupPoint): JsonResponse
+    {
+        if ($pickupPoint->student_id !== $student->id) {
+            return response()->json(['message' => 'Pickup point not found for this student.'], 404);
+        }
+
+        $pickupPoint = app(SetDefaultPickupPointAction::class)($pickupPoint);
+
+        return response()->json([
+            'pickup_point' => $pickupPoint,
+        ]);
+    }
+
+    /**
+     * Update the status of a student.
+     */
+    public function updateStatus(Student $student, UpdateStudentStatusRequest $request): JsonResponse
+    {
+        $student = app(UpdateStudentStatusAction::class)($student, $request->validated());
+
+        return response()->json([
+            'student' => $student,
+            'message' => 'Student status updated successfully.',
+        ]);
+    }
+
+    /**
+     * Remove a student from their assigned instructor.
+     */
+    public function removeStudent(Student $student): JsonResponse
+    {
+        if (! $student->instructor_id) {
+            return response()->json(['message' => 'Student is not assigned to an instructor.'], 422);
+        }
+
+        $student = app(RemoveStudentFromInstructorAction::class)($student);
+
+        return response()->json([
+            'student' => $student,
+            'message' => 'Student has been removed from the instructor.',
+        ]);
+    }
+
+    /**
+     * Get checklist items for a student (lazy-seeds defaults on first access).
+     */
+    public function checklist(Student $student): JsonResponse
+    {
+        $items = app(GetStudentChecklistAction::class)($student);
+
+        return response()->json([
+            'checklist_items' => $items,
+        ]);
+    }
+
+    /**
+     * Toggle a checklist item's checked state.
+     */
+    public function toggleChecklistItem(Student $student, StudentChecklistItem $checklistItem): JsonResponse
+    {
+        if ($checklistItem->student_id !== $student->id) {
+            return response()->json(['message' => 'Checklist item not found for this student.'], 404);
+        }
+
+        $data = request()->validate([
+            'is_checked' => 'required|boolean',
+            'date' => 'nullable|date',
+            'notes' => 'nullable|string|max:1000',
+        ]);
+
+        $checklistItem = app(ToggleChecklistItemAction::class)($checklistItem, $data);
+
+        return response()->json([
+            'checklist_item' => $checklistItem,
         ]);
     }
 }

@@ -4,6 +4,7 @@ import axios from 'axios'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -23,6 +24,13 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet'
 import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
+import {
     BookOpen,
     CheckCircle2,
     Clock,
@@ -31,6 +39,7 @@ import {
     Loader2,
     ClipboardCheck,
     CalendarDays,
+    FileText,
 } from 'lucide-vue-next'
 import { toast } from '@/components/ui/sonner'
 
@@ -46,6 +55,7 @@ interface Lesson {
     end_time: string | null
     status: 'pending' | 'completed' | 'cancelled'
     completed_at: string | null
+    summary: string | null
     payment_status: 'due' | 'paid' | 'refunded' | null
     payment_mode: 'upfront' | 'weekly'
     payout_status: 'pending' | 'paid' | 'failed' | null
@@ -67,6 +77,12 @@ const loading = ref(true)
 const isSignOffSheetOpen = ref(false)
 const signOffTarget = ref<Lesson | null>(null)
 const isSigningOff = ref(false)
+const summary = ref('')
+const errors = ref<Record<string, string>>({})
+
+// View summary dialog state
+const isViewSummaryOpen = ref(false)
+const viewSummaryTarget = ref<Lesson | null>(null)
 
 // Computed
 const pendingLessons = computed(() => lessons.value.filter((l) => l.status === 'pending'))
@@ -148,19 +164,34 @@ const loadLessons = async () => {
     }
 }
 
+const openViewSummary = (lesson: Lesson) => {
+    viewSummaryTarget.value = lesson
+    isViewSummaryOpen.value = true
+}
+
 // Sign-off flow
 const openSignOffSheet = (lesson: Lesson) => {
     signOffTarget.value = lesson
+    summary.value = ''
+    errors.value = {}
     isSignOffSheetOpen.value = true
 }
 
 const handleSignOff = async () => {
     if (!signOffTarget.value) return
 
+    errors.value = {}
+
+    if (!summary.value.trim()) {
+        errors.value = { summary: 'Please provide a lesson summary.' }
+        return
+    }
+
     isSigningOff.value = true
     try {
         await axios.post(
             `/students/${props.studentId}/lessons/${signOffTarget.value.id}/sign-off`,
+            { summary: summary.value.trim() },
         )
 
         // Optimistically update the lesson status in the list
@@ -170,6 +201,7 @@ const handleSignOff = async () => {
                 ...lessons.value[idx],
                 status: 'completed',
                 completed_at: new Date().toISOString(),
+                summary: summary.value.trim(),
             }
         }
 
@@ -177,8 +209,14 @@ const handleSignOff = async () => {
         signOffTarget.value = null
         toast.success('Lesson sign-off is being processed')
     } catch (error: any) {
-        const message = error.response?.data?.message || 'Failed to sign off lesson'
-        toast.error(message)
+        if (error.response?.status === 422 && error.response?.data?.errors) {
+            errors.value = Object.fromEntries(
+                Object.entries(error.response.data.errors).map(([key, val]: [string, any]) => [key, val[0]])
+            )
+        } else {
+            const message = error.response?.data?.message || 'Failed to sign off lesson'
+            toast.error(message)
+        }
     } finally {
         isSigningOff.value = false
     }
@@ -316,6 +354,16 @@ onMounted(() => {
                                     <ClipboardCheck class="h-4 w-4" />
                                     Sign Off
                                 </Button>
+                                <Button
+                                    v-else-if="lesson.status === 'completed' && lesson.summary"
+                                    variant="ghost"
+                                    size="sm"
+                                    @click="openViewSummary(lesson)"
+                                    class="gap-1"
+                                >
+                                    <FileText class="h-4 w-4" />
+                                    View Summary
+                                </Button>
                                 <span
                                     v-else-if="lesson.status === 'completed'"
                                     class="text-sm text-muted-foreground"
@@ -342,7 +390,7 @@ onMounted(() => {
                     </SheetDescription>
                 </SheetHeader>
 
-                <div v-if="signOffTarget" class="mt-6 space-y-6 px-6 py-4">
+                <div v-if="signOffTarget" class="mt-6 flex-1 space-y-6 overflow-y-auto px-6 py-4">
                     <!-- Lesson Details -->
                     <div class="space-y-3">
                         <h4 class="text-sm font-medium">Lesson Details</h4>
@@ -369,6 +417,28 @@ onMounted(() => {
                         </div>
                     </div>
 
+                    <!-- Lesson Summary -->
+                    <div class="space-y-2">
+                        <Label for="lesson_summary">Lesson Summary *</Label>
+                        <textarea
+                            id="lesson_summary"
+                            v-model="summary"
+                            rows="4"
+                            placeholder="Describe what was covered in this lesson, e.g. roundabouts, left turns, emergency stops..."
+                            :disabled="isSigningOff"
+                            class="border-input bg-background placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                        <p class="text-muted-foreground text-xs">
+                            This summary will be used to recommend relevant learning resources to the student.
+                        </p>
+                        <p
+                            v-if="errors.summary"
+                            class="text-destructive text-sm"
+                        >
+                            {{ errors.summary }}
+                        </p>
+                    </div>
+
                     <!-- Terms & Conditions -->
                     <div class="space-y-3">
                         <h4 class="text-sm font-medium">Terms & Conditions</h4>
@@ -381,6 +451,7 @@ onMounted(() => {
                                 <li>You understand that signing off will trigger a payout to your connected Stripe account for the lesson amount.</li>
                                 <li>Once signed off, this action cannot be reversed. The lesson will be permanently marked as completed.</li>
                                 <li>A feedback request email will be sent to the student following sign-off.</li>
+                                <li>Relevant learning resources will be recommended to the student based on your lesson summary.</li>
                             </ul>
                         </div>
                     </div>
@@ -406,5 +477,24 @@ onMounted(() => {
                 </SheetFooter>
             </SheetContent>
         </Sheet>
+
+        <!-- View Summary Dialog -->
+        <Dialog v-model:open="isViewSummaryOpen">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle class="flex items-center gap-2">
+                        <FileText class="h-5 w-5" />
+                        Lesson Summary
+                    </DialogTitle>
+                    <DialogDescription>
+                        {{ viewSummaryTarget ? formatDate(viewSummaryTarget.date) : '' }}
+                        {{ viewSummaryTarget ? formatTime(viewSummaryTarget.start_time, viewSummaryTarget.end_time) : '' }}
+                    </DialogDescription>
+                </DialogHeader>
+                <div v-if="viewSummaryTarget" class="text-sm whitespace-pre-wrap">
+                    {{ viewSummaryTarget.summary }}
+                </div>
+            </DialogContent>
+        </Dialog>
     </div>
 </template>

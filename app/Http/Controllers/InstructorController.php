@@ -553,6 +553,7 @@ class InstructorController extends Controller
             'relationship' => 'required|string|max:100',
             'phone' => 'required|string|max:50',
             'email' => 'nullable|email|max:255',
+            'address' => 'nullable|string|max:1000',
             'is_primary' => 'boolean',
         ]);
 
@@ -577,6 +578,7 @@ class InstructorController extends Controller
             'relationship' => 'required|string|max:100',
             'phone' => 'required|string|max:50',
             'email' => 'nullable|email|max:255',
+            'address' => 'nullable|string|max:1000',
             'is_primary' => 'boolean',
         ]);
 

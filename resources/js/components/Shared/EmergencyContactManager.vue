@@ -30,6 +30,7 @@ import {
     Save,
     UserRoundPlus,
     Mail,
+    MapPin,
     HeartHandshake,
     Shield,
 } from 'lucide-vue-next'
@@ -41,6 +42,7 @@ interface Contact {
     relationship: string
     phone: string
     email: string | null
+    address: string | null
     is_primary: boolean
     created_at: string
     updated_at: string
@@ -51,6 +53,7 @@ interface ContactFormData {
     relationship: string
     phone: string
     email: string
+    address: string
     is_primary: boolean
 }
 
@@ -89,6 +92,7 @@ const form = ref<ContactFormData>({
     relationship: '',
     phone: '',
     email: '',
+    address: '',
     is_primary: false,
 })
 
@@ -124,6 +128,7 @@ const openAddSheet = () => {
         relationship: '',
         phone: '',
         email: '',
+        address: '',
         is_primary: false,
     }
     errors.value = {}
@@ -138,6 +143,7 @@ const openEditSheet = (contact: Contact) => {
         relationship: contact.relationship,
         phone: contact.phone,
         email: contact.email || '',
+        address: contact.address || '',
         is_primary: contact.is_primary,
     }
     errors.value = {}
@@ -320,7 +326,7 @@ const handleSetPrimary = async (contact: Contact) => {
                     v-for="contact in contacts"
                     :key="contact.id"
                 >
-                    <CardContent class="p-6">
+                    <CardContent class="p-2 px-4">
                         <div class="flex items-start justify-between">
                             <div class="flex-1">
                                 <!-- Name + Primary Badge -->
@@ -382,6 +388,13 @@ const handleSetPrimary = async (contact: Contact) => {
                                     >
                                         <Mail class="h-4 w-4" />
                                         <span>{{ contact.email }}</span>
+                                    </div>
+                                    <div
+                                        v-if="contact.address"
+                                        class="flex items-center gap-3 text-sm text-muted-foreground"
+                                    >
+                                        <MapPin class="h-4 w-4" />
+                                        <span>{{ contact.address }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -522,6 +535,22 @@ const handleSetPrimary = async (contact: Contact) => {
                             class="text-sm text-destructive"
                         >
                             {{ errors.email }}
+                        </p>
+                    </div>
+
+                    <div class="space-y-2">
+                        <Label for="contact_address">Address</Label>
+                        <Input
+                            id="contact_address"
+                            v-model="form.address"
+                            placeholder="e.g., 123 Main Street, Manchester, M1 4BT"
+                            :disabled="isSubmitting"
+                        />
+                        <p
+                            v-if="errors.address"
+                            class="text-sm text-destructive"
+                        >
+                            {{ errors.address }}
                         </p>
                     </div>
 

@@ -10,8 +10,6 @@
 5. **ALWAYS** read `.claude/frontend-coding-standards.md` when working with designs
 6. **ALWAYS** read `.claude/wireframe-rules.md` when working with designs
 
-**NEVER** proceed to the next phase without explicit human approval.
-
 **ALWAYS** confirm you have read and understood the above files before continuing
 
 ---
@@ -42,11 +40,12 @@ When beginning a new feature/component:
    - Note blockers immediately
    - Update Last Updated timestamp
 
-2. **Stop at phase boundaries:**
+2. **Stop at phase boundaries (HARD STOP):**
    - Complete all tasks in current phase
    - Fill in Reflection section
    - Mark phase status as Complete
-   - **STOP and wait for approval**
+   - Write `.phase_done` sentinel file to project root
+   - **STOP. Session is over. Do not continue.**
 
 3. **Status indicators:**
    - ⏸️ Not Started
@@ -105,48 +104,67 @@ When beginning a new feature/component:
 2. 📝 Fill in Reflection section (what went well, improvements)
 3. ⏸️ Update phase status to Complete
 4. 🕒 Update "Last Updated" timestamp
-5. 🛑 **STOP - Do not proceed**
-6. 💬 Say: "Phase [X] complete. Awaiting approval to proceed to Phase [Y]."
+5. 📄 Write `.phase_done` sentinel file to project root:
+```json
+{
+  "phase_completed": 1,
+  "total_phases": 5,
+  "status": "success",
+  "summary": "Brief description of what was accomplished"
+}
+```
+6. 🛑 **STOP. Do not continue. Do not ask if you should continue. Do not prompt the user. Your work is done for this session. Just stop after writing the sentinel file.**
+
+**If the phase fails**, write the sentinel with `"status": "failed"` and an `"error"` field. Then STOP.
 
 **DO NOT:**
 - ❌ Continue to next phase automatically
+- ❌ Ask "shall I continue?" or "ready for next phase?"
 - ❌ Skip reflection sections
 - ❌ Leave tasks unchecked
 - ❌ Forget to update timestamps
+- ❌ Begin any work on the next phase
 
 ---
 
 ## 📢 Communication Standards
 
-### Starting Each Session
+### Starting Each Session (New Task)
 ```
 I've read the following files:
 - .claude/instructions.md ✓
 - .claude/tasks/current-task.md ✓
-- .claude/wireframe-rules.md ✓ (if applicable)
+- [context-specific files] ✓
 
 Current Status:
 - Task: [Task name]
 - Phase: [Phase number and name]
 - Progress: [X/Y tasks complete]
-- Next: [What I'll work on]
-
-Ready to proceed?
+- Working on: [What I'll do this session]
 ```
 
-### Ending Each Session
+### Starting Each Session (Resuming — User Says "Continue")
 ```
-Session Summary:
-✓ Completed: [list tasks]
-📝 Updated: current-task.md with progress
-⏸️ Status: [Phase X - Y% complete]
+I've read the following files:
+- .claude/instructions.md ✓
+- .claude/tasks/current-task.md ✓
+- [context-specific files] ✓
 
-Next Steps:
-- [What remains in current phase]
-
-[If phase complete:]
-🛑 Phase [X] complete - awaiting approval to proceed to Phase [Y]
+Resuming:
+- Task: [Task name]
+- Completed phases: [list completed]
+- Next phase: Phase [X] — [name]
+- Starting now.
 ```
+
+Then immediately begin executing the next incomplete phase. Do NOT re-plan or re-do completed work.
+
+### Phase Complete (Session End)
+After writing the `.phase_done` sentinel file, output ONLY this:
+```
+Phase [X] complete. Sentinel written. Session done.
+```
+Then STOP. Do not output anything else. Do not ask questions. Do not suggest next steps.
 
 ### When Blocked
 ```
@@ -157,8 +175,9 @@ Attempted: [What I tried]
 Suggestions: [Possible solutions]
 Impact: [What's blocked]
 
-Documented in current-task.md - awaiting guidance.
+Documented in current-task.md.
 ```
+Write `.phase_done` with `"status": "failed"` and the error details. Then STOP.
 
 ---
 
@@ -284,14 +303,9 @@ completed/2024-02-10-data-export-feature.md
 "Create new task file for [feature name] and start Phase 1"
 ```
 
-**To continue work:**
+**To continue to next phase (new session):**
 ```
-"Continue with current task - read current-task.md first"
-```
-
-**To approve phase:**
-```
-"Phase [X] approved - proceed to Phase [Y]"
+"Continue"
 ```
 
 **To check status:**

@@ -46,6 +46,8 @@ class GetStudentDetailAction
             'lessons_total' => $lessonsTotal,
             'revenue_pence' => $revenuePence,
             'status' => $this->determineStatus($lessonsCompleted, $lessonsTotal, $student->orders->first()),
+            'student_status' => $student->status ?? 'active',
+            'inactive_reason' => $student->inactive_reason,
         ];
     }
 

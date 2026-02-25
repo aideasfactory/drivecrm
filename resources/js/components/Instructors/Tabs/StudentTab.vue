@@ -53,7 +53,7 @@ const subTabs: { key: SubTabType; label: string }[] = [
     { key: 'overview', label: 'Overview' },
     { key: 'lessons', label: 'Lessons' },
     { key: 'payments', label: 'Payments' },
-    { key: 'emergency', label: 'Emergency Contact' },
+    // { key: 'emergency', label: 'Emergency Contact' },
     { key: 'messages', label: 'Messages' },
     { key: 'actions', label: 'Actions' },
 ]

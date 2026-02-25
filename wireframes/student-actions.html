@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+        window.FontAwesomeConfig = {
+          autoReplaceSvg: 'nest'
+        };
+      </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Pupil</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#DC2626',
+                        primaryLight: '#FEE2E2',
+                        accent: '#F3F4F6'
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.plot.ly/plotly-3.1.1.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { display: none; }
+        body { margin: 0; padding: 0; }
+    </style>
+</head>
+<body class="bg-accent">
+    
+    <header id="header" class="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-50 h-16">
+        <div class="flex items-center justify-between h-full px-6">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                    <i class="fa-solid fa-car text-white text-xl"></i>
+                </div>
+                <span class="text-xl font-bold text-gray-900">GoRoadie Driving School</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <button class="relative p-2 text-gray-600 hover:text-gray-900">
+                    <i class="fa-regular fa-bell text-xl"></i>
+                    <span class="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full"></span>
+                </button>
+                <div class="flex items-center gap-3 cursor-pointer">
+                    <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-2.jpg" alt="User" class="w-10 h-10 rounded-full object-cover">
+                    <div class="flex flex-col">
+                        <span class="text-sm font-semibold text-gray-900">Admin User</span>
+                        <span class="text-xs text-gray-500">Administrator</span>
+                    </div>
+                    <i class="fa-solid fa-chevron-down text-gray-400 text-sm"></i>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <aside id="sidebar" class="fixed left-0 top-16 bottom-0 w-64 bg-white border-r border-gray-200 overflow-y-auto">
+        <nav class="p-4">
+            <ul class="space-y-1">
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-solid fa-chart-line text-lg w-5"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-regular fa-envelope text-lg w-5"></i>
+                        <span>Enquiries</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg bg-primaryLight text-primary font-semibold">
+                        <i class="fa-regular fa-user text-lg w-5"></i>
+                        <span>Pupils</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-solid fa-users text-lg w-5"></i>
+                        <span>Team</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-regular fa-file-lines text-lg w-5"></i>
+                        <span>Reports</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-regular fa-folder-open text-lg w-5"></i>
+                        <span>Resources</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-solid fa-gear text-lg w-5"></i>
+                        <span>Settings</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 font-medium">
+                        <i class="fa-solid fa-grid-2 text-lg w-5"></i>
+                        <span>Apps</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </aside>
+
+    <main id="main-content" class="ml-64 mt-16 p-8">
+        
+        <section id="pupil-header" class="mb-8">
+            <div class="flex items-center gap-4 mb-6">
+                <button class="flex items-center gap-2 text-gray-600 hover:text-gray-900">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span class="text-sm font-medium">Back to Pupils</span>
+                </button>
+            </div>
+            
+            <div class="bg-white rounded-xl p-8 border border-gray-200">
+                <div class="flex items-start justify-between">
+                    <div class="flex items-center gap-6">
+                        <img src="https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-5.jpg" alt="Sarah Johnson" class="w-24 h-24 rounded-full object-cover">
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-900 mb-2">Sarah Johnson</h1>
+                            <div class="flex items-center gap-6 text-gray-600">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-phone text-sm"></i>
+                                    <span class="text-sm">07912 345 678</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-regular fa-envelope text-sm"></i>
+                                    <span class="text-sm">sarah.johnson@email.com</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-location-dot text-sm"></i>
+                                    <span class="text-sm">Manchester, M1 4BT</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button class="px-4 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-red-700 flex items-center gap-2">
+                            <i class="fa-solid fa-plus"></i>
+                            Add Booking
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="pupil-tabs" class="mb-8">
+            <div class="bg-white rounded-xl border border-gray-200">
+                <div class="border-b border-gray-200">
+                    <nav class="flex">
+                        <button id="overview-tab" onclick="switchTab('overview')" class="px-6 py-4 text-sm font-medium text-gray-500 hover:text-gray-700">Overview</button>
+                        <button id="lessons-tab" onclick="switchTab('lessons')" class="px-6 py-4 text-sm font-medium text-gray-500 hover:text-gray-700">Lessons</button>
+                        <button id="message-tab" onclick="switchTab('message')" class="px-6 py-4 text-sm font-medium text-gray-500 hover:text-gray-700">Messages</button>
+                        <button id="actions-tab" onclick="switchTab('actions')" class="px-6 py-4 text-sm font-semibold text-primary border-b-2 border-primary bg-primaryLight">Actions</button>
+                    </nav>
+                </div>
+
+                <div id="actions-content" class="p-8">
+                    <div class="grid grid-cols-2 gap-8">
+                        
+                        <div id="transfer-section" class="bg-gray-50 rounded-xl p-6">
+                            <div class="flex items-center gap-3 mb-6">
+                                <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                                    <i class="fa-solid fa-exchange-alt text-blue-600"></i>
+                                </div>
+                                <h3 class="text-lg font-bold text-gray-900">Transfer Student</h3>
+                            </div>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-2">Select New Instructor</label>
+                                    <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                        <option value="">Choose instructor...</option>
+                                        <option value="instructor1">Mike Thompson</option>
+                                        <option value="instructor2">Emma Davis</option>
+                                        <option value="instructor3">David Wilson</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-2">Transfer Reason</label>
+                                    <textarea placeholder="Enter reason for transfer..." class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none h-24"></textarea>
+                                </div>
+                                <button onclick="openTransferModal()" class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700">
+                                    Transfer Student
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="emergency-contact-section" class="bg-gray-50 rounded-xl p-6">
+                            <div class="flex items-center justify-between mb-6">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                                        <i class="fa-solid fa-phone text-red-600"></i>
+                                    </div>
+                                    <h3 class="text-lg font-bold text-gray-900">Emergency Contacts</h3>
+                                </div>
+                                <button onclick="openEmergencyContactModal()" class="px-3 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-red-700">
+                                    <i class="fa-solid fa-plus mr-2"></i>Add
+                                </button>
+                            </div>
+                            
+                            <div class="space-y-3">
+                                <div class="bg-white rounded-lg p-4 border border-gray-200">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <h4 class="font-semibold text-gray-900">Jane Johnson</h4>
+                                            <p class="text-sm text-gray-600">Mother • 07912 345 679</p>
+                                            <span class="inline-block mt-1 px-2 py-1 bg-primary text-white text-xs rounded-full">Primary</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button class="p-2 text-gray-400 hover:text-gray-600">
+                                                <i class="fa-solid fa-edit"></i>
+                                            </button>
+                                            <button class="p-2 text-red-400 hover:text-red-600">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="bg-white rounded-lg p-4 border border-gray-200">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <h4 class="font-semibold text-gray-900">Robert Johnson</h4>
+                                            <p class="text-sm text-gray-600">Father • 07912 345 680</p>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button class="p-2 text-gray-400 hover:text-gray-600">
+                                                <i class="fa-solid fa-edit"></i>
+                                            </button>
+                                            <button class="p-2 text-red-400 hover:text-red-600">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="pickup-points-section" class="bg-gray-50 rounded-xl p-6">
+                            <div class="flex items-center justify-between mb-6">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                                        <i class="fa-solid fa-map-marker-alt text-green-600"></i>
+                                    </div>
+                                    <h3 class="text-lg font-bold text-gray-900">Pickup Points</h3>
+                                </div>
+                                <button onclick="openPickupPointModal()" class="px-3 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-red-700">
+                                    <i class="fa-solid fa-plus mr-2"></i>Add
+                                </button>
+                            </div>
+                            
+                            <div class="space-y-3">
+                                <div class="bg-white rounded-lg p-4 border border-gray-200">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <h4 class="font-semibold text-gray-900">Home Address</h4>
+                                            <p class="text-sm text-gray-600">123 Main Street, Manchester, M1 4BT</p>
+                                            <span class="inline-block mt-1 px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">Default</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button class="p-2 text-gray-400 hover:text-gray-600">
+                                                <i class="fa-solid fa-edit"></i>
+                                            </button>
+                                            <button class="p-2 text-red-400 hover:text-red-600">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="bg-white rounded-lg p-4 border border-gray-200">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <h4 class="font-semibold text-gray-900">School</h4>
+                                            <p class="text-sm text-gray-600">Manchester High School, Oxford Road, M13 9PL</p>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button class="p-2 text-gray-400 hover:text-gray-600">
+                                                <i class="fa-solid fa-edit"></i>
+                                            </button>
+                                            <button class="p-2 text-red-400 hover:text-red-600">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="status-section" class="bg-gray-50 rounded-xl p-6">
+                            <div class="flex items-center gap-3 mb-6">
+                                <div class="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+                                    <i class="fa-solid fa-user-check text-yellow-600"></i>
+                                </div>
+                                <h3 class="text-lg font-bold text-gray-900">Student Status</h3>
+                            </div>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-2">Current Status</label>
+                                    <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                        <option value="active" selected>Active</option>
+                                        <option value="passed">Passed</option>
+                                        <option value="failed">Failed</option>
+                                        <option value="on-hold">On Hold</option>
+                                        <option value="cancelled">Cancelled</option>
+                                        <option value="completed">Completed</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-2">Status Notes</label>
+                                    <textarea placeholder="Add notes about status change..." class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none h-24"></textarea>
+                                </div>
+                                <button class="w-full px-4 py-3 bg-yellow-600 text-white rounded-lg font-semibold hover:bg-yellow-700">
+                                    Update Status
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="student-checklist-section" class="bg-gray-50 rounded-xl p-6 col-span-2">
+                            <div class="flex items-center gap-3 mb-6">
+                                <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                                    <i class="fa-solid fa-list-check text-indigo-600"></i>
+                                </div>
+                                <h3 class="text-lg font-bold text-gray-900">Student Checklist</h3>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                <div>
+                                    <h4 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Theory Test</h4>
+                                    <div class="space-y-3">
+                                        <label class="flex items-center gap-3 text-gray-700 cursor-pointer">
+                                            <input type="checkbox" onclick="openChecklistModal(this, 'Book theory test')" class="w-5 h-5 text-primary rounded border-gray-300 focus:ring-primary focus:ring-offset-0">
+                                            <span>Book theory test</span>
+                                        </label>
+                                        <label class="flex items-center gap-3 text-gray-700 cursor-pointer">
+                                            <input type="checkbox" onclick="openChecklistModal(this, 'Sit theory test')" class="w-5 h-5 text-primary rounded border-gray-300 focus:ring-primary focus:ring-offset-0">
+                                            <span>Sit theory test</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Practical Test</h4>
+                                    <div class="space-y-3">
+                                        <label class="flex items-center gap-3 text-gray-700 cursor-pointer">
+                                            <input type="checkbox" onclick="openChecklistModal(this, 'Schedule mock test')" class="w-5 h-5 text-primary rounded border-gray-300 focus:ring-primary focus:ring-offset-0">
+                                            <span>Schedule mock test</span>
+                                        </label>
+                                        <label class="flex items-center gap-3 text-gray-700 cursor-pointer">
+                                            <input type="checkbox" onclick="openChecklistModal(this, 'Sit mock test')" class="w-5 h-5 text-primary rounded border-gray-300 focus:ring-primary focus:ring-offset-0">
+                                            <span>Sit mock test</span>
+                                        </label>
+                                        <label class="flex items-center gap-3 text-gray-700 cursor-pointer">
+                                            <input type="checkbox" onclick="openChecklistModal(this, 'Book practical test')" class="w-5 h-5 text-primary rounded border-gray-300 focus:ring-primary focus:ring-offset-0">
+                                            <span>Book practical test</span>
+                                        </label>
+                                        <label class="flex items-center gap-3 text-gray-700 cursor-pointer">
+                                            <input type="checkbox" onclick="openChecklistModal(this, 'Sit practical test')" class="w-5 h-5 text-primary rounded border-gray-300 focus:ring-primary focus:ring-offset-0">
+                                            <span>Sit practical test</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">General</h4>
+                                    <div class="space-y-3">
+                                        <label class="flex items-center gap-3 text-gray-700 cursor-pointer">
+                                            <input type="checkbox" onclick="openChecklistModal(this, 'Agreed terms')" class="w-5 h-5 text-primary rounded border-gray-300 focus:ring-primary focus:ring-offset-0">
+                                            <span>Agreed terms</span>
+                                        </label>
+                                        <label class="flex items-center gap-3 text-gray-700 cursor-pointer">
+                                            <input type="checkbox" onclick="openChecklistModal(this, 'Driving licence number')" class="w-5 h-5 text-primary rounded border-gray-300 focus:ring-primary focus:ring-offset-0">
+                                            <span>Driving licence number</span>
+                                        </label>
+                                        <label class="flex items-center gap-3 text-gray-700 cursor-pointer">
+                                            <input type="checkbox" onclick="openChecklistModal(this, 'Eyesight checked')" class="w-5 h-5 text-primary rounded border-gray-300 focus:ring-primary focus:ring-offset-0">
+                                            <span>Eyesight checked</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="general-section" class="bg-gray-50 rounded-xl p-6 col-span-2">
+                            <div class="flex items-center gap-3 mb-6">
+                                <div class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                                    <i class="fa-solid fa-cog text-gray-600"></i>
+                                </div>
+                                <h3 class="text-lg font-bold text-gray-900">General Actions</h3>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-6">
+                                <div class="space-y-4">
+                                    <h4 class="text-md font-semibold text-gray-800">Account Management</h4>
+                                    <button class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 flex items-center justify-center gap-2">
+                                        <i class="fa-solid fa-key"></i>
+                                        Send Password Reset Link
+                                    </button>
+                                </div>
+                                
+                                <div class="space-y-4">
+                                    <h4 class="text-md font-semibold text-gray-800">Student Management</h4>
+                                    <button onclick="openRemoveStudentModal()" class="w-full px-4 py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 flex items-center justify-center gap-2">
+                                        <i class="fa-solid fa-user-minus"></i>
+                                        Remove Student
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div id="transfer-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-xl p-8 max-w-md w-full">
+                <h3 class="text-xl font-bold text-gray-900 mb-4">Transfer Student - Terms & Conditions</h3>
+                <div class="bg-gray-50 rounded-lg p-4 mb-6 max-h-48 overflow-y-auto">
+                    <p class="text-sm text-gray-700">
+                        By transferring this student, you acknowledge that:
+                        <br><br>
+                        • All lesson history will be transferred to the new instructor
+                        • Outstanding payments will remain with the current instructor
+                        • The student will be notified of the transfer
+                        • This action cannot be undone
+                        • You will lose access to this student's future bookings
+                    </p>
+                </div>
+                <div class="flex items-center gap-3 mb-6">
+                    <input type="checkbox" id="transfer-agree" class="w-4 h-4 text-primary">
+                    <label for="transfer-agree" class="text-sm text-gray-700">I agree to the terms and conditions</label>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button onclick="closeTransferModal()" class="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button class="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700">
+                        Confirm Transfer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="checklist-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-xl p-8 max-w-md w-full">
+                <h3 class="text-xl font-bold text-gray-900 mb-2" id="checklist-modal-title">Complete Checklist Item</h3>
+                <p class="text-sm text-gray-600 mb-6">Please enter the date when this item was completed</p>
+                
+                <div class="mb-6">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Completion Date</label>
+                    <input type="date" id="checklist-date" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                </div>
+                
+                <div class="mb-6">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Notes (Optional)</label>
+                    <textarea id="checklist-notes" placeholder="Add any additional notes..." class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none h-24"></textarea>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                    <button onclick="closeChecklistModal()" class="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button onclick="confirmChecklistItem()" class="flex-1 px-4 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-red-700">
+                        Confirm
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tab) {
+            document.querySelectorAll('[id$="-content"]').forEach(content => content.classList.add('hidden'));
+            document.querySelectorAll('[id$="-tab"]').forEach(tabBtn => {
+                tabBtn.classList.remove('text-primary', 'border-b-2', 'border-primary', 'bg-primaryLight', 'font-semibold');
+                tabBtn.classList.add('text-gray-500', 'font-medium');
+            });
+            
+            document.getElementById(`${tab}-content`).classList.remove('hidden');
+            document.getElementById(`${tab}-tab`).classList.add('text-primary', 'border-b-2', 'border-primary', 'bg-primaryLight', 'font-semibold');
+        }
+
+        function openTransferModal() {
+            document.getElementById('transfer-modal').classList.remove('hidden');
+        }
+
+        function closeTransferModal() {
+            document.getElementById('transfer-modal').classList.add('hidden');
+        }
+
+        function openEmergencyContactModal() {
+            console.log('Open emergency contact modal');
+        }
+
+        function openPickupPointModal() {
+            console.log('Open pickup point modal');
+        }
+
+        function openRemoveStudentModal() {
+            console.log('Open remove student modal');
+        }
+
+        let currentCheckbox = null;
+        let currentItemName = '';
+
+        function openChecklistModal(checkbox, itemName) {
+            if (checkbox.checked) {
+                checkbox.checked = false;
+                currentCheckbox = checkbox;
+                currentItemName = itemName;
+                document.getElementById('checklist-modal-title').textContent = itemName;
+                document.getElementById('checklist-modal').classList.remove('hidden');
+                
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('checklist-date').value = today;
+            }
+        }
+
+        function closeChecklistModal() {
+            document.getElementById('checklist-modal').classList.add('hidden');
+            document.getElementById('checklist-date').value = '';
+            document.getElementById('checklist-notes').value = '';
+            currentCheckbox = null;
+            currentItemName = '';
+        }
+
+        function confirmChecklistItem() {
+            const date = document.getElementById('checklist-date').value;
+            const notes = document.getElementById('checklist-notes').value;
+            
+            if (!date) {
+                alert('Please select a completion date');
+                return;
+            }
+            
+            if (currentCheckbox) {
+                currentCheckbox.checked = true;
+                console.log('Checklist item completed:', {
+                    item: currentItemName,
+                    date: date,
+                    notes: notes
+                });
+            }
+            
+            closeChecklistModal();
+        }
+    </script>
+
+</body>
+</html>

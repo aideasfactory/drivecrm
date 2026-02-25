@@ -6,7 +6,9 @@ namespace App\Services;
 
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Student\Lesson\GetStudentLessonsAction;
+use App\Actions\Student\Lesson\SaveLessonSummaryAction;
 use App\Actions\Student\Lesson\SignOffLessonAction;
+use App\Jobs\ProcessResourceRecommendationsJob;
 use App\Mail\LessonFeedbackRequest;
 use App\Models\Instructor;
 use App\Models\Lesson;
@@ -20,6 +22,7 @@ class LessonSignOffService
     public function __construct(
         protected GetStudentLessonsAction $getStudentLessons,
         protected SignOffLessonAction $signOffLesson,
+        protected SaveLessonSummaryAction $saveLessonSummary,
         protected LogActivityAction $logActivity
     ) {}
 
@@ -32,13 +35,18 @@ class LessonSignOffService
     }
 
     /**
-     * Sign off a lesson: complete it, process payout, log activity, send feedback email.
+     * Sign off a lesson: save summary, complete it, process payout, log activity, send emails, dispatch resource recommendations.
      *
      * @return array{lesson: Lesson, payout: Payout, order_completed: bool}
      */
-    public function signOffLesson(Lesson $lesson, Instructor $instructor): array
+    public function signOffLesson(Lesson $lesson, Instructor $instructor, string $summary = ''): array
     {
         $lesson->load(['order.student']);
+
+        // Save the instructor's lesson summary before sign-off
+        if ($summary !== '') {
+            ($this->saveLessonSummary)($lesson, $summary);
+        }
 
         // Execute the sign-off pipeline (mark complete, calendar update, payout, order check)
         $result = ($this->signOffLesson)($lesson, $instructor);
@@ -72,6 +80,11 @@ class LessonSignOffService
 
         // Send feedback request email to student
         $this->sendFeedbackEmail($lesson, $student, $instructor);
+
+        // Dispatch AI resource recommendations (separate async job)
+        if ($summary !== '') {
+            ProcessResourceRecommendationsJob::dispatch($lesson);
+        }
 
         return $result;
     }

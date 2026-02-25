@@ -22,6 +22,7 @@ class Lesson extends Model
         'calendar_item_id',
         'completed_at',
         'status',
+        'summary',
     ];
 
     protected function casts(): array

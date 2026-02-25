@@ -28,6 +28,8 @@ class Student extends Model
         'contact_terms',
         'contact_communications',
         'owns_account',
+        'status',
+        'inactive_reason',
     ];
 
     protected $casts = [
@@ -122,6 +124,30 @@ class Student extends Model
     public function activityLogs(): MorphMany
     {
         return $this->morphMany(ActivityLog::class, 'loggable');
+    }
+
+    /**
+     * Get pickup points for this student.
+     */
+    public function pickupPoints(): HasMany
+    {
+        return $this->hasMany(StudentPickupPoint::class);
+    }
+
+    /**
+     * Get checklist items for this student.
+     */
+    public function checklistItems(): HasMany
+    {
+        return $this->hasMany(StudentChecklistItem::class);
+    }
+
+    /**
+     * Check if student is active.
+     */
+    public function isActive(): bool
+    {
+        return $this->status === 'active';
     }
 
     /**

@@ -1,41 +1,65 @@
-# Task: Student Lessons — List & Sign Off (V1)
+# Task: Student Actions Tab
 
-**Created:** 2026-02-13
-**Last Updated:** 2026-02-13
-**Status:** ✅ All Phases Complete
+**Created:** 2026-02-19
+**Last Updated:** 2026-02-19
+**Status:** ✅ Complete — All 8 phases finished
 
 ---
 
 ## Overview
 
 ### Goal
-Build the student lessons tab — listing all booked lessons and enabling instructors to sign off completed lessons. Sign-off triggers Stripe payout to the instructor's Connect account (mirroring the v1 implementation), updates lesson/calendar statuses, logs activity, and sends a feedback request email to the student.
-
-### Requirements
-1. **List lessons** — Display all lessons for a student with status indicators (completed, upcoming, awaiting payment)
-2. **Sign off lesson** — Instructor can sign off a completed lesson
-3. **Activity log** — Record sign-off event in activity_logs
-4. **Lesson status** — Mark lesson as `completed`, set `completed_at`
-5. **Calendar item status** — Update associated calendar_item status to `completed`
-6. **LessonPayment status** — Mark as `paid` (for upfront mode, auto-set on sign-off)
-7. **Stripe payout** — Create Stripe Transfer to instructor's Connect account (mirrors v1 `LessonController@complete`)
-8. **Feedback email** — Send email to student asking for feedback
-9. **All logic in services/actions** — Reusable for mobile app
-10. **Job-based processing** — Sign-off orchestration runs on a queued job
+Build out the Student Actions tab (`ActionsSubTab.vue`) with five functional sections:
+1. **Emergency Contacts** — Enhanced version with address field + auto-populate from student contact details
+2. **Pickup Points** — CRUD for student pickup/drop-off addresses with postcode geocoding and default flag
+3. **Student Status** — Update student status (active/inactive) with notes
+4. **Remove Student** — Detach student from instructor's account
+5. **Student Checklist** — Trackable checklist items with dates and notes (e.g., "Book theory test" → date booked)
 
 ### What Already Exists
-- **Models:** Lesson, LessonPayment, Payout, Order, CalendarItem, Student, Instructor — all complete with enums
-- **Enums:** LessonStatus, PayoutStatus, PaymentStatus, CalendarItemStatus, OrderStatus, PaymentMode
-- **StripeService:** `createTransfer()` method exists for instructor payouts
-- **Exceptions:** LessonAlreadyCompletedException, InstructorNotOnboardedException, PayoutAlreadyProcessedException
-- **Activity logging:** LogActivityAction + LogActivityJob pipeline
-- **v1 reference:** `v1/app/Http/Controllers/Instructor/LessonController.php` — complete sign-off flow
-- **Frontend placeholder:** `resources/js/components/Instructors/Tabs/Student/LessonsSubTab.vue`
-- **PupilController:** Handles student data endpoints (contacts, notes, messages, activity-logs)
-- **Routes:** Student routes under `/students/{student}/...` pattern
+- **Emergency Contacts**: Full CRUD — `Contact` model (polymorphic), `EmergencyContactManager.vue` (shared component), `PupilController` endpoints, routes. **Missing: `address` field on contacts table.**
+- **Student Model**: Has `contact_first_name`, `contact_surname`, `contact_email`, `contact_phone` fields (third-party booker details) — these should auto-populate the first emergency contact.
+- **ActionsSubTab.vue**: Currently a placeholder with "coming soon" message.
+- **PupilController**: Already has contact CRUD, notes, messages, lessons endpoints.
 
-### Domain
-All backend code in the **Student** domain: `app/Actions/Student/Lesson/`, `app/Services/LessonSignOffService.php`, controller methods on `PupilController`.
+### What Needs to Be Built
+
+#### Database Changes
+1. **Migration: Add `address` to `contacts` table** — text, nullable
+2. **Migration: Add `status` and `inactive_reason` to `students` table** — enum + text
+3. **Migration: Create `student_pickup_points` table** — address, postcode, lat/lng, is_default, label
+4. **Migration: Create `student_checklist_items` table** — student_id, key (slug), checked, date, notes
+
+#### Backend (Models, Actions, Services, Controller, Routes)
+- `StudentPickupPoint` model + factory
+- `StudentChecklistItem` model + factory
+- Update `Contact` model ($fillable with address)
+- Update `Student` model (add `status` to fillable, relationships for pickup points & checklist items)
+- Actions: `GetStudentPickupPointsAction`, `CreatePickupPointAction`, `UpdatePickupPointAction`, `DeletePickupPointAction`, `SetDefaultPickupPointAction`
+- Actions: `GetStudentChecklistAction`, `ToggleChecklistItemAction`
+- Actions: `UpdateStudentStatusAction`, `RemoveStudentFromInstructorAction`
+- Action: `AutoCreateEmergencyContactAction` (auto-populate from student contact fields)
+- Service: Update existing `PupilController` or create dedicated service methods
+- Routes: Pickup points CRUD, checklist toggle, status update, remove student
+
+#### Frontend (Vue Components)
+- **ActionsSubTab.vue** — Layout container (2-col grid from wireframe)
+- **EmergencyContactSection** — Reuse existing `EmergencyContactManager` + auto-populate logic
+- **PickupPointsSection.vue** — CRUD with postcode lookup, default toggle, edit/delete
+- **StudentStatusSection.vue** — Status dropdown + notes textarea + update button
+- **RemoveStudentSection.vue** — Remove button with confirmation dialog
+- **StudentChecklistSection.vue** — Checklist grid with checkboxes, date picker modal, notes
+
+### Wireframe Reference
+`wireframes/student-actions.html` — 2-column grid layout:
+- Row 1: [Transfer Student (SKIP)] | [Emergency Contacts]
+- Row 2: [Pickup Points] | [Student Status]
+- Row 3 (full-width): [Student Checklist]
+- Row 4 (full-width): [General Actions — Remove Student only]
+
+### Excluded (per user request)
+- Transfer Student section
+- Account Management section (Send Password Reset Link)
 
 ---
 
@@ -43,198 +67,349 @@ All backend code in the **Student** domain: `app/Actions/Student/Lesson/`, `app/
 
 ### Tasks
 - [x] Read all instruction files and coding standards
-- [x] Review wireframe (student-lessons.html)
-- [x] Study v1 implementation (LessonController@complete, StripeService, models, enums)
-- [x] Audit current codebase (PupilController, routes, existing actions/services)
-- [x] Create task breakdown with phases
+- [x] Explore existing codebase (Contact model, Student model, EmergencyContactManager, PupilController, routes)
+- [x] Analyze wireframe for layout structure
+- [x] Identify what exists vs what needs to be built
+- [x] Design database schema for new tables
+- [x] Plan architecture and phased breakdown
+- [x] Get approval on plan before proceeding
+
+### Database Design
+
+#### 1. Migration: `add_address_to_contacts_table`
+```sql
+ALTER TABLE contacts ADD COLUMN address TEXT NULLABLE AFTER email;
+```
+
+#### 2. Migration: `add_status_fields_to_students_table`
+```sql
+ALTER TABLE students
+  ADD COLUMN status VARCHAR(50) DEFAULT 'active' AFTER owns_account,
+  ADD COLUMN inactive_reason TEXT NULLABLE AFTER status;
+```
+Status values: `active`, `inactive`, `on_hold`, `passed`, `failed`, `completed`
+
+#### 3. Migration: `create_student_pickup_points_table`
+```sql
+CREATE TABLE student_pickup_points (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    student_id BIGINT UNSIGNED NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    label VARCHAR(255) NOT NULL,          -- e.g., "Home", "School", "Work"
+    address TEXT NOT NULL,                  -- Full address line
+    postcode VARCHAR(10) NOT NULL,          -- UK postcode
+    latitude DECIMAL(10,8) NULLABLE,        -- From postcode geocoding
+    longitude DECIMAL(11,8) NULLABLE,       -- From postcode geocoding
+    is_default BOOLEAN DEFAULT FALSE,       -- One default per student
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    INDEX (student_id),
+    INDEX (student_id, is_default)
+);
+```
+
+#### 4. Migration: `create_student_checklist_items_table`
+```sql
+CREATE TABLE student_checklist_items (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    student_id BIGINT UNSIGNED NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    key VARCHAR(100) NOT NULL,              -- e.g., "book_theory_test"
+    label VARCHAR(255) NOT NULL,            -- e.g., "Book theory test"
+    category VARCHAR(100) NOT NULL,         -- e.g., "Theory Test", "Practical Test", "General"
+    is_checked BOOLEAN DEFAULT FALSE,
+    date DATE NULLABLE,                     -- Date for the item (e.g., when theory test booked for)
+    notes TEXT NULLABLE,                    -- Optional notes
+    sort_order INTEGER DEFAULT 0,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    UNIQUE (student_id, key),
+    INDEX (student_id)
+);
+```
+
+Default checklist items (seeded per student):
+- **Theory Test**: Book theory test, Sit theory test
+- **Practical Test**: Schedule mock test, Sit mock test, Book practical test, Sit practical test
+- **General**: Agreed terms, Driving licence number, Eyesight checked
 
 ### Architecture Plan
 
-**Backend — Controller → Service → Action pattern:**
+**Phase 2: Database & Models** — Migrations, models, factories
+**Phase 3: Backend — Emergency Contacts Enhancement** — Add address field, auto-populate action
+**Phase 4: Backend — Pickup Points** — Full CRUD with postcode geocoding
+**Phase 5: Backend — Student Status & Remove Student** — Status update, remove from instructor
+**Phase 6: Backend — Student Checklist** — Checklist seeding, toggle with date/notes
+**Phase 7: Frontend — ActionsSubTab.vue** — Build all 5 sections using ShadCN components
+**Phase 8: Review & Reflection** — Code review, edge cases, final reflection
 
-1. **Actions (app/Actions/Student/Lesson/):**
-   - `GetStudentLessonsAction` — Fetch all lessons for a student across all orders, with related data
-   - `SignOffLessonAction` — Orchestrates the sign-off: validates, marks complete, creates payout, Stripe transfer, updates calendar, checks order completion
-   - `MarkLessonCompletedAction` — DB-level: set status=completed, completed_at=now()
-   - `UpdateCalendarItemCompletedAction` — Update calendar_item status to completed
-   - `CreateLessonPayoutAction` — Create Payout record + Stripe Transfer
-   - `CheckOrderCompletionAction` — If all lessons completed, mark order completed
+### Route Plan
 
-2. **Service (app/Services/LessonSignOffService.php):**
-   - Injects all actions
-   - `getStudentLessons(Student)` — calls GetStudentLessonsAction
-   - `signOffLesson(Lesson, Instructor)` — orchestrates the full sign-off pipeline
-
-3. **Job (app/Jobs/ProcessLessonSignOffJob.php):**
-   - Queued job dispatched from controller
-   - Calls LessonSignOffService::signOffLesson()
-   - Handles Stripe transfer, activity log, email
-
-4. **Mailable (app/Mail/LessonFeedbackRequest.php):**
-   - Email to student asking for feedback after lesson completion
-
-5. **Controller (PupilController):**
-   - `lessons(Student)` — GET /students/{student}/lessons → returns lesson list
-   - `signOffLesson(Student, Lesson)` — POST /students/{student}/lessons/{lesson}/sign-off → dispatches job
-
-6. **Routes:**
-   - `GET /students/{student}/lessons` → `PupilController@lessons`
-   - `POST /students/{student}/lessons/{lesson}/sign-off` → `PupilController@signOffLesson`
-
-**Frontend:**
-- Replace `LessonsSubTab.vue` placeholder with full lesson list
-- Use ShadCN components (Card, Badge, Button, Dialog, Skeleton)
-- Self-loading component (axios pattern)
-- Sign-off button opens confirmation dialog
-- Status badges (Completed/Upcoming/Awaiting Payment)
-- Loading states with skeletons
-
-### Sign-Off Flow (mirrors v1):
 ```
-1. Instructor clicks "Sign Off" on a lesson
-2. Frontend POSTs to /students/{student}/lessons/{lesson}/sign-off
-3. Controller validates basics → dispatches ProcessLessonSignOffJob
-4. Job runs:
-   a. Validate: lesson is pending, instructor onboarding complete, payouts enabled
-   b. For weekly mode: verify LessonPayment is paid
-   c. DB transaction:
-      - Mark lesson status = completed, completed_at = now()
-      - Update calendar_item status = completed
-      - Create Payout record (status = pending)
-      - Call StripeService::createTransfer()
-      - Update Payout with transfer_id, status = paid, paid_at
-      - Check if all order lessons completed → mark order completed
-   d. Log activity for student AND instructor
-   e. Send feedback email to student
-5. Frontend polls/refreshes to show updated status
+# Pickup Points
+GET    /students/{student}/pickup-points                  → PupilController@pickupPoints
+POST   /students/{student}/pickup-points                  → PupilController@storePickupPoint
+PUT    /students/{student}/pickup-points/{pickupPoint}     → PupilController@updatePickupPoint
+DELETE /students/{student}/pickup-points/{pickupPoint}     → PupilController@deletePickupPoint
+PATCH  /students/{student}/pickup-points/{pickupPoint}/default → PupilController@setDefaultPickupPoint
+
+# Student Checklist
+GET    /students/{student}/checklist                      → PupilController@checklist
+PATCH  /students/{student}/checklist/{checklistItem}      → PupilController@toggleChecklistItem
+
+# Student Status
+PATCH  /students/{student}/status                         → PupilController@updateStatus
+
+# Remove Student
+DELETE /students/{student}/remove                         → PupilController@removeStudent
+
+# Auto Emergency Contact (triggered on actions page load)
+POST   /students/{student}/contacts/auto-create           → PupilController@autoCreateEmergencyContact
 ```
 
-### Reflection
-- The v1 implementation is clean and well-structured — we mirror it exactly but extract into proper Action classes
-- Running on a job means the controller responds immediately while Stripe transfer processes async
-- Activity logs go to both student AND instructor for full audit trail
-- Email is a new addition (not in v1) — simple Mailable class
-- All actions are standalone and reusable for mobile API
+### Postcode Geocoding Strategy
+Use the free **postcodes.io** API (no API key needed):
+```
+GET https://api.postcodes.io/postcodes/{postcode}
+→ Returns: latitude, longitude, admin_district, etc.
+```
+Create a shared action: `App\Actions\Shared\LookupPostcodeAction` that calls postcodes.io and returns lat/lng.
 
 ---
 
-## Phase 2: Backend Implementation ✅
+## Phase 2: Database & Models ✅
 
 ### Tasks
-- [x] Create `GetStudentLessonsAction` in `app/Actions/Student/Lesson/`
-- [x] Create `SignOffLessonAction` in `app/Actions/Student/Lesson/`
-- [x] Create `MarkLessonCompletedAction` in `app/Actions/Student/Lesson/`
-- [x] Create `UpdateCalendarItemCompletedAction` in `app/Actions/Student/Lesson/`
-- [x] Create `CreateLessonPayoutAction` in `app/Actions/Student/Lesson/`
-- [x] Create `CheckOrderCompletionAction` in `app/Actions/Student/Lesson/`
-- [x] Create `LessonSignOffService` in `app/Services/`
-- [x] Create `ProcessLessonSignOffJob` in `app/Jobs/`
-- [x] Create `LessonFeedbackRequest` Mailable in `app/Mail/`
-- [x] Create email blade template in `resources/views/emails/`
-- [x] Add `lessons()` and `signOffLesson()` methods to PupilController
-- [x] Add routes to `routes/web.php`
-- [x] Fix Payout model: `transferred_at` → `paid_at` (match migration column name)
-- [x] Fix Payout model: `isCompleted()` referenced non-existent `PayoutStatus::COMPLETED` → `PayoutStatus::PAID`
+- [x] Create migration: `add_address_to_contacts_table`
+- [x] Create migration: `add_status_fields_to_students_table`
+- [x] Create migration: `create_student_pickup_points_table`
+- [x] Create migration: `create_student_checklist_items_table`
+- [x] Create `StudentPickupPoint` model with factory
+- [x] Create `StudentChecklistItem` model with factory
+- [x] Update `Contact` model — add `address` to `$fillable`
+- [x] Update `Student` model — add `status`, `inactive_reason` to `$fillable`, add relationships
+- [x] Update `.claude/database-schema.md` with all new tables/columns
+- [ ] User to run migrations
 
 ### Reflection
-- All 6 actions created with single responsibility, each independently usable for mobile app
-- SignOffLessonAction orchestrates the full flow inside a DB transaction (mirrors v1 exactly)
-- CreateLessonPayoutAction includes the exact Stripe transfer logic from v1 with proper failure handling (marks payout as FAILED)
-- LessonSignOffService adds activity logging for both student AND instructor + feedback email dispatch
-- ProcessLessonSignOffJob runs async with 3 retries and 30s backoff
-- Controller does only basic validation (lesson belongs to student, lesson is pending) then dispatches job
-- Found and fixed 2 pre-existing bugs in Payout model: wrong column name in fillable/casts, wrong enum value in isCompleted()
+- 4 migrations created covering all schema changes
+- 2 new models (`StudentPickupPoint`, `StudentChecklistItem`) with proper relationships, casts, and factories
+- `StudentChecklistItem::defaultItems()` static method defines the 9 default checklist items matching the wireframe
+- `Contact` model updated with `address` in `$fillable` (nullable, so backward compatible)
+- `Student` model updated with `status` + `inactive_reason` in `$fillable`, plus `pickupPoints()` and `checklistItems()` relationships
+- `database-schema.md` updated with all new tables, columns, indexes, and relationships
+- All factories include useful states (`->default()` for pickup points, `->checked()` for checklist items)
 
 ---
 
-## Phase 3: Frontend Implementation ✅
+## Phase 3: Backend — Emergency Contacts Enhancement ✅
 
 ### Tasks
-- [x] Replace `LessonsSubTab.vue` placeholder with full lesson list component
-- [x] Implement lesson list with status badges and sign-off capability
-- [x] Add sign-off Sheet slide-out panel (with T&Cs and sign-off button) instead of Dialog
-- [x] Add loading states (Skeleton)
-- [x] Add toast notifications for success/error
-- [x] Add empty state when no lessons
+- [x] Update `PupilController@storeContact` validation to include `address`
+- [x] Update `PupilController@updateContact` validation to include `address`
+- [x] Create `AutoCreateEmergencyContactAction` — checks if student has `contact_*` fields, auto-creates contact if no contacts exist
+- [x] Add `autoCreateEmergencyContact` endpoint to `PupilController`
+- [x] Add route for auto-create
+- [x] Update `EmergencyContactManager.vue` — add address field to form
+- [x] Update `InstructorController` validation to include `address` (shared `Contact` model)
 
 ### Reflection
-- Used Sheet (slide-out) instead of Dialog per user request — T&Cs section with bullet points, lesson details summary, and confirm sign-off button all inside the sheet
-- Table layout with 7 columns: Date, Time, Package, Amount, Status, Payment, Actions
-- Summary stat cards (Total, Completed, Pending) match the OverviewSubTab pattern
-- Status badges use icons (CheckCircle2, Clock, Ban) alongside text for clarity
-- Payment badges show paid/due/refunded states
-- Optimistic UI update on sign-off: immediately marks lesson as completed in local state
-- Self-loading with axios following project patterns exactly
+- Added `address` validation to both `PupilController` and `InstructorController` (store + update) since the `Contact` model and `EmergencyContactManager.vue` component are shared
+- `AutoCreateEmergencyContactAction` has 3 guard conditions: contacts already exist, no contact_first_name, no phone number — prevents duplicate/empty auto-creation
+- Auto-create defaults relationship to "Parent" since contact fields represent a third-party booker (likely a parent)
+- Frontend: Added `address` to the TS interface, form data, default form state, add/edit sheets, and contact card display
+- Added `MapPin` icon for address display in contact cards
+- Route placed after existing contacts routes: `POST /students/{student}/contacts/auto-create`
 
 ---
 
-## Phase 4: Documentation ✅
+## Phase 4: Backend — Pickup Points ✅
 
 ### Tasks
-- [x] Create lesson sign-off process document (`.claude/docs/lesson-sign-off-process.md`)
-- [x] Update database-schema.md if any schema changes were needed — No schema changes were made (all existing tables)
+- [x] Create `LookupPostcodeAction` in `App\Actions\Shared` — calls postcodes.io API
+- [x] Create `GetStudentPickupPointsAction`
+- [x] Create `CreatePickupPointAction` — validates, geocodes postcode, saves
+- [x] Create `UpdatePickupPointAction` — re-geocodes only if postcode changed
+- [x] Create `DeletePickupPointAction`
+- [x] Create `SetDefaultPickupPointAction` — unsets other defaults, sets new one
+- [x] Create Form Requests: `StorePickupPointRequest`, `UpdatePickupPointRequest`
+- [x] Add pickup point methods to `PupilController`
+- [x] Add pickup point routes
 
 ### Reflection
-- Created comprehensive process doc covering the full sign-off flow, all files, API shapes, validation rules, Stripe logic, and activity logs
-- No database schema changes needed — the feature uses existing Lesson, LessonPayment, Payout, CalendarItem, Order tables
+- `LookupPostcodeAction` uses `Http::timeout(5)` with try/catch — fails gracefully (returns null) if API is unreachable
+- `CreatePickupPointAction` geocodes on every create; `UpdatePickupPointAction` only re-geocodes when postcode actually changes (normalized comparison)
+- Both form requests use a regex for UK postcode validation: `/^[A-Z]{1,2}[0-9][0-9A-Z]?\s?[0-9][A-Z]{2}$/i`
+- Default management follows same pattern as contacts: unset all others before setting new default
+- Controller ownership checks use `$pickupPoint->student_id !== $student->id`
+- 5 routes added: GET (list), POST (create), PUT (update), DELETE, PATCH (set default)
 
 ---
 
-## Phase 5: Review & Reflection ✅
+## Phase 5: Backend — Student Status & Remove Student ✅
 
 ### Tasks
-- [x] Verify sign-off flow end-to-end (Controller → Job → Service → SignOffLessonAction → 4 sub-actions)
-- [x] Verify ShadCN components used throughout (Card, Badge, Button, Table, Sheet, Skeleton, Separator)
-- [x] Verify loading states, toasts, error handling
-- [x] Verify activity logs created for both student and instructor (LessonSignOffService logs both)
-- [x] Verify email dispatch (Mail::to()->queue(LessonFeedbackRequest) in service)
-- [x] Final reflection
+- [x] Create `UpdateStudentStatusAction` — updates status, saves inactive_reason, logs activity
+- [x] Create `RemoveStudentFromInstructorAction` — sets instructor_id to null, logs activity
+- [x] Create Form Request: `UpdateStudentStatusRequest`
+- [x] Add `updateStatus` method to `PupilController`
+- [x] Add `removeStudent` method to `PupilController`
+- [x] Add routes for status update and remove student
 
 ### Reflection
-**Code review score: 9/10** — All 11 files verified correct with no critical issues.
+- `UpdateStudentStatusAction` logs the status change with previous/new values + reason in activity log metadata
+- `RemoveStudentFromInstructorAction` captures instructor name before nullifying, logs with instructor_name in metadata
+- Controller `removeStudent` has a guard: returns 422 if student has no instructor assigned
+- Status values validated via `Rule::in()`: active, inactive, on_hold, passed, failed, completed
+- `inactive_reason` is nullable — only relevant when status changes to inactive/on_hold but stored for any status change
 
-**What went well:**
-- Clean Controller → Service → Action architecture, every action independently reusable for mobile app
-- Frontend follows project patterns exactly: self-loading via axios, skeleton states, toast feedback, ShadCN components
-- Sheet slide-out for sign-off with T&Cs provides a better UX than a Dialog — instructor sees lesson details and terms before confirming
-- Data shape alignment between backend (GetStudentLessonsAction) and frontend (TypeScript Lesson interface) is exact — 16 fields match
-- Optimistic UI update on sign-off gives instant feedback while the job processes async
+---
 
-**Design decisions:**
-- Redundant validation in sub-actions (e.g. MarkLessonCompletedAction also checks status) is intentional — each action is standalone-safe for mobile API reuse
-- `hasPayoutProcessed()` blocks retries after failed Stripe transfers — matches v1 behavior, admin intervention needed for recovery (acceptable for now)
-- Sheet component with T&Cs text was user-requested and fits the ShadCN "Sheet for forms" pattern from frontend coding standards
+## Phase 6: Backend — Student Checklist ✅
 
-**No technical debt created.**
+### Tasks
+- [x] Create `GetStudentChecklistAction` — returns checklist items, seeds defaults if empty
+- [x] Create `ToggleChecklistItemAction` — toggle checked, update date and notes
+- [x] Add `checklist` and `toggleChecklistItem` methods to `PupilController`
+- [x] Add checklist routes
+- [x] Define default checklist items constant (on model via `defaultItems()` static method)
+
+### Reflection
+- `GetStudentChecklistAction` lazy-seeds defaults: on first access, if student has 0 checklist items, it bulk-inserts the 9 default items via `StudentChecklistItem::insert()` for efficiency
+- `ToggleChecklistItemAction` handles two states: checking (sets date + notes) and unchecking (clears both)
+- Controller `toggleChecklistItem` validates `is_checked` (required boolean), `date` (nullable date), `notes` (nullable string max 1000)
+- Ownership check: `$checklistItem->student_id !== $student->id` returns 404
+- 2 routes: `GET /students/{student}/checklist`, `PATCH /students/{student}/checklist/{checklistItem}`
+
+---
+
+## Phase 7: Frontend — ActionsSubTab.vue ✅
+
+### Tasks
+- [x] Build `ActionsSubTab.vue` — 2-column grid layout container with student data loading + auto-create emergency contact
+- [x] Build Emergency Contacts section — reuses `EmergencyContactManager` with key remount for auto-populate
+- [x] Build `PickupPointsSection.vue` — list with default badge, add/edit sheet, delete dialog, set default
+- [x] Build `StudentStatusSection.vue` — status dropdown, notes textarea, update button, confirmation dialog
+- [x] Build `RemoveStudentSection.vue` — remove button with confirmation dialog, redirects to pupils list
+- [x] Build `StudentChecklistSection.vue` — 3-column grid of checkboxes, date picker dialog on check, uncheck inline
+- [x] Ensure all sections use ShadCN components (no wireframe styling)
+- [x] Add loading skeletons for all sections
+- [x] Add toast notifications for all actions
+- [x] Add button preloaders for all async actions
+- [x] Add `student_status` and `inactive_reason` to `GetStudentDetailAction` response
+
+### Reflection
+- **ActionsSubTab.vue** — Loads student data and calls auto-create in parallel via `Promise.allSettled`. If auto-create succeeds, forces EmergencyContactManager remount via key increment
+- **PickupPointsSection** — Follows identical pattern to EmergencyContactManager: Card list, Sheet for add/edit, Dialog for delete, optimistic local state updates, sort by default first
+- **StudentStatusSection** — Receives current status as prop, uses native `<select>` (following codebase convention), confirmation Dialog before updating
+- **RemoveStudentSection** — Destructive action with confirmation Dialog, uses `router.visit('/pupils')` after removal
+- **StudentChecklistSection** — Groups items by category using computed. Checking opens Dialog for date+notes (date pre-filled with today). Unchecking calls API directly. Shows date Badge and notes on checked items. Uses native checkbox with `@click.prevent` for controlled behavior
+- **GetStudentDetailAction** — Added `student_status` (model field) and `inactive_reason` alongside existing `status` (booking progress) to avoid naming conflict
+- All sections follow self-loading pattern with Skeleton states
+- All async operations have Button preloaders (Loader2 + disabled state)
+- All mutations trigger toast notifications (success and error)
+- Native form elements (`<select>`, `<textarea>`, `<input type="checkbox">`, `<input type="date">`) used following codebase convention
+
+---
+
+## Phase 8: Review & Reflection ✅
+
+### Tasks
+- [x] Review all migrations, models, and factories
+- [x] Review all actions and form requests
+- [x] Review controller methods and routes
+- [x] Review all Vue section components
+- [x] Review ActionsSubTab layout and integration
+- [x] Check edge cases and potential issues
+- [x] Final reflection and summary
+
+### Code Review Findings
+
+**Backend — All Clean:**
+- 4 migrations: clean schema design with proper FKs, indexes, cascadeOnDelete, down() methods
+- 2 new models: proper $fillable, casts(), relationships, factory with useful states
+- Student model: correctly updated with status/inactive_reason in $fillable, new relationships, isActive() helper
+- 10 actions: single-responsibility, proper constructor injection, PHPDoc annotations
+- 3 form requests: UK postcode regex, Rule::in for status, custom error messages
+- PupilController: consistent ownership checks, proper HTTP status codes (201, 404, 422)
+- Routes: RESTful naming convention, all within auth middleware group
+
+**Frontend — All Clean:**
+- 5 section components follow identical patterns to existing codebase (EmergencyContactManager as reference)
+- Self-loading pattern with Skeleton states for all data-dependent sections
+- Sheet for CRUD forms, Dialog for confirmations and checklist date entry
+- Toast notifications on all success/error paths
+- Button preloaders (Loader2 + disabled) on all async actions
+- Native form elements (select, textarea, checkbox, date input) matching existing conventions
+- Controlled checkbox behavior via `@click.prevent` for checklist (prevents visual toggle before API confirmation)
+
+**Edge Cases Reviewed:**
+- Auto-create race condition: `Promise.allSettled` + key-based remount handles timing gracefully
+- Postcode geocoding failure: graceful — lat/lng stay null, pickup point still saves
+- Status naming conflict: `student_status` (model field) vs `status` (booking progress) avoided collision
+- Checklist date serialization: Carbon `date` cast → ISO 8601 → JS `new Date()` parses correctly
+- Student data load failure: StudentStatusSection and RemoveStudentSection won't render (acceptable — page requires valid student)
+- Unchecking checklist: sends `null` for date/notes, passes `nullable` validation correctly
+- Boolean `false` with `required` rule: PHP validation accepts `false` as a value (not empty), works correctly
+
+### Final Reflection
+
+**Scope:** 5 fully functional sections built from scratch — Emergency Contacts (enhanced), Pickup Points (CRUD + geocoding), Student Status (with activity logging), Remove Student (with confirmation), Student Checklist (with date tracking). All integrated into a 2-column responsive grid layout.
+
+**Architecture Quality:**
+- Consistent Controller → Action pattern throughout
+- Single-responsibility actions with constructor-injected dependencies
+- Form Requests for all validation (no inline validation in controllers)
+- Polymorphic Contact model reused cleanly across instructors and students
+- Lazy-seeding pattern for checklist avoids separate migration data or seeders
+
+**Files Created:** 23 new files (4 migrations, 2 models, 2 factories, 10 actions, 3 form requests, 4 Vue components)
+**Files Modified:** 8 files (Student model, Contact model, PupilController, InstructorController, routes, EmergencyContactManager, GetStudentDetailAction, database-schema.md)
 
 ---
 
 ## Decisions Log
-- **Job-based sign-off**: Controller dispatches ProcessLessonSignOffJob for async processing (Stripe transfer can be slow)
-- **Action extraction**: Each step is a standalone Action for mobile app reuse
-- **Student domain**: All new actions under `app/Actions/Student/Lesson/`
-- **PupilController**: Keep using existing controller (matches current routing pattern `/students/{student}/...`)
-- **Feedback email**: New Mailable, not a Notification (simpler, no need for multiple channels in v1)
-- **Mirror v1 Stripe flow**: Exact same validation + transfer logic as `v1/LessonController@complete`
+- **Emergency Contact address**: Add `address` column to existing polymorphic `contacts` table (affects both instructor and student contacts — acceptable since it's nullable)
+- **Postcode geocoding**: Use free postcodes.io API (no API key needed, UK postcodes only)
+- **Student checklist**: Separate table with per-student rows. Default items seeded on first access (lazy seeding). Items defined as a constant, not a separate config table.
+- **Student status**: Stored as varchar on students table (not enum to allow future extension). Values: active, inactive, on_hold, passed, failed, completed.
+- **Remove student**: Soft-remove by setting `instructor_id = null` (doesn't delete the student record, just detaches from instructor)
+- **Layout**: 2-column grid as per wireframe, with checklist and general actions spanning full width
+- **Excluded**: Transfer Student, Account Management (Send Password Reset Link)
 
 ## Files to Create
 | File | Purpose |
 |------|---------|
-| `app/Actions/Student/Lesson/GetStudentLessonsAction.php` | Fetch lessons for a student |
-| `app/Actions/Student/Lesson/SignOffLessonAction.php` | Orchestrate full sign-off |
-| `app/Actions/Student/Lesson/MarkLessonCompletedAction.php` | Mark lesson completed |
-| `app/Actions/Student/Lesson/UpdateCalendarItemCompletedAction.php` | Update calendar_item status |
-| `app/Actions/Student/Lesson/CreateLessonPayoutAction.php` | Create payout + Stripe transfer |
-| `app/Actions/Student/Lesson/CheckOrderCompletionAction.php` | Check/update order completion |
-| `app/Services/LessonSignOffService.php` | Service orchestrating actions |
-| `app/Jobs/ProcessLessonSignOffJob.php` | Queued sign-off job |
-| `app/Mail/LessonFeedbackRequest.php` | Feedback request email |
-| `resources/views/emails/lesson-feedback-request.blade.php` | Email template |
-| `.claude/docs/lesson-sign-off-process.md` | Process documentation |
+| `database/migrations/..._add_address_to_contacts_table.php` | Add address column |
+| `database/migrations/..._add_status_fields_to_students_table.php` | Add status + inactive_reason |
+| `database/migrations/..._create_student_pickup_points_table.php` | Pickup points table |
+| `database/migrations/..._create_student_checklist_items_table.php` | Checklist items table |
+| `app/Models/StudentPickupPoint.php` | Pickup point model |
+| `app/Models/StudentChecklistItem.php` | Checklist item model |
+| `app/Actions/Shared/LookupPostcodeAction.php` | Postcode geocoding via postcodes.io |
+| `app/Actions/Student/PickupPoint/GetStudentPickupPointsAction.php` | Get all pickup points |
+| `app/Actions/Student/PickupPoint/CreatePickupPointAction.php` | Create pickup point |
+| `app/Actions/Student/PickupPoint/UpdatePickupPointAction.php` | Update pickup point |
+| `app/Actions/Student/PickupPoint/DeletePickupPointAction.php` | Delete pickup point |
+| `app/Actions/Student/PickupPoint/SetDefaultPickupPointAction.php` | Set default |
+| `app/Actions/Student/Checklist/GetStudentChecklistAction.php` | Get/seed checklist |
+| `app/Actions/Student/Checklist/ToggleChecklistItemAction.php` | Toggle item |
+| `app/Actions/Student/Status/UpdateStudentStatusAction.php` | Update status |
+| `app/Actions/Student/Status/RemoveStudentFromInstructorAction.php` | Remove from instructor |
+| `app/Actions/Student/Contact/AutoCreateEmergencyContactAction.php` | Auto-create from student fields |
+| `app/Http/Requests/StorePickupPointRequest.php` | Store validation |
+| `app/Http/Requests/UpdatePickupPointRequest.php` | Update validation |
+| `app/Http/Requests/UpdateStudentStatusRequest.php` | Status validation |
+| `resources/js/components/Instructors/Tabs/Student/Actions/PickupPointsSection.vue` | Pickup points UI |
+| `resources/js/components/Instructors/Tabs/Student/Actions/StudentStatusSection.vue` | Status UI |
+| `resources/js/components/Instructors/Tabs/Student/Actions/RemoveStudentSection.vue` | Remove UI |
+| `resources/js/components/Instructors/Tabs/Student/Actions/StudentChecklistSection.vue` | Checklist UI |
 
 ## Files to Modify
 | File | Change |
 |------|--------|
-| `app/Http/Controllers/PupilController.php` | Add `lessons()` and `signOffLesson()` methods |
-| `routes/web.php` | Add lesson routes |
-| `resources/js/components/Instructors/Tabs/Student/LessonsSubTab.vue` | Full lesson list + sign-off UI |
+| `app/Models/Contact.php` | Add `address` to `$fillable` |
+| `app/Models/Student.php` | Add `status`, `inactive_reason` to `$fillable`, add relationships |
+| `app/Http/Controllers/PupilController.php` | Add pickup points, checklist, status, remove methods |
+| `routes/web.php` | Add new routes |
+| `resources/js/components/Instructors/Tabs/Student/ActionsSubTab.vue` | Complete rebuild |
+| `resources/js/components/Shared/EmergencyContactManager.vue` | Add address field |
+| `.claude/database-schema.md` | Document all new tables and columns |

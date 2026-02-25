@@ -49,4 +49,10 @@ return [
         'search_radius_miles' => env('INSTRUCTOR_SEARCH_RADIUS_MILES', 10),
     ],
 
+    'openrouter' => [
+        'api_key' => env('OPENROUTER_API_KEY'),
+        'model' => env('OPENROUTER_MODEL', 'amazon/nova-lite-v1'),
+        'max_tokens' => (int) env('OPENROUTER_MAX_TOKENS', 1024),
+    ],
+
 ];

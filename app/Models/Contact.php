@@ -16,6 +16,7 @@ class Contact extends Model
         'relationship',
         'phone',
         'email',
+        'address',
         'is_primary',
     ];
 

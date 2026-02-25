@@ -64,6 +64,7 @@ const allNavItems: NavItem[] = [
         title: 'Resources',
         href: resourcesIndex(),
         icon: BookOpen,
+        roles: ['owner'], // Only visible to owners
     },
     {
         title: 'Settings',

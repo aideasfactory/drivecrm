@@ -30,7 +30,8 @@ class ProcessLessonSignOffJob implements ShouldQueue
 
     public function __construct(
         public Lesson $lesson,
-        public Instructor $instructor
+        public Instructor $instructor,
+        public string $summary = ''
     ) {}
 
     /**
@@ -39,7 +40,7 @@ class ProcessLessonSignOffJob implements ShouldQueue
     public function handle(LessonSignOffService $service): void
     {
         try {
-            $result = $service->signOffLesson($this->lesson, $this->instructor);
+            $result = $service->signOffLesson($this->lesson, $this->instructor, $this->summary);
 
             Log::info('Lesson sign-off processed successfully', [
                 'lesson_id' => $this->lesson->id,

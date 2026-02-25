@@ -106,6 +106,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('students.contacts.destroy');
     Route::patch('/students/{student}/contacts/{contact}/primary', [\App\Http\Controllers\PupilController::class, 'setPrimaryContact'])
         ->name('students.contacts.primary');
+    Route::post('/students/{student}/contacts/auto-create', [\App\Http\Controllers\PupilController::class, 'autoCreateEmergencyContact'])
+        ->name('students.contacts.auto-create');
 
     // Student Notes
     Route::get('/students/{student}/notes', [\App\Http\Controllers\PupilController::class, 'notes'])
@@ -127,12 +129,58 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/students/{student}/lessons/{lesson}/sign-off', [\App\Http\Controllers\PupilController::class, 'signOffLesson'])
         ->name('students.lessons.sign-off');
 
+    // Student Pickup Points
+    Route::get('/students/{student}/pickup-points', [\App\Http\Controllers\PupilController::class, 'pickupPoints'])
+        ->name('students.pickup-points');
+    Route::post('/students/{student}/pickup-points', [\App\Http\Controllers\PupilController::class, 'storePickupPoint'])
+        ->name('students.pickup-points.store');
+    Route::put('/students/{student}/pickup-points/{pickupPoint}', [\App\Http\Controllers\PupilController::class, 'updatePickupPoint'])
+        ->name('students.pickup-points.update');
+    Route::delete('/students/{student}/pickup-points/{pickupPoint}', [\App\Http\Controllers\PupilController::class, 'deletePickupPoint'])
+        ->name('students.pickup-points.destroy');
+    Route::patch('/students/{student}/pickup-points/{pickupPoint}/default', [\App\Http\Controllers\PupilController::class, 'setDefaultPickupPoint'])
+        ->name('students.pickup-points.default');
+
+    // Student Checklist
+    Route::get('/students/{student}/checklist', [\App\Http\Controllers\PupilController::class, 'checklist'])
+        ->name('students.checklist');
+    Route::patch('/students/{student}/checklist/{checklistItem}', [\App\Http\Controllers\PupilController::class, 'toggleChecklistItem'])
+        ->name('students.checklist.toggle');
+
+    // Student Status & Management
+    Route::patch('/students/{student}/status', [\App\Http\Controllers\PupilController::class, 'updateStatus'])
+        ->name('students.status.update');
+    Route::delete('/students/{student}/remove', [\App\Http\Controllers\PupilController::class, 'removeStudent'])
+        ->name('students.remove');
+
     Route::get('/teams', [\App\Http\Controllers\TeamController::class, 'index'])
         ->name('teams.index');
     Route::get('/reports', [\App\Http\Controllers\ReportController::class, 'index'])
         ->name('reports.index');
-    Route::get('/resources', [\App\Http\Controllers\ResourceController::class, 'index'])
-        ->name('resources.index');
+    // Resources (Owner Only)
+    Route::middleware([\App\Http\Middleware\EnsureOwner::class])->group(function () {
+        Route::get('/resources', [\App\Http\Controllers\ResourceController::class, 'index'])
+            ->name('resources.index');
+        Route::get('/resources/folders/root/contents', [\App\Http\Controllers\ResourceController::class, 'getFolderContents'])
+            ->name('resources.folders.root-contents');
+        Route::get('/resources/folders/{folder}/contents', [\App\Http\Controllers\ResourceController::class, 'getFolderContents'])
+            ->name('resources.folders.contents');
+        Route::post('/resources/folders', [\App\Http\Controllers\ResourceController::class, 'storeFolder'])
+            ->name('resources.folders.store');
+        Route::put('/resources/folders/{folder}', [\App\Http\Controllers\ResourceController::class, 'updateFolder'])
+            ->name('resources.folders.update');
+        Route::delete('/resources/folders/{folder}', [\App\Http\Controllers\ResourceController::class, 'destroyFolder'])
+            ->name('resources.folders.destroy');
+        Route::post('/resources/files', [\App\Http\Controllers\ResourceController::class, 'storeResource'])
+            ->name('resources.files.store');
+        Route::get('/resources/files/{resource}/url', [\App\Http\Controllers\ResourceController::class, 'getFileUrl'])
+            ->name('resources.files.url');
+        Route::put('/resources/files/{resource}', [\App\Http\Controllers\ResourceController::class, 'updateResource'])
+            ->name('resources.files.update');
+        Route::delete('/resources/files/{resource}', [\App\Http\Controllers\ResourceController::class, 'destroyResource'])
+            ->name('resources.files.destroy');
+    });
+
     Route::get('/apps', [\App\Http\Controllers\AppController::class, 'index'])
         ->name('apps.index');
 });
@@ -198,6 +246,10 @@ Route::prefix('/onboarding/{uuid}')
 Route::get('/onboarding/{uuid}/instructor/{instructor}/availability', [StepFourController::class, 'availability'])
     ->middleware([ValidateEnquiryUuid::class])
     ->name('onboarding.instructor.availability');
+
+// Resource email view (signed URL — no auth required, students click from email)
+Route::get('/resources/view/{resource}', [\App\Http\Controllers\ResourceController::class, 'emailView'])
+    ->name('resources.email-view');
 
 // Stripe Webhook (must be outside auth middleware)
 Route::post('/webhook/stripe', [\App\Http\Controllers\WebhookController::class, 'handle'])
