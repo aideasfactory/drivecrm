@@ -20,6 +20,8 @@ class UpdateCalendarItemAction
      * @param  string  $startTime  New start time in H:i format
      * @param  string  $endTime  New end time in H:i format
      * @param  bool|null  $isAvailable  New availability status (null to keep unchanged)
+     * @param  string|null  $notes  Notes about the slot (null to keep unchanged)
+     * @param  string|null  $unavailabilityReason  Reason for unavailability (null to keep unchanged)
      * @return CalendarItem The updated calendar item
      */
     public function __invoke(
@@ -28,7 +30,9 @@ class UpdateCalendarItemAction
         string $date,
         string $startTime,
         string $endTime,
-        ?bool $isAvailable = null
+        ?bool $isAvailable = null,
+        ?string $notes = null,
+        ?string $unavailabilityReason = null
     ): CalendarItem {
         $oldCalendar = $calendarItem->calendar;
         $newDate = Carbon::parse($date)->format('Y-m-d');
@@ -56,6 +60,16 @@ class UpdateCalendarItemAction
         // Update availability if provided
         if ($isAvailable !== null) {
             $calendarItem->is_available = $isAvailable;
+        }
+
+        // Update notes if provided
+        if ($notes !== null) {
+            $calendarItem->notes = $notes;
+        }
+
+        // Update unavailability reason if provided
+        if ($unavailabilityReason !== null) {
+            $calendarItem->unavailability_reason = $unavailabilityReason;
         }
 
         $calendarItem->save();

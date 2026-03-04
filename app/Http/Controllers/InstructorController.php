@@ -269,7 +269,9 @@ class InstructorController extends Controller
             $request->input('date'),
             $request->input('start_time'),
             $request->input('end_time'),
-            $request->boolean('is_available', true)
+            $request->boolean('is_available', true),
+            $request->input('notes'),
+            $request->input('unavailability_reason')
         );
 
         return response()->json([
@@ -281,6 +283,8 @@ class InstructorController extends Controller
                 'end_time' => $calendarItem->end_time,
                 'is_available' => $calendarItem->is_available,
                 'status' => $calendarItem->status ?? 'available',
+                'notes' => $calendarItem->notes,
+                'unavailability_reason' => $calendarItem->unavailability_reason,
             ],
         ], 201);
     }
@@ -303,7 +307,9 @@ class InstructorController extends Controller
             $request->input('date'),
             $request->input('start_time'),
             $request->input('end_time'),
-            $request->has('is_available') ? $request->boolean('is_available') : null
+            $request->has('is_available') ? $request->boolean('is_available') : null,
+            $request->has('notes') ? $request->input('notes') : null,
+            $request->has('unavailability_reason') ? $request->input('unavailability_reason') : null
         );
 
         return response()->json([
@@ -315,6 +321,8 @@ class InstructorController extends Controller
                 'end_time' => $calendarItem->end_time,
                 'is_available' => $calendarItem->is_available,
                 'status' => $calendarItem->status ?? 'available',
+                'notes' => $calendarItem->notes,
+                'unavailability_reason' => $calendarItem->unavailability_reason,
             ],
         ]);
     }

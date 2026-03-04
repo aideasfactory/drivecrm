@@ -237,6 +237,9 @@ class InstructorService
      * @param  string  $date  Date in Y-m-d format
      * @param  string  $startTime  Start time in H:i format
      * @param  string  $endTime  End time in H:i format
+     * @param  bool  $isAvailable  Whether the slot is available
+     * @param  string|null  $notes  Optional notes about the slot
+     * @param  string|null  $unavailabilityReason  Reason for unavailability
      * @return CalendarItem The created calendar item
      */
     public function addCalendarItem(
@@ -244,13 +247,25 @@ class InstructorService
         string $date,
         string $startTime,
         string $endTime,
-        bool $isAvailable = true
+        bool $isAvailable = true,
+        ?string $notes = null,
+        ?string $unavailabilityReason = null
     ): CalendarItem {
-        return ($this->createCalendarItem)($instructor, $date, $startTime, $endTime, $isAvailable);
+        return ($this->createCalendarItem)($instructor, $date, $startTime, $endTime, $isAvailable, $notes, $unavailabilityReason);
     }
 
     /**
      * Update a calendar item (time slot) - handles moves and status changes.
+     *
+     * @param  Instructor  $instructor  The instructor who owns the calendar
+     * @param  CalendarItem  $calendarItem  The calendar item to update
+     * @param  string  $date  New date in Y-m-d format
+     * @param  string  $startTime  New start time in H:i format
+     * @param  string  $endTime  New end time in H:i format
+     * @param  bool|null  $isAvailable  New availability status (null to keep unchanged)
+     * @param  string|null  $notes  Notes about the slot (null to keep unchanged)
+     * @param  string|null  $unavailabilityReason  Reason for unavailability (null to keep unchanged)
+     * @return CalendarItem The updated calendar item
      */
     public function updateCalendarItem(
         Instructor $instructor,
@@ -258,9 +273,11 @@ class InstructorService
         string $date,
         string $startTime,
         string $endTime,
-        ?bool $isAvailable = null
+        ?bool $isAvailable = null,
+        ?string $notes = null,
+        ?string $unavailabilityReason = null
     ): CalendarItem {
-        return ($this->updateCalendarItem)($instructor, $calendarItem, $date, $startTime, $endTime, $isAvailable);
+        return ($this->updateCalendarItem)($instructor, $calendarItem, $date, $startTime, $endTime, $isAvailable, $notes, $unavailabilityReason);
     }
 
     /**

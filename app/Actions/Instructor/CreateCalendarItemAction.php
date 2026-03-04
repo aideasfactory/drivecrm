@@ -18,6 +18,9 @@ class CreateCalendarItemAction
      * @param  string  $date  Date in Y-m-d format
      * @param  string  $startTime  Start time in H:i format
      * @param  string  $endTime  End time in H:i format
+     * @param  bool  $isAvailable  Whether the slot is available
+     * @param  string|null  $notes  Optional notes about the slot
+     * @param  string|null  $unavailabilityReason  Reason for unavailability (when is_available = false)
      * @return CalendarItem The created calendar item
      */
     public function __invoke(
@@ -25,7 +28,9 @@ class CreateCalendarItemAction
         string $date,
         string $startTime,
         string $endTime,
-        bool $isAvailable = true
+        bool $isAvailable = true,
+        ?string $notes = null,
+        ?string $unavailabilityReason = null
     ): CalendarItem {
         // Find or create calendar for this date
         $calendar = Calendar::firstOrCreate(
@@ -42,6 +47,8 @@ class CreateCalendarItemAction
             'end_time' => $endTime,
             'is_available' => $isAvailable,
             'status' => null, // Status is for booking state (draft/reserved/booked), not availability
+            'notes' => $notes,
+            'unavailability_reason' => $unavailabilityReason,
         ]);
 
         // Load the calendar relationship for convenience

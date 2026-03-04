@@ -70,6 +70,8 @@ const createForm = ref<CalendarItemFormData>({
     start_time: '',
     end_time: '',
     is_available: true,
+    notes: '',
+    unavailability_reason: '',
 })
 
 const editForm = ref<{
@@ -78,12 +80,16 @@ const editForm = ref<{
     start_time: string
     end_time: string
     is_available: boolean
+    notes: string
+    unavailability_reason: string
 }>({
     id: 0,
     date: '',
     start_time: '',
     end_time: '',
     is_available: true,
+    notes: '',
+    unavailability_reason: '',
 })
 
 // ── Time slot options (2-hour blocks within 08:00–18:00) ─
@@ -149,6 +155,8 @@ function toCalendarEvent(item: CalendarItemResponse): CalendarEvent {
         isAvailable: item.is_available,
         status: item.status,
         studentName: item.student_name,
+        notes: item.notes,
+        unavailabilityReason: item.unavailability_reason,
     }
 }
 
@@ -178,6 +186,8 @@ async function loadCalendarRange(startDate: string, endDate: string) {
                     end_time: item.end_time,
                     is_available: item.is_available,
                     status: item.status,
+                    notes: item.notes ?? null,
+                    unavailability_reason: item.unavailability_reason ?? null,
                     student_name: item.student_name ?? null,
                 }
                 newItemsMap.set(item.id, calItem)
@@ -208,6 +218,8 @@ function handleSlotClick(date: string, time: string) {
         start_time: startTime,
         end_time: calcEndTime(startTime),
         is_available: true,
+        notes: '',
+        unavailability_reason: '',
     }
     isCreateSheetOpen.value = true
 }
@@ -224,11 +236,24 @@ async function handleCreateSubmit() {
         return
     }
 
+    // Validate unavailability reason when marking as unavailable
+    if (!createForm.value.is_available && !createForm.value.unavailability_reason?.trim()) {
+        toast({ title: 'Please provide a reason for unavailability', variant: 'destructive' })
+        return
+    }
+
     formLoading.value = true
     try {
         const response = await axios.post(
             `/instructors/${props.instructorId}/calendar/items`,
-            createForm.value,
+            {
+                date: createForm.value.date,
+                start_time: createForm.value.start_time,
+                end_time: createForm.value.end_time,
+                is_available: createForm.value.is_available,
+                notes: createForm.value.notes || null,
+                unavailability_reason: createForm.value.is_available ? null : createForm.value.unavailability_reason,
+            },
         )
 
         const newItem: CalendarItemResponse = response.data.calendar_item
@@ -257,12 +282,20 @@ function handleEventClick(event: CalendarEvent) {
         start_time: startTime,
         end_time: calcEndTime(startTime),
         is_available: item.is_available,
+        notes: item.notes ?? '',
+        unavailability_reason: item.unavailability_reason ?? '',
     }
     isEditSheetOpen.value = true
 }
 
 // ── Edit time slot ───────────────────────────────────────
 async function handleEditSubmit() {
+    // Validate unavailability reason when marking as unavailable
+    if (!editForm.value.is_available && !editForm.value.unavailability_reason?.trim()) {
+        toast({ title: 'Please provide a reason for unavailability', variant: 'destructive' })
+        return
+    }
+
     formLoading.value = true
     try {
         const response = await axios.put(
@@ -272,6 +305,8 @@ async function handleEditSubmit() {
                 start_time: editForm.value.start_time,
                 end_time: editForm.value.end_time,
                 is_available: editForm.value.is_available,
+                notes: editForm.value.notes || null,
+                unavailability_reason: editForm.value.is_available ? null : editForm.value.unavailability_reason,
             },
         )
 
@@ -489,6 +524,39 @@ onMounted(() => {
                         </div>
                     </div>
 
+                    <!-- Notes Field -->
+                    <div class="space-y-2">
+                        <Label for="create-notes">Notes</Label>
+                        <textarea
+                            id="create-notes"
+                            v-model="createForm.notes"
+                            placeholder="Add any notes about this time slot (optional)"
+                            class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            maxlength="1000"
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            {{ createForm.notes?.length || 0 }}/1000 characters
+                        </p>
+                    </div>
+
+                    <!-- Unavailability Reason Field (shown only when unavailable) -->
+                    <div v-if="!createForm.is_available" class="space-y-2">
+                        <Label for="create-unavailability-reason">
+                            Unavailability Reason <span class="text-destructive">*</span>
+                        </Label>
+                        <textarea
+                            id="create-unavailability-reason"
+                            v-model="createForm.unavailability_reason"
+                            placeholder="Why is this slot unavailable?"
+                            required
+                            class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            maxlength="500"
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            {{ createForm.unavailability_reason?.length || 0 }}/500 characters
+                        </p>
+                    </div>
+
                     <Button
                         type="submit"
                         :disabled="formLoading"
@@ -574,6 +642,39 @@ onMounted(() => {
                         </div>
                     </div>
 
+                    <!-- Notes Field -->
+                    <div class="space-y-2">
+                        <Label for="edit-notes">Notes</Label>
+                        <textarea
+                            id="edit-notes"
+                            v-model="editForm.notes"
+                            placeholder="Add any notes about this time slot (optional)"
+                            class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            maxlength="1000"
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            {{ editForm.notes?.length || 0 }}/1000 characters
+                        </p>
+                    </div>
+
+                    <!-- Unavailability Reason Field (shown only when unavailable) -->
+                    <div v-if="!editForm.is_available" class="space-y-2">
+                        <Label for="edit-unavailability-reason">
+                            Unavailability Reason <span class="text-destructive">*</span>
+                        </Label>
+                        <textarea
+                            id="edit-unavailability-reason"
+                            v-model="editForm.unavailability_reason"
+                            placeholder="Why is this slot unavailable?"
+                            required
+                            class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            maxlength="500"
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            {{ editForm.unavailability_reason?.length || 0 }}/500 characters
+                        </p>
+                    </div>
+
                     <div class="flex gap-2">
                         <Button
                             type="submit"
@@ -610,7 +711,7 @@ onMounted(() => {
                     </DialogDescription>
                 </DialogHeader>
 
-                <div class="py-4">
+                <div class="py-4 space-y-2">
                     <p class="text-sm text-muted-foreground">
                         <strong>Date:</strong> {{ editForm.date }}
                     </p>
@@ -619,6 +720,12 @@ onMounted(() => {
                     </p>
                     <p class="text-sm text-muted-foreground">
                         <strong>Status:</strong> {{ editForm.is_available ? 'Available' : 'Unavailable' }}
+                    </p>
+                    <p v-if="editForm.notes" class="text-sm text-muted-foreground">
+                        <strong>Notes:</strong> {{ editForm.notes }}
+                    </p>
+                    <p v-if="!editForm.is_available && editForm.unavailability_reason" class="text-sm text-muted-foreground">
+                        <strong>Reason:</strong> {{ editForm.unavailability_reason }}
                     </p>
                 </div>
 

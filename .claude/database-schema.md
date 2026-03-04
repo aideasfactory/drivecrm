@@ -678,6 +678,8 @@ Defines time slots within a calendar date.
 | `end_time` | time | NOT NULL | Slot end time |
 | `is_available` | boolean | DEFAULT true | Availability flag |
 | `status` | enum('draft', 'reserved', 'booked', 'completed') | NULLABLE | Booking lifecycle status |
+| `notes` | text | NULLABLE | General notes about this calendar slot |
+| `unavailability_reason` | text | NULLABLE | Reason for marking slot unavailable (only when is_available = false) |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
