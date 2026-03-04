@@ -112,3 +112,18 @@ export interface CalendarItemResponse {
   unavailability_reason: string | null
   student_name: string | null
 }
+
+export interface InstructorPayout {
+  id: number
+  amount_pence: number
+  formatted_amount: string
+  status: 'pending' | 'paid' | 'failed'
+  paid_at: string | null
+  created_at: string
+  stripe_transfer_id: string | null
+  student_name: string | null
+  package_name: string | null
+  lesson_date: string | null
+  lesson_start_time: string | null
+  lesson_end_time: string | null
+}

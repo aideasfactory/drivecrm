@@ -1,215 +1,85 @@
-# Task: Calendar Item Notes and Unavailability Reason
+# Task: Create instructor Reports page with payment tracking
 
-**Created:** 2026-03-04  
-**Last Updated:** 2026-03-04  
-**Status:** 🔄 In Progress — Phase 1: Planning
+**Created:** 2026-03-04
+**Last Updated:** 2026-03-04T17:30:00Z
+**Status:** Complete
 
 ---
 
-## Overview
+## 📋 Overview
 
 ### Goal
-Update the instructor scheduling feature in Drive CRM to support:
-1. **Notes field** — Add ability to include notes when creating scheduling dates for each instructor
-2. **Unavailability reason** — When an instructor selects unavailable, require them to provide a reason via a free text field
-3. **Database updates** — Update the `calendar_item` table migration to include new fields (`notes` and `unavailability_reason`)
-4. **Model updates** — Update the `CalendarItem` model to support these new attributes
-5. **UI updates** — Ensure the UI captures and displays these fields appropriately
+Implement the Reports page for individual instructors in Drive CRM. Display tabulated data showing all payments received and pending payments with filtering capability.
 
-### Repository
-`aideasfactory/drivecrm` (local: `/Users/claw/Herd/drivecrm`)
+### Success Criteria
+- [x] Update page at instructors/{id}?tab=reports
+- [x] Display tabulated data for payments received and pending
+- [x] Implement filtering to toggle between paid/pending views
+- [x] Update summary cards to reflect totals based on active filter
+- [x] Clean, simple tabulated data for version one
 
-### Branch
-`feature/calendar-item-notes-unavailability`
-
----
-
-## What Already Exists
-
-**Calendar System (from previous Phase 1 Onboarding work):**
-- `Calendar` model — Parent calendar for instructors
-- `CalendarItem` model — Time slots within a calendar date
-- Existing fields on `calendar_items`: `id`, `calendar_id`, `start_time`, `end_time`, `is_available`, `status`, `created_at`, `updated_at`
-- Status enum: `draft`, `reserved`, `booked`, `completed`
-- `is_available` boolean for blocking slots
-
-**Frontend:**
-- Calendar UI components for instructors to manage their availability
-- Scheduling interface for creating/managing calendar items
+### Context
+- Tile ID: 019cb9b4-7154-7012-bebd-86a8b24a59d0
+- Branch: feature/019cb9b4-7154-7012-bebd-86a8b24a59d0-create-instructor-reports-page-with-payment-tracking
 
 ---
 
-## What Needs to Be Built
+## 🎯 PHASE 1: PLANNING
+**Status:** ✅ Complete
 
-### Database Changes
-1. **Migration: Add `notes` to `calendar_items` table** — text, nullable
-2. **Migration: Add `unavailability_reason` to `calendar_items` table** — text, nullable (only relevant when `is_available = false`)
-
-### Backend
-1. **Update `CalendarItem` model** — Add `notes` and `unavailability_reason` to `$fillable`
-2. **Update Calendar/Scheduling Controller** — Accept and store the new fields
-3. **Validation rules** — `notes` optional string, `unavailability_reason` required when marking unavailable
-
-### Frontend
-1. **Calendar item creation/edit form** — Add notes textarea
-2. **Unavailability dialog** — When marking a slot unavailable, show modal requiring reason input
-3. **Calendar display** — Show notes indicator and unavailability reason on calendar items
-
----
-
-## Phased Plan
-
-**Phase 1: Planning** ✅ — Break down requirements, review existing code  
-**Phase 2: Database Migration** ✅ — Create migrations, update model and docs  
-**Phase 3: Backend Updates** ✅ — Update controller, validation, actions, service  
-**Phase 4: Frontend Updates** ✅ — Update forms and UI components  
-**Phase 5: Testing & Review** 🔄 — Test all scenarios, edge cases (IN PROGRESS)  
-**Phase 6: Reflection** — Document decisions, complete task
-
----
-
-## Phase 1: Planning ✅
-
-### Tasks
-- [x] Read .claude/instructions.md
-- [x] Read .claude/database-schema.md (calendar_items section)
-- [x] Explore existing Calendar and CalendarItem models
-- [x] Identify existing controller and frontend components
-- [x] Plan database changes
-- [x] Plan validation rules
-- [x] Get approval from Sam
+### Architecture
+- Backend: GetInstructorPayoutsAction → InstructorService → InstructorController
+- Frontend: Self-managed ReportsTab with local filtering, summary cards, ShadCN table
+- Route: GET /instructors/{instructor}/payouts
 
 ### Reflection
-- Reviewed existing calendar system architecture
-- Confirmed calendar_items table structure from database-schema.md
-- Planned simple migration approach: two separate ALTER TABLE statements
-- Validation rules defined: notes optional, unavailability_reason required when unavailable
-- Frontend flow mapped: conditional fields based on availability toggle
-- Phase 1 complete — ready for database migration
-
-#### Migration 1: Add `notes` to `calendar_items`
-```sql
-ALTER TABLE calendar_items 
-ADD COLUMN notes TEXT NULLABLE AFTER status;
-```
-
-#### Migration 2: Add `unavailability_reason` to `calendar_items`
-```sql
-ALTER TABLE calendar_items 
-ADD COLUMN unavailability_reason TEXT NULLABLE AFTER notes;
-```
-
-### Validation Rules
-- `notes` — nullable, string, max 1000 characters
-- `unavailability_reason` — required only when `is_available` is set to `false`, string, max 500 characters
-
-### Frontend Flow
-1. **Creating/Editing Calendar Item:**
-   - Show notes textarea (optional)
-   - Show "Available" toggle
-   - If toggle switched to "Unavailable", show unavailability_reason textarea (required)
-
-2. **Calendar Display:**
-   - Show notes indicator (icon) on items with notes
-   - Show unavailability badge with reason preview on unavailable slots
+Planning complete. Using existing patterns with Payout model as primary data source.
 
 ---
 
-## Files to Create/Modify
-
-### Create
-| File | Purpose |
-|------|---------|
-| `database/migrations/YYYY_MM_DD_HHMMSS_add_notes_to_calendar_items_table.php` | Add notes column |
-| `database/migrations/YYYY_MM_DD_HHMMSS_add_unavailability_reason_to_calendar_items_table.php` | Add unavailability_reason column |
-
-### Modify
-| File | Change |
-|------|--------|
-| `app/Models/CalendarItem.php` | Add `notes`, `unavailability_reason` to `$fillable` |
-| `app/Http/Controllers/CalendarController.php` (or similar) | Accept and validate new fields |
-| `resources/js/components/.../CalendarItemForm.vue` (or similar) | Add notes and unavailability fields |
-| `.claude/database-schema.md` | Document new columns |
-
----
-
-## Decisions Log
-- Notes field is optional — instructors can add general notes to any calendar item
-- Unavailability reason is required when marking unavailable — ensures visibility into why slots are blocked
-- Both fields are text (not limited string) to allow flexibility
-- Unavailability reason only shown in UI when is_available = false
-
----
-
-## Phase 2: Database Migration ✅
+## 🔨 PHASE 2: IMPLEMENTATION
+**Status:** ✅ Complete
 
 ### Tasks
-- [x] Create migration for `notes` field
-- [x] Create migration for `unavailability_reason` field
-- [x] Update CalendarItem model
-- [x] Update database-schema.md
-- [ ] Run migrations locally
+- [x] Create GetInstructorPayoutsAction
+- [x] Add getPayouts to InstructorService
+- [x] Add payouts endpoint to InstructorController
+- [x] Add route for payouts
+- [x] Add TypeScript Payout interface
+- [x] Implement ReportsTab.vue
+- [x] Write Pest test
+- [x] Create factories (Student, Order, Lesson, Payout)
 
 ### Reflection
-- Created two separate migrations following Laravel conventions: `add_notes_to_calendar_items_table` and `add_unavailability_reason_to_calendar_items_table`
-- Added `notes` and `unavailability_reason` to CalendarItem model `$fillable` array
-- Updated database-schema.md with new column documentation
-- Both fields are nullable text columns as planned
-- Migrations use `->after()` to position columns logically after `status`
-- Ready for user to run `php artisan migrate`
+All backend and frontend implementation complete. Followed existing patterns exactly.
 
 ---
 
-## Phase 3: Backend Updates ✅
+## 💭 PHASE 3: FINAL REFLECTION & DOCUMENTATION
+**Status:** ✅ Complete
 
-### Tasks
-- [x] Find and examine Calendar/Scheduling controller
-- [x] Update StoreCalendarItemRequest validation rules
-- [x] Update UpdateCalendarItemRequest validation rules
-- [x] Add conditional validation for unavailability_reason (required when is_available=false)
-- [x] Update CreateCalendarItemAction to accept and store new fields
-- [x] Update UpdateCalendarItemAction to accept and store new fields
-- [x] Update InstructorService to pass new fields to actions
-- [x] Update InstructorController to accept and return new fields
+### Summary
+Implemented the instructor Reports tab with payment tracking. The tab replaces the placeholder and now shows a self-loading component that fetches payout data via axios, displays 4 summary cards (Total Payouts, Total Amount, Paid, Pending), and renders a ShadCN Table with student name, lesson date/time, package, amount, status badge, and paid-at columns. Filter buttons (All/Paid/Pending) allow toggling between views, with summary cards updating reactively.
 
-### Reflection
-- Located calendar item handling in InstructorController with Form Request validation
-- Added `notes` (nullable, max 1000) and `unavailability_reason` (nullable, max 500) to both Form Requests
-- Implemented conditional validation in `withValidator()` - unavailability_reason required when is_available=false
-- Updated CreateCalendarItemAction and UpdateCalendarItemAction to accept and store the new fields
-- Updated InstructorService method signatures to include optional $notes and $unavailabilityReason parameters
-- Updated InstructorController to pass fields from requests to service and include them in JSON responses
-- All backend components now support the new fields end-to-end
+### Files Changed
+- `app/Actions/Instructor/GetInstructorPayoutsAction.php` (created)
+- `app/Services/InstructorService.php` (added getPayouts method)
+- `app/Http/Controllers/InstructorController.php` (added payouts endpoint)
+- `routes/web.php` (added GET /instructors/{instructor}/payouts)
+- `resources/js/types/instructor.ts` (added InstructorPayout interface)
+- `resources/js/components/Instructors/Tabs/ReportsTab.vue` (full implementation)
+- `database/factories/StudentFactory.php` (created)
+- `database/factories/OrderFactory.php` (created)
+- `database/factories/LessonFactory.php` (created)
+- `database/factories/PayoutFactory.php` (created)
+- `tests/Feature/Instructors/InstructorPayoutsTest.php` (created, 7 tests)
 
----
+### Potential Overhead / Anti-patterns
+None. The implementation follows all established patterns exactly:
+- Action → Service → Controller architecture
+- Self-managed tab component with axios
+- ShadCN components throughout
+- Client-side filtering for responsiveness
 
-## Phase 4: Frontend Updates ✅
-
-### Tasks
-- [x] Find and examine frontend calendar components
-- [x] Update TypeScript types (CalendarItem, CalendarItemFormData, CalendarItemResponse)
-- [x] Update ScheduleTab.vue create/edit forms with notes field
-- [x] Add unavailability reason dialog/field when marking unavailable
-- [x] Update CalendarEventBlock.vue to display notes indicator
-- [x] Update CalendarEventBlock.vue to display unavailability reason
-- [x] Add form validation for unavailability reason
-- [x] Update delete dialog to show notes and unavailability reason
-
-### Reflection
-- Updated TypeScript types in `types/instructor.ts` to include `notes` and `unavailability_reason` fields
-- Modified `ScheduleTab.vue` to include notes textarea (always visible) and unavailability_reason textarea (conditional, required when unavailable)
-- Added character count indicators for both fields (1000 for notes, 500 for unavailability reason)
-- Updated form submission logic to validate unavailability_reason when marking unavailable
-- Modified `CalendarEventBlock.vue` to display notes icon and text, and unavailability reason with warning icon
-- Updated delete confirmation dialog to show notes and unavailability reason
-- All frontend components now properly handle the new fields end-to-end
-
----
-
-**Last Updated:** 2026-03-04 14:00 GMT  
-**Current Phase:** Phase 4 Complete — Ready for Phase 5 (Testing & Review)
-
----
-
-**Last Updated:** 2026-03-04 13:50 GMT  
-**Current Phase:** Phase 4 — Frontend Updates (IN PROGRESS)
+### Score: 8/10
+Clean V1 implementation following all conventions. Deducted points for: wireframe unavailable (Google Drive auth required) so layout was inferred from requirements and existing patterns; no pagination yet (acceptable for V1 but may be needed as data grows).
