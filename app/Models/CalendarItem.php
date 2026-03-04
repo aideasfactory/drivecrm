@@ -17,6 +17,8 @@ class CalendarItem extends Model
         'end_time',
         'is_available',
         'status',
+        'notes',
+        'unavailability_reason',
     ];
 
     protected function casts(): array

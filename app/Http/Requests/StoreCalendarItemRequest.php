@@ -44,6 +44,16 @@ class StoreCalendarItemRequest extends FormRequest
                 'sometimes',
                 'boolean',
             ],
+            'notes' => [
+                'nullable',
+                'string',
+                'max:1000',
+            ],
+            'unavailability_reason' => [
+                'nullable',
+                'string',
+                'max:500',
+            ],
         ];
     }
 
@@ -59,7 +69,26 @@ class StoreCalendarItemRequest extends FormRequest
 
             // Check for overlapping time slots on the same date
             $this->checkForOverlap($validator);
+
+            // Check unavailability reason is provided when marking as unavailable
+            $this->checkUnavailabilityReason($validator);
         });
+    }
+
+    /**
+     * Check unavailability reason is provided when marking as unavailable.
+     */
+    protected function checkUnavailabilityReason(Validator $validator): void
+    {
+        $isAvailable = $this->boolean('is_available', true);
+        $unavailabilityReason = $this->input('unavailability_reason');
+
+        if (! $isAvailable && empty($unavailabilityReason)) {
+            $validator->errors()->add(
+                'unavailability_reason',
+                'Please provide a reason when marking this slot as unavailable.'
+            );
+        }
     }
 
     /**
@@ -117,6 +146,8 @@ class StoreCalendarItemRequest extends FormRequest
             'end_time.required' => 'Please provide an end time.',
             'end_time.date_format' => 'End time must be in HH:MM format.',
             'end_time.after' => 'End time must be after start time.',
+            'notes.max' => 'Notes cannot exceed 1000 characters.',
+            'unavailability_reason.max' => 'Unavailability reason cannot exceed 500 characters.',
         ];
     }
 }
