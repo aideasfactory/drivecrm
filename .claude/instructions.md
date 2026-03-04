@@ -40,12 +40,11 @@ When beginning a new feature/component:
    - Note blockers immediately
    - Update Last Updated timestamp
 
-2. **Stop at phase boundaries (HARD STOP):**
+2. **At phase boundaries (AUTO-CONTINUE):**
    - Complete all tasks in current phase
    - Fill in Reflection section
    - Mark phase status as Complete
-   - Write `.phase_done` sentinel file to project root
-   - **STOP. Session is over. Do not continue.**
+   - **Immediately continue to the next phase — do NOT stop or ask permission**
 
 3. **Status indicators:**
    - ⏸️ Not Started
@@ -96,34 +95,39 @@ When beginning a new feature/component:
 
 ---
 
-## 🛑 Phase Checkpoint Protocol
+## 🔄 Phase Checkpoint Protocol
 
-**At the end of EVERY phase:**
+**At the end of EVERY phase (except the last):**
 
 1. ✅ Mark all tasks in phase as complete
 2. 📝 Fill in Reflection section (what went well, improvements)
 3. ⏸️ Update phase status to Complete
 4. 🕒 Update "Last Updated" timestamp
-5. 📄 Write `.phase_done` sentinel file to project root:
+5. ▶️ **Immediately continue to the next phase — do NOT stop or ask permission**
+
+**When ALL phases are complete (entire task done):**
+
+1. Complete steps 1-4 above for the final phase
+2. 📄 Write `.phase_done` sentinel file to project root:
 ```json
 {
-  "phase_completed": 1,
-  "total_phases": 5,
+  "phase_completed": "all",
+  "total_phases": 3,
   "status": "success",
-  "summary": "Brief description of what was accomplished"
+  "summary": "Brief description of what was accomplished across all phases"
 }
 ```
-6. 🛑 **STOP. Do not continue. Do not ask if you should continue. Do not prompt the user. Your work is done for this session. Just stop after writing the sentinel file.**
+3. 🛑 **STOP. The entire task is done.**
 
-**If the phase fails**, write the sentinel with `"status": "failed"` and an `"error"` field. Then STOP.
+**If a phase fails**, write the sentinel with `"status": "failed"` and an `"error"` field. Then STOP.
 
 **DO NOT:**
-- ❌ Continue to next phase automatically
+- ❌ Stop between phases to ask permission
 - ❌ Ask "shall I continue?" or "ready for next phase?"
 - ❌ Skip reflection sections
 - ❌ Leave tasks unchecked
 - ❌ Forget to update timestamps
-- ❌ Begin any work on the next phase
+- ❌ Create a "Testing & Review" phase (no migrations, no manual test scenarios)
 
 ---
 
@@ -159,10 +163,10 @@ Resuming:
 
 Then immediately begin executing the next incomplete phase. Do NOT re-plan or re-do completed work.
 
-### Phase Complete (Session End)
-After writing the `.phase_done` sentinel file, output ONLY this:
+### All Phases Complete (Session End)
+After writing the `.phase_done` sentinel file at the very end, output ONLY this:
 ```
-Phase [X] complete. Sentinel written. Session done.
+All phases complete. Sentinel written. Task done.
 ```
 Then STOP. Do not output anything else. Do not ask questions. Do not suggest next steps.
 
@@ -190,8 +194,6 @@ After **each phase**, verify:
 - [ ] Timestamp updated
 - [ ] Phase status updated
 - [ ] Notes captured
-- [ ] No work started on next phase
-
 After **implementation phase specifically:**
 
 - [ ] Code follows project patterns
@@ -220,14 +222,7 @@ After **implementation phase specifically:**
 - Document decisions as you make them
 - Stop if blocked - don't guess
 
-### Phase 3: Testing & Review
-- Test systematically (happy path, errors, edge cases)
-- Check responsive design
-- Verify accessibility basics
-- Document all issues found
-- Don't fix issues yet - just document
-
-### Phase 4: Reflection
+### Phase 3: Reflection
 - Be honest about what worked/didn't
 - Identify technical debt created
 - Note future improvements

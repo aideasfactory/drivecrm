@@ -7,7 +7,7 @@ import { Car } from 'lucide-vue-next';
     <div
         class="flex aspect-square size-8 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground"
     >
-        <Car class="h-6 w-6 text-red-600" />
+        <Car class="h-6 w-6 text-white" />
     </div>
     <div class="ml-1 grid flex-1 text-left text-sm">
         <span class="text-xl font-bold">DRIVE</span>

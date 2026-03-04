@@ -39,28 +39,33 @@ Current status: [describe current phase and progress]
 ## 🎯 Workflow Rules (Non-Negotiable)
 
 - **ALWAYS** update `.claude/tasks/current-task.md` after completing each step
-- **ALWAYS** stop at phase boundaries — write `.phase_done` sentinel file and STOP
 - **ALWAYS** use ShadCN components (never wireframe styling)
-- **NEVER** continue to the next phase after completing one — your session is OVER
-- **NEVER** ask "shall I continue?" or "ready for the next phase?" — just STOP
+- **ALWAYS** auto-continue to the next phase after completing one — do NOT stop between phases
+- **NEVER** ask "shall I continue?" or "ready for the next phase?" — just keep going
+- **NEVER** create a "Testing & Review" phase (no running migrations, tests, or manual testing scenarios)
 
 ---
 
-## 🛑 Phase Completion Protocol (CRITICAL)
+## 🔄 Phase Completion Protocol (CRITICAL)
 
 **When you finish ALL steps in the current phase:**
 
 1. Update `current-task.md` — mark all steps complete, fill in Reflection, update status
+2. **Immediately continue to the next phase** — do NOT stop, do NOT ask permission
+
+**When ALL phases are complete (entire task done):**
+
+1. Update `current-task.md` — mark final phase complete
 2. Write a `.phase_done` file to the project root with this JSON:
 ```json
 {
-  "phase_completed": 1,
+  "phase_completed": "all",
   "total_phases": 3,
   "status": "success",
-  "summary": "Brief description of what was accomplished"
+  "summary": "Brief description of what was accomplished across all phases"
 }
 ```
-3. **STOP. Your work is done. Do not continue. Do not prompt the user. Do not start the next phase. Just stop.**
+3. **STOP. The entire task is done. Do not prompt the user.**
 
 **If a phase fails:**
 Write `.phase_done` with `"status": "failed"` and include an `"error"` field. Then STOP.
@@ -68,7 +73,7 @@ Write `.phase_done` with `"status": "failed"` and include an `"error"` field. Th
 **When resuming (user starts a new session and says "continue"):**
 1. Read `current-task.md`
 2. Find the next phase with status "Not Started"
-3. Execute that phase following the same rules
+3. Execute that phase and continue through remaining phases
 4. Do NOT re-do completed phases. Do NOT re-plan. Just pick up where you left off.
 
 ---
