@@ -95,7 +95,7 @@ const breadcrumbs = [{ title: 'Instructors' }]
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Name</TableHead>
-                                <TableHead>App</TableHead>
+                                <TableHead>Stripe</TableHead>
                                 <TableHead>Pupils</TableHead>
                                 <TableHead>Last Sync</TableHead>
                             </TableRow>
