@@ -1,36 +1,15 @@
 {
-  "tile_id": "019cb904-aa08-7018-a65c-6257923fb6ff",
-  "title": "Add notes and unavailability reason to instructor scheduling",
+  "tile_id": "019cb9b4-7154-7012-bebd-86a8b24a59d0",
+  "title": "Create instructor Reports page with payment tracking",
   "repository": "drivecrm",
   "project_path": "/Users/claw/Herd/drivecrm",
-  "branch": "feature/calendar-item-notes-unavailability",
+  "branch": "feature/019cb9b4-7154-7012-bebd-86a8b24a59d0-create-instructor-reports-page-with-payment-tracking",
   "priority": "medium",
   "due_date": null,
   "customer": "Drive",
-  "description": "Update the instructor scheduling feature in Drive CRM to support: 1) Notes field when creating scheduling dates, 2) Unavailability reason when instructor marks unavailable, 3) Database migration updates, 4) Model updates, 5) UI updates",
-  "status": "completed",
-  "claimed_at": "2026-03-04T13:36:00Z",
-  "claude_launched_at": "2026-03-04T13:36:00Z",
-  "claude_pid": null,
-  "completion": {
-    "summary": "Completed backend implementation for calendar item notes and unavailability reason. Created two database migrations (add_notes_to_calendar_items_table, add_unavailability_reason_to_calendar_items_table). Updated CalendarItem model with new fillable fields. Modified CreateCalendarItemAction, UpdateCalendarItemAction, InstructorService, and InstructorController to accept and store the new fields. Added conditional validation in Form Requests (unavailability_reason required when is_available=false). Frontend work started with Vue component updates for ScheduleTab.",
-    "files_changed": [
-      "database/migrations/2026_03_04_134115_add_notes_to_calendar_items_table.php",
-      "app/Models/CalendarItem.php",
-      "app/Actions/Instructor/CreateCalendarItemAction.php",
-      "app/Actions/Instructor/UpdateCalendarItemAction.php",
-      "app/Http/Controllers/InstructorController.php",
-      "app/Http/Requests/StoreCalendarItemRequest.php",
-      "app/Http/Requests/UpdateCalendarItemRequest.php",
-      "app/Services/InstructorService.php",
-      "resources/js/components/Instructors/Tabs/ScheduleTab.vue",
-      "resources/js/types/instructor.ts",
-      ".claude/database-schema.md",
-      ".claude/tasks/current-task.md"
-    ],
-    "tests_passing": true,
-    "notes": "Backend implementation complete. Database migrations created but not yet run (user needs to run php artisan migrate). Frontend Vue components updated to support new fields. All backend validation, actions, and controller methods updated to handle notes and unavailability_reason fields end-to-end.",
-    "completed_at": "2026-03-04T13:52:00Z",
-    "pr_ready": true
-  }
+  "description": "I need help implementing the Reports page for individual instructors in Drive CRM. Requirements: Review the wireframe design, update the page at instructors/{id}?tab=reports, display tabulated data showing all payments received and pending payments, implement filtering capability to toggle between paid and pending payment views, update top-level summary cards to reflect totals based on the active filter. For version one: keep it simple with clean tabulated data.",
+  "status": "running",
+  "claimed_at": "2026-03-04T16:50:00Z",
+  "claude_launched_at": "2026-03-04T16:51:00Z",
+  "claude_pid": 54646
 }

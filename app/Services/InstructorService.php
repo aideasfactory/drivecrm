@@ -13,6 +13,7 @@ use App\Actions\Instructor\DeleteInstructorLocationAction;
 use App\Actions\Instructor\GetInstructorCalendarAction;
 use App\Actions\Instructor\GetInstructorLocationsAction;
 use App\Actions\Instructor\GetInstructorPackagesAction;
+use App\Actions\Instructor\GetInstructorPayoutsAction;
 use App\Actions\Instructor\GetInstructorPupilsAction;
 use App\Actions\Instructor\UpdateCalendarItemAction;
 use App\Actions\Shared\LogActivityAction;
@@ -42,6 +43,7 @@ class InstructorService
         protected DeleteCalendarItemAction $deleteCalendarItem,
         protected UpdateCalendarItemAction $updateCalendarItem,
         protected CreatePupilAction $createPupil,
+        protected GetInstructorPayoutsAction $getInstructorPayouts,
         protected GetInstructorPupilsAction $getInstructorPupils,
         protected SendBroadcastMessageAction $sendBroadcastMessage,
         protected LogActivityAction $logActivity
@@ -342,5 +344,15 @@ class InstructorService
         );
 
         return $student;
+    }
+
+    /**
+     * Get all payouts for an instructor.
+     *
+     * @return Collection Formatted payout data
+     */
+    public function getPayouts(Instructor $instructor): Collection
+    {
+        return ($this->getInstructorPayouts)($instructor);
     }
 }

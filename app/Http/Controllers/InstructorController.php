@@ -714,4 +714,16 @@ class InstructorController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Get all payouts for an instructor.
+     */
+    public function payouts(Instructor $instructor): JsonResponse
+    {
+        $payouts = $this->instructorService->getPayouts($instructor);
+
+        return response()->json([
+            'payouts' => $payouts,
+        ]);
+    }
 }
