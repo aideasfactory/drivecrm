@@ -61,7 +61,7 @@ const summaryCards = computed(() => [
         icon: CalendarCheck,
     },
     {
-        title: 'Free Slots',
+        title: 'Unavailable',
         value: props.analytics.summary.total_free,
         icon: Users,
     },
@@ -106,7 +106,7 @@ const summaryCards = computed(() => [
                                 <TableHead>Instructor</TableHead>
                                 <TableHead class="text-right">Available</TableHead>
                                 <TableHead class="text-right">Booked</TableHead>
-                                <TableHead class="text-right">Free</TableHead>
+                                <TableHead class="text-right">Unavailable</TableHead>
                                 <TableHead class="text-right">Utilization</TableHead>
                                 <TableHead class="w-[200px]">Performance</TableHead>
                             </TableRow>
