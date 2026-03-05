@@ -12,3 +12,12 @@ export interface Pupil {
     has_app: boolean
     status: 'active' | 'pending' | 'completed' | 'cancelled'
 }
+
+export interface PupilListing {
+    id: number
+    name: string
+    email: string | null
+    status: string
+    instructor_id: number | null
+    instructor_name: string | null
+}

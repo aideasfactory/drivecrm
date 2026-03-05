@@ -6,6 +6,7 @@ import {
     GraduationCap,
     Grid3x3,
     LayoutGrid,
+    Package,
     Settings,
     Users,
     UsersRound,
@@ -28,6 +29,7 @@ import { dashboard } from '@/routes';
 import { index as appsIndex } from '@/routes/apps';
 import { index as instructorsIndex } from '@/routes/instructors';
 import { edit as profileEdit } from '@/routes/profile';
+import { index as packagesIndex } from '@/routes/packages';
 import { index as pupilsIndex } from '@/routes/pupils';
 import { index as reportsIndex } from '@/routes/reports';
 import { index as resourcesIndex } from '@/routes/resources';
@@ -54,6 +56,12 @@ const allNavItems: NavItem[] = [
         title: 'Pupils',
         href: pupilsIndex(),
         icon: Users,
+    },
+    {
+        title: 'Packages',
+        href: packagesIndex(),
+        icon: Package,
+        roles: ['owner'],
     },
     {
         title: 'Reports',

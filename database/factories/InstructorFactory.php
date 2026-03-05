@@ -37,7 +37,7 @@ class InstructorFactory extends Factory
     public function stripeConnected(): static
     {
         return $this->state(fn (array $attributes) => [
-            'stripe_account_id' => 'acct_' . fake()->unique()->regexify('[a-zA-Z0-9]{16}'),
+            'stripe_account_id' => 'acct_'.fake()->unique()->regexify('[a-zA-Z0-9]{16}'),
             'onboarding_complete' => true,
             'charges_enabled' => true,
             'payouts_enabled' => true,

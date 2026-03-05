@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\PayoutStatus;
 use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Order;

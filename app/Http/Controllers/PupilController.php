@@ -35,18 +35,34 @@ use App\Models\Student;
 use App\Models\StudentChecklistItem;
 use App\Models\StudentPickupPoint;
 use App\Services\LessonSignOffService;
+use App\Services\StudentService;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class PupilController extends Controller
 {
+    public function __construct(
+        protected StudentService $studentService
+    ) {}
+
     /**
      * Display the pupils index page.
      */
     public function index(): Response
     {
-        return Inertia::render('Pupils/Index');
+        $students = $this->studentService->getAll();
+
+        return Inertia::render('Pupils/Index', [
+            'pupils' => $students->map(fn (Student $student) => [
+                'id' => $student->id,
+                'name' => trim($student->first_name.' '.$student->surname),
+                'email' => $student->email,
+                'status' => $student->status,
+                'instructor_id' => $student->instructor_id,
+                'instructor_name' => $student->instructor?->user?->name,
+            ]),
+        ]);
     }
 
     /**

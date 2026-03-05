@@ -1,26 +1,29 @@
-# Task: Create instructor Reports page with payment tracking
+# Task: Create Pupils Listing Page
 
-**Created:** 2026-03-04
-**Last Updated:** 2026-03-04T17:30:00Z
-**Status:** Complete
+**Created:** 2026-03-05
+**Last Updated:** 2026-03-05T14:00:00Z
+**Status:** In Progress
 
 ---
 
 ## 📋 Overview
 
 ### Goal
-Implement the Reports page for individual instructors in Drive CRM. Display tabulated data showing all payments received and pending payments with filtering capability.
+Create a pupils listing page at `/pupils` that displays all students in the system in a searchable table with pupil name (avatar), associated instructor (avatar), and clickable navigation to detail pages.
 
 ### Success Criteria
-- [x] Update page at instructors/{id}?tab=reports
-- [x] Display tabulated data for payments received and pending
-- [x] Implement filtering to toggle between paid/pending views
-- [x] Update summary cards to reflect totals based on active filter
-- [x] Clean, simple tabulated data for version one
+- [ ] Page at `/pupils` lists all students in a ShadCN Table
+- [ ] Columns: Pupil name (with avatar), Instructor (with avatar or "Unassigned")
+- [ ] Search filters pupils by name, email, or instructor name
+- [ ] Pupil names are clickable (link to `/students/{id}` detail page)
+- [ ] Instructor names are clickable (link to `/instructors/{id}`)
+- [ ] Handles pupils with no assigned instructor gracefully
+- [ ] Feature test covers the listing endpoint
 
 ### Context
-- Tile ID: 019cb9b4-7154-7012-bebd-86a8b24a59d0
-- Branch: feature/019cb9b4-7154-7012-bebd-86a8b24a59d0-create-instructor-reports-page-with-payment-tracking
+- **Existing**: PupilController with empty `index()`, Pupils/Index.vue placeholder, route `/pupils` registered, sidebar link exists
+- **Missing**: GetAllStudentsAction, StudentService, data passing in controller, table UI in Vue page
+- **Reference patterns**: Instructors/Index.vue, Packages/Index.vue, GetAllPackagesAction
 
 ---
 
@@ -28,58 +31,74 @@ Implement the Reports page for individual instructors in Drive CRM. Display tabu
 **Status:** ✅ Complete
 
 ### Architecture
-- Backend: GetInstructorPayoutsAction → InstructorService → InstructorController
-- Frontend: Self-managed ReportsTab with local filtering, summary cards, ShadCN table
-- Route: GET /instructors/{instructor}/payouts
+- **Action**: `GetAllStudentsAction` in `app/Actions/Student/` — fetches all students with instructor + user relationships
+- **Service**: `StudentService` in `app/Services/` — orchestrates actions, injected into PupilController
+- **Controller**: Update `PupilController::index()` — map students to listing data, pass to Inertia
+- **Frontend**: Update `Pupils/Index.vue` — ShadCN Table with search, avatars, clickable links
+- **Types**: Update `resources/js/types/pupil.ts` — add `instructor_id` and `instructor_name` fields
+- **Tests**: `tests/Feature/Pupils/PupilListingTest.php`
+
+### Data Shape (Controller → Frontend)
+```
+{
+  id: number
+  name: string              // first_name + surname
+  email: string | null
+  instructor_id: number | null
+  instructor_name: string | null
+  status: string
+}
+```
+
+### Key Decisions
+1. No new migration needed — students table already has all required fields
+2. Use existing `StudentFactory` (has instructor_id) for tests
+3. Follow Instructors/Index.vue pattern exactly for UI consistency
+4. Client-side search (same pattern as other listing pages)
+5. Avatar uses initials fallback (no profile photo column exists)
 
 ### Reflection
-Planning complete. Using existing patterns with Payout model as primary data source.
+Planning complete. Identified all existing infrastructure (controller, route, sidebar, placeholder page) and determined minimal changes needed.
 
 ---
 
 ## 🔨 PHASE 2: IMPLEMENTATION
-**Status:** ✅ Complete
+**Status:** ⏸️ Not Started
 
 ### Tasks
-- [x] Create GetInstructorPayoutsAction
-- [x] Add getPayouts to InstructorService
-- [x] Add payouts endpoint to InstructorController
-- [x] Add route for payouts
-- [x] Add TypeScript Payout interface
-- [x] Implement ReportsTab.vue
-- [x] Write Pest test
-- [x] Create factories (Student, Order, Lesson, Payout)
+
+**Backend:**
+- [ ] Create `GetAllStudentsAction` in `app/Actions/Student/`
+- [ ] Create `StudentService` in `app/Services/`
+- [ ] Update `PupilController::index()` to pass student data via service
+- [ ] Run Wayfinder generation
+
+**Frontend:**
+- [ ] Update `resources/js/types/pupil.ts` with listing fields
+- [ ] Update `resources/js/pages/Pupils/Index.vue` with table, search, avatars, links
+
+**Testing:**
+- [ ] Create `tests/Feature/Pupils/PupilListingTest.php`
+
+### Currently Working On
+Not started yet
 
 ### Reflection
-All backend and frontend implementation complete. Followed existing patterns exactly.
+_To be filled after implementation_
 
 ---
 
 ## 💭 PHASE 3: FINAL REFLECTION & DOCUMENTATION
-**Status:** ✅ Complete
+**Status:** ⏸️ Not Started
 
 ### Summary
-Implemented the instructor Reports tab with payment tracking. The tab replaces the placeholder and now shows a self-loading component that fetches payout data via axios, displays 4 summary cards (Total Payouts, Total Amount, Paid, Pending), and renders a ShadCN Table with student name, lesson date/time, package, amount, status badge, and paid-at columns. Filter buttons (All/Paid/Pending) allow toggling between views, with summary cards updating reactively.
+_To be filled after all phases complete_
 
 ### Files Changed
-- `app/Actions/Instructor/GetInstructorPayoutsAction.php` (created)
-- `app/Services/InstructorService.php` (added getPayouts method)
-- `app/Http/Controllers/InstructorController.php` (added payouts endpoint)
-- `routes/web.php` (added GET /instructors/{instructor}/payouts)
-- `resources/js/types/instructor.ts` (added InstructorPayout interface)
-- `resources/js/components/Instructors/Tabs/ReportsTab.vue` (full implementation)
-- `database/factories/StudentFactory.php` (created)
-- `database/factories/OrderFactory.php` (created)
-- `database/factories/LessonFactory.php` (created)
-- `database/factories/PayoutFactory.php` (created)
-- `tests/Feature/Instructors/InstructorPayoutsTest.php` (created, 7 tests)
+_To be filled_
 
 ### Potential Overhead / Anti-patterns
-None. The implementation follows all established patterns exactly:
-- Action → Service → Controller architecture
-- Self-managed tab component with axios
-- ShadCN components throughout
-- Client-side filtering for responsiveness
+_To be filled_
 
-### Score: 8/10
-Clean V1 implementation following all conventions. Deducted points for: wireframe unavailable (Google Drive auth required) so layout was inferred from requirements and existing patterns; no pagination yet (acceptable for V1 but may be needed as data grows).
+### Score
+_To be filled_

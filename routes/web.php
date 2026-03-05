@@ -88,6 +88,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/instructors/{instructor}/contacts/{contact}/primary', [\App\Http\Controllers\InstructorController::class, 'setPrimaryContact'])
         ->name('instructors.contacts.primary');
 
+    Route::get('/packages', [\App\Http\Controllers\PackageController::class, 'index'])
+        ->name('packages.index');
+    Route::post('/packages', [\App\Http\Controllers\PackageController::class, 'store'])
+        ->name('packages.store');
     Route::put('/packages/{package}', [\App\Http\Controllers\PackageController::class, 'update'])
         ->name('packages.update');
     Route::get('/pupils', [\App\Http\Controllers\PupilController::class, 'index'])
