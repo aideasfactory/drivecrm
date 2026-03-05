@@ -9,6 +9,7 @@ use App\Actions\Resource\DeleteFolderAction;
 use App\Actions\Resource\DeleteResourceAction;
 use App\Actions\Resource\GetFolderBreadcrumbsAction;
 use App\Actions\Resource\GetFolderContentsAction;
+use App\Actions\Resource\StoreVideoLinkResourceAction;
 use App\Actions\Resource\UpdateFolderAction;
 use App\Actions\Resource\UpdateResourceAction;
 use App\Actions\Resource\UploadResourceAction;
@@ -25,6 +26,7 @@ class ResourceService
         protected UpdateFolderAction $updateFolder,
         protected DeleteFolderAction $deleteFolder,
         protected UploadResourceAction $uploadResource,
+        protected StoreVideoLinkResourceAction $storeVideoLinkResource,
         protected UpdateResourceAction $updateResource,
         protected DeleteResourceAction $deleteResource
     ) {}
@@ -84,6 +86,19 @@ class ResourceService
         ?array $tags = null
     ): Resource {
         return ($this->uploadResource)($folder, $file, $title, $description, $tags);
+    }
+
+    /**
+     * Store a video link resource (Vimeo/YouTube).
+     */
+    public function storeVideoLinkResource(
+        ResourceFolder $folder,
+        string $videoUrl,
+        string $title,
+        ?string $description = null,
+        ?array $tags = null
+    ): Resource {
+        return ($this->storeVideoLinkResource)($folder, $videoUrl, $title, $description, $tags);
     }
 
     /**

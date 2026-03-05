@@ -97,22 +97,32 @@ class ResourceController extends Controller
     }
 
     /**
-     * Upload a new resource file.
+     * Store a new resource (file upload or video link).
      */
     public function storeResource(StoreResourceRequest $request): JsonResponse
     {
         $folder = ResourceFolder::findOrFail($request->validated('resource_folder_id'));
 
-        $resource = $this->resourceService->uploadResource(
-            $folder,
-            $request->file('file'),
-            $request->validated('title'),
-            $request->validated('description'),
-            $request->validated('tags')
-        );
+        if ($request->validated('resource_type') === 'video_link') {
+            $resource = $this->resourceService->storeVideoLinkResource(
+                $folder,
+                $request->validated('video_url'),
+                $request->validated('title'),
+                $request->validated('description'),
+                $request->validated('tags')
+            );
+        } else {
+            $resource = $this->resourceService->uploadResource(
+                $folder,
+                $request->file('file'),
+                $request->validated('title'),
+                $request->validated('description'),
+                $request->validated('tags')
+            );
+        }
 
         return response()->json([
-            'message' => 'Resource uploaded successfully.',
+            'message' => 'Resource created successfully.',
             'resource' => $resource,
         ], 201);
     }
@@ -136,10 +146,14 @@ class ResourceController extends Controller
     }
 
     /**
-     * Get a temporary signed URL for a resource file.
+     * Get a temporary signed URL for a resource file, or the video URL for video links.
      */
     public function getFileUrl(Resource $resource): JsonResponse
     {
+        if ($resource->isVideoLink()) {
+            return response()->json(['url' => $resource->video_url]);
+        }
+
         $url = Storage::disk('s3')->temporaryUrl(
             $resource->file_path,
             now()->addMinutes(30)
@@ -170,6 +184,10 @@ class ResourceController extends Controller
     {
         if (! $request->hasValidSignature()) {
             abort(403, 'This link has expired or is invalid.');
+        }
+
+        if ($resource->isVideoLink()) {
+            return redirect()->away($resource->video_url);
         }
 
         $url = Storage::disk('s3')->temporaryUrl(

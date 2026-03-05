@@ -759,7 +759,7 @@ Hierarchical folder structure for organising resources (videos, PDFs). Self-refe
 
 ### 18. **resources**
 
-Stores uploaded files (videos, PDFs) with metadata, descriptions, and tags for AI-powered search. Files stored on S3. Owner-only feature.
+Stores uploaded files (videos, PDFs) or video links (Vimeo/YouTube) with metadata, descriptions, and tags for AI-powered search. Files stored on S3; video links store only the URL. Owner-only feature.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -768,10 +768,12 @@ Stores uploaded files (videos, PDFs) with metadata, descriptions, and tags for A
 | `title` | varchar(255) | NOT NULL | Resource display title |
 | `description` | text | NULLABLE | Text description (used for AI search) |
 | `tags` | json | NULLABLE | Array of tag strings (used for AI search) |
-| `file_path` | varchar(500) | NOT NULL | S3 storage path |
-| `file_name` | varchar(255) | NOT NULL | Original filename at upload |
-| `file_size` | bigint unsigned | NOT NULL | File size in bytes |
-| `mime_type` | varchar(100) | NOT NULL | File MIME type (video/mp4, application/pdf, etc.) |
+| `resource_type` | varchar(20) | NOT NULL, DEFAULT 'file' | Type of resource: 'file' or 'video_link' |
+| `video_url` | varchar(500) | NULLABLE | Vimeo/YouTube URL (only for video_link type) |
+| `file_path` | varchar(500) | NULLABLE | S3 storage path (only for file type) |
+| `file_name` | varchar(255) | NULLABLE | Original filename at upload (only for file type) |
+| `file_size` | bigint unsigned | NULLABLE | File size in bytes (only for file type) |
+| `mime_type` | varchar(100) | NULLABLE | File MIME type (only for file type) |
 | `thumbnail_path` | varchar(500) | NULLABLE | S3 thumbnail path (optional) |
 | `sort_order` | integer | DEFAULT 0 | Display ordering within folder |
 | `created_at` | timestamp | - | Record creation timestamp |
@@ -784,12 +786,13 @@ Stores uploaded files (videos, PDFs) with metadata, descriptions, and tags for A
 - Belongs to one `ResourceFolder`
 
 **Business Logic:**
-- Supports video files (video/mp4, video/webm, etc.) and PDFs (application/pdf)
-- Files uploaded to S3 disk
+- Two resource types: `file` (uploaded to S3) and `video_link` (Vimeo/YouTube URL stored in `video_url`)
+- For `file` type: supports video files (video/mp4, video/webm, etc.) and PDFs (application/pdf), stored on S3
+- For `video_link` type: file columns (`file_path`, `file_name`, `file_size`, `mime_type`) are NULL
 - Tags stored as JSON array of strings, e.g. `["roundabout", "right turn", "signalling"]`
 - Description and tags will be used for AI-powered video/document suggestions at a later date
-- `mime_type` determines rendering: video player for videos, PDF viewer/download for PDFs
-- Deleting a resource also removes the file from S3
+- `resource_type` + `mime_type` determines rendering: embedded player for video links, video player for uploaded videos, PDF viewer/download for PDFs
+- Deleting a file-type resource also removes the file from S3; deleting a video_link resource only removes the DB record
 
 ---
 

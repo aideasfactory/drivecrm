@@ -17,10 +17,12 @@ interface ResourceItem {
     title: string;
     description: string | null;
     tags: string[] | null;
-    file_name: string;
-    file_size: number;
-    mime_type: string;
-    file_path: string;
+    resource_type: 'file' | 'video_link';
+    video_url: string | null;
+    file_name: string | null;
+    file_size: number | null;
+    mime_type: string | null;
+    file_path: string | null;
     thumbnail_path: string | null;
 }
 
@@ -36,18 +38,49 @@ const emit = defineEmits<{
 const fileUrl = ref('');
 const loadingUrl = ref(false);
 
+const isVideoLink = computed(() => props.resource?.resource_type === 'video_link');
+
 const isVideo = computed(() =>
-    props.resource?.mime_type.startsWith('video/'),
+    props.resource?.mime_type?.startsWith('video/') ?? false,
 );
 
 const isPdf = computed(
     () => props.resource?.mime_type === 'application/pdf',
 );
 
+/**
+ * Extract an embeddable URL from a YouTube or Vimeo link.
+ */
+const embedUrl = computed(() => {
+    const url = props.resource?.video_url;
+    if (!url) return '';
+
+    // YouTube: https://www.youtube.com/watch?v=ID or https://youtu.be/ID
+    const ytMatch = url.match(
+        /(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/,
+    );
+    if (ytMatch) {
+        return `https://www.youtube.com/embed/${ytMatch[1]}`;
+    }
+
+    // Vimeo: https://vimeo.com/ID
+    const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+    if (vimeoMatch) {
+        return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+    }
+
+    return '';
+});
+
 watch(
     () => props.open,
     async (isOpen) => {
         if (isOpen && props.resource) {
+            if (isVideoLink.value) {
+                fileUrl.value = props.resource.video_url ?? '';
+                loadingUrl.value = false;
+                return;
+            }
             loadingUrl.value = true;
             try {
                 const response = await axios.get(
@@ -82,7 +115,41 @@ watch(
                     <Skeleton class="h-48 w-full rounded-lg" />
                 </div>
 
-                <!-- Video Player -->
+                <!-- Video Link Embed (YouTube/Vimeo) -->
+                <div
+                    v-else-if="isVideoLink && embedUrl"
+                    class="overflow-hidden rounded-lg"
+                >
+                    <div class="relative w-full" style="padding-top: 56.25%;">
+                        <iframe
+                            :src="embedUrl"
+                            class="absolute inset-0 h-full w-full rounded-lg"
+                            frameborder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowfullscreen
+                        />
+                    </div>
+                </div>
+
+                <!-- Video Link fallback (couldn't parse embed URL) -->
+                <div
+                    v-else-if="isVideoLink"
+                    class="flex flex-col items-center gap-4 rounded-lg border p-8"
+                >
+                    <p class="text-muted-foreground text-sm">
+                        Unable to embed this video.
+                    </p>
+                    <Button
+                        as="a"
+                        :href="resource.video_url ?? ''"
+                        target="_blank"
+                    >
+                        <ExternalLink class="mr-2 h-4 w-4" />
+                        Open Video Link
+                    </Button>
+                </div>
+
+                <!-- Video Player (uploaded file) -->
                 <div
                     v-else-if="isVideo && fileUrl"
                     class="overflow-hidden rounded-lg bg-black"

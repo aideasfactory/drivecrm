@@ -51,10 +51,12 @@ interface ResourceItem {
     title: string;
     description: string | null;
     tags: string[] | null;
-    file_name: string;
-    file_size: number;
-    mime_type: string;
-    file_path: string;
+    resource_type: 'file' | 'video_link';
+    video_url: string | null;
+    file_name: string | null;
+    file_size: number | null;
+    mime_type: string | null;
+    file_path: string | null;
     thumbnail_path: string | null;
 }
 
@@ -279,7 +281,7 @@ onMounted(() => {
                         @click="isUploadOpen = true"
                     >
                         <Upload class="mr-2 h-4 w-4" />
-                        Upload File
+                        Upload Resource
                     </Button>
                 </div>
             </div>
@@ -331,7 +333,7 @@ onMounted(() => {
                                 @click="isUploadOpen = true"
                             >
                                 <Upload class="mr-2 h-4 w-4" />
-                                Upload File
+                                Upload Resource
                             </Button>
                         </div>
                     </div>

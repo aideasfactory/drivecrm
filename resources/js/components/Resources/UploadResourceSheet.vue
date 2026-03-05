@@ -12,8 +12,10 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet';
 import { toast } from '@/components/ui/sonner';
-import { Upload, Loader2, Save } from 'lucide-vue-next';
+import { Upload, Loader2, Save, FileUp, Link } from 'lucide-vue-next';
 import TagInput from '@/components/Resources/TagInput.vue';
+
+type ResourceType = 'file' | 'video_link';
 
 const props = defineProps<{
     open: boolean;
@@ -30,20 +32,23 @@ const uploadProgress = ref(0);
 const errors = ref<Record<string, string>>({});
 const fileInput = ref<HTMLInputElement | null>(null);
 const selectedFile = ref<File | null>(null);
+const resourceType = ref<ResourceType>('file');
 const form = ref({
     title: '',
     description: '',
     tags: [] as string[],
+    video_url: '',
 });
 
 watch(
     () => props.open,
     (val) => {
         if (val) {
-            form.value = { title: '', description: '', tags: [] };
+            form.value = { title: '', description: '', tags: [], video_url: '' };
             selectedFile.value = null;
             uploadProgress.value = 0;
             errors.value = {};
+            resourceType.value = 'file';
             if (fileInput.value) {
                 fileInput.value.value = '';
             }
@@ -62,8 +67,13 @@ const handleFileChange = (e: Event) => {
 };
 
 const handleSubmit = async () => {
-    if (!selectedFile.value) {
+    if (resourceType.value === 'file' && !selectedFile.value) {
         errors.value = { file: 'Please select a file to upload.' };
+        return;
+    }
+
+    if (resourceType.value === 'video_link' && !form.value.video_url) {
+        errors.value = { video_url: 'Please enter a video URL.' };
         return;
     }
 
@@ -72,9 +82,10 @@ const handleSubmit = async () => {
     uploadProgress.value = 0;
 
     const formData = new FormData();
-    formData.append('file', selectedFile.value);
+    formData.append('resource_type', resourceType.value);
     formData.append('title', form.value.title);
     formData.append('resource_folder_id', String(props.folderId));
+
     if (form.value.description) {
         formData.append('description', form.value.description);
     }
@@ -82,18 +93,28 @@ const handleSubmit = async () => {
         formData.append(`tags[${i}]`, tag);
     });
 
+    if (resourceType.value === 'video_link') {
+        formData.append('video_url', form.value.video_url);
+    } else {
+        formData.append('file', selectedFile.value!);
+    }
+
     try {
         await axios.post('/resources/files', formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
             onUploadProgress: (progressEvent) => {
-                if (progressEvent.total) {
+                if (resourceType.value === 'file' && progressEvent.total) {
                     uploadProgress.value = Math.round(
                         (progressEvent.loaded * 100) / progressEvent.total,
                     );
                 }
             },
         });
-        toast.success('File uploaded successfully');
+        toast.success(
+            resourceType.value === 'video_link'
+                ? 'Video link added successfully'
+                : 'File uploaded successfully',
+        );
         emit('update:open', false);
         emit('uploaded');
     } catch (error: any) {
@@ -105,7 +126,7 @@ const handleSubmit = async () => {
             );
         } else {
             toast.error(
-                error.response?.data?.message || 'Failed to upload file',
+                error.response?.data?.message || 'Failed to create resource',
             );
         }
     } finally {
@@ -123,10 +144,10 @@ const handleSubmit = async () => {
             <SheetHeader>
                 <SheetTitle class="flex items-center gap-2">
                     <Upload class="h-5 w-5" />
-                    Upload File
+                    Upload Resource
                 </SheetTitle>
                 <SheetDescription>
-                    Upload a video or PDF file to this folder.
+                    Upload a file or add a video link to this folder.
                 </SheetDescription>
             </SheetHeader>
 
@@ -134,8 +155,35 @@ const handleSubmit = async () => {
                 class="mt-6 space-y-6 px-6 py-4"
                 @submit.prevent="handleSubmit"
             >
-                <!-- File Input -->
+                <!-- Resource Type Selector -->
                 <div class="space-y-2">
+                    <Label>Resource Type *</Label>
+                    <div class="flex gap-2">
+                        <Button
+                            type="button"
+                            :variant="resourceType === 'file' ? 'default' : 'outline'"
+                            class="flex-1"
+                            :disabled="isSubmitting"
+                            @click="resourceType = 'file'"
+                        >
+                            <FileUp class="mr-2 h-4 w-4" />
+                            File
+                        </Button>
+                        <Button
+                            type="button"
+                            :variant="resourceType === 'video_link' ? 'default' : 'outline'"
+                            class="flex-1"
+                            :disabled="isSubmitting"
+                            @click="resourceType = 'video_link'"
+                        >
+                            <Link class="mr-2 h-4 w-4" />
+                            Video Link
+                        </Button>
+                    </div>
+                </div>
+
+                <!-- File Input (only for file type) -->
+                <div v-if="resourceType === 'file'" class="space-y-2">
                     <Label for="resource_file">File *</Label>
                     <input
                         id="resource_file"
@@ -154,6 +202,26 @@ const handleSubmit = async () => {
                         class="text-destructive text-sm"
                     >
                         {{ errors.file }}
+                    </p>
+                </div>
+
+                <!-- Video URL Input (only for video_link type) -->
+                <div v-if="resourceType === 'video_link'" class="space-y-2">
+                    <Label for="resource_video_url">Video URL *</Label>
+                    <Input
+                        id="resource_video_url"
+                        v-model="form.video_url"
+                        placeholder="https://www.youtube.com/watch?v=... or https://vimeo.com/..."
+                        :disabled="isSubmitting"
+                    />
+                    <p class="text-muted-foreground text-xs">
+                        Paste a YouTube or Vimeo video URL.
+                    </p>
+                    <p
+                        v-if="errors.video_url"
+                        class="text-destructive text-sm"
+                    >
+                        {{ errors.video_url }}
                     </p>
                 </div>
 
@@ -206,9 +274,9 @@ const handleSubmit = async () => {
                     </p>
                 </div>
 
-                <!-- Upload Progress -->
+                <!-- Upload Progress (only for file uploads) -->
                 <div
-                    v-if="isSubmitting && uploadProgress > 0"
+                    v-if="resourceType === 'file' && isSubmitting && uploadProgress > 0"
                     class="space-y-1"
                 >
                     <div class="flex justify-between text-sm">
@@ -244,7 +312,7 @@ const handleSubmit = async () => {
                             class="mr-2 h-4 w-4 animate-spin"
                         />
                         <Save v-else class="mr-2 h-4 w-4" />
-                        Upload
+                        {{ resourceType === 'video_link' ? 'Save' : 'Upload' }}
                     </Button>
                 </div>
             </form>

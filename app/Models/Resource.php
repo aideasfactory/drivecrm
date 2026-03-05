@@ -14,6 +14,8 @@ class Resource extends Model
         'title',
         'description',
         'tags',
+        'resource_type',
+        'video_url',
         'file_path',
         'file_name',
         'file_size',
@@ -40,11 +42,27 @@ class Resource extends Model
     }
 
     /**
+     * Check if the resource is a video link (Vimeo/YouTube).
+     */
+    public function isVideoLink(): bool
+    {
+        return $this->resource_type === 'video_link';
+    }
+
+    /**
+     * Check if the resource is an uploaded file.
+     */
+    public function isFile(): bool
+    {
+        return $this->resource_type === 'file';
+    }
+
+    /**
      * Check if the resource is a video.
      */
     public function isVideo(): bool
     {
-        return str_starts_with($this->mime_type, 'video/');
+        return str_starts_with($this->mime_type ?? '', 'video/');
     }
 
     /**
@@ -61,6 +79,10 @@ class Resource extends Model
     public function getFormattedFileSizeAttribute(): string
     {
         $bytes = $this->file_size;
+
+        if ($bytes === null) {
+            return '';
+        }
 
         if ($bytes >= 1073741824) {
             return number_format($bytes / 1073741824, 2).' GB';

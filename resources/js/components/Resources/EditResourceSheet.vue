@@ -20,10 +20,12 @@ interface ResourceItem {
     title: string;
     description: string | null;
     tags: string[] | null;
-    file_name: string;
-    file_size: number;
-    mime_type: string;
-    file_path: string;
+    resource_type: 'file' | 'video_link';
+    video_url: string | null;
+    file_name: string | null;
+    file_size: number | null;
+    mime_type: string | null;
+    file_path: string | null;
     thumbnail_path: string | null;
 }
 
@@ -112,17 +114,25 @@ const handleSubmit = async () => {
                 class="mt-6 space-y-6 px-6 py-4"
                 @submit.prevent="handleSubmit"
             >
-                <!-- File Info (read-only) -->
+                <!-- Resource Info (read-only) -->
                 <div
                     v-if="resource"
                     class="bg-muted/50 rounded-md p-3"
                 >
-                    <p class="text-sm font-medium">
-                        {{ resource.file_name }}
-                    </p>
-                    <p class="text-muted-foreground text-xs">
-                        {{ resource.mime_type }}
-                    </p>
+                    <template v-if="resource.resource_type === 'video_link'">
+                        <p class="text-sm font-medium">Video Link</p>
+                        <p class="text-muted-foreground truncate text-xs">
+                            {{ resource.video_url }}
+                        </p>
+                    </template>
+                    <template v-else>
+                        <p class="text-sm font-medium">
+                            {{ resource.file_name }}
+                        </p>
+                        <p class="text-muted-foreground text-xs">
+                            {{ resource.mime_type }}
+                        </p>
+                    </template>
                 </div>
 
                 <!-- Title -->
