@@ -410,7 +410,7 @@ class StripeService
                 'customer' => $student->stripe_customer_id,
                 'amount' => $lesson->amount_pence,
                 'currency' => 'gbp',
-                'description' => "Lesson payment for {$package->name} - ".$lesson->scheduled_at->format('d M Y H:i'),
+                'description' => "Lesson payment for {$package->name} - ".$lesson->date->format('d M Y').' '.$lesson->start_time->format('H:i'),
                 'metadata' => [
                     'lesson_id' => $lesson->id,
                     'order_id' => $lesson->order_id,

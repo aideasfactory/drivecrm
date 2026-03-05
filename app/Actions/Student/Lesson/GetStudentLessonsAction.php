@@ -52,7 +52,10 @@ class GetStudentLessonsAction
                     'calendar_date' => $lesson->calendarItem?->calendar?->date?->format('Y-m-d'),
                 ];
             }))
-            ->sortByDesc('date')
+            ->sortBy([
+                ['date', 'desc'],
+                ['start_time', 'desc'],
+            ])
             ->values();
     }
 }
