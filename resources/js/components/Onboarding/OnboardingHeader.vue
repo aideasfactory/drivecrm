@@ -29,7 +29,7 @@
                              'secondary'"
                     :class="[
                       'rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium mr-2',
-                      getStepStatus(index + 1) === 'completed' ? 'bg-red-600 text-white hover:bg-red-700' : ''
+                      getStepStatus(index + 1) === 'completed' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''
                     ]"
                   >
                     {{ getStepStatus(index + 1) === 'completed' ? '✓' : index + 1 }}
@@ -48,7 +48,7 @@
                              'secondary'"
                     :class="[
                       'rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium mr-2',
-                      getStepStatus(index + 1) === 'completed' ? 'bg-red-600 text-white hover:bg-red-700' : ''
+                      getStepStatus(index + 1) === 'completed' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''
                     ]"
                   >
                     {{ getStepStatus(index + 1) === 'completed' ? '✓' : index + 1 }}

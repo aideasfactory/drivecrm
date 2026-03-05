@@ -22,7 +22,7 @@ class StepFiveRequest extends FormRequest
             'pickup_postcode' => ['nullable', 'string', 'max:20'],
             'promo_code' => ['nullable', 'string', 'max:50'],
             'booking_for_someone_else' => ['nullable', 'boolean'],
-            // Always allow learner fields to be submitted (they'll be validated based on booking_for_someone_else)
+            'auto_save' => ['nullable', 'boolean'],
             'learner_first_name' => ['nullable', 'string', 'max:100'],
             'learner_last_name' => ['nullable', 'string', 'max:100'],
             'learner_email' => ['nullable', 'email', 'max:255'],
@@ -30,8 +30,8 @@ class StepFiveRequest extends FormRequest
             'learner_dob' => ['nullable', 'date', 'before:today'],
         ];
 
-        // Make fields required if booking for someone else
-        if ($this->input('booking_for_someone_else')) {
+        // Make learner fields required only on explicit submit (not auto-save)
+        if ($this->input('booking_for_someone_else') && ! $this->input('auto_save')) {
             $rules['learner_first_name'] = ['required', 'string', 'max:100'];
             $rules['learner_last_name'] = ['required', 'string', 'max:100'];
             $rules['learner_email'] = ['required', 'email', 'max:255'];

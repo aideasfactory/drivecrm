@@ -1,144 +1,85 @@
-# Task: CSV Bulk Import for Instructors and Resources
+# Task: Fix Onboarding UI Issues (Colors, Spacing, Continue Button)
 
 **Created:** 2026-03-05
-**Last Updated:** 2026-03-05T18:30:00Z
+**Last Updated:** 2026-03-05T19:15:00Z
 **Status:** ✅ Complete
 
 ---
 
-## 📋 Overview
+## Overview
 
 ### Goal
-Implement CSV bulk import functionality for both /instructors and /resources pages. Users can download example CSV templates and upload completed CSVs to bulk-create records with full validation, error reporting, and duplicate handling.
+Fix several UI issues across the onboarding forms:
+1. Change 'DVSA Approved' and 'Secure Checkout' badge colors from hardcoded `bg-red-600` to `bg-primary`
+2. Update stepper completed step badges from `bg-red-600` to `bg-primary`
+3. Increase spacing between labels and inputs in Step 5 "Learner Details" form
+4. Fix Continue button on Step 5 when "I'm booking for someone else" is checked
 
 ### Success Criteria
-- [ ] Example CSV download button on /instructors page with all required fields
-- [ ] Example CSV download button on /resources page with all required fields
-- [ ] Upload CSV button on both pages to import completed CSVs
-- [ ] Backend parsing and validation of uploaded CSV data
-- [ ] Valid records imported into database
-- [ ] Clear feedback on successful imports and validation errors
-- [ ] Edge cases handled: duplicates, missing required fields, malformed data
-
-### Context
-- **Instructor required fields**: name, email, transmission_type (+ optional: phone, bio, status, pdi_status, address, postcode)
-- **Resource required fields**: title, resource_type, resource_folder_id (+ conditional: video_url for video_link type; + optional: description, tags)
-- **Resource CSV**: Only video_link type practical for CSV (file uploads need actual files)
-- **Architecture**: Controller → Service → Action pattern
-- **Frontend**: Vue 3 + Inertia v2, ShadCN components, Sheets for forms
+- [x] Badge labels use `bg-primary text-primary-foreground` instead of `bg-red-600 text-white`
+- [x] Stepper completed steps use `bg-primary text-primary-foreground` instead of `bg-red-600 text-white`
+- [x] Learner Details form has 2-3px more spacing between labels and inputs
+- [x] Continue button on Step 5 progresses to Step 6 when "booking for someone else" is checked
 
 ---
 
-## 🎯 PHASE 1: PLANNING
-**Status:** 🔄 In Progress
+## PHASE 1: PLANNING
+**Status:** ✅ Complete
 
 ### Analysis
 
-#### Backend (Instructor CSV Import)
-1. **Action**: `app/Actions/Instructor/BulkImportInstructorsAction.php`
-   - Parse CSV, validate each row, create instructors via existing `CreateInstructorAction`
-   - Return results: { imported: count, errors: [{row, field, message}] }
-2. **FormRequest**: `app/Http/Requests/ImportInstructorsCsvRequest.php`
-   - Validate file is CSV, max size
-3. **Controller methods** on `InstructorController`:
-   - `downloadCsvTemplate()` — returns example CSV with headers + sample row
-   - `importCsv()` — accepts upload, delegates to service, returns results
+#### Issue 1: Badge Colors (DVSA Approved & Secure Checkout)
+- **Files:** `Step1.vue` (lines 30, 34), `OnboardingLeftSidebar.vue` (lines 23, 27)
+- **Current:** `bg-red-600 text-white hover:bg-red-700`
+- **Fix:** Replace with `bg-primary text-primary-foreground hover:bg-primary/90`
 
-#### Backend (Resource CSV Import)
-1. **Action**: `app/Actions/Resource/BulkImportResourcesAction.php`
-   - Parse CSV, validate each row, create resources via existing service methods
-   - Only supports video_link type (file uploads require actual files)
-   - Return results: { imported: count, errors: [{row, field, message}] }
-2. **FormRequest**: `app/Http/Requests/ImportResourcesCsvRequest.php`
-   - Validate file is CSV, max size
-3. **Controller methods** on `ResourceController`:
-   - `downloadCsvTemplate()` — returns example CSV with headers + sample row
-   - `importCsv()` — accepts upload, delegates to service, returns results
+#### Issue 2: Stepper Background
+- **File:** `OnboardingHeader.vue` (lines 32, 51)
+- **Current:** `bg-red-600 text-white hover:bg-red-700` on completed steps
+- **Fix:** Replace with `bg-primary text-primary-foreground hover:bg-primary/90`
 
-#### Frontend (Both Pages)
-1. **Shared component**: `CsvImportSheet.vue` — Sheet with file upload, progress, results display
-2. **Instructor Index**: Add "Download Template" and "Upload CSV" buttons
-3. **Resources Index**: Add "Download Template" and "Upload CSV" buttons
-4. **Results display**: Show imported count, list row-level errors with details
+#### Issue 3: Learner Details Form Spacing
+- **File:** `Step5.vue` — learner details form inputs
+- **Fix:** Add `mt-1.5` to all 5 Input elements in the learner details section
 
-#### CSV Template Fields
-**Instructors**: name, email, transmission_type, phone, bio, status, pdi_status, address, postcode
-**Resources**: title, resource_type, video_url, description, tags, resource_folder_id
-
-### Risks & Edge Cases
-- Duplicate email detection (unique constraint on users.email)
-- Postcode coordinate lookup may fail — handle gracefully
-- Large CSV files — process row by row, don't load entire file into memory
-- Malformed CSV — detect and report parsing errors early
-- Resource folder_id must exist — validate before import
-- Video URL validation (YouTube/Vimeo only)
+#### Issue 4: Continue Button Bug
+- **Root cause:** `autoSave()` posts to same endpoint as `submit()` without an `auto_save` field. Backend checks `!$request->has('auto_save')` to decide redirect vs save-only. Auto-save was being treated as a real submit, causing race conditions and premature redirect attempts.
+- **Fix:** (1) Add `auto_save: true` via `form.transform()`, (2) Cancel pending auto-save before submit, (3) Skip required learner field validation during auto-save in FormRequest
 
 ### Reflection
-Solid plan covering both entities. The shared CsvImportSheet component prevents duplication. Using existing create actions ensures consistency. Row-level error reporting gives users actionable feedback.
+Clear, well-scoped fixes. The button bug was a subtle interaction between auto-save and the backend's redirect logic.
 
 ---
 
-## 🔨 PHASE 2: BACKEND IMPLEMENTATION
+## PHASE 2: IMPLEMENTATION
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Create `ImportInstructorsCsvRequest` FormRequest
-- [x] Create `BulkImportInstructorsAction` in `app/Actions/Instructor/`
-- [x] Add `bulkImportInstructors()` and `parseCsvFile()` to InstructorService
-- [x] Add `downloadCsvTemplate()` and `importCsv()` to InstructorController
-- [x] Create `ImportResourcesCsvRequest` FormRequest
-- [x] Create `BulkImportResourcesAction` in `app/Actions/Resource/`
-- [x] Add `bulkImportResources()` and `parseCsvFile()` to ResourceService
-- [x] Add `downloadCsvTemplate()` and `importCsv()` to ResourceController
-- [x] Register routes in web.php (4 routes confirmed)
+- [x] Fix badge colors in `OnboardingLeftSidebar.vue` (2 badges)
+- [x] Fix badge colors in `Step1.vue` (2 badges)
+- [x] Fix stepper colors in `OnboardingHeader.vue` (2 occurrences)
+- [x] Add `mt-1.5` spacing to all 5 inputs in Step 5 learner details form
+- [x] Fix auto-save to send `auto_save: true` via `form.transform()`
+- [x] Cancel pending auto-save timeout before explicit submit
+- [x] Remove duplicate watcher on `isBookingForSomeoneElse`
+- [x] Remove stale `console.log(props.package)` from Step5.vue
+- [x] Update `StepFiveRequest.php` to accept `auto_save` field and skip learner required validation during auto-save
+- [x] Fixed Label `for` attribute typo (`learner-first-name mb-4` → `learner-first-name`)
 
 ### Reflection
-Clean implementation following existing patterns. Actions handle row-level validation with detailed error reporting. CSV parsing in service layer with shared `parseCsvFile()`. Template downloads use streamed responses. Resource CSV only supports video_link type as planned.
+All fixes applied cleanly. The badge and stepper color changes were simple class replacements. The button bug fix required changes in both frontend (auto-save transform + cancel) and backend (FormRequest conditional validation). Also cleaned up dead code (duplicate watcher, console.log, typo in Label for attribute).
 
 ---
 
-## 🔨 PHASE 3: FRONTEND IMPLEMENTATION
-**Status:** ✅ Complete
-
-### Tasks
-- [x] Create shared `CsvImportSheet.vue` component (file upload, results display, error list)
-- [x] Add "Download Template" and "Upload CSV" buttons to Instructors/Index.vue
-- [x] Wire up instructor CSV import with toast notifications and error display
-- [x] Add "Download Template" and "Upload CSV" buttons to Resources/Index.vue
-- [x] Wire up resource CSV import with toast notifications and error display
-- [x] Generate Wayfinder types for new routes
-
-### Reflection
-Shared `CsvImportSheet.vue` component works for both pages via props (`importUrl`, `extraFormData`). Resources page passes `resource_folder_id` dynamically based on the current folder. Both pages use toast notifications for feedback and display row-level errors in a scrollable table.
-
----
-
-## 💭 FINAL REFLECTION
+## FINAL REFLECTION
 **Status:** ✅ Complete
 
 ### Summary
-Implemented CSV bulk import for both Instructors and Resources pages. Users can download example CSV templates and upload completed CSVs to bulk-create records with full validation and error reporting.
+Fixed 4 UI issues in the onboarding flow: badge colors, stepper colors, form spacing, and continue button bug.
 
 ### Files Changed
-**Backend (new):**
-1. `app/Http/Requests/ImportInstructorsCsvRequest.php` — FormRequest for instructor CSV upload
-2. `app/Http/Requests/ImportResourcesCsvRequest.php` — FormRequest for resource CSV upload
-3. `app/Actions/Instructor/BulkImportInstructorsAction.php` — Row-level validation and creation
-4. `app/Actions/Resource/BulkImportResourcesAction.php` — Row-level validation and creation
-
-**Backend (modified):**
-5. `app/Services/InstructorService.php` — Added `bulkImportInstructors()` and `parseCsvFile()`
-6. `app/Services/ResourceService.php` — Added `bulkImportResources()` and `parseCsvFile()`
-7. `app/Http/Controllers/InstructorController.php` — Added `downloadCsvTemplate()` and `importCsv()`
-8. `app/Http/Controllers/ResourceController.php` — Added `downloadCsvTemplate()` and `importCsv()`
-9. `routes/web.php` — 4 new routes for CSV template/import endpoints
-
-**Frontend (new):**
-10. `resources/js/components/CsvImportSheet.vue` — Shared reusable Sheet component
-
-**Frontend (modified):**
-11. `resources/js/pages/Instructors/Index.vue` — CSV Template + Upload CSV buttons
-12. `resources/js/pages/Resources/Index.vue` — CSV Template + Upload CSV buttons
-
-### Score
-9/10 — Clean, well-structured implementation following all project patterns. The shared CsvImportSheet component avoids duplication. Row-level error reporting gives actionable feedback. Minor note: `parseCsvFile()` is duplicated in both services — could be extracted to a shared trait, but kept simple to avoid over-engineering.
+1. `resources/js/components/Onboarding/OnboardingLeftSidebar.vue` — Badge colors: `bg-red-600` → `bg-primary`
+2. `resources/js/pages/Onboarding/Step1.vue` — Badge colors: `bg-red-600` → `bg-primary`
+3. `resources/js/components/Onboarding/OnboardingHeader.vue` — Stepper colors: `bg-red-600` → `bg-primary`
+4. `resources/js/pages/Onboarding/Step5.vue` — Label spacing, auto-save fix, removed dead code
+5. `app/Http/Requests/Onboarding/StepFiveRequest.php` — Added `auto_save` rule, conditional learner validation

@@ -164,11 +164,12 @@
                         <CardContent class="space-y-4">
                           <div class="grid grid-cols-2 gap-4">
                             <div>
-                              <Label for="learner-first-name mb-4">First Name</Label>
+                              <Label for="learner-first-name">First Name</Label>
                               <Input
                                 v-model="form.learner_first_name"
                                 id="learner-first-name"
                                 type="text"
+                                class="mt-1.5"
                                 :class="{ 'border-destructive': form.errors.learner_first_name }"
                               />
                               <p v-if="form.errors.learner_first_name" class="text-sm text-destructive mt-1">
@@ -181,6 +182,7 @@
                                 v-model="form.learner_last_name"
                                 id="learner-last-name"
                                 type="text"
+                                class="mt-1.5"
                                 :class="{ 'border-destructive': form.errors.learner_last_name }"
                               />
                               <p v-if="form.errors.learner_last_name" class="text-sm text-destructive mt-1">
@@ -193,6 +195,7 @@
                                 v-model="form.learner_phone"
                                 id="learner-phone"
                                 type="tel"
+                                class="mt-1.5"
                                 :class="{ 'border-destructive': form.errors.learner_phone }"
                               />
                               <p v-if="form.errors.learner_phone" class="text-sm text-destructive mt-1">
@@ -205,6 +208,7 @@
                                 v-model="form.learner_email"
                                 id="learner-email"
                                 type="email"
+                                class="mt-1.5"
                                 :class="{ 'border-destructive': form.errors.learner_email }"
                               />
                               <p v-if="form.errors.learner_email" class="text-sm text-destructive mt-1">
@@ -217,6 +221,7 @@
                                 v-model="form.learner_dob"
                                 id="learner-dob"
                                 type="date"
+                                class="mt-1.5"
                                 :class="{ 'border-destructive': form.errors.learner_dob }"
                               />
                               <p v-if="form.errors.learner_dob" class="text-sm text-destructive mt-1">
@@ -348,8 +353,6 @@ const props = defineProps({
   maxStepReached: { type: Number, default: 5 }
 })
 
-console.log(props.package)
-
 const page = usePage()
 
 const form = useForm({
@@ -433,7 +436,10 @@ function autoSave() {
 
   clearTimeout(saveTimeout)
   saveTimeout = setTimeout(() => {
-    form.post(store({ uuid: uuid.value }).url, {
+    form.transform((data) => ({
+      ...data,
+      auto_save: true,
+    })).post(store({ uuid: uuid.value }).url, {
       preserveScroll: true,
       preserveState: true,
       onSuccess: () => {
@@ -446,17 +452,8 @@ function autoSave() {
   }, 1500) // 1.5 second debounce
 }
 
-// Watch for changes and auto-save
 // Note: We don't auto-save learner fields to avoid premature validation
 // Learner fields are only validated on explicit form submission
-watch(isBookingForSomeoneElse, (newValue) => {
-  // Sync the checkbox state but don't auto-save to avoid validation
-  // Validation will happen on explicit submit
-})
-
-// Removed auto-save watchers for learner fields
-// These fields will only be validated when user clicks "Confirm & Continue to Payment"
-// This prevents showing validation errors while user is still filling out the form
 
 // Watch address fields
 watch(() => form.pickup_address_line_1, () => autoSave())
@@ -473,6 +470,8 @@ watch(editingAddress, () => {
 })
 
 function submit() {
+  // Cancel any pending auto-save to prevent race conditions
+  clearTimeout(saveTimeout)
   form.post(store({ uuid: uuid.value }).url)
 }
 </script>
