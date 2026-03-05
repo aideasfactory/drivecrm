@@ -14,9 +14,10 @@ import {
     TableRow,
 } from '@/components/ui/table'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Search, Plus, Smartphone } from 'lucide-vue-next'
+import { Search, Plus, Smartphone, Download, FileUp } from 'lucide-vue-next'
 import type { Instructor } from '@/types/instructor'
 import AddInstructorSheet from '@/components/Instructors/AddInstructorSheet.vue'
+import CsvImportSheet from '@/components/CsvImportSheet.vue'
 
 interface Props {
     instructors: Instructor[]
@@ -26,6 +27,11 @@ const props = defineProps<Props>()
 
 const searchQuery = ref('')
 const isAddSheetOpen = ref(false)
+const isCsvImportOpen = ref(false)
+
+const handleCsvImported = () => {
+    router.reload()
+}
 
 const filteredInstructors = computed(() => {
     if (!searchQuery.value) {
@@ -82,10 +88,20 @@ const breadcrumbs = [{ title: 'Instructors' }]
                         class="pl-9"
                     />
                 </div>
-                <Button @click="isAddSheetOpen = true" class="cursor-pointer">
-                    <Plus class="mr-2 h-4 w-4" />
-                    Add Instructor
-                </Button>
+                <div class="flex items-center gap-2">
+                    <Button variant="outline" as="a" href="/instructors/csv-template">
+                        <Download class="mr-2 h-4 w-4" />
+                        CSV Template
+                    </Button>
+                    <Button variant="outline" @click="isCsvImportOpen = true">
+                        <FileUp class="mr-2 h-4 w-4" />
+                        Upload CSV
+                    </Button>
+                    <Button @click="isAddSheetOpen = true" class="cursor-pointer">
+                        <Plus class="mr-2 h-4 w-4" />
+                        Add Instructor
+                    </Button>
+                </div>
             </div>
 
             <!-- Instructors Table -->
@@ -184,6 +200,15 @@ const breadcrumbs = [{ title: 'Instructors' }]
         <AddInstructorSheet
             v-model:open="isAddSheetOpen"
             @instructor-created="isAddSheetOpen = false"
+        />
+
+        <!-- CSV Import Sheet -->
+        <CsvImportSheet
+            v-model:open="isCsvImportOpen"
+            title="Import Instructors from CSV"
+            description="Upload a CSV file to bulk-create instructor records. Download the template first to see the required format."
+            import-url="/instructors/import-csv"
+            @imported="handleCsvImported"
         />
     </AppLayout>
 </template>

@@ -29,6 +29,8 @@ import {
     FolderOpen,
     FileVideo,
     Loader2,
+    Download,
+    FileUp,
 } from 'lucide-vue-next';
 
 import FolderCard from '@/components/Resources/FolderCard.vue';
@@ -38,6 +40,7 @@ import EditFolderSheet from '@/components/Resources/EditFolderSheet.vue';
 import UploadResourceSheet from '@/components/Resources/UploadResourceSheet.vue';
 import EditResourceSheet from '@/components/Resources/EditResourceSheet.vue';
 import ResourcePreview from '@/components/Resources/ResourcePreview.vue';
+import CsvImportSheet from '@/components/CsvImportSheet.vue';
 
 // Types
 interface FolderItem {
@@ -90,6 +93,13 @@ const isDeletingFolder = ref(false);
 const isDeleteResourceDialogOpen = ref(false);
 const deletingResource = ref<ResourceItem | null>(null);
 const isDeletingResource = ref(false);
+
+// CSV import
+const isCsvImportOpen = ref(false);
+
+const csvExtraFormData = computed(() => {
+    return currentFolderId.value ? { resource_folder_id: currentFolderId.value } : {};
+});
 
 // Computed
 const currentFolderId = computed(() => currentFolder.value?.id ?? null);
@@ -269,6 +279,18 @@ onMounted(() => {
 
                 <!-- Action Buttons -->
                 <div class="flex items-center gap-2">
+                    <Button variant="outline" as="a" href="/resources/csv-template">
+                        <Download class="mr-2 h-4 w-4" />
+                        CSV Template
+                    </Button>
+                    <Button
+                        v-if="currentFolder"
+                        variant="outline"
+                        @click="isCsvImportOpen = true"
+                    >
+                        <FileUp class="mr-2 h-4 w-4" />
+                        Upload CSV
+                    </Button>
                     <Button
                         variant="outline"
                         @click="isCreateFolderOpen = true"
@@ -497,5 +519,15 @@ onMounted(() => {
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+
+        <!-- CSV Import Sheet -->
+        <CsvImportSheet
+            v-model:open="isCsvImportOpen"
+            title="Import Video Resources from CSV"
+            description="Upload a CSV file to bulk-create video link resources in the current folder. Download the template first to see the required format."
+            import-url="/resources/import-csv"
+            :extra-form-data="csvExtraFormData"
+            @imported="loadContents(currentFolderId)"
+        />
     </AppLayout>
 </template>

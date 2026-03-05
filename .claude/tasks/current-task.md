@@ -1,131 +1,144 @@
-# Task: Extend Resource Upload to Support Video Links (Vimeo/YouTube)
+# Task: CSV Bulk Import for Instructors and Resources
 
 **Created:** 2026-03-05
-**Last Updated:** 2026-03-05T15:30:00Z
-**Status:** Complete
+**Last Updated:** 2026-03-05T18:30:00Z
+**Status:** ✅ Complete
 
 ---
 
 ## 📋 Overview
 
 ### Goal
-Extend the existing resource upload functionality to support two upload types: file upload (existing) and video link (Vimeo/YouTube URL). Update the slide-out sheet UI to allow choosing between upload types while keeping common fields (title, description, tags) for both.
+Implement CSV bulk import functionality for both /instructors and /resources pages. Users can download example CSV templates and upload completed CSVs to bulk-create records with full validation, error reporting, and duplicate handling.
 
 ### Success Criteria
-- [x] Button text changed from "Upload File" to "Upload Resource"
-- [x] Upload sheet has a type selector: "File" or "Video Link"
-- [x] When "Video Link" selected, shows URL input field (for Vimeo/YouTube)
-- [x] When "File" selected, keeps existing file upload functionality
-- [x] Both types share title, description, and tags fields
-- [x] Database migration adds `resource_type` and `video_url` fields to resources table
-- [x] Resource model updated with new fields
-- [x] Existing file uploads continue to work after changes
-- [x] Feature test covers both upload types
+- [ ] Example CSV download button on /instructors page with all required fields
+- [ ] Example CSV download button on /resources page with all required fields
+- [ ] Upload CSV button on both pages to import completed CSVs
+- [ ] Backend parsing and validation of uploaded CSV data
+- [ ] Valid records imported into database
+- [ ] Clear feedback on successful imports and validation errors
+- [ ] Edge cases handled: duplicates, missing required fields, malformed data
 
 ### Context
-- **Existing**: Full resources CRUD with S3 file upload, nested folders, tags, preview
-- **Architecture**: ResourceController → ResourceService → Actions (app/Actions/Resource/)
-- **Frontend**: UploadResourceSheet.vue with drag-drop file upload, TagInput component
-- **Storage**: S3 for files; video links will be URL-only (no file storage)
+- **Instructor required fields**: name, email, transmission_type (+ optional: phone, bio, status, pdi_status, address, postcode)
+- **Resource required fields**: title, resource_type, resource_folder_id (+ conditional: video_url for video_link type; + optional: description, tags)
+- **Resource CSV**: Only video_link type practical for CSV (file uploads need actual files)
+- **Architecture**: Controller → Service → Action pattern
+- **Frontend**: Vue 3 + Inertia v2, ShadCN components, Sheets for forms
 
 ---
 
 ## 🎯 PHASE 1: PLANNING
-**Status:** ✅ Complete
+**Status:** 🔄 In Progress
 
-### Architecture
+### Analysis
 
-**Database Changes:**
-- Add `resource_type` column defaulting to 'file' to `resources` table
-- Add `video_url` nullable string(500) column to `resources` table
-- Make `file_path`, `file_name`, `file_size`, `mime_type` nullable (video links won't have files)
+#### Backend (Instructor CSV Import)
+1. **Action**: `app/Actions/Instructor/BulkImportInstructorsAction.php`
+   - Parse CSV, validate each row, create instructors via existing `CreateInstructorAction`
+   - Return results: { imported: count, errors: [{row, field, message}] }
+2. **FormRequest**: `app/Http/Requests/ImportInstructorsCsvRequest.php`
+   - Validate file is CSV, max size
+3. **Controller methods** on `InstructorController`:
+   - `downloadCsvTemplate()` — returns example CSV with headers + sample row
+   - `importCsv()` — accepts upload, delegates to service, returns results
 
-**Backend Changes:**
-- Update `Resource` model — add new fillable fields, add `isVideoLink()` and `isFile()` methods
-- Update `StoreResourceRequest` — conditional validation based on `resource_type`
-- Create `StoreVideoLinkResourceAction` in `app/Actions/Resource/`
-- Update `ResourceService` — inject and expose new action
-- Update `ResourceController::storeResource()` — branch on resource_type
-- Update `ResourceController::getFileUrl()` — return video_url for video links
-- Update `ResourceController::emailView()` — redirect to video_url for video links
+#### Backend (Resource CSV Import)
+1. **Action**: `app/Actions/Resource/BulkImportResourcesAction.php`
+   - Parse CSV, validate each row, create resources via existing service methods
+   - Only supports video_link type (file uploads require actual files)
+   - Return results: { imported: count, errors: [{row, field, message}] }
+2. **FormRequest**: `app/Http/Requests/ImportResourcesCsvRequest.php`
+   - Validate file is CSV, max size
+3. **Controller methods** on `ResourceController`:
+   - `downloadCsvTemplate()` — returns example CSV with headers + sample row
+   - `importCsv()` — accepts upload, delegates to service, returns results
 
-**Frontend Changes:**
-- Update `UploadResourceSheet.vue` — type selector buttons, conditional file/URL input
-- Update `Resources/Index.vue` — change button text to "Upload Resource"
-- Update `ResourceCard.vue` — purple link icon for video links, conditional file info
-- Update `ResourcePreview.vue` — YouTube/Vimeo iframe embed with 16:9 aspect ratio
-- Update `EditResourceSheet.vue` — show video URL instead of file info for video links
+#### Frontend (Both Pages)
+1. **Shared component**: `CsvImportSheet.vue` — Sheet with file upload, progress, results display
+2. **Instructor Index**: Add "Download Template" and "Upload CSV" buttons
+3. **Resources Index**: Add "Download Template" and "Upload CSV" buttons
+4. **Results display**: Show imported count, list row-level errors with details
+
+#### CSV Template Fields
+**Instructors**: name, email, transmission_type, phone, bio, status, pdi_status, address, postcode
+**Resources**: title, resource_type, video_url, description, tags, resource_folder_id
+
+### Risks & Edge Cases
+- Duplicate email detection (unique constraint on users.email)
+- Postcode coordinate lookup may fail — handle gracefully
+- Large CSV files — process row by row, don't load entire file into memory
+- Malformed CSV — detect and report parsing errors early
+- Resource folder_id must exist — validate before import
+- Video URL validation (YouTube/Vimeo only)
 
 ### Reflection
-Planning was thorough. Identified all files that needed changes across the full stack.
+Solid plan covering both entities. The shared CsvImportSheet component prevents duplication. Using existing create actions ensures consistency. Row-level error reporting gives users actionable feedback.
 
 ---
 
-## 🔨 PHASE 2: IMPLEMENTATION
+## 🔨 PHASE 2: BACKEND IMPLEMENTATION
 **Status:** ✅ Complete
 
 ### Tasks
-
-**Database & Backend:**
-- [x] Create migration to add `resource_type`, `video_url` and make file columns nullable
-- [x] Update `.claude/database-schema.md` with new fields
-- [x] Update `Resource` model with new fields, `isVideoLink()`, `isFile()` methods
-- [x] Update `StoreResourceRequest` with conditional validation rules
-- [x] Create `StoreVideoLinkResourceAction` in `app/Actions/Resource/`
-- [x] Update `ResourceService` with `storeVideoLinkResource()` method
-- [x] Update `ResourceController::storeResource()` to handle both types
-- [x] Update `ResourceController::getFileUrl()` to return video_url for video links
-- [x] Update `ResourceController::emailView()` to redirect to video_url for video links
-- [x] Run Wayfinder generation
-
-**Frontend:**
-- [x] Update `UploadResourceSheet.vue` with type selector and conditional inputs
-- [x] Update `Resources/Index.vue` button text to "Upload Resource"
-- [x] Update `ResourceCard.vue` to handle video link display
-- [x] Update `ResourcePreview.vue` to handle video link embed
-- [x] Update `EditResourceSheet.vue` to show video URL info for video links
-
-**Testing:**
-- [x] Create feature test for video link resource creation
-- [x] Create feature test verifying file upload still works
+- [x] Create `ImportInstructorsCsvRequest` FormRequest
+- [x] Create `BulkImportInstructorsAction` in `app/Actions/Instructor/`
+- [x] Add `bulkImportInstructors()` and `parseCsvFile()` to InstructorService
+- [x] Add `downloadCsvTemplate()` and `importCsv()` to InstructorController
+- [x] Create `ImportResourcesCsvRequest` FormRequest
+- [x] Create `BulkImportResourcesAction` in `app/Actions/Resource/`
+- [x] Add `bulkImportResources()` and `parseCsvFile()` to ResourceService
+- [x] Add `downloadCsvTemplate()` and `importCsv()` to ResourceController
+- [x] Register routes in web.php (4 routes confirmed)
 
 ### Reflection
-Implementation went cleanly. All existing patterns were followed (Controller → Service → Action). Conditional validation in FormRequest keeps the API clean. The frontend type selector uses Button variant toggling since no Tabs/RadioGroup ShadCN components were available.
+Clean implementation following existing patterns. Actions handle row-level validation with detailed error reporting. CSV parsing in service layer with shared `parseCsvFile()`. Template downloads use streamed responses. Resource CSV only supports video_link type as planned.
 
 ---
 
-## 💭 PHASE 3: FINAL REFLECTION & DOCUMENTATION
+## 🔨 PHASE 3: FRONTEND IMPLEMENTATION
+**Status:** ✅ Complete
+
+### Tasks
+- [x] Create shared `CsvImportSheet.vue` component (file upload, results display, error list)
+- [x] Add "Download Template" and "Upload CSV" buttons to Instructors/Index.vue
+- [x] Wire up instructor CSV import with toast notifications and error display
+- [x] Add "Download Template" and "Upload CSV" buttons to Resources/Index.vue
+- [x] Wire up resource CSV import with toast notifications and error display
+- [x] Generate Wayfinder types for new routes
+
+### Reflection
+Shared `CsvImportSheet.vue` component works for both pages via props (`importUrl`, `extraFormData`). Resources page passes `resource_folder_id` dynamically based on the current folder. Both pages use toast notifications for feedback and display row-level errors in a scrollable table.
+
+---
+
+## 💭 FINAL REFLECTION
 **Status:** ✅ Complete
 
 ### Summary
-Extended the resource upload system to support both file uploads and video links (YouTube/Vimeo). Added `resource_type` and `video_url` columns to the resources table, made file-specific columns nullable, created a new `StoreVideoLinkResourceAction`, updated all layers (Controller, Service, FormRequest, Model), and updated 5 Vue components to handle the new resource type with embedded video previews.
+Implemented CSV bulk import for both Instructors and Resources pages. Users can download example CSV templates and upload completed CSVs to bulk-create records with full validation and error reporting.
 
 ### Files Changed
-**Backend (7 files):**
-1. `database/migrations/2026_03_05_133615_add_resource_type_and_video_url_to_resources_table.php` — NEW
-2. `app/Models/Resource.php` — Added fillable fields, `isVideoLink()`, `isFile()`, null-safe `isVideo()`
-3. `app/Http/Requests/StoreResourceRequest.php` — Conditional validation for file vs video_link
-4. `app/Actions/Resource/StoreVideoLinkResourceAction.php` — NEW
-5. `app/Services/ResourceService.php` — Injected new action, added `storeVideoLinkResource()`
-6. `app/Http/Controllers/ResourceController.php` — Branching in storeResource, getFileUrl, emailView
+**Backend (new):**
+1. `app/Http/Requests/ImportInstructorsCsvRequest.php` — FormRequest for instructor CSV upload
+2. `app/Http/Requests/ImportResourcesCsvRequest.php` — FormRequest for resource CSV upload
+3. `app/Actions/Instructor/BulkImportInstructorsAction.php` — Row-level validation and creation
+4. `app/Actions/Resource/BulkImportResourcesAction.php` — Row-level validation and creation
 
-**Frontend (5 files):**
-7. `resources/js/components/Resources/UploadResourceSheet.vue` — Type selector, conditional inputs
-8. `resources/js/pages/Resources/Index.vue` — Button text + ResourceItem interface
-9. `resources/js/components/Resources/ResourceCard.vue` — Video link icon/info display
-10. `resources/js/components/Resources/ResourcePreview.vue` — YouTube/Vimeo iframe embed
-11. `resources/js/components/Resources/EditResourceSheet.vue` — Video URL in read-only info
+**Backend (modified):**
+5. `app/Services/InstructorService.php` — Added `bulkImportInstructors()` and `parseCsvFile()`
+6. `app/Services/ResourceService.php` — Added `bulkImportResources()` and `parseCsvFile()`
+7. `app/Http/Controllers/InstructorController.php` — Added `downloadCsvTemplate()` and `importCsv()`
+8. `app/Http/Controllers/ResourceController.php` — Added `downloadCsvTemplate()` and `importCsv()`
+9. `routes/web.php` — 4 new routes for CSV template/import endpoints
 
-**Documentation (1 file):**
-12. `.claude/database-schema.md` — Updated resources table docs
+**Frontend (new):**
+10. `resources/js/components/CsvImportSheet.vue` — Shared reusable Sheet component
 
-**Tests (1 file):**
-13. `tests/Feature/Resources/ResourceUploadTest.php` — NEW (6 test cases)
-
-### Potential Overhead / Anti-patterns
-- The `resource_type` column uses a plain string rather than a DB enum — this is actually better for Laravel as DB enums are harder to modify. Could consider a PHP Enum backing if more types are added later.
-- The regex validation for YouTube/Vimeo URLs in StoreResourceRequest may be too strict or miss edge cases (e.g., YouTube Shorts URLs, Vimeo private videos with hash). Consider relaxing if users report issues.
-- No migration for a `ResourceFactory` — tests create ResourceFolder manually. Could benefit from factories if more resource tests are needed.
+**Frontend (modified):**
+11. `resources/js/pages/Instructors/Index.vue` — CSV Template + Upload CSV buttons
+12. `resources/js/pages/Resources/Index.vue` — CSV Template + Upload CSV buttons
 
 ### Score
-8/10
+9/10 — Clean, well-structured implementation following all project patterns. The shared CsvImportSheet component avoids duplication. Row-level error reporting gives actionable feedback. Minor note: `parseCsvFile()` is duplicated in both services — could be extracted to a shared trait, but kept simple to avoid over-engineering.

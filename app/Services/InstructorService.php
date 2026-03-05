@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Actions\FetchPostcodeCoordinatesAction;
 use App\Actions\FindInstructorsByPostcodeSectorAction;
+use App\Actions\Instructor\BulkImportInstructorsAction;
 use App\Actions\Instructor\CreateCalendarItemAction;
 use App\Actions\Instructor\CreateInstructorLocationAction;
 use App\Actions\Instructor\CreateInstructorPackageAction;
@@ -33,6 +34,7 @@ class InstructorService
     public function __construct(
         protected FetchPostcodeCoordinatesAction $fetchPostcodeCoordinates,
         protected FindInstructorsByPostcodeSectorAction $findInstructorsByPostcodeSector,
+        protected BulkImportInstructorsAction $bulkImportInstructors,
         protected GetInstructorPackagesAction $getInstructorPackages,
         protected CreateInstructorPackageAction $createInstructorPackage,
         protected GetInstructorLocationsAction $getInstructorLocations,
@@ -354,5 +356,56 @@ class InstructorService
     public function getPayouts(Instructor $instructor): Collection
     {
         return ($this->getInstructorPayouts)($instructor);
+    }
+
+    /**
+     * Bulk import instructors from parsed CSV rows.
+     *
+     * @param  array<int, array<string, string>>  $rows  Parsed CSV rows
+     * @return array{imported: int, skipped: int, errors: array<int, array{row: int, field: string|null, message: string}>}
+     */
+    public function bulkImportInstructors(array $rows): array
+    {
+        return ($this->bulkImportInstructors)($rows);
+    }
+
+    /**
+     * Parse a CSV file into an array of associative rows.
+     *
+     * @return array<int, array<string, string>>
+     */
+    public function parseCsvFile(\Illuminate\Http\UploadedFile $file): array
+    {
+        $rows = [];
+        $handle = fopen($file->getRealPath(), 'r');
+
+        if ($handle === false) {
+            return [];
+        }
+
+        // Read header row
+        $headers = fgetcsv($handle);
+        if ($headers === false) {
+            fclose($handle);
+
+            return [];
+        }
+
+        // Normalize headers
+        $headers = array_map(fn ($h) => strtolower(trim($h)), $headers);
+
+        // Read data rows
+        while (($row = fgetcsv($handle)) !== false) {
+            // Skip completely empty rows
+            if (count(array_filter($row, fn ($v) => trim($v) !== '')) === 0) {
+                continue;
+            }
+
+            $rows[] = array_combine($headers, array_pad($row, count($headers), ''));
+        }
+
+        fclose($handle);
+
+        return $rows;
     }
 }

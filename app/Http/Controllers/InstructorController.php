@@ -9,6 +9,7 @@ use App\Actions\Shared\Contact\DeleteContactAction;
 use App\Actions\Shared\Contact\SetPrimaryContactAction;
 use App\Actions\Shared\Contact\UpdateContactAction;
 use App\Actions\Shared\LogActivityAction;
+use App\Http\Requests\ImportInstructorsCsvRequest;
 use App\Http\Requests\StoreCalendarItemRequest;
 use App\Http\Requests\StoreInstructorRequest;
 use App\Http\Requests\StoreLocationRequest;
@@ -724,6 +725,50 @@ class InstructorController extends Controller
 
         return response()->json([
             'payouts' => $payouts,
+        ]);
+    }
+
+    /**
+     * Download the instructor CSV import template.
+     */
+    public function downloadCsvTemplate(): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $headers = ['name', 'email', 'transmission_type', 'phone', 'bio', 'status', 'pdi_status', 'address', 'postcode'];
+        $exampleRow = ['John Smith', 'john@example.com', 'manual', '07700900000', 'Experienced instructor', 'active', '', '123 High Street', 'SW1A 1AA'];
+
+        return response()->streamDownload(function () use ($headers, $exampleRow) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, $headers);
+            fputcsv($handle, $exampleRow);
+            fclose($handle);
+        }, 'instructors-template.csv', [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
+    /**
+     * Import instructors from an uploaded CSV file.
+     */
+    public function importCsv(ImportInstructorsCsvRequest $request): JsonResponse
+    {
+        $rows = $this->instructorService->parseCsvFile($request->file('file'));
+
+        if (empty($rows)) {
+            return response()->json([
+                'message' => 'The CSV file is empty or could not be parsed.',
+                'imported' => 0,
+                'skipped' => 0,
+                'errors' => [],
+            ], 422);
+        }
+
+        $result = $this->instructorService->bulkImportInstructors($rows);
+
+        return response()->json([
+            'message' => "{$result['imported']} instructor(s) imported successfully.",
+            'imported' => $result['imported'],
+            'skipped' => $result['skipped'],
+            'errors' => $result['errors'],
         ]);
     }
 }

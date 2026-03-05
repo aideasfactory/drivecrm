@@ -31,6 +31,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('instructors.index');
     Route::post('/instructors', [\App\Http\Controllers\InstructorController::class, 'store'])
         ->name('instructors.store');
+    Route::get('/instructors/csv-template', [\App\Http\Controllers\InstructorController::class, 'downloadCsvTemplate'])
+        ->name('instructors.csv-template');
+    Route::post('/instructors/import-csv', [\App\Http\Controllers\InstructorController::class, 'importCsv'])
+        ->name('instructors.import-csv');
     Route::get('/instructors/{instructor}', [\App\Http\Controllers\InstructorController::class, 'show'])
         ->name('instructors.show');
     Route::put('/instructors/{instructor}', [\App\Http\Controllers\InstructorController::class, 'update'])
@@ -185,6 +189,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('resources.files.update');
         Route::delete('/resources/files/{resource}', [\App\Http\Controllers\ResourceController::class, 'destroyResource'])
             ->name('resources.files.destroy');
+        Route::get('/resources/csv-template', [\App\Http\Controllers\ResourceController::class, 'downloadCsvTemplate'])
+            ->name('resources.csv-template');
+        Route::post('/resources/import-csv', [\App\Http\Controllers\ResourceController::class, 'importCsv'])
+            ->name('resources.import-csv');
     });
 
     Route::get('/apps', [\App\Http\Controllers\AppController::class, 'index'])

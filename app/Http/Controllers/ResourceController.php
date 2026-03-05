@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ImportResourcesCsvRequest;
 use App\Http\Requests\StoreFolderRequest;
 use App\Http\Requests\StoreResourceRequest;
 use App\Http\Requests\UpdateFolderRequest;
@@ -196,5 +197,51 @@ class ResourceController extends Controller
         );
 
         return redirect()->away($url);
+    }
+
+    /**
+     * Download the resource CSV import template.
+     */
+    public function downloadCsvTemplate(): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $headers = ['title', 'video_url', 'description', 'tags'];
+        $exampleRow = ['Introduction to Driving Theory', 'https://www.youtube.com/watch?v=example', 'A video covering basic driving theory', 'theory,beginner,driving'];
+
+        return response()->streamDownload(function () use ($headers, $exampleRow) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, $headers);
+            fputcsv($handle, $exampleRow);
+            fclose($handle);
+        }, 'resources-template.csv', [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
+    /**
+     * Import video link resources from an uploaded CSV file.
+     */
+    public function importCsv(ImportResourcesCsvRequest $request): JsonResponse
+    {
+        $folder = ResourceFolder::findOrFail($request->validated('resource_folder_id'));
+
+        $rows = $this->resourceService->parseCsvFile($request->file('file'));
+
+        if (empty($rows)) {
+            return response()->json([
+                'message' => 'The CSV file is empty or could not be parsed.',
+                'imported' => 0,
+                'skipped' => 0,
+                'errors' => [],
+            ], 422);
+        }
+
+        $result = $this->resourceService->bulkImportResources($rows, $folder);
+
+        return response()->json([
+            'message' => "{$result['imported']} resource(s) imported successfully.",
+            'imported' => $result['imported'],
+            'skipped' => $result['skipped'],
+            'errors' => $result['errors'],
+        ]);
     }
 }
