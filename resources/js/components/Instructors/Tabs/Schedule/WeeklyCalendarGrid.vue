@@ -22,8 +22,9 @@ const DAY_START_HOUR = 8
 const DAY_END_HOUR = 18
 const ROW_HEIGHT = 40 // px per 30-min slot
 const SLOT_COUNT = (DAY_END_HOUR - DAY_START_HOUR) * 2 // 20 half-hour slots
-const SNAP_HOURS = 2 // drag & click snap to 2-hour blocks
-const SNAP_PX = SNAP_HOURS * 2 * ROW_HEIGHT // 2 hours = 4 rows of 30-min = 160px
+const SNAP_MINUTES = 30 // drag & click snap to 30-min intervals
+const SNAP_PX = ROW_HEIGHT // 30-min = 1 row = 40px
+const BLOCK_DURATION_HOURS = 2 // blocks are always 2 hours long
 
 // ── Time labels ──────────────────────────────────────────
 const timeLabels = computed(() => {
@@ -60,16 +61,16 @@ function isToday(date: Date): boolean {
     )
 }
 
-// ── Click on empty slot (snap to nearest even hour) ─────
+// ── Click on empty slot (snap to nearest 30-min) ────────
 function handleSlotClick(dayDate: Date, slotIndex: number) {
     const date = formatDate(dayDate)
     const totalMinutes = DAY_START_HOUR * 60 + slotIndex * 30
-    // Round down to nearest even hour
-    const h = Math.floor(totalMinutes / 60)
-    const snappedHour = h % 2 === 0 ? h : h - 1
-    // Clamp so the 2-hour slot fits within the day
-    const clampedHour = Math.min(snappedHour, DAY_END_HOUR - SNAP_HOURS)
-    const time = `${String(clampedHour).padStart(2, '0')}:00`
+    // Round down to nearest 30 minutes
+    const snappedMinutes = Math.floor(totalMinutes / SNAP_MINUTES) * SNAP_MINUTES
+    // Clamp so the 2-hour block fits within the day
+    const lastValidStart = (DAY_END_HOUR - BLOCK_DURATION_HOURS) * 60
+    const clampedMinutes = Math.min(snappedMinutes, lastValidStart)
+    const time = minutesToTime(clampedMinutes)
     emit('clickSlot', date, time)
 }
 
@@ -146,7 +147,7 @@ function handlePointerMove(e: PointerEvent) {
 
     const gridRect = gridRef.value.getBoundingClientRect()
 
-    // Calculate ghost position (snap to 2-hour increments vertically)
+    // Calculate ghost position (snap to 30-min increments vertically)
     const rawTop = e.clientY - gridRect.top - dragging.value.offsetY
     const snappedTop = Math.round(rawTop / SNAP_PX) * SNAP_PX
     dragging.value.ghostTop = Math.max(0, Math.min(snappedTop, SLOT_COUNT * ROW_HEIGHT - dragging.value.ghostHeight))
@@ -176,10 +177,10 @@ function handlePointerUp(_e: PointerEvent) {
     const drag = dragging.value
     const event = drag.event
 
-    // Calculate new time from snapped position (2-hour blocks)
-    const snapBlocks = Math.round(drag.ghostTop / SNAP_PX)
-    const newStartMinutes = DAY_START_HOUR * 60 + snapBlocks * SNAP_HOURS * 60
-    const newEndMinutes = newStartMinutes + SNAP_HOURS * 60
+    // Calculate new time from snapped position (30-min intervals, 2-hour blocks)
+    const snapSlots = Math.round(drag.ghostTop / SNAP_PX)
+    const newStartMinutes = DAY_START_HOUR * 60 + snapSlots * SNAP_MINUTES
+    const newEndMinutes = newStartMinutes + BLOCK_DURATION_HOURS * 60
 
     // Clamp within day boundaries
     if (newStartMinutes < DAY_START_HOUR * 60 || newEndMinutes > DAY_END_HOUR * 60) {

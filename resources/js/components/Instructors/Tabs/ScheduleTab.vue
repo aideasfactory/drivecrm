@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import axios from 'axios'
 import {
     Plus,
@@ -92,15 +92,24 @@ const editForm = ref<{
     unavailability_reason: '',
 })
 
-// ── Time slot options (2-hour blocks within 08:00–18:00) ─
+// ── Time slot constants ──────────────────────────────────
 const SLOT_DURATION_HOURS = 2
-const startTimeOptions = [
-    { value: '08:00', label: '08:00' },
-    { value: '10:00', label: '10:00' },
-    { value: '12:00', label: '12:00' },
-    { value: '14:00', label: '14:00' },
-    { value: '16:00', label: '16:00' },
-]
+const TRAVEL_TIME_MINUTES = 30
+const DAY_START_HOUR = 8
+const DAY_END_HOUR = 18
+
+// Generate 30-min interval start times where a 2-hour block still fits within the day
+const startTimeOptions = (() => {
+    const options: { value: string; label: string }[] = []
+    const lastValidStart = (DAY_END_HOUR - SLOT_DURATION_HOURS) * 60 // 16:00 = 960
+    for (let m = DAY_START_HOUR * 60; m <= lastValidStart; m += 30) {
+        const hh = String(Math.floor(m / 60)).padStart(2, '0')
+        const mm = String(m % 60).padStart(2, '0')
+        const label = `${hh}:${mm}`
+        options.push({ value: label, label })
+    }
+    return options
+})()
 
 // ── Helpers ──────────────────────────────────────────────
 /** Normalise "HH:MM:SS" or "HH:MM" → "HH:MM" */
@@ -123,13 +132,38 @@ function calcEndTime(startTime: string): string {
     return minutesToTime(minutes + SLOT_DURATION_HOURS * 60)
 }
 
-/** Snap a time string to the nearest valid start time option */
+/** Snap a time string to the nearest valid 30-min start time option */
 function snapToStartOption(time: string): string {
     const minutes = timeToMinutes(time)
-    const hour = Math.floor(minutes / 60)
-    const snappedHour = hour % 2 === 0 ? hour : hour - 1
-    const clamped = Math.max(8, Math.min(snappedHour, 16))
-    return `${String(clamped).padStart(2, '0')}:00`
+    // Round down to nearest 30 minutes
+    const snapped = Math.floor(minutes / 30) * 30
+    // Clamp so the 2-hour block fits within the day
+    const lastValidStart = (DAY_END_HOUR - SLOT_DURATION_HOURS) * 60
+    const clamped = Math.max(DAY_START_HOUR * 60, Math.min(snapped, lastValidStart))
+    return minutesToTime(clamped)
+}
+
+/** Check if a proposed time slot conflicts with existing events (including travel time) */
+function hasConflict(date: string, startTime: string, endTime: string, excludeId?: number): boolean {
+    const newStart = timeToMinutes(startTime)
+    const newEnd = timeToMinutes(endTime)
+    const bufferedStart = newStart - TRAVEL_TIME_MINUTES
+    const bufferedEnd = newEnd + TRAVEL_TIME_MINUTES
+
+    return events.value.some((evt) => {
+        if (evt.date !== date) return false
+        if (excludeId !== undefined && evt.id === excludeId) return false
+        const evtStart = timeToMinutes(normaliseTime(evt.startTime))
+        const evtEnd = timeToMinutes(normaliseTime(evt.endTime))
+        // Conflict if the buffered window overlaps with the existing event
+        return bufferedStart < evtEnd && bufferedEnd > evtStart
+    })
+}
+
+/** Get a human-readable conflict message for the user */
+function getConflictMessage(date: string, startTime: string, endTime: string, excludeId?: number): string | null {
+    if (!hasConflict(date, startTime, endTime, excludeId)) return null
+    return `This slot conflicts with an existing block. There must be at least ${TRAVEL_TIME_MINUTES} minutes of travel time between blocks.`
 }
 
 // Auto-calculate end time when start time changes
@@ -143,6 +177,17 @@ watch(() => editForm.value.start_time, (newStart) => {
     if (newStart) {
         editForm.value.end_time = calcEndTime(newStart)
     }
+})
+
+// ── Conflict warnings (reactive) ─────────────────────────
+const createConflictWarning = computed(() => {
+    if (!createForm.value.date || !createForm.value.start_time || !createForm.value.end_time) return null
+    return getConflictMessage(createForm.value.date, createForm.value.start_time, createForm.value.end_time)
+})
+
+const editConflictWarning = computed(() => {
+    if (!editForm.value.date || !editForm.value.start_time || !editForm.value.end_time) return null
+    return getConflictMessage(editForm.value.date, editForm.value.start_time, editForm.value.end_time, editForm.value.id)
 })
 
 /** Convert backend item to grid event */
@@ -242,6 +287,13 @@ async function handleCreateSubmit() {
         return
     }
 
+    // Check for travel time conflicts before sending to backend
+    const conflictMsg = getConflictMessage(createForm.value.date, createForm.value.start_time, createForm.value.end_time)
+    if (conflictMsg) {
+        toast({ title: conflictMsg, variant: 'destructive' })
+        return
+    }
+
     formLoading.value = true
     try {
         const response = await axios.post(
@@ -275,7 +327,7 @@ function handleEventClick(event: CalendarEvent) {
     const item = itemsMap.value.get(event.id)
     if (!item) return
 
-    const startTime = snapToStartOption(normaliseTime(item.start_time))
+    const startTime = normaliseTime(item.start_time)
     editForm.value = {
         id: item.id,
         date: item.date,
@@ -293,6 +345,13 @@ async function handleEditSubmit() {
     // Validate unavailability reason when marking as unavailable
     if (!editForm.value.is_available && !editForm.value.unavailability_reason?.trim()) {
         toast({ title: 'Please provide a reason for unavailability', variant: 'destructive' })
+        return
+    }
+
+    // Check for travel time conflicts before sending to backend
+    const conflictMsg = getConflictMessage(editForm.value.date, editForm.value.start_time, editForm.value.end_time, editForm.value.id)
+    if (conflictMsg) {
+        toast({ title: conflictMsg, variant: 'destructive' })
         return
     }
 
@@ -557,9 +616,14 @@ onMounted(() => {
                         </p>
                     </div>
 
+                    <!-- Travel time conflict warning -->
+                    <div v-if="createConflictWarning" class="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                        {{ createConflictWarning }}
+                    </div>
+
                     <Button
                         type="submit"
-                        :disabled="formLoading"
+                        :disabled="formLoading || !!createConflictWarning"
                         class="w-full min-w-[120px]"
                     >
                         <Loader2 v-if="formLoading" class="mr-2 h-4 w-4 animate-spin" />
@@ -675,10 +739,15 @@ onMounted(() => {
                         </p>
                     </div>
 
+                    <!-- Travel time conflict warning -->
+                    <div v-if="editConflictWarning" class="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                        {{ editConflictWarning }}
+                    </div>
+
                     <div class="flex gap-2">
                         <Button
                             type="submit"
-                            :disabled="formLoading"
+                            :disabled="formLoading || !!editConflictWarning"
                             class="min-w-[120px] flex-1"
                         >
                             <Loader2 v-if="formLoading" class="mr-2 h-4 w-4 animate-spin" />
