@@ -42,7 +42,7 @@ class BulkImportInstructorsAction
             $validator = Validator::make($row, [
                 'name' => ['required', 'string', 'max:255'],
                 'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-                'transmission_type' => ['required', Rule::in(['manual', 'automatic'])],
+                'transmission_type' => ['required', Rule::in(['manual', 'automatic', 'both'])],
                 'phone' => ['nullable', 'string', 'max:50'],
                 'bio' => ['nullable', 'string'],
                 'status' => ['nullable', 'string', 'max:50'],
@@ -55,7 +55,7 @@ class BulkImportInstructorsAction
                 'email.email' => 'Email must be a valid email address.',
                 'email.unique' => 'This email is already in use.',
                 'transmission_type.required' => 'Transmission type is required.',
-                'transmission_type.in' => 'Transmission type must be "manual" or "automatic".',
+                'transmission_type.in' => 'Transmission type must be "manual", "automatic", or "both".',
             ]);
 
             if ($validator->fails()) {

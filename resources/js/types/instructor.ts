@@ -15,7 +15,7 @@ export interface InstructorDetail {
   postcode: string | null
   bio: string | null
   rating: number | null
-  transmission_type: 'manual' | 'automatic'
+  transmission_type: 'manual' | 'automatic' | 'both'
   status: string
   stats: InstructorStats
   booking_hours: BookingHours
@@ -41,7 +41,7 @@ export interface CreateInstructorData {
   password?: string
   phone?: string
   bio?: string
-  transmission_type: 'manual' | 'automatic'
+  transmission_type: 'manual' | 'automatic' | 'both'
   status?: string
   pdi_status?: string
   address?: string

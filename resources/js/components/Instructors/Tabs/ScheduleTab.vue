@@ -11,7 +11,12 @@ import {
     X,
     ChevronLeft,
     ChevronRight,
+<<<<<<< feature/019ce7ac-e270-73ed-9823-3824cf04b133-calendar-add-recurring-slot-options-and-review-best-implemen
     Repeat,
+=======
+    CalendarDays,
+    CalendarRange,
+>>>>>>> main
 } from 'lucide-vue-next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -34,6 +39,7 @@ import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/toast'
 import WeeklyCalendarGrid from './Schedule/WeeklyCalendarGrid.vue'
+import MonthlyCalendarGrid from './Schedule/MonthlyCalendarGrid.vue'
 import type { CalendarEvent } from './Schedule/CalendarEventBlock.vue'
 import { useCalendarNavigation } from '@/composables/useCalendarNavigation'
 import type { CalendarItemFormData, CalendarItemResponse, RecurrencePattern } from '@/types/instructor'
@@ -46,12 +52,22 @@ const props = defineProps<Props>()
 
 // ── Navigation ───────────────────────────────────────────
 const {
+    currentView,
     weekDays,
     weekStartFormatted,
     weekEndFormatted,
     goToNextWeek,
     goToPreviousWeek,
     goToToday,
+    monthDays,
+    currentMonth,
+    monthStartFormatted,
+    monthEndFormatted,
+    goToNextMonth,
+    goToPreviousMonth,
+    goToCurrentMonth,
+    rangeStartFormatted,
+    rangeEndFormatted,
 } = useCalendarNavigation()
 
 // ── State ────────────────────────────────────────────────
@@ -230,10 +246,42 @@ async function loadCalendarRange(startDate: string, endDate: string) {
     }
 }
 
-// Reload when week changes
-watch(weekStartFormatted, () => {
-    loadCalendarRange(weekStartFormatted.value, weekEndFormatted.value)
+// Reload when the active date range changes (covers both week and month nav)
+watch(rangeStartFormatted, () => {
+    loading.value = true
+    loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
 })
+
+// Reload when switching views
+watch(currentView, () => {
+    loading.value = true
+    loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
+})
+
+// ── View navigation helpers ─────────────────────────────
+function goToPrevious() {
+    if (currentView.value === 'week') {
+        goToPreviousWeek()
+    } else {
+        goToPreviousMonth()
+    }
+}
+
+function goToNext() {
+    if (currentView.value === 'week') {
+        goToNextWeek()
+    } else {
+        goToNextMonth()
+    }
+}
+
+function goToNow() {
+    if (currentView.value === 'week') {
+        goToToday()
+    } else {
+        goToCurrentMonth()
+    }
+}
 
 // ── Click on empty slot → open create sheet ──────────────
 function handleSlotClick(date: string, time: string) {
@@ -248,6 +296,19 @@ function handleSlotClick(date: string, time: string) {
         unavailability_reason: '',
         recurrence_pattern: 'none',
         recurrence_end_date: '',
+    }
+    isCreateSheetOpen.value = true
+}
+
+// ── Click on day in monthly view → open create sheet ─────
+function handleDayClick(date: string) {
+    createForm.value = {
+        date,
+        start_time: '08:00',
+        end_time: '10:00',
+        is_available: true,
+        notes: '',
+        unavailability_reason: '',
     }
     isCreateSheetOpen.value = true
 }
@@ -437,48 +498,80 @@ async function handleDelete() {
     }
 }
 
-// ── Week label ───────────────────────────────────────────
+// ── Navigation label ────────────────────────────────────
+const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+const shortMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
 function formatWeekLabel(days: Date[]): string {
     if (days.length === 0) return ''
     const first = days[0]
     const last = days[6]
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
     if (first.getMonth() === last.getMonth()) {
-        return `${first.getDate()} - ${last.getDate()} ${monthNames[first.getMonth()]} ${first.getFullYear()}`
+        return `${first.getDate()} - ${last.getDate()} ${shortMonthNames[first.getMonth()]} ${first.getFullYear()}`
     }
-    return `${first.getDate()} ${monthNames[first.getMonth()]} - ${last.getDate()} ${monthNames[last.getMonth()]} ${first.getFullYear()}`
+    return `${first.getDate()} ${shortMonthNames[first.getMonth()]} - ${last.getDate()} ${shortMonthNames[last.getMonth()]} ${first.getFullYear()}`
+}
+
+function formatMonthLabel(date: Date): string {
+    return `${monthNames[date.getMonth()]} ${date.getFullYear()}`
 }
 
 // ── Mount ────────────────────────────────────────────────
 onMounted(() => {
     loading.value = true
-    loadCalendarRange(weekStartFormatted.value, weekEndFormatted.value)
+    loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
 })
 </script>
 
 <template>
     <div class="flex flex-col gap-6">
 
+<<<<<<< feature/019ce7ac-e270-73ed-9823-3824cf04b133-calendar-add-recurring-slot-options-and-review-best-implemen
         <!-- Week Navigation + Calendar Grid -->
+=======
+        <!-- Navigation + Calendar Grid -->
+>>>>>>> main
         <Card class="!pb-6 !pt-0">
             <!-- Navigation Bar -->
             <div class="flex items-center justify-between border-b border-border px-4 py-3">
                 <div class="flex items-center gap-2">
-                    <Button variant="outline" size="icon" @click="goToPreviousWeek">
+                    <Button variant="outline" size="icon" @click="goToPrevious">
                         <ChevronLeft class="h-4 w-4" />
                     </Button>
-                    <Button variant="outline" size="sm" @click="goToToday">
+                    <Button variant="outline" size="sm" @click="goToNow">
                         Today
                     </Button>
-                    <Button variant="outline" size="icon" @click="goToNextWeek">
+                    <Button variant="outline" size="icon" @click="goToNext">
                         <ChevronRight class="h-4 w-4" />
                     </Button>
                 </div>
 
                 <span class="text-sm font-medium text-foreground">
-                    {{ formatWeekLabel(weekDays) }}
+                    {{ currentView === 'week' ? formatWeekLabel(weekDays) : formatMonthLabel(currentMonth) }}
                 </span>
+
+                <!-- View Toggle -->
+                <div class="flex items-center gap-1 rounded-md border border-border p-0.5">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        :class="currentView === 'week' ? 'bg-muted' : ''"
+                        @click="currentView = 'week'"
+                    >
+                        <CalendarDays class="mr-1.5 h-4 w-4" />
+                        Week
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        :class="currentView === 'month' ? 'bg-muted' : ''"
+                        @click="currentView = 'month'"
+                    >
+                        <CalendarRange class="mr-1.5 h-4 w-4" />
+                        Month
+                    </Button>
+                </div>
             </div>
 
             <!-- Calendar Grid -->
@@ -487,7 +580,9 @@ onMounted(() => {
                     <Skeleton class="h-8 w-full" />
                     <Skeleton class="h-[500px] w-full" />
                 </div>
-                <div v-else class="overflow-x-auto">
+
+                <!-- Weekly View -->
+                <div v-else-if="currentView === 'week'" class="overflow-x-auto">
                     <div class="min-w-[700px]">
                         <WeeklyCalendarGrid
                             :week-days="weekDays"
@@ -497,6 +592,17 @@ onMounted(() => {
                             @event-move="handleEventMove"
                         />
                     </div>
+                </div>
+
+                <!-- Monthly View -->
+                <div v-else>
+                    <MonthlyCalendarGrid
+                        :month-days="monthDays"
+                        :current-month="currentMonth"
+                        :events="events"
+                        @click-day="handleDayClick"
+                        @event-click="handleEventClick"
+                    />
                 </div>
             </CardContent>
         </Card>
