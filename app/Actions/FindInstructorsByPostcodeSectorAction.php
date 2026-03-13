@@ -82,7 +82,7 @@ class FindInstructorsByPostcodeSectorAction
                 'id' => $instructor->id,
                 'name' => $instructor->user->name,
                 'image' => $meta['avatar'] ?? 'https://ui-avatars.com/api/?name='.urlencode($instructor->user->name).'&background=0D8ABC&color=fff',
-                'transmissions' => $meta['transmissions'] ?? [$instructor->transmission_type],
+                'transmissions' => $meta['transmissions'] ?? ($instructor->transmission_type === 'both' ? ['manual', 'automatic'] : [$instructor->transmission_type]),
                 'experience' => $meta['experience'] ?? null,
                 'passRate' => $meta['pass_rate'] ?? null,
                 'totalStudents' => $meta['total_students'] ?? null,
