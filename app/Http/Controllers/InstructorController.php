@@ -335,7 +335,8 @@ class InstructorController extends Controller
             $request->input('end_time'),
             $request->has('is_available') ? $request->boolean('is_available') : null,
             $request->has('notes') ? $request->input('notes') : null,
-            $request->has('unavailability_reason') ? $request->input('unavailability_reason') : null
+            $request->has('unavailability_reason') ? $request->input('unavailability_reason') : null,
+            $request->has('travel_time_minutes') ? $request->integer('travel_time_minutes') : null
         );
 
         return response()->json([

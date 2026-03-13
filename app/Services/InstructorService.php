@@ -275,6 +275,7 @@ class InstructorService
      * @param  bool|null  $isAvailable  New availability status (null to keep unchanged)
      * @param  string|null  $notes  Notes about the slot (null to keep unchanged)
      * @param  string|null  $unavailabilityReason  Reason for unavailability (null to keep unchanged)
+     * @param  int|null  $travelTimeMinutes  Travel time in minutes (0 to remove, 15/30/45 to set)
      * @return CalendarItem The updated calendar item
      */
     public function updateCalendarItem(
@@ -285,9 +286,10 @@ class InstructorService
         string $endTime,
         ?bool $isAvailable = null,
         ?string $notes = null,
-        ?string $unavailabilityReason = null
+        ?string $unavailabilityReason = null,
+        ?int $travelTimeMinutes = null
     ): CalendarItem {
-        return ($this->updateCalendarItem)($instructor, $calendarItem, $date, $startTime, $endTime, $isAvailable, $notes, $unavailabilityReason);
+        return ($this->updateCalendarItem)($instructor, $calendarItem, $date, $startTime, $endTime, $isAvailable, $notes, $unavailabilityReason, $travelTimeMinutes);
     }
 
     /**

@@ -120,6 +120,7 @@ const editForm = ref<{
     recurrence_pattern: RecurrencePattern
     recurrence_group_id: string | null
     item_type: string
+    travel_time_minutes: number
 }>({
     id: 0,
     date: '',
@@ -131,6 +132,7 @@ const editForm = ref<{
     recurrence_pattern: 'none',
     recurrence_group_id: null,
     item_type: 'slot',
+    travel_time_minutes: 0,
 })
 
 /** Whether the item being edited is part of a recurring series */
@@ -424,6 +426,7 @@ function handleEventClick(event: CalendarEvent) {
         recurrence_pattern: item.recurrence_pattern ?? 'none',
         recurrence_group_id: item.recurrence_group_id ?? null,
         item_type: item.item_type ?? 'slot',
+        travel_time_minutes: item.travel_time_minutes ?? 0,
     }
     isEditSheetOpen.value = true
 }
@@ -438,6 +441,8 @@ async function handleEditSubmit() {
 
     formLoading.value = true
     try {
+        const travelMinutes = editForm.value.is_available ? (editForm.value.travel_time_minutes || 0) : 0
+
         const response = await axios.put(
             `/instructors/${props.instructorId}/calendar/items/${editForm.value.id}`,
             {
@@ -447,6 +452,7 @@ async function handleEditSubmit() {
                 is_available: editForm.value.is_available,
                 notes: editForm.value.notes || null,
                 unavailability_reason: editForm.value.is_available ? null : editForm.value.unavailability_reason,
+                travel_time_minutes: travelMinutes,
             },
         )
 
@@ -646,7 +652,7 @@ onMounted(() => {
                     </SheetTitle>
                 </SheetHeader>
 
-                <form @submit.prevent="handleCreateSubmit" class="mt-6 space-y-6 px-6 py-4">
+                <form @submit.prevent="handleCreateSubmit" class="mt-6 flex-1 space-y-6 overflow-y-auto px-6 py-4">
                     <div class="space-y-2">
                         <Label for="create-date">Date</Label>
                         <Input
@@ -860,7 +866,7 @@ onMounted(() => {
                 </div>
 
                 <!-- Regular slot edit form -->
-                <form v-else @submit.prevent="handleEditSubmit" class="mt-6 space-y-6 px-6 py-4">
+                <form v-else @submit.prevent="handleEditSubmit" class="mt-6 flex-1 space-y-6 overflow-y-auto px-6 py-4">
                     <div class="space-y-2">
                         <Label for="edit-date">Date</Label>
                         <Input
@@ -895,6 +901,32 @@ onMounted(() => {
                         <div class="flex h-10 w-full items-center rounded-md border border-input bg-muted/50 px-3 text-sm text-muted-foreground">
                             {{ editForm.end_time || '—' }}
                         </div>
+                    </div>
+
+                    <!-- Travel Time (only shown when available) -->
+                    <div v-if="editForm.is_available" class="space-y-2">
+                        <Label for="edit-travel">
+                            <span class="flex items-center gap-1.5">
+                                <Car class="h-4 w-4" />
+                                Travel Time After Lesson
+                            </span>
+                        </Label>
+                        <select
+                            id="edit-travel"
+                            v-model.number="editForm.travel_time_minutes"
+                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                            <option
+                                v-for="opt in travelTimeOptions"
+                                :key="opt.value"
+                                :value="opt.value"
+                            >
+                                {{ opt.label }}
+                            </option>
+                        </select>
+                        <p v-if="editForm.travel_time_minutes && editForm.travel_time_minutes > 0 && editForm.end_time" class="text-xs text-muted-foreground">
+                            Travel block: {{ editForm.end_time }} - {{ minutesToTime(timeToMinutes(editForm.end_time) + (editForm.travel_time_minutes || 0)) }}
+                        </p>
                     </div>
 
                     <!-- Status Toggle -->

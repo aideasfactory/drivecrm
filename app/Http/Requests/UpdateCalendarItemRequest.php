@@ -54,6 +54,11 @@ class UpdateCalendarItemRequest extends FormRequest
                 'string',
                 'max:500',
             ],
+            'travel_time_minutes' => [
+                'nullable',
+                'integer',
+                'in:0,15,30,45',
+            ],
         ];
     }
 
