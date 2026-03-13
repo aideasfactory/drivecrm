@@ -258,9 +258,10 @@ class InstructorService
         string $endTime,
         bool $isAvailable = true,
         ?string $notes = null,
-        ?string $unavailabilityReason = null
+        ?string $unavailabilityReason = null,
+        ?int $travelTimeMinutes = null
     ): CalendarItem {
-        return ($this->createCalendarItem)($instructor, $date, $startTime, $endTime, $isAvailable, $notes, $unavailabilityReason);
+        return ($this->createCalendarItem)($instructor, $date, $startTime, $endTime, $isAvailable, $notes, $unavailabilityReason, $travelTimeMinutes);
     }
 
     /**

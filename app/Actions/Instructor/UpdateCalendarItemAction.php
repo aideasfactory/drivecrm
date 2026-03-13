@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Instructor;
 
+use App\Enums\CalendarItemType;
 use App\Models\Calendar;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
@@ -73,6 +74,20 @@ class UpdateCalendarItemAction
         }
 
         $calendarItem->save();
+
+        // Update associated travel-time block if the slot time changed
+        $travelItem = $calendarItem->travelItem;
+        if ($travelItem) {
+            $travelStart = Carbon::parse($calendarItem->end_time);
+            $travelMinutes = $calendarItem->travel_time_minutes ?? 30;
+            $travelEnd = $travelStart->copy()->addMinutes($travelMinutes);
+
+            $travelItem->calendar_id = $calendarItem->calendar_id;
+            $travelItem->start_time = $travelStart->format('H:i');
+            $travelItem->end_time = $travelEnd->format('H:i');
+            $travelItem->save();
+        }
+
         $calendarItem->load('calendar');
 
         return $calendarItem;

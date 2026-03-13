@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import type { RecurrencePattern } from '@/types/instructor'
+import type { CalendarItemTypeValue, RecurrencePattern } from '@/types/instructor'
 
 export interface CalendarEvent {
     id: number
@@ -10,6 +10,9 @@ export interface CalendarEvent {
     endTime: string
     isAvailable: boolean
     status: string | null
+    itemType: CalendarItemTypeValue
+    travelTimeMinutes: number | null
+    parentItemId: number | null
     studentName: string | null
     notes: string | null
     unavailabilityReason: string | null
@@ -41,6 +44,9 @@ function formatTime(t: string): string {
     return t.substring(0, 5)
 }
 
+/** Whether this event is a travel-time block */
+const isTravel = computed(() => props.event.itemType === 'travel')
+
 /** Calculate top offset in px based on start time */
 const topPx = computed(() => {
     const startMinutes = timeToMinutes(props.event.startTime)
@@ -59,6 +65,11 @@ const heightPx = computed(() => {
 
 /** Status-based color classes */
 const colorClasses = computed(() => {
+    // Travel-time blocks get a distinct purple/indigo style
+    if (isTravel.value) {
+        return 'border-purple-300 bg-purple-100 text-purple-800 dark:border-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+    }
+
     const status = props.event.status
 
     if (status === 'booked') {
@@ -88,6 +99,8 @@ const colorClasses = computed(() => {
 
 /** Status label for display */
 const statusLabel = computed(() => {
+    if (isTravel.value) return 'Travel'
+
     const status = props.event.status
 
     if (status === 'booked') return 'Booked'
@@ -104,6 +117,8 @@ function handleClick(e: MouseEvent) {
 }
 
 function handlePointerDown(e: PointerEvent) {
+    // Prevent dragging travel-time blocks directly
+    if (isTravel.value) return
     e.stopPropagation()
     emit('dragstart', props.event, e)
 }
@@ -111,13 +126,20 @@ function handlePointerDown(e: PointerEvent) {
 
 <template>
     <div
-        class="absolute inset-x-1 z-10 cursor-pointer select-none overflow-hidden rounded-md border px-2 py-1 text-xs leading-tight transition-shadow hover:shadow-md"
-        :class="colorClasses"
+        class="absolute inset-x-1 z-10 select-none overflow-hidden rounded-md border px-2 py-1 text-xs leading-tight transition-shadow"
+        :class="[
+            colorClasses,
+            isTravel ? 'cursor-default border-dashed opacity-80' : 'cursor-pointer hover:shadow-md',
+        ]"
         :style="{ top: `${topPx}px`, height: `${heightPx}px`, minHeight: '20px' }"
         @click="handleClick"
         @pointerdown="handlePointerDown"
     >
         <div class="flex items-center gap-1 font-medium">
+            <!-- Travel icon for travel blocks -->
+            <svg v-if="isTravel" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
             <span>{{ formatTime(event.startTime) }} - {{ formatTime(event.endTime) }}</span>
             <!-- Recurrence indicator -->
             <svg v-if="event.recurrencePattern && event.recurrencePattern !== 'none'" class="h-3 w-3 shrink-0 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Recurring">
@@ -131,14 +153,14 @@ function handlePointerDown(e: PointerEvent) {
             {{ event.studentName }}
         </div>
         <!-- Notes indicator -->
-        <div v-if="event.notes && heightPx > 40" class="mt-0.5 flex items-center gap-1 truncate opacity-75">
+        <div v-if="event.notes && !isTravel && heightPx > 40" class="mt-0.5 flex items-center gap-1 truncate opacity-75">
             <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             <span class="truncate">{{ event.notes }}</span>
         </div>
-        <!-- Unavailability reason (only shown when unavailable) -->
-        <div v-if="!event.isAvailable && event.unavailabilityReason && heightPx > 40" class="mt-0.5 flex items-center gap-1 truncate text-red-700 dark:text-red-300">
+        <!-- Unavailability reason (only shown when unavailable and not travel) -->
+        <div v-if="!event.isAvailable && !isTravel && event.unavailabilityReason && heightPx > 40" class="mt-0.5 flex items-center gap-1 truncate text-red-700 dark:text-red-300">
             <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>

@@ -678,6 +678,9 @@ Defines time slots within a calendar date.
 | `end_time` | time | NOT NULL | Slot end time |
 | `is_available` | boolean | DEFAULT true | Availability flag |
 | `status` | enum('draft', 'reserved', 'booked', 'completed') | NULLABLE | Booking lifecycle status |
+| `item_type` | varchar(20) | DEFAULT 'slot', INDEXED | Calendar item type: 'slot' (lesson) or 'travel' (travel time) |
+| `travel_time_minutes` | smallint unsigned | NULLABLE | Travel time in minutes (15, 30, or 45) set on the parent slot |
+| `parent_item_id` | bigint unsigned | FOREIGN KEY (calendar_items.id), NULLABLE, ON DELETE SET NULL | Links travel blocks to their parent lesson slot |
 | `notes` | text | NULLABLE | General notes about this calendar slot |
 | `unavailability_reason` | text | NULLABLE | Reason for marking slot unavailable (only when is_available = false) |
 | `recurrence_pattern` | varchar(20) | DEFAULT 'none' | Recurrence pattern: none, weekly, biweekly, monthly |
