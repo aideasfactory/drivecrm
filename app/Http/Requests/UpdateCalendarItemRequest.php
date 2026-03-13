@@ -59,6 +59,10 @@ class UpdateCalendarItemRequest extends FormRequest
                 'integer',
                 'in:0,15,30,45',
             ],
+            'is_practical_test' => [
+                'sometimes',
+                'boolean',
+            ],
         ];
     }
 

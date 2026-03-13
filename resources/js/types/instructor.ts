@@ -92,7 +92,7 @@ export interface CalendarItem {
 }
 
 export type RecurrencePattern = 'none' | 'weekly' | 'biweekly' | 'monthly'
-export type CalendarItemTypeValue = 'slot' | 'travel'
+export type CalendarItemTypeValue = 'slot' | 'travel' | 'practical_test'
 
 export interface CalendarItemFormData {
   date: string
@@ -104,6 +104,7 @@ export interface CalendarItemFormData {
   recurrence_pattern?: RecurrencePattern
   recurrence_end_date?: string
   travel_time_minutes?: number | null
+  is_practical_test?: boolean
 }
 
 export interface CalendarItemResponse {

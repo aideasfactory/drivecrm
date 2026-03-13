@@ -29,7 +29,7 @@ class CalendarService
                 $query->where('is_available', true)
                     ->where(function ($q) {
                         $q->whereNull('item_type')
-                            ->orWhere('item_type', '!=', 'travel');
+                            ->orWhereNotIn('item_type', ['travel', 'practical_test']);
                     })
                     ->orderBy('start_time');
             }])

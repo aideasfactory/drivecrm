@@ -1,22 +1,27 @@
-# Task: Update lesson start-time selection to support 15-minute increments
+# Task: Lessons: add practical test slot availability type
 
 **Created:** 2026-03-13
-**Last Updated:** 2026-03-13T17:40:00Z
-**Status:** ✅ Complete
+**Last Updated:** 2026-03-13T19:30:00Z
+**Status:** Complete
 
 ---
 
 ## Overview
 
 ### Goal
-Update the lesson start-time selection from 30-minute to 15-minute increments across the scheduling UI.
+Add support for practical test slots within lesson availability. When creating a slot, instructors can mark it as a practical test. The system models 1hr prep + 1hr test + 30min buffer = 2.5hr total block, marks it unavailable for normal bookings, and displays it distinctly on the calendar.
 
 ### Context
-- Tile ID: 019ce836-2973-7273-92e7-d6290f0fadec
+- Tile ID: 019ce7ac-e5d3-7376-86bf-e0086c45b030
 - Repository: drivecrm
-- Branch: feature/019ce836-2973-7273-92e7-d6290f0fadec-update-lesson-start-time-selection-to-support-15-minute-incr
-- Priority: MEDIUM
-- Customer: Drive
+- Branch: feature/019ce7ac-e5d3-7376-86bf-e0086c45b030-lessons-add-practical-test-slot-availability-type
+- Priority: HIGH
+
+### Design Decisions
+- **No migration needed**: `item_type` is already a `string(20)` column. Adding `PracticalTest` to the PHP enum is sufficient.
+- **Single block approach**: Practical test creates one CalendarItem spanning 2.5hrs (prep + test + buffer) with `item_type = 'practical_test'` and `is_available = false`.
+- **User selects test time**: The form lets the user pick the actual test appointment time. System auto-calculates start (test - 1hr) and end (test + 1hr + 30min).
+- **Visual distinction**: Teal/cyan color on calendar, distinct from travel (purple) and unavailable (red).
 
 ---
 
@@ -24,14 +29,14 @@ Update the lesson start-time selection from 30-minute to 15-minute increments ac
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Review current start-time implementation in ScheduleTab.vue
-- [x] Review WeeklyCalendarGrid.vue snap/click logic
-- [x] Review CalendarEventBlock.vue positioning (no changes needed)
-- [x] Review backend validation (no changes needed)
-- [x] Identify all files requiring changes
+- ✓ Read all instruction files and coding standards
+- ✓ Explore existing availability/calendar system
+- ✓ Identify all files to modify
+- ✓ Design approach (no migration, single block, teal styling)
+- ✓ Create task breakdown
 
 ### Reflection
-The backend already supports arbitrary H:i format times. The change is entirely frontend-focused: updating the dropdown step from 30→15 and updating the calendar grid drag snapping for consistency. CalendarEventBlock positioning math uses `(minutes / 30) * rowHeight` which naturally handles 15-min positions correctly.
+Thorough exploration revealed the existing `item_type` string column and enum pattern. The practical test feature fits cleanly as a new enum case without schema changes.
 
 ---
 
@@ -39,32 +44,33 @@ The backend already supports arbitrary H:i format times. The change is entirely 
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Update `startTimeOptions` in ScheduleTab.vue to use 15-min increments
-- [x] Update `snapToStartOption` in ScheduleTab.vue to snap to 15-min
-- [x] Update `SNAP_MINUTES` and `SNAP_PX` in WeeklyCalendarGrid.vue
-- [x] Update comments referencing 30-min increments
-- [x] Write Pest test for start-time validation with 15-min times
+- ✓ Add `PracticalTest` case to `CalendarItemType` enum
+- ✓ Add `isPracticalTest()` helper to `CalendarItem` model
+- ✓ Add `practicalTest()` factory state to `CalendarItemFactory`
+- ✓ Update `CreateCalendarItemAction` to handle practical test time calculation
+- ✓ Update `StoreCalendarItemRequest` with `is_practical_test` validation + overlap check
+- ✓ Update `UpdateCalendarItemRequest` with `is_practical_test` validation
+- ✓ Update `InstructorController` to pass practical test flag
+- ✓ Update `InstructorService` to pass through
+- ✓ Update `CalendarService` to exclude practical test slots from booking availability
+- ✓ Update TypeScript types (`CalendarItemTypeValue`, `CalendarItemFormData`)
+- ✓ Update `ScheduleTab.vue` with practical test checkbox, auto-time logic, and read-only edit view
+- ✓ Update `CalendarEventBlock.vue` with teal/cyan styling and practical test icon
+- ✓ Update `MonthlyCalendarGrid.vue` with practical test colors and label
+- ✓ Write 10 Pest tests covering creation, deletion, API, factory, and availability exclusion
 
 ### Reflection
-Changes were minimal and focused. The dropdown now generates 33 options (08:00–16:00 in 15-min steps) instead of 17 (30-min steps). Both create and edit forms benefit since they share the same `startTimeOptions` computed property. The drag-and-drop snap was halved from 40px to 20px to match 15-min granularity. Tests cover both Action-level and HTTP endpoint-level creation with 15-min start times.
+Implementation went smoothly. No migration was needed since `item_type` is a string column. The practical test type integrates naturally with the existing travel block pattern. Frontend handles the checkbox toggle, auto-calculates times, and shows a clear info panel explaining the 2.5hr block.
 
 ---
 
 ## PHASE 3: FINAL REFLECTION & DOCUMENTATION
 **Status:** ✅ Complete
 
-### Files Changed
-1. `resources/js/components/Instructors/Tabs/ScheduleTab.vue` — Dropdown 30→15 min, snap function 30→15 min
-2. `resources/js/components/Instructors/Tabs/Schedule/WeeklyCalendarGrid.vue` — SNAP_MINUTES 30→15, SNAP_PX 40→20
-3. `tests/Feature/CalendarItem15MinuteStartTimeTest.php` — New test file (5 tests)
+### Tasks
+- ✓ Update `.claude/database-schema.md` (enum values and business logic)
+- ✓ Complete reflection
+- ✓ Write `.phase_done` sentinel
 
-### No changes needed
-- Backend validation (already accepts H:i format)
-- CalendarEventBlock.vue (positioning math handles any minute value)
-- Models/migrations (time columns are flexible)
-
-### Summary
-Updated the lesson scheduling start-time dropdown from 30-minute to 15-minute increments, providing more flexible time selection. Updated the calendar grid drag-and-drop to also snap at 15-minute intervals for consistency. Added 5 Pest tests covering 15-minute start times via both the Action layer and the HTTP endpoint.
-
-### Score: 8/10
-Simple, focused changes with no unnecessary complexity. No anti-patterns introduced. The only potential consideration is that the visual calendar grid still renders 30-min rows — events at :15/:45 will position correctly between grid lines but the grid lines themselves remain at :00/:30 boundaries. This is a reasonable UX tradeoff since doubling grid lines would make the calendar overly busy.
+### Reflection
+Clean implementation with no schema changes, full test coverage, and clear visual distinction on both weekly and monthly calendar views.

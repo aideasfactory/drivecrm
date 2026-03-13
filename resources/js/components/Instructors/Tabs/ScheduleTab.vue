@@ -15,6 +15,7 @@ import {
     CalendarDays,
     CalendarRange,
     Car,
+    ClipboardCheck,
 } from 'lucide-vue-next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -107,6 +108,7 @@ const createForm = ref<CalendarItemFormData>({
     recurrence_pattern: 'none',
     recurrence_end_date: '',
     travel_time_minutes: 30,
+    is_practical_test: false,
 })
 
 const editForm = ref<{
@@ -143,6 +145,11 @@ const editItemIsRecurring = computed(() => {
 /** Whether the item being edited is a travel-time block */
 const editItemIsTravel = computed(() => {
     return editForm.value.item_type === 'travel'
+})
+
+/** Whether the item being edited is a practical test slot */
+const editItemIsPracticalTest = computed(() => {
+    return editForm.value.item_type === 'practical_test'
 })
 
 // ── Time slot options (15-min increments, 08:00–16:00) ───
@@ -194,7 +201,27 @@ function snapToStartOption(time: string): string {
 // Auto-calculate end time when start time changes
 watch(() => createForm.value.start_time, (newStart) => {
     if (newStart) {
-        createForm.value.end_time = calcEndTime(newStart)
+        if (createForm.value.is_practical_test) {
+            // For practical tests: test is 1hr, show the full block time (prep + test + buffer)
+            createForm.value.end_time = minutesToTime(timeToMinutes(newStart) + 60)
+        } else {
+            createForm.value.end_time = calcEndTime(newStart)
+        }
+    }
+})
+
+// When practical test checkbox changes, recalculate end time
+watch(() => createForm.value.is_practical_test, (isPracticalTest) => {
+    if (createForm.value.start_time) {
+        if (isPracticalTest) {
+            // Practical test: 1hr test appointment
+            createForm.value.end_time = minutesToTime(timeToMinutes(createForm.value.start_time) + 60)
+            createForm.value.is_available = false
+        } else {
+            // Regular slot: 2hr duration
+            createForm.value.end_time = calcEndTime(createForm.value.start_time)
+            createForm.value.is_available = true
+        }
     }
 })
 
@@ -325,6 +352,7 @@ function handleSlotClick(date: string, time: string) {
         recurrence_pattern: 'none',
         recurrence_end_date: '',
         travel_time_minutes: 30,
+        is_practical_test: false,
     }
     isCreateSheetOpen.value = true
 }
@@ -339,6 +367,7 @@ function handleDayClick(date: string) {
         notes: '',
         unavailability_reason: '',
         travel_time_minutes: 30,
+        is_practical_test: false,
     }
     isCreateSheetOpen.value = true
 }
@@ -355,28 +384,37 @@ async function handleCreateSubmit() {
         return
     }
 
-    // Validate unavailability reason when marking as unavailable
-    if (!createForm.value.is_available && !createForm.value.unavailability_reason?.trim()) {
+    // Validate unavailability reason when marking as unavailable (skip for practical tests)
+    if (!createForm.value.is_practical_test && !createForm.value.is_available && !createForm.value.unavailability_reason?.trim()) {
         toast({ title: 'Please provide a reason for unavailability', variant: 'destructive' })
         return
     }
 
     formLoading.value = true
     try {
-        const travelMinutes = createForm.value.is_available ? (createForm.value.travel_time_minutes || 0) : 0
+        const isPracticalTest = createForm.value.is_practical_test || false
+        const travelMinutes = (!isPracticalTest && createForm.value.is_available) ? (createForm.value.travel_time_minutes || 0) : 0
+
+        // For practical test: send the test appointment time (1hr slot)
+        // Backend will expand to prep(1hr) + test(1hr) + buffer(30min)
+        const startTime = createForm.value.start_time
+        const endTime = isPracticalTest
+            ? minutesToTime(timeToMinutes(startTime) + 60)
+            : createForm.value.end_time
 
         const response = await axios.post(
             `/instructors/${props.instructorId}/calendar/items`,
             {
                 date: createForm.value.date,
-                start_time: createForm.value.start_time,
-                end_time: createForm.value.end_time,
-                is_available: createForm.value.is_available,
+                start_time: startTime,
+                end_time: endTime,
+                is_available: isPracticalTest ? false : createForm.value.is_available,
                 notes: createForm.value.notes || null,
-                unavailability_reason: createForm.value.is_available ? null : createForm.value.unavailability_reason,
+                unavailability_reason: isPracticalTest ? null : (createForm.value.is_available ? null : createForm.value.unavailability_reason),
                 recurrence_pattern: createForm.value.recurrence_pattern || 'none',
                 recurrence_end_date: createForm.value.recurrence_end_date || null,
                 travel_time_minutes: travelMinutes > 0 ? travelMinutes : null,
+                is_practical_test: isPracticalTest,
             },
         )
 
@@ -389,6 +427,9 @@ async function handleCreateSubmit() {
         } else if (hasTravelItem) {
             // Reload to pick up both the slot and travel item
             toast({ title: 'Time slot with travel time added!' })
+            await loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
+        } else if (isPracticalTest) {
+            toast({ title: 'Practical test slot added!' })
             await loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
         } else {
             const newItem: CalendarItemResponse = response.data.calendar_item
@@ -411,7 +452,8 @@ function handleEventClick(event: CalendarEvent) {
     const item = itemsMap.value.get(event.id)
     if (!item) return
 
-    const startTime = item.item_type === 'travel'
+    const isSpecialType = item.item_type === 'travel' || item.item_type === 'practical_test'
+    const startTime = isSpecialType
         ? normaliseTime(item.start_time)
         : snapToStartOption(normaliseTime(item.start_time))
 
@@ -419,7 +461,7 @@ function handleEventClick(event: CalendarEvent) {
         id: item.id,
         date: item.date,
         start_time: startTime,
-        end_time: item.item_type === 'travel' ? normaliseTime(item.end_time) : calcEndTime(startTime),
+        end_time: isSpecialType ? normaliseTime(item.end_time) : calcEndTime(startTime),
         is_available: item.is_available,
         notes: item.notes ?? '',
         unavailability_reason: item.unavailability_reason ?? '',
@@ -473,8 +515,8 @@ async function handleEventMove(eventId: number, newDate: string, newStartTime: s
     const item = itemsMap.value.get(eventId)
     if (!item) return
 
-    // Don't allow dragging travel items
-    if (item.item_type === 'travel') return
+    // Don't allow dragging travel or practical test items
+    if (item.item_type === 'travel' || item.item_type === 'practical_test') return
 
     // Optimistically update
     const oldItem = { ...item }
@@ -689,8 +731,31 @@ onMounted(() => {
                         </div>
                     </div>
 
-                    <!-- Travel Time (only shown when available) -->
-                    <div v-if="createForm.is_available" class="space-y-2">
+                    <!-- Practical Test Checkbox -->
+                    <div class="space-y-2">
+                        <label class="flex cursor-pointer items-center gap-2">
+                            <input
+                                type="checkbox"
+                                v-model="createForm.is_practical_test"
+                                class="h-4 w-4 rounded border-input text-teal-600 focus:ring-teal-500"
+                            />
+                            <span class="flex items-center gap-1.5 text-sm font-medium">
+                                <ClipboardCheck class="h-4 w-4 text-teal-600" />
+                                Practical Test
+                            </span>
+                        </label>
+                        <p v-if="createForm.is_practical_test && createForm.start_time" class="rounded-md border border-teal-200 bg-teal-50 p-3 text-xs text-teal-800 dark:border-teal-800 dark:bg-teal-900/20 dark:text-teal-300">
+                            This will block a <strong>2.5 hour</strong> window:<br />
+                            <span class="mt-1 inline-block">
+                                {{ minutesToTime(timeToMinutes(createForm.start_time) - 60) }} - {{ createForm.start_time }} <span class="text-teal-600 dark:text-teal-400">(1hr prep)</span><br />
+                                {{ createForm.start_time }} - {{ createForm.end_time }} <span class="text-teal-600 dark:text-teal-400">(1hr test)</span><br />
+                                {{ createForm.end_time }} - {{ minutesToTime(timeToMinutes(createForm.end_time) + 30) }} <span class="text-teal-600 dark:text-teal-400">(30min buffer)</span>
+                            </span>
+                        </p>
+                    </div>
+
+                    <!-- Travel Time (only shown when available and not practical test) -->
+                    <div v-if="createForm.is_available && !createForm.is_practical_test" class="space-y-2">
                         <Label for="create-travel">
                             <span class="flex items-center gap-1.5">
                                 <Car class="h-4 w-4" />
@@ -715,8 +780,8 @@ onMounted(() => {
                         </p>
                     </div>
 
-                    <!-- Recurrence Pattern -->
-                    <div class="space-y-2">
+                    <!-- Recurrence Pattern (hidden for practical tests) -->
+                    <div v-if="!createForm.is_practical_test" class="space-y-2">
                         <Label for="create-recurrence">
                             <span class="flex items-center gap-1.5">
                                 <Repeat class="h-4 w-4" />
@@ -752,8 +817,8 @@ onMounted(() => {
                         </p>
                     </div>
 
-                    <!-- Status Toggle -->
-                    <div class="space-y-2">
+                    <!-- Status Toggle (hidden for practical tests - always unavailable) -->
+                    <div v-if="!createForm.is_practical_test" class="space-y-2">
                         <Label>Status</Label>
                         <div class="flex gap-2">
                             <Button
@@ -817,7 +882,7 @@ onMounted(() => {
                     >
                         <Loader2 v-if="formLoading" class="mr-2 h-4 w-4 animate-spin" />
                         <Plus v-else class="mr-2 h-4 w-4" />
-                        {{ createForm.recurrence_pattern && createForm.recurrence_pattern !== 'none' ? 'Add Recurring Slots' : 'Add Time Slot' }}
+                        {{ createForm.is_practical_test ? 'Add Practical Test' : (createForm.recurrence_pattern && createForm.recurrence_pattern !== 'none' ? 'Add Recurring Slots' : 'Add Time Slot') }}
                     </Button>
                 </form>
             </SheetContent>
@@ -829,8 +894,9 @@ onMounted(() => {
                 <SheetHeader>
                     <SheetTitle class="flex items-center gap-2">
                         <Car v-if="editItemIsTravel" class="h-5 w-5" />
+                        <ClipboardCheck v-else-if="editItemIsPracticalTest" class="h-5 w-5 text-teal-600" />
                         <Clock v-else class="h-5 w-5" />
-                        {{ editItemIsTravel ? 'Travel Time' : 'Edit Time Slot' }}
+                        {{ editItemIsTravel ? 'Travel Time' : editItemIsPracticalTest ? 'Practical Test' : 'Edit Time Slot' }}
                         <span v-if="editItemIsRecurring" class="ml-auto flex items-center gap-1 text-xs font-normal text-muted-foreground">
                             <Repeat class="h-3.5 w-3.5" />
                             Recurring
@@ -863,6 +929,46 @@ onMounted(() => {
                     >
                         Close
                     </Button>
+                </div>
+
+                <!-- Practical test item view (read-only info with delete) -->
+                <div v-else-if="editItemIsPracticalTest" class="mt-6 space-y-4 px-6 py-4">
+                    <div class="rounded-md border border-teal-200 bg-teal-50 p-4 dark:border-teal-800 dark:bg-teal-900/20">
+                        <p class="text-sm font-medium text-teal-800 dark:text-teal-300">
+                            This is a practical test slot (1hr prep + 1hr test + 30min buffer).
+                        </p>
+                        <p class="mt-1 text-xs text-teal-600 dark:text-teal-400">
+                            Practical test slots are unavailable for normal bookings.
+                        </p>
+                    </div>
+                    <div class="space-y-2">
+                        <p class="text-sm text-muted-foreground">
+                            <strong>Date:</strong> {{ editForm.date }}
+                        </p>
+                        <p class="text-sm text-muted-foreground">
+                            <strong>Full Block:</strong> {{ editForm.start_time }} - {{ editForm.end_time }}
+                        </p>
+                        <p v-if="editForm.notes" class="text-sm text-muted-foreground">
+                            <strong>Notes:</strong> {{ editForm.notes }}
+                        </p>
+                    </div>
+                    <div class="flex gap-2">
+                        <Button
+                            variant="outline"
+                            class="flex-1"
+                            @click="isEditSheetOpen = false"
+                        >
+                            Close
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            class="min-w-[100px]"
+                            @click="openDeleteDialog"
+                        >
+                            <Trash2 class="mr-2 h-4 w-4" />
+                            Delete
+                        </Button>
+                    </div>
                 </div>
 
                 <!-- Regular slot edit form -->

@@ -71,6 +71,10 @@ class StoreCalendarItemRequest extends FormRequest
                 'integer',
                 'in:15,30,45',
             ],
+            'is_practical_test' => [
+                'sometimes',
+                'boolean',
+            ],
         ];
     }
 
@@ -97,6 +101,11 @@ class StoreCalendarItemRequest extends FormRequest
      */
     protected function checkUnavailabilityReason(Validator $validator): void
     {
+        // Practical tests auto-set unavailability reason, skip check
+        if ($this->boolean('is_practical_test')) {
+            return;
+        }
+
         $isAvailable = $this->boolean('is_available', true);
         $unavailabilityReason = $this->input('unavailability_reason');
 
@@ -118,10 +127,21 @@ class StoreCalendarItemRequest extends FormRequest
         $startTime = $this->input('start_time');
         $endTime = $this->input('end_time');
         $travelMinutes = $this->integer('travel_time_minutes', 0);
+        $isPracticalTest = $this->boolean('is_practical_test');
 
-        // Calculate the full blocked window (slot + travel time)
+        // For practical tests, the actual blocked window is:
+        // 1hr before start_time → end_time + 30min buffer
+        $effectiveStartTime = $startTime;
         $effectiveEndTime = $endTime;
-        if ($travelMinutes > 0) {
+
+        if ($isPracticalTest) {
+            $effectiveStartTime = \Carbon\Carbon::parse($startTime)
+                ->subMinutes(60)
+                ->format('H:i');
+            $effectiveEndTime = \Carbon\Carbon::parse($endTime)
+                ->addMinutes(30)
+                ->format('H:i');
+        } elseif ($travelMinutes > 0) {
             $effectiveEndTime = \Carbon\Carbon::parse($endTime)
                 ->addMinutes($travelMinutes)
                 ->format('H:i');
@@ -137,11 +157,11 @@ class StoreCalendarItemRequest extends FormRequest
             return;
         }
 
-        // Check for overlapping time slots (including travel time window)
+        // Check for overlapping time slots (including travel/practical test time window)
         $overlap = $calendar->items()
-            ->where(function ($query) use ($startTime, $effectiveEndTime) {
+            ->where(function ($query) use ($effectiveStartTime, $effectiveEndTime) {
                 // Overlap occurs when: (start_time < existing.end_time) AND (end_time > existing.start_time)
-                $query->whereRaw('TIME(?) < TIME(end_time)', [$startTime])
+                $query->whereRaw('TIME(?) < TIME(end_time)', [$effectiveStartTime])
                     ->whereRaw('TIME(?) > TIME(start_time)', [$effectiveEndTime]);
             })
             ->exists();
