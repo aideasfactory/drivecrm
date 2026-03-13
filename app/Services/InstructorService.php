@@ -9,8 +9,10 @@ use App\Actions\Instructor\CreateCalendarItemAction;
 use App\Actions\Instructor\CreateInstructorLocationAction;
 use App\Actions\Instructor\CreateInstructorPackageAction;
 use App\Actions\Instructor\CreatePupilAction;
+use App\Actions\Instructor\CreateRecurringCalendarItemsAction;
 use App\Actions\Instructor\DeleteCalendarItemAction;
 use App\Actions\Instructor\DeleteInstructorLocationAction;
+use App\Actions\Instructor\DeleteRecurringCalendarItemsAction;
 use App\Actions\Instructor\GetInstructorCalendarAction;
 use App\Actions\Instructor\GetInstructorLocationsAction;
 use App\Actions\Instructor\GetInstructorPackagesAction;
@@ -19,6 +21,7 @@ use App\Actions\Instructor\GetInstructorPupilsAction;
 use App\Actions\Instructor\UpdateCalendarItemAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Shared\Message\SendBroadcastMessageAction;
+use App\Enums\RecurrencePattern;
 use App\Enums\UserRole;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
@@ -44,6 +47,8 @@ class InstructorService
         protected CreateCalendarItemAction $createCalendarItem,
         protected DeleteCalendarItemAction $deleteCalendarItem,
         protected UpdateCalendarItemAction $updateCalendarItem,
+        protected CreateRecurringCalendarItemsAction $createRecurringCalendarItems,
+        protected DeleteRecurringCalendarItemsAction $deleteRecurringCalendarItems,
         protected CreatePupilAction $createPupil,
         protected GetInstructorPayoutsAction $getInstructorPayouts,
         protected GetInstructorPupilsAction $getInstructorPupils,
@@ -292,6 +297,45 @@ class InstructorService
     public function removeCalendarItem(CalendarItem $calendarItem): bool
     {
         return ($this->deleteCalendarItem)($calendarItem);
+    }
+
+    /**
+     * Create recurring calendar items for an instructor.
+     *
+     * @return Collection The created calendar items
+     */
+    public function addRecurringCalendarItems(
+        Instructor $instructor,
+        string $date,
+        string $startTime,
+        string $endTime,
+        RecurrencePattern $pattern,
+        ?string $recurrenceEndDate = null,
+        bool $isAvailable = true,
+        ?string $notes = null,
+        ?string $unavailabilityReason = null
+    ): Collection {
+        return ($this->createRecurringCalendarItems)(
+            $instructor,
+            $date,
+            $startTime,
+            $endTime,
+            $pattern,
+            $recurrenceEndDate,
+            $isAvailable,
+            $notes,
+            $unavailabilityReason
+        );
+    }
+
+    /**
+     * Delete recurring calendar items from a given item forward.
+     *
+     * @return int Number of items deleted
+     */
+    public function removeRecurringCalendarItems(CalendarItem $calendarItem): int
+    {
+        return ($this->deleteRecurringCalendarItems)($calendarItem);
     }
 
     /**

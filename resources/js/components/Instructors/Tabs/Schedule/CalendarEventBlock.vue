@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import type { RecurrencePattern } from '@/types/instructor'
+
 export interface CalendarEvent {
     id: number
     date: string
@@ -11,6 +13,8 @@ export interface CalendarEvent {
     studentName: string | null
     notes: string | null
     unavailabilityReason: string | null
+    recurrencePattern: RecurrencePattern
+    recurrenceGroupId: string | null
 }
 
 interface Props {
@@ -113,8 +117,12 @@ function handlePointerDown(e: PointerEvent) {
         @click="handleClick"
         @pointerdown="handlePointerDown"
     >
-        <div class="font-medium">
-            {{ formatTime(event.startTime) }} - {{ formatTime(event.endTime) }}
+        <div class="flex items-center gap-1 font-medium">
+            <span>{{ formatTime(event.startTime) }} - {{ formatTime(event.endTime) }}</span>
+            <!-- Recurrence indicator -->
+            <svg v-if="event.recurrencePattern && event.recurrencePattern !== 'none'" class="h-3 w-3 shrink-0 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Recurring">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
         </div>
         <div v-if="heightPx > 30" class="mt-0.5 opacity-75">
             {{ statusLabel }}

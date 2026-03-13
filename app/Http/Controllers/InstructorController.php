@@ -9,6 +9,7 @@ use App\Actions\Shared\Contact\DeleteContactAction;
 use App\Actions\Shared\Contact\SetPrimaryContactAction;
 use App\Actions\Shared\Contact\UpdateContactAction;
 use App\Actions\Shared\LogActivityAction;
+use App\Enums\RecurrencePattern;
 use App\Http\Requests\ImportInstructorsCsvRequest;
 use App\Http\Requests\StoreCalendarItemRequest;
 use App\Http\Requests\StoreInstructorRequest;
@@ -265,6 +266,32 @@ class InstructorController extends Controller
      */
     public function storeCalendarItem(StoreCalendarItemRequest $request, Instructor $instructor): JsonResponse
     {
+        $pattern = RecurrencePattern::tryFrom($request->input('recurrence_pattern', 'none')) ?? RecurrencePattern::None;
+
+        // Handle recurring slots
+        if ($pattern !== RecurrencePattern::None) {
+            $items = $this->instructorService->addRecurringCalendarItems(
+                $instructor,
+                $request->input('date'),
+                $request->input('start_time'),
+                $request->input('end_time'),
+                $pattern,
+                $request->input('recurrence_end_date'),
+                $request->boolean('is_available', true),
+                $request->input('notes'),
+                $request->input('unavailability_reason')
+            );
+
+            $firstItem = $items->first();
+            $firstItem->load('calendar');
+
+            return response()->json([
+                'calendar_item' => $this->formatCalendarItem($firstItem),
+                'recurring_count' => $items->count(),
+            ], 201);
+        }
+
+        // Handle single slot
         $calendarItem = $this->instructorService->addCalendarItem(
             $instructor,
             $request->input('date'),
@@ -276,17 +303,7 @@ class InstructorController extends Controller
         );
 
         return response()->json([
-            'calendar_item' => [
-                'id' => $calendarItem->id,
-                'calendar_id' => $calendarItem->calendar_id,
-                'date' => $calendarItem->calendar->date->format('Y-m-d'),
-                'start_time' => $calendarItem->start_time,
-                'end_time' => $calendarItem->end_time,
-                'is_available' => $calendarItem->is_available,
-                'status' => $calendarItem->status ?? 'available',
-                'notes' => $calendarItem->notes,
-                'unavailability_reason' => $calendarItem->unavailability_reason,
-            ],
+            'calendar_item' => $this->formatCalendarItem($calendarItem),
         ], 201);
     }
 
@@ -314,17 +331,7 @@ class InstructorController extends Controller
         );
 
         return response()->json([
-            'calendar_item' => [
-                'id' => $calendarItem->id,
-                'calendar_id' => $calendarItem->calendar_id,
-                'date' => $calendarItem->calendar->date->format('Y-m-d'),
-                'start_time' => $calendarItem->start_time,
-                'end_time' => $calendarItem->end_time,
-                'is_available' => $calendarItem->is_available,
-                'status' => $calendarItem->status ?? 'available',
-                'notes' => $calendarItem->notes,
-                'unavailability_reason' => $calendarItem->unavailability_reason,
-            ],
+            'calendar_item' => $this->formatCalendarItem($calendarItem),
         ]);
     }
 
@@ -340,7 +347,18 @@ class InstructorController extends Controller
             ], 404);
         }
 
+        $deleteScope = request()->query('scope', 'single');
+
         try {
+            if ($deleteScope === 'future' && $calendarItem->isRecurring()) {
+                $deletedCount = $this->instructorService->removeRecurringCalendarItems($calendarItem);
+
+                return response()->json([
+                    'message' => "{$deletedCount} recurring calendar item(s) removed successfully.",
+                    'deleted_count' => $deletedCount,
+                ]);
+            }
+
             $this->instructorService->removeCalendarItem($calendarItem);
 
             return response()->json([
@@ -351,6 +369,29 @@ class InstructorController extends Controller
                 'message' => $e->getMessage(),
             ], 400);
         }
+    }
+
+    /**
+     * Format a calendar item for JSON response.
+     *
+     * @return array<string, mixed>
+     */
+    private function formatCalendarItem(CalendarItem $calendarItem): array
+    {
+        return [
+            'id' => $calendarItem->id,
+            'calendar_id' => $calendarItem->calendar_id,
+            'date' => $calendarItem->calendar->date->format('Y-m-d'),
+            'start_time' => $calendarItem->start_time,
+            'end_time' => $calendarItem->end_time,
+            'is_available' => $calendarItem->is_available,
+            'status' => $calendarItem->status ?? 'available',
+            'notes' => $calendarItem->notes,
+            'unavailability_reason' => $calendarItem->unavailability_reason,
+            'recurrence_pattern' => $calendarItem->recurrence_pattern?->value ?? 'none',
+            'recurrence_end_date' => $calendarItem->recurrence_end_date?->format('Y-m-d'),
+            'recurrence_group_id' => $calendarItem->recurrence_group_id,
+        ];
     }
 
     /**

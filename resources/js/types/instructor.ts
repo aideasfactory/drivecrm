@@ -91,6 +91,8 @@ export interface CalendarItem {
   updated_at: string
 }
 
+export type RecurrencePattern = 'none' | 'weekly' | 'biweekly' | 'monthly'
+
 export interface CalendarItemFormData {
   date: string
   start_time: string
@@ -98,6 +100,8 @@ export interface CalendarItemFormData {
   is_available: boolean
   notes?: string
   unavailability_reason?: string
+  recurrence_pattern?: RecurrencePattern
+  recurrence_end_date?: string
 }
 
 export interface CalendarItemResponse {
@@ -111,6 +115,9 @@ export interface CalendarItemResponse {
   notes: string | null
   unavailability_reason: string | null
   student_name: string | null
+  recurrence_pattern: RecurrencePattern
+  recurrence_end_date: string | null
+  recurrence_group_id: string | null
 }
 
 export interface InstructorPayout {

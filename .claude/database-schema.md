@@ -680,6 +680,9 @@ Defines time slots within a calendar date.
 | `status` | enum('draft', 'reserved', 'booked', 'completed') | NULLABLE | Booking lifecycle status |
 | `notes` | text | NULLABLE | General notes about this calendar slot |
 | `unavailability_reason` | text | NULLABLE | Reason for marking slot unavailable (only when is_available = false) |
+| `recurrence_pattern` | varchar(20) | DEFAULT 'none' | Recurrence pattern: none, weekly, biweekly, monthly |
+| `recurrence_end_date` | date | NULLABLE | End date for the recurrence series |
+| `recurrence_group_id` | uuid | NULLABLE, INDEXED | Groups all instances of a recurring slot together |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
@@ -688,12 +691,16 @@ Defines time slots within a calendar date.
 
 **Enums:**
 - Status: `draft` (tentative hold during onboarding), `reserved` (weekly payment pending), `booked` (fully paid), `completed` (lesson finished)
+- RecurrencePattern: `none` (single slot), `weekly` (every week), `biweekly` (every 2 weeks), `monthly` (every month)
 
 **Business Logic:**
 - Multiple time slots per calendar date
 - `is_available` allows blocking slots without deletion
 - `status` tracks the booking lifecycle: `draft` → `reserved`/`booked` → `completed`
 - Draft items are cleaned up by `calendar:cleanup-drafts` command if abandoned
+- Recurring slots: materialized instances pattern — each occurrence is a separate row linked by `recurrence_group_id`
+- Individual occurrences can be modified/deleted without affecting the rest of the series
+- Deleting "this and all future" removes all items in the group from the selected date forward (excluding those with lessons)
 
 ---
 
@@ -1036,7 +1043,7 @@ Laravel's failed jobs storage.
 - **enquiries:** None (uses UUID primary key)
 - **locations:** `postcode_sector`
 - **calendars:** Unique constraint on `(instructor_id, date)`
-- **calendar_items:** None
+- **calendar_items:** `recurrence_group_id`
 - **messages:** `from`, `to`
 - **resource_folders:** `parent_id`, unique on `(parent_id, slug)`
 - **resources:** `resource_folder_id`
