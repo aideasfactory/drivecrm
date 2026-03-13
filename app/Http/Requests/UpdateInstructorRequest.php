@@ -37,7 +37,7 @@ class UpdateInstructorRequest extends FormRequest
             ],
             'phone' => ['nullable', 'string', 'max:20'],
             'bio' => ['nullable', 'string', 'max:1000'],
-            'transmission_type' => ['required', 'in:manual,automatic'],
+            'transmission_type' => ['required', 'in:manual,automatic,both'],
             'status' => ['nullable', 'string', 'max:50'],
             'pdi_status' => ['nullable', 'string', 'max:50'],
             'address' => ['nullable', 'string', 'max:500'],
@@ -60,7 +60,7 @@ class UpdateInstructorRequest extends FormRequest
             'email.email' => 'Please provide a valid email address.',
             'email.unique' => 'This email address is already in use.',
             'transmission_type.required' => 'Please select a transmission type.',
-            'transmission_type.in' => 'Transmission type must be either manual or automatic.',
+            'transmission_type.in' => 'Transmission type must be manual, automatic, or both.',
         ];
     }
 }

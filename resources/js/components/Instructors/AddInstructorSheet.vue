@@ -262,6 +262,7 @@ const handleRequestDeletion = () => {
                         >
                             <option value="manual">Manual</option>
                             <option value="automatic">Automatic</option>
+                            <option value="both">Both</option>
                         </select>
                         <p
                             v-if="errors.transmission_type"
