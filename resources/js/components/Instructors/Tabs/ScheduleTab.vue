@@ -11,12 +11,9 @@ import {
     X,
     ChevronLeft,
     ChevronRight,
-<<<<<<< feature/019ce7ac-e270-73ed-9823-3824cf04b133-calendar-add-recurring-slot-options-and-review-best-implemen
     Repeat,
-=======
     CalendarDays,
     CalendarRange,
->>>>>>> main
 } from 'lucide-vue-next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -527,11 +524,7 @@ onMounted(() => {
 <template>
     <div class="flex flex-col gap-6">
 
-<<<<<<< feature/019ce7ac-e270-73ed-9823-3824cf04b133-calendar-add-recurring-slot-options-and-review-best-implemen
-        <!-- Week Navigation + Calendar Grid -->
-=======
         <!-- Navigation + Calendar Grid -->
->>>>>>> main
         <Card class="!pb-6 !pt-0">
             <!-- Navigation Bar -->
             <div class="flex items-center justify-between border-b border-border px-4 py-3">
