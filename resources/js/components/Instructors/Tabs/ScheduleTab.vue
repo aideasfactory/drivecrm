@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
 import axios from 'axios'
 import {
     Plus,
@@ -11,6 +11,7 @@ import {
     X,
     ChevronLeft,
     ChevronRight,
+    Repeat,
 } from 'lucide-vue-next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -35,7 +36,7 @@ import { toast } from '@/components/ui/toast'
 import WeeklyCalendarGrid from './Schedule/WeeklyCalendarGrid.vue'
 import type { CalendarEvent } from './Schedule/CalendarEventBlock.vue'
 import { useCalendarNavigation } from '@/composables/useCalendarNavigation'
-import type { CalendarItemFormData, CalendarItemResponse } from '@/types/instructor'
+import type { CalendarItemFormData, CalendarItemResponse, RecurrencePattern } from '@/types/instructor'
 
 interface Props {
     instructorId: number
@@ -60,9 +61,18 @@ const isEditSheetOpen = ref(false)
 const isDeleteDialogOpen = ref(false)
 const formLoading = ref(false)
 const events = ref<CalendarEvent[]>([])
+const deleteScope = ref<'single' | 'future'>('single')
 
 // Map of backend items by ID for quick lookup
 const itemsMap = ref<Map<number, CalendarItemResponse>>(new Map())
+
+// ── Recurrence options ──────────────────────────────────
+const recurrenceOptions: { value: RecurrencePattern; label: string }[] = [
+    { value: 'none', label: 'Does not repeat' },
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'biweekly', label: 'Every 2 weeks' },
+    { value: 'monthly', label: 'Monthly' },
+]
 
 // ── Form state ───────────────────────────────────────────
 const createForm = ref<CalendarItemFormData>({
@@ -72,6 +82,8 @@ const createForm = ref<CalendarItemFormData>({
     is_available: true,
     notes: '',
     unavailability_reason: '',
+    recurrence_pattern: 'none',
+    recurrence_end_date: '',
 })
 
 const editForm = ref<{
@@ -82,6 +94,8 @@ const editForm = ref<{
     is_available: boolean
     notes: string
     unavailability_reason: string
+    recurrence_pattern: RecurrencePattern
+    recurrence_group_id: string | null
 }>({
     id: 0,
     date: '',
@@ -90,6 +104,13 @@ const editForm = ref<{
     is_available: true,
     notes: '',
     unavailability_reason: '',
+    recurrence_pattern: 'none',
+    recurrence_group_id: null,
+})
+
+/** Whether the item being edited is part of a recurring series */
+const editItemIsRecurring = computed(() => {
+    return editForm.value.recurrence_pattern !== 'none' && editForm.value.recurrence_group_id !== null
 })
 
 // ── Time slot options (2-hour blocks within 08:00–18:00) ─
@@ -157,6 +178,8 @@ function toCalendarEvent(item: CalendarItemResponse): CalendarEvent {
         studentName: item.student_name,
         notes: item.notes,
         unavailabilityReason: item.unavailability_reason,
+        recurrencePattern: item.recurrence_pattern ?? 'none',
+        recurrenceGroupId: item.recurrence_group_id ?? null,
     }
 }
 
@@ -189,6 +212,9 @@ async function loadCalendarRange(startDate: string, endDate: string) {
                     notes: item.notes ?? null,
                     unavailability_reason: item.unavailability_reason ?? null,
                     student_name: item.student_name ?? null,
+                    recurrence_pattern: item.recurrence_pattern ?? 'none',
+                    recurrence_end_date: item.recurrence_end_date ?? null,
+                    recurrence_group_id: item.recurrence_group_id ?? null,
                 }
                 newItemsMap.set(item.id, calItem)
             }
@@ -220,6 +246,8 @@ function handleSlotClick(date: string, time: string) {
         is_available: true,
         notes: '',
         unavailability_reason: '',
+        recurrence_pattern: 'none',
+        recurrence_end_date: '',
     }
     isCreateSheetOpen.value = true
 }
@@ -253,14 +281,23 @@ async function handleCreateSubmit() {
                 is_available: createForm.value.is_available,
                 notes: createForm.value.notes || null,
                 unavailability_reason: createForm.value.is_available ? null : createForm.value.unavailability_reason,
+                recurrence_pattern: createForm.value.recurrence_pattern || 'none',
+                recurrence_end_date: createForm.value.recurrence_end_date || null,
             },
         )
 
-        const newItem: CalendarItemResponse = response.data.calendar_item
-        itemsMap.value.set(newItem.id, newItem)
-        rebuildEvents()
+        const recurringCount = response.data.recurring_count
+        if (recurringCount && recurringCount > 1) {
+            toast({ title: `${recurringCount} recurring time slots created!` })
+            // Reload the full week to pick up all new items
+            await loadCalendarRange(weekStartFormatted.value, weekEndFormatted.value)
+        } else {
+            const newItem: CalendarItemResponse = response.data.calendar_item
+            itemsMap.value.set(newItem.id, newItem)
+            rebuildEvents()
+            toast({ title: 'Time slot added successfully!' })
+        }
 
-        toast({ title: 'Time slot added successfully!' })
         isCreateSheetOpen.value = false
     } catch (error: any) {
         const message = error.response?.data?.message || 'Failed to add time slot'
@@ -284,6 +321,8 @@ function handleEventClick(event: CalendarEvent) {
         is_available: item.is_available,
         notes: item.notes ?? '',
         unavailability_reason: item.unavailability_reason ?? '',
+        recurrence_pattern: item.recurrence_pattern ?? 'none',
+        recurrence_group_id: item.recurrence_group_id ?? null,
     }
     isEditSheetOpen.value = true
 }
@@ -365,20 +404,30 @@ async function handleEventMove(eventId: number, newDate: string, newStartTime: s
 // ── Delete time slot ─────────────────────────────────────
 function openDeleteDialog() {
     isEditSheetOpen.value = false
+    deleteScope.value = 'single'
     isDeleteDialogOpen.value = true
 }
 
 async function handleDelete() {
     formLoading.value = true
     try {
+        const scopeParam = deleteScope.value === 'future' && editItemIsRecurring.value ? 'future' : 'single'
+
         await axios.delete(
             `/instructors/${props.instructorId}/calendar/items/${editForm.value.id}`,
+            { params: { scope: scopeParam } },
         )
 
-        itemsMap.value.delete(editForm.value.id)
-        rebuildEvents()
+        if (scopeParam === 'future') {
+            // Reload the full calendar since multiple items were deleted
+            toast({ title: 'Recurring time slots removed successfully!' })
+            await loadCalendarRange(weekStartFormatted.value, weekEndFormatted.value)
+        } else {
+            itemsMap.value.delete(editForm.value.id)
+            rebuildEvents()
+            toast({ title: 'Time slot removed successfully!' })
+        }
 
-        toast({ title: 'Time slot removed successfully!' })
         isDeleteDialogOpen.value = false
     } catch (error: any) {
         const message = error.response?.data?.message || 'Failed to delete time slot'
@@ -410,7 +459,7 @@ onMounted(() => {
 
 <template>
     <div class="flex flex-col gap-6">
-  
+
         <!-- Week Navigation + Calendar Grid -->
         <Card class="!pb-6 !pt-0">
             <!-- Navigation Bar -->
@@ -499,6 +548,43 @@ onMounted(() => {
                         </div>
                     </div>
 
+                    <!-- Recurrence Pattern -->
+                    <div class="space-y-2">
+                        <Label for="create-recurrence">
+                            <span class="flex items-center gap-1.5">
+                                <Repeat class="h-4 w-4" />
+                                Repeat
+                            </span>
+                        </Label>
+                        <select
+                            id="create-recurrence"
+                            v-model="createForm.recurrence_pattern"
+                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                            <option
+                                v-for="opt in recurrenceOptions"
+                                :key="opt.value"
+                                :value="opt.value"
+                            >
+                                {{ opt.label }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <!-- Recurrence End Date (shown only when repeating) -->
+                    <div v-if="createForm.recurrence_pattern && createForm.recurrence_pattern !== 'none'" class="space-y-2">
+                        <Label for="create-recurrence-end">Repeat Until</Label>
+                        <Input
+                            id="create-recurrence-end"
+                            v-model="createForm.recurrence_end_date"
+                            type="date"
+                            placeholder="Leave empty for 6 months"
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            Leave empty to repeat for 6 months
+                        </p>
+                    </div>
+
                     <!-- Status Toggle -->
                     <div class="space-y-2">
                         <Label>Status</Label>
@@ -564,7 +650,7 @@ onMounted(() => {
                     >
                         <Loader2 v-if="formLoading" class="mr-2 h-4 w-4 animate-spin" />
                         <Plus v-else class="mr-2 h-4 w-4" />
-                        Add Time Slot
+                        {{ createForm.recurrence_pattern && createForm.recurrence_pattern !== 'none' ? 'Add Recurring Slots' : 'Add Time Slot' }}
                     </Button>
                 </form>
             </SheetContent>
@@ -577,6 +663,10 @@ onMounted(() => {
                     <SheetTitle class="flex items-center gap-2">
                         <Clock class="h-5 w-5" />
                         Edit Time Slot
+                        <span v-if="editItemIsRecurring" class="ml-auto flex items-center gap-1 text-xs font-normal text-muted-foreground">
+                            <Repeat class="h-3.5 w-3.5" />
+                            Recurring
+                        </span>
                     </SheetTitle>
                 </SheetHeader>
 
@@ -675,6 +765,11 @@ onMounted(() => {
                         </p>
                     </div>
 
+                    <!-- Info about editing recurring items -->
+                    <p v-if="editItemIsRecurring" class="text-xs text-muted-foreground">
+                        Changes apply to this occurrence only. To remove the entire series, use Delete.
+                    </p>
+
                     <div class="flex gap-2">
                         <Button
                             type="submit"
@@ -727,6 +822,27 @@ onMounted(() => {
                     <p v-if="!editForm.is_available && editForm.unavailability_reason" class="text-sm text-muted-foreground">
                         <strong>Reason:</strong> {{ editForm.unavailability_reason }}
                     </p>
+                </div>
+
+                <!-- Recurring delete scope selector -->
+                <div v-if="editItemIsRecurring" class="space-y-3 border-t border-border pt-4">
+                    <Label class="text-sm font-medium">Delete scope</Label>
+                    <div class="space-y-2">
+                        <label class="flex cursor-pointer items-center gap-3 rounded-md border border-input px-3 py-2.5 transition-colors hover:bg-muted/50" :class="{ 'border-primary bg-primary/5': deleteScope === 'single' }">
+                            <input type="radio" v-model="deleteScope" value="single" class="accent-primary" />
+                            <div>
+                                <div class="text-sm font-medium">This event only</div>
+                                <div class="text-xs text-muted-foreground">Remove just this occurrence</div>
+                            </div>
+                        </label>
+                        <label class="flex cursor-pointer items-center gap-3 rounded-md border border-input px-3 py-2.5 transition-colors hover:bg-muted/50" :class="{ 'border-primary bg-primary/5': deleteScope === 'future' }">
+                            <input type="radio" v-model="deleteScope" value="future" class="accent-primary" />
+                            <div>
+                                <div class="text-sm font-medium">This and all future events</div>
+                                <div class="text-xs text-muted-foreground">Remove this and all later occurrences in the series</div>
+                            </div>
+                        </label>
+                    </div>
                 </div>
 
                 <DialogFooter>

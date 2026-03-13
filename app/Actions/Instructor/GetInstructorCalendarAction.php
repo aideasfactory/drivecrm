@@ -61,6 +61,11 @@ class GetInstructorCalendarAction
                         'is_available' => $item->is_available,
                         'status' => $item->status?->value ?? 'available',
                         'student_name' => $studentName,
+                        'notes' => $item->notes,
+                        'unavailability_reason' => $item->unavailability_reason,
+                        'recurrence_pattern' => $item->recurrence_pattern?->value ?? 'none',
+                        'recurrence_end_date' => $item->recurrence_end_date?->format('Y-m-d'),
+                        'recurrence_group_id' => $item->recurrence_group_id,
                     ];
                 }),
             ];

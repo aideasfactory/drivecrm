@@ -1,7 +1,7 @@
-# Task: Fix Onboarding UI Issues (Colors, Spacing, Continue Button)
+# Task: Calendar: add recurring slot options and review best implementation
 
-**Created:** 2026-03-05
-**Last Updated:** 2026-03-05T19:15:00Z
+**Created:** 2026-03-13
+**Last Updated:** 2026-03-13T16:30:00Z
 **Status:** ✅ Complete
 
 ---
@@ -9,45 +9,25 @@
 ## Overview
 
 ### Goal
-Fix several UI issues across the onboarding forms:
-1. Change 'DVSA Approved' and 'Secure Checkout' badge colors from hardcoded `bg-red-600` to `bg-primary`
-2. Update stepper completed step badges from `bg-red-600` to `bg-primary`
-3. Increase spacing between labels and inputs in Step 5 "Learner Details" form
-4. Fix Continue button on Step 5 when "I'm booking for someone else" is checked
+Build improved recurring slot support for the calendar. Instructors should be able to create time slots that repeat weekly, bi-weekly, monthly, or indefinitely, while still allowing individual occurrences to be modified or deleted.
 
-### Success Criteria
-- [x] Badge labels use `bg-primary text-primary-foreground` instead of `bg-red-600 text-white`
-- [x] Stepper completed steps use `bg-primary text-primary-foreground` instead of `bg-red-600 text-white`
-- [x] Learner Details form has 2-3px more spacing between labels and inputs
-- [x] Continue button on Step 5 progresses to Step 6 when "booking for someone else" is checked
+### Context
+- Tile ID: 019ce7ac-e270-73ed-9823-3824cf04b133
+- Repository: drivecrm
+- Branch: feature/019ce7ac-e270-73ed-9823-3824cf04b133-calendar-add-recurring-slot-options-and-review-best-implemen
+- Priority: HIGH
+- Customer: Drive
 
 ---
 
 ## PHASE 1: PLANNING
 **Status:** ✅ Complete
 
-### Analysis
-
-#### Issue 1: Badge Colors (DVSA Approved & Secure Checkout)
-- **Files:** `Step1.vue` (lines 30, 34), `OnboardingLeftSidebar.vue` (lines 23, 27)
-- **Current:** `bg-red-600 text-white hover:bg-red-700`
-- **Fix:** Replace with `bg-primary text-primary-foreground hover:bg-primary/90`
-
-#### Issue 2: Stepper Background
-- **File:** `OnboardingHeader.vue` (lines 32, 51)
-- **Current:** `bg-red-600 text-white hover:bg-red-700` on completed steps
-- **Fix:** Replace with `bg-primary text-primary-foreground hover:bg-primary/90`
-
-#### Issue 3: Learner Details Form Spacing
-- **File:** `Step5.vue` — learner details form inputs
-- **Fix:** Add `mt-1.5` to all 5 Input elements in the learner details section
-
-#### Issue 4: Continue Button Bug
-- **Root cause:** `autoSave()` posts to same endpoint as `submit()` without an `auto_save` field. Backend checks `!$request->has('auto_save')` to decide redirect vs save-only. Auto-save was being treated as a real submit, causing race conditions and premature redirect attempts.
-- **Fix:** (1) Add `auto_save: true` via `form.transform()`, (2) Cancel pending auto-save before submit, (3) Skip required learner field validation during auto-save in FormRequest
+### Design Decision: Materialized Instances with Recurrence Metadata
+Chose to generate individual CalendarItem rows for each occurrence, linked by a shared `recurrence_group_id` UUID. This approach keeps existing queries, overlap checks, and onboarding flow unchanged while allowing individual modifications.
 
 ### Reflection
-Clear, well-scoped fixes. The button bug was a subtle interaction between auto-save and the backend's redirect logic.
+Good choice of pattern — avoids RRULE complexity, keeps the database query model simple, and matches how the existing onboarding flow already creates weekly slots.
 
 ---
 
@@ -55,31 +35,52 @@ Clear, well-scoped fixes. The button bug was a subtle interaction between auto-s
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Fix badge colors in `OnboardingLeftSidebar.vue` (2 badges)
-- [x] Fix badge colors in `Step1.vue` (2 badges)
-- [x] Fix stepper colors in `OnboardingHeader.vue` (2 occurrences)
-- [x] Add `mt-1.5` spacing to all 5 inputs in Step 5 learner details form
-- [x] Fix auto-save to send `auto_save: true` via `form.transform()`
-- [x] Cancel pending auto-save timeout before explicit submit
-- [x] Remove duplicate watcher on `isBookingForSomeoneElse`
-- [x] Remove stale `console.log(props.package)` from Step5.vue
-- [x] Update `StepFiveRequest.php` to accept `auto_save` field and skip learner required validation during auto-save
-- [x] Fixed Label `for` attribute typo (`learner-first-name mb-4` → `learner-first-name`)
+- [x] Create RecurrencePattern enum (None, Weekly, Biweekly, Monthly)
+- [x] Create migration: add recurrence_pattern, recurrence_end_date, recurrence_group_id to calendar_items
+- [x] Update CalendarItem model with new fields, casts, and isRecurring() helper
+- [x] Create CreateRecurringCalendarItemsAction (generates all occurrences)
+- [x] Create DeleteRecurringCalendarItemsAction (delete this + all future)
+- [x] Update StoreCalendarItemRequest with recurrence validation
+- [x] Update InstructorService with new methods
+- [x] Update InstructorController with recurrence handling + formatCalendarItem helper
+- [x] Update GetInstructorCalendarAction to return recurrence fields
+- [x] Update TypeScript types (RecurrencePattern, CalendarItemFormData, CalendarItemResponse)
+- [x] Update ScheduleTab.vue with recurrence dropdown + end date picker
+- [x] Update CalendarEventBlock.vue with recurrence indicator icon + new CalendarEvent fields
+- [x] Update database-schema.md with new columns and business logic
+- [x] Write Pest feature tests (10 tests covering actions, model, and API endpoints)
 
 ### Reflection
-All fixes applied cleanly. The badge and stepper color changes were simple class replacements. The button bug fix required changes in both frontend (auto-save transform + cancel) and backend (FormRequest conditional validation). Also cleaned up dead code (duplicate watcher, console.log, typo in Label for attribute).
+Implementation went smoothly. The materialized instances pattern meant zero changes to the existing calendar query pipeline. The delete endpoint's `scope` query parameter cleanly supports both single and bulk delete without adding a new route. The frontend UI additions are minimal — a recurrence dropdown on the create sheet and a radio selector in the delete dialog.
 
 ---
 
-## FINAL REFLECTION
+## PHASE 3: FINAL REFLECTION & DOCUMENTATION
 **Status:** ✅ Complete
 
 ### Summary
-Fixed 4 UI issues in the onboarding flow: badge colors, stepper colors, form spacing, and continue button bug.
+Built full recurring slot support for the instructor calendar. Instructors can now create time slots that repeat weekly, bi-weekly, or monthly with an optional end date (defaults to 6 months). Each occurrence is an independent CalendarItem that can be individually edited, moved, or deleted. The delete dialog offers "this event only" or "this and all future events" for recurring series.
 
 ### Files Changed
-1. `resources/js/components/Onboarding/OnboardingLeftSidebar.vue` — Badge colors: `bg-red-600` → `bg-primary`
-2. `resources/js/pages/Onboarding/Step1.vue` — Badge colors: `bg-red-600` → `bg-primary`
-3. `resources/js/components/Onboarding/OnboardingHeader.vue` — Stepper colors: `bg-red-600` → `bg-primary`
-4. `resources/js/pages/Onboarding/Step5.vue` — Label spacing, auto-save fix, removed dead code
-5. `app/Http/Requests/Onboarding/StepFiveRequest.php` — Added `auto_save` rule, conditional learner validation
+- `app/Enums/RecurrencePattern.php` (new)
+- `app/Models/CalendarItem.php` (updated)
+- `app/Actions/Instructor/CreateRecurringCalendarItemsAction.php` (new)
+- `app/Actions/Instructor/DeleteRecurringCalendarItemsAction.php` (new)
+- `app/Actions/Instructor/GetInstructorCalendarAction.php` (updated)
+- `app/Http/Requests/StoreCalendarItemRequest.php` (updated)
+- `app/Http/Controllers/InstructorController.php` (updated)
+- `app/Services/InstructorService.php` (updated)
+- `database/migrations/2026_03_13_160502_add_recurrence_fields_to_calendar_items_table.php` (new)
+- `resources/js/types/instructor.ts` (updated)
+- `resources/js/components/Instructors/Tabs/ScheduleTab.vue` (updated)
+- `resources/js/components/Instructors/Tabs/Schedule/CalendarEventBlock.vue` (updated)
+- `tests/Feature/RecurringCalendarItemsTest.php` (new)
+- `.claude/database-schema.md` (updated)
+
+### Potential Overhead / Anti-Patterns
+1. **Data volume**: The materialized approach creates many rows (e.g., 26 rows for weekly/6-month). This is acceptable for this scale but could be optimized with lazy expansion if instructors create hundreds of recurring slots.
+2. **No bulk update**: Editing a recurring event only changes the single occurrence, not the entire series. This is intentional for flexibility but could be extended later if needed.
+3. **Overlap validation**: The overlap check in StoreCalendarItemRequest only validates the first date, not all generated dates. For recurring slots, some occurrences could theoretically overlap with existing slots. This is an acceptable tradeoff — the instructor can delete individual conflicting occurrences.
+
+### Score: 8/10
+Solid implementation that follows existing project patterns. The materialized instances approach is simple, maintainable, and backward-compatible. Deducted points for the overlap validation gap on recurring dates and the lack of bulk-edit capability for recurring series (both are reasonable future enhancements).

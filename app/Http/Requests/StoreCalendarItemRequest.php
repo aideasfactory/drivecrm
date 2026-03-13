@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Enums\RecurrencePattern;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rules\Enum;
 use Illuminate\Validation\Validator;
 
 class StoreCalendarItemRequest extends FormRequest
@@ -53,6 +55,16 @@ class StoreCalendarItemRequest extends FormRequest
                 'nullable',
                 'string',
                 'max:500',
+            ],
+            'recurrence_pattern' => [
+                'sometimes',
+                new Enum(RecurrencePattern::class),
+            ],
+            'recurrence_end_date' => [
+                'nullable',
+                'date',
+                'date_format:Y-m-d',
+                'after:date',
             ],
         ];
     }
@@ -148,6 +160,9 @@ class StoreCalendarItemRequest extends FormRequest
             'end_time.after' => 'End time must be after start time.',
             'notes.max' => 'Notes cannot exceed 1000 characters.',
             'unavailability_reason.max' => 'Unavailability reason cannot exceed 500 characters.',
+            'recurrence_pattern' => 'Please select a valid recurrence pattern.',
+            'recurrence_end_date.date' => 'Please provide a valid end date for the recurrence.',
+            'recurrence_end_date.after' => 'Recurrence end date must be after the start date.',
         ];
     }
 }

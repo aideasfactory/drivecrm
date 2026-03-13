@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\CalendarItemStatus;
+use App\Enums\RecurrencePattern;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -19,6 +20,9 @@ class CalendarItem extends Model
         'status',
         'notes',
         'unavailability_reason',
+        'recurrence_pattern',
+        'recurrence_end_date',
+        'recurrence_group_id',
     ];
 
     protected function casts(): array
@@ -26,7 +30,19 @@ class CalendarItem extends Model
         return [
             'is_available' => 'boolean',
             'status' => CalendarItemStatus::class,
+            'recurrence_pattern' => RecurrencePattern::class,
+            'recurrence_end_date' => 'date',
         ];
+    }
+
+    /**
+     * Check if this item is part of a recurring series.
+     */
+    public function isRecurring(): bool
+    {
+        return $this->recurrence_pattern !== null
+            && $this->recurrence_pattern !== RecurrencePattern::None
+            && $this->recurrence_group_id !== null;
     }
 
     public function calendar(): BelongsTo
