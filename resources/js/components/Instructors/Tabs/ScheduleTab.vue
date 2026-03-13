@@ -143,12 +143,12 @@ const editItemIsTravel = computed(() => {
     return editForm.value.item_type === 'travel'
 })
 
-// ── Time slot options (30-min increments, 08:00–16:00) ───
+// ── Time slot options (15-min increments, 08:00–16:00) ───
 const SLOT_DURATION_HOURS = 2
 const startTimeOptions = computed(() => {
     const options: { value: string; label: string }[] = []
     for (let h = 8; h <= 16; h++) {
-        for (let m = 0; m < 60; m += 30) {
+        for (let m = 0; m < 60; m += 15) {
             // Don't go past 16:00 (a 2-hour slot ending at 18:00)
             if (h === 16 && m > 0) break
             const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
@@ -179,11 +179,11 @@ function calcEndTime(startTime: string): string {
     return minutesToTime(minutes + SLOT_DURATION_HOURS * 60)
 }
 
-/** Snap a time string to the nearest valid 30-minute start time */
+/** Snap a time string to the nearest valid 15-minute start time */
 function snapToStartOption(time: string): string {
     const minutes = timeToMinutes(time)
-    // Round down to nearest 30-minute increment
-    const snappedMinutes = Math.floor(minutes / 30) * 30
+    // Round down to nearest 15-minute increment
+    const snappedMinutes = Math.floor(minutes / 15) * 15
     // Clamp between 08:00 (480) and 16:00 (960)
     const clamped = Math.max(480, Math.min(snappedMinutes, 960))
     return minutesToTime(clamped)
