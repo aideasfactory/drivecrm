@@ -17,7 +17,7 @@ class PackageService
     ) {}
 
     /**
-     * Get all packages with instructor relationships.
+     * Get all platform-owned packages.
      *
      * @return Collection<int, Package>
      */

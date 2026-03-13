@@ -36,8 +36,6 @@ class PackageController extends Controller
                 'formatted_total_price' => $package->formatted_total_price,
                 'formatted_lesson_price' => $package->formatted_lesson_price,
                 'active' => $package->active,
-                'is_platform_package' => $package->isPlatformPackage(),
-                'instructor_name' => $package->instructor?->name,
                 'created_at' => $package->created_at?->format('d M Y'),
             ]),
         ]);

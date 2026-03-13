@@ -24,7 +24,7 @@ test('authenticated users can view packages index', function () {
     );
 });
 
-test('packages index displays admin packages', function () {
+test('packages index displays only platform packages', function () {
     $user = User::factory()->create();
     $this->actingAs($user);
 
@@ -37,17 +37,17 @@ test('packages index displays admin packages', function () {
         ->component('Packages/Index')
         ->has('packages', 1)
         ->where('packages.0.name', 'Admin Gold Package')
-        ->where('packages.0.is_platform_package', true)
-        ->where('packages.0.instructor_name', null)
     );
 });
 
-test('packages index displays instructor packages with instructor name', function () {
+test('packages index excludes instructor bespoke packages', function () {
     $user = User::factory()->create();
     $this->actingAs($user);
 
     $instructorUser = User::factory()->create(['name' => 'John Smith']);
     $instructor = Instructor::factory()->create(['user_id' => $instructorUser->id]);
+
+    Package::factory()->create(['name' => 'Platform Package']);
     Package::factory()->forInstructor($instructor)->create(['name' => 'Instructor Package']);
 
     $response = $this->get(route('packages.index'));
@@ -56,9 +56,7 @@ test('packages index displays instructor packages with instructor name', functio
     $response->assertInertia(fn ($page) => $page
         ->component('Packages/Index')
         ->has('packages', 1)
-        ->where('packages.0.name', 'Instructor Package')
-        ->where('packages.0.is_platform_package', false)
-        ->where('packages.0.instructor_name', 'John Smith')
+        ->where('packages.0.name', 'Platform Package')
     );
 });
 
@@ -130,7 +128,7 @@ test('store package validates required fields', function () {
     $response->assertJsonValidationErrors(['name', 'total_price_pence', 'lessons_count']);
 });
 
-test('packages index returns packages ordered by newest first', function () {
+test('packages index returns platform packages ordered by newest first', function () {
     $user = User::factory()->create();
     $this->actingAs($user);
 

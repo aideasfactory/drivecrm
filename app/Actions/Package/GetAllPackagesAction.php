@@ -10,14 +10,14 @@ use Illuminate\Database\Eloquent\Collection;
 class GetAllPackagesAction
 {
     /**
-     * Get all packages with their associated instructor.
+     * Get all platform-owned packages (where instructor_id is null).
      *
      * @return Collection<int, Package>
      */
     public function __invoke(): Collection
     {
         return Package::query()
-            ->with('instructor')
+            ->whereNull('instructor_id')
             ->orderByDesc('created_at')
             ->get();
     }

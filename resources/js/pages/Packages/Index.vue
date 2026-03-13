@@ -28,8 +28,6 @@ interface PackageItem {
     formatted_total_price: string
     formatted_lesson_price: string
     active: boolean
-    is_platform_package: boolean
-    instructor_name: string | null
     created_at: string | null
 }
 
@@ -49,10 +47,7 @@ const filteredPackages = computed(() => {
 
     const query = searchQuery.value.toLowerCase()
     return props.packages.filter(
-        (pkg) =>
-            pkg.name.toLowerCase().includes(query) ||
-            (pkg.instructor_name?.toLowerCase().includes(query) ?? false) ||
-            (pkg.is_platform_package && 'admin package'.includes(query)),
+        (pkg) => pkg.name.toLowerCase().includes(query),
     )
 })
 
@@ -72,7 +67,7 @@ const breadcrumbs = [{ title: 'Packages' }]
             <div class="flex flex-col gap-2">
                 <h2 class="text-3xl font-bold">Packages</h2>
                 <p class="text-muted-foreground">
-                    Manage all lesson packages across the platform
+                    Manage platform lesson packages
                 </p>
             </div>
 
@@ -105,7 +100,6 @@ const breadcrumbs = [{ title: 'Packages' }]
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Name</TableHead>
-                                <TableHead>Owner</TableHead>
                                 <TableHead>Lessons</TableHead>
                                 <TableHead>Price</TableHead>
                                 <TableHead>Per Lesson</TableHead>
@@ -135,17 +129,6 @@ const breadcrumbs = [{ title: 'Packages' }]
                                             </div>
                                         </div>
                                     </div>
-                                </TableCell>
-                                <TableCell>
-                                    <Badge
-                                        v-if="pkg.is_platform_package"
-                                        variant="secondary"
-                                    >
-                                        Admin Package
-                                    </Badge>
-                                    <span v-else class="text-sm">
-                                        {{ pkg.instructor_name }}
-                                    </span>
                                 </TableCell>
                                 <TableCell>
                                     <span class="font-medium">
@@ -180,7 +163,7 @@ const breadcrumbs = [{ title: 'Packages' }]
                                 </TableCell>
                             </TableRow>
                             <TableRow v-if="filteredPackages.length === 0">
-                                <TableCell colspan="7" class="text-center">
+                                <TableCell colspan="6" class="text-center">
                                     <div class="py-8 text-muted-foreground">
                                         No packages found
                                     </div>
