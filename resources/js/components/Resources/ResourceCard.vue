@@ -17,6 +17,7 @@ interface ResourceItem {
     mime_type: string | null;
     file_path: string | null;
     thumbnail_path: string | null;
+    thumbnail_url: string | null;
 }
 
 const props = defineProps<{
@@ -55,6 +56,17 @@ const formattedSize = computed(() => {
             <div class="flex items-start justify-between gap-3">
                 <div class="flex items-start gap-3 overflow-hidden">
                     <div
+                        v-if="resource.thumbnail_url"
+                        class="h-10 w-10 shrink-0 overflow-hidden rounded-lg"
+                    >
+                        <img
+                            :src="resource.thumbnail_url"
+                            :alt="resource.title"
+                            class="h-full w-full object-cover"
+                        />
+                    </div>
+                    <div
+                        v-else
                         class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
                         :class="
                             isVideoLink
