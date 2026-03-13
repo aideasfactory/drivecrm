@@ -66,6 +66,11 @@ class StoreCalendarItemRequest extends FormRequest
                 'date_format:Y-m-d',
                 'after:date',
             ],
+            'travel_time_minutes' => [
+                'nullable',
+                'integer',
+                'in:15,30,45',
+            ],
         ];
     }
 
@@ -112,6 +117,15 @@ class StoreCalendarItemRequest extends FormRequest
         $date = $this->input('date');
         $startTime = $this->input('start_time');
         $endTime = $this->input('end_time');
+        $travelMinutes = $this->integer('travel_time_minutes', 0);
+
+        // Calculate the full blocked window (slot + travel time)
+        $effectiveEndTime = $endTime;
+        if ($travelMinutes > 0) {
+            $effectiveEndTime = \Carbon\Carbon::parse($endTime)
+                ->addMinutes($travelMinutes)
+                ->format('H:i');
+        }
 
         // Get calendar for this instructor and date
         $calendar = $instructor->calendars()
@@ -123,20 +137,19 @@ class StoreCalendarItemRequest extends FormRequest
             return;
         }
 
-        // Check for overlapping time slots
+        // Check for overlapping time slots (including travel time window)
         $overlap = $calendar->items()
-            ->where(function ($query) use ($startTime, $endTime) {
-                // Check if new slot overlaps with existing slots
+            ->where(function ($query) use ($startTime, $effectiveEndTime) {
                 // Overlap occurs when: (start_time < existing.end_time) AND (end_time > existing.start_time)
                 $query->whereRaw('TIME(?) < TIME(end_time)', [$startTime])
-                    ->whereRaw('TIME(?) > TIME(start_time)', [$endTime]);
+                    ->whereRaw('TIME(?) > TIME(start_time)', [$effectiveEndTime]);
             })
             ->exists();
 
         if ($overlap) {
             $validator->errors()->add(
                 'start_time',
-                'This time slot overlaps with an existing time slot.'
+                'This time slot (including travel time) overlaps with an existing time slot.'
             );
         }
     }
@@ -163,6 +176,8 @@ class StoreCalendarItemRequest extends FormRequest
             'recurrence_pattern' => 'Please select a valid recurrence pattern.',
             'recurrence_end_date.date' => 'Please provide a valid end date for the recurrence.',
             'recurrence_end_date.after' => 'Recurrence end date must be after the start date.',
+            'travel_time_minutes.integer' => 'Travel time must be a number.',
+            'travel_time_minutes.in' => 'Travel time must be 15, 30, or 45 minutes.',
         ];
     }
 }

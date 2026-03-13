@@ -24,6 +24,11 @@ class DeleteCalendarItemAction
             throw new \Exception('Cannot delete calendar item with booked lessons');
         }
 
+        // Delete any associated travel-time block
+        if ($calendarItem->travelItem) {
+            $calendarItem->travelItem->delete();
+        }
+
         // Delete the calendar item
         $deleted = $calendarItem->delete();
 

@@ -14,6 +14,7 @@ import {
     Repeat,
     CalendarDays,
     CalendarRange,
+    Car,
 } from 'lucide-vue-next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -87,6 +88,14 @@ const recurrenceOptions: { value: RecurrencePattern; label: string }[] = [
     { value: 'monthly', label: 'Monthly' },
 ]
 
+// ── Travel time options ─────────────────────────────────
+const travelTimeOptions = [
+    { value: 0, label: 'No travel time' },
+    { value: 15, label: '15 minutes' },
+    { value: 30, label: '30 minutes' },
+    { value: 45, label: '45 minutes' },
+]
+
 // ── Form state ───────────────────────────────────────────
 const createForm = ref<CalendarItemFormData>({
     date: '',
@@ -97,6 +106,7 @@ const createForm = ref<CalendarItemFormData>({
     unavailability_reason: '',
     recurrence_pattern: 'none',
     recurrence_end_date: '',
+    travel_time_minutes: 30,
 })
 
 const editForm = ref<{
@@ -109,6 +119,7 @@ const editForm = ref<{
     unavailability_reason: string
     recurrence_pattern: RecurrencePattern
     recurrence_group_id: string | null
+    item_type: string
 }>({
     id: 0,
     date: '',
@@ -119,6 +130,7 @@ const editForm = ref<{
     unavailability_reason: '',
     recurrence_pattern: 'none',
     recurrence_group_id: null,
+    item_type: 'slot',
 })
 
 /** Whether the item being edited is part of a recurring series */
@@ -126,15 +138,25 @@ const editItemIsRecurring = computed(() => {
     return editForm.value.recurrence_pattern !== 'none' && editForm.value.recurrence_group_id !== null
 })
 
-// ── Time slot options (2-hour blocks within 08:00–18:00) ─
+/** Whether the item being edited is a travel-time block */
+const editItemIsTravel = computed(() => {
+    return editForm.value.item_type === 'travel'
+})
+
+// ── Time slot options (30-min increments, 08:00–16:00) ───
 const SLOT_DURATION_HOURS = 2
-const startTimeOptions = [
-    { value: '08:00', label: '08:00' },
-    { value: '10:00', label: '10:00' },
-    { value: '12:00', label: '12:00' },
-    { value: '14:00', label: '14:00' },
-    { value: '16:00', label: '16:00' },
-]
+const startTimeOptions = computed(() => {
+    const options: { value: string; label: string }[] = []
+    for (let h = 8; h <= 16; h++) {
+        for (let m = 0; m < 60; m += 30) {
+            // Don't go past 16:00 (a 2-hour slot ending at 18:00)
+            if (h === 16 && m > 0) break
+            const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+            options.push({ value: time, label: time })
+        }
+    }
+    return options
+})
 
 // ── Helpers ──────────────────────────────────────────────
 /** Normalise "HH:MM:SS" or "HH:MM" → "HH:MM" */
@@ -157,13 +179,14 @@ function calcEndTime(startTime: string): string {
     return minutesToTime(minutes + SLOT_DURATION_HOURS * 60)
 }
 
-/** Snap a time string to the nearest valid start time option */
+/** Snap a time string to the nearest valid 30-minute start time */
 function snapToStartOption(time: string): string {
     const minutes = timeToMinutes(time)
-    const hour = Math.floor(minutes / 60)
-    const snappedHour = hour % 2 === 0 ? hour : hour - 1
-    const clamped = Math.max(8, Math.min(snappedHour, 16))
-    return `${String(clamped).padStart(2, '0')}:00`
+    // Round down to nearest 30-minute increment
+    const snappedMinutes = Math.floor(minutes / 30) * 30
+    // Clamp between 08:00 (480) and 16:00 (960)
+    const clamped = Math.max(480, Math.min(snappedMinutes, 960))
+    return minutesToTime(clamped)
 }
 
 // Auto-calculate end time when start time changes
@@ -188,6 +211,9 @@ function toCalendarEvent(item: CalendarItemResponse): CalendarEvent {
         endTime: item.end_time,
         isAvailable: item.is_available,
         status: item.status,
+        itemType: item.item_type ?? 'slot',
+        travelTimeMinutes: item.travel_time_minutes ?? null,
+        parentItemId: item.parent_item_id ?? null,
         studentName: item.student_name,
         notes: item.notes,
         unavailabilityReason: item.unavailability_reason,
@@ -222,6 +248,9 @@ async function loadCalendarRange(startDate: string, endDate: string) {
                     end_time: item.end_time,
                     is_available: item.is_available,
                     status: item.status,
+                    item_type: item.item_type ?? 'slot',
+                    travel_time_minutes: item.travel_time_minutes ?? null,
+                    parent_item_id: item.parent_item_id ?? null,
                     notes: item.notes ?? null,
                     unavailability_reason: item.unavailability_reason ?? null,
                     student_name: item.student_name ?? null,
@@ -293,6 +322,7 @@ function handleSlotClick(date: string, time: string) {
         unavailability_reason: '',
         recurrence_pattern: 'none',
         recurrence_end_date: '',
+        travel_time_minutes: 30,
     }
     isCreateSheetOpen.value = true
 }
@@ -306,6 +336,7 @@ function handleDayClick(date: string) {
         is_available: true,
         notes: '',
         unavailability_reason: '',
+        travel_time_minutes: 30,
     }
     isCreateSheetOpen.value = true
 }
@@ -330,6 +361,8 @@ async function handleCreateSubmit() {
 
     formLoading.value = true
     try {
+        const travelMinutes = createForm.value.is_available ? (createForm.value.travel_time_minutes || 0) : 0
+
         const response = await axios.post(
             `/instructors/${props.instructorId}/calendar/items`,
             {
@@ -341,14 +374,20 @@ async function handleCreateSubmit() {
                 unavailability_reason: createForm.value.is_available ? null : createForm.value.unavailability_reason,
                 recurrence_pattern: createForm.value.recurrence_pattern || 'none',
                 recurrence_end_date: createForm.value.recurrence_end_date || null,
+                travel_time_minutes: travelMinutes > 0 ? travelMinutes : null,
             },
         )
 
         const recurringCount = response.data.recurring_count
+        const hasTravelItem = response.data.has_travel_item
+
         if (recurringCount && recurringCount > 1) {
             toast({ title: `${recurringCount} recurring time slots created!` })
-            // Reload the full week to pick up all new items
-            await loadCalendarRange(weekStartFormatted.value, weekEndFormatted.value)
+            await loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
+        } else if (hasTravelItem) {
+            // Reload to pick up both the slot and travel item
+            toast({ title: 'Time slot with travel time added!' })
+            await loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
         } else {
             const newItem: CalendarItemResponse = response.data.calendar_item
             itemsMap.value.set(newItem.id, newItem)
@@ -370,17 +409,21 @@ function handleEventClick(event: CalendarEvent) {
     const item = itemsMap.value.get(event.id)
     if (!item) return
 
-    const startTime = snapToStartOption(normaliseTime(item.start_time))
+    const startTime = item.item_type === 'travel'
+        ? normaliseTime(item.start_time)
+        : snapToStartOption(normaliseTime(item.start_time))
+
     editForm.value = {
         id: item.id,
         date: item.date,
         start_time: startTime,
-        end_time: calcEndTime(startTime),
+        end_time: item.item_type === 'travel' ? normaliseTime(item.end_time) : calcEndTime(startTime),
         is_available: item.is_available,
         notes: item.notes ?? '',
         unavailability_reason: item.unavailability_reason ?? '',
         recurrence_pattern: item.recurrence_pattern ?? 'none',
         recurrence_group_id: item.recurrence_group_id ?? null,
+        item_type: item.item_type ?? 'slot',
     }
     isEditSheetOpen.value = true
 }
@@ -388,7 +431,7 @@ function handleEventClick(event: CalendarEvent) {
 // ── Edit time slot ───────────────────────────────────────
 async function handleEditSubmit() {
     // Validate unavailability reason when marking as unavailable
-    if (!editForm.value.is_available && !editForm.value.unavailability_reason?.trim()) {
+    if (!editForm.value.is_available && !editItemIsTravel.value && !editForm.value.unavailability_reason?.trim()) {
         toast({ title: 'Please provide a reason for unavailability', variant: 'destructive' })
         return
     }
@@ -407,11 +450,9 @@ async function handleEditSubmit() {
             },
         )
 
-        const updated: CalendarItemResponse = response.data.calendar_item
-        itemsMap.value.set(updated.id, updated)
-        rebuildEvents()
-
+        // Reload full calendar to pick up any travel item changes
         toast({ title: 'Time slot updated successfully!' })
+        await loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
         isEditSheetOpen.value = false
     } catch (error: any) {
         const message = error.response?.data?.message || 'Failed to update time slot'
@@ -426,6 +467,9 @@ async function handleEventMove(eventId: number, newDate: string, newStartTime: s
     const item = itemsMap.value.get(eventId)
     if (!item) return
 
+    // Don't allow dragging travel items
+    if (item.item_type === 'travel') return
+
     // Optimistically update
     const oldItem = { ...item }
     item.date = newDate
@@ -434,7 +478,7 @@ async function handleEventMove(eventId: number, newDate: string, newStartTime: s
     rebuildEvents()
 
     try {
-        const response = await axios.put(
+        await axios.put(
             `/instructors/${props.instructorId}/calendar/items/${eventId}`,
             {
                 date: newDate,
@@ -444,11 +488,9 @@ async function handleEventMove(eventId: number, newDate: string, newStartTime: s
             },
         )
 
-        const updated: CalendarItemResponse = response.data.calendar_item
-        itemsMap.value.set(updated.id, updated)
-        rebuildEvents()
-
+        // Reload to get updated travel items too
         toast({ title: 'Time slot moved successfully!' })
+        await loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
     } catch (error: any) {
         // Revert on error
         itemsMap.value.set(eventId, oldItem as CalendarItemResponse)
@@ -476,15 +518,9 @@ async function handleDelete() {
             { params: { scope: scopeParam } },
         )
 
-        if (scopeParam === 'future') {
-            // Reload the full calendar since multiple items were deleted
-            toast({ title: 'Recurring time slots removed successfully!' })
-            await loadCalendarRange(weekStartFormatted.value, weekEndFormatted.value)
-        } else {
-            itemsMap.value.delete(editForm.value.id)
-            rebuildEvents()
-            toast({ title: 'Time slot removed successfully!' })
-        }
+        // Always reload to pick up travel item deletions
+        toast({ title: scopeParam === 'future' ? 'Recurring time slots removed successfully!' : 'Time slot removed successfully!' })
+        await loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
 
         isDeleteDialogOpen.value = false
     } catch (error: any) {
@@ -647,6 +683,32 @@ onMounted(() => {
                         </div>
                     </div>
 
+                    <!-- Travel Time (only shown when available) -->
+                    <div v-if="createForm.is_available" class="space-y-2">
+                        <Label for="create-travel">
+                            <span class="flex items-center gap-1.5">
+                                <Car class="h-4 w-4" />
+                                Travel Time After Lesson
+                            </span>
+                        </Label>
+                        <select
+                            id="create-travel"
+                            v-model.number="createForm.travel_time_minutes"
+                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                            <option
+                                v-for="opt in travelTimeOptions"
+                                :key="opt.value"
+                                :value="opt.value"
+                            >
+                                {{ opt.label }}
+                            </option>
+                        </select>
+                        <p v-if="createForm.travel_time_minutes && createForm.travel_time_minutes > 0 && createForm.end_time" class="text-xs text-muted-foreground">
+                            Travel block: {{ createForm.end_time }} - {{ minutesToTime(timeToMinutes(createForm.end_time) + (createForm.travel_time_minutes || 0)) }}
+                        </p>
+                    </div>
+
                     <!-- Recurrence Pattern -->
                     <div class="space-y-2">
                         <Label for="create-recurrence">
@@ -760,8 +822,9 @@ onMounted(() => {
             <SheetContent side="right">
                 <SheetHeader>
                     <SheetTitle class="flex items-center gap-2">
-                        <Clock class="h-5 w-5" />
-                        Edit Time Slot
+                        <Car v-if="editItemIsTravel" class="h-5 w-5" />
+                        <Clock v-else class="h-5 w-5" />
+                        {{ editItemIsTravel ? 'Travel Time' : 'Edit Time Slot' }}
                         <span v-if="editItemIsRecurring" class="ml-auto flex items-center gap-1 text-xs font-normal text-muted-foreground">
                             <Repeat class="h-3.5 w-3.5" />
                             Recurring
@@ -769,7 +832,35 @@ onMounted(() => {
                     </SheetTitle>
                 </SheetHeader>
 
-                <form @submit.prevent="handleEditSubmit" class="mt-6 space-y-6 px-6 py-4">
+                <!-- Travel item view (read-only info) -->
+                <div v-if="editItemIsTravel" class="mt-6 space-y-4 px-6 py-4">
+                    <div class="rounded-md border border-purple-200 bg-purple-50 p-4 dark:border-purple-800 dark:bg-purple-900/20">
+                        <p class="text-sm font-medium text-purple-800 dark:text-purple-300">
+                            This is a travel-time block created automatically after a lesson slot.
+                        </p>
+                        <p class="mt-1 text-xs text-purple-600 dark:text-purple-400">
+                            Travel time blocks cannot be booked and are managed through the parent lesson slot.
+                        </p>
+                    </div>
+                    <div class="space-y-2">
+                        <p class="text-sm text-muted-foreground">
+                            <strong>Date:</strong> {{ editForm.date }}
+                        </p>
+                        <p class="text-sm text-muted-foreground">
+                            <strong>Time:</strong> {{ editForm.start_time }} - {{ editForm.end_time }}
+                        </p>
+                    </div>
+                    <Button
+                        variant="outline"
+                        class="w-full"
+                        @click="isEditSheetOpen = false"
+                    >
+                        Close
+                    </Button>
+                </div>
+
+                <!-- Regular slot edit form -->
+                <form v-else @submit.prevent="handleEditSubmit" class="mt-6 space-y-6 px-6 py-4">
                     <div class="space-y-2">
                         <Label for="edit-date">Date</Label>
                         <Input

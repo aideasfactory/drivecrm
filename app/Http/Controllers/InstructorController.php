@@ -292,6 +292,8 @@ class InstructorController extends Controller
         }
 
         // Handle single slot
+        $travelTimeMinutes = $request->integer('travel_time_minutes') ?: null;
+
         $calendarItem = $this->instructorService->addCalendarItem(
             $instructor,
             $request->input('date'),
@@ -299,12 +301,18 @@ class InstructorController extends Controller
             $request->input('end_time'),
             $request->boolean('is_available', true),
             $request->input('notes'),
-            $request->input('unavailability_reason')
+            $request->input('unavailability_reason'),
+            $travelTimeMinutes
         );
 
-        return response()->json([
-            'calendar_item' => $this->formatCalendarItem($calendarItem),
-        ], 201);
+        // If travel time was requested, reload the full calendar range so frontend picks up both items
+        $response = ['calendar_item' => $this->formatCalendarItem($calendarItem)];
+
+        if ($travelTimeMinutes) {
+            $response['has_travel_item'] = true;
+        }
+
+        return response()->json($response, 201);
     }
 
     /**
@@ -386,6 +394,9 @@ class InstructorController extends Controller
             'end_time' => $calendarItem->end_time,
             'is_available' => $calendarItem->is_available,
             'status' => $calendarItem->status ?? 'available',
+            'item_type' => $calendarItem->item_type?->value ?? 'slot',
+            'travel_time_minutes' => $calendarItem->travel_time_minutes,
+            'parent_item_id' => $calendarItem->parent_item_id,
             'notes' => $calendarItem->notes,
             'unavailability_reason' => $calendarItem->unavailability_reason,
             'recurrence_pattern' => $calendarItem->recurrence_pattern?->value ?? 'none',

@@ -92,6 +92,7 @@ export interface CalendarItem {
 }
 
 export type RecurrencePattern = 'none' | 'weekly' | 'biweekly' | 'monthly'
+export type CalendarItemTypeValue = 'slot' | 'travel'
 
 export interface CalendarItemFormData {
   date: string
@@ -102,6 +103,7 @@ export interface CalendarItemFormData {
   unavailability_reason?: string
   recurrence_pattern?: RecurrencePattern
   recurrence_end_date?: string
+  travel_time_minutes?: number | null
 }
 
 export interface CalendarItemResponse {
@@ -112,6 +114,9 @@ export interface CalendarItemResponse {
   end_time: string
   is_available: boolean
   status: string | null
+  item_type: CalendarItemTypeValue
+  travel_time_minutes: number | null
+  parent_item_id: number | null
   notes: string | null
   unavailability_reason: string | null
   student_name: string | null

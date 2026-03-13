@@ -28,6 +28,9 @@ class CalendarItemFactory extends Factory
             'end_time' => sprintf('%02d:00:00', $startHour + 2),
             'is_available' => true,
             'status' => null,
+            'item_type' => 'slot',
+            'travel_time_minutes' => null,
+            'parent_item_id' => null,
             'notes' => null,
             'unavailability_reason' => null,
         ];
@@ -52,6 +55,18 @@ class CalendarItemFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'is_available' => true,
             'status' => 'booked',
+        ]);
+    }
+
+    /**
+     * Create a travel-time block.
+     */
+    public function travel(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'item_type' => 'travel',
+            'is_available' => false,
+            'unavailability_reason' => 'Travel time',
         ]);
     }
 }

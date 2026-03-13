@@ -27,6 +27,10 @@ class CalendarService
             ->where('date', '>=', $minimumDate->format('Y-m-d')) // Extra safety check
             ->with(['items' => function ($query) {
                 $query->where('is_available', true)
+                    ->where(function ($q) {
+                        $q->whereNull('item_type')
+                            ->orWhere('item_type', '!=', 'travel');
+                    })
                     ->orderBy('start_time');
             }])
             ->orderBy('date')
