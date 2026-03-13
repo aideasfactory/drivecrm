@@ -32,7 +32,7 @@ class StoreInstructorRequest extends FormRequest
             'password' => ['nullable', 'string', 'min:8'],
             'phone' => ['nullable', 'string', 'max:50'],
             'bio' => ['nullable', 'string'],
-            'transmission_type' => ['required', Rule::in(['manual', 'automatic'])],
+            'transmission_type' => ['required', Rule::in(['manual', 'automatic', 'both'])],
             'status' => ['nullable', 'string', 'max:50'],
             'pdi_status' => ['nullable', 'string', 'max:50'],
             'address' => ['nullable', 'string'],
@@ -54,7 +54,7 @@ class StoreInstructorRequest extends FormRequest
             'email.required' => 'The email address is required.',
             'email.unique' => 'This email address is already in use.',
             'transmission_type.required' => 'Please select a transmission type.',
-            'transmission_type.in' => 'Transmission type must be either manual or automatic.',
+            'transmission_type.in' => 'Transmission type must be manual, automatic, or both.',
         ];
     }
 }
