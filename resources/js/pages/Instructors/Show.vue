@@ -33,7 +33,7 @@ const tabs: { key: TabType; label: string }[] = [
     { key: 'details', label: 'Details' },
     { key: 'active-pupils', label: 'Pupils' },
     { key: 'reports', label: 'Reports' },
-    { key: 'actions', label: 'Actions' },
+    // { key: 'actions', label: 'Actions' }, // Temporarily hidden — will revisit once functionality is defined
 ]
 
 const activeTab = computed(() => props.tab || 'schedule')

@@ -51,7 +51,7 @@ class CreateRecurringCalendarItemsAction
 
         $groupId = Str::uuid()->toString();
         $dates = $this->generateOccurrenceDates($startDate, $endDate, $pattern);
-        $items = new Collection();
+        $items = new Collection;
 
         foreach ($dates as $occurrenceDate) {
             $calendar = Calendar::firstOrCreate([
@@ -85,7 +85,7 @@ class CreateRecurringCalendarItemsAction
      */
     private function generateOccurrenceDates(Carbon $start, Carbon $end, RecurrencePattern $pattern): Collection
     {
-        $dates = new Collection();
+        $dates = new Collection;
         $current = $start->copy();
 
         while ($current->lte($end)) {

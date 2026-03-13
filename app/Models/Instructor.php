@@ -186,14 +186,14 @@ class Instructor extends Model
     protected function lastName(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->user->name ? explode(' ', $this->user->name)[1] : null,
+            get: fn () => $this->user->name ? (explode(' ', $this->user->name)[1] ?? null) : null,
         );
     }
 
     protected function name(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->user->name ? explode(' ', $this->user->name)[0].' '.explode(' ', $this->user->name)[1] : null,
+            get: fn () => $this->user->name ? trim(explode(' ', $this->user->name)[0].' '.(explode(' ', $this->user->name)[1] ?? '')) : null,
         );
     }
 
