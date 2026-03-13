@@ -1,7 +1,7 @@
-# Task: Fix Onboarding UI Issues (Colors, Spacing, Continue Button)
+# Task: Calendar: add monthly view
 
-**Created:** 2026-03-05
-**Last Updated:** 2026-03-05T19:15:00Z
+**Created:** 2026-03-13
+**Last Updated:** 2026-03-13T15:55:00Z
 **Status:** ✅ Complete
 
 ---
@@ -9,17 +9,14 @@
 ## Overview
 
 ### Goal
-Fix several UI issues across the onboarding forms:
-1. Change 'DVSA Approved' and 'Secure Checkout' badge colors from hardcoded `bg-red-600` to `bg-primary`
-2. Update stepper completed step badges from `bg-red-600` to `bg-primary`
-3. Increase spacing between labels and inputs in Step 5 "Learner Details" form
-4. Fix Continue button on Step 5 when "I'm booking for someone else" is checked
+Add a monthly calendar view for Drive that works alongside the existing weekly view.
 
-### Success Criteria
-- [x] Badge labels use `bg-primary text-primary-foreground` instead of `bg-red-600 text-white`
-- [x] Stepper completed steps use `bg-primary text-primary-foreground` instead of `bg-red-600 text-white`
-- [x] Learner Details form has 2-3px more spacing between labels and inputs
-- [x] Continue button on Step 5 progresses to Step 6 when "booking for someone else" is checked
+### Context
+- Tile ID: 019ce7ac-e34f-7294-bbdc-7446417d41e4
+- Repository: drivecrm
+- Branch: feature/019ce7ac-e34f-7294-bbdc-7446417d41e4-calendar-add-monthly-view
+- Priority: MEDIUM
+- Customer: Drive
 
 ---
 
@@ -27,27 +24,19 @@ Fix several UI issues across the onboarding forms:
 **Status:** ✅ Complete
 
 ### Analysis
+- Current state: Only weekly view exists (`WeeklyCalendarGrid.vue`)
+- Navigation composable (`useCalendarNavigation.ts`) only handles week-level nav
+- Backend already supports arbitrary date range queries via `start_date` / `end_date` params
+- No view toggle UI exists yet
 
-#### Issue 1: Badge Colors (DVSA Approved & Secure Checkout)
-- **Files:** `Step1.vue` (lines 30, 34), `OnboardingLeftSidebar.vue` (lines 23, 27)
-- **Current:** `bg-red-600 text-white hover:bg-red-700`
-- **Fix:** Replace with `bg-primary text-primary-foreground hover:bg-primary/90`
-
-#### Issue 2: Stepper Background
-- **File:** `OnboardingHeader.vue` (lines 32, 51)
-- **Current:** `bg-red-600 text-white hover:bg-red-700` on completed steps
-- **Fix:** Replace with `bg-primary text-primary-foreground hover:bg-primary/90`
-
-#### Issue 3: Learner Details Form Spacing
-- **File:** `Step5.vue` — learner details form inputs
-- **Fix:** Add `mt-1.5` to all 5 Input elements in the learner details section
-
-#### Issue 4: Continue Button Bug
-- **Root cause:** `autoSave()` posts to same endpoint as `submit()` without an `auto_save` field. Backend checks `!$request->has('auto_save')` to decide redirect vs save-only. Auto-save was being treated as a real submit, causing race conditions and premature redirect attempts.
-- **Fix:** (1) Add `auto_save: true` via `form.transform()`, (2) Cancel pending auto-save before submit, (3) Skip required learner field validation during auto-save in FormRequest
+### Plan
+1. Extend `useCalendarNavigation.ts` with month navigation
+2. Create `MonthlyCalendarGrid.vue` component
+3. Add view toggle to `ScheduleTab.vue`
+4. Write Pest tests for monthly date range queries
 
 ### Reflection
-Clear, well-scoped fixes. The button bug was a subtle interaction between auto-save and the backend's redirect logic.
+Planning complete. Backend already supports needed date range queries — this is purely a frontend feature with a view toggle. No migrations needed.
 
 ---
 
@@ -55,31 +44,34 @@ Clear, well-scoped fixes. The button bug was a subtle interaction between auto-s
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Fix badge colors in `OnboardingLeftSidebar.vue` (2 badges)
-- [x] Fix badge colors in `Step1.vue` (2 badges)
-- [x] Fix stepper colors in `OnboardingHeader.vue` (2 occurrences)
-- [x] Add `mt-1.5` spacing to all 5 inputs in Step 5 learner details form
-- [x] Fix auto-save to send `auto_save: true` via `form.transform()`
-- [x] Cancel pending auto-save timeout before explicit submit
-- [x] Remove duplicate watcher on `isBookingForSomeoneElse`
-- [x] Remove stale `console.log(props.package)` from Step5.vue
-- [x] Update `StepFiveRequest.php` to accept `auto_save` field and skip learner required validation during auto-save
-- [x] Fixed Label `for` attribute typo (`learner-first-name mb-4` → `learner-first-name`)
+- [x] Extend `useCalendarNavigation.ts` with month navigation (`currentMonth`, `monthDays`, month nav functions, `rangeStartFormatted`/`rangeEndFormatted`)
+- [x] Create `MonthlyCalendarGrid.vue` — 7-col grid with day cells, event pills, overflow indicators, today highlight, current-month opacity
+- [x] Add Week/Month view toggle to `ScheduleTab.vue` navigation bar
+- [x] Wire up monthly data loading — view-aware `rangeStartFormatted`/`rangeEndFormatted` watchers reload data on view or range change
+- [x] Add `handleDayClick()` for creating slots from month view
+- [x] Create `CalendarFactory` and `CalendarItemFactory`
+- [x] Write 5 Pest feature tests for monthly calendar range queries
 
 ### Reflection
-All fixes applied cleanly. The badge and stepper color changes were simple class replacements. The button bug fix required changes in both frontend (auto-save transform + cancel) and backend (FormRequest conditional validation). Also cleaned up dead code (duplicate watcher, console.log, typo in Label for attribute).
+Implementation went smoothly. The backend already accepted arbitrary date ranges so no backend changes were needed. The monthly grid reuses the same event data structure and color scheme from `CalendarEventBlock.vue`. The view toggle is clean and integrated into the existing navigation bar.
 
 ---
 
-## FINAL REFLECTION
+## PHASE 3: FINAL REFLECTION & DOCUMENTATION
 **Status:** ✅ Complete
 
-### Summary
-Fixed 4 UI issues in the onboarding flow: badge colors, stepper colors, form spacing, and continue button bug.
+### What was built
+- **Monthly calendar grid** (`MonthlyCalendarGrid.vue`) — a standard calendar month layout with event pills showing time + status, color-coded dots, overflow "+N more" indicators, today highlighting, and dimmed adjacent-month days
+- **View toggle** — Week/Month buttons integrated into the navigation bar with icon labels
+- **Extended navigation composable** — added `currentMonth`, `monthDays` (includes leading/trailing days for full grid), month navigation functions, and view-aware `rangeStartFormatted`/`rangeEndFormatted` computed properties
+- **Factories** — `CalendarFactory` and `CalendarItemFactory` for testing
+- **5 Pest tests** verifying weekly range, monthly range, date boundary filtering, and response structure
 
-### Files Changed
-1. `resources/js/components/Onboarding/OnboardingLeftSidebar.vue` — Badge colors: `bg-red-600` → `bg-primary`
-2. `resources/js/pages/Onboarding/Step1.vue` — Badge colors: `bg-red-600` → `bg-primary`
-3. `resources/js/components/Onboarding/OnboardingHeader.vue` — Stepper colors: `bg-red-600` → `bg-primary`
-4. `resources/js/pages/Onboarding/Step5.vue` — Label spacing, auto-save fix, removed dead code
-5. `app/Http/Requests/Onboarding/StepFiveRequest.php` — Added `auto_save` rule, conditional learner validation
+### Decisions
+- Monthly view is read-overview + click-to-create only (no drag-and-drop) — appropriate for a month-level overview
+- Clicking a day in month view opens the create sheet pre-filled with that date
+- Event pills show time + status label with colored dot matching the weekly view's color scheme
+- Max 3 events shown per day cell with "+N more" overflow
+
+### Score: 8/10
+Good clean implementation that follows existing patterns. The monthly view integrates seamlessly with the existing weekly view. Potential improvements: (1) clicking "+N more" could expand to show all events in a popover, (2) a day detail panel could show full event blocks like the weekly view. These are not implemented to avoid over-engineering.
