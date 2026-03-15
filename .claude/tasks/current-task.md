@@ -1,30 +1,22 @@
-# Task: Update Package Pricing UI to Use Pounds Instead of Pence
+# Task: Assign new users to current_team_id 1 during registration
 
-**Created:** 2026-03-13
-**Last Updated:** 2026-03-13T19:00:00Z
-**Status:** 🔄 In Progress
+**Created:** 2026-03-15
+**Last Updated:** 2026-03-15T12:25:00Z
+**Status:** ✅ Complete
 
 ---
 
 ## Overview
 
 ### Goal
-Update the Create/Edit Package UI so users enter prices in pounds (e.g., 500.00) instead of pence (e.g., 50000). Database storage remains in pence — conversions happen at the form boundary.
+Create a teams table, Team model, and update the user registration flow so that every new user is assigned `current_team_id = 1` (the "Drive" team). This lays the groundwork for multi-team support.
 
 ### Context
-- Currently `PackageForm.vue` accepts `total_price_pence` directly as a pence integer
-- Helper text says "Enter price in pence (e.g., 50000 = £500.00)"
-- The model already formats display values correctly (formatted_total_price, formatted_lesson_price)
-- Stripe integration uses `total_price_pence` directly as `unit_amount` — no change needed there
-- Database stores all prices as integer pence — this must NOT change
-
-### Key Files
-- `resources/js/components/Instructors/PackageForm.vue` — Main form component
-- `resources/js/components/Packages/CreatePackageSheet.vue` — Create sheet wrapper
-- `resources/js/pages/Packages/Index.vue` — Package listing page
-- `app/Http/Requests/StorePackageRequest.php` — Store validation
-- `app/Http/Requests/UpdatePackageRequest.php` — Update validation
-- `tests/Feature/Packages/PackageManagementTest.php` — Existing tests
+- Tile ID: 019cee54-97b1-722e-abf2-05679546c964
+- Repository: drivecrm
+- Branch: feature/019cee54-97b1-722e-abf2-05679546c964-assign-new-users-to-current-team-id-1-during-registration
+- Priority: MEDIUM
+- Customer: Drive
 
 ---
 
@@ -32,53 +24,61 @@ Update the Create/Edit Package UI so users enter prices in pounds (e.g., 500.00)
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Review PackageForm.vue input handling and computed properties
-- [x] Review CreatePackageSheet.vue submission logic
-- [x] Review StorePackageRequest / UpdatePackageRequest validation
-- [x] Review Package model formatting attributes
-- [x] Review existing tests
-- [x] Identify conversion points (frontend → backend, backend → frontend)
-
-### Conversion Strategy
-**Frontend (form input in pounds → submit in pence):**
-1. Change form input to accept pounds (decimal, e.g., 500.00)
-2. On form submit, convert pounds to pence: `Math.round(pounds * 100)`
-3. Update helper text and labels
-4. Update computed display properties
-
-**Backend (validation):**
-1. Validation rules stay as integer/pence — the frontend sends pence after conversion
-2. No backend changes needed for storage or Stripe
-
-**Edit form (load existing data):**
-1. When editing, convert `total_price_pence` from model → pounds for display: `pence / 100`
+- [x] Review current registration flow (Fortify CreateNewUser action)
+- [x] Review User model and users migration
+- [x] Identify all files that need changes
+- [x] Plan migration structure for teams table
+- [x] Plan migration for adding current_team_id to users
 
 ### Reflection
-Clean separation — all conversion happens in the Vue form component. Backend stays unchanged because the form still submits pence. This minimises risk and keeps Stripe/database logic untouched.
+Planning complete. The registration flow uses Fortify's `CreateNewUser` action which is straightforward to modify. The teams table is simple with a JSON settings column for future extensibility.
 
 ---
 
 ## PHASE 2: IMPLEMENTATION
-**Status:** ⏸️ Not Started
+**Status:** ✅ Complete
 
 ### Tasks
-- [ ] Update `PackageForm.vue`: change input to accept pounds, add pence↔pounds conversion
-- [ ] Update `PackageForm.vue`: update labels, helper text, and computed properties
-- [ ] Update `CreatePackageSheet.vue`: ensure submit converts pounds→pence before POST
-- [ ] Check if edit flow exists and handle pence→pounds conversion for pre-filling
-- [ ] Update tests to verify the flow still works correctly
-- [ ] Verify Index.vue display columns still work (they use model-formatted values)
+- [x] Create teams table migration
+- [x] Create add_current_team_id_to_users migration
+- [x] Create Team model with factory and seeder
+- [x] Update User model (fillable, cast, relationship)
+- [x] Update CreateNewUser action
+- [x] Update UserFactory
+- [x] Update DatabaseSeeder
+- [x] Write Pest tests
+- [x] Update database-schema.md
+
+### Files Created
+- `database/migrations/2026_03_15_120000_create_teams_table.php`
+- `database/migrations/2026_03_15_120001_add_current_team_id_to_users_table.php`
+- `app/Models/Team.php`
+- `database/factories/TeamFactory.php`
+- `database/seeders/TeamSeeder.php`
+- `tests/Feature/TeamTest.php`
+
+### Files Modified
+- `app/Models/User.php` — added `current_team_id` to fillable, `BelongsTo` import, `team()` relationship
+- `app/Actions/Fortify/CreateNewUser.php` — added `current_team_id => 1` to User::create
+- `database/factories/UserFactory.php` — added `current_team_id => Team::factory()`
+- `database/seeders/DatabaseSeeder.php` — calls TeamSeeder before creating users
+- `tests/Feature/Auth/RegistrationTest.php` — updated with team seeding and team assignment assertions
+- `.claude/database-schema.md` — documented teams table and updated users table
 
 ### Reflection
-_To be completed after implementation_
+Implementation was clean and followed existing patterns. The nullable foreign key on `current_team_id` keeps backward compatibility. The `current_team_id => 1` assignment in CreateNewUser is explicit and easy to change later.
 
 ---
 
 ## PHASE 3: FINAL REFLECTION & DOCUMENTATION
-**Status:** ⏸️ Not Started
-
-### Files Changed
-_To be completed_
+**Status:** ✅ Complete
 
 ### Summary
-_To be completed_
+Created a `teams` table with `id`, `uuid`, `name`, and JSON `settings` columns. Added a `current_team_id` foreign key to the `users` table. Updated the Fortify `CreateNewUser` action to assign `current_team_id = 1` to all new registrations. Created the `Team` model with factory and seeder (seeds "Drive" as id=1). Updated the `User` model with a `team()` BelongsTo relationship. Wrote Pest tests covering team creation, user-team relationships, and registration team assignment. Updated database-schema.md with full teams table documentation.
+
+### Potential Overhead / Anti-Patterns
+- **Hardcoded team ID**: `current_team_id => 1` in `CreateNewUser` is hardcoded. This is intentional per requirements but should be extracted to a config or service when multi-team registration is needed.
+- **Nullable FK**: `current_team_id` is nullable to avoid breaking existing users. Once all existing users are assigned teams, this could be made non-nullable.
+
+### Score: 8/10
+Solid, simple implementation that follows existing project patterns. Points deducted for the hardcoded team ID (acceptable per requirements) and the nullable FK which may need tightening later.
