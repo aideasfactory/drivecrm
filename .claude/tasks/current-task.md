@@ -1,22 +1,30 @@
-# Task: Update lesson start-time selection to support 15-minute increments
+# Task: Update Package Pricing UI to Use Pounds Instead of Pence
 
 **Created:** 2026-03-13
-**Last Updated:** 2026-03-13T17:40:00Z
-**Status:** ✅ Complete
+**Last Updated:** 2026-03-13T19:00:00Z
+**Status:** 🔄 In Progress
 
 ---
 
 ## Overview
 
 ### Goal
-Update the lesson start-time selection from 30-minute to 15-minute increments across the scheduling UI.
+Update the Create/Edit Package UI so users enter prices in pounds (e.g., 500.00) instead of pence (e.g., 50000). Database storage remains in pence — conversions happen at the form boundary.
 
 ### Context
-- Tile ID: 019ce836-2973-7273-92e7-d6290f0fadec
-- Repository: drivecrm
-- Branch: feature/019ce836-2973-7273-92e7-d6290f0fadec-update-lesson-start-time-selection-to-support-15-minute-incr
-- Priority: MEDIUM
-- Customer: Drive
+- Currently `PackageForm.vue` accepts `total_price_pence` directly as a pence integer
+- Helper text says "Enter price in pence (e.g., 50000 = £500.00)"
+- The model already formats display values correctly (formatted_total_price, formatted_lesson_price)
+- Stripe integration uses `total_price_pence` directly as `unit_amount` — no change needed there
+- Database stores all prices as integer pence — this must NOT change
+
+### Key Files
+- `resources/js/components/Instructors/PackageForm.vue` — Main form component
+- `resources/js/components/Packages/CreatePackageSheet.vue` — Create sheet wrapper
+- `resources/js/pages/Packages/Index.vue` — Package listing page
+- `app/Http/Requests/StorePackageRequest.php` — Store validation
+- `app/Http/Requests/UpdatePackageRequest.php` — Update validation
+- `tests/Feature/Packages/PackageManagementTest.php` — Existing tests
 
 ---
 
@@ -24,47 +32,53 @@ Update the lesson start-time selection from 30-minute to 15-minute increments ac
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Review current start-time implementation in ScheduleTab.vue
-- [x] Review WeeklyCalendarGrid.vue snap/click logic
-- [x] Review CalendarEventBlock.vue positioning (no changes needed)
-- [x] Review backend validation (no changes needed)
-- [x] Identify all files requiring changes
+- [x] Review PackageForm.vue input handling and computed properties
+- [x] Review CreatePackageSheet.vue submission logic
+- [x] Review StorePackageRequest / UpdatePackageRequest validation
+- [x] Review Package model formatting attributes
+- [x] Review existing tests
+- [x] Identify conversion points (frontend → backend, backend → frontend)
+
+### Conversion Strategy
+**Frontend (form input in pounds → submit in pence):**
+1. Change form input to accept pounds (decimal, e.g., 500.00)
+2. On form submit, convert pounds to pence: `Math.round(pounds * 100)`
+3. Update helper text and labels
+4. Update computed display properties
+
+**Backend (validation):**
+1. Validation rules stay as integer/pence — the frontend sends pence after conversion
+2. No backend changes needed for storage or Stripe
+
+**Edit form (load existing data):**
+1. When editing, convert `total_price_pence` from model → pounds for display: `pence / 100`
 
 ### Reflection
-The backend already supports arbitrary H:i format times. The change is entirely frontend-focused: updating the dropdown step from 30→15 and updating the calendar grid drag snapping for consistency. CalendarEventBlock positioning math uses `(minutes / 30) * rowHeight` which naturally handles 15-min positions correctly.
+Clean separation — all conversion happens in the Vue form component. Backend stays unchanged because the form still submits pence. This minimises risk and keeps Stripe/database logic untouched.
 
 ---
 
 ## PHASE 2: IMPLEMENTATION
-**Status:** ✅ Complete
+**Status:** ⏸️ Not Started
 
 ### Tasks
-- [x] Update `startTimeOptions` in ScheduleTab.vue to use 15-min increments
-- [x] Update `snapToStartOption` in ScheduleTab.vue to snap to 15-min
-- [x] Update `SNAP_MINUTES` and `SNAP_PX` in WeeklyCalendarGrid.vue
-- [x] Update comments referencing 30-min increments
-- [x] Write Pest test for start-time validation with 15-min times
+- [ ] Update `PackageForm.vue`: change input to accept pounds, add pence↔pounds conversion
+- [ ] Update `PackageForm.vue`: update labels, helper text, and computed properties
+- [ ] Update `CreatePackageSheet.vue`: ensure submit converts pounds→pence before POST
+- [ ] Check if edit flow exists and handle pence→pounds conversion for pre-filling
+- [ ] Update tests to verify the flow still works correctly
+- [ ] Verify Index.vue display columns still work (they use model-formatted values)
 
 ### Reflection
-Changes were minimal and focused. The dropdown now generates 33 options (08:00–16:00 in 15-min steps) instead of 17 (30-min steps). Both create and edit forms benefit since they share the same `startTimeOptions` computed property. The drag-and-drop snap was halved from 40px to 20px to match 15-min granularity. Tests cover both Action-level and HTTP endpoint-level creation with 15-min start times.
+_To be completed after implementation_
 
 ---
 
 ## PHASE 3: FINAL REFLECTION & DOCUMENTATION
-**Status:** ✅ Complete
+**Status:** ⏸️ Not Started
 
 ### Files Changed
-1. `resources/js/components/Instructors/Tabs/ScheduleTab.vue` — Dropdown 30→15 min, snap function 30→15 min
-2. `resources/js/components/Instructors/Tabs/Schedule/WeeklyCalendarGrid.vue` — SNAP_MINUTES 30→15, SNAP_PX 40→20
-3. `tests/Feature/CalendarItem15MinuteStartTimeTest.php` — New test file (5 tests)
-
-### No changes needed
-- Backend validation (already accepts H:i format)
-- CalendarEventBlock.vue (positioning math handles any minute value)
-- Models/migrations (time columns are flexible)
+_To be completed_
 
 ### Summary
-Updated the lesson scheduling start-time dropdown from 30-minute to 15-minute increments, providing more flexible time selection. Updated the calendar grid drag-and-drop to also snap at 15-minute intervals for consistency. Added 5 Pest tests covering 15-minute start times via both the Action layer and the HTTP endpoint.
-
-### Score: 8/10
-Simple, focused changes with no unnecessary complexity. No anti-patterns introduced. The only potential consideration is that the visual calendar grid still renders 30-min rows — events at :15/:45 will position correctly between grid lines but the grid lines themselves remain at :00/:30 boundaries. This is a reasonable UX tradeoff since doubling grid lines would make the calendar overly busy.
+_To be completed_

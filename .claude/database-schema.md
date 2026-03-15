@@ -175,6 +175,7 @@ Core user table storing all users in the system (owners, instructors, and studen
 - Has one `Instructor` profile (if role is instructor)
 - Has one `Student` profile (if role is student)
 - Has many `Orders` (through Student)
+- Has many `PersonalAccessTokens` (Sanctum API tokens)
 
 **Enums:**
 - Role: `owner`, `instructor`, `student`
@@ -962,6 +963,32 @@ Laravel's failed jobs storage.
 | `payload` | longtext | NOT NULL | Job payload |
 | `exception` | longtext | NOT NULL | Exception details |
 | `failed_at` | timestamp | DEFAULT CURRENT_TIMESTAMP | When job failed |
+
+---
+
+### 25. **personal_access_tokens**
+
+Laravel Sanctum's API token storage. Each row is a single API token issued to a user (typically one per mobile device).
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique token identifier |
+| `tokenable_type` | varchar(255) | NOT NULL | Polymorphic model type (e.g., `App\Models\User`) |
+| `tokenable_id` | bigint unsigned | NOT NULL | Polymorphic model ID (user ID) |
+| `name` | varchar(255) | NOT NULL | Token name (device name, e.g., "iPhone 15") |
+| `token` | varchar(64) | UNIQUE, NOT NULL | SHA-256 hash of the plain-text token |
+| `abilities` | text | NULLABLE | JSON array of token abilities/scopes |
+| `last_used_at` | timestamp | NULLABLE | When the token was last used |
+| `expires_at` | timestamp | NULLABLE | Optional token expiration |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Indexes:**
+- Unique on `token`
+- Index on `(tokenable_type, tokenable_id)`
+
+**Relationships:**
+- Belongs to a `User` (via polymorphic `tokenable`)
 
 ---
 

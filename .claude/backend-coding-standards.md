@@ -29,7 +29,9 @@ php artisan serve # Backend (or use Herd)
 ## 4. Security & Secrets
 - **Secrets**: NEVER commit `.env` or keys.
 - **Access**: Use `config('app.name')`, NOT `env('APP_NAME')`.
-- **Auth**: Use Laravel Fortify features; do not roll custom auth logic.
+- **Auth**: Use Laravel Fortify + Sanctum; do not roll custom auth logic.
+- **API Auth**: All API routes MUST use `auth:sanctum` middleware.
+- **Tokens**: API tokens issued via Sanctum `createToken()`. Never store plain-text tokens.
 
 ## 5. JIT Index - Directory Map
 
@@ -180,11 +182,14 @@ class InstructorController extends Controller
 ### 🚨 Pattern Violations
 
 **DON'T:**
-- ❌ Put business logic in Controllers
+- ❌ Put business logic in Controllers (Web OR API)
 - ❌ Make HTTP calls from Actions
 - ❌ Query models directly in Controllers
 - ❌ Skip Services and call Actions from Controllers
 - ❌ Put Actions in root `app/Actions/` folder without domain organization
+- ❌ Return raw models/arrays from API controllers — use Eloquent Resources
+- ❌ Create separate Service classes for API — reuse existing Services
+- ❌ Add HTTP/Inertia concerns to Services (they must stay transport-agnostic)
 
 ### 📋 Checklist for New Features
 
@@ -200,6 +205,91 @@ When adding a new feature:
 - ✅ **Testability**: Test Actions independently of HTTP
 - ✅ **Maintainability**: Clear separation of concerns
 - ✅ **Domain Organization**: Easy to find related functionality
+
+---
+
+---
+
+### 🌐 API Development Rules (STRICT)
+
+**CRITICAL: Read `.claude/api.md` before building ANY API feature.**
+
+#### API Architecture
+
+API routes follow the **same** Controller → Service → Action pattern. The only difference is the HTTP layer:
+
+```
+API Controller → Service → Action(s) → Eloquent Resource (response)
+     ↓              ↓          ↓              ↓
+  JSON only    Orchestration  Logic     Formatted output
+```
+
+#### 🚨 MANDATORY Rules for API Features
+
+1. **Separate API Controllers**: API controllers live in `app/Http/Controllers/Api/V1/`
+   - Namespace: `App\Http\Controllers\Api\V1`
+   - Never mix Inertia and API responses in the same controller
+2. **Eloquent API Resources**: ALL API JSON responses MUST use Eloquent Resources
+   - Resources live in `app/Http/Resources/V1/`
+   - Namespace: `App\Http\Resources\V1`
+   - NEVER return raw models or arrays from API controllers — always wrap in a Resource
+3. **FormRequest validation**: Same rule as web — ALL validation in FormRequest classes
+   - API FormRequests live in `app/Http/Requests/Api/V1/`
+4. **Sanctum auth**: ALL API routes use `auth:sanctum` middleware (except login/register)
+5. **Versioned routes**: All API routes prefixed with `/api/v1/`
+6. **Services are shared**: API and Web controllers share the SAME Service classes
+   - Services contain zero HTTP concerns — this is what makes them reusable
+   - If a Service returns Inertia responses, it's WRONG — refactor it
+7. **Actions are shared**: Same Actions used by web and API — no duplication
+
+#### ❌ API Pattern Violations
+
+- ❌ Returning `response()->json($model)` without a Resource
+- ❌ Putting API logic in web controllers
+- ❌ Creating duplicate Services for API vs Web
+- ❌ Skipping FormRequest validation in API controllers
+- ❌ Using session-based auth for API routes
+- ❌ Returning Inertia responses from API controllers
+- ❌ Hardcoding response structures instead of using Resources
+
+#### 📁 API File Structure
+
+```
+app/Http/Controllers/Api/V1/
+├── AuthController.php          (login, register, logout, user)
+├── InstructorController.php
+├── StudentController.php
+├── PackageController.php
+└── ...
+
+app/Http/Resources/V1/
+├── UserResource.php
+├── InstructorResource.php
+├── StudentResource.php
+├── PackageResource.php
+└── ...
+
+app/Http/Requests/Api/V1/
+├── LoginRequest.php
+├── ...
+
+routes/
+├── api.php                     (all API routes, versioned)
+```
+
+#### 📋 Checklist for New API Features
+
+When adding a new API endpoint:
+1. [ ] Create/reuse Action in `app/Actions/{Domain}/`
+2. [ ] Create/reuse Service method (shared with web)
+3. [ ] Create API Controller in `app/Http/Controllers/Api/V1/`
+4. [ ] Create Eloquent Resource in `app/Http/Resources/V1/`
+5. [ ] Create FormRequest in `app/Http/Requests/Api/V1/` (if POST/PUT/PATCH)
+6. [ ] Add route to `routes/api.php` with `auth:sanctum` middleware
+7. [ ] **Update `.claude/api.md`** with endpoint documentation
+8. [ ] Include request body, response example, and auth requirements
+
+**Rule: No API feature is complete until `api.md` is updated.**
 
 ---
 
