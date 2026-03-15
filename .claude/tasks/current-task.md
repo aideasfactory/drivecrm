@@ -1,30 +1,27 @@
-# Task: Update Package Pricing UI to Use Pounds Instead of Pence
+# Task: Resources: improve thumbnails, delete action, folders, and sorting
 
 **Created:** 2026-03-13
-**Last Updated:** 2026-03-13T19:00:00Z
-**Status:** 🔄 In Progress
+**Last Updated:** 2026-03-13T19:55:00Z
+**Status:** ✅ Complete
 
 ---
 
 ## Overview
 
 ### Goal
-Update the Create/Edit Package UI so users enter prices in pounds (e.g., 500.00) instead of pence (e.g., 50000). Database storage remains in pence — conversions happen at the form boundary.
+Improve the Resources area at /resources with:
+- Video resource thumbnail URL support (external link, new DB column)
+- Fix Delete action for video_link resources (null file_path bug)
+- CSV import folder/subfolder structure support
+- Alphabetical sorting for folders
+- Tests for new features
 
 ### Context
-- Currently `PackageForm.vue` accepts `total_price_pence` directly as a pence integer
-- Helper text says "Enter price in pence (e.g., 50000 = £500.00)"
-- The model already formats display values correctly (formatted_total_price, formatted_lesson_price)
-- Stripe integration uses `total_price_pence` directly as `unit_amount` — no change needed there
-- Database stores all prices as integer pence — this must NOT change
-
-### Key Files
-- `resources/js/components/Instructors/PackageForm.vue` — Main form component
-- `resources/js/components/Packages/CreatePackageSheet.vue` — Create sheet wrapper
-- `resources/js/pages/Packages/Index.vue` — Package listing page
-- `app/Http/Requests/StorePackageRequest.php` — Store validation
-- `app/Http/Requests/UpdatePackageRequest.php` — Update validation
-- `tests/Feature/Packages/PackageManagementTest.php` — Existing tests
+- Tile ID: 019ce7ac-e770-70b4-abe1-64abfeaa8659
+- Repository: drivecrm
+- Branch: feature/019ce7ac-e770-70b4-abe1-64abfeaa8659-resources-improve-thumbnails-delete-action-folders-and-sorti
+- Priority: HIGH
+- Customer: Drive
 
 ---
 
@@ -32,29 +29,13 @@ Update the Create/Edit Package UI so users enter prices in pounds (e.g., 500.00)
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Review PackageForm.vue input handling and computed properties
-- [x] Review CreatePackageSheet.vue submission logic
-- [x] Review StorePackageRequest / UpdatePackageRequest validation
-- [x] Review Package model formatting attributes
-- [x] Review existing tests
-- [x] Identify conversion points (frontend → backend, backend → frontend)
-
-### Conversion Strategy
-**Frontend (form input in pounds → submit in pence):**
-1. Change form input to accept pounds (decimal, e.g., 500.00)
-2. On form submit, convert pounds to pence: `Math.round(pounds * 100)`
-3. Update helper text and labels
-4. Update computed display properties
-
-**Backend (validation):**
-1. Validation rules stay as integer/pence — the frontend sends pence after conversion
-2. No backend changes needed for storage or Stripe
-
-**Edit form (load existing data):**
-1. When editing, convert `total_price_pence` from model → pounds for display: `pence / 100`
+- [x] Read all instruction files
+- [x] Explore existing Resources codebase
+- [x] Identify bugs and gaps
+- [x] Create implementation plan
 
 ### Reflection
-Clean separation — all conversion happens in the Vue form component. Backend stays unchanged because the form still submits pence. This minimises risk and keeps Stripe/database logic untouched.
+Thorough exploration revealed a delete bug, missing thumbnail_url support, and CSV folder support gap. Plan was solid.
 
 ---
 
@@ -62,23 +43,28 @@ Clean separation — all conversion happens in the Vue form component. Backend s
 **Status:** ⏸️ Not Started
 
 ### Tasks
-- [ ] Update `PackageForm.vue`: change input to accept pounds, add pence↔pounds conversion
-- [ ] Update `PackageForm.vue`: update labels, helper text, and computed properties
-- [ ] Update `CreatePackageSheet.vue`: ensure submit converts pounds→pence before POST
-- [ ] Check if edit flow exists and handle pence→pounds conversion for pre-filling
-- [ ] Update tests to verify the flow still works correctly
-- [ ] Verify Index.vue display columns still work (they use model-formatted values)
+- [x] Create migration to add `thumbnail_url` column to resources table
+- [x] Fix `DeleteResourceAction` to handle null `file_path` (video_link delete bug)
+- [x] Update backend: Model, Actions, Requests, Controller, Service for thumbnail_url
+- [x] Update frontend: UploadResourceSheet, EditResourceSheet, ResourceCard, ResourcePreview for thumbnail_url
+- [x] Add folder column support to CSV import (BulkImportResourcesAction)
+- [x] Update CSV template download with folder and thumbnail_url columns
+- [x] Verify alphabetical sorting for folders (already correct)
+- [x] Write tests: ResourceDeleteTest, ResourceThumbnailTest, ResourceCsvImportTest
 
 ### Reflection
-_To be completed after implementation_
+Implementation went smoothly. The delete bug was a simple null check fix. Thumbnail URL support required changes across all layers (migration, model, actions, requests, controller, service, Vue components). CSV folder support used a `firstOrCreate` approach with caching for efficiency.
 
 ---
 
 ## PHASE 3: FINAL REFLECTION & DOCUMENTATION
 **Status:** ⏸️ Not Started
 
-### Files Changed
-_To be completed_
+### Tasks
+- [x] Update `.claude/database-schema.md` with `thumbnail_url` column
+- [x] Final review of all changes
+- [x] Update this task file with final reflection
+- [x] Write `.phase_done` sentinel file
 
-### Summary
-_To be completed_
+### Reflection
+All requirements met. The implementation follows existing patterns and conventions. No anti-patterns introduced.

@@ -786,6 +786,7 @@ Stores uploaded files (videos, PDFs) or video links (Vimeo/YouTube) with metadat
 | `file_size` | bigint unsigned | NULLABLE | File size in bytes (only for file type) |
 | `mime_type` | varchar(100) | NULLABLE | File MIME type (only for file type) |
 | `thumbnail_path` | varchar(500) | NULLABLE | S3 thumbnail path (optional) |
+| `thumbnail_url` | varchar(500) | NULLABLE | External thumbnail URL (for video_link resources) |
 | `sort_order` | integer | DEFAULT 0 | Display ordering within folder |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
@@ -804,6 +805,7 @@ Stores uploaded files (videos, PDFs) or video links (Vimeo/YouTube) with metadat
 - Description and tags will be used for AI-powered video/document suggestions at a later date
 - `resource_type` + `mime_type` determines rendering: embedded player for video links, video player for uploaded videos, PDF viewer/download for PDFs
 - Deleting a file-type resource also removes the file from S3; deleting a video_link resource only removes the DB record
+- `thumbnail_url` stores an external image URL for video link resources (e.g. YouTube thumbnail)
 
 ---
 

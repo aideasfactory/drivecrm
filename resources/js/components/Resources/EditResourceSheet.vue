@@ -27,6 +27,7 @@ interface ResourceItem {
     mime_type: string | null;
     file_path: string | null;
     thumbnail_path: string | null;
+    thumbnail_url: string | null;
 }
 
 const props = defineProps<{
@@ -45,6 +46,7 @@ const form = ref({
     title: '',
     description: '',
     tags: [] as string[],
+    thumbnail_url: '',
 });
 
 watch(
@@ -55,6 +57,7 @@ watch(
                 title: props.resource.title,
                 description: props.resource.description || '',
                 tags: props.resource.tags || [],
+                thumbnail_url: props.resource.thumbnail_url || '',
             };
             errors.value = {};
         }
@@ -72,6 +75,7 @@ const handleSubmit = async () => {
             title: form.value.title,
             description: form.value.description || null,
             tags: form.value.tags.length > 0 ? form.value.tags : null,
+            thumbnail_url: form.value.thumbnail_url || null,
         });
         toast.success('Resource updated successfully');
         emit('update:open', false);
@@ -183,6 +187,26 @@ const handleSubmit = async () => {
                     />
                     <p class="text-muted-foreground text-xs">
                         Tags help with searching and AI recommendations.
+                    </p>
+                </div>
+
+                <!-- Thumbnail URL (only for video_link resources) -->
+                <div v-if="resource?.resource_type === 'video_link'" class="space-y-2">
+                    <Label for="edit_thumbnail_url">Thumbnail URL</Label>
+                    <Input
+                        id="edit_thumbnail_url"
+                        v-model="form.thumbnail_url"
+                        placeholder="https://example.com/thumbnail.jpg"
+                        :disabled="isSubmitting"
+                    />
+                    <p class="text-muted-foreground text-xs">
+                        Optional. Add a thumbnail image URL for this video.
+                    </p>
+                    <p
+                        v-if="errors.thumbnail_url"
+                        class="text-destructive text-sm"
+                    >
+                        {{ errors.thumbnail_url }}
                     </p>
                 </div>
 

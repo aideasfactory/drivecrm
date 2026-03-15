@@ -38,13 +38,14 @@ const form = ref({
     description: '',
     tags: [] as string[],
     video_url: '',
+    thumbnail_url: '',
 });
 
 watch(
     () => props.open,
     (val) => {
         if (val) {
-            form.value = { title: '', description: '', tags: [], video_url: '' };
+            form.value = { title: '', description: '', tags: [], video_url: '', thumbnail_url: '' };
             selectedFile.value = null;
             uploadProgress.value = 0;
             errors.value = {};
@@ -95,6 +96,9 @@ const handleSubmit = async () => {
 
     if (resourceType.value === 'video_link') {
         formData.append('video_url', form.value.video_url);
+        if (form.value.thumbnail_url) {
+            formData.append('thumbnail_url', form.value.thumbnail_url);
+        }
     } else {
         formData.append('file', selectedFile.value!);
     }
@@ -222,6 +226,26 @@ const handleSubmit = async () => {
                         class="text-destructive text-sm"
                     >
                         {{ errors.video_url }}
+                    </p>
+                </div>
+
+                <!-- Thumbnail URL Input (only for video_link type) -->
+                <div v-if="resourceType === 'video_link'" class="space-y-2">
+                    <Label for="resource_thumbnail_url">Thumbnail URL</Label>
+                    <Input
+                        id="resource_thumbnail_url"
+                        v-model="form.thumbnail_url"
+                        placeholder="https://example.com/thumbnail.jpg"
+                        :disabled="isSubmitting"
+                    />
+                    <p class="text-muted-foreground text-xs">
+                        Optional. Add a thumbnail image URL for this video.
+                    </p>
+                    <p
+                        v-if="errors.thumbnail_url"
+                        class="text-destructive text-sm"
+                    >
+                        {{ errors.thumbnail_url }}
                     </p>
                 </div>
 
