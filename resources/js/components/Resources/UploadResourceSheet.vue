@@ -144,7 +144,7 @@ const handleSubmit = async () => {
         :open="open"
         @update:open="emit('update:open', $event)"
     >
-        <SheetContent side="right" class="sm:max-w-lg">
+        <SheetContent side="right" class="flex sm:max-w-lg flex-col overflow-hidden">
             <SheetHeader>
                 <SheetTitle class="flex items-center gap-2">
                     <Upload class="h-5 w-5" />
@@ -156,7 +156,7 @@ const handleSubmit = async () => {
             </SheetHeader>
 
             <form
-                class="mt-6 space-y-6 px-6 py-4"
+                class="mt-6 flex-1 space-y-6 overflow-y-auto px-6 py-4"
                 @submit.prevent="handleSubmit"
             >
                 <!-- Resource Type Selector -->
