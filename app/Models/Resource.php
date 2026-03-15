@@ -21,6 +21,7 @@ class Resource extends Model
         'file_size',
         'mime_type',
         'thumbnail_path',
+        'thumbnail_url',
         'sort_order',
     ];
 

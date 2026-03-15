@@ -61,6 +61,7 @@ interface ResourceItem {
     mime_type: string | null;
     file_path: string | null;
     thumbnail_path: string | null;
+    thumbnail_url: string | null;
 }
 
 interface BreadcrumbEntry {

@@ -12,6 +12,13 @@ use Illuminate\Support\Facades\Validator;
 class BulkImportResourcesAction
 {
     /**
+     * Cache of resolved folder paths to avoid duplicate lookups.
+     *
+     * @var array<string, ResourceFolder>
+     */
+    private array $folderCache = [];
+
+    /**
      * Parse and import video link resources from CSV data.
      *
      * @param  array<int, array<string, string>>  $rows  Parsed CSV rows (associative arrays)
@@ -23,6 +30,7 @@ class BulkImportResourcesAction
         $imported = 0;
         $skipped = 0;
         $errors = [];
+        $this->folderCache = [];
 
         foreach ($rows as $index => $row) {
             $rowNumber = $index + 2; // +2 for header row + 0-index
@@ -36,6 +44,8 @@ class BulkImportResourcesAction
                 'video_url' => ['required', 'url', 'max:500', 'regex:/^https?:\/\/(www\.)?(youtube\.com|youtu\.be|vimeo\.com)\/.+/i'],
                 'description' => ['nullable', 'string', 'max:5000'],
                 'tags' => ['nullable', 'string'],
+                'folder' => ['nullable', 'string', 'max:500'],
+                'thumbnail_url' => ['nullable', 'url', 'max:500'],
             ], [
                 'title.required' => 'Title is required.',
                 'video_url.required' => 'Video URL is required.',
@@ -67,13 +77,20 @@ class BulkImportResourcesAction
                     $tags = array_values($tags); // Re-index
                 }
 
+                // Resolve target folder from folder path (e.g. "Theory/Road Signs")
+                $targetFolder = $folder;
+                if (! empty($validated['folder'])) {
+                    $targetFolder = $this->resolveOrCreateFolderPath($validated['folder'], $folder);
+                }
+
                 Resource::create([
-                    'resource_folder_id' => $folder->id,
+                    'resource_folder_id' => $targetFolder->id,
                     'resource_type' => 'video_link',
                     'video_url' => $validated['video_url'],
                     'title' => $validated['title'],
                     'description' => $validated['description'] ?? null,
                     'tags' => $tags,
+                    'thumbnail_url' => $validated['thumbnail_url'] ?? null,
                 ]);
 
                 $imported++;
@@ -97,5 +114,49 @@ class BulkImportResourcesAction
             'skipped' => $skipped,
             'errors' => $errors,
         ];
+    }
+
+    /**
+     * Resolve or create a nested folder path relative to a parent folder.
+     *
+     * E.g. "Theory/Road Signs" creates "Theory" under parent, then "Road Signs" under "Theory".
+     */
+    private function resolveOrCreateFolderPath(string $path, ResourceFolder $parent): ResourceFolder
+    {
+        $cacheKey = $parent->id.':'.$path;
+        if (isset($this->folderCache[$cacheKey])) {
+            return $this->folderCache[$cacheKey];
+        }
+
+        $segments = array_filter(array_map('trim', explode('/', $path)));
+        $currentParent = $parent;
+
+        foreach ($segments as $segmentName) {
+            $segmentCacheKey = $currentParent->id.':'.$segmentName;
+
+            if (isset($this->folderCache[$segmentCacheKey])) {
+                $currentParent = $this->folderCache[$segmentCacheKey];
+
+                continue;
+            }
+
+            $folder = ResourceFolder::firstOrCreate(
+                [
+                    'parent_id' => $currentParent->id,
+                    'name' => $segmentName,
+                ],
+                [
+                    'parent_id' => $currentParent->id,
+                    'name' => $segmentName,
+                ]
+            );
+
+            $this->folderCache[$segmentCacheKey] = $folder;
+            $currentParent = $folder;
+        }
+
+        $this->folderCache[$cacheKey] = $currentParent;
+
+        return $currentParent;
     }
 }

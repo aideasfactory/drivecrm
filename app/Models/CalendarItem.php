@@ -60,6 +60,14 @@ class CalendarItem extends Model
         return $this->item_type === CalendarItemType::Travel;
     }
 
+    /**
+     * Check if this item is a practical test slot.
+     */
+    public function isPracticalTest(): bool
+    {
+        return $this->item_type === CalendarItemType::PracticalTest;
+    }
+
     public function calendar(): BelongsTo
     {
         return $this->belongsTo(Calendar::class, 'calendar_id');
