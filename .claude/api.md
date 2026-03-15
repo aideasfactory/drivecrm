@@ -286,6 +286,124 @@ Returns the authenticated user's profile with role-specific data.
 
 ---
 
+#### `POST /api/v1/auth/register/student`
+
+**Auth required:** No
+
+Register a new student account. Creates a base user record with the `student` role and an associated student profile. Returns a Bearer token for immediate use.
+
+**Request Body:**
+```json
+{
+  "name": "Jane Doe",
+  "email": "jane@example.com",
+  "password": "Password123!",
+  "password_confirmation": "Password123!",
+  "phone": "07700900000",
+  "device_name": "iPhone 15"
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `name` | string | Yes | Full name (split into first_name/surname for student record) |
+| `email` | string | Yes | Must be unique across all users |
+| `password` | string | Yes | Must meet password policy (min 8 chars) |
+| `password_confirmation` | string | Yes | Must match `password` |
+| `phone` | string | No | Student's phone number |
+| `device_name` | string | Yes | Human-readable device identifier |
+
+**Success Response:** `201 Created`
+```json
+{
+  "token": "2|xyz789abc123def456ghi789jkl012mno345pqr678stu",
+  "user": {
+    "id": 5,
+    "name": "Jane Doe",
+    "email": "jane@example.com",
+    "role": "student",
+    "email_verified_at": null,
+    "created_at": "2026-03-15T12:00:00.000000Z"
+  }
+}
+```
+
+**Error Response:** `422 Unprocessable Entity`
+```json
+{
+  "message": "The email has already been taken.",
+  "errors": {
+    "email": [
+      "The email has already been taken."
+    ]
+  }
+}
+```
+
+---
+
+#### `POST /api/v1/auth/register/instructor`
+
+**Auth required:** No
+
+Register a new instructor account. Creates a base user record with the `instructor` role and an associated instructor profile. Returns a Bearer token for immediate use. The instructor will still need to complete onboarding (Stripe Connect, etc.) separately.
+
+**Request Body:**
+```json
+{
+  "name": "John Smith",
+  "email": "john@example.com",
+  "password": "Password123!",
+  "password_confirmation": "Password123!",
+  "phone": "07700900001",
+  "postcode": "TS7 0AB",
+  "address": "1 High Street",
+  "transmission_type": "manual",
+  "device_name": "Pixel 8"
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `name` | string | Yes | Instructor's full name |
+| `email` | string | Yes | Must be unique across all users |
+| `password` | string | Yes | Must meet password policy (min 8 chars) |
+| `password_confirmation` | string | Yes | Must match `password` |
+| `phone` | string | No | Instructor's phone number |
+| `postcode` | string | No | Business postcode (max 10 chars) |
+| `address` | string | No | Business address |
+| `transmission_type` | string | No | One of: `manual`, `automatic`, `both` |
+| `device_name` | string | Yes | Human-readable device identifier |
+
+**Success Response:** `201 Created`
+```json
+{
+  "token": "3|mno345pqr678stu901vwx234abc567def890ghi123jkl",
+  "user": {
+    "id": 6,
+    "name": "John Smith",
+    "email": "john@example.com",
+    "role": "instructor",
+    "email_verified_at": null,
+    "created_at": "2026-03-15T12:05:00.000000Z"
+  }
+}
+```
+
+**Error Response:** `422 Unprocessable Entity`
+```json
+{
+  "message": "The email has already been taken.",
+  "errors": {
+    "email": [
+      "The email has already been taken."
+    ]
+  }
+}
+```
+
+---
+
 ## Appendix: User Roles
 
 The system has three user roles. The mobile app will likely serve **instructors** and **students**.
@@ -305,6 +423,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | Date | Change | Endpoints Affected |
 |------|--------|--------------------|
 | 2026-03-14 | Initial API documentation created | Auth (login, logout, user) |
+| 2026-03-15 | Added student and instructor registration endpoints | Auth (register/student, register/instructor) |
 
 ---
 

@@ -1,30 +1,28 @@
-# Task: Update Package Pricing UI to Use Pounds Instead of Pence
+# Task: Start mobile app authentication flows for login, student registration, and instructor registration
 
-**Created:** 2026-03-13
-**Last Updated:** 2026-03-13T19:00:00Z
-**Status:** 🔄 In Progress
+**Created:** 2026-03-15
+**Last Updated:** 2026-03-15T13:15:00Z
+**Status:** ✅ Complete
 
 ---
 
 ## Overview
 
 ### Goal
-Update the Create/Edit Package UI so users enter prices in pounds (e.g., 500.00) instead of pence (e.g., 50000). Database storage remains in pence — conversions happen at the form boundary.
+Build the mobile app authentication layer with login, student registration, and instructor registration flows using Sanctum tokens. Reuse existing services and actions where possible.
 
 ### Context
-- Currently `PackageForm.vue` accepts `total_price_pence` directly as a pence integer
-- Helper text says "Enter price in pence (e.g., 50000 = £500.00)"
-- The model already formats display values correctly (formatted_total_price, formatted_lesson_price)
-- Stripe integration uses `total_price_pence` directly as `unit_amount` — no change needed there
-- Database stores all prices as integer pence — this must NOT change
+- Tile ID: 019cee56-a00b-72a7-a1c8-640538f298e1
+- Repository: drivecrm
+- Branch: feature/019cee56-a00b-72a7-a1c8-640538f298e1-start-mobile-app-authentication-flows-for-login-student-regi
+- Priority: MEDIUM
 
-### Key Files
-- `resources/js/components/Instructors/PackageForm.vue` — Main form component
-- `resources/js/components/Packages/CreatePackageSheet.vue` — Create sheet wrapper
-- `resources/js/pages/Packages/Index.vue` — Package listing page
-- `app/Http/Requests/StorePackageRequest.php` — Store validation
-- `app/Http/Requests/UpdatePackageRequest.php` — Update validation
-- `tests/Feature/Packages/PackageManagementTest.php` — Existing tests
+### Key Decisions
+- Created new `Auth` domain Actions rather than repurposing enquiry-specific actions
+- Followed existing Controller → Service → Action pattern
+- Used Eloquent Resources for API responses (UserResource)
+- Sanctum token-based auth with device_name tracking
+- Registration endpoints return token immediately for seamless UX
 
 ---
 
@@ -32,53 +30,57 @@ Update the Create/Edit Package UI so users enter prices in pounds (e.g., 500.00)
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Review PackageForm.vue input handling and computed properties
-- [x] Review CreatePackageSheet.vue submission logic
-- [x] Review StorePackageRequest / UpdatePackageRequest validation
-- [x] Review Package model formatting attributes
-- [x] Review existing tests
-- [x] Identify conversion points (frontend → backend, backend → frontend)
-
-### Conversion Strategy
-**Frontend (form input in pounds → submit in pence):**
-1. Change form input to accept pounds (decimal, e.g., 500.00)
-2. On form submit, convert pounds to pence: `Math.round(pounds * 100)`
-3. Update helper text and labels
-4. Update computed display properties
-
-**Backend (validation):**
-1. Validation rules stay as integer/pence — the frontend sends pence after conversion
-2. No backend changes needed for storage or Stripe
-
-**Edit form (load existing data):**
-1. When editing, convert `total_price_pence` from model → pounds for display: `pence / 100`
+- [x] Read all instruction files
+- [x] Explore existing models (User, Student, Instructor)
+- [x] Explore existing actions (CreatePupilAction, CreateNewUser, CreateUserAndStudentFromEnquiryAction)
+- [x] Explore existing services (InstructorService, StudentService)
+- [x] Review existing routes/api.php
+- [x] Identify reusable components
+- [x] Create implementation plan
 
 ### Reflection
-Clean separation — all conversion happens in the Vue form component. Backend stays unchanged because the form still submits pence. This minimises risk and keeps Stripe/database logic untouched.
+The codebase has solid existing patterns. `CreatePupilAction` and `CreateUserAndStudentFromEnquiryAction` show how User+Student pairs are created. `InstructorService::createInstructor()` handles User+Instructor creation with geocoding. For the API auth flow, we created focused Actions that follow the same patterns but are tailored for self-registration (password set by user, no enquiry dependency, no Stripe integration at registration time).
 
 ---
 
 ## PHASE 2: IMPLEMENTATION
-**Status:** ⏸️ Not Started
+**Status:** ✅ Complete
 
 ### Tasks
-- [ ] Update `PackageForm.vue`: change input to accept pounds, add pence↔pounds conversion
-- [ ] Update `PackageForm.vue`: update labels, helper text, and computed properties
-- [ ] Update `CreatePackageSheet.vue`: ensure submit converts pounds→pence before POST
-- [ ] Check if edit flow exists and handle pence→pounds conversion for pre-filling
-- [ ] Update tests to verify the flow still works correctly
-- [ ] Verify Index.vue display columns still work (they use model-formatted values)
+- [x] Create Auth Actions (Login, Logout, RegisterStudent, RegisterInstructor)
+- [x] Create AuthService to orchestrate actions
+- [x] Create API FormRequests (Login, RegisterStudent, RegisterInstructor)
+- [x] Create UserResource for API responses
+- [x] Create API AuthController
+- [x] Update routes/api.php with versioned auth routes
+- [x] Write 13 Pest feature tests
+- [x] Update api.md with registration endpoint documentation
 
 ### Reflection
-_To be completed after implementation_
+Implementation went smoothly following the existing architecture. The Controller → Service → Action pattern kept the code clean and testable. Each Action is single-responsibility and reusable. The AuthService orchestrates token creation after registration, keeping that concern out of the Actions themselves. FormRequests handle all validation including password confirmation and unique email checks.
 
 ---
 
 ## PHASE 3: FINAL REFLECTION & DOCUMENTATION
-**Status:** ⏸️ Not Started
+**Status:** ✅ Complete
 
-### Files Changed
-_To be completed_
+### Reflection
+All three auth flows (login, student registration, instructor registration) are implemented cleanly:
 
-### Summary
-_To be completed_
+**What went well:**
+- Followed existing codebase patterns exactly (Controller → Service → Action)
+- Reused UserRole enum, password hashing via model casts, and Sanctum HasApiTokens
+- Clean separation: Actions handle business logic, Service orchestrates + creates tokens, Controller handles HTTP
+- Comprehensive test coverage with 13 tests covering success paths, validation, auth requirements, and edge cases
+
+**Architecture notes:**
+- Actions in `app/Actions/Auth/` are domain-organized per coding standards
+- No duplicate logic — each Action is atomic and reusable by web controllers, jobs, or CLI
+- Services remain transport-agnostic (no HTTP concerns)
+- UserResource ensures consistent JSON structure across all auth endpoints
+
+**Potential future enhancements (not implemented — out of scope):**
+- Password reset flow for mobile
+- Email verification flow for mobile
+- Rate limiting on registration endpoints
+- Instructor registration with geocoding (currently postcode stored without lat/lng — could integrate FetchPostcodeCoordinatesAction later)
