@@ -14,8 +14,10 @@ class DeleteResourceAction
      */
     public function __invoke(Resource $resource): void
     {
-        // Delete the file from S3
-        Storage::disk('s3')->delete($resource->file_path);
+        // Delete the file from S3 (only for file resources)
+        if ($resource->file_path) {
+            Storage::disk('s3')->delete($resource->file_path);
+        }
 
         if ($resource->thumbnail_path) {
             Storage::disk('s3')->delete($resource->thumbnail_path);

@@ -98,17 +98,18 @@ class ResourceService
         string $videoUrl,
         string $title,
         ?string $description = null,
-        ?array $tags = null
+        ?array $tags = null,
+        ?string $thumbnailUrl = null
     ): Resource {
-        return ($this->storeVideoLinkResource)($folder, $videoUrl, $title, $description, $tags);
+        return ($this->storeVideoLinkResource)($folder, $videoUrl, $title, $description, $tags, $thumbnailUrl);
     }
 
     /**
      * Update resource metadata.
      */
-    public function updateResource(Resource $resource, string $title, ?string $description = null, ?array $tags = null): Resource
+    public function updateResource(Resource $resource, string $title, ?string $description = null, ?array $tags = null, ?string $thumbnailUrl = null): Resource
     {
-        return ($this->updateResource)($resource, $title, $description, $tags);
+        return ($this->updateResource)($resource, $title, $description, $tags, $thumbnailUrl);
     }
 
     /**

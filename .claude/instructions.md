@@ -9,6 +9,7 @@
 4. **ALWAYS** read `.claude/database-schema.md` when working with databases
 5. **ALWAYS** read `.claude/frontend-coding-standards.md` when working with designs
 6. **ALWAYS** read `.claude/wireframe-rules.md` when working with designs
+7. **ALWAYS** read `.claude/api.md` when building or modifying ANY API feature
 
 **ALWAYS** confirm you have read and understood the above files before continuing
 
@@ -268,6 +269,33 @@ After **implementation phase specifically:**
 - ❌ Say "documentation will be updated later"
 
 **The rule is:** Migration code + Schema documentation = ONE atomic task.
+
+---
+
+## 🌐 API Documentation Protocol
+
+### When Creating or Modifying API Endpoints
+
+**MANDATORY STEPS (in this order):**
+
+1. **Create the API endpoint** (Controller, Resource, FormRequest, route)
+2. **IMMEDIATELY update `.claude/api.md`**
+   - Add the endpoint with method, path, auth requirements
+   - Document ALL request body fields with types and validation
+   - Include a complete example response with realistic data
+   - Update the changelog at the bottom
+3. **Announce the update**
+   ```
+   API endpoint created: POST /api/v1/auth/login
+   Updated: .claude/api.md
+   ```
+
+**NEVER:**
+- ❌ Create an API endpoint without updating api.md
+- ❌ Mark an API feature complete if api.md is outdated
+- ❌ Say "API docs will be updated later"
+
+**The rule is:** API code + api.md documentation = ONE atomic task.
 
 ---
 
