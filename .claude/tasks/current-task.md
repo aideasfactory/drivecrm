@@ -1,27 +1,22 @@
-# Task: Lessons: add practical test slot availability type
+# Task: Settings: remove delete account option from profile settings
 
 **Created:** 2026-03-13
-**Last Updated:** 2026-03-13T19:30:00Z
-**Status:** Complete
+**Last Updated:** 2026-03-13T20:05:00Z
+**Status:** ✅ Complete
 
 ---
 
 ## Overview
 
 ### Goal
-Add support for practical test slots within lesson availability. When creating a slot, instructors can mark it as a practical test. The system models 1hr prep + 1hr test + 30min buffer = 2.5hr total block, marks it unavailable for normal bookings, and displays it distinctly on the calendar.
+Remove the delete account option from /settings/profile so users cannot delete their account.
 
 ### Context
-- Tile ID: 019ce7ac-e5d3-7376-86bf-e0086c45b030
+- Tile ID: 019ce7ac-e83c-733b-a0e8-8bd1ee5c989b
 - Repository: drivecrm
-- Branch: feature/019ce7ac-e5d3-7376-86bf-e0086c45b030-lessons-add-practical-test-slot-availability-type
-- Priority: HIGH
-
-### Design Decisions
-- **No migration needed**: `item_type` is already a `string(20)` column. Adding `PracticalTest` to the PHP enum is sufficient.
-- **Single block approach**: Practical test creates one CalendarItem spanning 2.5hrs (prep + test + buffer) with `item_type = 'practical_test'` and `is_available = false`.
-- **User selects test time**: The form lets the user pick the actual test appointment time. System auto-calculates start (test - 1hr) and end (test + 1hr + 30min).
-- **Visual distinction**: Teal/cyan color on calendar, distinct from travel (purple) and unavailable (red).
+- Branch: feature/019ce7ac-e83c-733b-a0e8-8bd1ee5c989b-settings-remove-delete-account-option-from-profile-settings
+- Priority: MEDIUM
+- Customer: Drive
 
 ---
 
@@ -29,14 +24,15 @@ Add support for practical test slots within lesson availability. When creating a
 **Status:** ✅ Complete
 
 ### Tasks
-- ✓ Read all instruction files and coding standards
-- ✓ Explore existing availability/calendar system
+- ✓ Review Profile.vue page — uses `<DeleteUser />` component at bottom
+- ✓ Review DeleteUser.vue component — full delete account UI with confirmation dialog
+- ✓ Review ProfileController.php — has `destroy` method
+- ✓ Review routes/settings.php — has DELETE route at `settings/profile`
+- ✓ Review existing tests — ProfileUpdateTest.php has 2 delete-related tests
 - ✓ Identify all files to modify
-- ✓ Design approach (no migration, single block, teal styling)
-- ✓ Create task breakdown
 
 ### Reflection
-Thorough exploration revealed the existing `item_type` string column and enum pattern. The practical test feature fits cleanly as a new enum case without schema changes.
+Straightforward removal task. The delete account feature is self-contained with clear boundaries.
 
 ---
 
@@ -44,23 +40,17 @@ Thorough exploration revealed the existing `item_type` string column and enum pa
 **Status:** ⏸️ Not Started
 
 ### Tasks
-- ✓ Add `PracticalTest` case to `CalendarItemType` enum
-- ✓ Add `isPracticalTest()` helper to `CalendarItem` model
-- ✓ Add `practicalTest()` factory state to `CalendarItemFactory`
-- ✓ Update `CreateCalendarItemAction` to handle practical test time calculation
-- ✓ Update `StoreCalendarItemRequest` with `is_practical_test` validation + overlap check
-- ✓ Update `UpdateCalendarItemRequest` with `is_practical_test` validation
-- ✓ Update `InstructorController` to pass practical test flag
-- ✓ Update `InstructorService` to pass through
-- ✓ Update `CalendarService` to exclude practical test slots from booking availability
-- ✓ Update TypeScript types (`CalendarItemTypeValue`, `CalendarItemFormData`)
-- ✓ Update `ScheduleTab.vue` with practical test checkbox, auto-time logic, and read-only edit view
-- ✓ Update `CalendarEventBlock.vue` with teal/cyan styling and practical test icon
-- ✓ Update `MonthlyCalendarGrid.vue` with practical test colors and label
-- ✓ Write 10 Pest tests covering creation, deletion, API, factory, and availability exclusion
+- ✓ Remove DeleteUser component from Profile.vue
+- ✓ Remove DELETE route from settings.php
+- ✓ Remove destroy method from ProfileController.php
+- ✓ Remove ProfileDeleteRequest.php
+- ✓ Remove DeleteUser.vue component
+- ✓ Update tests — removed 2 delete tests, added 1 test confirming 405
+- ✓ Regenerated Wayfinder TypeScript bindings
+- ✓ Ran Pint (pass)
 
 ### Reflection
-Implementation went smoothly. No migration was needed since `item_type` is a string column. The practical test type integrates naturally with the existing travel block pattern. Frontend handles the checkbox toggle, auto-calculates times, and shows a clear info panel explaining the 2.5hr block.
+Clean removal across all layers: frontend component, route, controller method, form request, and tests. No orphaned references remain.
 
 ---
 
@@ -68,9 +58,9 @@ Implementation went smoothly. No migration was needed since `item_type` is a str
 **Status:** ✅ Complete
 
 ### Tasks
-- ✓ Update `.claude/database-schema.md` (enum values and business logic)
-- ✓ Complete reflection
-- ✓ Write `.phase_done` sentinel
+- ✓ Verified no broken references remain (grep confirmed only a commented-out line in web.php)
+- ✓ Updated current-task.md with final status
+- ✓ Written .phase_done sentinel
 
 ### Reflection
-Clean implementation with no schema changes, full test coverage, and clear visual distinction on both weekly and monthly calendar views.
+Task completed cleanly. All delete account functionality removed from the profile settings page across frontend, backend, routes, and tests. Wayfinder bindings regenerated to reflect route removal.
