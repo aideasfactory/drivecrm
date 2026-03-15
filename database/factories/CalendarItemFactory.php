@@ -69,4 +69,16 @@ class CalendarItemFactory extends Factory
             'unavailability_reason' => 'Travel time',
         ]);
     }
+
+    /**
+     * Create a practical test block.
+     */
+    public function practicalTest(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'item_type' => 'practical_test',
+            'is_available' => false,
+            'unavailability_reason' => 'Practical Test',
+        ]);
+    }
 }

@@ -679,7 +679,7 @@ Defines time slots within a calendar date.
 | `end_time` | time | NOT NULL | Slot end time |
 | `is_available` | boolean | DEFAULT true | Availability flag |
 | `status` | enum('draft', 'reserved', 'booked', 'completed') | NULLABLE | Booking lifecycle status |
-| `item_type` | varchar(20) | DEFAULT 'slot', INDEXED | Calendar item type: 'slot' (lesson) or 'travel' (travel time) |
+| `item_type` | varchar(20) | DEFAULT 'slot', INDEXED | Calendar item type: 'slot' (lesson), 'travel' (travel time), or 'practical_test' (driving test slot) |
 | `travel_time_minutes` | smallint unsigned | NULLABLE | Travel time in minutes (15, 30, or 45) set on the parent slot |
 | `parent_item_id` | bigint unsigned | FOREIGN KEY (calendar_items.id), NULLABLE, ON DELETE SET NULL | Links travel blocks to their parent lesson slot |
 | `notes` | text | NULLABLE | General notes about this calendar slot |
@@ -700,6 +700,7 @@ Defines time slots within a calendar date.
 **Business Logic:**
 - Multiple time slots per calendar date
 - `is_available` allows blocking slots without deletion
+- `item_type = 'practical_test'`: blocks a 2.5hr window (1hr prep + 1hr test + 30min buffer), always `is_available = false`
 - `status` tracks the booking lifecycle: `draft` → `reserved`/`booked` → `completed`
 - Draft items are cleaned up by `calendar:cleanup-drafts` command if abandoned
 - Recurring slots: materialized instances pattern — each occurrence is a separate row linked by `recurrence_group_id`

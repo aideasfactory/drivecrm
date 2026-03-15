@@ -1,27 +1,27 @@
-# Task: Resources: improve thumbnails, delete action, folders, and sorting
+# Task: Lessons: add practical test slot availability type
 
 **Created:** 2026-03-13
-**Last Updated:** 2026-03-13T19:55:00Z
-**Status:** ✅ Complete
+**Last Updated:** 2026-03-13T19:30:00Z
+**Status:** Complete
 
 ---
 
 ## Overview
 
 ### Goal
-Improve the Resources area at /resources with:
-- Video resource thumbnail URL support (external link, new DB column)
-- Fix Delete action for video_link resources (null file_path bug)
-- CSV import folder/subfolder structure support
-- Alphabetical sorting for folders
-- Tests for new features
+Add support for practical test slots within lesson availability. When creating a slot, instructors can mark it as a practical test. The system models 1hr prep + 1hr test + 30min buffer = 2.5hr total block, marks it unavailable for normal bookings, and displays it distinctly on the calendar.
 
 ### Context
-- Tile ID: 019ce7ac-e770-70b4-abe1-64abfeaa8659
+- Tile ID: 019ce7ac-e5d3-7376-86bf-e0086c45b030
 - Repository: drivecrm
-- Branch: feature/019ce7ac-e770-70b4-abe1-64abfeaa8659-resources-improve-thumbnails-delete-action-folders-and-sorti
+- Branch: feature/019ce7ac-e5d3-7376-86bf-e0086c45b030-lessons-add-practical-test-slot-availability-type
 - Priority: HIGH
-- Customer: Drive
+
+### Design Decisions
+- **No migration needed**: `item_type` is already a `string(20)` column. Adding `PracticalTest` to the PHP enum is sufficient.
+- **Single block approach**: Practical test creates one CalendarItem spanning 2.5hrs (prep + test + buffer) with `item_type = 'practical_test'` and `is_available = false`.
+- **User selects test time**: The form lets the user pick the actual test appointment time. System auto-calculates start (test - 1hr) and end (test + 1hr + 30min).
+- **Visual distinction**: Teal/cyan color on calendar, distinct from travel (purple) and unavailable (red).
 
 ---
 
@@ -29,13 +29,14 @@ Improve the Resources area at /resources with:
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Read all instruction files
-- [x] Explore existing Resources codebase
-- [x] Identify bugs and gaps
-- [x] Create implementation plan
+- ✓ Read all instruction files and coding standards
+- ✓ Explore existing availability/calendar system
+- ✓ Identify all files to modify
+- ✓ Design approach (no migration, single block, teal styling)
+- ✓ Create task breakdown
 
 ### Reflection
-Thorough exploration revealed a delete bug, missing thumbnail_url support, and CSV folder support gap. Plan was solid.
+Thorough exploration revealed the existing `item_type` string column and enum pattern. The practical test feature fits cleanly as a new enum case without schema changes.
 
 ---
 
@@ -43,28 +44,33 @@ Thorough exploration revealed a delete bug, missing thumbnail_url support, and C
 **Status:** ⏸️ Not Started
 
 ### Tasks
-- [x] Create migration to add `thumbnail_url` column to resources table
-- [x] Fix `DeleteResourceAction` to handle null `file_path` (video_link delete bug)
-- [x] Update backend: Model, Actions, Requests, Controller, Service for thumbnail_url
-- [x] Update frontend: UploadResourceSheet, EditResourceSheet, ResourceCard, ResourcePreview for thumbnail_url
-- [x] Add folder column support to CSV import (BulkImportResourcesAction)
-- [x] Update CSV template download with folder and thumbnail_url columns
-- [x] Verify alphabetical sorting for folders (already correct)
-- [x] Write tests: ResourceDeleteTest, ResourceThumbnailTest, ResourceCsvImportTest
+- ✓ Add `PracticalTest` case to `CalendarItemType` enum
+- ✓ Add `isPracticalTest()` helper to `CalendarItem` model
+- ✓ Add `practicalTest()` factory state to `CalendarItemFactory`
+- ✓ Update `CreateCalendarItemAction` to handle practical test time calculation
+- ✓ Update `StoreCalendarItemRequest` with `is_practical_test` validation + overlap check
+- ✓ Update `UpdateCalendarItemRequest` with `is_practical_test` validation
+- ✓ Update `InstructorController` to pass practical test flag
+- ✓ Update `InstructorService` to pass through
+- ✓ Update `CalendarService` to exclude practical test slots from booking availability
+- ✓ Update TypeScript types (`CalendarItemTypeValue`, `CalendarItemFormData`)
+- ✓ Update `ScheduleTab.vue` with practical test checkbox, auto-time logic, and read-only edit view
+- ✓ Update `CalendarEventBlock.vue` with teal/cyan styling and practical test icon
+- ✓ Update `MonthlyCalendarGrid.vue` with practical test colors and label
+- ✓ Write 10 Pest tests covering creation, deletion, API, factory, and availability exclusion
 
 ### Reflection
-Implementation went smoothly. The delete bug was a simple null check fix. Thumbnail URL support required changes across all layers (migration, model, actions, requests, controller, service, Vue components). CSV folder support used a `firstOrCreate` approach with caching for efficiency.
+Implementation went smoothly. No migration was needed since `item_type` is a string column. The practical test type integrates naturally with the existing travel block pattern. Frontend handles the checkbox toggle, auto-calculates times, and shows a clear info panel explaining the 2.5hr block.
 
 ---
 
 ## PHASE 3: FINAL REFLECTION & DOCUMENTATION
-**Status:** ⏸️ Not Started
+**Status:** ✅ Complete
 
 ### Tasks
-- [x] Update `.claude/database-schema.md` with `thumbnail_url` column
-- [x] Final review of all changes
-- [x] Update this task file with final reflection
-- [x] Write `.phase_done` sentinel file
+- ✓ Update `.claude/database-schema.md` (enum values and business logic)
+- ✓ Complete reflection
+- ✓ Write `.phase_done` sentinel
 
 ### Reflection
-All requirements met. The implementation follows existing patterns and conventions. No anti-patterns introduced.
+Clean implementation with no schema changes, full test coverage, and clear visual distinction on both weekly and monthly calendar views.
