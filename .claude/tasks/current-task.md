@@ -1,7 +1,7 @@
-# Task: Assign new users to current_team_id 1 during registration
+# Task: Start mobile app authentication flows for login, student registration, and instructor registration
 
 **Created:** 2026-03-15
-**Last Updated:** 2026-03-15T12:25:00Z
+**Last Updated:** 2026-03-15T13:15:00Z
 **Status:** ✅ Complete
 
 ---
@@ -9,14 +9,20 @@
 ## Overview
 
 ### Goal
-Create a teams table, Team model, and update the user registration flow so that every new user is assigned `current_team_id = 1` (the "Drive" team). This lays the groundwork for multi-team support.
+Build the mobile app authentication layer with login, student registration, and instructor registration flows using Sanctum tokens. Reuse existing services and actions where possible.
 
 ### Context
-- Tile ID: 019cee54-97b1-722e-abf2-05679546c964
+- Tile ID: 019cee56-a00b-72a7-a1c8-640538f298e1
 - Repository: drivecrm
-- Branch: feature/019cee54-97b1-722e-abf2-05679546c964-assign-new-users-to-current-team-id-1-during-registration
+- Branch: feature/019cee56-a00b-72a7-a1c8-640538f298e1-start-mobile-app-authentication-flows-for-login-student-regi
 - Priority: MEDIUM
-- Customer: Drive
+
+### Key Decisions
+- Created new `Auth` domain Actions rather than repurposing enquiry-specific actions
+- Followed existing Controller → Service → Action pattern
+- Used Eloquent Resources for API responses (UserResource)
+- Sanctum token-based auth with device_name tracking
+- Registration endpoints return token immediately for seamless UX
 
 ---
 
@@ -24,14 +30,16 @@ Create a teams table, Team model, and update the user registration flow so that 
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Review current registration flow (Fortify CreateNewUser action)
-- [x] Review User model and users migration
-- [x] Identify all files that need changes
-- [x] Plan migration structure for teams table
-- [x] Plan migration for adding current_team_id to users
+- [x] Read all instruction files
+- [x] Explore existing models (User, Student, Instructor)
+- [x] Explore existing actions (CreatePupilAction, CreateNewUser, CreateUserAndStudentFromEnquiryAction)
+- [x] Explore existing services (InstructorService, StudentService)
+- [x] Review existing routes/api.php
+- [x] Identify reusable components
+- [x] Create implementation plan
 
 ### Reflection
-Planning complete. The registration flow uses Fortify's `CreateNewUser` action which is straightforward to modify. The teams table is simple with a JSON settings column for future extensibility.
+The codebase has solid existing patterns. `CreatePupilAction` and `CreateUserAndStudentFromEnquiryAction` show how User+Student pairs are created. `InstructorService::createInstructor()` handles User+Instructor creation with geocoding. For the API auth flow, we created focused Actions that follow the same patterns but are tailored for self-registration (password set by user, no enquiry dependency, no Stripe integration at registration time).
 
 ---
 
@@ -39,46 +47,40 @@ Planning complete. The registration flow uses Fortify's `CreateNewUser` action w
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Create teams table migration
-- [x] Create add_current_team_id_to_users migration
-- [x] Create Team model with factory and seeder
-- [x] Update User model (fillable, cast, relationship)
-- [x] Update CreateNewUser action
-- [x] Update UserFactory
-- [x] Update DatabaseSeeder
-- [x] Write Pest tests
-- [x] Update database-schema.md
-
-### Files Created
-- `database/migrations/2026_03_15_120000_create_teams_table.php`
-- `database/migrations/2026_03_15_120001_add_current_team_id_to_users_table.php`
-- `app/Models/Team.php`
-- `database/factories/TeamFactory.php`
-- `database/seeders/TeamSeeder.php`
-- `tests/Feature/TeamTest.php`
-
-### Files Modified
-- `app/Models/User.php` — added `current_team_id` to fillable, `BelongsTo` import, `team()` relationship
-- `app/Actions/Fortify/CreateNewUser.php` — added `current_team_id => 1` to User::create
-- `database/factories/UserFactory.php` — added `current_team_id => Team::factory()`
-- `database/seeders/DatabaseSeeder.php` — calls TeamSeeder before creating users
-- `tests/Feature/Auth/RegistrationTest.php` — updated with team seeding and team assignment assertions
-- `.claude/database-schema.md` — documented teams table and updated users table
+- [x] Create Auth Actions (Login, Logout, RegisterStudent, RegisterInstructor)
+- [x] Create AuthService to orchestrate actions
+- [x] Create API FormRequests (Login, RegisterStudent, RegisterInstructor)
+- [x] Create UserResource for API responses
+- [x] Create API AuthController
+- [x] Update routes/api.php with versioned auth routes
+- [x] Write 13 Pest feature tests
+- [x] Update api.md with registration endpoint documentation
 
 ### Reflection
-Implementation was clean and followed existing patterns. The nullable foreign key on `current_team_id` keeps backward compatibility. The `current_team_id => 1` assignment in CreateNewUser is explicit and easy to change later.
+Implementation went smoothly following the existing architecture. The Controller → Service → Action pattern kept the code clean and testable. Each Action is single-responsibility and reusable. The AuthService orchestrates token creation after registration, keeping that concern out of the Actions themselves. FormRequests handle all validation including password confirmation and unique email checks.
 
 ---
 
 ## PHASE 3: FINAL REFLECTION & DOCUMENTATION
 **Status:** ✅ Complete
 
-### Summary
-Created a `teams` table with `id`, `uuid`, `name`, and JSON `settings` columns. Added a `current_team_id` foreign key to the `users` table. Updated the Fortify `CreateNewUser` action to assign `current_team_id = 1` to all new registrations. Created the `Team` model with factory and seeder (seeds "Drive" as id=1). Updated the `User` model with a `team()` BelongsTo relationship. Wrote Pest tests covering team creation, user-team relationships, and registration team assignment. Updated database-schema.md with full teams table documentation.
+### Reflection
+All three auth flows (login, student registration, instructor registration) are implemented cleanly:
 
-### Potential Overhead / Anti-Patterns
-- **Hardcoded team ID**: `current_team_id => 1` in `CreateNewUser` is hardcoded. This is intentional per requirements but should be extracted to a config or service when multi-team registration is needed.
-- **Nullable FK**: `current_team_id` is nullable to avoid breaking existing users. Once all existing users are assigned teams, this could be made non-nullable.
+**What went well:**
+- Followed existing codebase patterns exactly (Controller → Service → Action)
+- Reused UserRole enum, password hashing via model casts, and Sanctum HasApiTokens
+- Clean separation: Actions handle business logic, Service orchestrates + creates tokens, Controller handles HTTP
+- Comprehensive test coverage with 13 tests covering success paths, validation, auth requirements, and edge cases
 
-### Score: 8/10
-Solid, simple implementation that follows existing project patterns. Points deducted for the hardcoded team ID (acceptable per requirements) and the nullable FK which may need tightening later.
+**Architecture notes:**
+- Actions in `app/Actions/Auth/` are domain-organized per coding standards
+- No duplicate logic — each Action is atomic and reusable by web controllers, jobs, or CLI
+- Services remain transport-agnostic (no HTTP concerns)
+- UserResource ensures consistent JSON structure across all auth endpoints
+
+**Potential future enhancements (not implemented — out of scope):**
+- Password reset flow for mobile
+- Email verification flow for mobile
+- Rate limiting on registration endpoints
+- Instructor registration with geocoding (currently postcode stored without lat/lng — could integrate FetchPostcodeCoordinatesAction later)
