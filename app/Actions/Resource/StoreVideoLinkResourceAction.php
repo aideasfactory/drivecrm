@@ -17,7 +17,8 @@ class StoreVideoLinkResourceAction
         string $videoUrl,
         string $title,
         ?string $description = null,
-        ?array $tags = null
+        ?array $tags = null,
+        ?string $thumbnailUrl = null
     ): Resource {
         return Resource::create([
             'resource_folder_id' => $folder->id,
@@ -26,6 +27,7 @@ class StoreVideoLinkResourceAction
             'title' => $title,
             'description' => $description,
             'tags' => $tags,
+            'thumbnail_url' => $thumbnailUrl,
         ]);
     }
 }

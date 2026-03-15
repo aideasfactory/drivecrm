@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\UserRole;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -28,6 +29,7 @@ class User extends Authenticatable
         'password',
         'role',
         'stripe_customer_id',
+        'current_team_id',
     ];
 
     /**
@@ -68,6 +70,14 @@ class User extends Authenticatable
     public function student(): HasOne
     {
         return $this->hasOne(Student::class);
+    }
+
+    /**
+     * Get the team the user currently belongs to.
+     */
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(Team::class, 'current_team_id');
     }
 
     /**

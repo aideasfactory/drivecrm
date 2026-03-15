@@ -293,6 +293,7 @@ class InstructorController extends Controller
 
         // Handle single slot
         $travelTimeMinutes = $request->integer('travel_time_minutes') ?: null;
+        $isPracticalTest = $request->boolean('is_practical_test');
 
         $calendarItem = $this->instructorService->addCalendarItem(
             $instructor,
@@ -302,7 +303,8 @@ class InstructorController extends Controller
             $request->boolean('is_available', true),
             $request->input('notes'),
             $request->input('unavailability_reason'),
-            $travelTimeMinutes
+            $travelTimeMinutes,
+            $isPracticalTest
         );
 
         // If travel time was requested, reload the full calendar range so frontend picks up both items

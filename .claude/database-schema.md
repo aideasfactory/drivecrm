@@ -5,7 +5,8 @@ This document provides a comprehensive overview of the database structure for th
 ## 🔍 Quick Reference
 
 **Core Models:**
-- `User` → `Instructor` or `Student` (polymorphic via `role`)
+- `Team` → Organizational unit (e.g., "Drive"). Users belong to a team via `current_team_id`
+- `User` → `Instructor` or `Student` (polymorphic via `role`), belongs to `Team`
 - `Instructor` → Creates `Packages`, Teaches `Lessons`, Receives `Payouts`
 - `Student` → Purchases `Orders` → Contains `Lessons`
 - `Order` = Student + Instructor + Package
@@ -15,11 +16,13 @@ This document provides a comprehensive overview of the database structure for th
 
 **Key Relationships:**
 ```
+Team (1) → (Many) Users
+
 User (instructor) → Instructor → Packages
                               → Orders (assigned)
                               → Lessons (teaches)
                               → Payouts (receives)
-x
+
 User (student) → Student → Orders → Lessons → LessonPayments
                                             → Payouts
 ```
@@ -35,6 +38,8 @@ This is a Laravel-based application for managing instructor-student relationship
 ## Entity Relationship Diagram (Text)
 
 ```
+Teams (1) ──── (Many) Users
+                       │
 Users (1) ──┬── (1) Instructors ──┬── (Many) Packages
             │                     │
             │                     ├── (Many) Orders
@@ -65,9 +70,15 @@ Users (1) ──┬── (1) Instructors ──┬── (Many) Packages
 
 ### Core Entities
 
-1. **users** - Central user table
+1. **teams** - Organizational teams
+   - Users belong to a team via `current_team_id`
+   - Has JSON `settings` column for team-specific configuration (lesson defaults, permissions, etc.)
+   - Default team is "Drive" (id=1)
+
+2. **users** - Central user table
    - Polymorphic based on `role` enum: `owner`, `instructor`, `student`
    - Has one-to-one relationship with either `instructors` or `students` table
+   - Belongs to a `team` via `current_team_id` (nullable foreign key)
 
 2. **instructors** - Instructor profiles
    - One-to-one with `users` (via `user_id`)
@@ -120,6 +131,8 @@ Users (1) ──┬── (1) Instructors ──┬── (Many) Packages
 ### Relationship Summary
 
 ```
+Team → Has many Users (via current_team_id)
+
 User (role=instructor) → Instructor → Creates Packages
                                    → Assigned to Orders
                                    → Conducts Lessons
@@ -154,6 +167,27 @@ Resource → Belongs to ResourceFolder (videos, PDFs stored on S3)
 
 ## Tables
 
+### 0. **teams**
+
+Organizational teams for grouping users. The default team is "Drive" (id=1). The `settings` JSON column stores team-specific configuration such as default lesson duration, permissions, and rules.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique team identifier |
+| `uuid` | char(36) | NOT NULL, UNIQUE | UUID for external references |
+| `name` | varchar(255) | NOT NULL | Team name (e.g., "Drive") |
+| `settings` | json | NULLABLE | Team settings (lesson defaults, permissions, rules) |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Relationships:**
+- Has many `Users` (via `users.current_team_id`)
+
+**Seeded Data:**
+- id=1: "Drive" (default team for all new registrations)
+
+---
+
 ### 1. **users**
 
 Core user table storing all users in the system (owners, instructors, and students).
@@ -167,11 +201,13 @@ Core user table storing all users in the system (owners, instructors, and studen
 | `password` | varchar(255) | NOT NULL | Hashed password |
 | `role` | enum('owner', 'instructor', 'student') | DEFAULT 'student' | User role in the system |
 | `stripe_customer_id` | varchar(255) | NULLABLE, INDEXED | Stripe customer ID |
+| `current_team_id` | bigint unsigned | NULLABLE, FK → teams.id (ON DELETE SET NULL) | Current team assignment |
 | `remember_token` | varchar(100) | NULLABLE | Remember me token |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
 **Relationships:**
+- Belongs to `Team` (via `current_team_id`)
 - Has one `Instructor` profile (if role is instructor)
 - Has one `Student` profile (if role is student)
 - Has many `Orders` (through Student)
@@ -679,7 +715,7 @@ Defines time slots within a calendar date.
 | `end_time` | time | NOT NULL | Slot end time |
 | `is_available` | boolean | DEFAULT true | Availability flag |
 | `status` | enum('draft', 'reserved', 'booked', 'completed') | NULLABLE | Booking lifecycle status |
-| `item_type` | varchar(20) | DEFAULT 'slot', INDEXED | Calendar item type: 'slot' (lesson) or 'travel' (travel time) |
+| `item_type` | varchar(20) | DEFAULT 'slot', INDEXED | Calendar item type: 'slot' (lesson), 'travel' (travel time), or 'practical_test' (driving test slot) |
 | `travel_time_minutes` | smallint unsigned | NULLABLE | Travel time in minutes (15, 30, or 45) set on the parent slot |
 | `parent_item_id` | bigint unsigned | FOREIGN KEY (calendar_items.id), NULLABLE, ON DELETE SET NULL | Links travel blocks to their parent lesson slot |
 | `notes` | text | NULLABLE | General notes about this calendar slot |
@@ -700,6 +736,7 @@ Defines time slots within a calendar date.
 **Business Logic:**
 - Multiple time slots per calendar date
 - `is_available` allows blocking slots without deletion
+- `item_type = 'practical_test'`: blocks a 2.5hr window (1hr prep + 1hr test + 30min buffer), always `is_available = false`
 - `status` tracks the booking lifecycle: `draft` → `reserved`/`booked` → `completed`
 - Draft items are cleaned up by `calendar:cleanup-drafts` command if abandoned
 - Recurring slots: materialized instances pattern — each occurrence is a separate row linked by `recurrence_group_id`
@@ -786,6 +823,7 @@ Stores uploaded files (videos, PDFs) or video links (Vimeo/YouTube) with metadat
 | `file_size` | bigint unsigned | NULLABLE | File size in bytes (only for file type) |
 | `mime_type` | varchar(100) | NULLABLE | File MIME type (only for file type) |
 | `thumbnail_path` | varchar(500) | NULLABLE | S3 thumbnail path (optional) |
+| `thumbnail_url` | varchar(500) | NULLABLE | External thumbnail URL (for video_link resources) |
 | `sort_order` | integer | DEFAULT 0 | Display ordering within folder |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
@@ -804,6 +842,7 @@ Stores uploaded files (videos, PDFs) or video links (Vimeo/YouTube) with metadat
 - Description and tags will be used for AI-powered video/document suggestions at a later date
 - `resource_type` + `mime_type` determines rendering: embedded player for video links, video player for uploaded videos, PDF viewer/download for PDFs
 - Deleting a file-type resource also removes the file from S3; deleting a video_link resource only removes the DB record
+- `thumbnail_url` stores an external image URL for video link resources (e.g. YouTube thumbnail)
 
 ---
 

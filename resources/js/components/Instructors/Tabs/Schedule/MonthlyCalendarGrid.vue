@@ -57,6 +57,8 @@ function isCurrentMonth(date: Date): boolean {
 
 /** Status-based dot color */
 function dotColor(event: CalendarEvent): string {
+    if (event.itemType === 'practical_test') return 'bg-teal-500'
+
     const status = event.status
 
     if (status === 'booked') return 'bg-blue-500'
@@ -70,6 +72,8 @@ function dotColor(event: CalendarEvent): string {
 
 /** Status-based event pill classes */
 function pillClasses(event: CalendarEvent): string {
+    if (event.itemType === 'practical_test') return 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300'
+
     const status = event.status
 
     if (status === 'booked') return 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
@@ -86,6 +90,8 @@ function formatTime(t: string): string {
 }
 
 function statusLabel(event: CalendarEvent): string {
+    if (event.itemType === 'practical_test') return 'Practical Test'
+
     const status = event.status
 
     if (status === 'booked') return 'Booked'
