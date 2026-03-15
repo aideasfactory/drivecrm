@@ -47,6 +47,9 @@ function formatTime(t: string): string {
 /** Whether this event is a travel-time block */
 const isTravel = computed(() => props.event.itemType === 'travel')
 
+/** Whether this event is a practical test slot */
+const isPracticalTest = computed(() => props.event.itemType === 'practical_test')
+
 /** Calculate top offset in px based on start time */
 const topPx = computed(() => {
     const startMinutes = timeToMinutes(props.event.startTime)
@@ -68,6 +71,11 @@ const colorClasses = computed(() => {
     // Travel-time blocks get a distinct purple/indigo style
     if (isTravel.value) {
         return 'border-purple-300 bg-purple-100 text-purple-800 dark:border-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+    }
+
+    // Practical test slots get a distinct teal/cyan style
+    if (isPracticalTest.value) {
+        return 'border-teal-300 bg-teal-100 text-teal-800 dark:border-teal-700 dark:bg-teal-900/30 dark:text-teal-300'
     }
 
     const status = props.event.status
@@ -100,6 +108,7 @@ const colorClasses = computed(() => {
 /** Status label for display */
 const statusLabel = computed(() => {
     if (isTravel.value) return 'Travel'
+    if (isPracticalTest.value) return 'Practical Test'
 
     const status = props.event.status
 
@@ -117,8 +126,8 @@ function handleClick(e: MouseEvent) {
 }
 
 function handlePointerDown(e: PointerEvent) {
-    // Prevent dragging travel-time blocks directly
-    if (isTravel.value) return
+    // Prevent dragging travel-time and practical test blocks
+    if (isTravel.value || isPracticalTest.value) return
     e.stopPropagation()
     emit('dragstart', props.event, e)
 }
@@ -129,7 +138,9 @@ function handlePointerDown(e: PointerEvent) {
         class="absolute inset-x-1 z-10 select-none overflow-hidden rounded-md border px-2 py-1 text-xs leading-tight transition-shadow"
         :class="[
             colorClasses,
-            isTravel ? 'cursor-default border-dashed opacity-80' : 'cursor-pointer hover:shadow-md',
+            isTravel ? 'cursor-default border-dashed opacity-80' : '',
+            isPracticalTest ? 'cursor-pointer border-solid' : '',
+            !isTravel && !isPracticalTest ? 'cursor-pointer hover:shadow-md' : '',
         ]"
         :style="{ top: `${topPx}px`, height: `${heightPx}px`, minHeight: '20px' }"
         @click="handleClick"
@@ -139,6 +150,10 @@ function handlePointerDown(e: PointerEvent) {
             <!-- Travel icon for travel blocks -->
             <svg v-if="isTravel" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            <!-- Practical test icon -->
+            <svg v-if="isPracticalTest" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span>{{ formatTime(event.startTime) }} - {{ formatTime(event.endTime) }}</span>
             <!-- Recurrence indicator -->

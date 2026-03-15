@@ -10,9 +10,10 @@
 **Context-Specific Files (read when applicable):**
 
 3. **`.claude/backend-coding-standards.md`** - When working with PHP/Laravel backend code
-4. **`.claude/database-schema.md`** - When working with database models, migrations, or queries  
+4. **`.claude/database-schema.md`** - When working with database models, migrations, or queries
 5. **`.claude/frontend-coding-standards.md`** - When working with Vue/Inertia frontend code
 6. **`.claude/wireframe-rules.md`** - When implementing designs or wireframes
+7. **`.claude/api.md`** - When building, modifying, or debugging ANY API endpoint
 
 ---
 
@@ -28,6 +29,7 @@ Context-specific files (if applicable):
 - .claude/database-schema.md ✓ (if database work)
 - .claude/frontend-coding-standards.md ✓ (if frontend work)
 - .claude/wireframe-rules.md ✓ (if design work)
+- .claude/api.md ✓ (if API work)
 
 Current status: [describe current phase and progress]
 ```
@@ -109,6 +111,25 @@ Write `.phase_done` with `"status": "failed"` and include an `"error"` field. Th
 
 ---
 
+## 🌐 API Documentation Rule
+
+**CRITICAL: After creating or modifying ANY API endpoint:**
+
+1. **IMMEDIATELY update `.claude/api.md`**
+2. Document the endpoint: method, path, auth, request body, response example
+3. Update the changelog at the bottom of api.md
+4. **Announce:** "I've updated api.md to reflect the new/changed endpoint."
+
+**This applies to:**
+- ✅ New API endpoints
+- ✅ Modified request/response structures
+- ✅ Changed auth requirements
+- ✅ Removed endpoints
+
+**Always update api.md BEFORE marking an API task complete.**
+
+---
+
 ## 🔍 Quick Reference
 
 ### When to Read Each File:
@@ -121,6 +142,7 @@ Write `.phase_done` with `"status": "failed"` and include an `"error"` field. Th
 | `database-schema.md` | Migrations, Models, Relationships, Database queries |
 | `frontend-coding-standards.md` | Vue components, Inertia pages, Frontend logic |
 | `wireframe-rules.md` | Implementing designs, Working with HTML wireframes |
+| `api.md` | **Any API endpoint work** — creating, modifying, or debugging API routes |
 
 ---
 
@@ -153,6 +175,7 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - laravel/fortify (FORTIFY) - v1
 - laravel/framework (LARAVEL) - v12
 - laravel/prompts (PROMPTS) - v0
+- laravel/sanctum (SANCTUM) - v4
 - laravel/wayfinder (WAYFINDER) - v0
 - laravel/mcp (MCP) - v0
 - laravel/pint (PINT) - v1

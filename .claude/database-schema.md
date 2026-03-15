@@ -175,6 +175,7 @@ Core user table storing all users in the system (owners, instructors, and studen
 - Has one `Instructor` profile (if role is instructor)
 - Has one `Student` profile (if role is student)
 - Has many `Orders` (through Student)
+- Has many `PersonalAccessTokens` (Sanctum API tokens)
 
 **Enums:**
 - Role: `owner`, `instructor`, `student`
@@ -678,7 +679,7 @@ Defines time slots within a calendar date.
 | `end_time` | time | NOT NULL | Slot end time |
 | `is_available` | boolean | DEFAULT true | Availability flag |
 | `status` | enum('draft', 'reserved', 'booked', 'completed') | NULLABLE | Booking lifecycle status |
-| `item_type` | varchar(20) | DEFAULT 'slot', INDEXED | Calendar item type: 'slot' (lesson) or 'travel' (travel time) |
+| `item_type` | varchar(20) | DEFAULT 'slot', INDEXED | Calendar item type: 'slot' (lesson), 'travel' (travel time), or 'practical_test' (driving test slot) |
 | `travel_time_minutes` | smallint unsigned | NULLABLE | Travel time in minutes (15, 30, or 45) set on the parent slot |
 | `parent_item_id` | bigint unsigned | FOREIGN KEY (calendar_items.id), NULLABLE, ON DELETE SET NULL | Links travel blocks to their parent lesson slot |
 | `notes` | text | NULLABLE | General notes about this calendar slot |
@@ -699,6 +700,7 @@ Defines time slots within a calendar date.
 **Business Logic:**
 - Multiple time slots per calendar date
 - `is_available` allows blocking slots without deletion
+- `item_type = 'practical_test'`: blocks a 2.5hr window (1hr prep + 1hr test + 30min buffer), always `is_available = false`
 - `status` tracks the booking lifecycle: `draft` → `reserved`/`booked` → `completed`
 - Draft items are cleaned up by `calendar:cleanup-drafts` command if abandoned
 - Recurring slots: materialized instances pattern — each occurrence is a separate row linked by `recurrence_group_id`
@@ -785,6 +787,7 @@ Stores uploaded files (videos, PDFs) or video links (Vimeo/YouTube) with metadat
 | `file_size` | bigint unsigned | NULLABLE | File size in bytes (only for file type) |
 | `mime_type` | varchar(100) | NULLABLE | File MIME type (only for file type) |
 | `thumbnail_path` | varchar(500) | NULLABLE | S3 thumbnail path (optional) |
+| `thumbnail_url` | varchar(500) | NULLABLE | External thumbnail URL (for video_link resources) |
 | `sort_order` | integer | DEFAULT 0 | Display ordering within folder |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
@@ -803,6 +806,7 @@ Stores uploaded files (videos, PDFs) or video links (Vimeo/YouTube) with metadat
 - Description and tags will be used for AI-powered video/document suggestions at a later date
 - `resource_type` + `mime_type` determines rendering: embedded player for video links, video player for uploaded videos, PDF viewer/download for PDFs
 - Deleting a file-type resource also removes the file from S3; deleting a video_link resource only removes the DB record
+- `thumbnail_url` stores an external image URL for video link resources (e.g. YouTube thumbnail)
 
 ---
 
@@ -962,6 +966,32 @@ Laravel's failed jobs storage.
 | `payload` | longtext | NOT NULL | Job payload |
 | `exception` | longtext | NOT NULL | Exception details |
 | `failed_at` | timestamp | DEFAULT CURRENT_TIMESTAMP | When job failed |
+
+---
+
+### 25. **personal_access_tokens**
+
+Laravel Sanctum's API token storage. Each row is a single API token issued to a user (typically one per mobile device).
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique token identifier |
+| `tokenable_type` | varchar(255) | NOT NULL | Polymorphic model type (e.g., `App\Models\User`) |
+| `tokenable_id` | bigint unsigned | NOT NULL | Polymorphic model ID (user ID) |
+| `name` | varchar(255) | NOT NULL | Token name (device name, e.g., "iPhone 15") |
+| `token` | varchar(64) | UNIQUE, NOT NULL | SHA-256 hash of the plain-text token |
+| `abilities` | text | NULLABLE | JSON array of token abilities/scopes |
+| `last_used_at` | timestamp | NULLABLE | When the token was last used |
+| `expires_at` | timestamp | NULLABLE | Optional token expiration |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Indexes:**
+- Unique on `token`
+- Index on `(tokenable_type, tokenable_id)`
+
+**Relationships:**
+- Belongs to a `User` (via polymorphic `tokenable`)
 
 ---
 

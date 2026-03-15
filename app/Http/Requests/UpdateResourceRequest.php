@@ -24,6 +24,7 @@ class UpdateResourceRequest extends FormRequest
             'description' => ['nullable', 'string', 'max:5000'],
             'tags' => ['nullable', 'array'],
             'tags.*' => ['string', 'max:100'],
+            'thumbnail_url' => ['nullable', 'url', 'max:500'],
         ];
     }
 

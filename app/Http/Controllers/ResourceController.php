@@ -110,7 +110,8 @@ class ResourceController extends Controller
                 $request->validated('video_url'),
                 $request->validated('title'),
                 $request->validated('description'),
-                $request->validated('tags')
+                $request->validated('tags'),
+                $request->validated('thumbnail_url')
             );
         } else {
             $resource = $this->resourceService->uploadResource(
@@ -137,7 +138,8 @@ class ResourceController extends Controller
             $resource,
             $request->validated('title'),
             $request->validated('description'),
-            $request->validated('tags')
+            $request->validated('tags'),
+            $request->validated('thumbnail_url')
         );
 
         return response()->json([
@@ -204,8 +206,8 @@ class ResourceController extends Controller
      */
     public function downloadCsvTemplate(): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $headers = ['title', 'video_url', 'description', 'tags'];
-        $exampleRow = ['Introduction to Driving Theory', 'https://www.youtube.com/watch?v=example', 'A video covering basic driving theory', 'theory,beginner,driving'];
+        $headers = ['title', 'video_url', 'description', 'tags', 'folder', 'thumbnail_url'];
+        $exampleRow = ['Introduction to Driving Theory', 'https://www.youtube.com/watch?v=example', 'A video covering basic driving theory', 'theory,beginner,driving', 'Theory/Basics', 'https://img.youtube.com/vi/example/0.jpg'];
 
         return response()->streamDownload(function () use ($headers, $exampleRow) {
             $handle = fopen('php://output', 'w');
