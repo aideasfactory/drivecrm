@@ -33,6 +33,43 @@ php artisan serve # Backend (or use Herd)
 - **API Auth**: All API routes MUST use `auth:sanctum` middleware.
 - **Tokens**: API tokens issued via Sanctum `createToken()`. Never store plain-text tokens.
 
+### 🚨 API Identity Resolution (NON-NEGOTIABLE)
+
+**The `ResolveApiProfile` middleware automatically resolves the authenticated user's role-specific profile (Instructor or Student) from their Bearer token on every authenticated API request.**
+
+**CRITICAL RULES:**
+1. **NEVER accept an instructor ID or student ID as a request parameter** for scoping the current user's data. The profile is ALWAYS derived from the token.
+2. **NEVER trust client-sent IDs** to identify who the current user is. The mobile app does not send its own instructor/student ID — the backend resolves it.
+3. **ALWAYS use `$request->user()->profile`** to get the current user's Instructor or Student model.
+4. **ALWAYS use `$request->user()->instructor`** or **`$request->user()->student`** when you need the typed model.
+
+**How it works:**
+- Middleware: `App\Http\Middleware\ResolveApiProfile` (applied to all authenticated API routes)
+- The middleware eager-loads the `instructor` or `student` relationship based on `User::role`
+- `User::profile` accessor returns `$this->instructor ?? $this->student`
+
+**Example — "Get instructor's students" endpoint:**
+```php
+// ✅ CORRECT: Derive instructor from the authenticated user
+public function index(Request $request): StudentCollection
+{
+    $instructor = $request->user()->instructor;
+    return new StudentCollection($this->studentService->getByInstructor($instructor));
+}
+
+// ❌ WRONG: Accept instructor ID from the client
+public function index(Request $request, Instructor $instructor): StudentCollection
+{
+    return new StudentCollection($this->studentService->getByInstructor($instructor));
+}
+```
+
+**When planning any API endpoint, assume:**
+- "Get instructor's students" → scope by `$request->user()->instructor`
+- "Get student's lessons" → scope by `$request->user()->student`
+- "Update instructor profile" → target `$request->user()->instructor`
+- The ID is NEVER in the URL or request body for the current user's own resources
+
 ## 5. JIT Index - Directory Map
 
 ### Primary Contexts
@@ -235,12 +272,13 @@ API Controller → Service → Action(s) → Eloquent Resource (response)
    - NEVER return raw models or arrays from API controllers — always wrap in a Resource
 3. **FormRequest validation**: Same rule as web — ALL validation in FormRequest classes
    - API FormRequests live in `app/Http/Requests/Api/V1/`
-4. **Sanctum auth**: ALL API routes use `auth:sanctum` middleware (except login/register)
+4. **Sanctum auth**: ALL API routes use `auth:sanctum` + `ResolveApiProfile` middleware (except login/register)
 5. **Versioned routes**: All API routes prefixed with `/api/v1/`
 6. **Services are shared**: API and Web controllers share the SAME Service classes
    - Services contain zero HTTP concerns — this is what makes them reusable
    - If a Service returns Inertia responses, it's WRONG — refactor it
 7. **Actions are shared**: Same Actions used by web and API — no duplication
+8. **Identity from token, not request**: NEVER accept instructor/student ID from the client to scope the current user's data — always derive from `$request->user()->profile` (see Section 4)
 
 #### ❌ API Pattern Violations
 
@@ -251,6 +289,8 @@ API Controller → Service → Action(s) → Eloquent Resource (response)
 - ❌ Using session-based auth for API routes
 - ❌ Returning Inertia responses from API controllers
 - ❌ Hardcoding response structures instead of using Resources
+- ❌ Accepting instructor/student ID from the client to scope the current user's own data
+- ❌ Using route model binding for the current user's profile (e.g., `Route::get('instructors/{instructor}/students')` for "my students")
 
 #### 📁 API File Structure
 
@@ -285,9 +325,10 @@ When adding a new API endpoint:
 3. [ ] Create API Controller in `app/Http/Controllers/Api/V1/`
 4. [ ] Create Eloquent Resource in `app/Http/Resources/V1/`
 5. [ ] Create FormRequest in `app/Http/Requests/Api/V1/` (if POST/PUT/PATCH)
-6. [ ] Add route to `routes/api.php` with `auth:sanctum` middleware
-7. [ ] **Update `.claude/api.md`** with endpoint documentation
-8. [ ] Include request body, response example, and auth requirements
+6. [ ] Add route to `routes/api.php` inside the `auth:sanctum` + `ResolveApiProfile` group
+7. [ ] **Scope by `$request->user()->profile`** — never accept the user's own ID from the client
+8. [ ] **Update `.claude/api.md`** with endpoint documentation
+9. [ ] Include request body, response example, and auth requirements
 
 **Rule: No API feature is complete until `api.md` is updated.**
 

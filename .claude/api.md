@@ -26,7 +26,7 @@
 
 ### How It Works
 
-1. Mobile app sends `email`, `password`, and `device_name` to `/api/v1/auth/login`
+1. Mobile app sends `email`, `password`, `device_name`, and `role` to `/api/v1/auth/login`
 2. Server validates credentials and returns a **plain-text Bearer token**
 3. Mobile app stores the token securely (Keychain on iOS, EncryptedSharedPreferences on Android)
 4. Every subsequent request includes the token in the `Authorization` header
@@ -69,7 +69,7 @@ Authorization: Bearer {token}
 curl -X POST https://drivecrm.test/api/v1/auth/login \
   -H "Accept: application/json" \
   -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com", "password": "secret", "device_name": "iPhone 15"}'
+  -d '{"email": "user@example.com", "password": "secret", "device_name": "iPhone 15", "role": "instructor"}'
 
 # Authenticated request
 curl -X GET https://drivecrm.test/api/v1/auth/user \
@@ -94,6 +94,7 @@ const login = async (email, password) => {
       email,
       password,
       device_name: 'My App - iPhone 15',
+      role: 'instructor', // or 'student'
     }),
   });
   const data = await response.json();
@@ -206,7 +207,8 @@ Login and receive a Bearer token for subsequent API calls.
 {
   "email": "instructor@example.com",
   "password": "password123",
-  "device_name": "iPhone 15 Pro"
+  "device_name": "iPhone 15 Pro",
+  "role": "instructor"
 }
 ```
 
@@ -215,6 +217,7 @@ Login and receive a Bearer token for subsequent API calls.
 | `email` | string | Yes | User's email address |
 | `password` | string | Yes | User's password |
 | `device_name` | string | Yes | Human-readable device identifier (e.g., "John's iPhone 15") |
+| `role` | string | Yes | Must be `student` or `instructor`. The user's actual role must match, otherwise login is rejected. |
 
 **Success Response:** `200 OK`
 ```json
@@ -226,12 +229,25 @@ Login and receive a Bearer token for subsequent API calls.
     "email": "instructor@example.com",
     "role": "instructor",
     "email_verified_at": "2026-03-14T10:00:00.000000Z",
-    "created_at": "2026-01-15T08:30:00.000000Z"
+    "created_at": "2026-01-15T08:30:00.000000Z",
+    "profile": {
+      "id": 1,
+      "bio": null,
+      "transmission_type": "manual",
+      "status": "active",
+      "address": "1 High Street",
+      "postcode": "TS7 0AB",
+      "onboarding_complete": false,
+      "charges_enabled": false,
+      "payouts_enabled": false
+    }
   }
 }
 ```
 
-**Error Response:** `422 Unprocessable Entity`
+> **Note:** The `profile` object contains role-specific data. For `instructor` users it returns instructor fields; for `student` users it returns student fields. See [Profile Object by Role](#profile-object-by-role) below.
+
+**Error Response (bad credentials):** `422 Unprocessable Entity`
 ```json
 {
   "message": "The provided credentials are incorrect.",
@@ -242,6 +258,20 @@ Login and receive a Bearer token for subsequent API calls.
   }
 }
 ```
+
+**Error Response (role mismatch):** `422 Unprocessable Entity`
+```json
+{
+  "message": "Your account is not registered as a instructor.",
+  "errors": {
+    "role": [
+      "Your account is not registered as a instructor."
+    ]
+  }
+}
+```
+
+> This occurs when a student tries to log in via the instructor flow (or vice versa). The mobile app should direct the user to the correct login flow for their account type.
 
 ---
 
@@ -279,7 +309,18 @@ Returns the authenticated user's profile with role-specific data.
     "email": "instructor@example.com",
     "role": "instructor",
     "email_verified_at": "2026-03-14T10:00:00.000000Z",
-    "created_at": "2026-01-15T08:30:00.000000Z"
+    "created_at": "2026-01-15T08:30:00.000000Z",
+    "profile": {
+      "id": 1,
+      "bio": null,
+      "transmission_type": "manual",
+      "status": "active",
+      "address": "1 High Street",
+      "postcode": "TS7 0AB",
+      "onboarding_complete": false,
+      "charges_enabled": false,
+      "payouts_enabled": false
+    }
   }
 }
 ```
@@ -323,7 +364,15 @@ Register a new student account. Creates a base user record with the `student` ro
     "email": "jane@example.com",
     "role": "student",
     "email_verified_at": null,
-    "created_at": "2026-03-15T12:00:00.000000Z"
+    "created_at": "2026-03-15T12:00:00.000000Z",
+    "profile": {
+      "id": 1,
+      "first_name": "Jane",
+      "surname": "Doe",
+      "phone": "07700900000",
+      "status": "active",
+      "instructor_id": null
+    }
   }
 }
 ```
@@ -385,7 +434,18 @@ Register a new instructor account. Creates a base user record with the `instruct
     "email": "john@example.com",
     "role": "instructor",
     "email_verified_at": null,
-    "created_at": "2026-03-15T12:05:00.000000Z"
+    "created_at": "2026-03-15T12:05:00.000000Z",
+    "profile": {
+      "id": 1,
+      "bio": null,
+      "transmission_type": "manual",
+      "status": null,
+      "address": "1 High Street",
+      "postcode": "TS7 0AB",
+      "onboarding_complete": false,
+      "charges_enabled": false,
+      "payouts_enabled": false
+    }
   }
 }
 ```
@@ -401,6 +461,37 @@ Register a new instructor account. Creates a base user record with the `instruct
   }
 }
 ```
+
+---
+
+## Profile Object by Role
+
+The `profile` key in user responses contains role-specific data. The shape depends on the user's `role`:
+
+### Instructor Profile
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Instructor record ID |
+| `bio` | string\|null | Instructor biography |
+| `transmission_type` | string\|null | `manual`, `automatic`, or `both` |
+| `status` | string\|null | Instructor status |
+| `address` | string\|null | Business address |
+| `postcode` | string\|null | Business postcode |
+| `onboarding_complete` | boolean | Whether Stripe onboarding is done |
+| `charges_enabled` | boolean | Whether Stripe charges are enabled |
+| `payouts_enabled` | boolean | Whether Stripe payouts are enabled |
+
+### Student Profile
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Student record ID |
+| `first_name` | string | Student's first name |
+| `surname` | string | Student's surname |
+| `phone` | string\|null | Student's phone number |
+| `status` | string\|null | Student status (e.g., `active`) |
+| `instructor_id` | integer\|null | Assigned instructor ID (null if unassigned) |
 
 ---
 
@@ -424,6 +515,8 @@ The `role` field is always returned in user responses. Use it to determine which
 |------|--------|--------------------|
 | 2026-03-14 | Initial API documentation created | Auth (login, logout, user) |
 | 2026-03-15 | Added student and instructor registration endpoints | Auth (register/student, register/instructor) |
+| 2026-03-17 | Added `profile` object to all user responses (role-specific data) | Auth (login, user, register/student, register/instructor) |
+| 2026-03-17 | Login now requires `role` field; rejects role mismatches | Auth (login) |
 
 ---
 

@@ -27,7 +27,8 @@ class AuthController extends Controller
         $result = $this->authService->login(
             $request->validated('email'),
             $request->validated('password'),
-            $request->validated('device_name')
+            $request->validated('device_name'),
+            $request->validated('role')
         );
 
         return response()->json([

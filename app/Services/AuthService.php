@@ -26,9 +26,9 @@ class AuthService
      *
      * @return array{token: string, user: User}
      */
-    public function login(string $email, string $password, string $deviceName): array
+    public function login(string $email, string $password, string $deviceName, string $role): array
     {
-        return ($this->login)($email, $password, $deviceName);
+        return ($this->login)($email, $password, $deviceName, $role);
     }
 
     /**
@@ -50,6 +50,8 @@ class AuthService
     {
         $result = ($this->registerStudent)($data);
 
+        $result['user']->load('student');
+
         $token = $result['user']->createToken($deviceName)->plainTextToken;
 
         return [
@@ -69,6 +71,8 @@ class AuthService
     public function registerInstructor(array $data, string $deviceName): array
     {
         $result = ($this->registerInstructor)($data);
+
+        $result['user']->load('instructor');
 
         $token = $result['user']->createToken($deviceName)->plainTextToken;
 

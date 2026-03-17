@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Enums\UserRole;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class LoginRequest extends FormRequest
 {
@@ -27,6 +29,7 @@ class LoginRequest extends FormRequest
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
             'device_name' => ['required', 'string', 'max:255'],
+            'role' => ['required', 'string', Rule::in([UserRole::STUDENT->value, UserRole::INSTRUCTOR->value])],
         ];
     }
 }

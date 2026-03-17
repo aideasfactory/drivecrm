@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\V1;
 
+use App\Enums\UserRole;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -23,6 +24,23 @@ class UserResource extends JsonResource
             'role' => $this->role->value,
             'email_verified_at' => $this->email_verified_at,
             'created_at' => $this->created_at,
+            'profile' => $this->resolveProfile(),
         ];
+    }
+
+    /**
+     * Resolve the role-specific profile resource.
+     */
+    private function resolveProfile(): InstructorProfileResource|StudentProfileResource|null
+    {
+        if ($this->relationLoaded('instructor') && $this->instructor) {
+            return new InstructorProfileResource($this->instructor);
+        }
+
+        if ($this->relationLoaded('student') && $this->student) {
+            return new StudentProfileResource($this->student);
+        }
+
+        return null;
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\UserRole;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -102,6 +103,18 @@ class User extends Authenticatable
     public function receivedMessages(): HasMany
     {
         return $this->hasMany(Message::class, 'to');
+    }
+
+    /**
+     * Get the role-specific profile (Instructor or Student).
+     *
+     * Relies on the relationship being eager-loaded (e.g. by ResolveApiProfile middleware).
+     */
+    protected function profile(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->instructor ?? $this->student,
+        );
     }
 
     /**
