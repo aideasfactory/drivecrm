@@ -1,28 +1,22 @@
-# Task: Start mobile app authentication flows for login, student registration, and instructor registration
+# Task: Create instructor API endpoints for grouped student lists and recent activity
 
-**Created:** 2026-03-15
-**Last Updated:** 2026-03-15T13:15:00Z
-**Status:** ✅ Complete
+**Created:** 2026-03-17
+**Last Updated:** 2026-03-17T13:10:00Z
+**Status:** Complete
 
 ---
 
 ## Overview
 
 ### Goal
-Build the mobile app authentication layer with login, student registration, and instructor registration flows using Sanctum tokens. Reuse existing services and actions where possible.
+Build an instructor-facing API endpoint that returns students grouped into 4 objects: `active`, `passed`, `inactive`, and `recent_activity` (5 most recently updated students). Scoped to the authenticated instructor via token.
 
 ### Context
-- Tile ID: 019cee56-a00b-72a7-a1c8-640538f298e1
+- Tile ID: 019cfbd9-0500-7381-b554-34ee999619a4
 - Repository: drivecrm
-- Branch: feature/019cee56-a00b-72a7-a1c8-640538f298e1-start-mobile-app-authentication-flows-for-login-student-regi
+- Branch: feature/019cfbd9-0500-7381-b554-34ee999619a4-create-instructor-api-endpoints-for-grouped-student-lists-an
 - Priority: MEDIUM
-
-### Key Decisions
-- Created new `Auth` domain Actions rather than repurposing enquiry-specific actions
-- Followed existing Controller → Service → Action pattern
-- Used Eloquent Resources for API responses (UserResource)
-- Sanctum token-based auth with device_name tracking
-- Registration endpoints return token immediately for seamless UX
+- Customer: Drive
 
 ---
 
@@ -30,16 +24,13 @@ Build the mobile app authentication layer with login, student registration, and 
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Read all instruction files
-- [x] Explore existing models (User, Student, Instructor)
-- [x] Explore existing actions (CreatePupilAction, CreateNewUser, CreateUserAndStudentFromEnquiryAction)
-- [x] Explore existing services (InstructorService, StudentService)
-- [x] Review existing routes/api.php
-- [x] Identify reusable components
-- [x] Create implementation plan
+- [x] Explore existing codebase patterns (Student model, Instructor model, API routes, Services, Actions, Resources)
+- [x] Identify student status field values: active, inactive, on_hold, passed, failed, completed
+- [x] Confirm architecture: Controller → Service → Action pattern
+- [x] Plan file structure for new endpoint
 
 ### Reflection
-The codebase has solid existing patterns. `CreatePupilAction` and `CreateUserAndStudentFromEnquiryAction` show how User+Student pairs are created. `InstructorService::createInstructor()` handles User+Instructor creation with geocoding. For the API auth flow, we created focused Actions that follow the same patterns but are tailored for self-registration (password set by user, no enquiry dependency, no Stripe integration at registration time).
+Codebase is well-structured with clear patterns. The Student model has a `status` field with the exact values needed. The existing `GetInstructorPupilsAction` provides a good reference for querying instructor-scoped students.
 
 ---
 
@@ -47,40 +38,38 @@ The codebase has solid existing patterns. `CreatePupilAction` and `CreateUserAnd
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Create Auth Actions (Login, Logout, RegisterStudent, RegisterInstructor)
-- [x] Create AuthService to orchestrate actions
-- [x] Create API FormRequests (Login, RegisterStudent, RegisterInstructor)
-- [x] Create UserResource for API responses
-- [x] Create API AuthController
-- [x] Update routes/api.php with versioned auth routes
-- [x] Write 13 Pest feature tests
-- [x] Update api.md with registration endpoint documentation
+- [x] Create `GetGroupedStudentsAction` in `app/Actions/Instructor/`
+- [x] Create `StudentResource` in `app/Http/Resources/V1/`
+- [x] Add `getGroupedStudents()` method to `InstructorService`
+- [x] Create `InstructorStudentController` in `app/Http/Controllers/Api/V1/`
+- [x] Add route to `routes/api.php`
+- [x] Update `.claude/api.md` with endpoint documentation
+- [x] Write Pest tests
 
 ### Reflection
-Implementation went smoothly following the existing architecture. The Controller → Service → Action pattern kept the code clean and testable. Each Action is single-responsibility and reusable. The AuthService orchestrates token creation after registration, keeping that concern out of the Actions themselves. FormRequests handle all validation including password confirmation and unique email checks.
+Implementation follows the established Controller → Service → Action pattern exactly. Reused the existing `InstructorService` rather than creating a duplicate. The `StudentResource` is a new Eloquent API Resource that can be reused for future student-related endpoints. Tests cover grouping logic, scoping, max 5 recent activity, empty states, auth, and response structure.
 
 ---
 
 ## PHASE 3: FINAL REFLECTION & DOCUMENTATION
 **Status:** ✅ Complete
 
-### Reflection
-All three auth flows (login, student registration, instructor registration) are implemented cleanly:
+### Files Created
+- `app/Actions/Instructor/GetGroupedStudentsAction.php` — Business logic for grouping students by status
+- `app/Http/Resources/V1/StudentResource.php` — Eloquent API Resource for student data
+- `app/Http/Controllers/Api/V1/InstructorStudentController.php` — API controller
+- `tests/Feature/Api/V1/InstructorStudentControllerTest.php` — 6 Pest feature tests
 
-**What went well:**
-- Followed existing codebase patterns exactly (Controller → Service → Action)
-- Reused UserRole enum, password hashing via model casts, and Sanctum HasApiTokens
-- Clean separation: Actions handle business logic, Service orchestrates + creates tokens, Controller handles HTTP
-- Comprehensive test coverage with 13 tests covering success paths, validation, auth requirements, and edge cases
+### Files Modified
+- `app/Services/InstructorService.php` — Added `getGroupedStudents()` method
+- `routes/api.php` — Added `GET /api/v1/instructor/students` route
+- `.claude/api.md` — Documented new endpoint with full request/response examples
 
-**Architecture notes:**
-- Actions in `app/Actions/Auth/` are domain-organized per coding standards
-- No duplicate logic — each Action is atomic and reusable by web controllers, jobs, or CLI
-- Services remain transport-agnostic (no HTTP concerns)
-- UserResource ensures consistent JSON structure across all auth endpoints
+### Architecture Decisions
+- Single query fetches all instructor's students, then groups in-memory (efficient for typical instructor student counts)
+- `recent_activity` pulls from all statuses sorted by `updated_at`, not just a single status group
+- Used `StudentResource` (not `StudentProfileResource`) to keep API and auth profile resources separate — different use cases, different field sets
 
-**Potential future enhancements (not implemented — out of scope):**
-- Password reset flow for mobile
-- Email verification flow for mobile
-- Rate limiting on registration endpoints
-- Instructor registration with geocoding (currently postcode stored without lat/lng — could integrate FetchPostcodeCoordinatesAction later)
+### Potential Considerations
+- If instructors accumulate hundreds of students, the single-query approach may benefit from pagination per group. For now, the typical instructor student count makes this unnecessary.
+- No additional status filtering (e.g., `on_hold`, `failed`, `completed`) was requested. The structure is easy to extend by adding new keys to the Action's return array.
