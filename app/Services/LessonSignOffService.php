@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Actions\Shared\LogActivityAction;
+use App\Actions\Student\Lesson\ComputeLessonCardStatusAction;
 use App\Actions\Student\Lesson\GetStudentLessonDetailAction;
 use App\Actions\Student\Lesson\GetStudentLessonsAction;
 use App\Actions\Student\Lesson\SaveLessonSummaryAction;
@@ -23,6 +24,7 @@ class LessonSignOffService extends BaseService
     public function __construct(
         protected GetStudentLessonsAction $getStudentLessons,
         protected GetStudentLessonDetailAction $getStudentLessonDetail,
+        protected ComputeLessonCardStatusAction $computeCardStatus,
         protected SignOffLessonAction $signOffLesson,
         protected SaveLessonSummaryAction $saveLessonSummary,
         protected LogActivityAction $logActivity
@@ -37,11 +39,15 @@ class LessonSignOffService extends BaseService
     }
 
     /**
-     * Get a single lesson belonging to a student with full relationships.
+     * Get a single lesson belonging to a student with full relationships and computed card status.
      */
     public function getLessonDetail(Student $student, int $lessonId): Lesson
     {
-        return ($this->getStudentLessonDetail)($student, $lessonId);
+        $lesson = ($this->getStudentLessonDetail)($student, $lessonId);
+
+        $lesson->setAttribute('card_status', ($this->computeCardStatus)($lesson, $student)->value);
+
+        return $lesson;
     }
 
     /**

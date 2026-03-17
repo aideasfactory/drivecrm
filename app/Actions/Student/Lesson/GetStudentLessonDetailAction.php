@@ -28,6 +28,8 @@ class GetStudentLessonDetailAction
                 'calendarItem.calendar:id,date',
                 'lessonPayment:id,lesson_id,amount_pence,status,paid_at',
                 'payout:id,lesson_id,status,amount_pence,stripe_transfer_id,paid_at',
+                'reflectiveLog',
+                'resources',
             ])
             ->findOrFail($lessonId);
     }

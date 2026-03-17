@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Resource extends Model
 {
@@ -40,6 +41,14 @@ class Resource extends Model
     public function folder(): BelongsTo
     {
         return $this->belongsTo(ResourceFolder::class, 'resource_folder_id');
+    }
+
+    /**
+     * Get the lessons this resource is attached to.
+     */
+    public function lessons(): BelongsToMany
+    {
+        return $this->belongsToMany(Lesson::class)->withTimestamps();
     }
 
     /**

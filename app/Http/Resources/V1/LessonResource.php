@@ -28,6 +28,10 @@ class LessonResource extends JsonResource
             'end_time' => $this['end_time'],
             'status' => $this['status'],
             'completed_at' => $this['completed_at'],
+            'card_status' => $this['card_status'],
+            'has_reflective_log' => $this['has_reflective_log'],
+            'resources_count' => $this['resources_count'],
+            'payment_status' => $this['payment_status'],
         ];
     }
 }

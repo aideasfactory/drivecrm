@@ -1,36 +1,27 @@
-# Task: Create Student Lessons API Endpoints
+# Task: Expand Lessons API — Card Statuses, Reflective Logs, Resources
 
 **Created:** 2026-03-17
-**Last Updated:** 2026-03-17T15:30:00Z
-**Status:** ✅ Complete
+**Last Updated:** 2026-03-17T16:30:00Z
+**Status:** 🔄 In Progress
 
 ---
 
 ## Overview
 
 ### Goal
-Build two secure API endpoints for retrieving a student's lessons:
-1. **Lesson List** — `GET /api/v1/students/{student}/lessons` — returns all lessons for a student
-2. **Lesson Detail** — `GET /api/v1/students/{student}/lessons/{lesson}` — returns a single lesson's full detail
-
-Both endpoints are protected by a policy that allows access only when:
-- The authenticated user IS the student (user_id match), OR
-- The authenticated user is an instructor linked to that student (instructor_id match)
+Expand the Lessons API with:
+1. **Computed card statuses** — green (signed off), red (needs sign-off), orange (current/next), blue (upcoming)
+2. **Reflective Log** relationship — lessons require a reflective log for sign-off; past lessons without one are red
+3. **Resources** relationship — many-to-many between lessons and resources
+4. **Fix authorize bug** in StudentLessonController (`$this->authorize()` → `Gate::authorize()`)
 
 ---
 
 ## PHASE 1: PLANNING
 **Status:** ✅ Complete
 
-### Tasks
-- [x] Review existing Lesson model, relationships, and actions
-- [x] Review existing API structure (controllers, resources, services, routes)
-- [x] Review StudentPolicy for reusable authorization pattern
-- [x] Identify files to create/modify
-- [x] Document the implementation plan
-
 ### Reflection
-Clear codebase patterns. GetStudentLessonsAction already existed for the list endpoint. StudentPolicy provided the exact authorization pattern to replicate.
+Clear plan. Authorize bug confirmed — Laravel 12's base Controller has no AuthorizesRequests trait.
 
 ---
 
@@ -38,51 +29,58 @@ Clear codebase patterns. GetStudentLessonsAction already existed for the list en
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Fix `LessonSignOffService` to extend `BaseService`
-- [x] Create `GetStudentLessonDetailAction` in `app/Actions/Student/Lesson/`
-- [x] Add `getLessonDetail()` method to `LessonSignOffService`
-- [x] Create `LessonPolicy` with `viewAny` and `view` methods
-- [x] Create `LessonResource` in `app/Http/Resources/V1/`
-- [x] Create `LessonDetailResource` in `app/Http/Resources/V1/`
-- [x] Create `LessonCollection` in `app/Http/Resources/V1/`
-- [x] Create `StudentLessonController` with `index` and `show` methods
-- [x] Add routes to `routes/api.php`
-- [x] Update `.claude/api.md` with both endpoints
-
-### Reflection
-All files follow the Controller → Service → Action pattern. The existing `GetStudentLessonsAction` was reused for the list endpoint without any changes. A new `GetStudentLessonDetailAction` was created for the detail endpoint that scopes the lesson query to the student's orders (preventing cross-student access at the query level). The `LessonPolicy` mirrors `StudentPolicy`'s pattern with a shared private helper method. Fixed `LessonSignOffService` to extend `BaseService` (was a pre-existing violation).
-
----
-
-## PHASE 3: FINAL REVIEW & DOCUMENTATION
-**Status:** ✅ Complete
-
-### Tasks
-- [x] Verify all files follow project conventions (strict_types, PHPDoc, namespacing)
-- [x] Verify LessonSignOffService extends BaseService
-- [x] Verify api.md is complete and accurate
-- [x] Update current-task.md with final reflection
-- [x] Write .phase_done sentinel
+- [x] Fix authorize bug in StudentLessonController → Gate::authorize()
+- [x] Create reflective_logs migration
+- [x] Create lesson_resource pivot migration
+- [x] Create ReflectiveLog model
+- [x] Add reflectiveLog + resources relationships to Lesson model
+- [x] Add lessons relationship to Resource model
+- [x] Create LessonCardStatus enum
+- [x] Create ComputeLessonCardStatusAction
+- [x] Update GetStudentLessonsAction with card_status, has_reflective_log, resources_count
+- [x] Update GetStudentLessonDetailAction to eager-load reflectiveLog and resources
+- [x] Update LessonSignOffService to compute card_status in getLessonDetail
+- [x] Create ReflectiveLogResource
+- [x] Create LessonResourceResource
+- [x] Update LessonResource with card_status, has_reflective_log, resources_count, payment_status
+- [x] Update LessonDetailResource with card_status, reflective_log, resources, has_reflective_log
+- [x] Update .claude/api.md
+- [x] Update .claude/database-schema.md
 
 ### Files Created
 | File | Purpose |
 |------|---------|
-| `app/Actions/Student/Lesson/GetStudentLessonDetailAction.php` | Fetch single lesson scoped to student |
-| `app/Policies/LessonPolicy.php` | Authorization: student-self or linked-instructor |
-| `app/Http/Resources/V1/LessonResource.php` | JSON serialization for lesson list items |
-| `app/Http/Resources/V1/LessonDetailResource.php` | JSON serialization for lesson detail |
-| `app/Http/Resources/V1/LessonCollection.php` | Collection resource wrapping LessonResource |
-| `app/Http/Controllers/Api/V1/StudentLessonController.php` | API controller with index and show |
+| `database/migrations/2026_03_17_170923_create_reflective_logs_table.php` | Reflective logs table |
+| `database/migrations/2026_03_17_170923_create_lesson_resource_table.php` | Lesson-Resource pivot table |
+| `app/Models/ReflectiveLog.php` | ReflectiveLog model |
+| `app/Enums/LessonCardStatus.php` | Card status enum (signed_off, needs_sign_off, current, upcoming) |
+| `app/Actions/Student/Lesson/ComputeLessonCardStatusAction.php` | Compute card status for single lesson |
+| `app/Http/Resources/V1/ReflectiveLogResource.php` | API resource for reflective log |
+| `app/Http/Resources/V1/LessonResourceResource.php` | API resource for lesson resources |
 
 ### Files Modified
 | File | Change |
 |------|--------|
-| `app/Services/LessonSignOffService.php` | Fixed: extends BaseService; added getLessonDetail() method |
-| `routes/api.php` | Added 2 lesson routes nested under student |
-| `.claude/api.md` | Documented both endpoints with full request/response examples |
+| `app/Http/Controllers/Api/V1/StudentLessonController.php` | Fixed: `$this->authorize()` → `Gate::authorize()` |
+| `app/Models/Lesson.php` | Added reflectiveLog() and resources() relationships |
+| `app/Models/Resource.php` | Added lessons() relationship |
+| `app/Actions/Student/Lesson/GetStudentLessonsAction.php` | Card status computation, reflective log & resources data |
+| `app/Actions/Student/Lesson/GetStudentLessonDetailAction.php` | Eager-loads reflectiveLog and resources |
+| `app/Services/LessonSignOffService.php` | Injects ComputeLessonCardStatusAction, computes card_status in getLessonDetail |
+| `app/Http/Resources/V1/LessonResource.php` | Added card_status, has_reflective_log, resources_count, payment_status |
+| `app/Http/Resources/V1/LessonDetailResource.php` | Added card_status, reflective_log, resources, has_reflective_log |
+| `.claude/api.md` | Updated lesson list and detail docs, added card status docs |
+| `.claude/database-schema.md` | Added reflective_logs and lesson_resource tables |
 
 ### Reflection
-Clean implementation with no anti-patterns. The lesson detail query is doubly secure: the policy checks user-student/instructor-student relationship, and the query itself scopes lessons through the student's orders (preventing any cross-student access even if the policy were bypassed). No technical debt introduced. The BaseService fix on LessonSignOffService actually reduces existing debt.
+All files follow Controller → Service → Action pattern. Card status is computed at the Action level for list (efficient, single pass) and via a dedicated Action for detail (requires knowing the student's next lesson). The authorize bug fix is minimal — just swapping to Gate facade which works without the trait.
 
-### Score: 9/10
-Solid implementation reusing existing actions and following all project patterns. Deducted one point because the lesson list endpoint returns the flat array structure from GetStudentLessonsAction through the LessonResource (using array access `$this['key']` rather than model properties) — this works but is slightly less type-safe than a model-based resource. However, rewriting the existing action would be unnecessary scope.
+---
+
+## PHASE 3: FINAL REVIEW & DOCUMENTATION
+**Status:** 🔄 In Progress
+
+### Tasks
+- [ ] Verify all files follow project conventions
+- [ ] Final check on api.md and database-schema.md
+- [ ] Write .phase_done sentinel

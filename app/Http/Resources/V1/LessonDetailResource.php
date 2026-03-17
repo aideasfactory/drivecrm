@@ -12,7 +12,8 @@ class LessonDetailResource extends JsonResource
     /**
      * Transform the resource into an array.
      *
-     * Expects a Lesson model with eager-loaded relationships.
+     * Expects a Lesson model with eager-loaded relationships
+     * and a computed card_status attribute.
      *
      * @return array<string, mixed>
      */
@@ -36,6 +37,12 @@ class LessonDetailResource extends JsonResource
             'payout_status' => $this->payout?->status?->value,
             'has_payout' => $this->payout !== null,
             'calendar_date' => $this->calendarItem?->calendar?->date?->format('Y-m-d'),
+            'card_status' => $this->getAttribute('card_status'),
+            'has_reflective_log' => $this->reflectiveLog !== null,
+            'reflective_log' => $this->reflectiveLog
+                ? new ReflectiveLogResource($this->reflectiveLog)
+                : null,
+            'resources' => LessonResourceResource::collection($this->resources),
         ];
     }
 }

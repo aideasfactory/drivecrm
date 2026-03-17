@@ -11,6 +11,7 @@ use App\Models\Lesson;
 use App\Models\Student;
 use App\Services\LessonSignOffService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class StudentLessonController extends Controller
 {
@@ -25,7 +26,7 @@ class StudentLessonController extends Controller
      */
     public function index(Request $request, Student $student): LessonCollection
     {
-        $this->authorize('viewAny', [Lesson::class, $student]);
+        Gate::authorize('viewAny', [Lesson::class, $student]);
 
         $lessons = $this->lessonSignOffService->getStudentLessons($student);
 
@@ -39,7 +40,7 @@ class StudentLessonController extends Controller
      */
     public function show(Request $request, Student $student, int $lesson): LessonDetailResource
     {
-        $this->authorize('view', [Lesson::class, $student]);
+        Gate::authorize('view', [Lesson::class, $student]);
 
         $lesson = $this->lessonSignOffService->getLessonDetail($student, $lesson);
 

@@ -6,6 +6,7 @@ use App\Enums\LessonStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Lesson extends Model
@@ -74,6 +75,22 @@ class Lesson extends Model
     public function calendarItem(): BelongsTo
     {
         return $this->belongsTo(CalendarItem::class);
+    }
+
+    /**
+     * Get the reflective log for this lesson.
+     */
+    public function reflectiveLog(): HasOne
+    {
+        return $this->hasOne(ReflectiveLog::class);
+    }
+
+    /**
+     * Get the resources attached to this lesson.
+     */
+    public function resources(): BelongsToMany
+    {
+        return $this->belongsToMany(Resource::class)->withTimestamps();
     }
 
     /**

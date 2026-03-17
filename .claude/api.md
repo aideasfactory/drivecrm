@@ -626,7 +626,11 @@ Returns all lessons for a given student across all their orders. Access is contr
       "start_time": "09:00",
       "end_time": "10:00",
       "status": "pending",
-      "completed_at": null
+      "completed_at": null,
+      "card_status": "current",
+      "has_reflective_log": false,
+      "resources_count": 0,
+      "payment_status": "paid"
     },
     {
       "id": 2,
@@ -637,7 +641,41 @@ Returns all lessons for a given student across all their orders. Access is contr
       "start_time": "14:00",
       "end_time": "15:00",
       "status": "completed",
-      "completed_at": "2026-03-18T15:05:00.000000Z"
+      "completed_at": "2026-03-18T15:05:00.000000Z",
+      "card_status": "signed_off",
+      "has_reflective_log": true,
+      "resources_count": 2,
+      "payment_status": "paid"
+    },
+    {
+      "id": 3,
+      "order_id": 1,
+      "instructor_name": "John Smith",
+      "package_name": "10 Hour Package",
+      "date": "2026-03-15",
+      "start_time": "10:00",
+      "end_time": "11:00",
+      "status": "pending",
+      "completed_at": null,
+      "card_status": "needs_sign_off",
+      "has_reflective_log": false,
+      "resources_count": 0,
+      "payment_status": "paid"
+    },
+    {
+      "id": 4,
+      "order_id": 1,
+      "instructor_name": "John Smith",
+      "package_name": "10 Hour Package",
+      "date": "2026-03-25",
+      "start_time": "09:00",
+      "end_time": "10:00",
+      "status": "pending",
+      "completed_at": null,
+      "card_status": "upcoming",
+      "has_reflective_log": false,
+      "resources_count": 0,
+      "payment_status": null
     }
   ]
 }
@@ -656,6 +694,19 @@ Returns all lessons for a given student across all their orders. Access is contr
 | `end_time` | string\|null | End time (HH:MM) |
 | `status` | string | Lesson status: `pending`, `completed`, or `cancelled` |
 | `completed_at` | string\|null | ISO 8601 timestamp when lesson was completed |
+| `card_status` | string | Computed UI card status (see Card Status Logic below) |
+| `has_reflective_log` | boolean | Whether a reflective log exists for this lesson |
+| `resources_count` | integer | Number of resources attached to this lesson |
+| `payment_status` | string\|null | Payment status: `paid`, `due`, `refunded`, or null |
+
+**Card Status Logic:**
+
+| Value | Color | Condition |
+|-------|-------|-----------|
+| `signed_off` | Green | Past lesson that has been completed/signed off |
+| `needs_sign_off` | Red | Past lesson NOT signed off (reflective log missing) |
+| `current` | Orange | The next lesson (today or future) — the one to sign off next |
+| `upcoming` | Blue | Future lessons beyond the next one |
 
 > **Note:** Lessons are sorted by date descending, then start time descending (most recent first). Lessons span all orders for the student.
 
@@ -714,7 +765,31 @@ The lesson must belong to the student (via one of their orders) — otherwise a 
     "payment_mode": "upfront",
     "payout_status": "paid",
     "has_payout": true,
-    "calendar_date": "2026-03-18"
+    "calendar_date": "2026-03-18",
+    "card_status": "signed_off",
+    "has_reflective_log": true,
+    "reflective_log": {
+      "id": 1,
+      "what_i_learned": "How to parallel park between two cars",
+      "what_went_well": "Managed to park first time in a tight space",
+      "what_to_improve": "Need to check mirrors more frequently",
+      "additional_notes": null,
+      "created_at": "2026-03-18T15:10:00.000000Z"
+    },
+    "resources": [
+      {
+        "id": 5,
+        "title": "Parallel Parking Guide",
+        "description": "Step-by-step guide to parallel parking",
+        "resource_type": "file",
+        "video_url": null,
+        "file_path": "resources/parallel-parking-guide.pdf",
+        "file_name": "parallel-parking-guide.pdf",
+        "file_size": 245760,
+        "mime_type": "application/pdf",
+        "thumbnail_url": null
+      }
+    ]
   }
 }
 ```
@@ -740,6 +815,36 @@ The lesson must belong to the student (via one of their orders) — otherwise a 
 | `payout_status` | string\|null | Instructor payout status: `pending`, `paid`, `failed`, or null |
 | `has_payout` | boolean | Whether a payout has been created for this lesson |
 | `calendar_date` | string\|null | Calendar date for the lesson slot (YYYY-MM-DD) |
+| `card_status` | string | Computed UI card status: `signed_off`, `needs_sign_off`, `current`, `upcoming` |
+| `has_reflective_log` | boolean | Whether a reflective log exists for this lesson |
+| `reflective_log` | object\|null | The reflective log data (see Reflective Log Object below) |
+| `resources` | array | List of resources attached to this lesson (see Lesson Resource Object below) |
+
+**Reflective Log Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Reflective log ID |
+| `what_i_learned` | string\|null | What the student learned |
+| `what_went_well` | string\|null | What went well during the lesson |
+| `what_to_improve` | string\|null | Areas to improve |
+| `additional_notes` | string\|null | Any additional notes |
+| `created_at` | string\|null | ISO 8601 timestamp when the log was created |
+
+**Lesson Resource Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Resource ID |
+| `title` | string | Resource title |
+| `description` | string\|null | Resource description |
+| `resource_type` | string | Type: `video_link` or `file` |
+| `video_url` | string\|null | Video URL (for video_link type) |
+| `file_path` | string\|null | File storage path |
+| `file_name` | string\|null | Original file name |
+| `file_size` | integer\|null | File size in bytes |
+| `mime_type` | string\|null | MIME type of the file |
+| `thumbnail_url` | string\|null | Thumbnail URL if available |
 
 **Error Response (not authorised):** `403 Forbidden`
 ```json
@@ -815,6 +920,9 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-17 | Added grouped students endpoint for instructors | Instructor (students) |
 | 2026-03-17 | Added individual student record endpoint with access policy | Student (show) |
 | 2026-03-17 | Added student lessons list and lesson detail endpoints with access policy | Student (lessons index, lessons show) |
+| 2026-03-17 | Added card_status, has_reflective_log, resources_count, payment_status to lesson list | Student (lessons index) |
+| 2026-03-17 | Added card_status, reflective_log, resources, has_reflective_log to lesson detail | Student (lessons show) |
+| 2026-03-17 | Fixed authorize bug in StudentLessonController (Gate::authorize) | Student (lessons index, lessons show) |
 
 ---
 

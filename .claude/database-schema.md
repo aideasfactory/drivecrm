@@ -108,6 +108,8 @@ Users (1) ──┬── (1) Instructors ──┬── (Many) Packages
    - Many-to-one with `calendar_items` (scheduled time slot)
    - One-to-one with `lesson_payments` (payment tracking for weekly mode)
    - One-to-one with `payouts` (instructor payout)
+   - One-to-one with `reflective_logs` (student's reflective log)
+   - Many-to-many with `resources` (via `lesson_resource` pivot)
 
 7. **lesson_payments** - Payment tracking (weekly mode)
    - One-to-one with `lessons` (payment for specific lesson)
@@ -161,6 +163,10 @@ Message → Belongs to User (sender via 'from') + Belongs to User (recipient via
 
 ResourceFolder → Self-referencing (parent/children) → Has many Resources
 Resource → Belongs to ResourceFolder (videos, PDFs stored on S3)
+       → Many-to-many with Lessons (via lesson_resource pivot)
+
+ReflectiveLog → Belongs to Lesson (one-to-one, unique on lesson_id)
+LessonResource (pivot) → Lesson + Resource (many-to-many)
 ```
 
 ---
@@ -1028,6 +1034,50 @@ Laravel Sanctum's API token storage. Each row is a single API token issued to a 
 
 **Relationships:**
 - Belongs to a `User` (via polymorphic `tokenable`)
+
+---
+
+### 26. **reflective_logs**
+
+Student reflective logs for lessons. Each lesson can have at most one reflective log. A past lesson without a reflective log cannot be signed off (displays as "needs sign-off" / red card in the mobile app).
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique reflective log identifier |
+| `lesson_id` | bigint unsigned | FOREIGN KEY → lessons(id) ON DELETE CASCADE, UNIQUE | The lesson this log belongs to |
+| `what_i_learned` | text | NULLABLE | What the student learned |
+| `what_went_well` | text | NULLABLE | What went well during the lesson |
+| `what_to_improve` | text | NULLABLE | Areas to improve |
+| `additional_notes` | text | NULLABLE | Any additional notes |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Indexes:**
+- Unique on `lesson_id` (enforces one-to-one)
+
+**Relationships:**
+- Belongs to `Lesson` (one-to-one)
+
+---
+
+### 27. **lesson_resource** (pivot)
+
+Many-to-many pivot table linking lessons to resources. Allows attaching multiple resources to a lesson.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique pivot identifier |
+| `lesson_id` | bigint unsigned | FOREIGN KEY → lessons(id) ON DELETE CASCADE | The lesson |
+| `resource_id` | bigint unsigned | FOREIGN KEY → resources(id) ON DELETE CASCADE | The resource |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Indexes:**
+- Unique on `(lesson_id, resource_id)` (prevents duplicates)
+
+**Relationships:**
+- Belongs to `Lesson`
+- Belongs to `Resource`
 
 ---
 

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Actions\Student\Lesson;
 
+use App\Enums\LessonCardStatus;
 use App\Models\Student;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 class GetStudentLessonsAction
@@ -13,11 +15,12 @@ class GetStudentLessonsAction
      * Fetch all lessons for a student across all orders.
      *
      * Returns lessons with related order, instructor, calendar item,
-     * lesson payment, and payout data for display.
+     * lesson payment, payout, reflective log, and resource data.
+     * Each lesson includes a computed card_status.
      */
     public function __invoke(Student $student): Collection
     {
-        return $student->orders()
+        $lessons = $student->orders()
             ->with([
                 'lessons' => fn ($query) => $query
                     ->with([
@@ -25,9 +28,11 @@ class GetStudentLessonsAction
                         'calendarItem.calendar:id,date',
                         'lessonPayment:id,lesson_id,amount_pence,status,paid_at',
                         'payout:id,lesson_id,status,amount_pence,stripe_transfer_id,paid_at',
+                        'reflectiveLog:id,lesson_id',
+                        'resources:id,title,resource_type,video_url,file_path,file_name,file_size,mime_type,thumbnail_url',
                     ])
-                    ->orderByDesc('date')
-                    ->orderByDesc('start_time'),
+                    ->orderBy('date')
+                    ->orderBy('start_time'),
                 'package:id,name',
             ])
             ->get()
@@ -50,8 +55,43 @@ class GetStudentLessonsAction
                     'payout_status' => $lesson->payout?->status?->value,
                     'has_payout' => $lesson->payout !== null,
                     'calendar_date' => $lesson->calendarItem?->calendar?->date?->format('Y-m-d'),
+                    'has_reflective_log' => $lesson->reflectiveLog !== null,
+                    'resources_count' => $lesson->resources->count(),
+                    '_date_obj' => $lesson->date,
+                    '_completed_at' => $lesson->completed_at,
                 ];
             }))
+            ->sortBy([
+                ['date', 'asc'],
+                ['start_time', 'asc'],
+            ])
+            ->values();
+
+        $today = Carbon::today();
+        $nextLessonFound = false;
+
+        return $lessons->map(function (array $lesson) use ($today, &$nextLessonFound) {
+            $lessonDate = $lesson['_date_obj'];
+            $isCompleted = $lesson['_completed_at'] !== null;
+            $isPast = $lessonDate && $lessonDate->lt($today);
+            $isToday = $lessonDate && $lessonDate->isToday();
+
+            if ($isCompleted) {
+                $cardStatus = LessonCardStatus::SignedOff->value;
+            } elseif ($isPast) {
+                $cardStatus = LessonCardStatus::NeedsSignOff->value;
+            } elseif (! $nextLessonFound && ($isToday || ($lessonDate && $lessonDate->gt($today)))) {
+                $nextLessonFound = true;
+                $cardStatus = LessonCardStatus::Current->value;
+            } else {
+                $cardStatus = LessonCardStatus::Upcoming->value;
+            }
+
+            unset($lesson['_date_obj'], $lesson['_completed_at']);
+            $lesson['card_status'] = $cardStatus;
+
+            return $lesson;
+        })
             ->sortBy([
                 ['date', 'desc'],
                 ['start_time', 'desc'],
