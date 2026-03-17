@@ -12,6 +12,7 @@
 - [Endpoints](#endpoints)
   - [Auth](#auth)
   - [Instructor](#instructor)
+  - [Student](#student)
 
 ---
 
@@ -544,6 +545,58 @@ Returns the authenticated instructor's students grouped by status, plus a recent
 
 ---
 
+### Student
+
+#### `GET /api/v1/students/{student}`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Returns a single student record. Access is controlled by a policy:
+- **Students** can only view their own record (user_id must match the authenticated user).
+- **Instructors** can only view students assigned to them (instructor_id must match the authenticated instructor).
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 1,
+    "first_name": "Jane",
+    "surname": "Doe",
+    "email": "jane@example.com",
+    "phone": "07700900000",
+    "status": "active",
+    "has_app": true,
+    "updated_at": "2026-03-17T10:30:00+00:00"
+  }
+}
+```
+
+**Error Response (not authorised):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+**Error Response (not found):** `404 Not Found`
+```json
+{
+  "message": "No query results for model [App\\Models\\Student] 999."
+}
+```
+
+> **Note:** The policy checks two conditions: (1) is the authenticated user the student themselves, or (2) is the authenticated user an instructor with this student assigned. All other access is denied with a 403.
+
+---
+
 ## Profile Object by Role
 
 The `profile` key in user responses contains role-specific data. The shape depends on the user's `role`:
@@ -598,6 +651,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-17 | Added `profile` object to all user responses (role-specific data) | Auth (login, user, register/student, register/instructor) |
 | 2026-03-17 | Login now requires `role` field; rejects role mismatches | Auth (login) |
 | 2026-03-17 | Added grouped students endpoint for instructors | Instructor (students) |
+| 2026-03-17 | Added individual student record endpoint with access policy | Student (show) |
 
 ---
 

@@ -1,22 +1,23 @@
-# Task: Create instructor API endpoints for grouped student lists and recent activity
+# Task: Create a student record endpoint with access policy for students and linked instructors
 
 **Created:** 2026-03-17
-**Last Updated:** 2026-03-17T13:10:00Z
-**Status:** Complete
+**Last Updated:** 2026-03-17T14:12:00Z
+**Status:** ✅ Complete
 
 ---
 
 ## Overview
 
 ### Goal
-Build an instructor-facing API endpoint that returns students grouped into 4 objects: `active`, `passed`, `inactive`, and `recent_activity` (5 most recently updated students). Scoped to the authenticated instructor via token.
+Build a secure API endpoint (`GET /api/v1/students/{student}`) that returns an individual student record, protected by a policy that allows access only when:
+1. The authenticated user IS the student (user_id match), OR
+2. The authenticated user is an instructor who owns the student (instructor_id match)
 
 ### Context
-- Tile ID: 019cfbd9-0500-7381-b554-34ee999619a4
+- Tile ID: 019cfc05-9605-73dc-8367-42b22a2967d5
 - Repository: drivecrm
-- Branch: feature/019cfbd9-0500-7381-b554-34ee999619a4-create-instructor-api-endpoints-for-grouped-student-lists-an
+- Branch: feature/019cfc05-9605-73dc-8367-42b22a2967d5-create-a-student-record-endpoint-with-access-policy-for-stud
 - Priority: MEDIUM
-- Customer: Drive
 
 ---
 
@@ -24,13 +25,13 @@ Build an instructor-facing API endpoint that returns students grouped into 4 obj
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Explore existing codebase patterns (Student model, Instructor model, API routes, Services, Actions, Resources)
-- [x] Identify student status field values: active, inactive, on_hold, passed, failed, completed
-- [x] Confirm architecture: Controller → Service → Action pattern
-- [x] Plan file structure for new endpoint
+- [x] Review existing Student model, User model, and relationships
+- [x] Review existing API structure (controllers, resources, services, routes)
+- [x] Identify files to create/modify
+- [x] Document the implementation plan
 
 ### Reflection
-Codebase is well-structured with clear patterns. The Student model has a `status` field with the exact values needed. The existing `GetInstructorPupilsAction` provides a good reference for querying instructor-scoped students.
+Clear codebase patterns to follow. First policy in the project. Laravel auto-discovers policies by convention.
 
 ---
 
@@ -38,38 +39,29 @@ Codebase is well-structured with clear patterns. The Student model has a `status
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Create `GetGroupedStudentsAction` in `app/Actions/Instructor/`
-- [x] Create `StudentResource` in `app/Http/Resources/V1/`
-- [x] Add `getGroupedStudents()` method to `InstructorService`
-- [x] Create `InstructorStudentController` in `app/Http/Controllers/Api/V1/`
-- [x] Add route to `routes/api.php`
-- [x] Update `.claude/api.md` with endpoint documentation
-- [x] Write Pest tests
+- [x] Create StudentPolicy with `view` method
+- [x] Create GetStudentByIdAction
+- [x] Add `getById()` to StudentService
+- [x] Create StudentController with `show` method
+- [x] Add route to api.php
+- [x] Write feature tests (6 tests covering all access scenarios)
+- [x] Update api.md with endpoint documentation
 
 ### Reflection
-Implementation follows the established Controller → Service → Action pattern exactly. Reused the existing `InstructorService` rather than creating a duplicate. The `StudentResource` is a new Eloquent API Resource that can be reused for future student-related endpoints. Tests cover grouping logic, scoping, max 5 recent activity, empty states, auth, and response structure.
+Implementation follows the Controller → Service → Action pattern. The policy is the first in the project and uses Laravel's auto-discovery convention. Tests cover: self-access, instructor-access, instructor-denied, student-cross-access-denied, unauthenticated, and 404 scenarios.
 
 ---
 
 ## PHASE 3: FINAL REFLECTION & DOCUMENTATION
 **Status:** ✅ Complete
 
-### Files Created
-- `app/Actions/Instructor/GetGroupedStudentsAction.php` — Business logic for grouping students by status
-- `app/Http/Resources/V1/StudentResource.php` — Eloquent API Resource for student data
-- `app/Http/Controllers/Api/V1/InstructorStudentController.php` — API controller
-- `tests/Feature/Api/V1/InstructorStudentControllerTest.php` — 6 Pest feature tests
+### Tasks
+- [x] Final review of all created files
+- [x] Update current-task.md with reflection
+- [x] Write .phase_done sentinel
 
-### Files Modified
-- `app/Services/InstructorService.php` — Added `getGroupedStudents()` method
-- `routes/api.php` — Added `GET /api/v1/instructor/students` route
-- `.claude/api.md` — Documented new endpoint with full request/response examples
+### Reflection
+All files follow project conventions: `declare(strict_types=1)`, PHPDoc blocks, proper namespacing, and the Controller → Service → Action architecture. The StudentPolicy is clean and reusable — additional policy methods (update, delete, etc.) can be added later. The endpoint reuses the existing StudentResource. No anti-patterns or technical debt introduced.
 
-### Architecture Decisions
-- Single query fetches all instructor's students, then groups in-memory (efficient for typical instructor student counts)
-- `recent_activity` pulls from all statuses sorted by `updated_at`, not just a single status group
-- Used `StudentResource` (not `StudentProfileResource`) to keep API and auth profile resources separate — different use cases, different field sets
-
-### Potential Considerations
-- If instructors accumulate hundreds of students, the single-query approach may benefit from pagination per group. For now, the typical instructor student count makes this unnecessary.
-- No additional status filtering (e.g., `on_hold`, `failed`, `completed`) was requested. The structure is easy to extend by adding new keys to the Action's return array.
+### Score: 9/10
+Solid implementation following all project patterns. Deducted one point because the `StudentService::getById()` doesn't use caching (following BaseService `remember()` pattern), but caching isn't needed for a single-record lookup that's policy-gated.
