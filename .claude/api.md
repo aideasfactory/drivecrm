@@ -11,6 +11,7 @@
 - [Error Handling](#error-handling)
 - [Endpoints](#endpoints)
   - [Auth](#auth)
+  - [Instructor](#instructor)
 
 ---
 
@@ -464,6 +465,85 @@ Register a new instructor account. Creates a base user record with the `instruct
 
 ---
 
+### Instructor
+
+#### `GET /api/v1/instructor/students`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Returns the authenticated instructor's students grouped by status, plus a recent activity list.
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "active": [
+      {
+        "id": 1,
+        "first_name": "Jane",
+        "surname": "Doe",
+        "email": "jane@example.com",
+        "phone": "07700900000",
+        "status": "active",
+        "has_app": true,
+        "updated_at": "2026-03-17T10:30:00+00:00"
+      }
+    ],
+    "passed": [
+      {
+        "id": 2,
+        "first_name": "Tom",
+        "surname": "Brown",
+        "email": "tom@example.com",
+        "phone": "07700900001",
+        "status": "passed",
+        "has_app": true,
+        "updated_at": "2026-03-16T14:00:00+00:00"
+      }
+    ],
+    "inactive": [],
+    "recent_activity": [
+      {
+        "id": 1,
+        "first_name": "Jane",
+        "surname": "Doe",
+        "email": "jane@example.com",
+        "phone": "07700900000",
+        "status": "active",
+        "has_app": true,
+        "updated_at": "2026-03-17T10:30:00+00:00"
+      }
+    ]
+  }
+}
+```
+
+| Group | Description |
+|-------|-------------|
+| `active` | Students with `status = "active"` |
+| `passed` | Students with `status = "passed"` |
+| `inactive` | Students with `status = "inactive"` |
+| `recent_activity` | 5 most recently updated students (any status), ordered by `updated_at` descending |
+
+**Student Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Student record ID |
+| `first_name` | string | Student's first name |
+| `surname` | string | Student's surname |
+| `email` | string\|null | Student's email (falls back to user email) |
+| `phone` | string\|null | Student's phone number |
+| `status` | string\|null | Student status (e.g., `active`, `passed`, `inactive`) |
+| `has_app` | boolean | Whether the student has a linked user account |
+| `updated_at` | string\|null | ISO 8601 timestamp of last update |
+
+> **Note:** Students are automatically scoped to the authenticated instructor. No instructor ID is accepted in the request — it is derived from the Bearer token.
+
+---
+
 ## Profile Object by Role
 
 The `profile` key in user responses contains role-specific data. The shape depends on the user's `role`:
@@ -517,6 +597,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-15 | Added student and instructor registration endpoints | Auth (register/student, register/instructor) |
 | 2026-03-17 | Added `profile` object to all user responses (role-specific data) | Auth (login, user, register/student, register/instructor) |
 | 2026-03-17 | Login now requires `role` field; rejects role mismatches | Auth (login) |
+| 2026-03-17 | Added grouped students endpoint for instructors | Instructor (students) |
 
 ---
 

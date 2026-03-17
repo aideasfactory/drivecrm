@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\InstructorStudentController;
 use App\Http\Middleware\ResolveApiProfile;
 use Illuminate\Support\Facades\Route;
 
@@ -25,6 +26,11 @@ Route::prefix('v1')->group(function (): void {
         Route::prefix('auth')->group(function (): void {
             Route::post('logout', [AuthController::class, 'logout']);
             Route::get('user', [AuthController::class, 'user']);
+        });
+
+        // Instructor routes
+        Route::prefix('instructor')->group(function (): void {
+            Route::get('students', [InstructorStudentController::class, 'index']);
         });
 
     });

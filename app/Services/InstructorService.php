@@ -17,6 +17,7 @@ use App\Actions\Instructor\GetInstructorCalendarAction;
 use App\Actions\Instructor\GetInstructorLocationsAction;
 use App\Actions\Instructor\GetInstructorPackagesAction;
 use App\Actions\Instructor\GetInstructorPayoutsAction;
+use App\Actions\Instructor\GetGroupedStudentsAction;
 use App\Actions\Instructor\GetInstructorPupilsAction;
 use App\Actions\Instructor\UpdateCalendarItemAction;
 use App\Actions\Shared\LogActivityAction;
@@ -51,6 +52,7 @@ class InstructorService
         protected DeleteRecurringCalendarItemsAction $deleteRecurringCalendarItems,
         protected CreatePupilAction $createPupil,
         protected GetInstructorPayoutsAction $getInstructorPayouts,
+        protected GetGroupedStudentsAction $getGroupedStudents,
         protected GetInstructorPupilsAction $getInstructorPupils,
         protected SendBroadcastMessageAction $sendBroadcastMessage,
         protected LogActivityAction $logActivity
@@ -340,6 +342,16 @@ class InstructorService
     public function removeRecurringCalendarItems(CalendarItem $calendarItem): int
     {
         return ($this->deleteRecurringCalendarItems)($calendarItem);
+    }
+
+    /**
+     * Get instructor's students grouped by status with recent activity.
+     *
+     * @return array{active: Collection, passed: Collection, inactive: Collection, recent_activity: Collection}
+     */
+    public function getGroupedStudents(Instructor $instructor): array
+    {
+        return ($this->getGroupedStudents)($instructor);
     }
 
     /**
