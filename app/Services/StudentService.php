@@ -9,7 +9,7 @@ use App\Actions\Student\GetStudentByIdAction;
 use App\Models\Student;
 use Illuminate\Database\Eloquent\Collection;
 
-class StudentService
+class StudentService extends BaseService
 {
     public function __construct(
         protected GetAllStudentsAction $getAllStudents,

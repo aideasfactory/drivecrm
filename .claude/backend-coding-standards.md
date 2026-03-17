@@ -156,6 +156,7 @@ class GetInstructorPackagesAction
 ```
 
 **2. Services (Orchestration)**
+- 🚨 **MUST extend `App\Services\BaseService`** — this is NON-NEGOTIABLE for ALL Service classes
 - ✅ Inject Actions via constructor
 - ✅ Orchestrate multiple Actions
 - ✅ Handle transactions & caching
@@ -171,7 +172,7 @@ namespace App\Services;
 use App\Actions\Instructor\GetInstructorPackagesAction;
 use App\Actions\Instructor\CreateInstructorAction;
 
-class InstructorService
+class InstructorService extends BaseService
 {
     public function __construct(
         protected GetInstructorPackagesAction $getInstructorPackages,
@@ -219,6 +220,7 @@ class InstructorController extends Controller
 ### 🚨 Pattern Violations
 
 **DON'T:**
+- ❌ **Create a Service class that does NOT extend `BaseService`** — EVERY Service MUST extend `App\Services\BaseService`, no exceptions
 - ❌ Put business logic in Controllers (Web OR API)
 - ❌ Make HTTP calls from Actions
 - ❌ Query models directly in Controllers
@@ -232,10 +234,11 @@ class InstructorController extends Controller
 
 When adding a new feature:
 1. [ ] Create Action in `app/Actions/{Domain}/`
-2. [ ] Add Action to Service constructor
-3. [ ] Create Service method that invokes Action
-4. [ ] Inject Service into Controller
-5. [ ] Controller calls Service method only
+2. [ ] **Service MUST extend `BaseService`** — verify `extends BaseService` is present
+3. [ ] Add Action to Service constructor
+4. [ ] Create Service method that invokes Action
+5. [ ] Inject Service into Controller
+6. [ ] Controller calls Service method only
 
 **Why This Pattern?**
 - ✅ **Reusability**: Actions can be used in Web, API, CLI, Jobs
@@ -346,9 +349,11 @@ When adding a new API endpoint:
 
 **All caching happens at the Service layer.** Actions remain pure (no caching logic). Controllers remain thin (no caching logic). Services orchestrate when to cache and when to invalidate.
 
-#### BaseService
+#### BaseService (NON-NEGOTIABLE)
 
-All Services MUST extend `App\Services\BaseService`, which provides:
+🚨 **ALL Service classes MUST extend `App\Services\BaseService`.** This is enforced at every level — new Services, existing Services, API Services. There are ZERO exceptions. If you create a Service without `extends BaseService`, it is a violation.
+
+`BaseService` provides:
 
 | Method | Purpose |
 |--------|---------|
@@ -400,6 +405,7 @@ public function invalidateStudentCache(Instructor $instructor): void
 
 #### 🚨 Caching Violations
 
+- ❌ **Creating a Service that does not extend `BaseService`** — this is the #1 violation
 - ❌ Caching inside an Action
 - ❌ Caching inside a Controller
 - ❌ Forgetting to invalidate after a write
