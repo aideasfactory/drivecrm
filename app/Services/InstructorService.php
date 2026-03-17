@@ -33,7 +33,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
-class InstructorService
+class InstructorService extends BaseService
 {
     public function __construct(
         protected FetchPostcodeCoordinatesAction $fetchPostcodeCoordinates,
@@ -351,7 +351,19 @@ class InstructorService
      */
     public function getGroupedStudents(Instructor $instructor): array
     {
-        return ($this->getGroupedStudents)($instructor);
+        $key = $this->cacheKey('instructor', $instructor->id, 'grouped_students');
+
+        return $this->remember($key, fn () => ($this->getGroupedStudents)($instructor));
+    }
+
+    /**
+     * Invalidate cached student data for an instructor.
+     */
+    public function invalidateStudentCache(Instructor $instructor): void
+    {
+        $this->invalidate(
+            $this->cacheKey('instructor', $instructor->id, 'grouped_students')
+        );
     }
 
     /**
@@ -397,6 +409,8 @@ class InstructorService
     public function addPupil(Instructor $instructor, array $data): \App\Models\Student
     {
         $student = ($this->createPupil)($instructor, $data);
+
+        $this->invalidateStudentCache($instructor);
 
         ($this->logActivity)(
             $instructor,

@@ -336,10 +336,83 @@ When adding a new API endpoint:
 
 ### Other Backend Standards
 
-- **Caching**: All Service reads must use `BaseService::remember()`. Writes must `invalidate()`.
 - **Models**: Use `app/Models`. Always add `casts()` method.
 - **DB**: Prefer Eloquent relationships over `DB::table`.
 - **API**: Use Eloquent Resources for JSON responses.
+
+---
+
+### 🗄️ Caching Strategy (Service-Level)
+
+**All caching happens at the Service layer.** Actions remain pure (no caching logic). Controllers remain thin (no caching logic). Services orchestrate when to cache and when to invalidate.
+
+#### BaseService
+
+All Services MUST extend `App\Services\BaseService`, which provides:
+
+| Method | Purpose |
+|--------|---------|
+| `remember(string $key, callable $callback, ?int $ttl)` | Cache the result of `$callback`. Returns cached value if it exists, otherwise executes the callback and caches the result. |
+| `invalidate(string\|array $keys)` | Forget one or more cache keys. |
+| `cacheKey(string $prefix, int\|string $id, string $suffix)` | Build a namespaced key like `instructor:42:grouped_students`. |
+
+Default TTL is **10 minutes** (600 seconds). Override `$cacheTtl` on the Service class to change per-service.
+
+#### Pattern: Cache on Read, Invalidate on Write
+
+```php
+// ✅ READ — wrap Action call with remember()
+public function getGroupedStudents(Instructor $instructor): array
+{
+    $key = $this->cacheKey('instructor', $instructor->id, 'grouped_students');
+
+    return $this->remember($key, fn () => ($this->getGroupedStudents)($instructor));
+}
+
+// ✅ WRITE — invalidate after mutation
+public function addPupil(Instructor $instructor, array $data): Student
+{
+    $student = ($this->createPupil)($instructor, $data);
+
+    $this->invalidateStudentCache($instructor);
+
+    return $student;
+}
+
+// ✅ Helper to centralize invalidation for a domain
+public function invalidateStudentCache(Instructor $instructor): void
+{
+    $this->invalidate(
+        $this->cacheKey('instructor', $instructor->id, 'grouped_students')
+    );
+}
+```
+
+#### Rules
+
+1. **Cache reads only** — never cache writes, deletes, or side-effect operations
+2. **Invalidate on any write** that affects the cached data — creates, updates, deletes
+3. **Use `cacheKey()` for consistency** — always namespace keys as `{domain}:{id}:{suffix}`
+4. **Keep Actions cache-free** — Actions contain pure business logic, no `Cache::` calls
+5. **Keep Controllers cache-free** — Controllers delegate to Services, never call `Cache::` directly
+6. **Group invalidation** — if a write affects multiple cached queries, invalidate all related keys in a single helper method (e.g., `invalidateStudentCache()`)
+7. **Don't cache volatile data** — data that changes every request (e.g., real-time counts) should not be cached
+
+#### 🚨 Caching Violations
+
+- ❌ Caching inside an Action
+- ❌ Caching inside a Controller
+- ❌ Forgetting to invalidate after a write
+- ❌ Using raw `Cache::` facade instead of `BaseService` methods
+- ❌ Hardcoding cache keys as plain strings (use `cacheKey()`)
+
+#### 📋 Checklist for Adding Caching
+
+1. [ ] Service extends `BaseService`
+2. [ ] Read method uses `$this->remember()` with a key from `$this->cacheKey()`
+3. [ ] All write methods that affect cached data call `$this->invalidate()`
+4. [ ] Invalidation helper exists to centralize related cache keys
+5. [ ] Actions remain pure — no caching logic
 
 ## 7. Database Structure & Relationships
 **Structure mysql**: → [see DATABASE_SCHEMA.md](database-schema.md)
