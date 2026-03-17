@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\V1\StudentResource;
 use App\Services\StudentService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class StudentController extends Controller
 {
@@ -24,7 +25,7 @@ class StudentController extends Controller
     {
         $student = $this->studentService->getById($id);
 
-        $this->authorize('view', $student);
+        Gate::authorize('view', $student);
 
         return new StudentResource($student);
     }
