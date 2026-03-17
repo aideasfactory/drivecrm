@@ -597,6 +597,168 @@ Returns a single student record. Access is controlled by a policy:
 
 ---
 
+#### `GET /api/v1/students/{student}/lessons`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Returns all lessons for a given student across all their orders. Access is controlled by a policy:
+- **Students** can only view their own lessons (user_id must match the authenticated user).
+- **Instructors** can only view lessons for students assigned to them (instructor_id must match the authenticated instructor).
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "order_id": 1,
+      "instructor_name": "John Smith",
+      "package_name": "10 Hour Package",
+      "date": "2026-03-20",
+      "start_time": "09:00",
+      "end_time": "10:00",
+      "status": "pending",
+      "completed_at": null
+    },
+    {
+      "id": 2,
+      "order_id": 1,
+      "instructor_name": "John Smith",
+      "package_name": "10 Hour Package",
+      "date": "2026-03-18",
+      "start_time": "14:00",
+      "end_time": "15:00",
+      "status": "completed",
+      "completed_at": "2026-03-18T15:05:00.000000Z"
+    }
+  ]
+}
+```
+
+**Lesson List Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Lesson record ID |
+| `order_id` | integer | The order this lesson belongs to |
+| `instructor_name` | string\|null | Instructor's full name |
+| `package_name` | string\|null | Name of the package the lesson is part of |
+| `date` | string\|null | Lesson date (YYYY-MM-DD) |
+| `start_time` | string\|null | Start time (HH:MM) |
+| `end_time` | string\|null | End time (HH:MM) |
+| `status` | string | Lesson status: `pending`, `completed`, or `cancelled` |
+| `completed_at` | string\|null | ISO 8601 timestamp when lesson was completed |
+
+> **Note:** Lessons are sorted by date descending, then start time descending (most recent first). Lessons span all orders for the student.
+
+**Error Response (not authorised):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+**Error Response (not found):** `404 Not Found`
+```json
+{
+  "message": "No query results for model [App\\Models\\Student] 999."
+}
+```
+
+---
+
+#### `GET /api/v1/students/{student}/lessons/{lesson}`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Returns full detail for a single lesson belonging to a student. Access is controlled by the same policy as the lesson list:
+- **Students** can only view their own lessons.
+- **Instructors** can only view lessons for students assigned to them.
+
+The lesson must belong to the student (via one of their orders) — otherwise a 404 is returned.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+| `lesson` | integer | The lesson record ID |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 2,
+    "order_id": 1,
+    "instructor_id": 1,
+    "instructor_name": "John Smith",
+    "package_name": "10 Hour Package",
+    "amount_pence": 3500,
+    "date": "2026-03-18",
+    "start_time": "14:00",
+    "end_time": "15:00",
+    "status": "completed",
+    "completed_at": "2026-03-18T15:05:00.000000Z",
+    "summary": "Good progress on parallel parking. Needs more practice with mirrors.",
+    "payment_status": "paid",
+    "payment_mode": "upfront",
+    "payout_status": "paid",
+    "has_payout": true,
+    "calendar_date": "2026-03-18"
+  }
+}
+```
+
+**Lesson Detail Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Lesson record ID |
+| `order_id` | integer | The order this lesson belongs to |
+| `instructor_id` | integer | The instructor's record ID |
+| `instructor_name` | string\|null | Instructor's full name |
+| `package_name` | string\|null | Name of the package the lesson is part of |
+| `amount_pence` | integer\|null | Lesson cost in pence (e.g., 3500 = £35.00) |
+| `date` | string\|null | Lesson date (YYYY-MM-DD) |
+| `start_time` | string\|null | Start time (HH:MM) |
+| `end_time` | string\|null | End time (HH:MM) |
+| `status` | string | Lesson status: `pending`, `completed`, or `cancelled` |
+| `completed_at` | string\|null | ISO 8601 timestamp when lesson was completed |
+| `summary` | string\|null | Instructor's lesson summary/notes |
+| `payment_status` | string\|null | Payment status: `paid`, `due`, `refunded`, or null |
+| `payment_mode` | string\|null | Package payment mode: `upfront` or `weekly` |
+| `payout_status` | string\|null | Instructor payout status: `pending`, `paid`, `failed`, or null |
+| `has_payout` | boolean | Whether a payout has been created for this lesson |
+| `calendar_date` | string\|null | Calendar date for the lesson slot (YYYY-MM-DD) |
+
+**Error Response (not authorised):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+**Error Response (lesson not found or not owned by student):** `404 Not Found`
+```json
+{
+  "message": "No query results for model [App\\Models\\Lesson] 999."
+}
+```
+
+> **Note:** The lesson must belong to the student via one of their orders. If the lesson exists but belongs to a different student, a 404 is returned (not 403), preventing information leakage.
+
+---
+
 ## Profile Object by Role
 
 The `profile` key in user responses contains role-specific data. The shape depends on the user's `role`:
@@ -652,6 +814,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-17 | Login now requires `role` field; rejects role mismatches | Auth (login) |
 | 2026-03-17 | Added grouped students endpoint for instructors | Instructor (students) |
 | 2026-03-17 | Added individual student record endpoint with access policy | Student (show) |
+| 2026-03-17 | Added student lessons list and lesson detail endpoints with access policy | Student (lessons index, lessons show) |
 
 ---
 

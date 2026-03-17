@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Actions\Shared\LogActivityAction;
+use App\Actions\Student\Lesson\GetStudentLessonDetailAction;
 use App\Actions\Student\Lesson\GetStudentLessonsAction;
 use App\Actions\Student\Lesson\SaveLessonSummaryAction;
 use App\Actions\Student\Lesson\SignOffLessonAction;
@@ -17,10 +18,11 @@ use App\Models\Student;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Mail;
 
-class LessonSignOffService
+class LessonSignOffService extends BaseService
 {
     public function __construct(
         protected GetStudentLessonsAction $getStudentLessons,
+        protected GetStudentLessonDetailAction $getStudentLessonDetail,
         protected SignOffLessonAction $signOffLesson,
         protected SaveLessonSummaryAction $saveLessonSummary,
         protected LogActivityAction $logActivity
@@ -32,6 +34,14 @@ class LessonSignOffService
     public function getStudentLessons(Student $student): Collection
     {
         return ($this->getStudentLessons)($student);
+    }
+
+    /**
+     * Get a single lesson belonging to a student with full relationships.
+     */
+    public function getLessonDetail(Student $student, int $lessonId): Lesson
+    {
+        return ($this->getStudentLessonDetail)($student, $lessonId);
     }
 
     /**

@@ -1,7 +1,7 @@
-# Task: Create a student record endpoint with access policy for students and linked instructors
+# Task: Create Student Lessons API Endpoints
 
 **Created:** 2026-03-17
-**Last Updated:** 2026-03-17T14:12:00Z
+**Last Updated:** 2026-03-17T15:30:00Z
 **Status:** ✅ Complete
 
 ---
@@ -9,15 +9,13 @@
 ## Overview
 
 ### Goal
-Build a secure API endpoint (`GET /api/v1/students/{student}`) that returns an individual student record, protected by a policy that allows access only when:
-1. The authenticated user IS the student (user_id match), OR
-2. The authenticated user is an instructor who owns the student (instructor_id match)
+Build two secure API endpoints for retrieving a student's lessons:
+1. **Lesson List** — `GET /api/v1/students/{student}/lessons` — returns all lessons for a student
+2. **Lesson Detail** — `GET /api/v1/students/{student}/lessons/{lesson}` — returns a single lesson's full detail
 
-### Context
-- Tile ID: 019cfc05-9605-73dc-8367-42b22a2967d5
-- Repository: drivecrm
-- Branch: feature/019cfc05-9605-73dc-8367-42b22a2967d5-create-a-student-record-endpoint-with-access-policy-for-stud
-- Priority: MEDIUM
+Both endpoints are protected by a policy that allows access only when:
+- The authenticated user IS the student (user_id match), OR
+- The authenticated user is an instructor linked to that student (instructor_id match)
 
 ---
 
@@ -25,13 +23,14 @@ Build a secure API endpoint (`GET /api/v1/students/{student}`) that returns an i
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Review existing Student model, User model, and relationships
+- [x] Review existing Lesson model, relationships, and actions
 - [x] Review existing API structure (controllers, resources, services, routes)
+- [x] Review StudentPolicy for reusable authorization pattern
 - [x] Identify files to create/modify
 - [x] Document the implementation plan
 
 ### Reflection
-Clear codebase patterns to follow. First policy in the project. Laravel auto-discovers policies by convention.
+Clear codebase patterns. GetStudentLessonsAction already existed for the list endpoint. StudentPolicy provided the exact authorization pattern to replicate.
 
 ---
 
@@ -39,29 +38,51 @@ Clear codebase patterns to follow. First policy in the project. Laravel auto-dis
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Create StudentPolicy with `view` method
-- [x] Create GetStudentByIdAction
-- [x] Add `getById()` to StudentService
-- [x] Create StudentController with `show` method
-- [x] Add route to api.php
-- [x] Write feature tests (6 tests covering all access scenarios)
-- [x] Update api.md with endpoint documentation
+- [x] Fix `LessonSignOffService` to extend `BaseService`
+- [x] Create `GetStudentLessonDetailAction` in `app/Actions/Student/Lesson/`
+- [x] Add `getLessonDetail()` method to `LessonSignOffService`
+- [x] Create `LessonPolicy` with `viewAny` and `view` methods
+- [x] Create `LessonResource` in `app/Http/Resources/V1/`
+- [x] Create `LessonDetailResource` in `app/Http/Resources/V1/`
+- [x] Create `LessonCollection` in `app/Http/Resources/V1/`
+- [x] Create `StudentLessonController` with `index` and `show` methods
+- [x] Add routes to `routes/api.php`
+- [x] Update `.claude/api.md` with both endpoints
 
 ### Reflection
-Implementation follows the Controller → Service → Action pattern. The policy is the first in the project and uses Laravel's auto-discovery convention. Tests cover: self-access, instructor-access, instructor-denied, student-cross-access-denied, unauthenticated, and 404 scenarios.
+All files follow the Controller → Service → Action pattern. The existing `GetStudentLessonsAction` was reused for the list endpoint without any changes. A new `GetStudentLessonDetailAction` was created for the detail endpoint that scopes the lesson query to the student's orders (preventing cross-student access at the query level). The `LessonPolicy` mirrors `StudentPolicy`'s pattern with a shared private helper method. Fixed `LessonSignOffService` to extend `BaseService` (was a pre-existing violation).
 
 ---
 
-## PHASE 3: FINAL REFLECTION & DOCUMENTATION
+## PHASE 3: FINAL REVIEW & DOCUMENTATION
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Final review of all created files
-- [x] Update current-task.md with reflection
+- [x] Verify all files follow project conventions (strict_types, PHPDoc, namespacing)
+- [x] Verify LessonSignOffService extends BaseService
+- [x] Verify api.md is complete and accurate
+- [x] Update current-task.md with final reflection
 - [x] Write .phase_done sentinel
 
+### Files Created
+| File | Purpose |
+|------|---------|
+| `app/Actions/Student/Lesson/GetStudentLessonDetailAction.php` | Fetch single lesson scoped to student |
+| `app/Policies/LessonPolicy.php` | Authorization: student-self or linked-instructor |
+| `app/Http/Resources/V1/LessonResource.php` | JSON serialization for lesson list items |
+| `app/Http/Resources/V1/LessonDetailResource.php` | JSON serialization for lesson detail |
+| `app/Http/Resources/V1/LessonCollection.php` | Collection resource wrapping LessonResource |
+| `app/Http/Controllers/Api/V1/StudentLessonController.php` | API controller with index and show |
+
+### Files Modified
+| File | Change |
+|------|--------|
+| `app/Services/LessonSignOffService.php` | Fixed: extends BaseService; added getLessonDetail() method |
+| `routes/api.php` | Added 2 lesson routes nested under student |
+| `.claude/api.md` | Documented both endpoints with full request/response examples |
+
 ### Reflection
-All files follow project conventions: `declare(strict_types=1)`, PHPDoc blocks, proper namespacing, and the Controller → Service → Action architecture. The StudentPolicy is clean and reusable — additional policy methods (update, delete, etc.) can be added later. The endpoint reuses the existing StudentResource. No anti-patterns or technical debt introduced.
+Clean implementation with no anti-patterns. The lesson detail query is doubly secure: the policy checks user-student/instructor-student relationship, and the query itself scopes lessons through the student's orders (preventing any cross-student access even if the policy were bypassed). No technical debt introduced. The BaseService fix on LessonSignOffService actually reduces existing debt.
 
 ### Score: 9/10
-Solid implementation following all project patterns. Deducted one point because the `StudentService::getById()` doesn't use caching (following BaseService `remember()` pattern), but caching isn't needed for a single-record lookup that's policy-gated.
+Solid implementation reusing existing actions and following all project patterns. Deducted one point because the lesson list endpoint returns the flat array structure from GetStudentLessonsAction through the LessonResource (using array access `$this['key']` rather than model properties) — this works but is slightly less type-safe than a model-based resource. However, rewriting the existing action would be unnecessary scope.
