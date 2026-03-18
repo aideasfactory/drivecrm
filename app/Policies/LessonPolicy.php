@@ -33,6 +33,16 @@ class LessonPolicy
     }
 
     /**
+     * Determine whether the user (instructor) can sign off a lesson for the given student.
+     *
+     * Only the instructor assigned to the student may sign off their lessons.
+     */
+    public function signOff(User $user, Student $student): bool
+    {
+        return $user->isInstructor() && $student->instructor_id === $user->instructor?->id;
+    }
+
+    /**
      * Check if the user can access the student's lessons.
      */
     private function canAccessStudentLessons(User $user, Student $student): bool

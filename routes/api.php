@@ -39,6 +39,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('students/{student}', [StudentController::class, 'show']);
         Route::get('students/{student}/lessons', [StudentLessonController::class, 'index']);
         Route::get('students/{student}/lessons/{lesson}', [StudentLessonController::class, 'show']);
+        Route::post('students/{student}/lessons/{lesson}/sign-off', [StudentLessonController::class, 'signOff']);
 
     });
 

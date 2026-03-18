@@ -864,6 +864,85 @@ The lesson must belong to the student (via one of their orders) — otherwise a 
 
 ---
 
+#### `POST /api/v1/students/{student}/lessons/{lesson}/sign-off`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Signs off a lesson as completed. This triggers the full sign-off workflow:
+1. Saves the instructor's lesson summary
+2. Marks the lesson as completed and updates the calendar
+3. Creates a payout and Stripe transfer to the instructor
+4. Checks if all lessons in the order are complete (marks order as completed if so)
+5. Logs activity for both student and instructor
+6. Sends a feedback request email to the student
+7. Dispatches AI resource recommendations based on the lesson summary
+
+**Access control:** Only the instructor assigned to the student can sign off their lessons. Students cannot sign off lessons.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+| `lesson` | integer | The lesson record ID |
+
+**Request Body:**
+```json
+{
+  "summary": "Great lesson covering parallel parking and hill starts. Student showed good progress with mirrors."
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `summary` | string | Yes | Instructor's lesson summary/notes (max 5000 chars) |
+
+**Success Response:** `200 OK`
+```json
+{
+  "message": "Lesson sign-off is being processed."
+}
+```
+
+> **Note:** The sign-off is processed asynchronously via a queued job. The response confirms the job was dispatched, not that the sign-off is complete. The lesson status, payout, and notifications will be updated in the background.
+
+**Error Response (not authorised — student or wrong instructor):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+**Error Response (lesson not found for student):** `404 Not Found`
+```json
+{
+  "message": "Lesson not found for this student."
+}
+```
+
+**Error Response (lesson already completed):** `422 Unprocessable Entity`
+```json
+{
+  "message": "This lesson has already been completed."
+}
+```
+
+**Error Response (validation — missing summary):** `422 Unprocessable Entity`
+```json
+{
+  "message": "The summary field is required.",
+  "errors": {
+    "summary": [
+      "The summary field is required."
+    ]
+  }
+}
+```
+
+> **Note:** The lesson must belong to the student via one of their orders and must be in `pending` status. The instructor must have completed Stripe onboarding with payouts enabled for the payout transfer to succeed (this is validated within the async job).
+
+---
+
 ## Profile Object by Role
 
 The `profile` key in user responses contains role-specific data. The shape depends on the user's `role`:
@@ -923,6 +1002,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-17 | Added card_status, has_reflective_log, resources_count, payment_status to lesson list | Student (lessons index) |
 | 2026-03-17 | Added card_status, reflective_log, resources, has_reflective_log to lesson detail | Student (lessons show) |
 | 2026-03-17 | Fixed authorize bug in StudentLessonController (Gate::authorize) | Student (lessons index, lessons show) |
+| 2026-03-18 | Added lesson sign-off endpoint for instructors (full workflow: payout, emails, AI recommendations) | Student (lessons sign-off) |
 
 ---
 

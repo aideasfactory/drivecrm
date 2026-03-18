@@ -1,27 +1,32 @@
-# Task: Expand Lessons API — Card Statuses, Reflective Logs, Resources
+# Task: Expose the full lesson sign-off workflow through an API endpoint for app use
 
-**Created:** 2026-03-17
-**Last Updated:** 2026-03-17T16:30:00Z
-**Status:** 🔄 In Progress
+**Created:** 2026-03-18
+**Last Updated:** 2026-03-18T15:15:00Z
+**Status:** ✅ Complete
 
 ---
 
 ## Overview
 
 ### Goal
-Expand the Lessons API with:
-1. **Computed card statuses** — green (signed off), red (needs sign-off), orange (current/next), blue (upcoming)
-2. **Reflective Log** relationship — lessons require a reflective log for sign-off; past lessons without one are red
-3. **Resources** relationship — many-to-many between lessons and resources
-4. **Fix authorize bug** in StudentLessonController (`$this->authorize()` → `Gate::authorize()`)
+Build an API endpoint that exposes the full lesson sign-off workflow for mobile app use, matching the admin-area behaviour exactly.
+
+### Context
+- Tile ID: 019d0111-f0a9-73cb-bafa-35f685d267d7
+- Repository: drivecrm
+- Branch: feature/019d0111-f0a9-73cb-bafa-35f685d267d7-expose-the-full-lesson-sign-off-workflow-through-an-api-endp
+- Priority: MEDIUM
 
 ---
 
 ## PHASE 1: PLANNING
 **Status:** ✅ Complete
 
+### Analysis
+The admin sign-off flow in `PupilController::signOffLesson()` dispatches `ProcessLessonSignOffJob` which calls `LessonSignOffService::signOffLesson()`. The service and all actions are already transport-agnostic — no refactoring needed.
+
 ### Reflection
-Clear plan. Authorize bug confirmed — Laravel 12's base Controller has no AuthorizesRequests trait.
+Clean architecture made this straightforward. Only the API HTTP layer was needed.
 
 ---
 
@@ -29,58 +34,36 @@ Clear plan. Authorize bug confirmed — Laravel 12's base Controller has no Auth
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Fix authorize bug in StudentLessonController → Gate::authorize()
-- [x] Create reflective_logs migration
-- [x] Create lesson_resource pivot migration
-- [x] Create ReflectiveLog model
-- [x] Add reflectiveLog + resources relationships to Lesson model
-- [x] Add lessons relationship to Resource model
-- [x] Create LessonCardStatus enum
-- [x] Create ComputeLessonCardStatusAction
-- [x] Update GetStudentLessonsAction with card_status, has_reflective_log, resources_count
-- [x] Update GetStudentLessonDetailAction to eager-load reflectiveLog and resources
-- [x] Update LessonSignOffService to compute card_status in getLessonDetail
-- [x] Create ReflectiveLogResource
-- [x] Create LessonResourceResource
-- [x] Update LessonResource with card_status, has_reflective_log, resources_count, payment_status
-- [x] Update LessonDetailResource with card_status, reflective_log, resources, has_reflective_log
-- [x] Update .claude/api.md
-- [x] Update .claude/database-schema.md
-
-### Files Created
-| File | Purpose |
-|------|---------|
-| `database/migrations/2026_03_17_170923_create_reflective_logs_table.php` | Reflective logs table |
-| `database/migrations/2026_03_17_170923_create_lesson_resource_table.php` | Lesson-Resource pivot table |
-| `app/Models/ReflectiveLog.php` | ReflectiveLog model |
-| `app/Enums/LessonCardStatus.php` | Card status enum (signed_off, needs_sign_off, current, upcoming) |
-| `app/Actions/Student/Lesson/ComputeLessonCardStatusAction.php` | Compute card status for single lesson |
-| `app/Http/Resources/V1/ReflectiveLogResource.php` | API resource for reflective log |
-| `app/Http/Resources/V1/LessonResourceResource.php` | API resource for lesson resources |
-
-### Files Modified
-| File | Change |
-|------|--------|
-| `app/Http/Controllers/Api/V1/StudentLessonController.php` | Fixed: `$this->authorize()` → `Gate::authorize()` |
-| `app/Models/Lesson.php` | Added reflectiveLog() and resources() relationships |
-| `app/Models/Resource.php` | Added lessons() relationship |
-| `app/Actions/Student/Lesson/GetStudentLessonsAction.php` | Card status computation, reflective log & resources data |
-| `app/Actions/Student/Lesson/GetStudentLessonDetailAction.php` | Eager-loads reflectiveLog and resources |
-| `app/Services/LessonSignOffService.php` | Injects ComputeLessonCardStatusAction, computes card_status in getLessonDetail |
-| `app/Http/Resources/V1/LessonResource.php` | Added card_status, has_reflective_log, resources_count, payment_status |
-| `app/Http/Resources/V1/LessonDetailResource.php` | Added card_status, reflective_log, resources, has_reflective_log |
-| `.claude/api.md` | Updated lesson list and detail docs, added card status docs |
-| `.claude/database-schema.md` | Added reflective_logs and lesson_resource tables |
+- [x] Add `signOff` policy method to `LessonPolicy`
+- [x] Create `SignOffLessonRequest` form request in `Api/V1/`
+- [x] Add `signOff` method to `StudentLessonController`
+- [x] Add `POST` route to `routes/api.php`
+- [x] Write Pest feature tests (8 tests covering auth, policy, validation, happy path)
+- [x] Update `api.md` with endpoint documentation and changelog
 
 ### Reflection
-All files follow Controller → Service → Action pattern. Card status is computed at the Action level for list (efficient, single pass) and via a dedicated Action for detail (requires knowing the student's next lesson). The authorize bug fix is minimal — just swapping to Gate facade which works without the trait.
+Implementation was clean with no surprises. Reused existing `LessonSignOffService`, `ProcessLessonSignOffJob`, and `LessonPolicy`. The API endpoint mirrors the admin flow exactly — same job dispatch, same service call, same side effects.
 
 ---
 
-## PHASE 3: FINAL REVIEW & DOCUMENTATION
-**Status:** 🔄 In Progress
+## PHASE 3: FINAL REFLECTION & DOCUMENTATION
+**Status:** ✅ Complete
 
-### Tasks
-- [ ] Verify all files follow project conventions
-- [ ] Final check on api.md and database-schema.md
-- [ ] Write .phase_done sentinel
+### Summary
+Added `POST /api/v1/students/{student}/lessons/{lesson}/sign-off` endpoint. Instructor-only via policy. Validates summary, checks lesson ownership/status, then dispatches the same `ProcessLessonSignOffJob` used by the admin area. Full workflow preserved: payout, activity logging, feedback email, AI recommendations.
+
+### Files Changed
+- `app/Policies/LessonPolicy.php` — Added `signOff()` policy method
+- `app/Http/Requests/Api/V1/SignOffLessonRequest.php` — New FormRequest
+- `app/Http/Controllers/Api/V1/StudentLessonController.php` — Added `signOff()` method
+- `routes/api.php` — Added POST route
+- `tests/Feature/Api/V1/StudentLessonSignOffTest.php` — 8 Pest tests
+- `.claude/api.md` — Endpoint documentation + changelog
+
+### No Anti-Patterns or Overhead
+- No new services or actions created — fully reused existing ones
+- No refactoring was needed — architecture was already transport-agnostic
+- Standard patterns followed throughout (Controller → Service → Action, FormRequest, Policy, Eloquent Resource not needed since response is a simple message)
+
+### Score: 9/10
+Clean implementation with full reuse of existing architecture. Point deducted only because the endpoint returns a simple JSON message rather than a resource (appropriate here since the work is async, but worth noting).
