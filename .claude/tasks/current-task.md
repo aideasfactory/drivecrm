@@ -1,19 +1,20 @@
-# Task: Expand Lessons API — Card Statuses, Reflective Logs, Resources
+# Task: Create an authenticated instructor profile update endpoint with self-only access policy
 
-**Created:** 2026-03-17
-**Last Updated:** 2026-03-17T16:30:00Z
-**Status:** 🔄 In Progress
+**Created:** 2026-03-18
+**Last Updated:** 2026-03-18T20:45:00Z
+**Status:** Complete
 
 ---
 
 ## Overview
 
 ### Goal
-Expand the Lessons API with:
-1. **Computed card statuses** — green (signed off), red (needs sign-off), orange (current/next), blue (upcoming)
-2. **Reflective Log** relationship — lessons require a reflective log for sign-off; past lessons without one are red
-3. **Resources** relationship — many-to-many between lessons and resources
-4. **Fix authorize bug** in StudentLessonController (`$this->authorize()` → `Gate::authorize()`)
+Build an authenticated API endpoint for instructors to update their own profile in Drive.
+
+### Context
+- Tile ID: 019d01c0-ad41-71c6-81fb-b03c18b1f150
+- Repository: drivecrm
+- Branch: feature/019d01c0-ad41-71c6-81fb-b03c18b1f150-create-an-authenticated-instructor-profile-update-endpoint-w
 
 ---
 
@@ -21,7 +22,7 @@ Expand the Lessons API with:
 **Status:** ✅ Complete
 
 ### Reflection
-Clear plan. Authorize bug confirmed — Laravel 12's base Controller has no AuthorizesRequests trait.
+Explored existing patterns across controllers, services, actions, policies, resources, and routes. The codebase follows a clean Controller -> Service -> Action architecture with Sanctum auth and ResolveApiProfile middleware. No existing InstructorPolicy existed, so one was needed.
 
 ---
 
@@ -29,58 +30,29 @@ Clear plan. Authorize bug confirmed — Laravel 12's base Controller has no Auth
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Fix authorize bug in StudentLessonController → Gate::authorize()
-- [x] Create reflective_logs migration
-- [x] Create lesson_resource pivot migration
-- [x] Create ReflectiveLog model
-- [x] Add reflectiveLog + resources relationships to Lesson model
-- [x] Add lessons relationship to Resource model
-- [x] Create LessonCardStatus enum
-- [x] Create ComputeLessonCardStatusAction
-- [x] Update GetStudentLessonsAction with card_status, has_reflective_log, resources_count
-- [x] Update GetStudentLessonDetailAction to eager-load reflectiveLog and resources
-- [x] Update LessonSignOffService to compute card_status in getLessonDetail
-- [x] Create ReflectiveLogResource
-- [x] Create LessonResourceResource
-- [x] Update LessonResource with card_status, has_reflective_log, resources_count, payment_status
-- [x] Update LessonDetailResource with card_status, reflective_log, resources, has_reflective_log
-- [x] Update .claude/api.md
-- [x] Update .claude/database-schema.md
-
-### Files Created
-| File | Purpose |
-|------|---------|
-| `database/migrations/2026_03_17_170923_create_reflective_logs_table.php` | Reflective logs table |
-| `database/migrations/2026_03_17_170923_create_lesson_resource_table.php` | Lesson-Resource pivot table |
-| `app/Models/ReflectiveLog.php` | ReflectiveLog model |
-| `app/Enums/LessonCardStatus.php` | Card status enum (signed_off, needs_sign_off, current, upcoming) |
-| `app/Actions/Student/Lesson/ComputeLessonCardStatusAction.php` | Compute card status for single lesson |
-| `app/Http/Resources/V1/ReflectiveLogResource.php` | API resource for reflective log |
-| `app/Http/Resources/V1/LessonResourceResource.php` | API resource for lesson resources |
-
-### Files Modified
-| File | Change |
-|------|--------|
-| `app/Http/Controllers/Api/V1/StudentLessonController.php` | Fixed: `$this->authorize()` → `Gate::authorize()` |
-| `app/Models/Lesson.php` | Added reflectiveLog() and resources() relationships |
-| `app/Models/Resource.php` | Added lessons() relationship |
-| `app/Actions/Student/Lesson/GetStudentLessonsAction.php` | Card status computation, reflective log & resources data |
-| `app/Actions/Student/Lesson/GetStudentLessonDetailAction.php` | Eager-loads reflectiveLog and resources |
-| `app/Services/LessonSignOffService.php` | Injects ComputeLessonCardStatusAction, computes card_status in getLessonDetail |
-| `app/Http/Resources/V1/LessonResource.php` | Added card_status, has_reflective_log, resources_count, payment_status |
-| `app/Http/Resources/V1/LessonDetailResource.php` | Added card_status, reflective_log, resources, has_reflective_log |
-| `.claude/api.md` | Updated lesson list and detail docs, added card status docs |
-| `.claude/database-schema.md` | Added reflective_logs and lesson_resource tables |
+- ✓ Create InstructorPolicy with update method (self-only check)
+- ✓ Create UpdateInstructorProfileAction
+- ✓ Add updateProfile method to InstructorService
+- ✓ Create UpdateInstructorProfileRequest FormRequest
+- ✓ Create InstructorProfileController API controller
+- ✓ Add PUT route to api.php
+- ✓ Update api.md documentation
+- ✓ Write Pest feature test (7 test cases)
 
 ### Reflection
-All files follow Controller → Service → Action pattern. Card status is computed at the Action level for list (efficient, single pass) and via a dedicated Action for detail (requires knowing the student's next lesson). The authorize bug fix is minimal — just swapping to Gate facade which works without the trait.
+Implementation followed existing patterns exactly. The endpoint derives the instructor from the Bearer token (never from URL/request), which aligns with the API Identity Resolution rules. The InstructorPolicy ensures self-only access. All fields are optional in the request to support partial updates.
 
 ---
 
-## PHASE 3: FINAL REVIEW & DOCUMENTATION
-**Status:** 🔄 In Progress
+## PHASE 3: FINAL REFLECTION & DOCUMENTATION
+**Status:** ✅ Complete
 
-### Tasks
-- [ ] Verify all files follow project conventions
-- [ ] Final check on api.md and database-schema.md
-- [ ] Write .phase_done sentinel
+### Summary
+Built a complete PUT /api/v1/instructor/profile endpoint following the Controller -> Service -> Action pattern. The InstructorPolicy enforces that only the owning instructor can update their profile. The endpoint supports partial updates to bio, transmission_type, address, and postcode. Documented in api.md with changelog entry. Feature tests cover: full update, partial update, student rejection, auth required, validation errors, and response structure.
+
+### Potential Considerations
+- If postcode changes should trigger geocoding (lat/lng update), that logic would need to be added to the Action. Currently it only updates the postcode string.
+- Additional fields can be added to the FormRequest rules as the instructor profile grows.
+
+### Score: 8/10
+Clean implementation following all existing patterns. Deducted for not handling postcode geocoding on update (which may or may not be desired).

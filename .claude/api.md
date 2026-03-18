@@ -468,6 +468,71 @@ Register a new instructor account. Creates a base user record with the `instruct
 
 ### Instructor
 
+#### `PUT /api/v1/instructor/profile`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Update the authenticated instructor's own profile. The instructor is derived from the Bearer token — no instructor ID is accepted in the request.
+
+**Request Body:**
+```json
+{
+  "bio": "Experienced driving instructor with 10 years of teaching.",
+  "transmission_type": "both",
+  "address": "10 High Street",
+  "postcode": "TS7 0AB"
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `bio` | string | No | Instructor biography (max 1000 chars) |
+| `transmission_type` | string | No | One of: `manual`, `automatic`, `both` |
+| `address` | string | No | Business address (max 255 chars) |
+| `postcode` | string | No | Business postcode (max 10 chars) |
+
+> **Note:** All fields are optional. Only fields included in the request body will be updated. Fields not included remain unchanged.
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 1,
+    "bio": "Experienced driving instructor with 10 years of teaching.",
+    "transmission_type": "both",
+    "status": "active",
+    "address": "10 High Street",
+    "postcode": "TS7 0AB",
+    "onboarding_complete": false,
+    "charges_enabled": false,
+    "payouts_enabled": false
+  }
+}
+```
+
+**Error Response (not an instructor):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+**Error Response (validation):** `422 Unprocessable Entity`
+```json
+{
+  "message": "The transmission type field must be one of: manual, automatic, both.",
+  "errors": {
+    "transmission_type": [
+      "The transmission type field must be one of: manual, automatic, both."
+    ]
+  }
+}
+```
+
+> **Security:** An instructor can only update their own profile. The policy ensures the authenticated user's instructor record matches the target — there is no way to update another instructor's profile via this endpoint.
+
+---
+
 #### `GET /api/v1/instructor/students`
 
 **Auth required:** Yes (Bearer token — instructor only)
@@ -923,6 +988,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-17 | Added card_status, has_reflective_log, resources_count, payment_status to lesson list | Student (lessons index) |
 | 2026-03-17 | Added card_status, reflective_log, resources, has_reflective_log to lesson detail | Student (lessons show) |
 | 2026-03-17 | Fixed authorize bug in StudentLessonController (Gate::authorize) | Student (lessons index, lessons show) |
+| 2026-03-18 | Added instructor profile update endpoint with self-only access policy | Instructor (profile update) |
 
 ---
 
