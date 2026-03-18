@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\InstructorStudentController;
+use App\Http\Controllers\Api\V1\StudentChecklistItemController;
 use App\Http\Controllers\Api\V1\StudentController;
 use App\Http\Controllers\Api\V1\StudentLessonController;
 use App\Http\Middleware\ResolveApiProfile;
@@ -39,6 +40,10 @@ Route::prefix('v1')->group(function (): void {
         Route::get('students/{student}', [StudentController::class, 'show']);
         Route::get('students/{student}/lessons', [StudentLessonController::class, 'index']);
         Route::get('students/{student}/lessons/{lesson}', [StudentLessonController::class, 'show']);
+
+        // Student checklist item routes
+        Route::get('students/{student}/checklist-items', [StudentChecklistItemController::class, 'index']);
+        Route::put('students/{student}/checklist-items/{checklistItem}', [StudentChecklistItemController::class, 'update']);
 
     });
 
