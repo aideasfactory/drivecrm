@@ -25,8 +25,7 @@ All building blocks already existed. The GetStudentPickupPointsAction, StudentPi
 
 ---
 
-## PHASE 2: IMPLEMENTATION
-**Status:** ✅ Complete
+## PHASE 1: PLANNING — Complete
 
 ### Tasks
 - [x] Create StudentPickupPointResource in app/Http/Resources/V1/
