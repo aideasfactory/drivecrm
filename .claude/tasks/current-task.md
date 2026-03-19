@@ -1,86 +1,71 @@
-# Task: Expand Lessons API — Card Statuses, Reflective Logs, Resources
+# Task: Create an instructor day-view lessons endpoint with related student calendar item data
 
-**Created:** 2026-03-17
-**Last Updated:** 2026-03-17T16:30:00Z
-**Status:** 🔄 In Progress
+**Created:** 2026-03-19
+**Last Updated:** 2026-03-19T07:45:00Z
+**Status:** Complete
 
 ---
 
 ## Overview
 
 ### Goal
-Expand the Lessons API with:
-1. **Computed card statuses** — green (signed off), red (needs sign-off), orange (current/next), blue (upcoming)
-2. **Reflective Log** relationship — lessons require a reflective log for sign-off; past lessons without one are red
-3. **Resources** relationship — many-to-many between lessons and resources
-4. **Fix authorize bug** in StudentLessonController (`$this->authorize()` → `Gate::authorize()`)
+Create an instructor-scoped API endpoint that returns the authenticated instructor's lessons for a specific day, including student and calendar item data.
+
+### Context
+- Tile ID: 019d01c7-d203-705b-a040-3b481d5f88d5
+- Repository: drivecrm
+- Branch: feature/019d01c7-d203-705b-a040-3b481d5f88d5-create-an-instructor-day-view-lessons-endpoint-with-related-
+- Priority: MEDIUM
 
 ---
 
 ## PHASE 1: PLANNING
-**Status:** ✅ Complete
+**Status:** Complete
+
+### Tasks
+- [x] Read existing codebase patterns
+- [x] Identify files to create/modify
+- [x] Plan data structure and response format
 
 ### Reflection
-Clear plan. Authorize bug confirmed — Laravel 12's base Controller has no AuthorizesRequests trait.
+Explored the full codebase. Clear Controller -> Service -> Action patterns. Instructor scoping from token via ResolveApiProfile middleware.
 
 ---
 
 ## PHASE 2: IMPLEMENTATION
-**Status:** ✅ Complete
+**Status:** Complete
 
 ### Tasks
-- [x] Fix authorize bug in StudentLessonController → Gate::authorize()
-- [x] Create reflective_logs migration
-- [x] Create lesson_resource pivot migration
-- [x] Create ReflectiveLog model
-- [x] Add reflectiveLog + resources relationships to Lesson model
-- [x] Add lessons relationship to Resource model
-- [x] Create LessonCardStatus enum
-- [x] Create ComputeLessonCardStatusAction
-- [x] Update GetStudentLessonsAction with card_status, has_reflective_log, resources_count
-- [x] Update GetStudentLessonDetailAction to eager-load reflectiveLog and resources
-- [x] Update LessonSignOffService to compute card_status in getLessonDetail
-- [x] Create ReflectiveLogResource
-- [x] Create LessonResourceResource
-- [x] Update LessonResource with card_status, has_reflective_log, resources_count, payment_status
-- [x] Update LessonDetailResource with card_status, reflective_log, resources, has_reflective_log
-- [x] Update .claude/api.md
-- [x] Update .claude/database-schema.md
-
-### Files Created
-| File | Purpose |
-|------|---------|
-| `database/migrations/2026_03_17_170923_create_reflective_logs_table.php` | Reflective logs table |
-| `database/migrations/2026_03_17_170923_create_lesson_resource_table.php` | Lesson-Resource pivot table |
-| `app/Models/ReflectiveLog.php` | ReflectiveLog model |
-| `app/Enums/LessonCardStatus.php` | Card status enum (signed_off, needs_sign_off, current, upcoming) |
-| `app/Actions/Student/Lesson/ComputeLessonCardStatusAction.php` | Compute card status for single lesson |
-| `app/Http/Resources/V1/ReflectiveLogResource.php` | API resource for reflective log |
-| `app/Http/Resources/V1/LessonResourceResource.php` | API resource for lesson resources |
-
-### Files Modified
-| File | Change |
-|------|--------|
-| `app/Http/Controllers/Api/V1/StudentLessonController.php` | Fixed: `$this->authorize()` → `Gate::authorize()` |
-| `app/Models/Lesson.php` | Added reflectiveLog() and resources() relationships |
-| `app/Models/Resource.php` | Added lessons() relationship |
-| `app/Actions/Student/Lesson/GetStudentLessonsAction.php` | Card status computation, reflective log & resources data |
-| `app/Actions/Student/Lesson/GetStudentLessonDetailAction.php` | Eager-loads reflectiveLog and resources |
-| `app/Services/LessonSignOffService.php` | Injects ComputeLessonCardStatusAction, computes card_status in getLessonDetail |
-| `app/Http/Resources/V1/LessonResource.php` | Added card_status, has_reflective_log, resources_count, payment_status |
-| `app/Http/Resources/V1/LessonDetailResource.php` | Added card_status, reflective_log, resources, has_reflective_log |
-| `.claude/api.md` | Updated lesson list and detail docs, added card status docs |
-| `.claude/database-schema.md` | Added reflective_logs and lesson_resource tables |
+- [x] Create GetInstructorDayLessonsAction
+- [x] Add getDayLessons to InstructorService
+- [x] Create InstructorDayLessonResource
+- [x] Create InstructorDayLessonCollection
+- [x] Create InstructorLessonController
+- [x] Add route to api.php
+- [x] Write feature test (10 test cases)
+- [x] Update api.md with full endpoint documentation
 
 ### Reflection
-All files follow Controller → Service → Action pattern. Card status is computed at the Action level for list (efficient, single pass) and via a dedicated Action for detail (requires knowing the student's next lesson). The authorize bug fix is minimal — just swapping to Gate facade which works without the trait.
+Implementation follows existing patterns exactly. Used Instructor model's lessons() relationship scoped by date. Eager loading prevents N+1 queries. Resource includes student data, calendar item, payment/payout status.
 
 ---
 
-## PHASE 3: FINAL REVIEW & DOCUMENTATION
-**Status:** 🔄 In Progress
+## PHASE 3: FINAL REFLECTION & DOCUMENTATION
+**Status:** Complete
 
-### Tasks
-- [ ] Verify all files follow project conventions
-- [ ] Final check on api.md and database-schema.md
-- [ ] Write .phase_done sentinel
+### What was built
+- GET /api/v1/instructor/lessons/{date} endpoint
+- Returns chronologically ordered lessons with student, calendar item, and payment data
+- Properly scoped to authenticated instructor via token
+- Full API documentation in api.md
+- 10 feature tests covering all scenarios
+
+### Architecture quality
+- Follows Controller -> Service -> Action pattern exactly
+- Action is pure business logic, no HTTP concerns
+- Service extends BaseService, orchestrates Action
+- Resource transforms data consistently with existing resources
+- No N+1 queries (eager loading used throughout)
+
+### Score: 9/10
+Solid implementation following all project patterns. Clean separation of concerns. Comprehensive test coverage. One minor consideration: no caching was added since day lessons are date-specific and volatile.

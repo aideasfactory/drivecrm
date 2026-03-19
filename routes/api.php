@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\InstructorLessonController;
 use App\Http\Controllers\Api\V1\InstructorStudentController;
 use App\Http\Controllers\Api\V1\StudentController;
 use App\Http\Controllers\Api\V1\StudentLessonController;
@@ -33,6 +34,7 @@ Route::prefix('v1')->group(function (): void {
         // Instructor routes
         Route::prefix('instructor')->group(function (): void {
             Route::get('students', [InstructorStudentController::class, 'index']);
+            Route::get('lessons/{date}', [InstructorLessonController::class, 'index']);
         });
 
         // Student routes
