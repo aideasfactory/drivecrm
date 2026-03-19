@@ -13,6 +13,7 @@
   - [Auth](#auth)
   - [Instructor](#instructor)
   - [Student](#student)
+    - [Notes](#get-apiv1studentsstudentnotes)
   - [Messages](#messages)
 
 ---
@@ -930,6 +931,13 @@ The lesson must belong to the student (via one of their orders) — otherwise a 
 
 ---
 
+#### `GET /api/v1/students/{student}/notes`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Returns all notes for a given student, ordered by most recent first. Access is controlled by a policy:
+- **Students** can only view their own notes.
+- **Instructors** can only view notes for students assigned to them.
 #### `GET /api/v1/students/{student}/pickup-points`
 
 **Auth required:** Yes (Bearer token — student or instructor)
@@ -951,6 +959,29 @@ Returns all pickup points for a given student, ordered by default first then alp
 {
   "data": [
     {
+      "id": 2,
+      "note": "Needs more practice with parallel parking.",
+      "created_at": "2026-03-18T14:30:00+00:00",
+      "updated_at": "2026-03-18T14:30:00+00:00"
+    },
+    {
+      "id": 1,
+      "note": "Good progress on roundabouts today.",
+      "created_at": "2026-03-17T10:00:00+00:00",
+      "updated_at": "2026-03-17T10:00:00+00:00"
+    }
+  ]
+}
+```
+
+**Note Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Note record ID |
+| `note` | string | The note content |
+| `created_at` | string | ISO 8601 timestamp when the note was created |
+| `updated_at` | string | ISO 8601 timestamp when the note was last updated |
       "id": 1,
       "label": "Home",
       "address": "1 High Street, Middlesbrough",
@@ -1003,6 +1034,64 @@ Returns all pickup points for a given student, ordered by default first then alp
 ```json
 {
   "message": "No query results for model [App\\Models\\Student] 999."
+}
+```
+
+---
+
+#### `POST /api/v1/students/{student}/notes`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Creates a new note on a student record. Access is controlled by the same policy as the notes list:
+- **Students** can only add notes to their own record.
+- **Instructors** can only add notes to students assigned to them.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+
+**Request Body:**
+```json
+{
+  "note": "Great lesson today - nailed the bay parking."
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `note` | string | Yes | Note content (max 5000 characters) |
+
+**Success Response:** `201 Created`
+```json
+{
+  "data": {
+    "id": 3,
+    "note": "Great lesson today - nailed the bay parking.",
+    "created_at": "2026-03-18T15:00:00+00:00",
+    "updated_at": "2026-03-18T15:00:00+00:00"
+  }
+}
+```
+
+**Error Response (validation):** `422 Unprocessable Entity`
+```json
+{
+  "message": "The note field is required.",
+  "errors": {
+    "note": [
+      "The note field is required."
+    ]
+  }
+}
+```
+
+**Error Response (not authorised):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
 }
 ```
 
@@ -1141,6 +1230,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-17 | Added card_status, has_reflective_log, resources_count, payment_status to lesson list | Student (lessons index) |
 | 2026-03-17 | Added card_status, reflective_log, resources, has_reflective_log to lesson detail | Student (lessons show) |
 | 2026-03-17 | Fixed authorize bug in StudentLessonController (Gate::authorize) | Student (lessons index, lessons show) |
+| 2026-03-18 | Added student notes list and create endpoints with student-or-linked-instructor access policy | Student (notes index, notes store) |
 | 2026-03-18 | Added student pickup points endpoint with student-or-linked-instructor access policy | Student (pickup-points index) |
 | 2026-03-18 | Added instructor profile update endpoint with self-only access policy | Instructor (profile update) |
 | 2026-03-18 | Added messaging API endpoints (conversations list, conversation detail, send message) | Messages (conversations, conversations/{user}, POST messages) |

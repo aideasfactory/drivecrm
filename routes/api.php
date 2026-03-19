@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\InstructorStudentController;
 use App\Http\Controllers\Api\V1\MessageController;
 use App\Http\Controllers\Api\V1\StudentController;
 use App\Http\Controllers\Api\V1\StudentLessonController;
+use App\Http\Controllers\Api\V1\StudentNoteController;
 use App\Http\Controllers\Api\V1\StudentPickupPointController;
 use App\Http\Middleware\ResolveApiProfile;
 use Illuminate\Support\Facades\Route;
@@ -51,6 +52,10 @@ Route::prefix('v1')->group(function (): void {
             Route::get('conversations/{user}', [MessageController::class, 'show']);
             Route::post('/', [MessageController::class, 'store']);
         });
+
+        // Student notes
+        Route::get('students/{student}/notes', [StudentNoteController::class, 'index']);
+        Route::post('students/{student}/notes', [StudentNoteController::class, 'store']);
 
     });
 
