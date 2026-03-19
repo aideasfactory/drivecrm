@@ -597,6 +597,185 @@ Returns a single student record. Access is controlled by a policy:
 
 ---
 
+#### `POST /api/v1/students`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Creates a new student record assigned to the authenticated instructor.
+
+**Request Body:**
+```json
+{
+  "first_name": "Jane",
+  "surname": "Doe",
+  "email": "jane@example.com",
+  "phone": "07700900000",
+  "contact_first_name": "Mary",
+  "contact_surname": "Doe",
+  "contact_email": "mary@example.com",
+  "contact_phone": "07700900001",
+  "owns_account": true
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `first_name` | string | Yes | Student's first name (max 255) |
+| `surname` | string | Yes | Student's surname (max 255) |
+| `email` | string | No | Student's email address |
+| `phone` | string | No | Student's phone number (max 50) |
+| `contact_first_name` | string | No | Booker's first name (if different person) |
+| `contact_surname` | string | No | Booker's surname |
+| `contact_email` | string | No | Booker's email |
+| `contact_phone` | string | No | Booker's phone |
+| `owns_account` | boolean | No | Whether the student owns the account (default: true) |
+
+**Success Response:** `201 Created`
+```json
+{
+  "data": {
+    "id": 3,
+    "first_name": "Jane",
+    "surname": "Doe",
+    "email": "jane@example.com",
+    "phone": "07700900000",
+    "status": "active",
+    "has_app": false,
+    "updated_at": "2026-03-19T10:00:00+00:00"
+  }
+}
+```
+
+**Error Response (not instructor):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+**Error Response (validation):** `422 Unprocessable Entity`
+```json
+{
+  "message": "The first name field is required.",
+  "errors": {
+    "first_name": ["The first name field is required."],
+    "surname": ["The surname field is required."]
+  }
+}
+```
+
+> **Note:** The student is automatically assigned to the authenticated instructor. No instructor ID is accepted in the request — it is derived from the Bearer token. The student is created with `status = "active"` by default.
+
+---
+
+#### `PUT /api/v1/students/{student}`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Updates an existing student record. Access is controlled by a policy:
+- **Students** can only update their own record (user_id must match the authenticated user).
+- **Instructors** can only update students assigned to them (instructor_id must match the authenticated instructor).
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+
+**Request Body (all fields optional):**
+```json
+{
+  "first_name": "Janet",
+  "surname": "Smith",
+  "email": "janet@example.com",
+  "phone": "07700900099"
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `first_name` | string | No | Student's first name (max 255) |
+| `surname` | string | No | Student's surname (max 255) |
+| `email` | string | No | Student's email address |
+| `phone` | string | No | Student's phone number (max 50) |
+| `contact_first_name` | string | No | Booker's first name |
+| `contact_surname` | string | No | Booker's surname |
+| `contact_email` | string | No | Booker's email |
+| `contact_phone` | string | No | Booker's phone |
+| `owns_account` | boolean | No | Whether the student owns the account |
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 1,
+    "first_name": "Janet",
+    "surname": "Smith",
+    "email": "janet@example.com",
+    "phone": "07700900099",
+    "status": "active",
+    "has_app": true,
+    "updated_at": "2026-03-19T10:05:00+00:00"
+  }
+}
+```
+
+**Error Response (not authorised):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+**Error Response (not found):** `404 Not Found`
+```json
+{
+  "message": "No query results for model [App\Models\Student] 999."
+}
+```
+
+> **Note:** Only send the fields you want to update. The policy enforces the same student-or-linked-instructor access as the view endpoint.
+
+---
+
+#### `DELETE /api/v1/students/{student}`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Deletes a student record. Access is controlled by a policy:
+- **Students** can only delete their own record (user_id must match the authenticated user).
+- **Instructors** can only delete students assigned to them (instructor_id must match the authenticated instructor).
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+
+**Request Body:** None
+
+**Success Response:** `204 No Content`
+
+*(Empty response body)*
+
+**Error Response (not authorised):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+**Error Response (not found):** `404 Not Found`
+```json
+{
+  "message": "No query results for model [App\Models\Student] 999."
+}
+```
+
+> **Note:** This permanently deletes the student record. Cascading deletes will remove related orders, lessons, and other dependent records as defined by the database foreign key constraints.
+
+---
+
 #### `GET /api/v1/students/{student}/lessons`
 
 **Auth required:** Yes (Bearer token — student or instructor)
@@ -923,6 +1102,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-17 | Added card_status, has_reflective_log, resources_count, payment_status to lesson list | Student (lessons index) |
 | 2026-03-17 | Added card_status, reflective_log, resources, has_reflective_log to lesson detail | Student (lessons show) |
 | 2026-03-17 | Fixed authorize bug in StudentLessonController (Gate::authorize) | Student (lessons index, lessons show) |
+| 2026-03-19 | Added student create, update, and delete endpoints with policy enforcement | Student (store, update, destroy) |
 
 ---
 

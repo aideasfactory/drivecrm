@@ -36,7 +36,10 @@ Route::prefix('v1')->group(function (): void {
         });
 
         // Student routes
+        Route::post('students', [StudentController::class, 'store']);
         Route::get('students/{student}', [StudentController::class, 'show']);
+        Route::put('students/{student}', [StudentController::class, 'update']);
+        Route::delete('students/{student}', [StudentController::class, 'destroy']);
         Route::get('students/{student}/lessons', [StudentLessonController::class, 'index']);
         Route::get('students/{student}/lessons/{lesson}', [StudentLessonController::class, 'show']);
 

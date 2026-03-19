@@ -1,19 +1,20 @@
-# Task: Expand Lessons API — Card Statuses, Reflective Logs, Resources
+# Task: Create student create, update, and delete API endpoints with student-or-linked-instructor policy enforcement
 
-**Created:** 2026-03-17
-**Last Updated:** 2026-03-17T16:30:00Z
-**Status:** 🔄 In Progress
+**Created:** 2026-03-19
+**Last Updated:** 2026-03-19T09:45:00Z
+**Status:** ✅ Complete
 
 ---
 
 ## Overview
 
 ### Goal
-Expand the Lessons API with:
-1. **Computed card statuses** — green (signed off), red (needs sign-off), orange (current/next), blue (upcoming)
-2. **Reflective Log** relationship — lessons require a reflective log for sign-off; past lessons without one are red
-3. **Resources** relationship — many-to-many between lessons and resources
-4. **Fix authorize bug** in StudentLessonController (`$this->authorize()` → `Gate::authorize()`)
+Build API endpoints for creating, updating, and deleting student records with student-or-linked-instructor policy enforcement.
+
+### Context
+- Tile ID: 019d01ca-ec12-7391-aa9c-a4af8e7eaa2d
+- Repository: drivecrm
+- Branch: feature/019d01ca-ec12-7391-aa9c-a4af8e7eaa2d-create-student-create-update-and-delete-api-endpoints-with-s
 
 ---
 
@@ -21,7 +22,7 @@ Expand the Lessons API with:
 **Status:** ✅ Complete
 
 ### Reflection
-Clear plan. Authorize bug confirmed — Laravel 12's base Controller has no AuthorizesRequests trait.
+Explored all existing patterns thoroughly. Codebase follows strict Controller → Service → Action with BaseService, FormRequests, Eloquent Resources, and Gate-based StudentPolicy.
 
 ---
 
@@ -29,58 +30,31 @@ Clear plan. Authorize bug confirmed — Laravel 12's base Controller has no Auth
 **Status:** ✅ Complete
 
 ### Tasks
-- [x] Fix authorize bug in StudentLessonController → Gate::authorize()
-- [x] Create reflective_logs migration
-- [x] Create lesson_resource pivot migration
-- [x] Create ReflectiveLog model
-- [x] Add reflectiveLog + resources relationships to Lesson model
-- [x] Add lessons relationship to Resource model
-- [x] Create LessonCardStatus enum
-- [x] Create ComputeLessonCardStatusAction
-- [x] Update GetStudentLessonsAction with card_status, has_reflective_log, resources_count
-- [x] Update GetStudentLessonDetailAction to eager-load reflectiveLog and resources
-- [x] Update LessonSignOffService to compute card_status in getLessonDetail
-- [x] Create ReflectiveLogResource
-- [x] Create LessonResourceResource
-- [x] Update LessonResource with card_status, has_reflective_log, resources_count, payment_status
-- [x] Update LessonDetailResource with card_status, reflective_log, resources, has_reflective_log
-- [x] Update .claude/api.md
-- [x] Update .claude/database-schema.md
-
-### Files Created
-| File | Purpose |
-|------|---------|
-| `database/migrations/2026_03_17_170923_create_reflective_logs_table.php` | Reflective logs table |
-| `database/migrations/2026_03_17_170923_create_lesson_resource_table.php` | Lesson-Resource pivot table |
-| `app/Models/ReflectiveLog.php` | ReflectiveLog model |
-| `app/Enums/LessonCardStatus.php` | Card status enum (signed_off, needs_sign_off, current, upcoming) |
-| `app/Actions/Student/Lesson/ComputeLessonCardStatusAction.php` | Compute card status for single lesson |
-| `app/Http/Resources/V1/ReflectiveLogResource.php` | API resource for reflective log |
-| `app/Http/Resources/V1/LessonResourceResource.php` | API resource for lesson resources |
-
-### Files Modified
-| File | Change |
-|------|--------|
-| `app/Http/Controllers/Api/V1/StudentLessonController.php` | Fixed: `$this->authorize()` → `Gate::authorize()` |
-| `app/Models/Lesson.php` | Added reflectiveLog() and resources() relationships |
-| `app/Models/Resource.php` | Added lessons() relationship |
-| `app/Actions/Student/Lesson/GetStudentLessonsAction.php` | Card status computation, reflective log & resources data |
-| `app/Actions/Student/Lesson/GetStudentLessonDetailAction.php` | Eager-loads reflectiveLog and resources |
-| `app/Services/LessonSignOffService.php` | Injects ComputeLessonCardStatusAction, computes card_status in getLessonDetail |
-| `app/Http/Resources/V1/LessonResource.php` | Added card_status, has_reflective_log, resources_count, payment_status |
-| `app/Http/Resources/V1/LessonDetailResource.php` | Added card_status, reflective_log, resources, has_reflective_log |
-| `.claude/api.md` | Updated lesson list and detail docs, added card status docs |
-| `.claude/database-schema.md` | Added reflective_logs and lesson_resource tables |
+- [x] Create CreateStudentAction
+- [x] Create UpdateStudentAction
+- [x] Create DeleteStudentAction
+- [x] Add create/update/delete methods to StudentPolicy
+- [x] Add create/update/delete methods to StudentService
+- [x] Create StoreStudentRequest FormRequest
+- [x] Create UpdateStudentRequest FormRequest
+- [x] Add store/update/destroy to StudentController
+- [x] Add routes to api.php
+- [x] Update api.md documentation
+- [x] Write Pest tests (17 tests across create/update/delete)
 
 ### Reflection
-All files follow Controller → Service → Action pattern. Card status is computed at the Action level for list (efficient, single pass) and via a dedicated Action for detail (requires knowing the student's next lesson). The authorize bug fix is minimal — just swapping to Gate facade which works without the trait.
+All endpoints follow existing patterns exactly. Policy uses shared helper method for DRY authorization. Service invalidates instructor grouped_students cache on mutations. Tests cover all permission boundaries.
 
 ---
 
-## PHASE 3: FINAL REVIEW & DOCUMENTATION
-**Status:** 🔄 In Progress
+## PHASE 3: FINAL REFLECTION & DOCUMENTATION
+**Status:** ✅ Complete
 
-### Tasks
-- [ ] Verify all files follow project conventions
-- [ ] Final check on api.md and database-schema.md
-- [ ] Write .phase_done sentinel
+### Reflection
+- All three endpoints (POST, PUT, DELETE) follow the existing Controller → Service → Action architecture
+- StudentPolicy uses a shared `isStudentOrLinkedInstructor` helper to keep authorization DRY
+- Cache invalidation for instructor grouped_students is handled on create, update, and delete
+- api.md fully documented with request/response examples
+- 17 Pest tests written covering success, auth, validation, and permission boundaries
+- No anti-patterns or technical debt introduced
+- Score: 9/10 — clean implementation following all existing conventions
