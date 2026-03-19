@@ -13,6 +13,7 @@
   - [Auth](#auth)
   - [Instructor](#instructor)
   - [Student](#student)
+  - [Messages](#messages)
 
 ---
 
@@ -895,6 +896,80 @@ The `profile` key in user responses contains role-specific data. The shape depen
 
 ---
 
+### Messages
+
+#### `GET /api/v1/messages/conversations`
+
+**Auth required:** Yes (Bearer token — instructor or student)
+
+Returns all conversations for the authenticated user, grouped by the other participant. Each conversation includes the latest message preview. Ordered by most recent message first.
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+
+**Conversation Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `user.id` | integer | The other participant's user ID |
+| `user.name` | string | The other participant's name |
+| `latest_message.id` | integer | Message ID |
+| `latest_message.message` | string | Message content |
+| `latest_message.is_own` | boolean | Whether the authenticated user sent this message |
+| `latest_message.created_at` | string | ISO 8601 timestamp |
+
+> **Note:** Conversations are automatically scoped to the authenticated user.
+
+---
+
+#### `GET /api/v1/messages/conversations/{user}`
+
+**Auth required:** Yes (Bearer token — instructor or student)
+
+Returns paginated messages between the authenticated user and the specified user. Messages are ordered newest first for pagination (30 per page). Authorization requires an instructor-student relationship between the two users.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `user` | integer | The other participant's user ID |
+
+**Message Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Message ID |
+| `sender_id` | integer | Sender's user ID |
+| `sender_name` | string\|null | Sender's name |
+| `recipient_id` | integer | Recipient's user ID |
+| `message` | string | Message content |
+| `is_own` | boolean | Whether the authenticated user sent this message |
+| `created_at` | string | ISO 8601 timestamp |
+
+**Error Response (not authorised):** `403 Forbidden`
+
+---
+
+#### `POST /api/v1/messages`
+
+**Auth required:** Yes (Bearer token — instructor or student)
+
+Send a new message to another user. Authorization ensures only instructor-student pairs can message each other.
+
+**Request Body:**
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `recipient_id` | integer | Yes | The recipient's user ID. Must exist in the users table. |
+| `message` | string | Yes | Message content (max 5000 characters) |
+
+**Success Response:** `201 Created` — returns the created message object (same fields as Message Object above).
+
+**Error Responses:** `403 Forbidden` (no instructor-student relationship), `422 Unprocessable Entity` (validation failed).
+
+---
+
 ## Appendix: User Roles
 
 The system has three user roles. The mobile app will likely serve **instructors** and **students**.
@@ -923,6 +998,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-17 | Added card_status, has_reflective_log, resources_count, payment_status to lesson list | Student (lessons index) |
 | 2026-03-17 | Added card_status, reflective_log, resources, has_reflective_log to lesson detail | Student (lessons show) |
 | 2026-03-17 | Fixed authorize bug in StudentLessonController (Gate::authorize) | Student (lessons index, lessons show) |
+| 2026-03-18 | Added messaging API endpoints (conversations list, conversation detail, send message) | Messages (conversations, conversations/{user}, POST messages) |
 
 ---
 
