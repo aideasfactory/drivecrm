@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\InstructorProfileController;
 use App\Http\Controllers\Api\V1\InstructorStudentController;
+use App\Http\Controllers\Api\V1\MessageController;
 use App\Http\Controllers\Api\V1\StudentController;
 use App\Http\Controllers\Api\V1\StudentLessonController;
 use App\Http\Middleware\ResolveApiProfile;
@@ -41,6 +42,13 @@ Route::prefix('v1')->group(function (): void {
         Route::get('students/{student}', [StudentController::class, 'show']);
         Route::get('students/{student}/lessons', [StudentLessonController::class, 'index']);
         Route::get('students/{student}/lessons/{lesson}', [StudentLessonController::class, 'show']);
+
+        // Messaging routes
+        Route::prefix('messages')->group(function (): void {
+            Route::get('conversations', [MessageController::class, 'conversations']);
+            Route::get('conversations/{user}', [MessageController::class, 'show']);
+            Route::post('/', [MessageController::class, 'store']);
+        });
 
     });
 
