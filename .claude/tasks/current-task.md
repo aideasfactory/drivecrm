@@ -27,6 +27,9 @@ Create an instructor-scoped API endpoint that returns the authenticated instruct
 - [x] Identify files to create/modify
 - [x] Plan data structure and response format
 
+### Tasks
+- [x] Review existing patterns and identify files to create/modify
+
 ### Reflection
 Explored the full codebase. Clear Controller -> Service -> Action patterns. Instructor scoping from token via ResolveApiProfile middleware.
 
