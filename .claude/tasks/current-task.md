@@ -1,20 +1,19 @@
-# Task: Create an authenticated instructor profile update endpoint with self-only access policy
+# Task: Create a student pickup points endpoint with student-or-linked-instructor access policy
 
 **Created:** 2026-03-18
-**Last Updated:** 2026-03-18T20:45:00Z
-**Status:** Complete
+**Last Updated:** 2026-03-18T20:50:00Z
+**Status:** ✅ Complete
 
 ---
 
 ## Overview
 
 ### Goal
-Build an authenticated API endpoint for instructors to update their own profile in Drive.
+Create an API endpoint that returns a student's pickup points, protected by the existing student-or-linked-instructor access policy.
 
 ### Context
-- Tile ID: 019d01c0-ad41-71c6-81fb-b03c18b1f150
-- Repository: drivecrm
-- Branch: feature/019d01c0-ad41-71c6-81fb-b03c18b1f150-create-an-authenticated-instructor-profile-update-endpoint-w
+- Tile ID: 019d01c1-8b6c-7095-a1ce-8ac03348b282
+- Branch: feature/019d01c1-8b6c-7095-a1ce-8ac03348b282-create-a-student-pickup-points-endpoint-with-student-or-link
 
 ---
 
@@ -22,24 +21,22 @@ Build an authenticated API endpoint for instructors to update their own profile 
 **Status:** ✅ Complete
 
 ### Reflection
-Explored existing patterns across controllers, services, actions, policies, resources, and routes. The codebase follows a clean Controller -> Service -> Action architecture with Sanctum auth and ResolveApiProfile middleware. No existing InstructorPolicy existed, so one was needed.
+All building blocks already existed. The GetStudentPickupPointsAction, StudentPickupPoint model, StudentPolicy, and StudentService were already in place.
 
 ---
 
 ## PHASE 1: PLANNING — Complete
 
 ### Tasks
-- ✓ Create InstructorPolicy with update method (self-only check)
-- ✓ Create UpdateInstructorProfileAction
-- ✓ Add updateProfile method to InstructorService
-- ✓ Create UpdateInstructorProfileRequest FormRequest
-- ✓ Create InstructorProfileController API controller
-- ✓ Add PUT route to api.php
-- ✓ Update api.md documentation
-- ✓ Write Pest feature test (7 test cases)
+- [x] Create StudentPickupPointResource in app/Http/Resources/V1/
+- [x] Add getPickupPoints to StudentService (inject GetStudentPickupPointsAction)
+- [x] Create StudentPickupPointController in app/Http/Controllers/Api/V1/
+- [x] Add route to api.php
+- [x] Update api.md
+- [x] Write Pest feature test (8 tests)
 
 ### Reflection
-Implementation followed existing patterns exactly. The endpoint derives the instructor from the Bearer token (never from URL/request), which aligns with the API Identity Resolution rules. The InstructorPolicy ensures self-only access. All fields are optional in the request to support partial updates.
+Implementation was straightforward — reused existing action, policy, and service patterns exactly as other student endpoints. No new migrations needed. The controller follows the same Gate::authorize pattern as StudentController and StudentLessonController.
 
 ---
 
@@ -47,11 +44,15 @@ Implementation followed existing patterns exactly. The endpoint derives the inst
 **Status:** ✅ Complete
 
 ### Summary
-Built a complete PUT /api/v1/instructor/profile endpoint following the Controller -> Service -> Action pattern. The InstructorPolicy enforces that only the owning instructor can update their profile. The endpoint supports partial updates to bio, transmission_type, address, and postcode. Documented in api.md with changelog entry. Feature tests cover: full update, partial update, student rejection, auth required, validation errors, and response structure.
+Created GET /api/v1/students/{student}/pickup-points endpoint that returns a student's pickup points ordered by default first then by label. Protected by the existing StudentPolicy@view which allows access only to the student themselves or their linked instructor. All code follows existing patterns exactly. 8 Pest feature tests written covering all access scenarios.
 
-### Potential Considerations
-- If postcode changes should trigger geocoding (lat/lng update), that logic would need to be added to the Action. Currently it only updates the postcode string.
-- Additional fields can be added to the FormRequest rules as the instructor profile grows.
+### Files Changed
+- app/Http/Resources/V1/StudentPickupPointResource.php (new)
+- app/Http/Controllers/Api/V1/StudentPickupPointController.php (new)
+- app/Services/StudentService.php (modified - added getPickupPoints method)
+- routes/api.php (modified - added pickup-points route)
+- .claude/api.md (modified - documented endpoint + changelog)
+- tests/Feature/Api/V1/StudentPickupPointControllerTest.php (new - 8 tests)
 
-### Score: 8/10
-Clean implementation following all existing patterns. Deducted for not handling postcode geocoding on update (which may or may not be desired).
+### Score: 9/10
+Clean implementation reusing all existing patterns. No anti-patterns introduced. No over-engineering. The only reason it's not 10/10 is that no caching was added at the service level (not needed for this read-only, low-frequency endpoint).

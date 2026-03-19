@@ -930,6 +930,84 @@ The lesson must belong to the student (via one of their orders) — otherwise a 
 
 ---
 
+#### `GET /api/v1/students/{student}/pickup-points`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Returns all pickup points for a given student, ordered by default first then alphabetically by label. Access is controlled by a policy:
+- **Students** can only view their own pickup points (user_id must match the authenticated user).
+- **Instructors** can only view pickup points for students assigned to them (instructor_id must match the authenticated instructor).
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "label": "Home",
+      "address": "1 High Street, Middlesbrough",
+      "postcode": "TS1 1AA",
+      "latitude": "54.57623000",
+      "longitude": "-1.23456000",
+      "is_default": true,
+      "created_at": "2026-03-10T09:00:00+00:00",
+      "updated_at": "2026-03-10T09:00:00+00:00"
+    },
+    {
+      "id": 2,
+      "label": "School",
+      "address": "50 Borough Road, Middlesbrough",
+      "postcode": "TS1 2HJ",
+      "latitude": "54.57500000",
+      "longitude": "-1.23000000",
+      "is_default": false,
+      "created_at": "2026-03-12T14:30:00+00:00",
+      "updated_at": "2026-03-12T14:30:00+00:00"
+    }
+  ]
+}
+```
+
+**Pickup Point Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Pickup point record ID |
+| `label` | string | Human-readable label (e.g., "Home", "School") |
+| `address` | string\|null | Full address |
+| `postcode` | string\|null | UK postcode |
+| `latitude` | string\|null | Latitude coordinate (decimal, 8 places) |
+| `longitude` | string\|null | Longitude coordinate (decimal, 8 places) |
+| `is_default` | boolean | Whether this is the student's default pickup point |
+| `created_at` | string\|null | ISO 8601 timestamp |
+| `updated_at` | string\|null | ISO 8601 timestamp |
+
+> **Note:** Pickup points are ordered with the default point first, then alphabetically by label. A student may have zero or many pickup points. If no pickup points exist, `data` will be an empty array.
+
+**Error Response (not authorised):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+**Error Response (not found):** `404 Not Found`
+```json
+{
+  "message": "No query results for model [App\\Models\\Student] 999."
+}
+```
+
+---
+
 ## Profile Object by Role
 
 The `profile` key in user responses contains role-specific data. The shape depends on the user's `role`:
@@ -1063,6 +1141,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-17 | Added card_status, has_reflective_log, resources_count, payment_status to lesson list | Student (lessons index) |
 | 2026-03-17 | Added card_status, reflective_log, resources, has_reflective_log to lesson detail | Student (lessons show) |
 | 2026-03-17 | Fixed authorize bug in StudentLessonController (Gate::authorize) | Student (lessons index, lessons show) |
+| 2026-03-18 | Added student pickup points endpoint with student-or-linked-instructor access policy | Student (pickup-points index) |
 | 2026-03-18 | Added instructor profile update endpoint with self-only access policy | Instructor (profile update) |
 | 2026-03-18 | Added messaging API endpoints (conversations list, conversation detail, send message) | Messages (conversations, conversations/{user}, POST messages) |
 
