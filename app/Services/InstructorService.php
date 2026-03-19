@@ -15,6 +15,8 @@ use App\Actions\Instructor\DeleteInstructorLocationAction;
 use App\Actions\Instructor\DeleteRecurringCalendarItemsAction;
 use App\Actions\Instructor\GetGroupedStudentsAction;
 use App\Actions\Instructor\GetInstructorCalendarAction;
+use App\Actions\Instructor\GetInstructorDayLessonsAction;
+use App\Actions\Instructor\UpdateInstructorProfileAction;
 use App\Actions\Instructor\GetInstructorLocationsAction;
 use App\Actions\Instructor\GetInstructorPackagesAction;
 use App\Actions\Instructor\GetInstructorPayoutsAction;
@@ -52,10 +54,12 @@ class InstructorService extends BaseService
         protected DeleteRecurringCalendarItemsAction $deleteRecurringCalendarItems,
         protected CreatePupilAction $createPupil,
         protected GetInstructorPayoutsAction $getInstructorPayouts,
+        protected GetInstructorDayLessonsAction $getInstructorDayLessons,
         protected GetGroupedStudentsAction $getGroupedStudents,
         protected GetInstructorPupilsAction $getInstructorPupils,
         protected SendBroadcastMessageAction $sendBroadcastMessage,
-        protected LogActivityAction $logActivity
+        protected LogActivityAction $logActivity,
+        protected UpdateInstructorProfileAction $updateInstructorProfile
     ) {}
 
     /**
@@ -357,6 +361,16 @@ class InstructorService extends BaseService
     }
 
     /**
+     * Get the instructor's lessons for a specific date.
+     *
+     * @return Collection Lessons with student, calendar item, and payment data
+     */
+    public function getDayLessons(Instructor $instructor, string $date): Collection
+    {
+        return ($this->getInstructorDayLessons)($instructor, $date);
+    }
+
+    /**
      * Invalidate cached student data for an instructor.
      */
     public function invalidateStudentCache(Instructor $instructor): void
@@ -430,6 +444,16 @@ class InstructorService extends BaseService
     public function getPayouts(Instructor $instructor): Collection
     {
         return ($this->getInstructorPayouts)($instructor);
+    }
+
+    /**
+     * Update an instructor's profile with the given data.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function updateProfile(Instructor $instructor, array $data): Instructor
+    {
+        return ($this->updateInstructorProfile)($instructor, $data);
     }
 
     /**

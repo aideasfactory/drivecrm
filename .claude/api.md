@@ -13,6 +13,8 @@
   - [Auth](#auth)
   - [Instructor](#instructor)
   - [Student](#student)
+    - [Notes](#get-apiv1studentsstudentnotes)
+  - [Messages](#messages)
 
 ---
 
@@ -468,6 +470,71 @@ Register a new instructor account. Creates a base user record with the `instruct
 
 ### Instructor
 
+#### `PUT /api/v1/instructor/profile`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Update the authenticated instructor's own profile. The instructor is derived from the Bearer token — no instructor ID is accepted in the request.
+
+**Request Body:**
+```json
+{
+  "bio": "Experienced driving instructor with 10 years of teaching.",
+  "transmission_type": "both",
+  "address": "10 High Street",
+  "postcode": "TS7 0AB"
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `bio` | string | No | Instructor biography (max 1000 chars) |
+| `transmission_type` | string | No | One of: `manual`, `automatic`, `both` |
+| `address` | string | No | Business address (max 255 chars) |
+| `postcode` | string | No | Business postcode (max 10 chars) |
+
+> **Note:** All fields are optional. Only fields included in the request body will be updated. Fields not included remain unchanged.
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 1,
+    "bio": "Experienced driving instructor with 10 years of teaching.",
+    "transmission_type": "both",
+    "status": "active",
+    "address": "10 High Street",
+    "postcode": "TS7 0AB",
+    "onboarding_complete": false,
+    "charges_enabled": false,
+    "payouts_enabled": false
+  }
+}
+```
+
+**Error Response (not an instructor):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+**Error Response (validation):** `422 Unprocessable Entity`
+```json
+{
+  "message": "The transmission type field must be one of: manual, automatic, both.",
+  "errors": {
+    "transmission_type": [
+      "The transmission type field must be one of: manual, automatic, both."
+    ]
+  }
+}
+```
+
+> **Security:** An instructor can only update their own profile. The policy ensures the authenticated user's instructor record matches the target — there is no way to update another instructor's profile via this endpoint.
+
+---
+
 #### `GET /api/v1/instructor/students`
 
 **Auth required:** Yes (Bearer token — instructor only)
@@ -542,6 +609,123 @@ Returns the authenticated instructor's students grouped by status, plus a recent
 | `updated_at` | string\|null | ISO 8601 timestamp of last update |
 
 > **Note:** Students are automatically scoped to the authenticated instructor. No instructor ID is accepted in the request — it is derived from the Bearer token.
+
+---
+
+#### `GET /api/v1/instructor/lessons/{date}`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Returns the authenticated instructor's lessons for a specific date, ordered by start time. Each lesson includes the student details, calendar item data, payment/payout status, and resource counts — designed for a day-view screen in the mobile app.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `date` | string | Date in `YYYY-MM-DD` format (e.g., `2026-03-20`) |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "order_id": 1,
+      "date": "2026-03-20",
+      "start_time": "09:00",
+      "end_time": "10:00",
+      "status": "pending",
+      "completed_at": null,
+      "summary": null,
+      "amount_pence": 3500,
+      "student": {
+        "id": 1,
+        "first_name": "Jane",
+        "surname": "Doe",
+        "email": "jane@example.com",
+        "phone": "07700900000",
+        "status": "active"
+      },
+      "package_name": "10 Hour Package",
+      "payment_status": "paid",
+      "payment_mode": "upfront",
+      "payout_status": null,
+      "has_payout": false,
+      "calendar_item": {
+        "id": 5,
+        "start_time": "09:00:00",
+        "end_time": "10:00:00",
+        "status": "booked",
+        "item_type": "slot",
+        "notes": null
+      },
+      "has_reflective_log": false,
+      "resources_count": 0
+    }
+  ]
+}
+```
+
+**Day Lesson Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Lesson record ID |
+| `order_id` | integer | The order this lesson belongs to |
+| `date` | string\|null | Lesson date (YYYY-MM-DD) |
+| `start_time` | string\|null | Start time (HH:MM) |
+| `end_time` | string\|null | End time (HH:MM) |
+| `status` | string | Lesson status: `pending`, `completed`, or `cancelled` |
+| `completed_at` | string\|null | ISO 8601 timestamp when lesson was completed |
+| `summary` | string\|null | Instructor lesson summary/notes |
+| `amount_pence` | integer\|null | Lesson cost in pence |
+| `student` | object\|null | Student details (see Student Object below) |
+| `package_name` | string\|null | Name of the package the lesson is part of |
+| `payment_status` | string\|null | Payment status: `paid`, `due`, `refunded`, or null |
+| `payment_mode` | string\|null | Package payment mode: `upfront` or `weekly` |
+| `payout_status` | string\|null | Instructor payout status: `pending`, `paid`, `failed`, or null |
+| `has_payout` | boolean | Whether a payout has been created for this lesson |
+| `calendar_item` | object\|null | Calendar item data (see Calendar Item Object below) |
+| `has_reflective_log` | boolean | Whether a reflective log exists for this lesson |
+| `resources_count` | integer | Number of resources attached to this lesson |
+
+**Student Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Student record ID |
+| `first_name` | string | Student first name |
+| `surname` | string | Student surname |
+| `email` | string\|null | Student email (falls back to user email) |
+| `phone` | string\|null | Student phone number |
+| `status` | string\|null | Student status |
+
+**Calendar Item Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Calendar item ID |
+| `start_time` | string | Slot start time (HH:MM:SS) |
+| `end_time` | string | Slot end time (HH:MM:SS) |
+| `status` | string\|null | Booking lifecycle status: `draft`, `reserved`, `booked`, `completed` |
+| `item_type` | string\|null | Calendar item type: `slot`, `travel`, `practical_test` |
+| `notes` | string\|null | Notes about this calendar slot |
+
+**Error Response (invalid date):** `422 Unprocessable Entity`
+```json
+{
+  "message": "The date must be a valid date in Y-m-d format.",
+  "errors": {
+    "date": [
+      "The date must be a valid date in Y-m-d format."
+    ]
+  }
+}
+```
+
+> **Note:** Lessons are automatically scoped to the authenticated instructor. No instructor ID is accepted in the request — it is derived from the Bearer token. Lessons are sorted by start time ascending for chronological day-view display.
 
 ---
 
@@ -1043,6 +1227,277 @@ The lesson must belong to the student (via one of their orders) — otherwise a 
 
 ---
 
+#### `GET /api/v1/students/{student}/checklist-items`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Returns all checklist items for a given student. If the student has no checklist items yet, default items are automatically seeded on first access. Access is controlled by a policy:
+- **Students** can only view their own checklist items (user_id must match the authenticated user).
+- **Instructors** can only view checklist items for students assigned to them (instructor_id must match the authenticated instructor).
+#### `GET /api/v1/students/{student}/notes`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Returns all notes for a given student, ordered by most recent first. Access is controlled by a policy:
+- **Students** can only view their own notes.
+- **Instructors** can only view notes for students assigned to them.
+#### `GET /api/v1/students/{student}/pickup-points`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Returns all pickup points for a given student, ordered by default first then alphabetically by label. Access is controlled by a policy:
+- **Students** can only view their own pickup points (user_id must match the authenticated user).
+- **Instructors** can only view pickup points for students assigned to them (instructor_id must match the authenticated instructor).
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "key": "book_theory_test",
+      "label": "Book theory test",
+      "category": "Theory Test",
+      "is_checked": false,
+      "date": null,
+      "notes": null,
+      "sort_order": 1
+    },
+    {
+      "id": 2,
+      "key": "sit_theory_test",
+      "label": "Sit theory test",
+      "category": "Theory Test",
+      "is_checked": true,
+      "date": "2026-03-10",
+      "notes": "Passed first time",
+      "sort_order": 2
+    }
+  ]
+}
+```
+
+**Checklist Item Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Checklist item record ID |
+| `key` | string | Unique key identifier (e.g., `book_theory_test`) |
+| `label` | string | Human-readable label |
+| `category` | string | Category grouping (e.g., `Theory Test`, `Practical Test`, `General`) |
+| `is_checked` | boolean | Whether the item is checked/completed |
+| `date` | string\|null | Associated date (YYYY-MM-DD), e.g., when the item was completed |
+| `notes` | string\|null | Additional notes |
+| `sort_order` | integer | Display order |
+
+> **Note:** Items are returned ordered by `sort_order` ascending. On first access for a student with no checklist items, default items are automatically seeded.
+      "id": 2,
+      "note": "Needs more practice with parallel parking.",
+      "created_at": "2026-03-18T14:30:00+00:00",
+      "updated_at": "2026-03-18T14:30:00+00:00"
+    },
+    {
+      "id": 1,
+      "note": "Good progress on roundabouts today.",
+      "created_at": "2026-03-17T10:00:00+00:00",
+      "updated_at": "2026-03-17T10:00:00+00:00"
+    }
+  ]
+}
+```
+
+**Note Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Note record ID |
+| `note` | string | The note content |
+| `created_at` | string | ISO 8601 timestamp when the note was created |
+| `updated_at` | string | ISO 8601 timestamp when the note was last updated |
+      "id": 1,
+      "label": "Home",
+      "address": "1 High Street, Middlesbrough",
+      "postcode": "TS1 1AA",
+      "latitude": "54.57623000",
+      "longitude": "-1.23456000",
+      "is_default": true,
+      "created_at": "2026-03-10T09:00:00+00:00",
+      "updated_at": "2026-03-10T09:00:00+00:00"
+    },
+    {
+      "id": 2,
+      "label": "School",
+      "address": "50 Borough Road, Middlesbrough",
+      "postcode": "TS1 2HJ",
+      "latitude": "54.57500000",
+      "longitude": "-1.23000000",
+      "is_default": false,
+      "created_at": "2026-03-12T14:30:00+00:00",
+      "updated_at": "2026-03-12T14:30:00+00:00"
+    }
+  ]
+}
+```
+
+**Pickup Point Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Pickup point record ID |
+| `label` | string | Human-readable label (e.g., "Home", "School") |
+| `address` | string\|null | Full address |
+| `postcode` | string\|null | UK postcode |
+| `latitude` | string\|null | Latitude coordinate (decimal, 8 places) |
+| `longitude` | string\|null | Longitude coordinate (decimal, 8 places) |
+| `is_default` | boolean | Whether this is the student's default pickup point |
+| `created_at` | string\|null | ISO 8601 timestamp |
+| `updated_at` | string\|null | ISO 8601 timestamp |
+
+> **Note:** Pickup points are ordered with the default point first, then alphabetically by label. A student may have zero or many pickup points. If no pickup points exist, `data` will be an empty array.
+
+**Error Response (not authorised):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+---
+
+#### `PUT /api/v1/students/{student}/checklist-items/{checklistItem}`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Updates a single checklist item for a student. Access is controlled by the same policy as the list endpoint. The checklist item must belong to the specified student — otherwise a 404 is returned.
+**Error Response (not found):** `404 Not Found`
+```json
+{
+  "message": "No query results for model [App\\Models\\Student] 999."
+}
+```
+
+---
+
+#### `POST /api/v1/students/{student}/notes`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Creates a new note on a student record. Access is controlled by the same policy as the notes list:
+- **Students** can only add notes to their own record.
+- **Instructors** can only add notes to students assigned to them.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+| `checklistItem` | integer | The checklist item record ID |
+
+**Request Body:**
+```json
+{
+  "is_checked": true,
+  "date": "2026-03-18",
+  "notes": "Passed first time"
+  "note": "Great lesson today - nailed the bay parking."
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `is_checked` | boolean | No | Whether the item is checked/completed |
+| `date` | string\|null | No | Associated date (YYYY-MM-DD format) |
+| `notes` | string\|null | No | Additional notes (max 1000 characters) |
+
+> All fields are optional — you can send a partial update with only the fields you want to change.
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 2,
+    "key": "sit_theory_test",
+    "label": "Sit theory test",
+    "category": "Theory Test",
+    "is_checked": true,
+    "date": "2026-03-18",
+    "notes": "Passed first time",
+    "sort_order": 2
+  }
+}
+```
+
+**Error Response (not authorised):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+**Error Response (checklist item not found or not owned by student):** `404 Not Found`
+```json
+{
+  "message": "Not Found"
+}
+```
+
+**Error Response (validation failed):** `422 Unprocessable Entity`
+```json
+{
+  "message": "The is checked field must be true or false.",
+  "errors": {
+    "is_checked": [
+      "The is checked field must be true or false."
+    ]
+  }
+}
+```
+
+> **Note:** The checklist item must belong to the specified student. If the checklist item exists but belongs to a different student, a 404 is returned (not 403), preventing information leakage.
+
+| `note` | string | Yes | Note content (max 5000 characters) |
+
+**Success Response:** `201 Created`
+```json
+{
+  "data": {
+    "id": 3,
+    "note": "Great lesson today - nailed the bay parking.",
+    "created_at": "2026-03-18T15:00:00+00:00",
+    "updated_at": "2026-03-18T15:00:00+00:00"
+  }
+}
+```
+
+**Error Response (validation):** `422 Unprocessable Entity`
+```json
+{
+  "message": "The note field is required.",
+  "errors": {
+    "note": [
+      "The note field is required."
+    ]
+  }
+}
+```
+
+**Error Response (not authorised):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+---
+
 ## Profile Object by Role
 
 The `profile` key in user responses contains role-specific data. The shape depends on the user's `role`:
@@ -1071,6 +1526,80 @@ The `profile` key in user responses contains role-specific data. The shape depen
 | `phone` | string\|null | Student's phone number |
 | `status` | string\|null | Student status (e.g., `active`) |
 | `instructor_id` | integer\|null | Assigned instructor ID (null if unassigned) |
+
+---
+
+### Messages
+
+#### `GET /api/v1/messages/conversations`
+
+**Auth required:** Yes (Bearer token — instructor or student)
+
+Returns all conversations for the authenticated user, grouped by the other participant. Each conversation includes the latest message preview. Ordered by most recent message first.
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+
+**Conversation Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `user.id` | integer | The other participant's user ID |
+| `user.name` | string | The other participant's name |
+| `latest_message.id` | integer | Message ID |
+| `latest_message.message` | string | Message content |
+| `latest_message.is_own` | boolean | Whether the authenticated user sent this message |
+| `latest_message.created_at` | string | ISO 8601 timestamp |
+
+> **Note:** Conversations are automatically scoped to the authenticated user.
+
+---
+
+#### `GET /api/v1/messages/conversations/{user}`
+
+**Auth required:** Yes (Bearer token — instructor or student)
+
+Returns paginated messages between the authenticated user and the specified user. Messages are ordered newest first for pagination (30 per page). Authorization requires an instructor-student relationship between the two users.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `user` | integer | The other participant's user ID |
+
+**Message Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Message ID |
+| `sender_id` | integer | Sender's user ID |
+| `sender_name` | string\|null | Sender's name |
+| `recipient_id` | integer | Recipient's user ID |
+| `message` | string | Message content |
+| `is_own` | boolean | Whether the authenticated user sent this message |
+| `created_at` | string | ISO 8601 timestamp |
+
+**Error Response (not authorised):** `403 Forbidden`
+
+---
+
+#### `POST /api/v1/messages`
+
+**Auth required:** Yes (Bearer token — instructor or student)
+
+Send a new message to another user. Authorization ensures only instructor-student pairs can message each other.
+
+**Request Body:**
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `recipient_id` | integer | Yes | The recipient's user ID. Must exist in the users table. |
+| `message` | string | Yes | Message content (max 5000 characters) |
+
+**Success Response:** `201 Created` — returns the created message object (same fields as Message Object above).
+
+**Error Responses:** `403 Forbidden` (no instructor-student relationship), `422 Unprocessable Entity` (validation failed).
 
 ---
 

@@ -10,6 +10,7 @@ use App\Actions\Student\GetAllStudentsAction;
 use App\Actions\Student\GetStudentByIdAction;
 use App\Actions\Student\UpdateStudentAction;
 use App\Models\Instructor;
+use App\Actions\Student\PickupPoint\GetStudentPickupPointsAction;
 use App\Models\Student;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -21,6 +22,7 @@ class StudentService extends BaseService
         protected CreateStudentAction $createStudent,
         protected UpdateStudentAction $updateStudent,
         protected DeleteStudentAction $deleteStudent
+        protected GetStudentPickupPointsAction $getStudentPickupPoints
     ) {}
 
     /**
@@ -91,5 +93,12 @@ class StudentService extends BaseService
         $this->invalidate(
             $this->cacheKey('instructor', $instructor->id, 'grouped_students')
         );
+     * Get all pickup points for a student.
+     *
+     * @return Collection<int, \App\Models\StudentPickupPoint>
+     */
+    public function getPickupPoints(Student $student): Collection
+    {
+        return ($this->getStudentPickupPoints)($student);
     }
 }
