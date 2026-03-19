@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\InstructorProfileController;
 use App\Http\Controllers\Api\V1\InstructorStudentController;
+use App\Http\Controllers\Api\V1\StudentChecklistItemController;
 use App\Http\Controllers\Api\V1\MessageController;
 use App\Http\Controllers\Api\V1\StudentController;
 use App\Http\Controllers\Api\V1\StudentLessonController;
@@ -56,6 +57,10 @@ Route::prefix('v1')->group(function (): void {
         // Student notes
         Route::get('students/{student}/notes', [StudentNoteController::class, 'index']);
         Route::post('students/{student}/notes', [StudentNoteController::class, 'store']);
+
+        // Student checklist item routes
+        Route::get('students/{student}/checklist-items', [StudentChecklistItemController::class, 'index']);
+        Route::put('students/{student}/checklist-items/{checklistItem}', [StudentChecklistItemController::class, 'update']);
 
     });
 

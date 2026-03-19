@@ -931,6 +931,13 @@ The lesson must belong to the student (via one of their orders) — otherwise a 
 
 ---
 
+#### `GET /api/v1/students/{student}/checklist-items`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Returns all checklist items for a given student. If the student has no checklist items yet, default items are automatically seeded on first access. Access is controlled by a policy:
+- **Students** can only view their own checklist items (user_id must match the authenticated user).
+- **Instructors** can only view checklist items for students assigned to them (instructor_id must match the authenticated instructor).
 #### `GET /api/v1/students/{student}/notes`
 
 **Auth required:** Yes (Bearer token — student or instructor)
@@ -959,6 +966,43 @@ Returns all pickup points for a given student, ordered by default first then alp
 {
   "data": [
     {
+      "id": 1,
+      "key": "book_theory_test",
+      "label": "Book theory test",
+      "category": "Theory Test",
+      "is_checked": false,
+      "date": null,
+      "notes": null,
+      "sort_order": 1
+    },
+    {
+      "id": 2,
+      "key": "sit_theory_test",
+      "label": "Sit theory test",
+      "category": "Theory Test",
+      "is_checked": true,
+      "date": "2026-03-10",
+      "notes": "Passed first time",
+      "sort_order": 2
+    }
+  ]
+}
+```
+
+**Checklist Item Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Checklist item record ID |
+| `key` | string | Unique key identifier (e.g., `book_theory_test`) |
+| `label` | string | Human-readable label |
+| `category` | string | Category grouping (e.g., `Theory Test`, `Practical Test`, `General`) |
+| `is_checked` | boolean | Whether the item is checked/completed |
+| `date` | string\|null | Associated date (YYYY-MM-DD), e.g., when the item was completed |
+| `notes` | string\|null | Additional notes |
+| `sort_order` | integer | Display order |
+
+> **Note:** Items are returned ordered by `sort_order` ascending. On first access for a student with no checklist items, default items are automatically seeded.
       "id": 2,
       "note": "Needs more practice with parallel parking.",
       "created_at": "2026-03-18T14:30:00+00:00",
@@ -1030,6 +1074,13 @@ Returns all pickup points for a given student, ordered by default first then alp
 }
 ```
 
+---
+
+#### `PUT /api/v1/students/{student}/checklist-items/{checklistItem}`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Updates a single checklist item for a student. Access is controlled by the same policy as the list endpoint. The checklist item must belong to the specified student — otherwise a 404 is returned.
 **Error Response (not found):** `404 Not Found`
 ```json
 {
@@ -1052,16 +1103,70 @@ Creates a new note on a student record. Access is controlled by the same policy 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `student` | integer | The student record ID |
+| `checklistItem` | integer | The checklist item record ID |
 
 **Request Body:**
 ```json
 {
+  "is_checked": true,
+  "date": "2026-03-18",
+  "notes": "Passed first time"
   "note": "Great lesson today - nailed the bay parking."
 }
 ```
 
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
+| `is_checked` | boolean | No | Whether the item is checked/completed |
+| `date` | string\|null | No | Associated date (YYYY-MM-DD format) |
+| `notes` | string\|null | No | Additional notes (max 1000 characters) |
+
+> All fields are optional — you can send a partial update with only the fields you want to change.
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 2,
+    "key": "sit_theory_test",
+    "label": "Sit theory test",
+    "category": "Theory Test",
+    "is_checked": true,
+    "date": "2026-03-18",
+    "notes": "Passed first time",
+    "sort_order": 2
+  }
+}
+```
+
+**Error Response (not authorised):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+**Error Response (checklist item not found or not owned by student):** `404 Not Found`
+```json
+{
+  "message": "Not Found"
+}
+```
+
+**Error Response (validation failed):** `422 Unprocessable Entity`
+```json
+{
+  "message": "The is checked field must be true or false.",
+  "errors": {
+    "is_checked": [
+      "The is checked field must be true or false."
+    ]
+  }
+}
+```
+
+> **Note:** The checklist item must belong to the specified student. If the checklist item exists but belongs to a different student, a 404 is returned (not 403), preventing information leakage.
+
 | `note` | string | Yes | Note content (max 5000 characters) |
 
 **Success Response:** `201 Created`
@@ -1230,6 +1335,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-17 | Added card_status, has_reflective_log, resources_count, payment_status to lesson list | Student (lessons index) |
 | 2026-03-17 | Added card_status, reflective_log, resources, has_reflective_log to lesson detail | Student (lessons show) |
 | 2026-03-17 | Fixed authorize bug in StudentLessonController (Gate::authorize) | Student (lessons index, lessons show) |
+| 2026-03-18 | Added student checklist items list and update endpoints with access policy | Student (checklist-items index, checklist-items update) |
 | 2026-03-18 | Added student notes list and create endpoints with student-or-linked-instructor access policy | Student (notes index, notes store) |
 | 2026-03-18 | Added student pickup points endpoint with student-or-linked-instructor access policy | Student (pickup-points index) |
 | 2026-03-18 | Added instructor profile update endpoint with self-only access policy | Instructor (profile update) |
