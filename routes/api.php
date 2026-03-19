@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\InstructorLessonController;
 use App\Http\Controllers\Api\V1\InstructorProfileController;
 use App\Http\Controllers\Api\V1\InstructorStudentController;
 use App\Http\Controllers\Api\V1\StudentChecklistItemController;
@@ -39,6 +40,7 @@ Route::prefix('v1')->group(function (): void {
         Route::prefix('instructor')->group(function (): void {
             Route::put('profile', [InstructorProfileController::class, 'update']);
             Route::get('students', [InstructorStudentController::class, 'index']);
+            Route::get('lessons/{date}', [InstructorLessonController::class, 'index']);
         });
 
         // Student routes

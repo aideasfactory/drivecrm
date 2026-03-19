@@ -1,75 +1,74 @@
-# Task: Create student checklist item record list and update API endpoints
+# Task: Create an instructor day-view lessons endpoint with related student calendar item data
 
-**Created:** 2026-03-18
-**Last Updated:** 2026-03-18T22:15:00Z
-**Status:** ✅ Complete
+**Created:** 2026-03-19
+**Last Updated:** 2026-03-19T07:45:00Z
+**Status:** Complete
 
 ---
 
 ## Overview
 
 ### Goal
-Build API endpoints for listing and updating student checklist item records, following existing patterns.
+Create an instructor-scoped API endpoint that returns the authenticated instructor's lessons for a specific day, including student and calendar item data.
 
 ### Context
-- Tile ID: 019d01c5-1b19-73f1-b9cc-8f9212044f60
+- Tile ID: 019d01c7-d203-705b-a040-3b481d5f88d5
 - Repository: drivecrm
-- Branch: feature/019d01c5-1b19-73f1-b9cc-8f9212044f60-create-student-checklist-item-record-list-and-update-api-end
+- Branch: feature/019d01c7-d203-705b-a040-3b481d5f88d5-create-an-instructor-day-view-lessons-endpoint-with-related-
 - Priority: MEDIUM
 
 ---
 
 ## PHASE 1: PLANNING
-**Status:** ✅ Complete
+**Status:** Complete
+
+### Tasks
+- [x] Read existing codebase patterns
+- [x] Identify files to create/modify
+- [x] Plan data structure and response format
 
 ### Tasks
 - [x] Review existing patterns and identify files to create/modify
 
 ### Reflection
-Existing patterns are well-established. GetStudentChecklistAction already handles lazy-seeding. Following StudentLessonController pattern closely.
+Explored the full codebase. Clear Controller -> Service -> Action patterns. Instructor scoping from token via ResolveApiProfile middleware.
 
 ---
 
 ## PHASE 2: IMPLEMENTATION
-**Status:** ✅ Complete
+**Status:** Complete
 
 ### Tasks
-- [x] Create StudentChecklistItemPolicy
-- [x] Create UpdateStudentChecklistItemAction
-- [x] Create StudentChecklistService (extends BaseService)
-- [x] Create StudentChecklistItemResource
-- [x] Create StudentChecklistItemCollection
-- [x] Create UpdateStudentChecklistItemRequest
-- [x] Create StudentChecklistItemController (index + update)
-- [x] Add routes to api.php
-- [x] Write tests (13 test cases)
-- [x] Update api.md with endpoint documentation and changelog
+- [x] Create GetInstructorDayLessonsAction
+- [x] Add getDayLessons to InstructorService
+- [x] Create InstructorDayLessonResource
+- [x] Create InstructorDayLessonCollection
+- [x] Create InstructorLessonController
+- [x] Add route to api.php
+- [x] Write feature test (10 test cases)
+- [x] Update api.md with full endpoint documentation
 
 ### Reflection
-All files follow existing project patterns. Reused GetStudentChecklistAction for the list endpoint. Policy follows same pattern as StudentPolicy and LessonPolicy. Tests cover authorization for both roles, validation, partial updates, and ownership checks.
+Implementation follows existing patterns exactly. Used Instructor model's lessons() relationship scoped by date. Eager loading prevents N+1 queries. Resource includes student data, calendar item, payment/payout status.
 
 ---
 
 ## PHASE 3: FINAL REFLECTION & DOCUMENTATION
-**Status:** ✅ Complete
+**Status:** Complete
 
-### Summary
-Built two API endpoints for student checklist items:
-- GET /api/v1/students/{student}/checklist-items (list all items)
-- PUT /api/v1/students/{student}/checklist-items/{checklistItem} (update single item)
+### What was built
+- GET /api/v1/instructor/lessons/{date} endpoint
+- Returns chronologically ordered lessons with student, calendar item, and payment data
+- Properly scoped to authenticated instructor via token
+- Full API documentation in api.md
+- 10 feature tests covering all scenarios
 
-Both endpoints use the same authorization policy: students can access their own items, instructors can access items for students assigned to them. The implementation reuses the existing GetStudentChecklistAction (with lazy-seeding) and follows the Controller → Service → Action pattern throughout.
+### Architecture quality
+- Follows Controller -> Service -> Action pattern exactly
+- Action is pure business logic, no HTTP concerns
+- Service extends BaseService, orchestrates Action
+- Resource transforms data consistently with existing resources
+- No N+1 queries (eager loading used throughout)
 
-### Files Created
-- app/Policies/StudentChecklistItemPolicy.php
-- app/Actions/Student/Checklist/UpdateStudentChecklistItemAction.php
-- app/Services/StudentChecklistService.php
-- app/Http/Controllers/Api/V1/StudentChecklistItemController.php
-- app/Http/Resources/V1/StudentChecklistItemResource.php
-- app/Http/Resources/V1/StudentChecklistItemCollection.php
-- app/Http/Requests/Api/V1/UpdateStudentChecklistItemRequest.php
-- tests/Feature/Api/V1/StudentChecklistItemControllerTest.php
-
-### Files Modified
-- routes/api.php (added 2 routes)
-- .claude/api.md (added endpoint documentation + changelog entry)
+### Score: 9/10
+Solid implementation following all project patterns. Clean separation of concerns. Comprehensive test coverage. One minor consideration: no caching was added since day lessons are date-specific and volatile.

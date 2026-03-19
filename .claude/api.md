@@ -612,6 +612,123 @@ Returns the authenticated instructor's students grouped by status, plus a recent
 
 ---
 
+#### `GET /api/v1/instructor/lessons/{date}`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Returns the authenticated instructor's lessons for a specific date, ordered by start time. Each lesson includes the student details, calendar item data, payment/payout status, and resource counts — designed for a day-view screen in the mobile app.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `date` | string | Date in `YYYY-MM-DD` format (e.g., `2026-03-20`) |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "order_id": 1,
+      "date": "2026-03-20",
+      "start_time": "09:00",
+      "end_time": "10:00",
+      "status": "pending",
+      "completed_at": null,
+      "summary": null,
+      "amount_pence": 3500,
+      "student": {
+        "id": 1,
+        "first_name": "Jane",
+        "surname": "Doe",
+        "email": "jane@example.com",
+        "phone": "07700900000",
+        "status": "active"
+      },
+      "package_name": "10 Hour Package",
+      "payment_status": "paid",
+      "payment_mode": "upfront",
+      "payout_status": null,
+      "has_payout": false,
+      "calendar_item": {
+        "id": 5,
+        "start_time": "09:00:00",
+        "end_time": "10:00:00",
+        "status": "booked",
+        "item_type": "slot",
+        "notes": null
+      },
+      "has_reflective_log": false,
+      "resources_count": 0
+    }
+  ]
+}
+```
+
+**Day Lesson Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Lesson record ID |
+| `order_id` | integer | The order this lesson belongs to |
+| `date` | string\|null | Lesson date (YYYY-MM-DD) |
+| `start_time` | string\|null | Start time (HH:MM) |
+| `end_time` | string\|null | End time (HH:MM) |
+| `status` | string | Lesson status: `pending`, `completed`, or `cancelled` |
+| `completed_at` | string\|null | ISO 8601 timestamp when lesson was completed |
+| `summary` | string\|null | Instructor lesson summary/notes |
+| `amount_pence` | integer\|null | Lesson cost in pence |
+| `student` | object\|null | Student details (see Student Object below) |
+| `package_name` | string\|null | Name of the package the lesson is part of |
+| `payment_status` | string\|null | Payment status: `paid`, `due`, `refunded`, or null |
+| `payment_mode` | string\|null | Package payment mode: `upfront` or `weekly` |
+| `payout_status` | string\|null | Instructor payout status: `pending`, `paid`, `failed`, or null |
+| `has_payout` | boolean | Whether a payout has been created for this lesson |
+| `calendar_item` | object\|null | Calendar item data (see Calendar Item Object below) |
+| `has_reflective_log` | boolean | Whether a reflective log exists for this lesson |
+| `resources_count` | integer | Number of resources attached to this lesson |
+
+**Student Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Student record ID |
+| `first_name` | string | Student first name |
+| `surname` | string | Student surname |
+| `email` | string\|null | Student email (falls back to user email) |
+| `phone` | string\|null | Student phone number |
+| `status` | string\|null | Student status |
+
+**Calendar Item Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Calendar item ID |
+| `start_time` | string | Slot start time (HH:MM:SS) |
+| `end_time` | string | Slot end time (HH:MM:SS) |
+| `status` | string\|null | Booking lifecycle status: `draft`, `reserved`, `booked`, `completed` |
+| `item_type` | string\|null | Calendar item type: `slot`, `travel`, `practical_test` |
+| `notes` | string\|null | Notes about this calendar slot |
+
+**Error Response (invalid date):** `422 Unprocessable Entity`
+```json
+{
+  "message": "The date must be a valid date in Y-m-d format.",
+  "errors": {
+    "date": [
+      "The date must be a valid date in Y-m-d format."
+    ]
+  }
+}
+```
+
+> **Note:** Lessons are automatically scoped to the authenticated instructor. No instructor ID is accepted in the request — it is derived from the Bearer token. Lessons are sorted by start time ascending for chronological day-view display.
+
+---
+
 ### Student
 
 #### `GET /api/v1/students/{student}`
@@ -1335,6 +1452,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-17 | Added card_status, has_reflective_log, resources_count, payment_status to lesson list | Student (lessons index) |
 | 2026-03-17 | Added card_status, reflective_log, resources, has_reflective_log to lesson detail | Student (lessons show) |
 | 2026-03-17 | Fixed authorize bug in StudentLessonController (Gate::authorize) | Student (lessons index, lessons show) |
+| 2026-03-19 | Added instructor day-view lessons endpoint with student and calendar item data | Instructor (lessons/{date}) |
 | 2026-03-18 | Added student checklist items list and update endpoints with access policy | Student (checklist-items index, checklist-items update) |
 | 2026-03-18 | Added student notes list and create endpoints with student-or-linked-instructor access policy | Student (notes index, notes store) |
 | 2026-03-18 | Added student pickup points endpoint with student-or-linked-instructor access policy | Student (pickup-points index) |
