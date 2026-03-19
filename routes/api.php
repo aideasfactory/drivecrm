@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\InstructorProfileController;
 use App\Http\Controllers\Api\V1\InstructorStudentController;
 use App\Http\Controllers\Api\V1\MessageController;
 use App\Http\Controllers\Api\V1\StudentController;
@@ -33,6 +34,7 @@ Route::prefix('v1')->group(function (): void {
 
         // Instructor routes
         Route::prefix('instructor')->group(function (): void {
+            Route::put('profile', [InstructorProfileController::class, 'update']);
             Route::get('students', [InstructorStudentController::class, 'index']);
         });
 
