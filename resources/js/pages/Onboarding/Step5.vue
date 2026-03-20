@@ -272,6 +272,10 @@
                         <span>Promo discount</span>
                         <span class="font-medium">-£{{ promoDiscount }}.00</span>
                       </div>
+                      <div v-if="pricing?.uuid_discount" class="flex items-center justify-between text-green-600">
+                        <span>Discount ({{ pricing?.uuid_discount_percentage }}% off — {{ pricing?.uuid_discount_label }})</span>
+                        <span class="font-medium">-£{{ pricing?.uuid_discount }}</span>
+                      </div>
                       <Separator />
                       <div class="flex items-center justify-between">
                         <span class="text-lg font-semibold">Total</span>
@@ -344,6 +348,10 @@ const props = defineProps({
   contact: Object,
   learner: Object,
   pricing: Object,
+  discount: {
+    type: Object as () => { id: string; label: string; percentage: number } | null,
+    default: null
+  },
   available_promos: Array,
   pickup_address_line_1: String,
   pickup_address_line_2: String,

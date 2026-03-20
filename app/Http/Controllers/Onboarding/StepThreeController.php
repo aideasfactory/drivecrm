@@ -81,6 +81,9 @@ class StepThreeController extends Controller
             }
         }
 
+        // Get discount data if present
+        $discount = $enquiry->getDiscountData();
+
         return Inertia::render('Onboarding/Step3', [
             'uuid' => $enquiry->id,
             'currentStep' => 3,
@@ -90,6 +93,7 @@ class StepThreeController extends Controller
             'selectedInstructor' => $selectedInstructor,
             'packages' => $packages,
             'maxStepReached' => $enquiry->max_step_reached,
+            'discount' => $discount,
         ]);
     }
 

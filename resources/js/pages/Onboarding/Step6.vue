@@ -51,6 +51,9 @@
               <CardDescription>
                 Choose your preferred payment method to secure your driving lesson booking.
               </CardDescription>
+              <Badge v-if="discount" variant="destructive" class="w-fit text-sm mt-2">
+                {{ discount.percentage }}% off applied &mdash; {{ discount.label }}
+              </Badge>
             </CardHeader>
 
             <CardContent>
@@ -188,6 +191,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
@@ -206,7 +210,11 @@ const props = defineProps({
   schedule: Object,
   pricing: Object,
   stepData: Object,
-  maxStepReached: { type: Number, default: 6 }
+  maxStepReached: { type: Number, default: 6 },
+  discount: {
+    type: Object as () => { id: string; label: string; percentage: number } | null,
+    default: null
+  }
 })
 
 const page = usePage()
