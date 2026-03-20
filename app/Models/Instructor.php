@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Facades\Storage;
 
 class Instructor extends Model
 {
@@ -30,6 +31,7 @@ class Instructor extends Model
         'latitude',
         'longitude',
         'meta',
+        'profile_picture_path',
     ];
 
     protected function casts(): array
@@ -200,7 +202,29 @@ class Instructor extends Model
     protected function avatar(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->meta['avatar'] ?? null,
+            get: function () {
+                if ($this->profile_picture_path) {
+                    return Storage::disk('s3')->temporaryUrl($this->profile_picture_path, now()->addMinutes(60));
+                }
+
+                return $this->meta['avatar'] ?? null;
+            },
+        );
+    }
+
+    /**
+     * Get the profile picture URL (temporary S3 URL or null).
+     */
+    protected function profilePictureUrl(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                if ($this->profile_picture_path) {
+                    return Storage::disk('s3')->temporaryUrl($this->profile_picture_path, now()->addMinutes(60));
+                }
+
+                return null;
+            },
         );
     }
 
