@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { usePage } from '@inertiajs/vue3'
 import CalendarEventBlock from './CalendarEventBlock.vue'
 import type { CalendarEvent } from './CalendarEventBlock.vue'
 import { formatDate } from '@/composables/useCalendarNavigation'
+import type { AppPageProps } from '@/types'
 
 interface Props {
     weekDays: Date[]
@@ -18,11 +20,13 @@ const emit = defineEmits<{
 }>()
 
 // ── Constants ────────────────────────────────────────────
+const page = usePage<AppPageProps>()
 const DAY_START_HOUR = 8
 const DAY_END_HOUR = 18
 const ROW_HEIGHT = 40 // px per 30-min slot (visual grid row)
 const SLOT_COUNT = (DAY_END_HOUR - DAY_START_HOUR) * 2 // 20 half-hour visual rows
-const SLOT_DURATION_HOURS = 2 // lesson slots are always 2 hours
+const SLOT_DURATION_MINUTES = computed(() => page.props.teamSettings?.default_slot_duration_minutes ?? 120)
+const SLOT_DURATION_HOURS = computed(() => SLOT_DURATION_MINUTES.value / 60)
 const SNAP_MINUTES = 15 // drag & click snap to 15-minute increments
 const SNAP_PX = ROW_HEIGHT / 2 // 15 min = half a visual row = 20px
 
@@ -67,8 +71,8 @@ function handleSlotClick(dayDate: Date, slotIndex: number) {
     const totalMinutes = DAY_START_HOUR * 60 + slotIndex * 30
     // Round down to nearest 15-min increment
     const snappedMinutes = Math.floor(totalMinutes / SNAP_MINUTES) * SNAP_MINUTES
-    // Clamp so the 2-hour slot fits within the day
-    const maxStart = (DAY_END_HOUR - SLOT_DURATION_HOURS) * 60 // 16:00
+    // Clamp so the slot fits within the day
+    const maxStart = (DAY_END_HOUR - SLOT_DURATION_HOURS.value) * 60
     const clampedMinutes = Math.max(DAY_START_HOUR * 60, Math.min(snappedMinutes, maxStart))
     const time = minutesToTime(clampedMinutes)
     emit('clickSlot', date, time)
@@ -180,7 +184,7 @@ function handlePointerUp(_e: PointerEvent) {
     // Calculate new time from snapped position (15-min increments, 2-hour duration)
     const snapBlocks = Math.round(drag.ghostTop / SNAP_PX)
     const newStartMinutes = DAY_START_HOUR * 60 + snapBlocks * SNAP_MINUTES
-    const newEndMinutes = newStartMinutes + SLOT_DURATION_HOURS * 60
+    const newEndMinutes = newStartMinutes + SLOT_DURATION_MINUTES.value
 
     // Clamp within day boundaries
     if (newStartMinutes < DAY_START_HOUR * 60 || newEndMinutes > DAY_END_HOUR * 60) {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/app/AppSidebarLayout.vue';
+import { useTeamTheme } from '@/composables/useTeamTheme';
 import type { BreadcrumbItem } from '@/types';
 
 type Props = {
@@ -9,6 +10,8 @@ type Props = {
 withDefaults(defineProps<Props>(), {
     breadcrumbs: () => [],
 });
+
+useTeamTheme();
 </script>
 
 <template>

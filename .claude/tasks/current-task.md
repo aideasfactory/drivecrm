@@ -1,68 +1,51 @@
-# Task: Create student create, update, and delete API endpoints with student-or-linked-instructor policy enforcement
+# Task: Enforce team-based behaviour and add team-level configuration for key scheduling settings
 
-**Created:** 2026-03-19
-**Last Updated:** 2026-03-19T09:45:00Z
-**Status:** ✅ Complete
+**Created:** 2026-03-20
+**Last Updated:** 2026-03-20T15:09:14Z
+**Status:** Planning
 
 ---
 
 ## Overview
 
 ### Goal
-Build API endpoints for creating, updating, and deleting student records with student-or-linked-instructor policy enforcement.
+I need help building stronger team-based enforcement and configuration support across Drive.
+
+Requirements:
+- Revisit the concept that everything in the system should be team-based.
+- Enforce team logic more consistently throughout the system.
+- Add support for certain settings to be configured per team.
+- For the minimum viable scope, makle the *-primary colour configurable with a colour picker
+- For the minimum viable scope, make the default 2-hour time-slot duration configurable per team.
+- Ensure the implementation aligns with the wider team-based direction of the product and can be extended later with more team-level settings.
+- Keep the first pass focused on enforceable team behaviour and these two configuration points.
+
+Read .claude/instructions.md and create a new task in .claude/tasks/current-task.md. Break this down into phases and create a task list.
 
 ### Context
-- Tile ID: 019d01ca-ec12-7391-aa9c-a4af8e7eaa2d
+- Tile ID: 019d0adf-3f22-73e1-aac8-5db0022cf857
 - Repository: drivecrm
-- Branch: feature/019d01ca-ec12-7391-aa9c-a4af8e7eaa2d-create-student-create-update-and-delete-api-endpoints-with-s
+- Branch: feature/019d0adf-3f22-73e1-aac8-5db0022cf857-enforce-team-based-behaviour-and-add-team-level-configuratio
+- Priority: MEDIUM
+- Customer: Drive
 
 ---
 
 ## PHASE 1: PLANNING
-**Status:** Complete
+**Status:** Not Started
 
-### Tasks
-- [x] Read existing codebase patterns
-- [x] Identify files to create/modify
-- [x] Plan data structure and response format
-
-### Tasks
-- [x] Review existing patterns and identify files to create/modify
-
-### Reflection
-Explored all existing patterns thoroughly. Codebase follows strict Controller → Service → Action with BaseService, FormRequests, Eloquent Resources, and Gate-based StudentPolicy.
+[Claude Code fills this section in]
 
 ---
 
 ## PHASE 2: IMPLEMENTATION
-**Status:** Complete
+**Status:** Not Started
 
-### Tasks
-- [x] Create CreateStudentAction
-- [x] Create UpdateStudentAction
-- [x] Create DeleteStudentAction
-- [x] Add create/update/delete methods to StudentPolicy
-- [x] Add create/update/delete methods to StudentService
-- [x] Create StoreStudentRequest FormRequest
-- [x] Create UpdateStudentRequest FormRequest
-- [x] Add store/update/destroy to StudentController
-- [x] Add routes to api.php
-- [x] Update api.md documentation
-- [x] Write Pest tests (17 tests across create/update/delete)
-
-### Reflection
-All endpoints follow existing patterns exactly. Policy uses shared helper method for DRY authorization. Service invalidates instructor grouped_students cache on mutations. Tests cover all permission boundaries.
+[Claude Code fills this section in]
 
 ---
 
 ## PHASE 3: FINAL REFLECTION & DOCUMENTATION
-**Status:** ✅ Complete
+**Status:** Not Started
 
-### Reflection
-- All three endpoints (POST, PUT, DELETE) follow the existing Controller → Service → Action architecture
-- StudentPolicy uses a shared `isStudentOrLinkedInstructor` helper to keep authorization DRY
-- Cache invalidation for instructor grouped_students is handled on create, update, and delete
-- api.md fully documented with request/response examples
-- 17 Pest tests written covering success, auth, validation, and permission boundaries
-- No anti-patterns or technical debt introduced
-- Score: 9/10 — clean implementation following all existing conventions
+[Claude Code fills this section in]

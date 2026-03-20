@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -9,9 +10,12 @@ import { edit as editAppearance } from '@/routes/appearance';
 import { edit as editProfile } from '@/routes/profile';
 import { show } from '@/routes/two-factor';
 import { edit as editPassword } from '@/routes/user-password';
-import { type NavItem } from '@/types';
+import { type NavItem, type AppPageProps, UserRole } from '@/types';
 
-const sidebarNavItems: NavItem[] = [
+const page = usePage<AppPageProps>();
+const isOwner = computed(() => page.props.auth.user.role === UserRole.OWNER);
+
+const baseNavItems: NavItem[] = [
     {
         title: 'Profile',
         href: editProfile(),
@@ -29,6 +33,17 @@ const sidebarNavItems: NavItem[] = [
         href: editAppearance(),
     },
 ];
+
+const sidebarNavItems = computed(() => {
+    const items = [...baseNavItems];
+    if (isOwner.value) {
+        items.push({
+            title: 'Team',
+            href: '/settings/team',
+        });
+    }
+    return items;
+});
 
 const { isCurrentUrl } = useCurrentUrl();
 </script>
