@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted } from 'vue'
+import { usePage } from '@inertiajs/vue3'
 import axios from 'axios'
 import {
     Plus,
@@ -153,12 +154,15 @@ const editItemIsPracticalTest = computed(() => {
 })
 
 // ── Time slot options (15-min increments, 08:00–16:00) ───
-const SLOT_DURATION_HOURS = 2
+import type { AppPageProps } from '@/types'
+const page = usePage<AppPageProps>()
+const SLOT_DURATION_MINUTES = computed(() => page.props.teamSettings?.default_slot_duration_minutes ?? 120)
+const SLOT_DURATION_HOURS = computed(() => SLOT_DURATION_MINUTES.value / 60)
 const startTimeOptions = computed(() => {
     const options: { value: string; label: string }[] = []
     for (let h = 8; h <= 16; h++) {
         for (let m = 0; m < 60; m += 15) {
-            // Don't go past 16:00 (a 2-hour slot ending at 18:00)
+            // Don't go past 16:00 (slot would end beyond working hours)
             if (h === 16 && m > 0) break
             const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
             options.push({ value: time, label: time })
@@ -182,10 +186,10 @@ const minutesToTime = (minutes: number): string => {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
-/** Calculate end time from start time (adds SLOT_DURATION_HOURS) */
+/** Calculate end time from start time (uses team default slot duration) */
 function calcEndTime(startTime: string): string {
     const minutes = timeToMinutes(startTime)
-    return minutesToTime(minutes + SLOT_DURATION_HOURS * 60)
+    return minutesToTime(minutes + SLOT_DURATION_MINUTES.value)
 }
 
 /** Snap a time string to the nearest valid 15-minute start time */
@@ -218,7 +222,7 @@ watch(() => createForm.value.is_practical_test, (isPracticalTest) => {
             createForm.value.end_time = minutesToTime(timeToMinutes(createForm.value.start_time) + 60)
             createForm.value.is_available = false
         } else {
-            // Regular slot: 2hr duration
+            // Regular slot: team default duration
             createForm.value.end_time = calcEndTime(createForm.value.start_time)
             createForm.value.is_available = true
         }
@@ -362,7 +366,7 @@ function handleDayClick(date: string) {
     createForm.value = {
         date,
         start_time: '08:00',
-        end_time: '10:00',
+        end_time: calcEndTime('08:00'),
         is_available: true,
         notes: '',
         unavailability_reason: '',

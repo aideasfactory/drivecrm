@@ -20,6 +20,8 @@ class TeamSeeder extends Seeder
                 'name' => 'Drive',
                 'settings' => [
                     'default_lesson_duration_minutes' => 60,
+                    'primary_color' => null,
+                    'default_slot_duration_minutes' => 120,
                 ],
             ]
         );
