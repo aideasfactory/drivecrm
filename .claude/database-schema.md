@@ -1081,6 +1081,33 @@ Many-to-many pivot table linking lessons to resources. Allows attaching multiple
 
 ---
 
+### 28. **discount_codes**
+
+UUID-based discount codes for the onboarding flow. Each code maps to a percentage tier (5%, 10%, 15%, or 20%) and can be shared via URL.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | uuid | PRIMARY KEY | Unique identifier, used in onboarding URLs |
+| `label` | varchar(255) | NOT NULL | Human-readable label |
+| `percentage` | unsigned tinyint | NOT NULL | Discount percentage (5, 10, 15, or 20) |
+| `active` | boolean | DEFAULT true | Whether the code is currently usable |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Relationships:**
+- Has many `Orders` (via `orders.discount_code_id`)
+
+---
+
+### Orders Table — Discount Fields (added)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `discount_code_id` | uuid | NULLABLE, FK → discount_codes.id (ON DELETE SET NULL) | Discount code used |
+| `discount_percentage` | unsigned tinyint | NULLABLE | Snapshot of discount percentage at time of order |
+
+---
+
 ## Key Business Flows
 
 ### 1. Student Purchase Flow (Upfront Payment)

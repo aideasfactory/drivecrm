@@ -232,6 +232,8 @@ class StripeService
     public function createCheckoutSession(Order $order, Package $package, User $student, ?Instructor $instructor, string $successUrl, string $cancelUrl): array
     {
         try {
+            $hasDiscount = $order->discount_percentage !== null && $order->discount_percentage > 0;
+
             Log::info('StripeService: Creating checkout session', [
                 'order_id' => $order->id,
                 'package_id' => $package->id,
@@ -241,21 +243,41 @@ class StripeService
                 'stripe_customer_id' => $student->stripe_customer_id,
                 'stripe_price_id' => $package->stripe_price_id,
                 'instructor_id' => $instructor?->id,
+                'has_discount' => $hasDiscount,
+                'discount_percentage' => $order->discount_percentage,
+                'discounted_total_pence' => $order->package_total_price_pence,
             ]);
+
+            // When a discount is applied, use price_data with the discounted amount
+            // instead of the pre-created Stripe Price (which has the full price)
+            if ($hasDiscount) {
+                $lineItem = [
+                    'price_data' => [
+                        'currency' => 'gbp',
+                        'product' => $package->stripe_product_id,
+                        'unit_amount' => $order->package_total_price_pence,
+                    ],
+                    'quantity' => 1,
+                ];
+            } else {
+                $lineItem = [
+                    'price' => $package->stripe_price_id,
+                    'quantity' => 1,
+                ];
+            }
 
             $sessionData = [
                 'mode' => 'payment',
                 'customer' => $student->stripe_customer_id,
-                'line_items' => [[
-                    'price' => $package->stripe_price_id,
-                    'quantity' => 1,
-                ]],
+                'line_items' => [$lineItem],
                 'success_url' => $successUrl,
                 'cancel_url' => $cancelUrl,
                 'metadata' => [
                     'order_id' => $order->id,
                     'package_id' => $package->id,
                     'student_id' => $student->id,
+                    'discount_code_id' => $order->discount_code_id,
+                    'discount_percentage' => $order->discount_percentage,
                 ],
             ];
 
