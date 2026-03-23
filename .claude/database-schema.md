@@ -831,6 +831,7 @@ Stores uploaded files (videos, PDFs) or video links (Vimeo/YouTube) with metadat
 | `thumbnail_path` | varchar(500) | NULLABLE | S3 thumbnail path (optional) |
 | `thumbnail_url` | varchar(500) | NULLABLE | External thumbnail URL (for video_link resources) |
 | `sort_order` | integer | DEFAULT 0 | Display ordering within folder |
+| `status` | varchar(255) | DEFAULT 'published' | Resource visibility: 'published' or 'draft' |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
@@ -1078,6 +1079,33 @@ Many-to-many pivot table linking lessons to resources. Allows attaching multiple
 **Relationships:**
 - Belongs to `Lesson`
 - Belongs to `Resource`
+
+---
+
+### 28. **discount_codes**
+
+UUID-based discount codes for the onboarding flow. Each code maps to a percentage tier (5%, 10%, 15%, or 20%) and can be shared via URL.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | uuid | PRIMARY KEY | Unique identifier, used in onboarding URLs |
+| `label` | varchar(255) | NOT NULL | Human-readable label |
+| `percentage` | unsigned tinyint | NOT NULL | Discount percentage (5, 10, 15, or 20) |
+| `active` | boolean | DEFAULT true | Whether the code is currently usable |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Relationships:**
+- Has many `Orders` (via `orders.discount_code_id`)
+
+---
+
+### Orders Table — Discount Fields (added)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `discount_code_id` | uuid | NULLABLE, FK → discount_codes.id (ON DELETE SET NULL) | Discount code used |
+| `discount_percentage` | unsigned tinyint | NULLABLE | Snapshot of discount percentage at time of order |
 
 ---
 

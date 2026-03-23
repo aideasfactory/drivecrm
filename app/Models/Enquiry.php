@@ -39,4 +39,14 @@ class Enquiry extends Model
         $currentData['current_step'] = max($step, $currentData['current_step'] ?? 1);
         $this->data = $currentData;
     }
+
+    /**
+     * Get discount data stored in the enquiry (if any).
+     *
+     * @return array{id: string, label: string, percentage: int}|null
+     */
+    public function getDiscountData(): ?array
+    {
+        return $this->data['discount'] ?? null;
+    }
 }

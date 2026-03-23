@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\ResourceStatus;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -24,6 +26,7 @@ class Resource extends Model
         'thumbnail_path',
         'thumbnail_url',
         'sort_order',
+        'status',
     ];
 
     protected function casts(): array
@@ -32,6 +35,7 @@ class Resource extends Model
             'tags' => 'array',
             'file_size' => 'integer',
             'sort_order' => 'integer',
+            'status' => ResourceStatus::class,
         ];
     }
 
@@ -49,6 +53,14 @@ class Resource extends Model
     public function lessons(): BelongsToMany
     {
         return $this->belongsToMany(Lesson::class)->withTimestamps();
+    }
+
+    /**
+     * Scope to only published resources.
+     */
+    public function scopePublished(Builder $query): Builder
+    {
+        return $query->where('status', ResourceStatus::PUBLISHED);
     }
 
     /**

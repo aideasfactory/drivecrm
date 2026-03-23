@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Onboarding;
 
 use App\Http\Controllers\Controller;
+use App\Models\DiscountCode;
 use App\Models\Enquiry;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -10,15 +11,35 @@ use Inertia\Inertia;
 class OnboardingController extends Controller
 {
     /**
-     * Entry point — create new enquiry and redirect to step 1
+     * Entry point — create new enquiry and redirect to step 1.
+     * Accepts optional ?discount=<uuid> parameter.
      */
-    public function start()
+    public function start(Request $request)
     {
+        $data = [
+            'current_step' => 1,
+            'steps' => [],
+        ];
+
+        // Validate and attach discount code if provided
+        $discountUuid = $request->query('discount');
+        if ($discountUuid) {
+            $discountCode = DiscountCode::query()
+                ->where('id', $discountUuid)
+                ->where('active', true)
+                ->first();
+
+            if ($discountCode) {
+                $data['discount'] = [
+                    'id' => $discountCode->id,
+                    'label' => $discountCode->label,
+                    'percentage' => $discountCode->percentage,
+                ];
+            }
+        }
+
         $enquiry = Enquiry::create([
-            'data' => [
-                'current_step' => 1,
-                'steps' => [],
-            ],
+            'data' => $data,
             'current_step' => 1,
             'max_step_reached' => 1,
         ]);

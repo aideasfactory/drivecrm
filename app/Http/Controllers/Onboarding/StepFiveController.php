@@ -66,7 +66,14 @@ class StepFiveController extends Controller
             }
         }
 
-        $totalPrice = $packagePrice + $bookingFee - $promoDiscount;
+        // Apply UUID discount code if present
+        $discount = $enquiry->getDiscountData();
+        $uuidDiscount = 0;
+        if ($discount && $package) {
+            $uuidDiscount = ($package->total_price_pence / 100) * ($discount['percentage'] / 100);
+        }
+
+        $totalPrice = $packagePrice + $bookingFee - $promoDiscount - $uuidDiscount;
 
         return Inertia::render('Onboarding/Step5', [
             'uuid' => $enquiry->id,
@@ -137,11 +144,17 @@ class StepFiveController extends Controller
                 'package_price' => number_format($packagePrice, 2),
                 'booking_fee' => number_format($bookingFee, 2),
                 'promo_discount' => $promoDiscount > 0 ? number_format($promoDiscount, 2) : null,
+                'uuid_discount' => $uuidDiscount > 0 ? number_format($uuidDiscount, 2) : null,
+                'uuid_discount_percentage' => $discount ? $discount['percentage'] : null,
+                'uuid_discount_label' => $discount ? $discount['label'] : null,
                 'total' => number_format($totalPrice, 2),
             ],
 
             // Available promo codes (for demo)
             'available_promos' => ['SAVE10', 'SAVE20'],
+
+            // Discount code data
+            'discount' => $discount,
 
             // Pass back saved form data
             'pickup_address_line_1' => $step5['pickup_address_line_1'] ?? '',
