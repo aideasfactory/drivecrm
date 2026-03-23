@@ -98,6 +98,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('packages.store');
     Route::put('/packages/{package}', [\App\Http\Controllers\PackageController::class, 'update'])
         ->name('packages.update');
+
+    // Discount Codes
+    Route::get('/discount-codes', [\App\Http\Controllers\DiscountCodeController::class, 'index'])
+        ->name('discount-codes.index');
+    Route::post('/discount-codes', [\App\Http\Controllers\DiscountCodeController::class, 'store'])
+        ->name('discount-codes.store');
+    Route::delete('/discount-codes/{discountCode}', [\App\Http\Controllers\DiscountCodeController::class, 'destroy'])
+        ->name('discount-codes.destroy');
+
     Route::get('/pupils', [\App\Http\Controllers\PupilController::class, 'index'])
         ->name('pupils.index');
     Route::get('/students/{student}', [\App\Http\Controllers\PupilController::class, 'show'])

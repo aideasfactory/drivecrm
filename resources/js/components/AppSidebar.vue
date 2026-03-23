@@ -7,6 +7,7 @@ import {
     Grid3x3,
     LayoutGrid,
     Package,
+    Percent,
     Settings,
     Users,
     UsersRound,
@@ -29,6 +30,7 @@ import { dashboard } from '@/routes';
 import { index as appsIndex } from '@/routes/apps';
 import { index as instructorsIndex } from '@/routes/instructors';
 import { edit as profileEdit } from '@/routes/profile';
+import { index as discountCodesIndex } from '@/routes/discount-codes';
 import { index as packagesIndex } from '@/routes/packages';
 import { index as pupilsIndex } from '@/routes/pupils';
 import { index as reportsIndex } from '@/routes/reports';
@@ -61,6 +63,12 @@ const allNavItems: NavItem[] = [
         title: 'Packages',
         href: packagesIndex(),
         icon: Package,
+        roles: ['owner'],
+    },
+    {
+        title: 'Discount Codes',
+        href: discountCodesIndex(),
+        icon: Percent,
         roles: ['owner'],
     },
     {

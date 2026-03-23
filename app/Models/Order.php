@@ -25,6 +25,8 @@ class Order extends Model
         'status',
         'stripe_payment_intent_id',
         'stripe_subscription_id',
+        'discount_code_id',
+        'discount_percentage',
     ];
 
     protected function casts(): array
@@ -35,6 +37,7 @@ class Order extends Model
             'package_total_price_pence' => 'integer',
             'package_lesson_price_pence' => 'integer',
             'package_lessons_count' => 'integer',
+            'discount_percentage' => 'integer',
         ];
     }
 
@@ -60,6 +63,14 @@ class Order extends Model
     public function package(): BelongsTo
     {
         return $this->belongsTo(Package::class);
+    }
+
+    /**
+     * Get the discount code used for this order.
+     */
+    public function discountCode(): BelongsTo
+    {
+        return $this->belongsTo(DiscountCode::class, 'discount_code_id');
     }
 
     /**

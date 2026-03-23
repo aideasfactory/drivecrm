@@ -68,6 +68,9 @@ class StepSixController extends Controller
         $packagePrice = $package->total_price;
         $lessonPrice = $package->weekly_payment;
 
+        // Get discount data
+        $discount = $enquiry->getDiscountData();
+
         return Inertia::render('Onboarding/Step6', [
             'uuid' => $enquiry->id,
             'currentStep' => 6,
@@ -113,6 +116,9 @@ class StepSixController extends Controller
                     'total_over_time' => $packagePrice,
                 ],
             ],
+
+            // Discount code data
+            'discount' => $discount,
         ]);
     }
 
@@ -183,19 +189,24 @@ class StepSixController extends Controller
                 'enquiry_id' => $enquiry->id,
             ]);
 
+            // Get discount data from enquiry
+            $discount = $enquiry->getDiscountData();
+
             // Create order with lessons
             Log::info('Creating order from enquiry', [
                 'enquiry_id' => $enquiry->id,
                 'student_id' => $student->id,
                 'package_id' => $package->id,
                 'payment_mode' => $paymentMode->value,
+                'discount' => $discount,
             ]);
 
             $order = $this->createOrderAction->execute(
                 $enquiry,
                 $student,
                 $package,
-                $paymentMode
+                $paymentMode,
+                $discount
             );
 
             Log::info('Order created successfully', [
@@ -340,8 +351,22 @@ class StepSixController extends Controller
             ]);
         }
 
-        // Check if package has Stripe price ID
-        if (! $package->stripe_price_id) {
+        // Check if package has required Stripe IDs
+        $hasDiscount = $order->discount_percentage !== null && $order->discount_percentage > 0;
+
+        if ($hasDiscount && ! $package->stripe_product_id) {
+            Log::error('Package missing Stripe product ID (required for discounted checkout)', [
+                'package_id' => $package->id,
+                'package_name' => $package->name,
+            ]);
+
+            return [
+                'success' => false,
+                'error' => 'Package is not configured for Stripe payments. Please contact support.',
+            ];
+        }
+
+        if (! $hasDiscount && ! $package->stripe_price_id) {
             Log::error('Package missing Stripe price ID', [
                 'package_id' => $package->id,
                 'package_name' => $package->name,
