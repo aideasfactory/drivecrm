@@ -283,11 +283,36 @@ API Controller → Service → Action(s) → Eloquent Resource (response)
 7. **Actions are shared**: Same Actions used by web and API — no duplication
 8. **Identity from token, not request**: NEVER accept instructor/student ID from the client to scope the current user's data — always derive from `$request->user()->profile` (see Section 4)
 
+#### 🚨 REUSE-FIRST RULE (NON-NEGOTIABLE)
+
+**Before creating ANY new Service or Action for an API endpoint, you MUST check if a web equivalent already exists.** API endpoints must reuse the same Actions and Services that power the web UI. Creating duplicate logic is a violation.
+
+**How to apply:**
+1. **Check the web controller first** — find the web route that performs the same operation and trace it to its Service/Action
+2. **Reuse that exact Action** — the API controller calls the same Service method, which calls the same Action
+3. **Never create a new Action** for an API endpoint if an existing Action already does the same thing for the web
+4. **Never create a new Service** for an API endpoint — add a method to the existing domain Service instead
+5. **If the existing Action returns web-specific data** (e.g., mapped arrays for Inertia), refactor it to return models and move the mapping to the web controller — Actions should return reusable data structures
+
+**The test:** If you can describe what an API Action does and a web Action does using the same sentence, they should be the same Action.
+
+**Examples of violations this rule prevents:**
+- ❌ Creating `GetStudentNotesAction` (API) when `GetNotesAction` (shared) already exists
+- ❌ Creating `CreateStudentNoteAction` (API) when `CreateNoteAction` (shared, with activity logging) already exists
+- ❌ Creating `InstructorPackageService` with inline Eloquent when `GetInstructorPackagesAction` already exists
+- ❌ Creating `DeleteStudentAction` (hard delete) for API when web uses `RemoveStudentFromInstructorAction` (soft remove)
+- ❌ Creating `CreateStudentAction` (student-only) for API when web uses `CreatePupilAction` (user + student)
+
+**If the web and API need different behaviour for the same concept, that is a design discussion — not a reason to silently create a parallel action.**
+
 #### ❌ API Pattern Violations
 
 - ❌ Returning `response()->json($model)` without a Resource
 - ❌ Putting API logic in web controllers
 - ❌ Creating duplicate Services for API vs Web
+- ❌ Creating a new Action when a web Action already performs the same operation
+- ❌ Creating a new Service class for an API domain when an existing Service covers that domain
+- ❌ Implementing different behaviour (e.g., hard delete vs soft remove) without explicit approval
 - ❌ Skipping FormRequest validation in API controllers
 - ❌ Using session-based auth for API routes
 - ❌ Returning Inertia responses from API controllers
@@ -323,17 +348,19 @@ routes/
 #### 📋 Checklist for New API Features
 
 When adding a new API endpoint:
-1. [ ] Create/reuse Action in `app/Actions/{Domain}/`
-2. [ ] Create/reuse Service method (shared with web)
-3. [ ] Create API Controller in `app/Http/Controllers/Api/V1/`
-4. [ ] Create Eloquent Resource in `app/Http/Resources/V1/`
-5. [ ] Create FormRequest in `app/Http/Requests/Api/V1/` (if POST/PUT/PATCH)
-6. [ ] Add route to `routes/api.php` inside the `auth:sanctum` + `ResolveApiProfile` group
-7. [ ] **Scope by `$request->user()->profile`** — never accept the user's own ID from the client
-8. [ ] **Update `.claude/api.md`** with endpoint documentation
-9. [ ] Include request body, response example, and auth requirements
+1. [ ] **FIRST: Find the web equivalent** — check web controllers for the same operation and identify which Service/Action it uses
+2. [ ] **Reuse the existing Action** from `app/Actions/{Domain}/` — do NOT create a new one if a web Action already exists
+3. [ ] **Reuse the existing Service method** (shared with web) — do NOT create a new Service class
+4. [ ] Create API Controller in `app/Http/Controllers/Api/V1/`
+5. [ ] Create Eloquent Resource in `app/Http/Resources/V1/`
+6. [ ] Create FormRequest in `app/Http/Requests/Api/V1/` (if POST/PUT/PATCH)
+7. [ ] Add route to `routes/api.php` inside the `auth:sanctum` + `ResolveApiProfile` group
+8. [ ] **Scope by `$request->user()->profile`** — never accept the user's own ID from the client
+9. [ ] **Update `.claude/api.md`** with endpoint documentation
+10. [ ] Include request body, response example, and auth requirements
 
 **Rule: No API feature is complete until `api.md` is updated.**
+**Rule: No new Action or Service is justified until you've confirmed no web equivalent exists.**
 
 ---
 
