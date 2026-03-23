@@ -30,7 +30,7 @@ class StudentNoteController extends Controller
 
         $notes = $this->noteService->getStudentNotes($student);
 
-        return NoteResource::collection($notes);
+        return NoteResource::collection($notes->getCollection());
     }
 
     /**

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Actions\Student\CreateStudentAction;
-use App\Actions\Student\DeleteStudentAction;
+use App\Actions\Instructor\CreatePupilAction;
 use App\Actions\Student\GetAllStudentsAction;
 use App\Actions\Student\GetStudentByIdAction;
 use App\Actions\Student\PickupPoint\GetStudentPickupPointsAction;
+use App\Actions\Student\Status\RemoveStudentFromInstructorAction;
 use App\Actions\Student\UpdateStudentAction;
 use App\Models\Instructor;
 use App\Models\Student;
@@ -19,9 +19,9 @@ class StudentService extends BaseService
     public function __construct(
         protected GetAllStudentsAction $getAllStudents,
         protected GetStudentByIdAction $getStudentById,
-        protected CreateStudentAction $createStudent,
+        protected CreatePupilAction $createPupil,
         protected UpdateStudentAction $updateStudent,
-        protected DeleteStudentAction $deleteStudent,
+        protected RemoveStudentFromInstructorAction $removeStudent,
         protected GetStudentPickupPointsAction $getStudentPickupPoints
     ) {}
 
@@ -44,11 +44,11 @@ class StudentService extends BaseService
     }
 
     /**
-     * Create a new student record assigned to an instructor.
+     * Create a new pupil (user + student record) assigned to an instructor.
      */
     public function create(Instructor $instructor, array $data): Student
     {
-        $student = ($this->createStudent)($instructor, $data);
+        $student = ($this->createPupil)($instructor, $data);
 
         $this->invalidateInstructorStudentCache($instructor);
 
@@ -70,13 +70,13 @@ class StudentService extends BaseService
     }
 
     /**
-     * Delete a student record.
+     * Remove a student from their instructor (soft remove, not hard delete).
      */
-    public function delete(Student $student): bool
+    public function remove(Student $student): Student
     {
         $instructor = $student->instructor;
 
-        $result = ($this->deleteStudent)($student);
+        $result = ($this->removeStudent)($student);
 
         if ($instructor) {
             $this->invalidateInstructorStudentCache($instructor);

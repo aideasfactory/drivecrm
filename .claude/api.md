@@ -918,7 +918,7 @@ Returns all active packages for the authenticated instructor.
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Creates a new student record assigned to the authenticated instructor.
+Creates a new student with a user account and assigns them to the authenticated instructor. A welcome email is sent to the student with their temporary login credentials.
 
 **Request Body:**
 ```json
@@ -927,10 +927,6 @@ Creates a new student record assigned to the authenticated instructor.
   "surname": "Doe",
   "email": "jane@example.com",
   "phone": "07700900000",
-  "contact_first_name": "Mary",
-  "contact_surname": "Doe",
-  "contact_email": "mary@example.com",
-  "contact_phone": "07700900001",
   "owns_account": true
 }
 ```
@@ -939,12 +935,8 @@ Creates a new student record assigned to the authenticated instructor.
 |-------|------|----------|-------|
 | `first_name` | string | Yes | Student's first name (max 255) |
 | `surname` | string | Yes | Student's surname (max 255) |
-| `email` | string | No | Student's email address |
+| `email` | string | Yes | Student's email address (must be unique across all users) |
 | `phone` | string | No | Student's phone number (max 50) |
-| `contact_first_name` | string | No | Booker/guardian's first name (max 255) |
-| `contact_surname` | string | No | Booker/guardian's surname (max 255) |
-| `contact_email` | string | No | Booker/guardian's email |
-| `contact_phone` | string | No | Booker/guardian's phone (max 50) |
 | `owns_account` | boolean | No | Whether the student owns the account (default: true) |
 
 **Success Response:** `201 Created`
@@ -957,8 +949,8 @@ Creates a new student record assigned to the authenticated instructor.
     "email": "jane@example.com",
     "phone": "07700900000",
     "status": "active",
-    "has_app": false,
-    "updated_at": "2026-03-19T10:00:00+00:00"
+    "has_app": true,
+    "updated_at": "2026-03-23T10:00:00+00:00"
   }
 }
 ```
@@ -981,7 +973,22 @@ Creates a new student record assigned to the authenticated instructor.
 }
 ```
 
-> **Note:** The student is automatically assigned to the authenticated instructor. The student is created with `status = "active"` by default.
+**Error Response (duplicate email):** `422 Unprocessable Entity`
+```json
+{
+  "message": "The email has already been taken.",
+  "errors": {
+    "email": ["The email has already been taken."]
+  }
+}
+```
+
+> **Note:** The student is automatically assigned to the authenticated instructor. A user account is created with the `student` role and a randomly generated temporary password. A welcome email is sent to the student with their login credentials. The student should change their password after first login.
+
+**Side Effects:**
+- Creates a `User` record with `role = "student"` and a random temporary password
+- Creates a `Student` record linked to the new user and assigned to the instructor
+- Sends a `WelcomeStudentNotification` email with the temporary password (queued)
 
 ---
 
@@ -1094,7 +1101,7 @@ Updates an existing student record. Access is controlled by the same policy as t
 
 **Auth required:** Yes (Bearer token — student or instructor)
 
-Deletes a student record. Access is controlled by the same policy.
+Removes a student from their assigned instructor. This is a **soft remove** — the student record and user account are preserved, but the `instructor_id` is set to `null`. Access is controlled by the same policy.
 
 **URL Parameters:**
 
@@ -1104,14 +1111,26 @@ Deletes a student record. Access is controlled by the same policy.
 
 **Request Body:** None
 
-**Success Response:** `204 No Content`
-
-*(Empty response body)*
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 1,
+    "first_name": "Jane",
+    "surname": "Doe",
+    "email": "jane@example.com",
+    "phone": "07700900000",
+    "status": "active",
+    "has_app": true,
+    "updated_at": "2026-03-23T11:00:00+00:00"
+  }
+}
+```
 
 **Error Response (not authorised):** `403 Forbidden`
 **Error Response (not found):** `404 Not Found`
 
-> **Note:** This permanently deletes the student record. Cascading deletes will remove related orders, lessons, and other dependent records.
+> **Note:** This does NOT permanently delete the student. It removes the student from the instructor's list by setting `instructor_id` to null. The student's user account, lessons, orders, and other data are preserved. An activity log entry is created recording the removal.
 
 ---
 
@@ -2262,7 +2281,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | POST | `/api/v1/students` | Yes | Instructor | Create student |
 | GET | `/api/v1/students/{student}` | Yes | Both | View student |
 | PUT | `/api/v1/students/{student}` | Yes | Both | Update student |
-| DELETE | `/api/v1/students/{student}` | Yes | Both | Delete student |
+| DELETE | `/api/v1/students/{student}` | Yes | Both | Remove student (soft) |
 | GET | `/api/v1/students/{student}/lessons` | Yes | Both | List lessons |
 | GET | `/api/v1/students/{student}/lessons/{lesson}` | Yes | Both | Lesson detail |
 | POST | `/api/v1/students/{student}/lessons/{lesson}/sign-off` | Yes | Both | Sign off lesson |
@@ -2297,6 +2316,8 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-17 | Fixed authorize bug in StudentLessonController (Gate::authorize) | Student (lessons index, lessons show) |
 | 2026-03-19 | Added student create, update, and delete endpoints with policy enforcement | Student (store, update, destroy) |
 | 2026-03-23 | Full API documentation audit — added all missing endpoints and fixed broken sections | All endpoints |
+| 2026-03-23 | Student creation now creates a User account with temp password and sends welcome email; email field now required and unique | Student (store) |
+| 2026-03-23 | DELETE student endpoint changed from hard delete (204) to soft remove (200) — sets instructor_id to null, preserves student data | Student (destroy) |
 
 ---
 

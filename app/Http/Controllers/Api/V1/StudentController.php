@@ -69,7 +69,7 @@ class StudentController extends Controller
     }
 
     /**
-     * Delete a student record.
+     * Remove a student from the instructor (soft remove, not hard delete).
      *
      * Authorised for the student themselves or their assigned instructor.
      */
@@ -79,8 +79,10 @@ class StudentController extends Controller
 
         Gate::authorize('delete', $student);
 
-        $this->studentService->delete($student);
+        $student = $this->studentService->remove($student);
 
-        return response()->json(null, 204);
+        return (new StudentResource($student))
+            ->response()
+            ->setStatusCode(200);
     }
 }

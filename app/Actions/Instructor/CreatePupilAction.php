@@ -8,7 +8,9 @@ use App\Enums\UserRole;
 use App\Models\Instructor;
 use App\Models\Student;
 use App\Models\User;
+use App\Notifications\WelcomeStudentNotification;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class CreatePupilAction
 {
@@ -21,14 +23,16 @@ class CreatePupilAction
      */
     public function __invoke(Instructor $instructor, array $data): Student
     {
+        $temporaryPassword = Str::random(12);
+
         $user = User::create([
             'name' => $data['first_name'].' '.$data['surname'],
             'email' => $data['email'],
-            'password' => Hash::make('password'),
+            'password' => Hash::make($temporaryPassword),
             'role' => UserRole::STUDENT,
         ]);
 
-        return Student::create([
+        $student = Student::create([
             'user_id' => $user->id,
             'instructor_id' => $instructor->id,
             'first_name' => $data['first_name'],
@@ -37,5 +41,9 @@ class CreatePupilAction
             'phone' => $data['phone'] ?? null,
             'owns_account' => $data['owns_account'] ?? true,
         ]);
+
+        $user->notify(new WelcomeStudentNotification($temporaryPassword, $instructor));
+
+        return $student;
     }
 }

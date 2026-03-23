@@ -4,34 +4,34 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Actions\Note\CreateStudentNoteAction;
-use App\Actions\Note\GetStudentNotesAction;
+use App\Actions\Shared\Note\CreateNoteAction;
+use App\Actions\Shared\Note\GetNotesAction;
 use App\Models\Note;
 use App\Models\Student;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class NoteService extends BaseService
 {
     public function __construct(
-        protected GetStudentNotesAction $getStudentNotes,
-        protected CreateStudentNoteAction $createStudentNote
+        protected GetNotesAction $getNotes,
+        protected CreateNoteAction $createNote
     ) {}
 
     /**
-     * Get all notes for a student.
+     * Get paginated notes for a student.
      *
-     * @return Collection<int, Note>
+     * @return LengthAwarePaginator<int, Note>
      */
-    public function getStudentNotes(Student $student): Collection
+    public function getStudentNotes(Student $student, int $perPage = 50): LengthAwarePaginator
     {
-        return ($this->getStudentNotes)($student);
+        return ($this->getNotes)($student, $perPage);
     }
 
     /**
-     * Create a new note on a student.
+     * Create a new note on a student (with activity logging).
      */
     public function createStudentNote(Student $student, string $note): Note
     {
-        return ($this->createStudentNote)($student, $note);
+        return ($this->createNote)($student, $note);
     }
 }
