@@ -4,10 +4,13 @@ import axios from 'axios'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Mail, Phone, MapPin, Edit, CreditCard, Loader2, CheckCircle } from 'lucide-vue-next'
+import { Mail, Phone, MapPin, Edit, CreditCard, Loader2, CheckCircle, LogOut } from 'lucide-vue-next'
+import { router } from '@inertiajs/vue3'
 import { toast } from '@/components/ui/toast'
 import type { InstructorDetail } from '@/types/instructor'
 import { stripeStatus, startStripeOnboarding, refreshStripeOnboarding } from '@/actions/App/Http/Controllers/InstructorController'
+import { logout } from '@/routes'
+import { useRole } from '@/composables/useRole'
 
 interface Props {
     instructor: InstructorDetail
@@ -27,6 +30,7 @@ interface StripeStatus {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
+const { isOwner } = useRole()
 
 const loading = ref(false)
 const checkingStatus = ref(true)
@@ -175,6 +179,12 @@ onMounted(() => {
                 <Button @click="emit('edit')">
                     <Edit class="mr-2 h-4 w-4" />
                     Edit Profile
+                </Button>
+
+                <!-- Logout Button (hidden for owners — they use the sidebar menu) -->
+                <Button v-if="!isOwner" variant="outline" @click="router.flushAll(); router.post(logout.url())">
+                    <LogOut class="mr-2 h-4 w-4" />
+                    Logout
                 </Button>
             </div>
         </div>

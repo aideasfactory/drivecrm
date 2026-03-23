@@ -328,7 +328,8 @@ class InstructorService extends BaseService
         ?string $recurrenceEndDate = null,
         bool $isAvailable = true,
         ?string $notes = null,
-        ?string $unavailabilityReason = null
+        ?string $unavailabilityReason = null,
+        ?int $travelTimeMinutes = null
     ): Collection {
         return ($this->createRecurringCalendarItems)(
             $instructor,
@@ -339,7 +340,8 @@ class InstructorService extends BaseService
             $recurrenceEndDate,
             $isAvailable,
             $notes,
-            $unavailabilityReason
+            $unavailabilityReason,
+            $travelTimeMinutes
         );
     }
 

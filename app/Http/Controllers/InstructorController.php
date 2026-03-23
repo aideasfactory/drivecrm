@@ -270,6 +270,8 @@ class InstructorController extends Controller
 
         // Handle recurring slots
         if ($pattern !== RecurrencePattern::None) {
+            $travelTimeMinutes = $request->integer('travel_time_minutes') ?: null;
+
             $items = $this->instructorService->addRecurringCalendarItems(
                 $instructor,
                 $request->input('date'),
@@ -279,7 +281,8 @@ class InstructorController extends Controller
                 $request->input('recurrence_end_date'),
                 $request->boolean('is_available', true),
                 $request->input('notes'),
-                $request->input('unavailability_reason')
+                $request->input('unavailability_reason'),
+                $travelTimeMinutes
             );
 
             $firstItem = $items->first();

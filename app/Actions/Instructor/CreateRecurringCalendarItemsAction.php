@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Instructor;
 
+use App\Enums\CalendarItemType;
 use App\Enums\RecurrencePattern;
 use App\Models\Calendar;
 use App\Models\CalendarItem;
@@ -31,6 +32,7 @@ class CreateRecurringCalendarItemsAction
      * @param  bool  $isAvailable  Whether the slots are available
      * @param  string|null  $notes  Optional notes
      * @param  string|null  $unavailabilityReason  Reason for unavailability
+     * @param  int|null  $travelTimeMinutes  Travel time in minutes (15, 30, or 45) to create after each slot
      * @return Collection<int, CalendarItem> The created calendar items
      */
     public function __invoke(
@@ -42,7 +44,8 @@ class CreateRecurringCalendarItemsAction
         ?string $recurrenceEndDate = null,
         bool $isAvailable = true,
         ?string $notes = null,
-        ?string $unavailabilityReason = null
+        ?string $unavailabilityReason = null,
+        ?int $travelTimeMinutes = null
     ): Collection {
         $startDate = Carbon::parse($date);
         $endDate = $recurrenceEndDate
@@ -64,6 +67,8 @@ class CreateRecurringCalendarItemsAction
                 'start_time' => $startTime,
                 'end_time' => $endTime,
                 'is_available' => $isAvailable,
+                'item_type' => CalendarItemType::Slot,
+                'travel_time_minutes' => $travelTimeMinutes,
                 'status' => null,
                 'notes' => $notes,
                 'unavailability_reason' => $unavailabilityReason,
@@ -72,10 +77,39 @@ class CreateRecurringCalendarItemsAction
                 'recurrence_group_id' => $groupId,
             ]);
 
+            if ($travelTimeMinutes && $travelTimeMinutes > 0 && $isAvailable) {
+                $this->createTravelBlock($calendar, $item, $endTime, $travelTimeMinutes);
+            }
+
             $items->push($item);
         }
 
         return $items;
+    }
+
+    /**
+     * Create a travel-time calendar item immediately after a lesson slot.
+     */
+    private function createTravelBlock(
+        Calendar $calendar,
+        CalendarItem $parentItem,
+        string $slotEndTime,
+        int $travelMinutes
+    ): CalendarItem {
+        $travelStart = Carbon::parse($slotEndTime);
+        $travelEnd = $travelStart->copy()->addMinutes($travelMinutes);
+
+        return CalendarItem::create([
+            'calendar_id' => $calendar->id,
+            'start_time' => $travelStart->format('H:i'),
+            'end_time' => $travelEnd->format('H:i'),
+            'is_available' => false,
+            'item_type' => CalendarItemType::Travel,
+            'parent_item_id' => $parentItem->id,
+            'status' => null,
+            'notes' => null,
+            'unavailability_reason' => 'Travel time',
+        ]);
     }
 
     /**
