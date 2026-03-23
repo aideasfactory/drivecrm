@@ -831,6 +831,7 @@ Stores uploaded files (videos, PDFs) or video links (Vimeo/YouTube) with metadat
 | `thumbnail_path` | varchar(500) | NULLABLE | S3 thumbnail path (optional) |
 | `thumbnail_url` | varchar(500) | NULLABLE | External thumbnail URL (for video_link resources) |
 | `sort_order` | integer | DEFAULT 0 | Display ordering within folder |
+| `status` | varchar(255) | DEFAULT 'published' | Resource visibility: 'published' or 'draft' |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 

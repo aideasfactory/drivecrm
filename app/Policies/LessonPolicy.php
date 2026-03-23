@@ -33,6 +33,34 @@ class LessonPolicy
     }
 
     /**
+     * Determine whether the user can sign off a lesson for the given student.
+     *
+     * Only the student's assigned instructor can sign off lessons.
+     */
+    public function signOff(User $user, Student $student): bool
+    {
+        return $this->isStudentsInstructor($user, $student);
+    }
+
+    /**
+     * Determine whether the user can assign resources to a lesson.
+     *
+     * Only the student's assigned instructor can assign resources.
+     */
+    public function assignResources(User $user, Student $student): bool
+    {
+        return $this->isStudentsInstructor($user, $student);
+    }
+
+    /**
+     * Check if the user is the student's assigned instructor.
+     */
+    private function isStudentsInstructor(User $user, Student $student): bool
+    {
+        return $user->isInstructor() && $student->instructor_id === $user->instructor?->id;
+    }
+
+    /**
      * Check if the user can access the student's lessons.
      */
     private function canAccessStudentLessons(User $user, Student $student): bool
