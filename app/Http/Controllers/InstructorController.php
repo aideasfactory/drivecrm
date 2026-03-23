@@ -691,7 +691,8 @@ class InstructorController extends Controller
     public function pupils(Instructor $instructor): JsonResponse
     {
         $search = request()->query('search');
-        $pupils = $this->instructorService->getPupils($instructor, $search);
+        $status = request()->query('status', 'active');
+        $pupils = $this->instructorService->getPupils($instructor, $search, $status);
 
         return response()->json([
             'pupils' => $pupils,

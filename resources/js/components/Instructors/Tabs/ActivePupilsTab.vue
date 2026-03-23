@@ -50,6 +50,7 @@ const props = defineProps<Props>()
 const pupils = ref<Pupil[]>([])
 const loading = ref(true)
 const searchQuery = ref('')
+const showAllPupils = ref(false)
 
 // Broadcast Message Sheet
 const isBroadcastSheetOpen = ref(false)
@@ -86,8 +87,13 @@ const filteredPupils = computed(() => {
 const loadPupils = async () => {
     loading.value = true
     try {
+        const params: Record<string, string> = {}
+        if (showAllPupils.value) {
+            params.status = 'all'
+        }
         const response = await axios.get(
             `/instructors/${props.instructor.id}/pupils`,
+            { params },
         )
         pupils.value = response.data.pupils
     } catch (error: any) {
@@ -97,6 +103,11 @@ const loadPupils = async () => {
     } finally {
         loading.value = false
     }
+}
+
+const toggleShowAll = (value: boolean) => {
+    showAllPupils.value = value
+    loadPupils()
 }
 
 onMounted(() => {
@@ -288,6 +299,16 @@ const handleCreatePupil = async () => {
                 />
             </div>
             <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2">
+                    <Checkbox
+                        id="show-all-pupils"
+                        :checked="showAllPupils"
+                        @update:checked="toggleShowAll"
+                    />
+                    <Label for="show-all-pupils" class="cursor-pointer text-sm whitespace-nowrap">
+                        Show all pupils
+                    </Label>
+                </div>
                 <Button
                     @click="isAddPupilSheetOpen = true"
                     class="cursor-pointer"
@@ -437,14 +458,18 @@ const handleCreatePupil = async () => {
                                             {{
                                                 searchQuery
                                                     ? 'No pupils found'
-                                                    : 'No pupils yet'
+                                                    : showAllPupils
+                                                      ? 'No pupils yet'
+                                                      : 'No active pupils'
                                             }}
                                         </p>
                                         <p class="mt-1 text-sm">
                                             {{
                                                 searchQuery
                                                     ? 'Try adjusting your search'
-                                                    : 'Students assigned to this instructor will appear here'
+                                                    : showAllPupils
+                                                      ? 'Students assigned to this instructor will appear here'
+                                                      : 'Try enabling "Show all pupils" to see inactive students'
                                             }}
                                         </p>
                                     </div>
