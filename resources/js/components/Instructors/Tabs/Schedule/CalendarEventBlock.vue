@@ -1,5 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import {
+    Check,
+    X,
+    Flag,
+    PoundSterling,
+    CircleOff,
+} from 'lucide-vue-next'
 
 import type { CalendarItemTypeValue, RecurrencePattern } from '@/types/instructor'
 
@@ -14,6 +21,7 @@ export interface CalendarEvent {
     travelTimeMinutes: number | null
     parentItemId: number | null
     studentName: string | null
+    isPaid: boolean | null
     notes: string | null
     unavailabilityReason: string | null
     recurrencePattern: RecurrencePattern
@@ -66,43 +74,61 @@ const heightPx = computed(() => {
     return (durationMinutes / 30) * props.rowHeight
 })
 
+/** Whether the booked/completed slot has been paid */
+const isPaid = computed(() => props.event.isPaid === true)
+
+/** Whether the slot has a booking (booked or completed) */
+const hasBooking = computed(() => {
+    const status = props.event.status
+    return status === 'booked' || status === 'completed'
+})
+
 /** Status-based color classes */
 const colorClasses = computed(() => {
-    // Travel-time blocks get a distinct purple/indigo style
+    // Travel-time blocks — purple dashed
     if (isTravel.value) {
         return 'border-purple-300 bg-purple-100 text-purple-800 dark:border-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
     }
 
-    // Practical test slots get a distinct teal/cyan style
+    // Practical test slots — teal
     if (isPracticalTest.value) {
         return 'border-teal-300 bg-teal-100 text-teal-800 dark:border-teal-700 dark:bg-teal-900/30 dark:text-teal-300'
     }
 
     const status = props.event.status
 
-    if (status === 'booked') {
-        return 'border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-    }
-
-    if (status === 'draft') {
-        return 'border-gray-300 bg-gray-100 text-gray-800 dark:border-gray-600 dark:bg-gray-800/30 dark:text-gray-300'
-    }
-
-    if (status === 'reserved') {
-        return 'border-orange-300 bg-orange-100 text-orange-800 dark:border-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
-    }
-
+    // Completed — green
     if (status === 'completed') {
         return 'border-green-300 bg-green-100 text-green-800 dark:border-green-700 dark:bg-green-900/30 dark:text-green-300'
     }
 
-    // Unavailable (is_available = false, no booking status)
+    // Booked & paid — amber
+    if (status === 'booked' && isPaid.value) {
+        return 'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+    }
+
+    // Booked & not paid — gray
+    if (status === 'booked') {
+        return 'border-gray-300 bg-gray-100 text-gray-800 dark:border-gray-600 dark:bg-gray-800/30 dark:text-gray-300'
+    }
+
+    // Draft — gray (lighter)
+    if (status === 'draft') {
+        return 'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-600 dark:bg-gray-800/20 dark:text-gray-400'
+    }
+
+    // Reserved — orange
+    if (status === 'reserved') {
+        return 'border-orange-300 bg-orange-100 text-orange-800 dark:border-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
+    }
+
+    // Unavailable — red
     if (!props.event.isAvailable) {
         return 'border-red-300 bg-red-100 text-red-800 dark:border-red-700 dark:bg-red-900/30 dark:text-red-300'
     }
 
-    // Available (is_available = true, status null/available)
-    return 'border-yellow-300 bg-yellow-100 text-yellow-800 dark:border-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'
+    // Available — blue
+    return 'border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
 })
 
 /** Status label for display */
@@ -112,12 +138,25 @@ const statusLabel = computed(() => {
 
     const status = props.event.status
 
-    if (status === 'booked') return 'Booked'
+    if (status === 'completed') return 'Completed'
+    if (status === 'booked' && isPaid.value) return 'Booked & Paid'
+    if (status === 'booked') return 'Booked (Unpaid)'
     if (status === 'draft') return 'Draft'
     if (status === 'reserved') return 'Reserved'
-    if (status === 'completed') return 'Completed'
 
     return props.event.isAvailable ? 'Available' : 'Unavailable'
+})
+
+/** Whether to show the status flag icon */
+const showFlag = computed(() => {
+    if (isTravel.value || isPracticalTest.value) return false
+    const status = props.event.status
+    return status === 'booked' || status === 'completed' || !props.event.isAvailable
+})
+
+/** Whether to show the payment icon */
+const showPaymentIcon = computed(() => {
+    return hasBooking.value && props.event.isPaid !== null
 })
 
 function handleClick(e: MouseEvent) {
@@ -155,6 +194,13 @@ function handlePointerDown(e: PointerEvent) {
             <svg v-if="isPracticalTest" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
+            <!-- Status flag icons -->
+            <Flag v-if="showFlag && event.status === 'completed'" class="h-3 w-3 shrink-0" />
+            <Check v-if="showFlag && event.status === 'booked'" class="h-3 w-3 shrink-0" />
+            <X v-if="showFlag && !event.isAvailable && event.status !== 'booked' && event.status !== 'completed'" class="h-3 w-3 shrink-0" />
+            <!-- Payment icons -->
+            <PoundSterling v-if="showPaymentIcon && isPaid" class="h-3 w-3 shrink-0" />
+            <CircleOff v-if="showPaymentIcon && !isPaid" class="h-3 w-3 shrink-0" />
             <span>{{ formatTime(event.startTime) }} - {{ formatTime(event.endTime) }}</span>
             <!-- Recurrence indicator -->
             <svg v-if="event.recurrencePattern && event.recurrencePattern !== 'none'" class="h-3 w-3 shrink-0 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Recurring">

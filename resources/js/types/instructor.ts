@@ -121,6 +121,7 @@ export interface CalendarItemResponse {
   notes: string | null
   unavailability_reason: string | null
   student_name: string | null
+  is_paid: boolean | null
   recurrence_pattern: RecurrencePattern
   recurrence_end_date: string | null
   recurrence_group_id: string | null

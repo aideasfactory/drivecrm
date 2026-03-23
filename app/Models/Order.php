@@ -120,4 +120,33 @@ class Order extends Model
     {
         return $this->payment_mode === PaymentMode::WEEKLY;
     }
+
+    /**
+     * Get formatted total price from snapshot (e.g., "£500.00").
+     */
+    public function getFormattedPackageTotalPriceAttribute(): string
+    {
+        return '£'.number_format(($this->package_total_price_pence ?? 0) / 100, 2);
+    }
+
+    /**
+     * Get formatted lesson price from snapshot (e.g., "£50.00").
+     */
+    public function getFormattedPackageLessonPriceAttribute(): string
+    {
+        return '£'.number_format(($this->package_lesson_price_pence ?? 0) / 100, 2);
+    }
+
+    /**
+     * Get formatted weekly payment from snapshot data.
+     * Uses the stored lesson price, not the live package calculation.
+     */
+    public function getFormattedWeeklyPaymentAttribute(): string
+    {
+        if (! $this->package_lesson_price_pence || ! $this->package_lessons_count) {
+            return '£0.00';
+        }
+
+        return '£'.number_format($this->package_lesson_price_pence / 100, 2);
+    }
 }

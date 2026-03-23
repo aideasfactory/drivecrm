@@ -33,7 +33,7 @@ class GetInstructorCalendarAction
             ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->with(['items' => function ($query) {
                 $query->orderBy('start_time');
-            }, 'items.lessons.order.student'])
+            }, 'items.lessons.order.student', 'items.lessons.lessonPayment'])
             ->orderBy('date')
             ->get();
 
@@ -44,11 +44,17 @@ class GetInstructorCalendarAction
                 'date' => $calendar->date->format('Y-m-d'),
                 'items' => $calendar->items->map(function ($item) use ($calendar) {
                     $studentName = null;
+                    $isPaid = null;
+                    $lesson = null;
+
                     if ($item->status === CalendarItemStatus::BOOKED || $item->status === CalendarItemStatus::COMPLETED) {
                         $lesson = $item->lessons->first();
                         if ($lesson && $lesson->order && $lesson->order->student) {
                             $student = $lesson->order->student;
                             $studentName = trim($student->first_name.' '.$student->surname);
+                        }
+                        if ($lesson) {
+                            $isPaid = $lesson->lessonPayment?->isPaid() ?? false;
                         }
                     }
 
@@ -64,6 +70,7 @@ class GetInstructorCalendarAction
                         'travel_time_minutes' => $item->travel_time_minutes,
                         'parent_item_id' => $item->parent_item_id,
                         'student_name' => $studentName,
+                        'is_paid' => $isPaid,
                         'notes' => $item->notes,
                         'unavailability_reason' => $item->unavailability_reason,
                         'recurrence_pattern' => $item->recurrence_pattern?->value ?? 'none',
