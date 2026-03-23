@@ -1,7 +1,7 @@
-# Task: Instructor screen: show active pupils only
+# Task: Restrict instructor-role admin users to the instructor screen and hide the full admin side menu
 
 **Created:** 2026-03-23
-**Last Updated:** 2026-03-23T10:30:00Z
+**Last Updated:** 2026-03-23T11:30:00Z
 **Status:** ✅ Complete
 
 ---
@@ -9,65 +9,44 @@
 ## Overview
 
 ### Goal
-Change the instructor view so the Pupils list only shows active pupils by default, with a toggle to show all pupils.
+Build a role-specific admin experience for instructors. When an instructor logs in, they should only see their own instructor screen, with the full admin side menu hidden.
 
 ### Context
-- Tile ID: 019ce7ac-e041-73be-a396-70738093366c
-- Repository: drivecrm
-- Branch: feature/019ce7ac-e041-73be-a396-70738093366c-instructor-screen-show-active-pupils-only
-- Priority: HIGH
-- Customer: Drive
+- Tile ID: 019d1a52-1dbf-71c3-bb74-211c9e8a35a9
+- Branch: feature/019d1a52-1dbf-71c3-bb74-211c9e8a35a9-restrict-instructor-role-admin-users-to-the-instructor-scree
 
 ---
 
-## PHASE 1: PLANNING
-**Status:** ✅ Complete
-
-### Tasks
-- [x] Review current pupils display on instructor screen
-- [x] Identify Student status field and "active" definition
-- [x] Trace data flow: Controller → Service → Action → Frontend
-- [x] Identify where filtering should be applied
-- [x] Check for existing tests
-- [x] Plan implementation approach
+## PHASE 1: PLANNING — ✅ Complete
 
 ### Reflection
-The `status` column on the `students` table is the correct field to filter on. Filtering applied at the Action level with parameter passed through Controller → Service → Action. Frontend toggle allows staff to see all pupils when needed.
+Clean patterns already exist (EnsureOwner middleware, useRole composable). Followed the same approach.
 
 ---
 
-## PHASE 2: IMPLEMENTATION
-**Status:** ✅ Complete
+## PHASE 2: IMPLEMENTATION — ✅ Complete
 
 ### Tasks
-- [x] Add `?status` filter to `GetInstructorPupilsAction` (default: `'active'`)
-- [x] Update `InstructorService::getPupils()` to accept and pass status filter
-- [x] Update `InstructorController::pupils()` to read `?status` query param
-- [x] Add "Show all pupils" toggle to `ActivePupilsTab.vue`
-- [x] Write Pest feature tests for active-only and show-all filtering
+- ✓ Create RestrictInstructor middleware
+- ✓ Share instructor_id in HandleInertiaRequests
+- ✓ Apply middleware in routes/web.php
+- ✓ Modify AppSidebarLayout.vue to hide sidebar for instructors
+- ✓ Update Auth type to include instructor_id
+- ✓ Write tests
 
 ### Reflection
-Implementation was straightforward. The 3-layer pattern (Controller → Service → Action) made it clean to thread the new `status` parameter through. The frontend toggle uses a Checkbox component consistent with the existing UI patterns. Four test cases cover: default active-only, show-all, instructor scoping, and specific status filtering.
+All changes follow existing patterns. The middleware mirrors EnsureOwner's structure. Frontend uses the existing useRole composable. No new dependencies introduced.
 
 ---
 
-## PHASE 3: FINAL REFLECTION & DOCUMENTATION
-**Status:** ✅ Complete
+## PHASE 3: FINAL REFLECTION — ✅ Complete
 
-### Tasks
-- [x] Final reflection on implementation
-- [x] Update current-task.md with completion status
-- [x] Write .phase_done sentinel file
-
-### Reflection
-Clean, minimal change that follows existing patterns. No new dependencies, no migrations, no breaking changes. The default behaviour changes from showing all pupils to showing only active ones, with an opt-in toggle for staff who need to see everyone.
-
-### Files Changed
-- `app/Actions/Instructor/GetInstructorPupilsAction.php` — Added `$status` parameter with `where('status', ...)` filter
-- `app/Services/InstructorService.php` — Passed `$status` parameter through to action
-- `app/Http/Controllers/InstructorController.php` — Read `?status` query param (defaults to `'active'`)
-- `resources/js/components/Instructors/Tabs/ActivePupilsTab.vue` — Added "Show all pupils" checkbox toggle
-- `tests/Feature/Instructor/InstructorPupilsFilterTest.php` — 4 new test cases
+### What was built
+- Backend middleware (RestrictInstructor) that redirects instructor-role users to their own instructor page for any non-allowed route
+- Instructor-allowed routes: their own /instructors/{id}/*, /students/*, /settings/*
+- Frontend layout modification that completely hides the sidebar for instructor users
+- Shared instructor_id via Inertia for frontend use
+- Comprehensive test suite covering all redirect scenarios
 
 ### Score: 8/10
-Solid implementation following existing patterns. Minor consideration: the `status` query param is not validated against a whitelist of allowed values, but since it maps directly to a database column value comparison this is low risk. No anti-patterns introduced.
+Solid implementation that reuses existing patterns. Clean separation between backend enforcement (middleware) and frontend presentation (layout). No over-engineering. Minor consideration: if more allowed routes are needed in future, the middleware allowlist will need updating.

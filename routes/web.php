@@ -9,6 +9,7 @@ use App\Http\Controllers\Onboarding\StepSixController;
 use App\Http\Controllers\Onboarding\StepThreeController;
 use App\Http\Controllers\Onboarding\StepTwoController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Middleware\RestrictInstructor;
 use App\Http\Middleware\ValidateEnquiryUuid;
 use App\Http\Middleware\ValidateStepAccess;
 use Illuminate\Support\Facades\Route;
@@ -23,10 +24,10 @@ Route::get('/', function () {
 
 Route::get('dashboard', function () {
     return Inertia::render('Dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+})->middleware(['auth', 'verified', RestrictInstructor::class])->name('dashboard');
 
 // Main Application Routes
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(function () {
     Route::get('/instructors', [\App\Http\Controllers\InstructorController::class, 'index'])
         ->name('instructors.index');
     Route::post('/instructors', [\App\Http\Controllers\InstructorController::class, 'store'])
