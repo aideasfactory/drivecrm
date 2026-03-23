@@ -15,12 +15,17 @@ class GetInstructorPupilsAction
      *
      * @param  Instructor  $instructor  The instructor to fetch pupils for
      * @param  string|null  $search  Optional search term (name, email, phone)
+     * @param  string  $status  Filter by student status ('active' by default, 'all' to show everyone)
      * @return Collection Formatted pupil data
      */
-    public function __invoke(Instructor $instructor, ?string $search = null): Collection
+    public function __invoke(Instructor $instructor, ?string $search = null, string $status = 'active'): Collection
     {
         $query = Student::where('instructor_id', $instructor->id)
             ->with(['user', 'orders.lessons']);
+
+        if ($status !== 'all') {
+            $query->where('status', $status);
+        }
 
         if ($search) {
             $searchTerm = '%'.$search.'%';

@@ -1,7 +1,7 @@
-# Task: Create student create, update, and delete API endpoints with student-or-linked-instructor policy enforcement
+# Task: Instructor screen: show active pupils only
 
-**Created:** 2026-03-19
-**Last Updated:** 2026-03-19T09:45:00Z
+**Created:** 2026-03-23
+**Last Updated:** 2026-03-23T10:30:00Z
 **Status:** ✅ Complete
 
 ---
@@ -9,60 +9,65 @@
 ## Overview
 
 ### Goal
-Build API endpoints for creating, updating, and deleting student records with student-or-linked-instructor policy enforcement.
+Change the instructor view so the Pupils list only shows active pupils by default, with a toggle to show all pupils.
 
 ### Context
-- Tile ID: 019d01ca-ec12-7391-aa9c-a4af8e7eaa2d
+- Tile ID: 019ce7ac-e041-73be-a396-70738093366c
 - Repository: drivecrm
-- Branch: feature/019d01ca-ec12-7391-aa9c-a4af8e7eaa2d-create-student-create-update-and-delete-api-endpoints-with-s
+- Branch: feature/019ce7ac-e041-73be-a396-70738093366c-instructor-screen-show-active-pupils-only
+- Priority: HIGH
+- Customer: Drive
 
 ---
 
 ## PHASE 1: PLANNING
-**Status:** Complete
+**Status:** ✅ Complete
 
 ### Tasks
-- [x] Read existing codebase patterns
-- [x] Identify files to create/modify
-- [x] Plan data structure and response format
-
-### Tasks
-- [x] Review existing patterns and identify files to create/modify
+- [x] Review current pupils display on instructor screen
+- [x] Identify Student status field and "active" definition
+- [x] Trace data flow: Controller → Service → Action → Frontend
+- [x] Identify where filtering should be applied
+- [x] Check for existing tests
+- [x] Plan implementation approach
 
 ### Reflection
-Explored all existing patterns thoroughly. Codebase follows strict Controller → Service → Action with BaseService, FormRequests, Eloquent Resources, and Gate-based StudentPolicy.
+The `status` column on the `students` table is the correct field to filter on. Filtering applied at the Action level with parameter passed through Controller → Service → Action. Frontend toggle allows staff to see all pupils when needed.
 
 ---
 
 ## PHASE 2: IMPLEMENTATION
-**Status:** Complete
+**Status:** ✅ Complete
 
 ### Tasks
-- [x] Create CreateStudentAction
-- [x] Create UpdateStudentAction
-- [x] Create DeleteStudentAction
-- [x] Add create/update/delete methods to StudentPolicy
-- [x] Add create/update/delete methods to StudentService
-- [x] Create StoreStudentRequest FormRequest
-- [x] Create UpdateStudentRequest FormRequest
-- [x] Add store/update/destroy to StudentController
-- [x] Add routes to api.php
-- [x] Update api.md documentation
-- [x] Write Pest tests (17 tests across create/update/delete)
+- [x] Add `?status` filter to `GetInstructorPupilsAction` (default: `'active'`)
+- [x] Update `InstructorService::getPupils()` to accept and pass status filter
+- [x] Update `InstructorController::pupils()` to read `?status` query param
+- [x] Add "Show all pupils" toggle to `ActivePupilsTab.vue`
+- [x] Write Pest feature tests for active-only and show-all filtering
 
 ### Reflection
-All endpoints follow existing patterns exactly. Policy uses shared helper method for DRY authorization. Service invalidates instructor grouped_students cache on mutations. Tests cover all permission boundaries.
+Implementation was straightforward. The 3-layer pattern (Controller → Service → Action) made it clean to thread the new `status` parameter through. The frontend toggle uses a Checkbox component consistent with the existing UI patterns. Four test cases cover: default active-only, show-all, instructor scoping, and specific status filtering.
 
 ---
 
 ## PHASE 3: FINAL REFLECTION & DOCUMENTATION
 **Status:** ✅ Complete
 
+### Tasks
+- [x] Final reflection on implementation
+- [x] Update current-task.md with completion status
+- [x] Write .phase_done sentinel file
+
 ### Reflection
-- All three endpoints (POST, PUT, DELETE) follow the existing Controller → Service → Action architecture
-- StudentPolicy uses a shared `isStudentOrLinkedInstructor` helper to keep authorization DRY
-- Cache invalidation for instructor grouped_students is handled on create, update, and delete
-- api.md fully documented with request/response examples
-- 17 Pest tests written covering success, auth, validation, and permission boundaries
-- No anti-patterns or technical debt introduced
-- Score: 9/10 — clean implementation following all existing conventions
+Clean, minimal change that follows existing patterns. No new dependencies, no migrations, no breaking changes. The default behaviour changes from showing all pupils to showing only active ones, with an opt-in toggle for staff who need to see everyone.
+
+### Files Changed
+- `app/Actions/Instructor/GetInstructorPupilsAction.php` — Added `$status` parameter with `where('status', ...)` filter
+- `app/Services/InstructorService.php` — Passed `$status` parameter through to action
+- `app/Http/Controllers/InstructorController.php` — Read `?status` query param (defaults to `'active'`)
+- `resources/js/components/Instructors/Tabs/ActivePupilsTab.vue` — Added "Show all pupils" checkbox toggle
+- `tests/Feature/Instructor/InstructorPupilsFilterTest.php` — 4 new test cases
+
+### Score: 8/10
+Solid implementation following existing patterns. Minor consideration: the `status` query param is not validated against a whitelist of allowed values, but since it maps directly to a database column value comparison this is low risk. No anti-patterns introduced.

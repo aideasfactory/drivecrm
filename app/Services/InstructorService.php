@@ -384,11 +384,12 @@ class InstructorService extends BaseService
      * Get all students (pupils) belonging to an instructor.
      *
      * @param  string|null  $search  Optional search term
+     * @param  string  $status  Filter by student status ('active' by default, 'all' to show everyone)
      * @return Collection Formatted pupil data
      */
-    public function getPupils(Instructor $instructor, ?string $search = null): Collection
+    public function getPupils(Instructor $instructor, ?string $search = null, string $status = 'active'): Collection
     {
-        return ($this->getInstructorPupils)($instructor, $search);
+        return ($this->getInstructorPupils)($instructor, $search, $status);
     }
 
     /**
