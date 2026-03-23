@@ -8,7 +8,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\V1\InstructorDayLessonCollection;
 use App\Services\InstructorService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 
 class InstructorLessonController extends Controller

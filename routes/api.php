@@ -2,13 +2,18 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\InstructorLessonController;
+use App\Http\Controllers\Api\V1\InstructorPackageController;
 use App\Http\Controllers\Api\V1\InstructorProfileController;
 use App\Http\Controllers\Api\V1\InstructorStudentController;
 use App\Http\Controllers\Api\V1\MessageController;
+use App\Http\Controllers\Api\V1\LessonResourceController;
+use App\Http\Controllers\Api\V1\LessonSignOffController;
+use App\Http\Controllers\Api\V1\ResourceController;
 use App\Http\Controllers\Api\V1\StudentChecklistItemController;
 use App\Http\Controllers\Api\V1\StudentController;
 use App\Http\Controllers\Api\V1\StudentLessonController;
 use App\Http\Controllers\Api\V1\StudentNoteController;
+use App\Http\Controllers\Api\V1\StudentOrderController;
 use App\Http\Controllers\Api\V1\StudentPickupPointController;
 use App\Http\Middleware\ResolveApiProfile;
 use Illuminate\Support\Facades\Route;
@@ -43,6 +48,7 @@ Route::prefix('v1')->group(function (): void {
             Route::delete('profile/picture', [InstructorProfileController::class, 'deleteProfilePicture']);
             Route::get('students', [InstructorStudentController::class, 'index']);
             Route::get('lessons/{date}', [InstructorLessonController::class, 'index']);
+            Route::get('packages', [InstructorPackageController::class, 'index']);
         });
 
         // Student routes
@@ -53,6 +59,10 @@ Route::prefix('v1')->group(function (): void {
         Route::get('students/{student}/lessons', [StudentLessonController::class, 'index']);
         Route::get('students/{student}/lessons/{lesson}', [StudentLessonController::class, 'show']);
         Route::get('students/{student}/pickup-points', [StudentPickupPointController::class, 'index']);
+        Route::post('students/{student}/lessons/{lesson}/resources', [LessonResourceController::class, 'store']);
+        Route::post('students/{student}/lessons/{lesson}/sign-off', [LessonSignOffController::class, 'store']);
+        // Resources
+        Route::get('resources', [ResourceController::class, 'index']);
 
         // Messaging routes
         Route::prefix('messages')->group(function (): void {
@@ -68,6 +78,10 @@ Route::prefix('v1')->group(function (): void {
         // Student checklist item routes
         Route::get('students/{student}/checklist-items', [StudentChecklistItemController::class, 'index']);
         Route::put('students/{student}/checklist-items/{checklistItem}', [StudentChecklistItemController::class, 'update']);
+
+        // Order routes
+        Route::post('students/{student}/orders', [StudentOrderController::class, 'store']);
+        Route::get('orders/{order}/checkout/verify', [StudentOrderController::class, 'verify']);
 
     });
 

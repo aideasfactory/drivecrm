@@ -26,13 +26,16 @@ class CreateOrderFromEnquiryAction
     /**
      * Create order with scheduled lessons from enquiry data.
      *
+     * @param  array{id: string, label: string, percentage: int}|null  $discount
+     *
      * @throws \Exception
      */
     public function execute(
         Enquiry $enquiry,
         Student $student,
         Package $package,
-        PaymentMode $paymentMode
+        PaymentMode $paymentMode,
+        ?array $discount = null
     ): Order {
         try {
             DB::beginTransaction();
@@ -43,17 +46,29 @@ class CreateOrderFromEnquiryAction
             // Get instructor ID from step 2 or use package instructor
             $instructorId = $step2['instructor_id'] ?? $package->instructor_id;
 
-            // Create Order record with package snapshot
+            // Apply discount to prices if present
+            $totalPricePence = $package->total_price_pence;
+            $lessonPricePence = $package->lesson_price_pence;
+
+            if ($discount) {
+                $discountMultiplier = 1 - ($discount['percentage'] / 100);
+                $totalPricePence = (int) round($package->total_price_pence * $discountMultiplier);
+                $lessonPricePence = (int) floor($totalPricePence / $package->lessons_count);
+            }
+
+            // Create Order record with package snapshot (using discounted prices)
             $order = Order::create([
                 'student_id' => $student->id,
                 'instructor_id' => $instructorId,
                 'package_id' => $package->id,
                 'package_name' => $package->name,
-                'package_total_price_pence' => $package->total_price_pence,
-                'package_lesson_price_pence' => $package->lesson_price_pence,
+                'package_total_price_pence' => $totalPricePence,
+                'package_lesson_price_pence' => $lessonPricePence,
                 'package_lessons_count' => $package->lessons_count,
                 'status' => OrderStatus::PENDING,
                 'payment_mode' => $paymentMode,
+                'discount_code_id' => $discount['id'] ?? null,
+                'discount_percentage' => $discount['percentage'] ?? null,
             ]);
 
             Log::info('Created order from onboarding', [
@@ -232,10 +247,11 @@ class CreateOrderFromEnquiryAction
             ]);
 
             // Create lesson linked to the calendar item
+            // Use the order's snapshot price (which may be discounted)
             $lessonData = [
                 'order_id' => $order->id,
                 'instructor_id' => $instructorId,
-                'amount_pence' => $package->lesson_price_pence,
+                'amount_pence' => $order->package_lesson_price_pence,
                 'status' => LessonStatus::PENDING,
                 'date' => $scheduledDate->toDateString(),
                 'start_time' => $startTime,

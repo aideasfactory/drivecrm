@@ -34,6 +34,9 @@
               <CardDescription class="text-lg">
                 Choose the lesson package that works best for you
               </CardDescription>
+              <Badge v-if="discount" variant="destructive" class="w-fit text-sm mt-2">
+                {{ discount.percentage }}% off &mdash; {{ discount.label }}
+              </Badge>
             </CardHeader>
 
             <CardContent class="pt-6">
@@ -102,10 +105,19 @@
 
                         <CardContent class="pt-6 text-center">
                           <div class="mb-4">
-                            <div class="text-4xl font-bold mb-1">{{ pkg.formatted_total_price }}</div>
-                            <div class="text-sm text-muted-foreground">
-                              {{ pkg.formatted_lesson_price }} per hour
-                            </div>
+                            <template v-if="discount">
+                              <div class="text-lg text-muted-foreground line-through mb-1">{{ pkg.formatted_total_price }}</div>
+                              <div class="text-4xl font-bold mb-1 text-green-600 dark:text-green-400">{{ getDiscountedPrice(pkg.formatted_total_price) }}</div>
+                              <div class="text-sm text-muted-foreground">
+                                {{ getDiscountedPrice(pkg.formatted_lesson_price) }} per hour
+                              </div>
+                            </template>
+                            <template v-else>
+                              <div class="text-4xl font-bold mb-1">{{ pkg.formatted_total_price }}</div>
+                              <div class="text-sm text-muted-foreground">
+                                {{ pkg.formatted_lesson_price }} per hour
+                              </div>
+                            </template>
                           </div>
                           <p class="text-sm text-muted-foreground">{{ pkg.description }}</p>
                         </CardContent>
@@ -208,7 +220,11 @@ const props = defineProps({
   postcode: String,
   selectedInstructor: Object,
   packages: Array,
-  maxStepReached: { type: Number, default: 3 }
+  maxStepReached: { type: Number, default: 3 },
+  discount: {
+    type: Object as () => { id: string; label: string; percentage: number } | null,
+    default: null
+  }
 })
 
 const page = usePage()
@@ -224,6 +240,14 @@ const postcode = computed(() => {
 const selectedInstructor = computed(() => {
   return props.selectedInstructor || null
 })
+
+// Calculate discounted price string from a formatted price like "£500.00"
+function getDiscountedPrice(formattedPrice: string): string {
+  if (!props.discount) return formattedPrice
+  const price = parseFloat(formattedPrice.replace('£', '').replace(',', ''))
+  const discounted = price * (1 - props.discount.percentage / 100)
+  return '£' + discounted.toFixed(2)
+}
 
 // Get appropriate icon component for package
 function getPackageIcon(pkg: any) {
