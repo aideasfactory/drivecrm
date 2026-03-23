@@ -14,7 +14,7 @@ import {
     TableRow,
 } from '@/components/ui/table'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Search, Plus, Smartphone, Download, FileUp } from 'lucide-vue-next'
+import { Search, Plus, Download, FileUp } from 'lucide-vue-next'
 import type { Instructor } from '@/types/instructor'
 import AddInstructorSheet from '@/components/Instructors/AddInstructorSheet.vue'
 import CsvImportSheet from '@/components/CsvImportSheet.vue'
@@ -146,7 +146,7 @@ const breadcrumbs = [{ title: 'Instructors' }]
                                 </TableCell>
                                 <TableCell>
                                     <div class="flex items-center gap-2">
-                                        <Smartphone
+                                        <svg
                                             class="h-4 w-4"
                                             :class="
                                                 instructor.connection_status ===
@@ -154,7 +154,12 @@ const breadcrumbs = [{ title: 'Instructors' }]
                                                     ? 'text-primary'
                                                     : 'text-muted-foreground'
                                             "
-                                        />
+                                            viewBox="0 0 24 24"
+                                            fill="currentColor"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                        >
+                                            <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.918 3.757 7.164c0 4.469 2.978 6.2 6.334 7.476 2.172.831 2.978 1.488 2.978 2.409 0 .921-.831 1.488-2.287 1.488-1.937 0-4.88-.92-6.692-2.172L3.2 21.858C5.37 23.183 8.25 24 11.013 24c2.594 0 4.77-.623 6.334-1.808 1.66-1.275 2.532-3.142 2.532-5.537 0-4.607-3.035-6.334-5.903-7.505z" />
+                                        </svg>
                                         <span
                                             :class="
                                                 instructor.connection_status ===

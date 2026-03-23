@@ -81,32 +81,8 @@ class GetInstructorPupilsAction
                 'next_lesson_time' => $nextLesson?->start_time,
                 'revenue_pence' => $revenuePence,
                 'has_app' => $student->user_id !== null,
-                'status' => $this->determineStatus($lessonsCompleted, $lessonsTotal, $activeOrder),
+                'status' => $student->status ?? 'active',
             ];
         });
-    }
-
-    /**
-     * Determine the pupil's status based on lesson progress.
-     */
-    private function determineStatus(int $completed, int $total, $activeOrder): string
-    {
-        if (! $activeOrder) {
-            return 'pending';
-        }
-
-        if ($activeOrder->status === 'cancelled') {
-            return 'cancelled';
-        }
-
-        if ($total > 0 && $completed >= $total) {
-            return 'completed';
-        }
-
-        if ($activeOrder->status === 'active') {
-            return 'active';
-        }
-
-        return 'pending';
     }
 }

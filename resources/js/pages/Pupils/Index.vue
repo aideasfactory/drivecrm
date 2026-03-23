@@ -15,7 +15,6 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Search, GraduationCap } from 'lucide-vue-next'
-import { show as studentsShow } from '@/routes/students'
 import { show as instructorsShow } from '@/routes/instructors'
 import type { PupilListing } from '@/types/pupil'
 
@@ -50,8 +49,12 @@ const getInitials = (name: string) => {
         .slice(0, 2)
 }
 
-const navigateToPupil = (pupilId: number) => {
-    router.visit(studentsShow.url(pupilId))
+const navigateToPupil = (pupil: PupilListing) => {
+    if (pupil.instructor_id) {
+        router.visit(`/instructors/${pupil.instructor_id}`, {
+            data: { tab: 'student', student: pupil.id, subtab: 'overview' },
+        })
+    }
 }
 
 const navigateToInstructor = (event: Event, instructorId: number) => {
@@ -106,7 +109,7 @@ const breadcrumbs = [{ title: 'Pupils' }]
                                 v-for="pupil in filteredPupils"
                                 :key="pupil.id"
                                 class="cursor-pointer hover:bg-muted/50"
-                                @click="navigateToPupil(pupil.id)"
+                                @click="navigateToPupil(pupil)"
                             >
                                 <TableCell>
                                     <div class="flex items-center gap-3">

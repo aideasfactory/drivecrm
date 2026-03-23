@@ -45,30 +45,9 @@ class GetStudentDetailAction
             'lessons_completed' => $lessonsCompleted,
             'lessons_total' => $lessonsTotal,
             'revenue_pence' => $revenuePence,
-            'status' => $this->determineStatus($lessonsCompleted, $lessonsTotal, $student->orders->first()),
+            'status' => $student->status ?? 'active',
             'student_status' => $student->status ?? 'active',
             'inactive_reason' => $student->inactive_reason,
         ];
-    }
-
-    private function determineStatus(int $completed, int $total, $activeOrder): string
-    {
-        if (! $activeOrder) {
-            return 'pending';
-        }
-
-        if ($activeOrder->status === 'cancelled') {
-            return 'cancelled';
-        }
-
-        if ($total > 0 && $completed >= $total) {
-            return 'completed';
-        }
-
-        if ($activeOrder->status === 'active') {
-            return 'active';
-        }
-
-        return 'pending';
     }
 }

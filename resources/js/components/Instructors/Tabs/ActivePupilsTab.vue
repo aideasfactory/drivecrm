@@ -165,17 +165,20 @@ const getStatusVariant = (
         case 'active':
             return 'default'
         case 'completed':
+        case 'passed':
             return 'secondary'
-        case 'pending':
-            return 'outline'
-        case 'cancelled':
+        case 'inactive':
+        case 'failed':
             return 'destructive'
+        case 'on_hold':
+            return 'outline'
         default:
             return 'outline'
     }
 }
 
 const getStatusLabel = (status: string) => {
+    if (status === 'on_hold') return 'On Hold'
     return status.charAt(0).toUpperCase() + status.slice(1)
 }
 
@@ -299,16 +302,15 @@ const handleCreatePupil = async () => {
                 />
             </div>
             <div class="flex items-center gap-2">
-                <div class="flex items-center gap-2">
-                    <Checkbox
-                        id="show-all-pupils"
+                <label class="flex items-center gap-2 cursor-pointer text-sm whitespace-nowrap">
+                    <input
+                        type="checkbox"
                         :checked="showAllPupils"
-                        @update:checked="toggleShowAll"
+                        @change="toggleShowAll(($event.target as HTMLInputElement).checked)"
+                        class="h-4 w-4 rounded border-input"
                     />
-                    <Label for="show-all-pupils" class="cursor-pointer text-sm whitespace-nowrap">
-                        Show all pupils
-                    </Label>
-                </div>
+                    Show all pupils
+                </label>
                 <Button
                     @click="isAddPupilSheetOpen = true"
                     class="cursor-pointer"
