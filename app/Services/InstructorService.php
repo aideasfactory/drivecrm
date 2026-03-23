@@ -12,6 +12,7 @@ use App\Actions\Instructor\CreatePupilAction;
 use App\Actions\Instructor\CreateRecurringCalendarItemsAction;
 use App\Actions\Instructor\DeleteCalendarItemAction;
 use App\Actions\Instructor\DeleteInstructorLocationAction;
+use App\Actions\Instructor\DeleteInstructorProfilePictureAction;
 use App\Actions\Instructor\DeleteRecurringCalendarItemsAction;
 use App\Actions\Instructor\GetGroupedStudentsAction;
 use App\Actions\Instructor\GetInstructorCalendarAction;
@@ -22,6 +23,7 @@ use App\Actions\Instructor\GetInstructorPayoutsAction;
 use App\Actions\Instructor\GetInstructorPupilsAction;
 use App\Actions\Instructor\UpdateCalendarItemAction;
 use App\Actions\Instructor\UpdateInstructorProfileAction;
+use App\Actions\Instructor\UploadInstructorProfilePictureAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Shared\Message\SendBroadcastMessageAction;
 use App\Enums\RecurrencePattern;
@@ -31,6 +33,7 @@ use App\Models\Instructor;
 use App\Models\Location;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -59,7 +62,9 @@ class InstructorService extends BaseService
         protected GetInstructorPupilsAction $getInstructorPupils,
         protected SendBroadcastMessageAction $sendBroadcastMessage,
         protected LogActivityAction $logActivity,
-        protected UpdateInstructorProfileAction $updateInstructorProfile
+        protected UpdateInstructorProfileAction $updateInstructorProfile,
+        protected UploadInstructorProfilePictureAction $uploadProfilePicture,
+        protected DeleteInstructorProfilePictureAction $deleteProfilePicture
     ) {}
 
     /**
@@ -454,6 +459,22 @@ class InstructorService extends BaseService
     public function updateProfile(Instructor $instructor, array $data): Instructor
     {
         return ($this->updateInstructorProfile)($instructor, $data);
+    }
+
+    /**
+     * Upload or replace an instructor's profile picture.
+     */
+    public function updateProfilePicture(Instructor $instructor, UploadedFile $file): Instructor
+    {
+        return ($this->uploadProfilePicture)($instructor, $file);
+    }
+
+    /**
+     * Delete an instructor's profile picture.
+     */
+    public function deleteProfilePicture(Instructor $instructor): Instructor
+    {
+        return ($this->deleteProfilePicture)($instructor);
     }
 
     /**

@@ -5,9 +5,9 @@ use App\Http\Controllers\Api\V1\InstructorLessonController;
 use App\Http\Controllers\Api\V1\InstructorPackageController;
 use App\Http\Controllers\Api\V1\InstructorProfileController;
 use App\Http\Controllers\Api\V1\InstructorStudentController;
+use App\Http\Controllers\Api\V1\MessageController;
 use App\Http\Controllers\Api\V1\LessonResourceController;
 use App\Http\Controllers\Api\V1\LessonSignOffController;
-use App\Http\Controllers\Api\V1\MessageController;
 use App\Http\Controllers\Api\V1\ResourceController;
 use App\Http\Controllers\Api\V1\StudentChecklistItemController;
 use App\Http\Controllers\Api\V1\StudentController;
@@ -44,6 +44,8 @@ Route::prefix('v1')->group(function (): void {
         // Instructor routes
         Route::prefix('instructor')->group(function (): void {
             Route::put('profile', [InstructorProfileController::class, 'update']);
+            Route::post('profile/picture', [InstructorProfileController::class, 'updateProfilePicture']);
+            Route::delete('profile/picture', [InstructorProfileController::class, 'deleteProfilePicture']);
             Route::get('students', [InstructorStudentController::class, 'index']);
             Route::get('lessons/{date}', [InstructorLessonController::class, 'index']);
             Route::get('packages', [InstructorPackageController::class, 'index']);

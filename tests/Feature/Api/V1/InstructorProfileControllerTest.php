@@ -143,6 +143,7 @@ test('update instructor profile returns the expected resource structure', functi
                 'onboarding_complete',
                 'charges_enabled',
                 'payouts_enabled',
+                'profile_picture_url',
             ],
         ]);
 });
