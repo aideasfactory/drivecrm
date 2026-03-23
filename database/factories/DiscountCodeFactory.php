@@ -20,7 +20,7 @@ class DiscountCodeFactory extends Factory
     public function definition(): array
     {
         return [
-            'label' => fake()->words(2, true) . ' discount',
+            'label' => fake()->words(2, true).' discount',
             'percentage' => fake()->randomElement([5, 10, 15, 20]),
             'active' => true,
         ];

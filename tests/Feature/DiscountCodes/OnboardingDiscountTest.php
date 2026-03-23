@@ -10,7 +10,7 @@ test('onboarding start stores discount in enquiry when valid UUID provided', fun
         'active' => true,
     ]);
 
-    $response = $this->get('/onboarding?discount=' . $discount->id);
+    $response = $this->get('/onboarding?discount='.$discount->id);
 
     $response->assertRedirect();
 
@@ -27,7 +27,7 @@ test('onboarding start stores discount in enquiry when valid UUID provided', fun
 test('onboarding start ignores inactive discount code', function () {
     $discount = DiscountCode::factory()->inactive()->create();
 
-    $response = $this->get('/onboarding?discount=' . $discount->id);
+    $response = $this->get('/onboarding?discount='.$discount->id);
 
     $response->assertRedirect();
 

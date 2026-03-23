@@ -49,6 +49,6 @@ class DiscountCode extends Model
      */
     public function getFormattedPercentageAttribute(): string
     {
-        return $this->percentage . '% off';
+        return $this->percentage.'% off';
     }
 }

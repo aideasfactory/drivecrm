@@ -349,7 +349,7 @@ const props = defineProps({
   learner: Object,
   pricing: Object,
   discount: {
-    type: Object as () => { id: string; label: string; percentage: number } | null,
+    type: [Object, null],
     default: null
   },
   available_promos: Array,
