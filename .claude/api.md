@@ -1645,6 +1645,85 @@ Creates a new note on a student record. Access is controlled by the same policy 
 
 ---
 
+#### `PUT /api/v1/students/{student}/notes/{note}`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Updates an existing note on a student record. The note must belong to the specified student. Access is controlled by the same policy as the notes list:
+- **Students** can only update notes on their own record.
+- **Instructors** can only update notes on students assigned to them.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+| `note` | integer | The note record ID |
+
+**Request Body:**
+```json
+{
+  "note": "Updated note content with corrections."
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `note` | string | Yes | Note content (max 5000 characters) |
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 3,
+    "note": "Updated note content with corrections.",
+    "created_at": "2026-03-18T15:00:00+00:00",
+    "updated_at": "2026-03-24T09:30:00+00:00"
+  }
+}
+```
+
+**Error Response (validation):** `422 Unprocessable Entity`
+```json
+{
+  "message": "The note field is required.",
+  "errors": {
+    "note": [
+      "The note field is required."
+    ]
+  }
+}
+```
+
+**Error Response (not authorised):** `403 Forbidden`
+**Error Response (note not found on student):** `404 Not Found`
+
+---
+
+#### `DELETE /api/v1/students/{student}/notes/{note}`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Soft deletes an existing note on a student record. The note must belong to the specified student. Access is controlled by the same policy as the notes list:
+- **Students** can only delete notes on their own record.
+- **Instructors** can only delete notes on students assigned to them.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+| `note` | integer | The note record ID |
+
+**Request Body:** None
+
+**Success Response:** `204 No Content`
+
+**Error Response (not authorised):** `403 Forbidden`
+**Error Response (note not found on student):** `404 Not Found`
+
+---
+
 #### `GET /api/v1/students/{student}/checklist-items`
 
 **Auth required:** Yes (Bearer token — student or instructor)
@@ -2354,6 +2433,8 @@ The `role` field is always returned in user responses. Use it to determine which
 | POST | `/api/v1/students/{student}/lessons/{lesson}/resources` | Yes | Instructor | Assign resources |
 | GET | `/api/v1/students/{student}/notes` | Yes | Both | List notes |
 | POST | `/api/v1/students/{student}/notes` | Yes | Both | Create note |
+| PUT | `/api/v1/students/{student}/notes/{note}` | Yes | Both | Update note |
+| DELETE | `/api/v1/students/{student}/notes/{note}` | Yes | Both | Delete note (soft) |
 | GET | `/api/v1/students/{student}/checklist-items` | Yes | Both | List checklist |
 | PUT | `/api/v1/students/{student}/checklist-items/{item}` | Yes | Both | Update checklist item |
 | GET | `/api/v1/students/{student}/pickup-points` | Yes | Both | List pickup points |
@@ -2385,6 +2466,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-23 | Student creation now creates a User account with temp password and sends welcome email; email field now required and unique | Student (store) |
 | 2026-03-23 | DELETE student endpoint changed from hard delete (204) to soft remove (200) — sets instructor_id to null, preserves student data | Student (destroy) |
 | 2026-03-24 | Added stub endpoints for instructor on-way and arrived notifications (activity log only, push TBD) | Instructor (notify-on-way, notify-arrived) |
+| 2026-03-24 | Added update and delete endpoints for student notes (PUT and DELETE with soft delete) | Student Notes (update, destroy) |
 
 ---
 

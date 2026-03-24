@@ -76,6 +76,8 @@ Route::prefix('v1')->group(function (): void {
         // Student notes
         Route::get('students/{student}/notes', [StudentNoteController::class, 'index']);
         Route::post('students/{student}/notes', [StudentNoteController::class, 'store']);
+        Route::put('students/{student}/notes/{note}', [StudentNoteController::class, 'update']);
+        Route::delete('students/{student}/notes/{note}', [StudentNoteController::class, 'destroy']);
 
         // Student checklist item routes
         Route::get('students/{student}/checklist-items', [StudentChecklistItemController::class, 'index']);
