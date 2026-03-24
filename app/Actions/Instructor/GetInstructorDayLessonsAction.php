@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Instructor;
 
+use App\Enums\LessonStatus;
 use App\Models\Instructor;
 use Illuminate\Support\Collection;
 
@@ -20,6 +21,7 @@ class GetInstructorDayLessonsAction
     {
         return $instructor->lessons()
             ->whereDate('date', $date)
+            ->where('status', '!=', LessonStatus::DRAFT)
             ->with([
                 'order' => fn ($query) => $query->select([
                     'id', 'student_id', 'instructor_id', 'package_id',

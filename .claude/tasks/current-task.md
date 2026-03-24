@@ -1,19 +1,7 @@
-# Task: Calendar Management API for Mobile App
+# Task: Fix Onboarding Flow to Reuse Existing Users Without Duplication
 
 ## Overview
-Expose the existing admin calendar management functionality through the API so the mobile app can create, delete, and query calendar items. Reuse the same Actions and Services used by the admin area — no logic duplication.
-
-**Existing State:**
-- Admin area supports full calendar CRUD via `InstructorController` (web)
-- Actions exist in `app/Actions/Instructor/`: `CreateCalendarItemAction`, `DeleteCalendarItemAction`, `CreateRecurringCalendarItemsAction`, `DeleteRecurringCalendarItemsAction`
-- Services: `InstructorService` (orchestration), `InstructorCalendarService` (caching)
-- API already has a GET endpoint (`/api/v1/instructor/calendar`) for available items on a date — but only returns basic fields (id, start_time, end_time, is_available, status)
-- `CalendarItemResource` exists but is minimal — needs enriching
-
-**What's Needed:**
-1. **POST** `/api/v1/instructor/calendar/items` — Create calendar item (with all options: travel, recurrence, practical test, notes)
-2. **DELETE** `/api/v1/instructor/calendar/items/{calendarItem}` — Delete calendar item (single or future recurring)
-3. **GET** `/api/v1/instructor/calendar/items` — Get calendar items for a specific day with filters (e.g., only available slots)
+When someone completes onboarding with an email that already exists in the system, the flow should reuse the existing user and student records instead of failing or creating duplicates. The `CreateUserAndStudentFromEnquiryAction` already checks for existing users, but there are gaps: student data isn't updated for returning users, and there's no safeguard for edge cases like instructor/admin emails.
 
 ---
 
@@ -22,27 +10,22 @@ Expose the existing admin calendar management functionality through the API so t
 **Last Updated:** 2026-03-24
 
 ### Tasks
-- [x] Review existing web controller flow for create and delete
-- [x] Identify exact Service/Action methods to reuse
-- [x] Plan API controller methods, routes, form requests, and resources
-- [x] Document field mapping and response structure
-- [x] Create task breakdown for Phase 2
+- [x] Review `CreateUserAndStudentFromEnquiryAction` for all edge cases
+- [x] Review `CreateOrderFromEnquiryAction` for returning-user handling
+- [x] Review `StepSixController` payment flow for existing user compatibility
+- [x] Identify all code changes needed
+- [x] Document the fix strategy
 
 ### Decisions & Notes
-**Reuse plan:**
-- `InstructorService::addCalendarItem()` → single item creation
-- `InstructorService::addRecurringCalendarItems()` → recurring creation
-- `InstructorService::removeCalendarItem()` → single deletion
-- `InstructorService::removeRecurringCalendarItems()` → future recurring deletion
-- `InstructorCalendarService::getCalendarItems()` → GET with filtering (needs action update for filters)
-- Existing `InstructorCalendarController` has index() only — add store() and destroy()
-- `CalendarItemResource` needs enriching (currently only 5 fields)
-- Web `StoreCalendarItemRequest` overlap check uses `$this->route('instructor')` — API version must use `$request->user()->instructor`
-- The existing GET route for calendar was never registered in api.php — will register all 3 routes together
-- `GetInstructorCalendarItemsAction` currently hard-filters to available-only — needs optional filter params for the "get a day's items" requirement
+- Only one file needs changes: `CreateUserAndStudentFromEnquiryAction`
+- Core fix: `Student::firstOrCreate()` → `Student::updateOrCreate()`
+- User reuse already works correctly
+- Stripe customer handling already works correctly
+- `CreateOrderFromEnquiryAction` needs no changes (orders are per-enquiry)
+- Non-student users (instructor/owner) can safely go through onboarding — their role isn't changed
 
 ### Reflection
-Clean architecture — all logic exists in Actions/Services already. API layer is purely HTTP concerns.
+Clean analysis — only one file needs modification. The existing architecture handles most edge cases already.
 
 ---
 
@@ -51,16 +34,14 @@ Clean architecture — all logic exists in Actions/Services already. API layer i
 **Last Updated:** 2026-03-24
 
 ### Tasks
-- [x] Create `StoreCalendarItemRequest` for API (`app/Http/Requests/Api/V1/`)
-- [x] Enrich `CalendarItemResource` to include all fields (item_type, travel_time_minutes, notes, unavailability_reason, recurrence fields, parent_item_id)
-- [x] Add `store` method to `InstructorCalendarController` (create calendar item via existing Service)
-- [x] Add `destroy` method to `InstructorCalendarController` (delete calendar item via existing Service)
-- [x] Update `index` method on `InstructorCalendarController` to support day-based filtering (available_only param)
-- [x] Add routes to `routes/api.php`
-- [x] Update `.claude/api.md` with all new/modified endpoints
+- [x] Change `Student::firstOrCreate()` to `Student::updateOrCreate()` in `CreateUserAndStudentFromEnquiryAction`
+- [x] Remove redundant instructor assignment update block
+- [x] Add logging for existing student updates
+- [x] Verify the `getStudentData()` method produces correct data for both new and returning users
+- [x] Remove unused `Instructor` import
 
 ### Reflection
-All logic reused from existing InstructorService — zero new Actions or Services created. API FormRequest mirrors web version but resolves instructor from token. CalendarItemResource enriched with all fields using `whenLoaded` for the date relation. Changelog and quick route reference updated.
+Minimal, focused change. The `updateOrCreate()` call now handles both new and returning students in a single operation — no need for the separate instructor update block.
 
 ---
 
@@ -69,10 +50,9 @@ All logic reused from existing InstructorService — zero new Actions or Service
 **Last Updated:** 2026-03-24
 
 ### Tasks
-- [x] Final review of all endpoints for consistency with admin behaviour
-- [x] Verify CalendarItemResource response matches documented structure
-- [x] Ensure api.md is complete with request params, response examples, and auth requirements
+- [x] Final review of all changes for consistency
+- [x] Verify both new-user and returning-user paths work correctly
 - [x] Write `.phase_done` sentinel
 
 ### Reflection
-All three endpoints match admin behaviour exactly — same Service methods, same Actions, same validation (overlap detection, unavailability reason check). The CalendarItemResource `date` field uses `whenLoaded('calendar')` so it appears on store responses (where we explicitly load it) and is omitted on index responses (where the caller already knows the date). No new Services or Actions were created — full reuse.
+Single-file fix with no new dependencies, no new services, no migrations. Both new and returning user paths verified logically. The `updateOrCreate` approach is idiomatic Laravel and handles all edge cases: new users, returning students, and non-student users (instructor/owner) going through onboarding.

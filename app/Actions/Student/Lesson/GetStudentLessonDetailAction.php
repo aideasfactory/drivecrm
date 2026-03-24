@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Student\Lesson;
 
+use App\Enums\LessonStatus;
 use App\Models\Lesson;
 use App\Models\Student;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -14,6 +15,7 @@ class GetStudentLessonDetailAction
      * Fetch a single lesson belonging to a student, with full relationships.
      *
      * Ensures the lesson belongs to the student via one of their orders.
+     * Draft lessons (pre-payment) are excluded.
      *
      * @throws ModelNotFoundException
      */
@@ -21,6 +23,7 @@ class GetStudentLessonDetailAction
     {
         return Lesson::query()
             ->whereIn('order_id', $student->orders()->select('id'))
+            ->where('status', '!=', LessonStatus::DRAFT)
             ->with([
                 'instructor.user:id,name',
                 'order:id,package_name,package_id,payment_mode',

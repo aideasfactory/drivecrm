@@ -413,7 +413,7 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 | `calendar_item_id` | bigint unsigned | FOREIGN KEY (calendar_items.id), NULLABLE, ON DELETE SET NULL | Associated calendar slot |
 | `completed_at` | datetime | NULLABLE | When lesson was completed |
 | `summary` | text | NULLABLE | Instructor's summary of the lesson (written at sign-off, used for AI resource matching) |
-| `status` | enum('pending', 'completed', 'cancelled') | DEFAULT 'pending' | Lesson status |
+| `status` | enum('draft', 'pending', 'completed', 'cancelled') | DEFAULT 'pending' | Lesson status |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
@@ -430,10 +430,12 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 - Has one `Payout`
 
 **Enums:**
-- Status: `pending`, `completed`, `cancelled`
+- Status: `draft`, `pending`, `completed`, `cancelled`
 
 **Business Logic:**
-- Created automatically when order is activated
+- Created as `draft` for upfront orders (pre-payment) or `pending` for weekly orders
+- Transitions from `draft` → `pending` when Stripe confirms payment (via ConfirmCalendarItemsAction)
+- Draft lessons are filtered out of all API responses and cleaned up by the nightly `calendar:cleanup-drafts` command
 - Number of lessons matches the package's `lessons_count`
 - Scheduling information (date, start_time, end_time) can be set when booking lesson
 - Links to calendar_item for slot availability tracking

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Calendar;
 
 use App\Enums\CalendarItemStatus;
+use App\Enums\LessonStatus;
 use App\Models\CalendarItem;
 use App\Models\Order;
 use App\Services\InstructorCalendarService;
@@ -38,9 +39,15 @@ class ConfirmCalendarItemsAction
                 'is_available' => false,
             ]);
 
+        // Transition draft lessons to pending now that payment is confirmed
+        $lessonsUpdated = $order->lessons()
+            ->where('status', LessonStatus::DRAFT)
+            ->update(['status' => LessonStatus::PENDING]);
+
         Log::info('ConfirmCalendarItems: Calendar items confirmed as booked', [
             'order_id' => $order->id,
             'calendar_items_updated' => $updated,
+            'lessons_activated' => $lessonsUpdated,
             'calendar_item_ids' => $calendarItemIds->toArray(),
         ]);
 

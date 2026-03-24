@@ -94,6 +94,14 @@ class Lesson extends Model
     }
 
     /**
+     * Check if lesson is a draft (pre-payment).
+     */
+    public function isDraft(): bool
+    {
+        return $this->status === LessonStatus::DRAFT;
+    }
+
+    /**
      * Check if lesson is pending.
      */
     public function isPending(): bool

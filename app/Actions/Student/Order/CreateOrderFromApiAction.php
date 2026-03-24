@@ -81,11 +81,17 @@ class CreateOrderFromApiAction
                     ]);
                 }
 
+                // UPFRONT: Lessons start as DRAFT until Stripe confirms payment
+                // WEEKLY: Lessons start as PENDING immediately
+                $lessonStatus = $paymentMode === PaymentMode::UPFRONT
+                    ? LessonStatus::DRAFT
+                    : LessonStatus::PENDING;
+
                 $lesson = Lesson::create([
                     'order_id' => $order->id,
                     'instructor_id' => $instructorId,
                     'amount_pence' => $package->lesson_price_pence,
-                    'status' => LessonStatus::PENDING,
+                    'status' => $lessonStatus,
                     'date' => $scheduledDate->toDateString(),
                     'start_time' => $startTime,
                     'end_time' => $endTime,

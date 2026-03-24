@@ -254,11 +254,17 @@ class CreateOrderFromEnquiryAction
 
             // Create lesson linked to the calendar item
             // Use the order's snapshot price (which may be discounted)
+            // UPFRONT: Lessons start as DRAFT until Stripe confirms payment
+            // WEEKLY: Lessons start as PENDING immediately
+            $lessonStatus = $paymentMode === PaymentMode::UPFRONT
+                ? LessonStatus::DRAFT
+                : LessonStatus::PENDING;
+
             $lessonData = [
                 'order_id' => $order->id,
                 'instructor_id' => $instructorId,
                 'amount_pence' => $order->package_lesson_price_pence,
-                'status' => LessonStatus::PENDING,
+                'status' => $lessonStatus,
                 'date' => $scheduledDate->toDateString(),
                 'start_time' => $startTime,
                 'end_time' => $endTime,

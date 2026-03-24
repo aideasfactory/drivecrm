@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Student\Lesson;
 
 use App\Enums\LessonCardStatus;
+use App\Enums\LessonStatus;
 use App\Models\Student;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -23,6 +24,7 @@ class GetStudentLessonsAction
         $lessons = $student->orders()
             ->with([
                 'lessons' => fn ($query) => $query
+                    ->where('status', '!=', LessonStatus::DRAFT)
                     ->with([
                         'instructor.user:id,name',
                         'calendarItem.calendar:id,date',
@@ -50,7 +52,7 @@ class GetStudentLessonsAction
                     'status' => $lesson->status->value,
                     'completed_at' => $lesson->completed_at?->toISOString(),
                     'summary' => $lesson->summary,
-                    'payment_status' => $lesson->lessonPayment?->status?->value ?? ($order->isUpfront() ? 'paid' : null),
+                    'payment_status' => $lesson->lessonPayment?->status?->value ?? ($order->isUpfront() && $order->isActive() ? 'paid' : null),
                     'payment_mode' => $order->payment_mode->value,
                     'payout_status' => $lesson->payout?->status?->value,
                     'has_payout' => $lesson->payout !== null,
