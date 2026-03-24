@@ -20,6 +20,7 @@
     - [Notify Arrived](#post-apiv1instructorlessonslessonnotify-arrived)
     - [Packages](#get-apiv1instructorpackages)
     - [Calendar Items](#get-apiv1instructorcalendaritems)
+  - [Package Pricing](#get-apiv1packagespackagepricing)
   - [Students](#students)
     - [CRUD](#post-apiv1students)
     - [Lessons](#get-apiv1studentsstudentlessons)
@@ -974,6 +975,83 @@ Returns all active packages for the authenticated instructor.
 | `has_stripe_price` | boolean | Whether a Stripe price is configured for this package |
 
 > **Note:** Only active packages are returned. Packages without a Stripe price (`has_stripe_price: false`) cannot be used for upfront payments.
+
+---
+
+### Package Pricing
+
+#### `GET /api/v1/packages/{package}/pricing`
+
+**Auth required:** Yes (Bearer token — any role)
+
+Returns the full pricing breakdown for a package, including booking fee, digital fee, promo discount, and calculated totals. **This is the single source of truth for all fee calculations** — the mobile app should never hardcode fee values.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `promo_code` | string | No | Promo code to apply (e.g., `SAVE10`, `SAVE20`) |
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "package_price_pence": 35000,
+    "package_price": 350.00,
+    "booking_fee": 19.99,
+    "digital_fee_per_lesson": 3.99,
+    "digital_fee_total": 39.90,
+    "lessons_count": 10,
+    "promo_code": null,
+    "promo_discount": 0,
+    "subtotal": 409.89,
+    "total": 409.89,
+    "total_pence": 40989,
+    "weekly_payment": 40.99
+  }
+}
+```
+
+**With promo code:** `GET /api/v1/packages/1/pricing?promo_code=SAVE10`
+```json
+{
+  "data": {
+    "package_price_pence": 35000,
+    "package_price": 350.00,
+    "booking_fee": 19.99,
+    "digital_fee_per_lesson": 3.99,
+    "digital_fee_total": 39.90,
+    "lessons_count": 10,
+    "promo_code": "SAVE10",
+    "promo_discount": 35.00,
+    "subtotal": 409.89,
+    "total": 374.89,
+    "total_pence": 37489,
+    "weekly_payment": 37.49
+  }
+}
+```
+
+**Pricing Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `package_price_pence` | integer | Base package price in pence |
+| `package_price` | float | Base package price in pounds |
+| `booking_fee` | float | Flat booking fee (currently £19.99) |
+| `digital_fee_per_lesson` | float | Digital fee per lesson (currently £3.99) |
+| `digital_fee_total` | float | Total digital fee (`digital_fee_per_lesson × lessons_count`) |
+| `lessons_count` | integer | Number of lessons in the package |
+| `promo_code` | string\|null | Applied promo code (uppercase), or `null` if none |
+| `promo_discount` | float | Discount amount from promo code (applied to package price only) |
+| `subtotal` | float | `package_price + booking_fee + digital_fee_total` (before discounts) |
+| `total` | float | `subtotal - promo_discount` |
+| `total_pence` | integer | Total in pence (for Stripe) |
+| `weekly_payment` | float | `total ÷ lessons_count` |
+
+> **Important for mobile developers:** Always use this endpoint to display pricing — never hardcode fee values. The booking fee, digital fee, and promo codes are managed server-side and may change without an app update.
+
+> **Promo codes:** Currently supported: `SAVE10` (10% off package price), `SAVE20` (20% off package price). Invalid codes are silently ignored (pricing returns without discount).
 
 ---
 
@@ -2206,6 +2284,9 @@ Book lessons — creates an order, calendar items, and lessons. For `upfront` pa
     "package_total_price_pence": 35000,
     "package_lesson_price_pence": 3500,
     "package_lessons_count": 10,
+    "booking_fee_pence": 1999,
+    "digital_fee_pence": 3990,
+    "total_price_pence": 40989,
     "payment_mode": "upfront",
     "status": "pending",
     "lessons_count": 10,
@@ -2228,6 +2309,9 @@ Book lessons — creates an order, calendar items, and lessons. For `upfront` pa
     "package_total_price_pence": 35000,
     "package_lesson_price_pence": 3500,
     "package_lessons_count": 10,
+    "booking_fee_pence": 1999,
+    "digital_fee_pence": 3990,
+    "total_price_pence": 40989,
     "payment_mode": "weekly",
     "status": "active",
     "lessons_count": 10,
@@ -2245,9 +2329,12 @@ Book lessons — creates an order, calendar items, and lessons. For `upfront` pa
 | `instructor_id` | integer | Instructor record ID |
 | `package_id` | integer | Package record ID |
 | `package_name` | string | Name of the booked package |
-| `package_total_price_pence` | integer | Total package price in pence |
+| `package_total_price_pence` | integer | Base package price in pence (before fees) |
 | `package_lesson_price_pence` | integer | Per-lesson price in pence |
 | `package_lessons_count` | integer | Number of lessons in the package |
+| `booking_fee_pence` | integer | Booking fee in pence (e.g., 1999 = £19.99) |
+| `digital_fee_pence` | integer | Total digital fee in pence (£3.99 × lessons) |
+| `total_price_pence` | integer | Total charge amount sent to Stripe (package + booking fee + digital fees) |
 | `payment_mode` | string | `upfront` or `weekly` |
 | `status` | string | Order status: `pending`, `active`, `completed`, `cancelled` |
 | `lessons_count` | integer\|null | Number of lessons created |
@@ -2674,6 +2761,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | GET | `/api/v1/students/{student}/pickup-points` | Yes | Both | List pickup points |
 | POST | `/api/v1/students/{student}/orders` | Yes | Both | Create order/booking |
 | GET | `/api/v1/orders/{order}/checkout/verify` | Yes | Both | Verify payment |
+| GET | `/api/v1/packages/{package}/pricing` | Yes | Any | Package pricing breakdown |
 | GET | `/api/v1/resources` | Yes | Any | List resources |
 | GET | `/api/v1/messages/conversations` | Yes | Both | List conversations |
 | GET | `/api/v1/messages/conversations/{user}` | Yes | Both | View conversation |
@@ -2702,6 +2790,8 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-24 | Added stub endpoints for instructor on-way and arrived notifications (activity log only, push TBD) | Instructor (notify-on-way, notify-arrived) |
 | 2026-03-24 | Added update and delete endpoints for student notes (PUT and DELETE with soft delete) | Student Notes (update, destroy) |
 | 2026-03-24 | Added calendar management API — GET (with available_only filter), POST (create with all options: travel, recurrence, practical test), DELETE (single or future recurring) | Instructor Calendar (index, store, destroy) |
+| 2026-03-24 | Added package pricing endpoint — returns full fee breakdown (booking fee, digital fee per lesson, promo discounts, totals) as raw numeric values for mobile consumption | Package Pricing (show) |
+| 2026-03-24 | Fixed Stripe charge amount — now includes booking fee (£19.99) + digital fees (£3.99 × lessons) in the total sent to Stripe. Added `booking_fee_pence`, `digital_fee_pence`, `total_price_pence` to order response. | Orders (store), Checkout |
 
 ---
 

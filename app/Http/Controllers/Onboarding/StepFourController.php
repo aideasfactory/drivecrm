@@ -222,21 +222,38 @@ class StepFourController extends Controller
                 'enquiry_id' => $enquiry->id,
             ]);
 
-            // Create calendar item for this week
-            $calendarItem = CalendarItem::create([
-                'calendar_id' => $calendar->id,
-                'start_time' => $validated['start_time'],
-                'end_time' => $validated['end_time'],
-                'is_available' => false,
-                'status' => CalendarItemStatus::DRAFT,
-            ]);
+            // Reuse an existing available slot if one matches, otherwise create new
+            $existingItem = CalendarItem::query()
+                ->where('calendar_id', $calendar->id)
+                ->where('start_time', $validated['start_time'])
+                ->where('end_time', $validated['end_time'])
+                ->where('is_available', true)
+                ->whereDoesntHave('lessons')
+                ->first();
+
+            if ($existingItem) {
+                $existingItem->update([
+                    'is_available' => false,
+                    'status' => CalendarItemStatus::DRAFT,
+                ]);
+                $calendarItem = $existingItem;
+            } else {
+                $calendarItem = CalendarItem::create([
+                    'calendar_id' => $calendar->id,
+                    'start_time' => $validated['start_time'],
+                    'end_time' => $validated['end_time'],
+                    'is_available' => false,
+                    'status' => CalendarItemStatus::DRAFT,
+                ]);
+            }
 
             $calendarItemIds[] = $calendarItem->id;
 
-            Log::info('Created draft calendar item for future week', [
+            Log::info('Draft calendar item reserved for future week', [
                 'calendar_item_id' => $calendarItem->id,
                 'calendar_id' => $calendar->id,
                 'calendar_action' => $calendarAction,
+                'reused_existing' => isset($existingItem),
                 'week_number' => $i + 1,
                 'date' => $nextLessonDate->toDateString(),
                 'start_time' => $validated['start_time'],

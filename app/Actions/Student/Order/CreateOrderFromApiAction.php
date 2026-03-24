@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Student\Order;
 
+use App\Actions\Package\CalculatePackagePricingAction;
 use App\Enums\CalendarItemStatus;
 use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
@@ -38,6 +39,8 @@ class CreateOrderFromApiAction
         return DB::transaction(function () use ($student, $package, $paymentMode, $firstLessonDate, $startTime, $endTime, $calendarItemIds): Order {
             $instructorId = $student->instructor_id;
 
+            $pricing = app(CalculatePackagePricingAction::class)($package);
+
             $order = Order::create([
                 'student_id' => $student->id,
                 'instructor_id' => $instructorId,
@@ -46,6 +49,9 @@ class CreateOrderFromApiAction
                 'package_total_price_pence' => $package->total_price_pence,
                 'package_lesson_price_pence' => $package->lesson_price_pence,
                 'package_lessons_count' => $package->lessons_count,
+                'booking_fee_pence' => (int) round($pricing['booking_fee'] * 100),
+                'digital_fee_pence' => (int) round($pricing['digital_fee_total'] * 100),
+                'total_price_pence' => $pricing['total_pence'],
                 'status' => OrderStatus::PENDING,
                 'payment_mode' => $paymentMode,
             ]);

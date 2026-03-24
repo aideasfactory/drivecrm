@@ -21,6 +21,9 @@ class Order extends Model
         'package_total_price_pence',
         'package_lesson_price_pence',
         'package_lessons_count',
+        'booking_fee_pence',
+        'digital_fee_pence',
+        'total_price_pence',
         'payment_mode',
         'status',
         'stripe_payment_intent_id',
@@ -37,6 +40,9 @@ class Order extends Model
             'package_total_price_pence' => 'integer',
             'package_lesson_price_pence' => 'integer',
             'package_lessons_count' => 'integer',
+            'booking_fee_pence' => 'integer',
+            'digital_fee_pence' => 'integer',
+            'total_price_pence' => 'integer',
             'discount_percentage' => 'integer',
         ];
     }

@@ -2,18 +2,20 @@
 
 namespace App\Services;
 
+use App\Actions\Package\CalculatePackagePricingAction;
 use App\Actions\Package\CreateAdminPackageAction;
 use App\Actions\Package\GetAllPackagesAction;
 use App\Actions\Package\UpdatePackageAction;
 use App\Models\Package;
 use Illuminate\Database\Eloquent\Collection;
 
-class PackageService
+class PackageService extends BaseService
 {
     public function __construct(
         protected GetAllPackagesAction $getAllPackages,
         protected CreateAdminPackageAction $createAdminPackage,
-        protected UpdatePackageAction $updatePackage
+        protected UpdatePackageAction $updatePackage,
+        protected CalculatePackagePricingAction $calculatePricing
     ) {}
 
     /**
@@ -42,5 +44,16 @@ class PackageService
     public function update(Package $package, array $data): Package
     {
         return ($this->updatePackage)($package, $data);
+    }
+
+    /**
+     * Calculate full pricing breakdown for a package.
+     *
+     * @param  array{code?: string, percentage?: int|float}|null  $promoDiscount
+     * @return array<string, mixed>
+     */
+    public function calculatePricing(Package $package, ?array $promoDiscount = null): array
+    {
+        return ($this->calculatePricing)($package, $promoDiscount);
     }
 }

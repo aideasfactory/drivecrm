@@ -12,9 +12,10 @@ use Carbon\Carbon;
 class CreateDraftCalendarItemsAction
 {
     /**
-     * Create draft calendar items for each lesson in a package.
+     * Reserve calendar items for each lesson in a package.
      *
-     * Returns an array of CalendarItem IDs, one per lesson.
+     * For each week, looks for an existing available slot matching the time range
+     * and updates it to draft status. Only creates a new item if no matching slot exists.
      *
      * @return array<int, int>
      */
@@ -35,15 +36,31 @@ class CreateDraftCalendarItemsAction
                 'date' => $lessonDate->toDateString(),
             ]);
 
-            $calendarItem = CalendarItem::create([
-                'calendar_id' => $calendar->id,
-                'start_time' => $startTime,
-                'end_time' => $endTime,
-                'is_available' => false,
-                'status' => CalendarItemStatus::DRAFT,
-            ]);
+            // Check for an existing available slot that matches the time range
+            $existingItem = CalendarItem::query()
+                ->where('calendar_id', $calendar->id)
+                ->where('start_time', $startTime)
+                ->where('end_time', $endTime)
+                ->where('is_available', true)
+                ->whereDoesntHave('lessons')
+                ->first();
 
-            $calendarItemIds[] = $calendarItem->id;
+            if ($existingItem) {
+                $existingItem->update([
+                    'is_available' => false,
+                    'status' => CalendarItemStatus::DRAFT,
+                ]);
+                $calendarItemIds[] = $existingItem->id;
+            } else {
+                $calendarItem = CalendarItem::create([
+                    'calendar_id' => $calendar->id,
+                    'start_time' => $startTime,
+                    'end_time' => $endTime,
+                    'is_available' => false,
+                    'status' => CalendarItemStatus::DRAFT,
+                ]);
+                $calendarItemIds[] = $calendarItem->id;
+            }
         }
 
         return $calendarItemIds;

@@ -232,7 +232,12 @@ class StripeService
     public function createCheckoutSession(Order $order, Package $package, User $student, ?Instructor $instructor, string $successUrl, string $cancelUrl): array
     {
         try {
+            // Use total_price_pence (package + booking fee + digital fees) when available,
+            // otherwise fall back to package_total_price_pence for legacy orders
+            $chargeAmountPence = $order->total_price_pence ?? $order->package_total_price_pence;
+
             $hasDiscount = $order->discount_percentage !== null && $order->discount_percentage > 0;
+            $hasFeesOrDiscount = $order->total_price_pence !== null || $hasDiscount;
 
             Log::info('StripeService: Creating checkout session', [
                 'order_id' => $order->id,
@@ -245,17 +250,19 @@ class StripeService
                 'instructor_id' => $instructor?->id,
                 'has_discount' => $hasDiscount,
                 'discount_percentage' => $order->discount_percentage,
-                'discounted_total_pence' => $order->package_total_price_pence,
+                'charge_amount_pence' => $chargeAmountPence,
+                'booking_fee_pence' => $order->booking_fee_pence,
+                'digital_fee_pence' => $order->digital_fee_pence,
             ]);
 
-            // When a discount is applied, use price_data with the discounted amount
-            // instead of the pre-created Stripe Price (which has the full price)
-            if ($hasDiscount) {
+            // Always use price_data when fees are included or a discount is applied,
+            // since the pre-created Stripe Price only reflects the base package price
+            if ($hasFeesOrDiscount) {
                 $lineItem = [
                     'price_data' => [
                         'currency' => 'gbp',
                         'product' => $package->stripe_product_id,
-                        'unit_amount' => $order->package_total_price_pence,
+                        'unit_amount' => $chargeAmountPence,
                     ],
                     'quantity' => 1,
                 ];

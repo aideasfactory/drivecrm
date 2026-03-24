@@ -362,6 +362,9 @@ Student enrollments/purchases of lesson packages.
 | `package_total_price_pence` | integer | NULLABLE | Snapshot: total price in pence at time of order |
 | `package_lesson_price_pence` | integer | NULLABLE | Snapshot: per-lesson price in pence at time of order |
 | `package_lessons_count` | integer | NULLABLE | Snapshot: number of lessons at time of order |
+| `booking_fee_pence` | integer unsigned | DEFAULT 0 | Booking fee in pence (e.g., £19.99 = 1999) |
+| `digital_fee_pence` | integer unsigned | DEFAULT 0 | Total digital fee in pence (£3.99 × lessons) |
+| `total_price_pence` | integer unsigned | NULLABLE | Total charge amount in pence (package + booking fee + digital fees - discounts). Sent to Stripe. |
 | `payment_mode` | enum('upfront', 'weekly') | DEFAULT 'upfront' | Payment method chosen |
 | `status` | enum('pending', 'active', 'completed', 'cancelled') | DEFAULT 'pending' | Order status |
 | `stripe_payment_intent_id` | varchar(255) | NULLABLE | Stripe Payment Intent ID (for upfront payments) |
