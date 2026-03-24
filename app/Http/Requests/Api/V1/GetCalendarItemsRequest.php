@@ -21,6 +21,7 @@ class GetCalendarItemsRequest extends FormRequest
         return [
             'date' => ['required', 'date', 'date_format:Y-m-d'],
             'available_only' => ['sometimes', 'boolean'],
+            'exclude_drafts' => ['sometimes', 'boolean'],
         ];
     }
 }

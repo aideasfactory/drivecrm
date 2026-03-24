@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Instructor;
 
+use App\Enums\CalendarItemStatus;
 use App\Models\Calendar;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
@@ -18,8 +19,9 @@ class GetInstructorCalendarItemsAction
      *                               travel/practical_test types AND any slot whose time range
      *                               overlaps with a booked/reserved/completed item on the same calendar.
      *                               When false, returns all items.
+     * @param  bool  $excludeDrafts  When true, excludes items with draft status.
      */
-    public function __invoke(Instructor $instructor, string $date, bool $availableOnly = true): Collection
+    public function __invoke(Instructor $instructor, string $date, bool $availableOnly = true, bool $excludeDrafts = true): Collection
     {
         $calendar = Calendar::query()
             ->where('instructor_id', $instructor->id)
@@ -32,6 +34,13 @@ class GetInstructorCalendarItemsAction
 
         $query = CalendarItem::query()
             ->where('calendar_id', $calendar->id);
+
+        if ($excludeDrafts) {
+            $query->where(function ($q): void {
+                $q->whereNull('status')
+                    ->orWhere('status', '!=', 'draft');
+            });
+        }
 
         if ($availableOnly) {
             $query->where('is_available', true)

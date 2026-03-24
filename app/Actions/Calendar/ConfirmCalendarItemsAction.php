@@ -7,6 +7,7 @@ namespace App\Actions\Calendar;
 use App\Enums\CalendarItemStatus;
 use App\Models\CalendarItem;
 use App\Models\Order;
+use App\Services\InstructorCalendarService;
 use Illuminate\Support\Facades\Log;
 
 class ConfirmCalendarItemsAction
@@ -42,6 +43,20 @@ class ConfirmCalendarItemsAction
             'calendar_items_updated' => $updated,
             'calendar_item_ids' => $calendarItemIds->toArray(),
         ]);
+
+        // Invalidate calendar cache for affected dates
+        if ($updated > 0 && $order->instructor_id) {
+            $dates = CalendarItem::whereIn('id', $calendarItemIds)
+                ->join('calendars', 'calendar_items.calendar_id', '=', 'calendars.id')
+                ->pluck('calendars.date')
+                ->unique();
+
+            $calendarService = app(InstructorCalendarService::class);
+
+            foreach ($dates as $date) {
+                $calendarService->invalidateCalendarCache($order->instructor_id, $date);
+            }
+        }
 
         return $updated;
     }

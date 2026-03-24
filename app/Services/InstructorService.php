@@ -274,7 +274,11 @@ class InstructorService extends BaseService
         ?int $travelTimeMinutes = null,
         bool $isPracticalTest = false
     ): CalendarItem {
-        return ($this->createCalendarItem)($instructor, $date, $startTime, $endTime, $isAvailable, $notes, $unavailabilityReason, $travelTimeMinutes, $isPracticalTest);
+        $item = ($this->createCalendarItem)($instructor, $date, $startTime, $endTime, $isAvailable, $notes, $unavailabilityReason, $travelTimeMinutes, $isPracticalTest);
+
+        app(InstructorCalendarService::class)->invalidateCalendarCache($instructor->id, $date);
+
+        return $item;
     }
 
     /**
@@ -302,7 +306,19 @@ class InstructorService extends BaseService
         ?string $unavailabilityReason = null,
         ?int $travelTimeMinutes = null
     ): CalendarItem {
-        return ($this->updateCalendarItem)($instructor, $calendarItem, $date, $startTime, $endTime, $isAvailable, $notes, $unavailabilityReason, $travelTimeMinutes);
+        // Invalidate old date cache if item is moving to a different date
+        $oldDate = $calendarItem->calendar?->date;
+
+        $item = ($this->updateCalendarItem)($instructor, $calendarItem, $date, $startTime, $endTime, $isAvailable, $notes, $unavailabilityReason, $travelTimeMinutes);
+
+        $calendarService = app(InstructorCalendarService::class);
+        $calendarService->invalidateCalendarCache($instructor->id, $date);
+
+        if ($oldDate && $oldDate !== $date) {
+            $calendarService->invalidateCalendarCache($instructor->id, $oldDate);
+        }
+
+        return $item;
     }
 
     /**
@@ -312,7 +328,16 @@ class InstructorService extends BaseService
      */
     public function removeCalendarItem(CalendarItem $calendarItem): bool
     {
-        return ($this->deleteCalendarItem)($calendarItem);
+        $instructorId = $calendarItem->calendar?->instructor_id;
+        $date = $calendarItem->calendar?->date;
+
+        $result = ($this->deleteCalendarItem)($calendarItem);
+
+        if ($instructorId && $date) {
+            app(InstructorCalendarService::class)->invalidateCalendarCache($instructorId, $date);
+        }
+
+        return $result;
     }
 
     /**

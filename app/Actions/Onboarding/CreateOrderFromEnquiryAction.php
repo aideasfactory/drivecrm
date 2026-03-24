@@ -17,6 +17,7 @@ use App\Models\LessonPayment;
 use App\Models\Order;
 use App\Models\Package;
 use App\Models\Student;
+use App\Services\InstructorCalendarService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -150,6 +151,9 @@ class CreateOrderFromEnquiryAction
                 'first_lesson_date' => $firstLessonDate->toDateString(),
                 'payment_mode' => $paymentMode->value,
             ]);
+
+            // Invalidate calendar cache for affected dates (after transaction commits)
+            $this->invalidateCalendarCacheForItems($calendarItemIds, $instructorId);
 
             return $order;
 
@@ -306,5 +310,28 @@ class CreateOrderFromEnquiryAction
             'order_id' => $order->id,
             'payments_count' => $lessons->count(),
         ]);
+    }
+
+    /**
+     * Invalidate calendar cache for each date affected by the booked calendar items.
+     *
+     * @param  array<int>  $calendarItemIds
+     */
+    protected function invalidateCalendarCacheForItems(array $calendarItemIds, ?int $instructorId): void
+    {
+        if (empty($calendarItemIds) || ! $instructorId) {
+            return;
+        }
+
+        $dates = CalendarItem::whereIn('id', $calendarItemIds)
+            ->join('calendars', 'calendar_items.calendar_id', '=', 'calendars.id')
+            ->pluck('calendars.date')
+            ->unique();
+
+        $calendarService = app(InstructorCalendarService::class);
+
+        foreach ($dates as $date) {
+            $calendarService->invalidateCalendarCache($instructorId, $date);
+        }
     }
 }

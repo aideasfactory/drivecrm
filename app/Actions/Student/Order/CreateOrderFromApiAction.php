@@ -16,6 +16,7 @@ use App\Models\LessonPayment;
 use App\Models\Order;
 use App\Models\Package;
 use App\Models\Student;
+use App\Services\InstructorCalendarService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -36,7 +37,7 @@ class CreateOrderFromApiAction
         string $endTime,
         array $calendarItemIds
     ): Order {
-        return DB::transaction(function () use ($student, $package, $paymentMode, $firstLessonDate, $startTime, $endTime, $calendarItemIds): Order {
+        $order = DB::transaction(function () use ($student, $package, $paymentMode, $firstLessonDate, $startTime, $endTime, $calendarItemIds): Order {
             $instructorId = $student->instructor_id;
 
             $pricing = app(CalculatePackagePricingAction::class)($package);
@@ -114,5 +115,33 @@ class CreateOrderFromApiAction
 
             return $order;
         });
+
+        // Invalidate calendar cache for affected dates (after transaction commits)
+        $this->invalidateCalendarCacheForItems($calendarItemIds, $student->instructor_id);
+
+        return $order;
+    }
+
+    /**
+     * Invalidate calendar cache for each date affected by the booked calendar items.
+     *
+     * @param  array<int, int>  $calendarItemIds
+     */
+    protected function invalidateCalendarCacheForItems(array $calendarItemIds, int $instructorId): void
+    {
+        if (empty($calendarItemIds)) {
+            return;
+        }
+
+        $dates = CalendarItem::whereIn('id', $calendarItemIds)
+            ->join('calendars', 'calendar_items.calendar_id', '=', 'calendars.id')
+            ->pluck('calendars.date')
+            ->unique();
+
+        $calendarService = app(InstructorCalendarService::class);
+
+        foreach ($dates as $date) {
+            $calendarService->invalidateCalendarCache($instructorId, $date);
+        }
     }
 }

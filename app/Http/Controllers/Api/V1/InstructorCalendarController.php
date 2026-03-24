@@ -33,11 +33,13 @@ class InstructorCalendarController extends Controller
     {
         $instructor = $request->user()->instructor;
         $availableOnly = $request->boolean('available_only', true);
+        $excludeDrafts = $request->boolean('exclude_drafts', true);
 
         $items = $this->calendarService->getCalendarItems(
             $instructor,
             $request->validated('date'),
-            $availableOnly
+            $availableOnly,
+            $excludeDrafts
         );
 
         return CalendarItemResource::collection($items);
