@@ -9,3 +9,5 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('lessons:send-invoices')->hourly();
+
+Schedule::command('calendar:cleanup-drafts')->dailyAt('00:00');

@@ -1,9 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Console\Commands;
 
-use App\Enums\CalendarItemStatus;
-use App\Models\CalendarItem;
+use App\Actions\CalendarItem\ResetDraftCalendarItemsAction;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
@@ -14,79 +15,41 @@ class CleanupDraftCalendarItems extends Command
      *
      * @var string
      */
-    protected $signature = 'calendar:cleanup-drafts {--dry-run : Show what would be deleted without actually deleting}';
+    protected $signature = 'calendar:cleanup-drafts {--dry-run : Show what would be reset without actually resetting}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Delete draft calendar items that were created before today (abandoned bookings)';
+    protected $description = 'Reset draft calendar items created before today back to available';
 
     /**
      * Execute the console command.
      */
-    public function handle(): int
+    public function handle(ResetDraftCalendarItemsAction $resetDrafts): int
     {
-        $isDryRun = $this->option('dry-run');
+        $cutoff = now()->startOfDay();
 
-        $this->info('🧹 Starting cleanup of draft calendar items...');
-        $this->newLine();
+        if ($this->option('dry-run')) {
+            $count = \App\Models\CalendarItem::query()
+                ->where('status', \App\Enums\CalendarItemStatus::DRAFT)
+                ->where('created_at', '<', $cutoff)
+                ->count();
 
-        // Find all draft calendar items created before today
-        $query = CalendarItem::where('status', CalendarItemStatus::DRAFT)
-            ->where('created_at', '<', now()->startOfDay());
-
-        $count = $query->count();
-
-        if ($count === 0) {
-            $this->info('✅ No draft calendar items to clean up.');
+            $this->info("Would reset {$count} draft calendar item(s) to available.");
 
             return Command::SUCCESS;
         }
 
-        $this->warn("Found {$count} draft calendar items to delete.");
+        $reset = $resetDrafts($cutoff);
 
-        if ($isDryRun) {
-            $this->newLine();
-            $this->info('🔍 DRY RUN - Showing items that would be deleted:');
-            $this->newLine();
-
-            $items = $query->with('calendar.instructor.user')->get();
-
-            $this->table(
-                ['ID', 'Instructor', 'Date', 'Time Slot', 'Created At'],
-                $items->map(fn ($item) => [
-                    $item->id,
-                    $item->calendar->instructor->user->name ?? 'N/A',
-                    $item->calendar->date ?? 'N/A',
-                    "{$item->start_time} - {$item->end_time}",
-                    $item->created_at->format('Y-m-d H:i:s'),
-                ])
-            );
-
-            $this->newLine();
-            $this->info('ℹ️  Run without --dry-run to actually delete these items.');
-
-            return Command::SUCCESS;
-        }
-
-        // Confirm deletion
-        if (! $this->confirm("Delete {$count} draft calendar items?", true)) {
-            $this->warn('Cleanup cancelled.');
-
-            return Command::FAILURE;
-        }
-
-        // Delete the items
-        $deleted = $query->delete();
-
-        Log::info('Cleaned up draft calendar items', [
-            'deleted_count' => $deleted,
-            'cutoff_date' => now()->startOfDay()->toDateTimeString(),
+        Log::info('Nightly draft calendar cleanup completed', [
+            'reset_count' => $reset,
+            'cutoff' => $cutoff->toDateTimeString(),
         ]);
 
-        $this->info("✅ Deleted {$deleted} draft calendar items.");
+        $this->info("Reset {$reset} draft calendar item(s) back to available.");
 
         return Command::SUCCESS;
     }
