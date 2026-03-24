@@ -6,7 +6,6 @@ namespace App\Actions\Onboarding;
 
 use App\Enums\UserRole;
 use App\Models\Enquiry;
-use App\Models\Instructor;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\StripeService;
@@ -100,20 +99,19 @@ class CreateUserAndStudentFromEnquiryAction
                 ]);
             }
 
-            // Get or create student record
-            $student = Student::firstOrCreate(
+            // Get or update student record — updateOrCreate ensures returning
+            // users get their details refreshed with the latest onboarding data
+            $studentData = $this->getStudentData($enquiry, $step1, $step2, $step5, $bookingForSomeoneElse);
+            $student = Student::updateOrCreate(
                 ['user_id' => $user->id],
-                $this->getStudentData($enquiry, $step1, $step2, $step5, $bookingForSomeoneElse)
+                $studentData
             );
 
-            // If student already exists, update instructor assignment if needed
-            if (! $student->wasRecentlyCreated && ! empty($step2['instructor_id'])) {
-                $student->instructor_id = $step2['instructor_id'];
-                $student->save();
-
-                Log::info('Updated existing student instructor assignment', [
+            if (! $student->wasRecentlyCreated) {
+                Log::info('Updated existing student record from onboarding', [
                     'student_id' => $student->id,
-                    'instructor_id' => $step2['instructor_id'],
+                    'user_id' => $user->id,
+                    'enquiry_id' => $enquiry->id,
                 ]);
             }
 
