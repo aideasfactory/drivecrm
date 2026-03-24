@@ -6,7 +6,6 @@ namespace App\Actions\Onboarding;
 
 use App\Enums\UserRole;
 use App\Models\Enquiry;
-use App\Models\Instructor;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\StripeService;
@@ -101,30 +100,38 @@ class CreateUserAndStudentFromEnquiryAction
             }
 
             // Get or create student record
-            $student = Student::firstOrCreate(
-                ['user_id' => $user->id],
-                $this->getStudentData($enquiry, $step1, $step2, $step5, $bookingForSomeoneElse)
-            );
+            $studentData = $this->getStudentData($enquiry, $step1, $step2, $step5, $bookingForSomeoneElse);
+            $student = Student::where('user_id', $user->id)->first();
 
-            // If student already exists, update instructor assignment if needed
-            if (! $student->wasRecentlyCreated && ! empty($step2['instructor_id'])) {
-                $student->instructor_id = $step2['instructor_id'];
-                $student->save();
+            if ($student) {
+                // Update existing student with fresh enquiry data
+                $student->update($studentData);
 
-                Log::info('Updated existing student instructor assignment', [
+                Log::info('Updated existing student with fresh onboarding data', [
                     'student_id' => $student->id,
-                    'instructor_id' => $step2['instructor_id'],
+                    'instructor_id' => $studentData['instructor_id'] ?? null,
+                    'enquiry_id' => $enquiry->id,
+                ]);
+            } else {
+                $student = Student::create(array_merge(['user_id' => $user->id], $studentData));
+
+                Log::info('Created new student from onboarding', [
+                    'student_id' => $student->id,
+                    'user_id' => $user->id,
+                    'enquiry_id' => $enquiry->id,
                 ]);
             }
 
             DB::commit();
+
+            $isNewStudent = $student->wasRecentlyCreated;
 
             Log::info('Successfully created/retrieved user and student from enquiry', [
                 'user_id' => $user->id,
                 'student_id' => $student->id,
                 'enquiry_id' => $enquiry->id,
                 'is_new_user' => $isNewUser,
-                'is_new_student' => $student->wasRecentlyCreated,
+                'is_new_student' => $isNewStudent,
             ]);
 
             return [

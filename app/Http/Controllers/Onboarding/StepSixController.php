@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Onboarding;
 
+use App\Actions\Onboarding\CancelPendingOrderAction;
 use App\Actions\Onboarding\CreateOrderFromEnquiryAction;
 use App\Actions\Onboarding\CreateUserAndStudentFromEnquiryAction;
 use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
@@ -29,7 +30,8 @@ class StepSixController extends Controller
         protected StripeService $stripeService,
         protected CreateUserAndStudentFromEnquiryAction $createUserAndStudentAction,
         protected CreateOrderFromEnquiryAction $createOrderAction,
-        protected SendOrderConfirmationEmailAction $sendEmailAction
+        protected SendOrderConfirmationEmailAction $sendEmailAction,
+        protected CancelPendingOrderAction $cancelPendingOrderAction
     ) {}
 
     /**
@@ -169,6 +171,21 @@ class StepSixController extends Controller
                 return redirect()
                     ->route('onboarding.step3', ['uuid' => $enquiry->id])
                     ->with('error', 'This package is no longer available.');
+            }
+
+            // Cancel any previous pending order from this enquiry to prevent duplicates
+            $existingStep6 = $enquiry->getStepData(6) ?? [];
+            if (! empty($existingStep6['order_id'])) {
+                $existingOrder = Order::find($existingStep6['order_id']);
+
+                if ($existingOrder && $existingOrder->isPending()) {
+                    ($this->cancelPendingOrderAction)($existingOrder);
+
+                    Log::info('Cancelled previous pending order before creating new one', [
+                        'cancelled_order_id' => $existingOrder->id,
+                        'enquiry_id' => $enquiry->id,
+                    ]);
+                }
             }
 
             // Create or retrieve user and student
