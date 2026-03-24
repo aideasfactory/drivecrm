@@ -16,6 +16,8 @@
     - [Profile Picture](#post-apiv1instructorprofilepicture)
     - [Students](#get-apiv1instructorstudents)
     - [Lessons](#get-apiv1instructorlessonsdate)
+    - [Notify On Way](#post-apiv1instructorlessonslessonnotify-on-way)
+    - [Notify Arrived](#post-apiv1instructorlessonslessonnotify-arrived)
     - [Packages](#get-apiv1instructorpackages)
   - [Students](#students)
     - [CRUD](#post-apiv1students)
@@ -852,6 +854,70 @@ Returns the authenticated instructor's lessons for a specific date, ordered by s
 ```
 
 > **Note:** Lessons are automatically scoped to the authenticated instructor. Lessons are sorted by start time ascending for chronological day-view display.
+
+---
+
+#### `POST /api/v1/instructor/lessons/{lesson}/notify-on-way`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Logs that the instructor is on their way to the lesson. Currently writes an activity log entry for the instructor. Push notification to the student will be added in a future release.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `lesson` | integer | Lesson ID. Must belong to the authenticated instructor. |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "message": "On-way notification logged successfully."
+}
+```
+
+**Error Response (not your lesson):** `403 Forbidden`
+```json
+{
+  "message": "This lesson does not belong to you."
+}
+```
+
+> **Note:** This is a stub endpoint. The activity is logged but no push notification is sent yet. The mobile app should call this endpoint so the integration is ready when push notifications are implemented.
+
+---
+
+#### `POST /api/v1/instructor/lessons/{lesson}/notify-arrived`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Logs that the instructor has arrived at the lesson pickup point. Currently writes an activity log entry for the instructor. Push notification to the student will be added in a future release.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `lesson` | integer | Lesson ID. Must belong to the authenticated instructor. |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "message": "Arrived notification logged successfully."
+}
+```
+
+**Error Response (not your lesson):** `403 Forbidden`
+```json
+{
+  "message": "This lesson does not belong to you."
+}
+```
+
+> **Note:** This is a stub endpoint. The activity is logged but no push notification is sent yet. The mobile app should call this endpoint so the integration is ready when push notifications are implemented.
 
 ---
 
@@ -2318,6 +2384,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-23 | Full API documentation audit — added all missing endpoints and fixed broken sections | All endpoints |
 | 2026-03-23 | Student creation now creates a User account with temp password and sends welcome email; email field now required and unique | Student (store) |
 | 2026-03-23 | DELETE student endpoint changed from hard delete (204) to soft remove (200) — sets instructor_id to null, preserves student data | Student (destroy) |
+| 2026-03-24 | Added stub endpoints for instructor on-way and arrived notifications (activity log only, push TBD) | Instructor (notify-on-way, notify-arrived) |
 
 ---
 

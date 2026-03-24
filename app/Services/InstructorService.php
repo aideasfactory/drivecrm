@@ -30,6 +30,7 @@ use App\Enums\RecurrencePattern;
 use App\Enums\UserRole;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
+use App\Models\Lesson;
 use App\Models\Location;
 use App\Models\User;
 use Carbon\Carbon;
@@ -478,6 +479,48 @@ class InstructorService extends BaseService
     public function deleteProfilePicture(Instructor $instructor): Instructor
     {
         return ($this->deleteProfilePicture)($instructor);
+    }
+
+    /**
+     * Log that the instructor is on their way to a lesson.
+     *
+     * TODO: Replace with actual push notification to student when push is implemented.
+     */
+    public function notifyStudentOnWay(Instructor $instructor, Lesson $lesson): void
+    {
+        $student = $lesson->order?->student;
+
+        ($this->logActivity)(
+            $instructor,
+            'Instructor is on their way to lesson #'.$lesson->id.($student ? ' with '.$student->first_name.' '.$student->surname : ''),
+            'lesson',
+            [
+                'lesson_id' => $lesson->id,
+                'student_id' => $student?->id,
+                'notification_type' => 'on_way',
+            ]
+        );
+    }
+
+    /**
+     * Log that the instructor has arrived at a lesson.
+     *
+     * TODO: Replace with actual push notification to student when push is implemented.
+     */
+    public function notifyStudentArrived(Instructor $instructor, Lesson $lesson): void
+    {
+        $student = $lesson->order?->student;
+
+        ($this->logActivity)(
+            $instructor,
+            'Instructor has arrived for lesson #'.$lesson->id.($student ? ' with '.$student->first_name.' '.$student->surname : ''),
+            'lesson',
+            [
+                'lesson_id' => $lesson->id,
+                'student_id' => $student?->id,
+                'notification_type' => 'arrived',
+            ]
+        );
     }
 
     /**

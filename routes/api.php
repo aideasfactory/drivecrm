@@ -48,6 +48,8 @@ Route::prefix('v1')->group(function (): void {
             Route::delete('profile/picture', [InstructorProfileController::class, 'deleteProfilePicture']);
             Route::get('students', [InstructorStudentController::class, 'index']);
             Route::get('lessons/{date}', [InstructorLessonController::class, 'index']);
+            Route::post('lessons/{lesson}/notify-on-way', [InstructorLessonController::class, 'notifyOnWay']);
+            Route::post('lessons/{lesson}/notify-arrived', [InstructorLessonController::class, 'notifyArrived']);
             Route::get('packages', [InstructorPackageController::class, 'index']);
         });
 
