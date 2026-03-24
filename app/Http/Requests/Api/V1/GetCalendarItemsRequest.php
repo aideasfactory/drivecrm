@@ -14,12 +14,13 @@ class GetCalendarItemsRequest extends FormRequest
     }
 
     /**
-     * @return array<string, array<int, string>>
+     * @return array<string, array<int, mixed>>
      */
     public function rules(): array
     {
         return [
             'date' => ['required', 'date', 'date_format:Y-m-d'],
+            'available_only' => ['sometimes', 'boolean'],
         ];
     }
 }

@@ -17,10 +17,19 @@ class CalendarItemResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'date' => $this->whenLoaded('calendar', fn () => $this->calendar->date->format('Y-m-d')),
             'start_time' => Carbon::parse($this->start_time)->format('H:i'),
             'end_time' => Carbon::parse($this->end_time)->format('H:i'),
             'is_available' => $this->is_available,
             'status' => $this->status?->value,
+            'item_type' => $this->item_type?->value ?? 'slot',
+            'travel_time_minutes' => $this->travel_time_minutes,
+            'parent_item_id' => $this->parent_item_id,
+            'notes' => $this->notes,
+            'unavailability_reason' => $this->unavailability_reason,
+            'recurrence_pattern' => $this->recurrence_pattern?->value ?? 'none',
+            'recurrence_end_date' => $this->recurrence_end_date?->format('Y-m-d'),
+            'recurrence_group_id' => $this->recurrence_group_id,
         ];
     }
 }

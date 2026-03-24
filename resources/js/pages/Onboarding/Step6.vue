@@ -212,7 +212,7 @@ const props = defineProps({
   stepData: Object,
   maxStepReached: { type: Number, default: 6 },
   discount: {
-    type: Object as () => { id: string; label: string; percentage: number } | null,
+    type: [Object, null],
     default: null
   }
 })

@@ -15,12 +15,15 @@ class InstructorCalendarService extends BaseService
     ) {}
 
     /**
-     * Get available calendar items for an instructor on a specific date.
+     * Get calendar items for an instructor on a specific date.
+     *
+     * @param  bool  $availableOnly  When true, returns only available slots. When false, returns all items for the day.
      */
-    public function getCalendarItems(Instructor $instructor, string $date): Collection
+    public function getCalendarItems(Instructor $instructor, string $date, bool $availableOnly = true): Collection
     {
-        $key = $this->cacheKey('instructor', $instructor->id, "calendar:{$date}");
+        $suffix = $availableOnly ? "calendar:{$date}" : "calendar:{$date}:all";
+        $key = $this->cacheKey('instructor', $instructor->id, $suffix);
 
-        return $this->remember($key, fn () => ($this->getCalendarItems)($instructor, $date));
+        return $this->remember($key, fn () => ($this->getCalendarItems)($instructor, $date, $availableOnly));
     }
 }

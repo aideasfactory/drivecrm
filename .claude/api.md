@@ -19,6 +19,7 @@
     - [Notify On Way](#post-apiv1instructorlessonslessonnotify-on-way)
     - [Notify Arrived](#post-apiv1instructorlessonslessonnotify-arrived)
     - [Packages](#get-apiv1instructorpackages)
+    - [Calendar Items](#get-apiv1instructorcalendaritems)
   - [Students](#students)
     - [CRUD](#post-apiv1students)
     - [Lessons](#get-apiv1studentsstudentlessons)
@@ -973,6 +974,236 @@ Returns all active packages for the authenticated instructor.
 | `has_stripe_price` | boolean | Whether a Stripe price is configured for this package |
 
 > **Note:** Only active packages are returned. Packages without a Stripe price (`has_stripe_price: false`) cannot be used for upfront payments.
+
+---
+
+#### `GET /api/v1/instructor/calendar/items`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Returns the authenticated instructor's calendar items for a specific date. By default, returns only available slots (excluding travel and practical test items). Set `available_only=false` to return all items for the day.
+
+**Query Parameters:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `date` | string | **Yes** | Date in `Y-m-d` format (e.g., `2026-03-24`) |
+| `available_only` | boolean | No | `true` (default) = available slots only; `false` = all items for the day |
+
+**Example:** `GET /api/v1/instructor/calendar/items?date=2026-03-24&available_only=false`
+
+**Response (200):**
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "date": "2026-03-24",
+      "start_time": "09:00",
+      "end_time": "10:00",
+      "is_available": true,
+      "status": "draft",
+      "item_type": "slot",
+      "travel_time_minutes": 15,
+      "parent_item_id": null,
+      "notes": "Morning lesson",
+      "unavailability_reason": null,
+      "recurrence_pattern": "weekly",
+      "recurrence_end_date": "2026-06-24",
+      "recurrence_group_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    },
+    {
+      "id": 2,
+      "date": "2026-03-24",
+      "start_time": "10:00",
+      "end_time": "10:15",
+      "is_available": false,
+      "status": null,
+      "item_type": "travel",
+      "travel_time_minutes": null,
+      "parent_item_id": 1,
+      "notes": null,
+      "unavailability_reason": null,
+      "recurrence_pattern": "none",
+      "recurrence_end_date": null,
+      "recurrence_group_id": null
+    }
+  ]
+}
+```
+
+> **Note:** When `available_only=true` (default), travel and practical test items are excluded and only `is_available=true` items are returned. Use `available_only=false` to see the full day schedule.
+
+---
+
+#### `POST /api/v1/instructor/calendar/items`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Creates a new calendar item (time slot) for the authenticated instructor. Supports all options available in the admin area: travel time, practical tests, recurrence, and unavailability.
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `date` | string | **Yes** | Date in `Y-m-d` format. Cannot be in the past. |
+| `start_time` | string | **Yes** | Start time in `H:i` format (e.g., `09:00`) |
+| `end_time` | string | **Yes** | End time in `H:i` format. Must be after `start_time`. |
+| `is_available` | boolean | No | Whether the slot is available for booking. Default: `true`. |
+| `notes` | string\|null | No | Optional notes (max 1000 characters) |
+| `unavailability_reason` | string\|null | No | Reason for unavailability (max 500 chars). **Required** when `is_available=false` (unless `is_practical_test=true`). |
+| `recurrence_pattern` | string | No | One of: `none` (default), `weekly`, `biweekly`, `monthly` |
+| `recurrence_end_date` | string\|null | No | End date for recurring series in `Y-m-d` format. Must be after `date`. If omitted, defaults to 6 months from `date`. |
+| `travel_time_minutes` | integer\|null | No | Travel time block after the slot: `15`, `30`, or `45` minutes. Creates a separate travel item. |
+| `is_practical_test` | boolean | No | If `true`, creates a practical test slot. Blocks 1 hour before `start_time` and 30 minutes after `end_time`. Automatically marked unavailable. |
+
+**Example — Single slot with travel time:**
+```json
+{
+  "date": "2026-03-25",
+  "start_time": "09:00",
+  "end_time": "10:00",
+  "is_available": true,
+  "notes": "Morning lesson",
+  "travel_time_minutes": 15
+}
+```
+
+**Response (201):**
+```json
+{
+  "data": {
+    "id": 42,
+    "date": "2026-03-25",
+    "start_time": "09:00",
+    "end_time": "10:00",
+    "is_available": true,
+    "status": "draft",
+    "item_type": "slot",
+    "travel_time_minutes": 15,
+    "parent_item_id": null,
+    "notes": "Morning lesson",
+    "unavailability_reason": null,
+    "recurrence_pattern": "none",
+    "recurrence_end_date": null,
+    "recurrence_group_id": null
+  },
+  "has_travel_item": true
+}
+```
+
+**Example — Recurring weekly slot:**
+```json
+{
+  "date": "2026-03-25",
+  "start_time": "14:00",
+  "end_time": "15:00",
+  "is_available": true,
+  "recurrence_pattern": "weekly",
+  "recurrence_end_date": "2026-06-25"
+}
+```
+
+**Response (201):**
+```json
+{
+  "data": {
+    "id": 43,
+    "date": "2026-03-25",
+    "start_time": "14:00",
+    "end_time": "15:00",
+    "is_available": true,
+    "status": "draft",
+    "item_type": "slot",
+    "travel_time_minutes": null,
+    "parent_item_id": null,
+    "notes": null,
+    "unavailability_reason": null,
+    "recurrence_pattern": "weekly",
+    "recurrence_end_date": "2026-06-25",
+    "recurrence_group_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  },
+  "recurring_count": 13
+}
+```
+
+**Example — Practical test:**
+```json
+{
+  "date": "2026-04-10",
+  "start_time": "11:00",
+  "end_time": "12:00",
+  "is_practical_test": true
+}
+```
+
+**Example — Unavailable slot:**
+```json
+{
+  "date": "2026-03-26",
+  "start_time": "12:00",
+  "end_time": "13:00",
+  "is_available": false,
+  "unavailability_reason": "Lunch break"
+}
+```
+
+**Validation errors (422):**
+- Overlapping time slots (including travel time and practical test buffers) are rejected.
+- `unavailability_reason` is required when `is_available=false` (except for practical tests).
+
+---
+
+#### `DELETE /api/v1/instructor/calendar/items/{calendarItem}`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Deletes a calendar item belonging to the authenticated instructor. For recurring items, supports deleting a single occurrence or all future occurrences.
+
+**Path Parameters:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `calendarItem` | integer | Calendar item ID |
+
+**Query Parameters:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `scope` | string | No | `single` (default) = delete this item only; `future` = delete this item and all future items in the recurrence group |
+
+**Example:** `DELETE /api/v1/instructor/calendar/items/42?scope=future`
+
+**Response — Single delete (200):**
+```json
+{
+  "message": "Calendar item removed successfully."
+}
+```
+
+**Response — Recurring future delete (200):**
+```json
+{
+  "message": "5 recurring calendar item(s) removed successfully.",
+  "deleted_count": 5
+}
+```
+
+**Error — Item has booked lessons (400):**
+```json
+{
+  "message": "Cannot delete a calendar item that has booked lessons."
+}
+```
+
+**Error — Not found / not owned (404):**
+```json
+{
+  "message": "Calendar item not found."
+}
+```
+
+> **Note:** Items with booked lessons cannot be deleted. When using `scope=future`, only items without booked lessons are removed — items with bookings are preserved.
 
 ---
 
@@ -2423,6 +2654,9 @@ The `role` field is always returned in user responses. Use it to determine which
 | GET | `/api/v1/instructor/students` | Yes | Instructor | List students (grouped) |
 | GET | `/api/v1/instructor/lessons/{date}` | Yes | Instructor | Day view lessons |
 | GET | `/api/v1/instructor/packages` | Yes | Instructor | List packages |
+| GET | `/api/v1/instructor/calendar/items` | Yes | Instructor | List calendar items for a date |
+| POST | `/api/v1/instructor/calendar/items` | Yes | Instructor | Create calendar item |
+| DELETE | `/api/v1/instructor/calendar/items/{calendarItem}` | Yes | Instructor | Delete calendar item |
 | POST | `/api/v1/students` | Yes | Instructor | Create student |
 | GET | `/api/v1/students/{student}` | Yes | Both | View student |
 | PUT | `/api/v1/students/{student}` | Yes | Both | Update student |
@@ -2467,6 +2701,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-23 | DELETE student endpoint changed from hard delete (204) to soft remove (200) — sets instructor_id to null, preserves student data | Student (destroy) |
 | 2026-03-24 | Added stub endpoints for instructor on-way and arrived notifications (activity log only, push TBD) | Instructor (notify-on-way, notify-arrived) |
 | 2026-03-24 | Added update and delete endpoints for student notes (PUT and DELETE with soft delete) | Student Notes (update, destroy) |
+| 2026-03-24 | Added calendar management API — GET (with available_only filter), POST (create with all options: travel, recurrence, practical test), DELETE (single or future recurring) | Instructor Calendar (index, store, destroy) |
 
 ---
 

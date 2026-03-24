@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\InstructorCalendarController;
 use App\Http\Controllers\Api\V1\InstructorLessonController;
 use App\Http\Controllers\Api\V1\InstructorPackageController;
 use App\Http\Controllers\Api\V1\InstructorProfileController;
@@ -51,6 +52,9 @@ Route::prefix('v1')->group(function (): void {
             Route::post('lessons/{lesson}/notify-on-way', [InstructorLessonController::class, 'notifyOnWay']);
             Route::post('lessons/{lesson}/notify-arrived', [InstructorLessonController::class, 'notifyArrived']);
             Route::get('packages', [InstructorPackageController::class, 'index']);
+            Route::get('calendar/items', [InstructorCalendarController::class, 'index']);
+            Route::post('calendar/items', [InstructorCalendarController::class, 'store']);
+            Route::delete('calendar/items/{calendarItem}', [InstructorCalendarController::class, 'destroy']);
         });
 
         // Student routes
