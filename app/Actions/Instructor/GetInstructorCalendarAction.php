@@ -54,7 +54,8 @@ class GetInstructorCalendarAction
                             $studentName = trim($student->first_name.' '.$student->surname);
                         }
                         if ($lesson) {
-                            $isPaid = $lesson->lessonPayment?->isPaid() ?? false;
+                            $isPaid = $lesson->lessonPayment?->isPaid()
+                                ?? ($lesson->order?->isUpfront() ? true : false);
                         }
                     }
 
