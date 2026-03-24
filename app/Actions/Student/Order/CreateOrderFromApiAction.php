@@ -63,8 +63,10 @@ class CreateOrderFromApiAction
                 'payment_mode' => $paymentMode->value,
             ]);
 
+            // UPFRONT: Keep as DRAFT until Stripe confirms payment (ConfirmCalendarItemsAction handles transition)
+            // WEEKLY: Transition to RESERVED immediately (no Stripe checkout needed)
             $calendarItemStatus = $paymentMode === PaymentMode::UPFRONT
-                ? CalendarItemStatus::BOOKED
+                ? CalendarItemStatus::DRAFT
                 : CalendarItemStatus::RESERVED;
 
             for ($i = 0; $i < $package->lessons_count; $i++) {

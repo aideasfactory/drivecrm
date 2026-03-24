@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Onboarding;
 
+use App\Actions\Calendar\ConfirmCalendarItemsAction;
 use App\Actions\Onboarding\CreateOrderFromEnquiryAction;
 use App\Actions\Onboarding\CreateUserAndStudentFromEnquiryAction;
 use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
@@ -479,6 +480,9 @@ class StepSixController extends Controller
                     $order->status = OrderStatus::ACTIVE;
                     $order->stripe_payment_intent_id = $session->payment_intent;
                     $order->save();
+
+                    // Transition calendar items from DRAFT to BOOKED now that payment is confirmed
+                    app(ConfirmCalendarItemsAction::class)($order);
                 }
 
                 // Send confirmation email

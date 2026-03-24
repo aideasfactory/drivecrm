@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Calendar\ConfirmCalendarItemsAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
@@ -151,8 +152,8 @@ class WebhookController extends Controller
                     // Send confirmation email (for onboarding orders)
                     $this->sendOrderConfirmationEmail($order);
 
-                    // Mark calendar item as unavailable (for onboarding)
-                    $this->markCalendarItemUnavailable($order);
+                    // Transition calendar items from DRAFT to BOOKED now that payment is confirmed
+                    app(ConfirmCalendarItemsAction::class)($order);
 
                     DB::commit();
 
@@ -212,6 +213,9 @@ class WebhookController extends Controller
                 if ($order->lessons()->count() === 0) {
                     $this->createLessonsForOrder($order);
                 }
+
+                // Transition calendar items from DRAFT to BOOKED now that payment is confirmed
+                app(ConfirmCalendarItemsAction::class)($order);
 
                 DB::commit();
 
@@ -396,37 +400,6 @@ class WebhookController extends Controller
         } catch (\Exception $e) {
             // Log but don't throw - email failure shouldn't break webhook
             Log::error('Webhook: Failed to send order confirmation email', [
-                'order_id' => $order->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    /**
-     * Mark calendar item as unavailable (for onboarding orders).
-     */
-    protected function markCalendarItemUnavailable(Order $order): void
-    {
-        try {
-            // Get first lesson which might have calendar_item_id
-            $firstLesson = $order->lessons()->orderBy('date')->first();
-
-            if ($firstLesson && $firstLesson->calendar_item_id) {
-                $calendarItem = \App\Models\CalendarItem::find($firstLesson->calendar_item_id);
-
-                if ($calendarItem) {
-                    $calendarItem->is_available = false;
-                    $calendarItem->save();
-
-                    Log::info('Webhook: Marked calendar item as unavailable', [
-                        'order_id' => $order->id,
-                        'calendar_item_id' => $calendarItem->id,
-                    ]);
-                }
-            }
-        } catch (\Exception $e) {
-            // Log but don't throw - calendar update failure shouldn't break webhook
-            Log::error('Webhook: Failed to mark calendar item unavailable', [
                 'order_id' => $order->id,
                 'error' => $e->getMessage(),
             ]);

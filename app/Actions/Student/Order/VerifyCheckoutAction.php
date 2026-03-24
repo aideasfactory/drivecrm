@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Student\Order;
 
+use App\Actions\Calendar\ConfirmCalendarItemsAction;
 use App\Enums\OrderStatus;
 use App\Models\Order;
 use Illuminate\Support\Facades\Log;
@@ -34,6 +35,9 @@ class VerifyCheckoutAction
                     $order->status = OrderStatus::ACTIVE;
                     $order->stripe_payment_intent_id = $session->payment_intent;
                     $order->save();
+
+                    // Transition calendar items from DRAFT to BOOKED now that payment is confirmed
+                    app(ConfirmCalendarItemsAction::class)($order);
 
                     Log::info('Order activated via API checkout verification', [
                         'order_id' => $order->id,

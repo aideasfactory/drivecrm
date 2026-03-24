@@ -192,8 +192,10 @@ class CreateOrderFromEnquiryAction
         ]);
 
         // Determine calendar item status based on payment mode
+        // UPFRONT: Keep as DRAFT until Stripe confirms payment (ConfirmCalendarItemsAction handles transition)
+        // WEEKLY: Transition to RESERVED immediately (no Stripe checkout needed)
         $calendarItemStatus = $paymentMode === PaymentMode::UPFRONT
-            ? CalendarItemStatus::BOOKED
+            ? CalendarItemStatus::DRAFT
             : CalendarItemStatus::RESERVED;
 
         Log::info('Calendar items will be updated to status', [
