@@ -116,7 +116,7 @@ class BulkImportInstructorsAction
                     'status' => $validated['status'] ?? 'active',
                     'pdi_status' => $validated['pdi_status'] ?? null,
                     'priority' => false,
-                    'rating' => 1,
+                    'rating' => 4,
                     'onboarding_complete' => false,
                     'charges_enabled' => false,
                     'payouts_enabled' => false,

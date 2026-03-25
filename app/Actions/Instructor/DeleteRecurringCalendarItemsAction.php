@@ -38,6 +38,12 @@ class DeleteRecurringCalendarItemsAction
 
         foreach ($futureItems as $item) {
             $calendar = $item->calendar;
+
+            // Delete any associated travel-time block
+            if ($item->travelItem) {
+                $item->travelItem->delete();
+            }
+
             $item->delete();
             $deletedCount++;
 

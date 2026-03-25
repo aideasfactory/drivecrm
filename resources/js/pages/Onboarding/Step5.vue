@@ -36,11 +36,8 @@
                   <CardContent>
                     <div class="flex items-center space-x-4">
                       <Avatar class="h-16 w-16">
-                        <AvatarImage
-                          :src="instructor?.avatar || 'https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-5.jpg'"
-                          :alt="instructor?.name"
-                        />
-                        <AvatarFallback>{{ instructor?.name?.charAt(0) || 'I' }}</AvatarFallback>
+                        <AvatarImage v-if="instructor?.avatar" :src="instructor.avatar" :alt="instructor.name" />
+                        <AvatarFallback class="text-lg font-semibold bg-primary text-primary-foreground">{{ getInitials(instructor?.name) }}</AvatarFallback>
                       </Avatar>
                       <div class="flex-1">
                         <h4 class="font-semibold">{{ instructor?.name || 'No instructor selected' }}</h4>
@@ -55,7 +52,7 @@
                           </span>
                           <span class="flex items-center">
                             <Star class="mr-1 h-4 w-4 fill-yellow-400 text-yellow-400" />
-                            {{ instructor?.rating || '4.9' }} ({{ instructor?.reviews || '127' }} reviews)
+                            {{ instructor?.rating }} ({{ instructor?.reviews }} reviews)
                           </span>
                         </div>
                       </div>
@@ -391,6 +388,16 @@ watch(isBookingForSomeoneElse, (newValue) => {
 })
 
 const uuid = computed(() => props.uuid || page.props.enquiry?.id)
+
+function getInitials(name) {
+  if (!name) return ''
+  return name
+    .split(' ')
+    .map(part => part.charAt(0))
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+}
 
 const selectedDay = computed(() => {
   if (!props.schedule?.date) return ''

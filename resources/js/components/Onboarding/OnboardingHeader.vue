@@ -4,9 +4,11 @@
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between h-16 w-full">
           <div class="flex-shrink-0 min-w-[200px]">
-            <span class="flex items-center cursor-pointer">
-              <Car class="h-6 w-6 mr-2 text-red-600" />
-              <span class="text-xl font-bold">DRIVE</span>
+            <span class="flex items-center cursor-pointer w-8">
+              <AppLogoIcon
+                    class="w-4 fill-current text-[var(--foreground)] dark:text-white"
+                />
+              <span class="text-xl font-bold ml-2">DRIVE</span>
             </span>
           </div>
 
@@ -93,7 +95,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { step1, step2, step3, step4, step5, step6 } from '@/routes/onboarding'
-import { Car } from 'lucide-vue-next'
+import AppLogoIcon from '@/components/AppLogoIcon.vue';
 
 const props = defineProps({
   currentStep: {

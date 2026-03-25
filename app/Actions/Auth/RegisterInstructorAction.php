@@ -35,7 +35,7 @@ class RegisterInstructorAction
                 'onboarding_complete' => false,
                 'charges_enabled' => false,
                 'payouts_enabled' => false,
-                'rating' => 0,
+                'rating' => 4,
                 'priority' => false,
                 'meta' => [
                     'transmission_type' => $data['transmission_type'] ?? null,

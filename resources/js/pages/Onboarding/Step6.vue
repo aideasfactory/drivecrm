@@ -35,7 +35,7 @@
                   <Separator class="my-3" />
                   <div class="flex justify-between font-semibold">
                     <span>Total:</span>
-                    <span>£{{ pricing?.upfront?.total || '0.00' }}</span>
+                    <span>{{ pricing?.upfront?.total || '0.00' }}</span>
                   </div>
                 </div>
               </div>
@@ -57,6 +57,12 @@
             </CardHeader>
 
             <CardContent>
+              <!-- Flash error message -->
+              <Alert v-if="page.props.flash?.error" variant="destructive" class="mb-6">
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{{ page.props.flash.error }}</AlertDescription>
+              </Alert>
+
               <form @submit.prevent="processPayment">
                 <div class="space-y-8">
                   <!-- Payment Options -->

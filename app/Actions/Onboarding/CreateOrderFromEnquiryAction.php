@@ -47,15 +47,22 @@ class CreateOrderFromEnquiryAction
             // Get instructor ID from step 2 or use package instructor
             $instructorId = $step2['instructor_id'] ?? $package->instructor_id;
 
-            // Apply discount to prices if present
-            $totalPricePence = $package->total_price_pence;
+            // Calculate fees
+            $bookingFeePence = 999; // £9.99
+            $digitalFeePence = 399 * $package->lessons_count; // £3.99 per lesson
+
+            // Apply discount to base package price if present
+            $packagePricePence = $package->total_price_pence;
             $lessonPricePence = $package->lesson_price_pence;
 
             if ($discount) {
                 $discountMultiplier = 1 - ($discount['percentage'] / 100);
-                $totalPricePence = (int) round($package->total_price_pence * $discountMultiplier);
-                $lessonPricePence = (int) floor($totalPricePence / $package->lessons_count);
+                $packagePricePence = (int) round($package->total_price_pence * $discountMultiplier);
+                $lessonPricePence = (int) floor($packagePricePence / $package->lessons_count);
             }
+
+            // Total includes base package price + fees
+            $totalPricePence = $packagePricePence + $bookingFeePence + $digitalFeePence;
 
             // Create Order record with package snapshot (using discounted prices)
             $order = Order::create([
@@ -63,9 +70,12 @@ class CreateOrderFromEnquiryAction
                 'instructor_id' => $instructorId,
                 'package_id' => $package->id,
                 'package_name' => $package->name,
-                'package_total_price_pence' => $totalPricePence,
+                'package_total_price_pence' => $packagePricePence,
                 'package_lesson_price_pence' => $lessonPricePence,
                 'package_lessons_count' => $package->lessons_count,
+                'booking_fee_pence' => $bookingFeePence,
+                'digital_fee_pence' => $digitalFeePence,
+                'total_price_pence' => $totalPricePence,
                 'status' => OrderStatus::PENDING,
                 'payment_mode' => $paymentMode,
                 'discount_code_id' => $discount['id'] ?? null,
@@ -329,7 +339,7 @@ class CreateOrderFromEnquiryAction
             return;
         }
 
-        $dates = CalendarItem::whereIn('id', $calendarItemIds)
+        $dates = CalendarItem::whereIn('calendar_items.id', $calendarItemIds)
             ->join('calendars', 'calendar_items.calendar_id', '=', 'calendars.id')
             ->pluck('calendars.date')
             ->unique();

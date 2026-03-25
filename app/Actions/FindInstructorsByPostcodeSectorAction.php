@@ -55,16 +55,14 @@ class FindInstructorsByPostcodeSectorAction
      */
     private function extractPostcodeSector(string $postcode): ?string
     {
-        $normalized = strtoupper(trim($postcode));
+        $normalized = strtoupper(preg_replace('/\s+/', '', trim($postcode)));
 
-        if (empty($normalized)) {
+        if (empty($normalized) || strlen($normalized) < 5) {
             return null;
         }
 
-        // Extract everything before the space
-        $parts = explode(' ', $normalized);
-
-        return $parts[0] ?? null;
+        // UK inward code is always the last 3 characters, outward code is everything before
+        return substr($normalized, 0, -3);
     }
 
     /**

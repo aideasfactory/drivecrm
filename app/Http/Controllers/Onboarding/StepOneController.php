@@ -42,6 +42,10 @@ class StepOneController extends Controller
             ]);
         }
 
+        // Normalize postcode: strip spaces and re-insert before the 3-char inward code
+        $stripped = strtoupper(preg_replace('/\s+/', '', $validated['postcode']));
+        $validated['postcode'] = substr($stripped, 0, -3) . ' ' . substr($stripped, -3);
+
         // Update enquiry with step 1 data
         $enquiry->setStepData(1, $validated);
         $enquiry->current_step = max($enquiry->current_step, 1);

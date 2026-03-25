@@ -46,7 +46,6 @@
                     v-for="pkg in packages"
                     :key="pkg.id"
                     class="relative"
-                    :class="{ 'md:scale-105 md:-mt-4': pkg.promoted }"
                   >
                     <input
                       type="radio"
@@ -61,79 +60,76 @@
                     >
                       <Card
                         :class="[
-                          'relative transition-all duration-200 h-full overflow-hidden',
+                          'relative transition-all duration-200 h-full',
+                          form.package_id === pkg.id
+                            ? 'ring-2 ring-primary border-primary'
+                            : 'hover:border-muted-foreground/30',
                           pkg.promoted
-                            ? 'border-destructive hover:border-destructive/80 peer-checked:ring-4 peer-checked:ring-destructive peer-checked:border-destructive'
-                            : 'hover:border-primary peer-checked:ring-4 peer-checked:ring-primary peer-checked:border-primary'
+                            ? 'bg-gradient-to-b from-red-400/5 via-red-500/10 to-red-600/20'
+                            : ''
                         ]"
                       >
-                        <!-- Selected Indicator -->
+                        <!-- Promoted ribbon -->
                         <div
-                          v-if="form.package_id === pkg.id"
-                          :class="[
-                            'absolute top-4 right-4 z-20 rounded-full p-1',
-                            pkg.promoted ? 'bg-destructive' : 'bg-primary'
-                          ]"
+                          v-if="pkg.promoted"
+                          class="absolute top-0 right-0 z-10"
                         >
-                          <CheckCircle2 class="h-5 w-5 text-black" />
+                          <div class="bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg rounded-tr-xl flex items-center gap-1 shadow-md">
+                            <Flame class="h-3 w-3" />
+                            Popular
+                          </div>
                         </div>
 
-                        <CardHeader :class="pkg.promoted ? 'bg-destructive text-destructive-foreground' : ''">
-                          
-
+                        <CardHeader>
                           <div class="text-center pt-2">
-                            <div class="mb-4 flex justify-center">
-                              <component
-                                :is="getPackageIcon(pkg)"
-                                :class="[
-                                  'h-12 w-12',
-                                  pkg.promoted ? 'text-destructive-foreground' : 'text-muted-foreground'
-                                ]"
-                              />
+                            <div class="mb-3 flex justify-center">
+                              <div :class="[
+                                'rounded-full p-3',
+                                pkg.promoted ? 'bg-red-500/10' : 'bg-muted'
+                              ]">
+                                <component
+                                  :is="getPackageIcon(pkg)"
+                                  :class="[
+                                    'h-8 w-8',
+                                    pkg.promoted ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'
+                                  ]"
+                                />
+                              </div>
                             </div>
-                            <CardTitle class="text-xl mb-2">{{ pkg.name }}</CardTitle>
-                            <CardDescription
-                              :class="[
-                                'text-lg',
-                                pkg.promoted ? 'text-destructive-foreground/80' : ''
-                              ]"
-                            >
+                            <CardTitle class="text-lg">{{ pkg.name }}</CardTitle>
+                            <CardDescription class="text-sm mt-1">
                               {{ pkg.lessons_count }} lessons
                             </CardDescription>
                           </div>
                         </CardHeader>
 
-                        <CardContent class="pt-6 text-center">
+                        <CardContent class="text-center">
                           <div class="mb-4">
                             <template v-if="discount">
-                              <div class="text-lg text-muted-foreground line-through mb-1">{{ pkg.formatted_total_price }}</div>
-                              <div class="text-4xl font-bold mb-1 text-green-600 dark:text-green-400">{{ getDiscountedPrice(pkg.formatted_total_price) }}</div>
-                              <div class="text-sm text-muted-foreground">
+                              <div class="text-sm text-muted-foreground line-through">{{ pkg.formatted_total_price }}</div>
+                              <div class="text-3xl font-bold text-green-600 dark:text-green-400">{{ getDiscountedPrice(pkg.formatted_total_price) }}</div>
+                              <div class="text-xs text-muted-foreground mt-1">
                                 {{ getDiscountedPrice(pkg.formatted_lesson_price) }} per hour
                               </div>
                             </template>
                             <template v-else>
-                              <div class="text-4xl font-bold mb-1">{{ pkg.formatted_total_price }}</div>
-                              <div class="text-sm text-muted-foreground">
+                              <div class="text-3xl font-bold">{{ pkg.formatted_total_price }}</div>
+                              <div class="text-xs text-muted-foreground mt-1">
                                 {{ pkg.formatted_lesson_price }} per hour
                               </div>
                             </template>
                           </div>
-                          <p class="text-sm text-muted-foreground">{{ pkg.description }}</p>
+                          <p class="text-xs text-muted-foreground leading-relaxed">{{ pkg.description }}</p>
                         </CardContent>
 
-                        <CardFooter
-                          :class="[
-                            'justify-center',
-                            pkg.promoted ? '' : ''
-                          ]"
-                        >
+                        <CardFooter class="justify-center">
                           <Button
                             type="button"
                             :variant="form.package_id === pkg.id ? 'default' : 'outline'"
-                            :class="pkg.promoted && form.package_id === pkg.id ? 'bg-destructive hover:bg-destructive/90' : ''"
                             class="w-full"
+                            size="sm"
                           >
+                            <Check v-if="form.package_id === pkg.id" class="mr-1 h-4 w-4" />
                             {{ form.package_id === pkg.id ? 'Selected' : 'Select Package' }}
                           </Button>
                         </CardFooter>
@@ -210,7 +206,7 @@ import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 import { step2 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step3'
-import { ArrowLeft, ArrowRight, Car, GraduationCap, Trophy, Rocket, CheckCircle2, AlertTriangle, Info } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, Car, GraduationCap, Trophy, Rocket, Check, Flame, AlertTriangle, Info } from 'lucide-vue-next'
 
 const props = defineProps({
   uuid: String,

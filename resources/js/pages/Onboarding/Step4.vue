@@ -27,8 +27,8 @@
               <div v-if="selectedInstructor" class="space-y-4">
                 <div class="flex items-start space-x-4">
                   <Avatar class="h-16 w-16">
-                    <AvatarImage :src="selectedInstructor.avatar" :alt="selectedInstructor.name" />
-                    <AvatarFallback>{{ selectedInstructor.name?.charAt(0) }}</AvatarFallback>
+                    <AvatarImage v-if="selectedInstructor.avatar" :src="selectedInstructor.avatar" :alt="selectedInstructor.name" />
+                    <AvatarFallback class="text-lg font-semibold bg-primary text-primary-foreground">{{ getInitials(selectedInstructor.name) }}</AvatarFallback>
                   </Avatar>
                   <div class="flex-1">
                     <h4 class="font-semibold mb-1">{{ selectedInstructor.name }}</h4>
@@ -87,8 +87,8 @@
               >
                 <div class="flex items-start space-x-3">
                   <Avatar class="h-12 w-12 flex-shrink-0">
-                    <AvatarImage :src="instructor.avatar" :alt="instructor.name" />
-                    <AvatarFallback>{{ instructor.name?.charAt(0) }}</AvatarFallback>
+                    <AvatarImage v-if="instructor.avatar" :src="instructor.avatar" :alt="instructor.name" />
+                    <AvatarFallback class="text-sm font-semibold bg-primary text-primary-foreground">{{ getInitials(instructor.name) }}</AvatarFallback>
                   </Avatar>
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center justify-between mb-1">
@@ -237,7 +237,7 @@
                   <Info class="h-4 w-4" />
                   <AlertTitle>Lesson slots reserved</AlertTitle>
                   <AlertDescription>
-                    We'll hold your lesson slots for up to 24 hours while you complete payment.{{ selectedInstructor ? ' Your instructor ' + selectedInstructor.first_name + ' will coordinate exact times with you after booking confirmation.' : '' }}
+                    We'll hold your lesson slots untill midnight tonight while you complete payment.{{ selectedInstructor ? ' Your instructor ' + selectedInstructor.first_name + ' will coordinate exact times with you after booking confirmation.' : '' }}
                   </AlertDescription>
                 </Alert>
 
@@ -377,6 +377,16 @@ const form = useForm({
 })
 
 const selectedInstructor = ref(props.instructor || null)
+
+function getInitials(name) {
+  if (!name) return ''
+  return name
+    .split(' ')
+    .map(part => part.charAt(0))
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+}
 
 console.log(selectedInstructor.value)
 

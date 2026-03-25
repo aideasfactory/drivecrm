@@ -172,6 +172,13 @@ class StepFourController extends Controller
             'status' => CalendarItemStatus::DRAFT,
         ]);
 
+        // Mirror draft status to travel item
+        if ($selectedCalendarItem->travelItem) {
+            $selectedCalendarItem->travelItem->update([
+                'status' => CalendarItemStatus::DRAFT,
+            ]);
+        }
+
         Log::info('Updated selected calendar item to draft', [
             'calendar_item_id' => $selectedCalendarItem->id,
             'status' => CalendarItemStatus::DRAFT,
@@ -236,6 +243,14 @@ class StepFourController extends Controller
                     'is_available' => false,
                     'status' => CalendarItemStatus::DRAFT,
                 ]);
+
+                // Mirror draft status to travel item
+                if ($existingItem->travelItem) {
+                    $existingItem->travelItem->update([
+                        'status' => CalendarItemStatus::DRAFT,
+                    ]);
+                }
+
                 $calendarItem = $existingItem;
             } else {
                 $calendarItem = CalendarItem::create([

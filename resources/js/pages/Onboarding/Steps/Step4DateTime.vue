@@ -187,7 +187,7 @@
                         </svg>
                         <div class="text-sm text-blue-800">
                             <p class="font-medium mb-1">Lesson slots reserved</p>
-                            <p>We'll hold your lesson slots for up to 24 hours while you complete payment. Your instructor {{ selectedInstructor.name.split(' ')[0] }} will coordinate exact times with you after booking confirmation.</p>
+                            <p>We'll hold your lesson slots until midnight tonight while you complete payment. Your instructor {{ selectedInstructor.name.split(' ')[0] }} will coordinate exact times with you after booking confirmation.</p>
                         </div>
                     </div>
                 </div>

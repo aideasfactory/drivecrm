@@ -42,6 +42,14 @@ class ResetDraftCalendarItemsAction
             ]);
         }
 
+        // Reset travel items of these draft calendar items back to null status
+        CalendarItem::query()
+            ->whereIn('parent_item_id', $draftCalendarItemIds)
+            ->where('status', CalendarItemStatus::DRAFT)
+            ->update([
+                'status' => null,
+            ]);
+
         // Reset the calendar items back to available
         $updated = CalendarItem::query()
             ->whereIn('id', $draftCalendarItemIds)

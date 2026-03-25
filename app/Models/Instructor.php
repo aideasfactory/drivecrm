@@ -207,7 +207,7 @@ class Instructor extends Model
                     return Storage::disk('s3')->temporaryUrl($this->profile_picture_path, now()->addMinutes(60));
                 }
 
-                return $this->meta['avatar'] ?? null;
+                return null;
             },
         );
     }

@@ -68,99 +68,112 @@
 
                   <!-- Instructor Cards -->
                   <div class="space-y-3">
+                    <!-- Priority Instructor Card -->
                     <Card
                       v-for="instructor in filteredInstructors"
                       :key="instructor.id"
                       :class="[
-                        'cursor-pointer transition-all',
+                        'cursor-pointer transition-all relative overflow-hidden',
                         selectedInstructor === instructor.id
-                          ? 'border-primary ring-2 ring-primary bg-red-500/30'
-                          : instructor.priority
-                            ? 'border-2 border-orange-300 bg-orange-900/40'
-                            : ''
+                          ? 'ring-2 ring-primary border-primary'
+                          : '',
+                        instructor.priority
+                          ? 'bg-gradient-to-b from-red-400/5 via-red-500/10 to-red-600/20'
+                          : ''
                       ]"
                       @click="selectInstructor(instructor.id)"
                     >
-                      <CardContent class="pt-6">
-                        <div class="flex items-start space-x-3">
-                          <Avatar class="h-16 w-16">
-                            <img
-                              :src="instructor.avatar"
-                              :alt="instructor.name"
-                            />
-                          </Avatar>
-
-                          <div class="flex-1 min-w-0">
-                            <div class="flex items-start justify-between mb-2">
-                              <div class="flex-1">
-                                <div class="flex items-center space-x-2">
-                                  <h4 class="font-semibold text-base">{{ instructor.name }}</h4>
-                                  <Button
-                                    @click.stop="showInstructorInfo(instructor)"
-                                    variant="ghost"
-                                    size="sm"
-                                    class="h-auto p-1"
-                                  >
-                                    <Info class="h-4 w-4" />
-                                  </Button>
-                                </div>
-                                <div class="flex items-center space-x-2 mt-1">
-                                  <div class="flex items-center">
-                                    <div class="flex">
-                                      <Star
-                                        v-for="i in 5"
-                                        :key="i"
-                                        class="h-3 w-3"
-                                        :class="i <= Math.floor(instructor.rating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'"
-                                      />
-                                    </div>
-                                    <span class="text-xs ml-1">{{ instructor.rating }}</span>
-                                  </div>
-                                </div>
-                                <div class="flex items-center space-x-1 mt-1">
-                                  <Badge
-                                    v-for="transmission in instructor.transmissions"
-                                    :key="transmission"
-                                    variant="secondary"
-                                    class="text-xs"
-                                  >
-                                    {{ transmission === 'manual' ? 'Manual' : 'Auto' }}
-                                  </Badge>
-                                </div>
-                              </div>
-                              <Badge
-                                v-if="instructor.priority"
-                                variant="default"
-                                class="ml-2 bg-red-600 text-white hover:bg-red-700"
-                              >
-                                Top Pick
-                              </Badge>
-                            </div>
-
-                            <div class="space-y-1 text-sm">
-                              <div class="flex items-center">
-                                <MapPin class="mr-2 h-3 w-3" />
-                                <span>{{ instructor.address }} • {{ instructor.postcode }}</span>
-                              </div>
-                              <div class="flex items-center font-medium">
-                                <Calendar class="mr-2 h-3 w-3" />
-                                <span>Next: {{ instructor.next_available }}</span>
-                              </div>
-                            </div>
-
-                            <Button
-                              @click.stop="selectInstructor(instructor.id)"
-                              :variant="selectedInstructor === instructor.id ? 'default' : 'secondary'"
-                              class="w-full mt-3"
-                              size="sm"
-                            >
-                              <Check v-if="selectedInstructor === instructor.id" class="mr-1 h-4 w-4" />
-                              {{ selectedInstructor === instructor.id ? 'Selected' : 'Select Instructor' }}
-                            </Button>
+                        <!-- Priority ribbon -->
+                        <div
+                          v-if="instructor.priority"
+                          class="absolute top-0 right-0 z-10"
+                        >
+                          <div class="bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg flex items-center gap-1 shadow-md">
+                            <Flame class="h-3 w-3" />
+                            Top Pick
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
+
+                        <CardContent class="pt-6">
+                          <div class="flex items-start space-x-3">
+                            <div class="relative">
+                              <Avatar class="h-16 w-16" :class="instructor.priority ? 'ring-2 ring-amber-400 ring-offset-2 ring-offset-background' : ''">
+                                <AvatarImage v-if="instructor.avatar" :src="instructor.avatar" :alt="instructor.name" />
+                                <AvatarFallback class="text-lg font-semibold bg-primary text-primary-foreground">{{ getInitials(instructor.name) }}</AvatarFallback>
+                              </Avatar>
+                            </div>
+
+                            <div class="flex-1 min-w-0">
+                              <div class="flex items-start justify-between mb-2">
+                                <div class="flex-1">
+                                  <div class="flex items-center space-x-2">
+                                    <h4 class="font-semibold text-base">{{ instructor.name }}</h4>
+                                    <Button
+                                      @click.stop="showInstructorInfo(instructor)"
+                                      variant="ghost"
+                                      size="sm"
+                                      class="h-auto p-1"
+                                    >
+                                      <Info class="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                  <div class="flex items-center space-x-2 mt-1">
+                                    <div class="flex items-center">
+                                      <div class="flex">
+                                        <Star
+                                          v-for="i in 5"
+                                          :key="i"
+                                          class="h-3 w-3"
+                                          :class="i <= Math.floor(instructor.rating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'"
+                                        />
+                                      </div>
+                                      <span class="text-xs ml-1">{{ instructor.rating }}</span>
+                                    </div>
+                                  </div>
+                                  <div class="flex items-center space-x-1 mt-1">
+                                    <Badge
+                                      v-for="transmission in instructor.transmissions"
+                                      :key="transmission"
+                                      variant="secondary"
+                                      class="text-xs"
+                                    >
+                                      {{ transmission === 'manual' ? 'Manual' : 'Auto' }}
+                                    </Badge>
+                                    <Badge
+                                      v-if="instructor.priority"
+                                      variant="outline"
+                                      class="text-xs border-amber-400 text-amber-600 dark:text-amber-400"
+                                    >
+                                      Recommended
+                                    </Badge>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div class="space-y-1 text-sm">
+                                <div class="flex items-center">
+                                  <MapPin class="mr-2 h-3 w-3" />
+                                  <span>{{ instructor.address }} • {{ instructor.postcode }}</span>
+                                </div>
+                                <div class="flex items-center font-medium">
+                                  <Calendar class="mr-2 h-3 w-3" />
+                                  <span>Next: {{ instructor.next_available }}</span>
+                                </div>
+                              </div>
+
+                              <Button
+                                @click.stop="selectInstructor(instructor.id)"
+                                :variant="selectedInstructor === instructor.id ? 'default' : 'secondary'"
+                                class="w-full mt-3"
+                                size="sm"
+                              >
+                                <Check v-if="selectedInstructor === instructor.id" class="mr-1 h-4 w-4" />
+                                {{ selectedInstructor === instructor.id ? 'Selected' : 'Select Instructor' }}
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
                   </div>
 
                   <!-- Load More -->
@@ -214,10 +227,8 @@
         <div v-if="modalInstructor" class="space-y-6">
           <div class="flex items-start space-x-4">
             <Avatar class="h-24 w-24">
-              <img
-                :src="modalInstructor.image"
-                :alt="modalInstructor.name"
-              />
+              <AvatarImage v-if="modalInstructor.avatar" :src="modalInstructor.avatar" :alt="modalInstructor.name" />
+              <AvatarFallback class="text-2xl font-semibold">{{ getInitials(modalInstructor.name) }}</AvatarFallback>
             </Avatar>
             <div class="flex-1">
               <h4 class="text-2xl font-bold mb-1">{{ modalInstructor.name }}</h4>
@@ -320,7 +331,7 @@ import { usePage, useForm, router } from '@inertiajs/vue3'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Avatar } from '@/components/ui/avatar'
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
@@ -343,7 +354,8 @@ import {
   User,
   Award,
   CircleCheck,
-  Languages
+  Languages,
+  Flame
 } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -390,6 +402,15 @@ const filteredInstructors = computed(() => {
     instructor.transmissions && instructor.transmissions.includes(selectedTransmission.value)
   )
 })
+
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map(part => part.charAt(0))
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+}
 
 function setTransmissionFilter(filter) {
   selectedTransmission.value = filter

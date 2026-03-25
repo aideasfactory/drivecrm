@@ -139,7 +139,7 @@ class CreateOrderFromApiAction
             return;
         }
 
-        $dates = CalendarItem::whereIn('id', $calendarItemIds)
+        $dates = CalendarItem::whereIn('calendar_items.id', $calendarItemIds)
             ->join('calendars', 'calendar_items.calendar_id', '=', 'calendars.id')
             ->pluck('calendars.date')
             ->unique();

@@ -110,7 +110,7 @@ class InstructorService extends BaseService
                 'longitude' => $coordinates['longitude'],
                 'status' => 'active',
                 'priority' => false,
-                'rating' => 1,
+                'rating' => 4,
                 'onboarding_complete' => false,
                 'charges_enabled' => false,
                 'payouts_enabled' => false,

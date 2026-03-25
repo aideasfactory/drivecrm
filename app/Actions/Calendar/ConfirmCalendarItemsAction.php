@@ -39,6 +39,13 @@ class ConfirmCalendarItemsAction
                 'is_available' => false,
             ]);
 
+        // Mirror booked status to travel items
+        CalendarItem::whereIn('parent_item_id', $calendarItemIds)
+            ->where('status', CalendarItemStatus::DRAFT)
+            ->update([
+                'status' => CalendarItemStatus::BOOKED,
+            ]);
+
         // Transition draft lessons to pending now that payment is confirmed
         $lessonsUpdated = $order->lessons()
             ->where('status', LessonStatus::DRAFT)
@@ -53,7 +60,7 @@ class ConfirmCalendarItemsAction
 
         // Invalidate calendar cache for affected dates
         if ($updated > 0 && $order->instructor_id) {
-            $dates = CalendarItem::whereIn('id', $calendarItemIds)
+            $dates = CalendarItem::whereIn('calendar_items.id', $calendarItemIds)
                 ->join('calendars', 'calendar_items.calendar_id', '=', 'calendars.id')
                 ->pluck('calendars.date')
                 ->unique();
