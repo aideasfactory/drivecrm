@@ -34,6 +34,10 @@
     - [Orders](#post-apiv1studentsstudentorders)
   - [Resources](#get-apiv1resources)
   - [Messages](#messages)
+    - [Conversations List](#get-apiv1messagesconversations)
+    - [Conversation with Instructor (Student)](#get-apiv1messagesconversationsinstructor)
+    - [Conversation by User ID](#get-apiv1messagesconversationsuser)
+    - [Send Message](#post-apiv1messages)
 - [Profile Object by Role](#profile-object-by-role)
 - [Appendix: User Roles](#appendix-user-roles)
 - [Changelog](#changelog)
@@ -2617,11 +2621,79 @@ Returns all conversations for the authenticated user, grouped by the other parti
 
 ---
 
+#### `GET /api/v1/messages/conversations/instructor`
+
+**Auth required:** Yes (Bearer token — **student only**)
+
+Convenience endpoint for students. Returns paginated messages between the authenticated student and their assigned instructor. The instructor is resolved automatically from the student's `instructor_id` — no ID parameter needed.
+
+Messages are ordered newest first for pagination (30 per page).
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": [
+    {
+      "id": 42,
+      "sender_id": 1,
+      "sender_name": "John Smith",
+      "recipient_id": 5,
+      "message": "See you at 9am tomorrow!",
+      "is_own": false,
+      "created_at": "2026-03-22T18:30:00+00:00"
+    },
+    {
+      "id": 41,
+      "sender_id": 5,
+      "sender_name": "Jane Doe",
+      "recipient_id": 1,
+      "message": "What time is my lesson tomorrow?",
+      "is_own": true,
+      "created_at": "2026-03-22T18:25:00+00:00"
+    }
+  ]
+}
+```
+
+**Message Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Message ID |
+| `sender_id` | integer | Sender's user ID |
+| `sender_name` | string\|null | Sender's name |
+| `recipient_id` | integer | Recipient's user ID |
+| `message` | string | Message content |
+| `is_own` | boolean | Whether the authenticated user sent this message |
+| `created_at` | string | ISO 8601 timestamp |
+
+> **Note:** Messages are returned newest first. The mobile app should reverse the order for chronological display in the chat UI.
+
+**Error Response (no instructor assigned):** `404 Not Found`
+```json
+{
+  "message": "No instructor assigned."
+}
+```
+
+**Error Response (not authorised):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+---
+
 #### `GET /api/v1/messages/conversations/{user}`
 
 **Auth required:** Yes (Bearer token — instructor or student)
 
 Returns paginated messages between the authenticated user and the specified user. Messages are ordered newest first for pagination (30 per page). Authorization requires an instructor-student relationship between the two users.
+
+> **Tip for students:** Prefer `GET /api/v1/messages/conversations/instructor` — it resolves the instructor automatically so you don't need to know their user ID.
 
 **URL Parameters:**
 
@@ -2686,7 +2758,10 @@ Returns paginated messages between the authenticated user and the specified user
 
 Send a new message to another user. Authorization ensures only instructor-student pairs can message each other.
 
-**Request Body:**
+- **Instructors** must provide `recipient_id` (the student ID from the students table).
+- **Students** may omit `recipient_id` — the backend automatically resolves their assigned instructor.
+
+**Request Body (instructor):**
 ```json
 {
   "recipient_id": 5,
@@ -2694,9 +2769,16 @@ Send a new message to another user. Authorization ensures only instructor-studen
 }
 ```
 
+**Request Body (student — recipient_id optional):**
+```json
+{
+  "message": "What time is my lesson tomorrow?"
+}
+```
+
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
-| `recipient_id` | integer | Yes | The recipient's user ID. Must exist in the users table. |
+| `recipient_id` | integer | Instructors: Yes, Students: No | For instructors: the student ID from the students table. For students: omit to auto-resolve instructor, or pass the instructor's user ID. |
 | `message` | string | Yes | Message content (max 5000 characters) |
 
 **Success Response:** `201 Created`
@@ -2711,6 +2793,13 @@ Send a new message to another user. Authorization ensures only instructor-studen
     "is_own": true,
     "created_at": "2026-03-22T19:00:00+00:00"
   }
+}
+```
+
+**Error Response (no instructor assigned — student without recipient_id):** `404 Not Found`
+```json
+{
+  "message": "No instructor assigned."
 }
 ```
 
@@ -2733,7 +2822,7 @@ Send a new message to another user. Authorization ensures only instructor-studen
 ```
 
 **Custom Validation Messages:**
-- `recipient_id.required`: "A recipient is required."
+- `recipient_id.required`: "A recipient is required." (instructors only)
 - `recipient_id.exists`: "The selected recipient does not exist."
 - `message.required`: "A message is required."
 - `message.max`: "The message must not exceed 5000 characters."
@@ -2825,8 +2914,9 @@ The `role` field is always returned in user responses. Use it to determine which
 | GET | `/api/v1/packages/{package}/pricing` | Yes | Any | Package pricing breakdown |
 | GET | `/api/v1/resources` | Yes | Any | List resources |
 | GET | `/api/v1/messages/conversations` | Yes | Both | List conversations |
-| GET | `/api/v1/messages/conversations/{user}` | Yes | Both | View conversation |
-| POST | `/api/v1/messages` | Yes | Both | Send message |
+| GET | `/api/v1/messages/conversations/instructor` | Yes | Student | View conversation with assigned instructor |
+| GET | `/api/v1/messages/conversations/{user}` | Yes | Both | View conversation by user ID |
+| POST | `/api/v1/messages` | Yes | Both | Send message (students: recipient_id optional) |
 
 ---
 
@@ -2853,6 +2943,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-24 | Added calendar management API — GET (with available_only filter), POST (create with all options: travel, recurrence, practical test), DELETE (single or future recurring) | Instructor Calendar (index, store, destroy) |
 | 2026-03-24 | Added package pricing endpoint — returns full fee breakdown (booking fee, digital fee per lesson, promo discounts, totals) as raw numeric values for mobile consumption | Package Pricing (show) |
 | 2026-03-24 | Fixed Stripe charge amount — now includes booking fee (£19.99) + digital fees (£3.99 × lessons) in the total sent to Stripe. Added `booking_fee_pence`, `digital_fee_pence`, `total_price_pence` to order response. | Orders (store), Checkout |
+| 2026-03-25 | Extended messages API for student mobile app — added `GET conversations/instructor` (auto-resolves instructor from student record), made `recipient_id` optional for students on `POST /messages` (auto-resolves to assigned instructor) | Messages (conversations/instructor, store) |
 
 ---
 

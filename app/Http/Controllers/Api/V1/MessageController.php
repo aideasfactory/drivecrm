@@ -60,14 +60,44 @@ class MessageController extends Controller
     }
 
     /**
+     * Get paginated messages between the authenticated student and their instructor.
+     *
+     * Convenience endpoint for students — resolves the instructor automatically
+     * from the student's assigned instructor_id.
+     */
+    public function showInstructorConversation(Request $request): AnonymousResourceCollection
+    {
+        $student = $request->user()->student;
+        abort_unless($student?->instructor_id, 404, 'No instructor assigned.');
+
+        $instructorUser = $student->instructor->user;
+
+        Gate::authorize('viewConversation', [Message::class, $instructorUser]);
+
+        $messages = $this->messageService->getConversationMessages(
+            $request->user(),
+            $instructorUser
+        );
+
+        return MessageResource::collection($messages);
+    }
+
+    /**
      * Send a new message to another user.
      *
-     * Authorization ensures only instructor-student pairs can message each other.
+     * Instructors must provide a recipient_id (student ID from students table).
+     * Students may omit recipient_id — the backend resolves their assigned instructor.
      */
     public function store(SendMessageRequest $request): JsonResponse
     {
         $sender = $request->user();
-        $recipient = $this->resolveConversationUser($sender, (int) $request->validated('recipient_id'));
+
+        if ($sender->isStudent() && ! $request->validated('recipient_id')) {
+            $recipient = $this->resolveStudentInstructor($sender);
+        } else {
+            $recipient = $this->resolveConversationUser($sender, (int) $request->validated('recipient_id'));
+        }
+
         $recipient->load(['instructor', 'student']);
 
         Gate::authorize('send', [Message::class, $recipient]);
@@ -112,5 +142,18 @@ class MessageController extends Controller
         }
 
         return User::findOrFail($id);
+    }
+
+    /**
+     * Resolve the instructor's User model from the authenticated student's record.
+     *
+     * Looks up the student's assigned instructor_id and returns the instructor's user.
+     */
+    private function resolveStudentInstructor(User $studentUser): User
+    {
+        $student = $studentUser->student;
+        abort_unless($student?->instructor_id, 404, 'No instructor assigned.');
+
+        return $student->instructor->user;
     }
 }

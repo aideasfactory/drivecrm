@@ -17,17 +17,23 @@
         .email-container {
             background-color: #ffffff;
             border-radius: 8px;
-            padding: 40px;
+            overflow: hidden;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .brand-bar {
+            background-color: #DC2626;
+            height: 4px;
         }
         .logo {
             text-align: center;
-            margin-bottom: 30px;
+            padding: 30px 40px 0;
         }
-        .logo h1 {
-            font-size: 24px;
-            color: #1a1a1a;
-            margin: 0;
+        .logo img {
+            width: 70px;
+            height: 70px;
+        }
+        .email-body {
+            padding: 20px 40px 40px;
         }
         h2 {
             font-size: 20px;
@@ -35,8 +41,9 @@
             margin-top: 0;
         }
         .lesson-details {
-            background-color: #f9fafb;
-            border-radius: 6px;
+            background-color: #fef2f2;
+            border-left: 3px solid #DC2626;
+            border-radius: 0 6px 6px 0;
             padding: 16px;
             margin: 20px 0;
         }
@@ -63,8 +70,8 @@
             display: inline-block;
             font-size: 11px;
             font-weight: 600;
-            color: #6b7280;
-            background-color: #f3f4f6;
+            color: #DC2626;
+            background-color: #fef2f2;
             padding: 2px 8px;
             border-radius: 4px;
             text-transform: uppercase;
@@ -78,13 +85,16 @@
         }
         .resource-link {
             display: inline-block;
-            background-color: #1a1a1a;
+            background-color: #DC2626;
             color: #ffffff;
             text-decoration: none;
             padding: 8px 20px;
             border-radius: 6px;
             font-size: 14px;
             font-weight: 500;
+        }
+        a {
+            color: #DC2626;
         }
         .footer {
             margin-top: 30px;
@@ -98,41 +108,44 @@
 </head>
 <body>
     <div class="email-container">
+        <div class="brand-bar"></div>
         <div class="logo">
-            <h1>{{ config('app.name') }}</h1>
+            <img src="{{ asset('logo.png') }}" alt="{{ config('app.name') }}">
         </div>
 
-        <h2>Hi {{ $studentName }},</h2>
+        <div class="email-body">
+            <h2>Hi {{ $studentName }},</h2>
 
-        <p>Based on your recent driving lesson, we've picked some resources to help you practise and improve.</p>
+            <p>Based on your recent driving lesson, we've picked some resources to help you practise and improve.</p>
 
-        <div class="lesson-details">
-            <p><strong>Date:</strong> {{ $lessonDate }}</p>
-            <p><strong>Instructor:</strong> {{ $instructorName }}</p>
-            @if($summaryExcerpt)
-                <p><strong>Covered:</strong> {{ $summaryExcerpt }}</p>
-            @endif
-        </div>
-
-        <h3 style="font-size: 18px; margin-bottom: 16px;">Recommended Resources</h3>
-
-        @foreach($resourceLinks as $resource)
-            <div class="resource-card">
-                <span class="resource-type">{{ $resource['type'] }}</span>
-                <h3>{{ $resource['title'] }}</h3>
-                @if($resource['description'])
-                    <p class="resource-description">{{ $resource['description'] }}</p>
+            <div class="lesson-details">
+                <p><strong>Date:</strong> {{ $lessonDate }}</p>
+                <p><strong>Instructor:</strong> {{ $instructorName }}</p>
+                @if($summaryExcerpt)
+                    <p><strong>Covered:</strong> {{ $summaryExcerpt }}</p>
                 @endif
-                <a href="{{ $resource['url'] }}" class="resource-link">View Resource</a>
             </div>
-        @endforeach
 
-        <p style="margin-top: 24px; font-size: 14px; color: #6b7280;">
-            These links are valid for 7 days. If they have expired, please contact your instructor for access.
-        </p>
+            <h3 style="font-size: 18px; margin-bottom: 16px;">Recommended Resources</h3>
 
-        <div class="footer">
-            <p>&copy; {{ date('Y') }} {{ config('app.name') }}. All rights reserved.</p>
+            @foreach($resourceLinks as $resource)
+                <div class="resource-card">
+                    <span class="resource-type">{{ $resource['type'] }}</span>
+                    <h3>{{ $resource['title'] }}</h3>
+                    @if($resource['description'])
+                        <p class="resource-description">{{ $resource['description'] }}</p>
+                    @endif
+                    <a href="{{ $resource['url'] }}" class="resource-link">View Resource</a>
+                </div>
+            @endforeach
+
+            <p style="margin-top: 24px; font-size: 14px; color: #6b7280;">
+                These links are valid for 7 days. If they have expired, please contact your instructor for access.
+            </p>
+
+            <div class="footer">
+                <p>&copy; {{ date('Y') }} {{ config('app.name') }}. All rights reserved.</p>
+            </div>
         </div>
     </div>
 </body>

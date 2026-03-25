@@ -19,12 +19,19 @@ class SendMessageRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
+     * Instructors must provide a recipient_id (the student ID).
+     * Students may omit it — the backend resolves their assigned instructor.
+     *
      * @return array<string, array<int, string>>
      */
     public function rules(): array
     {
+        $recipientRule = $this->user()->isStudent()
+            ? ['sometimes', 'integer']
+            : ['required', 'integer'];
+
         return [
-            'recipient_id' => ['required', 'integer'],
+            'recipient_id' => $recipientRule,
             'message' => ['required', 'string', 'max:5000'],
         ];
     }

@@ -20,6 +20,7 @@ use App\Http\Requests\UpdateInstructorRequest;
 use App\Models\CalendarItem;
 use App\Models\Contact;
 use App\Models\Instructor;
+use App\Models\Lesson;
 use App\Models\Location;
 use App\Models\Student;
 use App\Models\User;
@@ -87,10 +88,31 @@ class InstructorController extends Controller
             'open_enquiries' => 0, // TODO: Implement enquiries tracking
         ];
 
-        // Calculate booking hours (demo data for now)
+        // Calculate booking hours from lessons
+        $currentWeekStart = Carbon::now()->startOfWeek();
+        $currentWeekEnd = Carbon::now()->endOfWeek();
+        $nextWeekStart = Carbon::now()->addWeek()->startOfWeek();
+        $nextWeekEnd = Carbon::now()->addWeek()->endOfWeek();
+
+        $currentWeekHours = Lesson::where('instructor_id', $instructor->id)
+            ->whereNotIn('status', ['cancelled', 'draft'])
+            ->whereBetween('date', [$currentWeekStart->toDateString(), $currentWeekEnd->toDateString()])
+            ->whereNotNull('start_time')
+            ->whereNotNull('end_time')
+            ->get()
+            ->sum(fn (Lesson $lesson) => Carbon::parse($lesson->start_time)->diffInMinutes(Carbon::parse($lesson->end_time)) / 60);
+
+        $nextWeekHours = Lesson::where('instructor_id', $instructor->id)
+            ->whereNotIn('status', ['cancelled', 'draft'])
+            ->whereBetween('date', [$nextWeekStart->toDateString(), $nextWeekEnd->toDateString()])
+            ->whereNotNull('start_time')
+            ->whereNotNull('end_time')
+            ->get()
+            ->sum(fn (Lesson $lesson) => Carbon::parse($lesson->start_time)->diffInMinutes(Carbon::parse($lesson->end_time)) / 60);
+
         $bookingHours = [
-            'current_week' => 0, // TODO: Calculate from lessons/calendar
-            'next_week' => 0, // TODO: Calculate from lessons/calendar
+            'current_week' => round($currentWeekHours, 1),
+            'next_week' => round($nextWeekHours, 1),
         ];
 
         // Get locations
