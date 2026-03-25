@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Onboarding;
 
 use App\Enums\CalendarItemStatus;
+use App\Enums\CalendarItemType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Onboarding\StepFourRequest;
 use App\Models\Calendar;
@@ -259,7 +260,26 @@ class StepFourController extends Controller
                     'end_time' => $validated['end_time'],
                     'is_available' => false,
                     'status' => CalendarItemStatus::DRAFT,
+                    'item_type' => $selectedCalendarItem->item_type,
+                    'travel_time_minutes' => $selectedCalendarItem->travel_time_minutes,
                 ]);
+
+                // Create travel block if the original calendar item has travel time
+                if ($selectedCalendarItem->travel_time_minutes && $selectedCalendarItem->travel_time_minutes > 0) {
+                    $travelStart = Carbon::parse($validated['end_time']);
+                    $travelEnd = $travelStart->copy()->addMinutes($selectedCalendarItem->travel_time_minutes);
+
+                    CalendarItem::create([
+                        'calendar_id' => $calendar->id,
+                        'start_time' => $travelStart->format('H:i'),
+                        'end_time' => $travelEnd->format('H:i'),
+                        'is_available' => false,
+                        'item_type' => CalendarItemType::Travel,
+                        'parent_item_id' => $calendarItem->id,
+                        'status' => CalendarItemStatus::DRAFT,
+                        'unavailability_reason' => 'Travel time',
+                    ]);
+                }
             }
 
             $calendarItemIds[] = $calendarItem->id;

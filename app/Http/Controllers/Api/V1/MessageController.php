@@ -9,6 +9,7 @@ use App\Http\Requests\Api\V1\SendMessageRequest;
 use App\Http\Resources\V1\ConversationResource;
 use App\Http\Resources\V1\MessageResource;
 use App\Models\Message;
+use App\Models\Student;
 use App\Models\User;
 use App\Services\MessageService;
 use Illuminate\Http\JsonResponse;
@@ -40,11 +41,14 @@ class MessageController extends Controller
     /**
      * Get paginated messages in a conversation with another user.
      *
+     * The mobile app sends a student ID (from the students table).
+     * We resolve it to the parent user for the conversation lookup.
      * Messages are returned newest first for pagination.
-     * The mobile app should reverse the order for chronological display.
      */
-    public function show(Request $request, User $user): AnonymousResourceCollection
+    public function show(Request $request, int $conversationUserId): AnonymousResourceCollection
     {
+        $user = $this->resolveConversationUser($request->user(), $conversationUserId);
+
         Gate::authorize('viewConversation', [Message::class, $user]);
 
         $messages = $this->messageService->getConversationMessages(
@@ -63,7 +67,8 @@ class MessageController extends Controller
     public function store(SendMessageRequest $request): JsonResponse
     {
         $sender = $request->user();
-        $recipient = User::with(['instructor', 'student'])->findOrFail($request->validated('recipient_id'));
+        $recipient = $this->resolveConversationUser($sender, (int) $request->validated('recipient_id'));
+        $recipient->load(['instructor', 'student']);
 
         Gate::authorize('send', [Message::class, $recipient]);
 
@@ -89,5 +94,23 @@ class MessageController extends Controller
         return (new MessageResource($message))
             ->response()
             ->setStatusCode(201);
+    }
+
+    /**
+     * Resolve the conversation partner's User model.
+     *
+     * If the authenticated user is an instructor, the ID is a student ID
+     * and we look up the parent user_id from the students table.
+     * If the authenticated user is a student, the ID is already a user ID.
+     */
+    private function resolveConversationUser(User $authUser, int $id): User
+    {
+        if ($authUser->isInstructor()) {
+            $student = Student::findOrFail($id);
+
+            return User::findOrFail($student->user_id);
+        }
+
+        return User::findOrFail($id);
     }
 }

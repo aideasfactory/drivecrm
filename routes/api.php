@@ -74,7 +74,7 @@ Route::prefix('v1')->group(function (): void {
         // Messaging routes
         Route::prefix('messages')->group(function (): void {
             Route::get('conversations', [MessageController::class, 'conversations']);
-            Route::get('conversations/{user}', [MessageController::class, 'show']);
+            Route::get('conversations/{conversationUserId}', [MessageController::class, 'show']);
             Route::post('/', [MessageController::class, 'store']);
         });
 

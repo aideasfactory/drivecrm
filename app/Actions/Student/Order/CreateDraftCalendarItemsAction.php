@@ -59,6 +59,13 @@ class CreateDraftCalendarItemsAction
                     'is_available' => false,
                     'status' => CalendarItemStatus::DRAFT,
                 ]);
+
+                // Also mark the existing travel block as DRAFT so it gets confirmed with the lesson
+                $existingItem->travelItem?->update([
+                    'is_available' => false,
+                    'status' => CalendarItemStatus::DRAFT,
+                ]);
+
                 $calendarItemIds[] = $existingItem->id;
             } else {
                 $calendarItem = CalendarItem::create([
