@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StorePickupPointRequest;
 use App\Http\Resources\V1\StudentPickupPointResource;
 use App\Models\Student;
 use App\Services\StudentService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Gate;
@@ -30,5 +32,19 @@ class StudentPickupPointController extends Controller
         $pickupPoints = $this->studentService->getPickupPoints($student);
 
         return StudentPickupPointResource::collection($pickupPoints);
+    }
+
+    /**
+     * Store a new pickup point for a student.
+     */
+    public function store(StorePickupPointRequest $request, Student $student): JsonResponse
+    {
+        Gate::authorize('update', $student);
+
+        $pickupPoint = $this->studentService->storePickupPoint($student, $request->validated());
+
+        return (new StudentPickupPointResource($pickupPoint))
+            ->response()
+            ->setStatusCode(201);
     }
 }

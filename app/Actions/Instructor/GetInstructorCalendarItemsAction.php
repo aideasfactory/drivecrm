@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Actions\Instructor;
 
-use App\Enums\CalendarItemStatus;
 use App\Models\Calendar;
 use App\Models\CalendarItem;
 use App\Models\Instructor;

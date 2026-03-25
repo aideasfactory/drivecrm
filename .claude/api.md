@@ -29,7 +29,8 @@
     - [Lesson Resources](#post-apiv1studentsstudentlessonslessonresources)
     - [Notes](#get-apiv1studentsstudentnotes)
     - [Checklist Items](#get-apiv1studentsstudentchecklist-items)
-    - [Pickup Points](#get-apiv1studentsstudentpickup-points)
+    - [Pickup Points (List)](#get-apiv1studentsstudentpickup-points)
+    - [Pickup Points (Create)](#post-apiv1studentsstudentpickup-points)
     - [Orders](#post-apiv1studentsstudentorders)
   - [Resources](#get-apiv1resources)
   - [Messages](#messages)
@@ -2233,6 +2234,65 @@ Returns all pickup points for a given student, ordered by default first then alp
 | `created_at` | string\|null | ISO 8601 timestamp |
 | `updated_at` | string\|null | ISO 8601 timestamp |
 
+---
+
+#### `POST /api/v1/students/{student}/pickup-points`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Creates a new pickup point for a student. The postcode is geocoded automatically. Access requires `update` permission on the student (same policy as editing the student).
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `label` | string | Yes | Human-readable label (e.g., "Home", "School"). Max 255 chars |
+| `address` | string | Yes | Full address. Max 1000 chars |
+| `postcode` | string | Yes | Valid UK postcode. Max 10 chars |
+| `is_default` | boolean | No | Set as default pickup point (unsets any existing default) |
+
+```json
+{
+  "label": "Home",
+  "address": "1 High Street, Middlesbrough",
+  "postcode": "TS1 1AA",
+  "is_default": true
+}
+```
+
+**Success Response:** `201 Created`
+```json
+{
+  "data": {
+    "id": 3,
+    "label": "Home",
+    "address": "1 High Street, Middlesbrough",
+    "postcode": "TS1 1AA",
+    "latitude": "54.57623000",
+    "longitude": "-1.23456000",
+    "is_default": true,
+    "created_at": "2026-03-25T10:00:00+00:00",
+    "updated_at": "2026-03-25T10:00:00+00:00"
+  }
+}
+```
+
+**Validation Errors:** `422 Unprocessable Entity`
+```json
+{
+  "message": "A label for this pickup point is required.",
+  "errors": {
+    "label": ["A label for this pickup point is required."]
+  }
+}
+```
+
 > **Note:** Pickup points are ordered with the default point first, then alphabetically by label. If no pickup points exist, `data` will be an empty array.
 
 **Error Response (not authorised):** `403 Forbidden`
@@ -2759,6 +2819,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | GET | `/api/v1/students/{student}/checklist-items` | Yes | Both | List checklist |
 | PUT | `/api/v1/students/{student}/checklist-items/{item}` | Yes | Both | Update checklist item |
 | GET | `/api/v1/students/{student}/pickup-points` | Yes | Both | List pickup points |
+| POST | `/api/v1/students/{student}/pickup-points` | Yes | Both | Create pickup point |
 | POST | `/api/v1/students/{student}/orders` | Yes | Both | Create order/booking |
 | GET | `/api/v1/orders/{order}/checkout/verify` | Yes | Both | Verify payment |
 | GET | `/api/v1/packages/{package}/pricing` | Yes | Any | Package pricing breakdown |

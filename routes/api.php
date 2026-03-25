@@ -66,6 +66,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('students/{student}/lessons', [StudentLessonController::class, 'index']);
         Route::get('students/{student}/lessons/{lesson}', [StudentLessonController::class, 'show']);
         Route::get('students/{student}/pickup-points', [StudentPickupPointController::class, 'index']);
+        Route::post('students/{student}/pickup-points', [StudentPickupPointController::class, 'store']);
         Route::post('students/{student}/lessons/{lesson}/resources', [LessonResourceController::class, 'store']);
         Route::post('students/{student}/lessons/{lesson}/sign-off', [LessonSignOffController::class, 'store']);
         // Resources

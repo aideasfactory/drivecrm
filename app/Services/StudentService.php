@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Actions\Instructor\CreatePupilAction;
 use App\Actions\Student\GetAllStudentsAction;
 use App\Actions\Student\GetStudentByIdAction;
+use App\Actions\Student\PickupPoint\CreatePickupPointAction;
 use App\Actions\Student\PickupPoint\GetStudentPickupPointsAction;
 use App\Actions\Student\Status\RemoveStudentFromInstructorAction;
 use App\Actions\Student\UpdateStudentAction;
@@ -22,7 +23,8 @@ class StudentService extends BaseService
         protected CreatePupilAction $createPupil,
         protected UpdateStudentAction $updateStudent,
         protected RemoveStudentFromInstructorAction $removeStudent,
-        protected GetStudentPickupPointsAction $getStudentPickupPoints
+        protected GetStudentPickupPointsAction $getStudentPickupPoints,
+        protected CreatePickupPointAction $createPickupPoint
     ) {}
 
     /**
@@ -103,5 +105,15 @@ class StudentService extends BaseService
     public function getPickupPoints(Student $student): Collection
     {
         return ($this->getStudentPickupPoints)($student);
+    }
+
+    /**
+     * Create a new pickup point for a student.
+     *
+     * @param  array{label: string, address: string, postcode: string, is_default?: bool}  $data
+     */
+    public function storePickupPoint(Student $student, array $data): \App\Models\StudentPickupPoint
+    {
+        return ($this->createPickupPoint)($student, $data);
     }
 }
