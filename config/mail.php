@@ -60,7 +60,9 @@ return [
             //     'timeout' => 5,
             // ],
         ],
-
+        'mailersend' => [
+            'transport' => 'mailersend',
+        ],
         'resend' => [
             'transport' => 'resend',
         ],
