@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import {
+    AlertTriangle,
     Check,
     X,
     Flag,
@@ -32,6 +33,12 @@ interface Props {
     event: CalendarEvent
     dayStartHour: number
     rowHeight: number
+    /** Column index when overlapping (0-based). Default 0. */
+    columnIndex?: number
+    /** Total columns in the overlap group. Default 1. */
+    totalColumns?: number
+    /** Whether this event has a scheduling clash (overlaps with another event) */
+    hasClash?: boolean
 }
 
 const props = defineProps<Props>()
@@ -73,6 +80,12 @@ const heightPx = computed(() => {
     const durationMinutes = endMinutes - startMinutes
     return (durationMinutes / 30) * props.rowHeight
 })
+
+/** Horizontal positioning when events overlap */
+const colIndex = computed(() => props.columnIndex ?? 0)
+const colTotal = computed(() => props.totalColumns ?? 1)
+const leftPercent = computed(() => (colIndex.value / colTotal.value) * 100)
+const widthPercent = computed(() => (1 / colTotal.value) * 100)
 
 /** Whether the booked/completed slot has been paid */
 const isPaid = computed(() => props.event.isPaid === true)
@@ -174,18 +187,27 @@ function handlePointerDown(e: PointerEvent) {
 
 <template>
     <div
-        class="absolute inset-x-1 z-10 select-none overflow-hidden rounded-md border px-2 py-1 text-xs leading-tight transition-shadow"
+        class="absolute z-10 select-none overflow-hidden rounded-md border px-1.5 py-1 text-xs leading-tight transition-shadow"
         :class="[
+            hasClash ? 'ring-2 ring-orange-400 ring-offset-1 dark:ring-orange-500' : '',
             colorClasses,
             isTravel ? 'cursor-default border-dashed opacity-80' : '',
             isPracticalTest ? 'cursor-pointer border-solid' : '',
             !isTravel && !isPracticalTest ? 'cursor-pointer hover:shadow-md' : '',
         ]"
-        :style="{ top: `${topPx}px`, height: `${heightPx}px`, minHeight: '20px' }"
+        :style="{
+            top: `${topPx}px`,
+            height: `${heightPx}px`,
+            minHeight: '20px',
+            left: colTotal > 1 ? `calc(${leftPercent}% + 2px)` : '4px',
+            width: colTotal > 1 ? `calc(${widthPercent}% - 4px)` : 'calc(100% - 8px)',
+        }"
         @click="handleClick"
         @pointerdown="handlePointerDown"
     >
         <div class="flex items-center gap-1 font-medium">
+            <!-- Clash warning indicator -->
+            <AlertTriangle v-if="hasClash" class="h-3 w-3 shrink-0 text-orange-500 dark:text-orange-400" />
             <!-- Travel icon for travel blocks -->
             <svg v-if="isTravel" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />

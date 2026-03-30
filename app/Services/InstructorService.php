@@ -24,8 +24,11 @@ use App\Actions\Instructor\GetInstructorPupilsAction;
 use App\Actions\Instructor\UpdateCalendarItemAction;
 use App\Actions\Instructor\UpdateInstructorProfileAction;
 use App\Actions\Instructor\UploadInstructorProfilePictureAction;
+use App\Actions\Calendar\DetectCalendarClashesAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Shared\Message\SendBroadcastMessageAction;
+use App\Notifications\CalendarClashDetectedNotification;
+use App\Notifications\LessonRescheduledNotification;
 use App\Enums\RecurrencePattern;
 use App\Enums\UserRole;
 use App\Models\CalendarItem;
@@ -65,7 +68,8 @@ class InstructorService extends BaseService
         protected LogActivityAction $logActivity,
         protected UpdateInstructorProfileAction $updateInstructorProfile,
         protected UploadInstructorProfilePictureAction $uploadProfilePicture,
-        protected DeleteInstructorProfilePictureAction $deleteProfilePicture
+        protected DeleteInstructorProfilePictureAction $deleteProfilePicture,
+        protected DetectCalendarClashesAction $detectCalendarClashes
     ) {}
 
     /**
@@ -278,6 +282,8 @@ class InstructorService extends BaseService
 
         app(InstructorCalendarService::class)->invalidateCalendarCache($instructor->id, $date);
 
+        $this->checkAndNotifyClashes($instructor, $item, $date, $startTime, $endTime);
+
         return $item;
     }
 
@@ -306,16 +312,38 @@ class InstructorService extends BaseService
         ?string $unavailabilityReason = null,
         ?int $travelTimeMinutes = null
     ): CalendarItem {
-        // Invalidate old date cache if item is moving to a different date
+        // Capture old values before the update for student notifications
         $oldDate = $calendarItem->calendar?->date;
+        $oldDateString = $oldDate?->format('Y-m-d');
+        $oldStartTime = $calendarItem->start_time;
+        $oldEndTime = $calendarItem->end_time;
+        $hasTimeChanged = $oldDateString !== $date || $oldStartTime !== $startTime || $oldEndTime !== $endTime;
+
+        // Load lessons with students before updating
+        $affectedLessons = $hasTimeChanged
+            ? $calendarItem->lessons()->with(['order.student.user'])->get()
+            : collect();
 
         $item = ($this->updateCalendarItem)($instructor, $calendarItem, $date, $startTime, $endTime, $isAvailable, $notes, $unavailabilityReason, $travelTimeMinutes);
 
         $calendarService = app(InstructorCalendarService::class);
         $calendarService->invalidateCalendarCache($instructor->id, $date);
 
-        if ($oldDate && $oldDate !== $date) {
-            $calendarService->invalidateCalendarCache($instructor->id, $oldDate);
+        if ($oldDate && $oldDateString !== $date) {
+            $calendarService->invalidateCalendarCache($instructor->id, $oldDateString);
+        }
+
+        // Notify students if the time/date has changed and there are booked lessons
+        if ($hasTimeChanged && $affectedLessons->isNotEmpty()) {
+            $itemNotes = $item->notes ?? $notes;
+            $this->notifyStudentsOfReschedule(
+                $instructor,
+                $affectedLessons,
+                $oldDateString,
+                $oldStartTime,
+                $oldEndTime,
+                $itemNotes
+            );
         }
 
         return $item;
@@ -357,7 +385,7 @@ class InstructorService extends BaseService
         ?string $unavailabilityReason = null,
         ?int $travelTimeMinutes = null
     ): Collection {
-        return ($this->createRecurringCalendarItems)(
+        $items = ($this->createRecurringCalendarItems)(
             $instructor,
             $date,
             $startTime,
@@ -369,6 +397,13 @@ class InstructorService extends BaseService
             $unavailabilityReason,
             $travelTimeMinutes
         );
+
+        foreach ($items as $item) {
+            $itemDate = $item->calendar?->date?->format('Y-m-d') ?? $date;
+            $this->checkAndNotifyClashes($instructor, $item, $itemDate, $startTime, $endTime);
+        }
+
+        return $items;
     }
 
     /**
@@ -379,6 +414,88 @@ class InstructorService extends BaseService
     public function removeRecurringCalendarItems(CalendarItem $calendarItem): int
     {
         return ($this->deleteRecurringCalendarItems)($calendarItem);
+    }
+
+    /**
+     * Check for clashes with existing calendar items and notify the instructor.
+     */
+    protected function checkAndNotifyClashes(
+        Instructor $instructor,
+        CalendarItem $newItem,
+        string $date,
+        string $startTime,
+        string $endTime
+    ): void {
+        $clashes = ($this->detectCalendarClashes)($instructor, $date, $startTime, $endTime, $newItem->id);
+
+        if ($clashes->isEmpty()) {
+            return;
+        }
+
+        $instructor->load('user');
+        $newItem->load('calendar');
+
+        $instructor->user->notify(new CalendarClashDetectedNotification($newItem, $clashes, $instructor));
+
+        ($this->logActivity)(
+            $instructor,
+            'Scheduling clash detected on '.Carbon::parse($date)->format('j M Y').' at '.$startTime.' — '.$clashes->count().' conflicting item(s)',
+            'notification',
+            [
+                'new_item_id' => $newItem->id,
+                'clashing_item_ids' => $clashes->pluck('id')->toArray(),
+                'date' => $date,
+            ]
+        );
+    }
+
+    /**
+     * Notify students whose lessons have been rescheduled due to a calendar item move.
+     */
+    protected function notifyStudentsOfReschedule(
+        Instructor $instructor,
+        Collection $lessons,
+        string $oldDate,
+        string $oldStartTime,
+        string $oldEndTime,
+        ?string $notes = null
+    ): void {
+        $instructor->load('user');
+
+        foreach ($lessons as $lesson) {
+            $student = $lesson->order?->student;
+            $user = $student?->user;
+
+            if (! $student || ! $user) {
+                continue;
+            }
+
+            // Update the lesson's date/time to match the moved calendar item
+            $lesson->refresh();
+
+            $user->notify(new LessonRescheduledNotification(
+                $lesson,
+                $student,
+                $instructor,
+                $oldDate,
+                $oldStartTime,
+                $oldEndTime,
+                $notes
+            ));
+
+            ($this->logActivity)(
+                $student,
+                'Lesson rescheduled by '.$instructor->user->name.' from '.Carbon::parse($oldDate)->format('j M Y').' '.$oldStartTime,
+                'notification',
+                [
+                    'lesson_id' => $lesson->id,
+                    'instructor_id' => $instructor->id,
+                    'old_date' => $oldDate,
+                    'old_start_time' => $oldStartTime,
+                    'old_end_time' => $oldEndTime,
+                ]
+            );
+        }
     }
 
     /**

@@ -49,6 +49,100 @@ const eventsByDate = computed(() => {
     return map
 })
 
+// ── Overlap layout: assign columns to overlapping events ─
+interface EventLayout {
+    columnIndex: number
+    totalColumns: number
+}
+
+/**
+ * For a list of events on one day, compute which visual column each should occupy.
+ * Overlapping events get side-by-side columns (like Google Calendar).
+ */
+function computeOverlapLayout(events: CalendarEvent[]): Map<number, EventLayout> {
+    const layout = new Map<number, EventLayout>()
+    if (events.length === 0) return layout
+
+    // Sort by start time, then by end time descending (longer events first)
+    const sorted = [...events].sort((a, b) => {
+        const diff = timeToMinutes(a.startTime) - timeToMinutes(b.startTime)
+        if (diff !== 0) return diff
+        return timeToMinutes(b.endTime) - timeToMinutes(a.endTime)
+    })
+
+    // Assign columns using a greedy algorithm
+    const columns: { endMinutes: number; eventId: number }[][] = []
+
+    for (const evt of sorted) {
+        const startMin = timeToMinutes(evt.startTime)
+        const endMin = timeToMinutes(evt.endTime)
+
+        // Find the first column where this event doesn't overlap
+        let placed = false
+        for (let col = 0; col < columns.length; col++) {
+            const lastInCol = columns[col][columns[col].length - 1]
+            if (lastInCol.endMinutes <= startMin) {
+                columns[col].push({ endMinutes: endMin, eventId: evt.id })
+                layout.set(evt.id, { columnIndex: col, totalColumns: 0 }) // totalColumns set later
+                placed = true
+                break
+            }
+        }
+
+        if (!placed) {
+            columns.push([{ endMinutes: endMin, eventId: evt.id }])
+            layout.set(evt.id, { columnIndex: columns.length - 1, totalColumns: 0 })
+        }
+    }
+
+    // Now determine totalColumns for each overlap group
+    // An overlap group is a set of events that transitively overlap
+    const groups: CalendarEvent[][] = []
+    let currentGroup: CalendarEvent[] = []
+    let groupEnd = 0
+
+    for (const evt of sorted) {
+        const startMin = timeToMinutes(evt.startTime)
+        const endMin = timeToMinutes(evt.endTime)
+
+        if (currentGroup.length === 0 || startMin < groupEnd) {
+            currentGroup.push(evt)
+            groupEnd = Math.max(groupEnd, endMin)
+        } else {
+            groups.push(currentGroup)
+            currentGroup = [evt]
+            groupEnd = endMin
+        }
+    }
+    if (currentGroup.length > 0) groups.push(currentGroup)
+
+    // Set totalColumns for each event in the group
+    for (const group of groups) {
+        // Find max column index in this group
+        let maxCol = 0
+        for (const evt of group) {
+            const l = layout.get(evt.id)
+            if (l && l.columnIndex > maxCol) maxCol = l.columnIndex
+        }
+        const totalCols = maxCol + 1
+        for (const evt of group) {
+            const l = layout.get(evt.id)
+            if (l) l.totalColumns = totalCols
+        }
+    }
+
+    return layout
+}
+
+/** Computed overlap layouts per date */
+const overlapLayoutByDate = computed(() => {
+    const map = new Map<string, Map<number, EventLayout>>()
+    for (const [date, events] of eventsByDate.value) {
+        map.set(date, computeOverlapLayout(events))
+    }
+    return map
+})
+
 // ── Day header formatting ────────────────────────────────
 const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -256,13 +350,16 @@ function handlePointerUp(_e: PointerEvent) {
                     @click="handleSlotClick(day, slotIdx - 1)"
                 ></div>
 
-                <!-- Event blocks (absolutely positioned) -->
+                <!-- Event blocks (absolutely positioned, side-by-side when overlapping) -->
                 <CalendarEventBlock
                     v-for="evt in eventsByDate.get(formatDate(day)) || []"
                     :key="evt.id"
                     :event="evt"
                     :day-start-hour="DAY_START_HOUR"
                     :row-height="ROW_HEIGHT"
+                    :column-index="overlapLayoutByDate.get(formatDate(day))?.get(evt.id)?.columnIndex ?? 0"
+                    :total-columns="overlapLayoutByDate.get(formatDate(day))?.get(evt.id)?.totalColumns ?? 1"
+                    :has-clash="(overlapLayoutByDate.get(formatDate(day))?.get(evt.id)?.totalColumns ?? 1) > 1"
                     :class="{ 'pointer-events-none opacity-30': dragging?.isDragging && dragging.event.id === evt.id }"
                     @click="emit('eventClick', $event)"
                     @dragstart="handleEventDragStart"

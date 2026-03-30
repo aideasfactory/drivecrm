@@ -82,12 +82,27 @@ class UpdateCalendarItemAction
 
         $calendarItem->save();
 
+        // Sync linked lessons when the calendar item is moved
+        $this->syncLessonDates($calendarItem, $newDate, $startTime, $endTime);
+
         // Handle travel-time block changes
         $this->syncTravelBlock($calendarItem, $travelTimeMinutes);
 
         $calendarItem->load('calendar');
 
         return $calendarItem;
+    }
+
+    /**
+     * Update linked lessons' date and times to match the moved calendar item.
+     */
+    private function syncLessonDates(CalendarItem $calendarItem, string $date, string $startTime, string $endTime): void
+    {
+        $calendarItem->lessons()->update([
+            'date' => $date,
+            'start_time' => $startTime,
+            'end_time' => $endTime,
+        ]);
     }
 
     /**

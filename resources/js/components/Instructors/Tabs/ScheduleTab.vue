@@ -503,6 +503,7 @@ async function handleEditSubmit() {
         // Reload full calendar to pick up any travel item changes
         toast({ title: 'Time slot updated successfully!' })
         await loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
+
         isEditSheetOpen.value = false
     } catch (error: any) {
         const message = error.response?.data?.message || 'Failed to update time slot'
@@ -539,8 +540,9 @@ async function handleEventMove(eventId: number, newDate: string, newStartTime: s
         )
 
         // Reload to get updated travel items too
-        toast({ title: 'Time slot moved successfully!' })
+        toast({ title: 'Time slot moved successfully! Student will be notified.' })
         await loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
+
     } catch (error: any) {
         // Revert on error
         itemsMap.value.set(eventId, oldItem as CalendarItemResponse)
