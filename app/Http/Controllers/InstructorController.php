@@ -169,7 +169,7 @@ class InstructorController extends Controller
                 'email' => $request->input('email'),
             ]);
 
-            $instructor = $this->instructorService->updateInstructor($instructor, $request->validated());
+            $instructor = $this->instructorService->updateProfile($instructor, $request->validated());
         });
 
         return redirect()->back();
