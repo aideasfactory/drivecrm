@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\Shared\AdminResetPasswordAction;
 use App\Actions\Shared\Contact\CreateContactAction;
 use App\Actions\Shared\Contact\DeleteContactAction;
 use App\Actions\Shared\Contact\SetPrimaryContactAction;
 use App\Actions\Shared\Contact\UpdateContactAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Enums\RecurrencePattern;
+use App\Http\Requests\AdminResetPasswordRequest;
 use App\Http\Requests\ImportInstructorsCsvRequest;
 use App\Http\Requests\StoreCalendarItemRequest;
 use App\Http\Requests\StoreInstructorRequest;
@@ -171,6 +173,18 @@ class InstructorController extends Controller
         });
 
         return redirect()->back();
+    }
+
+    /**
+     * Reset an instructor's password (admin action).
+     */
+    public function updatePassword(AdminResetPasswordRequest $request, Instructor $instructor): JsonResponse
+    {
+        (new AdminResetPasswordAction)($instructor->user, $request->validated('password'));
+
+        return response()->json([
+            'message' => 'Password has been reset successfully.',
+        ]);
     }
 
     /**

@@ -4,6 +4,7 @@ import axios from 'axios'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import EmergencyContactManager from '@/components/Shared/EmergencyContactManager.vue'
+import PasswordResetSection from '@/components/Shared/PasswordResetSection.vue'
 import PickupPointsSection from '@/components/Instructors/Tabs/Student/Actions/PickupPointsSection.vue'
 import StudentStatusSection from '@/components/Instructors/Tabs/Student/Actions/StudentStatusSection.vue'
 import RemoveStudentSection from '@/components/Instructors/Tabs/Student/Actions/RemoveStudentSection.vue'
@@ -89,6 +90,13 @@ const handleStatusUpdated = (
                     :inactive-reason="student.inactive_reason"
                     @updated="handleStatusUpdated"
                 />
+            </CardContent>
+        </Card>
+
+        <!-- Password Reset -->
+        <Card>
+            <CardContent class="p-6">
+                <PasswordResetSection :reset-url="`/students/${studentId}/password`" />
             </CardContent>
         </Card>
 

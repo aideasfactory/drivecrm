@@ -92,6 +92,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('instructors.contacts.destroy');
     Route::patch('/instructors/{instructor}/contacts/{contact}/primary', [\App\Http\Controllers\InstructorController::class, 'setPrimaryContact'])
         ->name('instructors.contacts.primary');
+    Route::put('/instructors/{instructor}/password', [\App\Http\Controllers\InstructorController::class, 'updatePassword'])
+        ->name('instructors.password.update');
 
     Route::get('/packages', [\App\Http\Controllers\PackageController::class, 'index'])
         ->name('packages.index');
@@ -172,6 +174,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('students.status.update');
     Route::delete('/students/{student}/remove', [\App\Http\Controllers\PupilController::class, 'removeStudent'])
         ->name('students.remove');
+    Route::put('/students/{student}/password', [\App\Http\Controllers\PupilController::class, 'updatePassword'])
+        ->name('students.password.update');
 
     Route::get('/teams', [\App\Http\Controllers\TeamController::class, 'index'])
         ->name('teams.index');
