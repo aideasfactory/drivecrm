@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Actions\Calendar\DetectCalendarClashesAction;
 use App\Actions\FetchPostcodeCoordinatesAction;
 use App\Actions\FindInstructorsByPostcodeSectorAction;
 use App\Actions\Instructor\BulkImportInstructorsAction;
@@ -24,11 +25,8 @@ use App\Actions\Instructor\GetInstructorPupilsAction;
 use App\Actions\Instructor\UpdateCalendarItemAction;
 use App\Actions\Instructor\UpdateInstructorProfileAction;
 use App\Actions\Instructor\UploadInstructorProfilePictureAction;
-use App\Actions\Calendar\DetectCalendarClashesAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Shared\Message\SendBroadcastMessageAction;
-use App\Notifications\CalendarClashDetectedNotification;
-use App\Notifications\LessonRescheduledNotification;
 use App\Enums\RecurrencePattern;
 use App\Enums\UserRole;
 use App\Models\CalendarItem;
@@ -36,6 +34,8 @@ use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Location;
 use App\Models\User;
+use App\Notifications\CalendarClashDetectedNotification;
+use App\Notifications\LessonRescheduledNotification;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
