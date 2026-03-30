@@ -145,6 +145,10 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
     Route::post('/students/{student}/messages', [\App\Http\Controllers\PupilController::class, 'sendMessage'])
         ->name('students.messages.store');
 
+    // Student Payments
+    Route::get('/students/{student}/payments', [\App\Http\Controllers\PupilController::class, 'payments'])
+        ->name('students.payments');
+
     // Student Lessons
     Route::get('/students/{student}/lessons', [\App\Http\Controllers\PupilController::class, 'lessons'])
         ->name('students.lessons');
