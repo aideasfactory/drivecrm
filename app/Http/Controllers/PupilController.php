@@ -72,7 +72,7 @@ class PupilController extends Controller
      */
     public function show(Student $student): JsonResponse
     {
-        $data = (new GetStudentDetailAction)($student);
+        $data = app(GetStudentDetailAction::class)($student);
 
         return response()->json([
             'student' => $data,

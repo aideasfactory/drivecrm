@@ -8,6 +8,9 @@ use App\Models\Student;
 
 class GetStudentDetailAction
 {
+    public function __construct(
+        protected CalculateStudentRevenueAction $calculateStudentRevenue
+    ) {}
     /**
      * Get detailed student data for the pupil detail page header.
      *
@@ -16,7 +19,7 @@ class GetStudentDetailAction
      */
     public function __invoke(Student $student): array
     {
-        $student->load(['user', 'instructor', 'orders.lessons']);
+        $student->load(['user', 'instructor', 'orders.lessons.lessonPayment']);
 
         $name = $student->first_name && $student->surname
             ? $student->first_name.' '.$student->surname
@@ -24,13 +27,13 @@ class GetStudentDetailAction
 
         $lessonsTotal = 0;
         $lessonsCompleted = 0;
-        $revenuePence = 0;
 
         foreach ($student->orders as $order) {
             $lessonsTotal += $order->lessons->count();
             $lessonsCompleted += $order->lessons->where('status', 'completed')->count();
-            $revenuePence += $order->package_total_price_pence ?? 0;
         }
+
+        $revenuePence = ($this->calculateStudentRevenue)($student);
 
         return [
             'id' => $student->id,

@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Actions\Instructor;
 
+use App\Actions\Student\CalculateStudentRevenueAction;
 use App\Models\Instructor;
 use App\Models\Student;
 use Illuminate\Support\Collection;
 
 class GetInstructorPupilsAction
 {
+    public function __construct(
+        protected CalculateStudentRevenueAction $calculateStudentRevenue
+    ) {}
     /**
      * Get all students belonging to an instructor with computed stats.
      *
@@ -21,7 +25,7 @@ class GetInstructorPupilsAction
     public function __invoke(Instructor $instructor, ?string $search = null, string $status = 'active'): Collection
     {
         $query = Student::where('instructor_id', $instructor->id)
-            ->with(['user', 'orders.lessons']);
+            ->with(['user', 'orders.lessons.lessonPayment']);
 
         if ($status !== 'all') {
             $query->where('status', $status);
@@ -45,13 +49,13 @@ class GetInstructorPupilsAction
             $activeOrder = $student->orders->first();
             $lessonsTotal = 0;
             $lessonsCompleted = 0;
-            $revenuePence = 0;
 
             foreach ($student->orders as $order) {
                 $lessonsTotal += $order->lessons->count();
                 $lessonsCompleted += $order->lessons->where('status', 'completed')->count();
-                $revenuePence += $order->package_total_price_pence ?? 0;
             }
+
+            $revenuePence = ($this->calculateStudentRevenue)($student);
 
             // Find next upcoming lesson
             $nextLesson = null;
