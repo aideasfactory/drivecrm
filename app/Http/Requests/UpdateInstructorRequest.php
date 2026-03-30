@@ -24,7 +24,8 @@ class UpdateInstructorRequest extends FormRequest
      */
     public function rules(): array
     {
-        $instructorId = $this->route('instructor');
+        $instructor = $this->route('instructor');
+        $userId = $instructor?->user_id;
 
         return [
             'name' => ['required', 'string', 'max:255'],
@@ -33,7 +34,7 @@ class UpdateInstructorRequest extends FormRequest
                 'string',
                 'email',
                 'max:255',
-                Rule::unique('users')->ignore($instructorId, 'id'),
+                Rule::unique('users')->ignore($userId),
             ],
             'phone' => ['nullable', 'string', 'max:20'],
             'bio' => ['nullable', 'string', 'max:1000'],
