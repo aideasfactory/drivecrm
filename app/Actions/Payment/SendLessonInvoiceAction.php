@@ -42,8 +42,8 @@ class SendLessonInvoiceAction
             return ['success' => false, 'error' => 'Student has no Stripe customer ID'];
         }
 
-        // Create Stripe invoice
-        $result = $this->stripeService->createInvoice($lesson, $user);
+        // Create Stripe invoice using LessonPayment amount (cast to int)
+        $result = $this->stripeService->createInvoice($lesson, $user, (int) $lessonPayment->amount_pence, $lessonPayment->id);
 
         if (! $result['success']) {
             Log::error('Failed to create Stripe invoice for lesson', [
@@ -98,23 +98,8 @@ class SendLessonInvoiceAction
                 return;
             }
 
-            $recipient = new class($recipientEmail, $recipientName)
-            {
-                public function __construct(
-                    public string $email,
-                    public string $name
-                ) {}
-
-                public function routeNotificationForMail(): string
-                {
-                    return $this->email;
-                }
-            };
-
-            Notification::send(
-                $recipient,
-                new LessonPaymentReminderNotification($lessonPayment, $student, $hostedInvoiceUrl, $isBookedByContact)
-            );
+            Notification::route('mail', $recipientEmail)
+                ->notify(new LessonPaymentReminderNotification($lessonPayment, $student, $hostedInvoiceUrl, $isBookedByContact));
 
             $lessonDate = $lessonPayment->lesson?->date?->format('d M Y') ?? 'N/A';
 

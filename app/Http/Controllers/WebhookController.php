@@ -293,13 +293,15 @@ class WebhookController extends Controller
 
         Log::info('Webhook: Processing invoice.paid', [
             'invoice_id' => $invoice->id,
+            'amount_paid' => $invoice->amount_paid ?? null,
         ]);
 
-        // Get lesson_id from invoice metadata
+        // Try lesson_payment_id first (new invoices), fall back to lesson_id lookup
+        $lessonPaymentId = $invoice->metadata->lesson_payment_id ?? null;
         $lessonId = $invoice->metadata->lesson_id ?? null;
 
-        if (! $lessonId) {
-            Log::warning('Webhook: Invoice has no lesson_id in metadata', [
+        if (! $lessonPaymentId && ! $lessonId) {
+            Log::warning('Webhook: Invoice has no lesson identifiers in metadata', [
                 'invoice_id' => $invoice->id,
             ]);
 
@@ -307,12 +309,13 @@ class WebhookController extends Controller
         }
 
         // Find the lesson payment
-        $lessonPayment = LessonPayment::whereHas('lesson', function ($query) use ($lessonId) {
-            $query->where('id', $lessonId);
-        })->first();
+        $lessonPayment = $lessonPaymentId
+            ? LessonPayment::find($lessonPaymentId)
+            : LessonPayment::where('lesson_id', $lessonId)->first();
 
         if (! $lessonPayment) {
             Log::warning('Webhook: Lesson payment not found', [
+                'lesson_payment_id' => $lessonPaymentId,
                 'lesson_id' => $lessonId,
                 'invoice_id' => $invoice->id,
             ]);
@@ -320,16 +323,49 @@ class WebhookController extends Controller
             return;
         }
 
-        // Mark as paid
+        // Mark lesson payment as paid
         $lessonPayment->update([
             'status' => PaymentStatus::PAID,
             'stripe_invoice_id' => $invoice->id,
             'paid_at' => now(),
         ]);
 
+        // Update the calendar item status to BOOKED if still in DRAFT/RESERVED
+        $lesson = $lessonPayment->lesson;
+        if ($lesson && $lesson->calendarItem) {
+            $calendarItem = $lesson->calendarItem;
+            if (in_array($calendarItem->status, [\App\Enums\CalendarItemStatus::DRAFT, \App\Enums\CalendarItemStatus::RESERVED])) {
+                $calendarItem->update(['status' => \App\Enums\CalendarItemStatus::BOOKED]);
+
+                Log::info('Webhook: Calendar item updated to BOOKED', [
+                    'calendar_item_id' => $calendarItem->id,
+                    'lesson_id' => $lesson->id,
+                ]);
+            }
+        }
+
+        // Log activity for the student
+        if ($lesson) {
+            $student = $lesson->order?->student;
+            if ($student) {
+                $lessonDate = $lesson->date?->format('d M Y') ?? 'N/A';
+                app(LogActivityAction::class)(
+                    $student,
+                    "Payment received for lesson on {$lessonDate} ({$lessonPayment->formatted_amount})",
+                    'payment',
+                    [
+                        'type' => 'lesson_payment_received',
+                        'lesson_payment_id' => $lessonPayment->id,
+                        'lesson_id' => $lesson->id,
+                        'invoice_id' => $invoice->id,
+                    ]
+                );
+            }
+        }
+
         Log::info('Webhook: Lesson payment marked as paid', [
             'lesson_payment_id' => $lessonPayment->id,
-            'lesson_id' => $lessonId,
+            'lesson_id' => $lessonPayment->lesson_id,
             'invoice_id' => $invoice->id,
         ]);
     }

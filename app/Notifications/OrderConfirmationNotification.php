@@ -60,7 +60,7 @@ class OrderConfirmationNotification extends Notification implements ShouldQueue
             $message->line('Payment: Paid in full (£'.number_format($order->package_total_price_pence / 100, 2).')');
         } else {
             $message->line('Payment: Weekly (£'.number_format($order->package_lesson_price_pence / 100, 2).' per lesson)');
-            $message->line('You will receive invoice emails 24 hours before each lesson.');
+            $message->line('You will receive invoice emails 48 hours before each lesson.');
         }
 
         $message->line('')

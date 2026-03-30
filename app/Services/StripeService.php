@@ -429,25 +429,21 @@ class StripeService
     /**
      * Create a Stripe Invoice for a lesson payment.
      */
-    public function createInvoice(Lesson $lesson, User $student): array
+    public function createInvoice(Lesson $lesson, User $student, int $amountPence, int $lessonPaymentId): array
     {
         try {
+            if ($amountPence <= 0) {
+                Log::error('Cannot create invoice with zero or negative amount', [
+                    'lesson_id' => $lesson->id,
+                    'amount_pence' => $amountPence,
+                ]);
+
+                return ['success' => false, 'error' => 'Invoice amount must be greater than zero'];
+            }
+
             $package = $lesson->order->package;
 
-            // Create invoice item
-            $invoiceItem = $this->stripe->invoiceItems->create([
-                'customer' => $student->stripe_customer_id,
-                'amount' => $lesson->amount_pence,
-                'currency' => 'gbp',
-                'description' => "Lesson payment for {$package->name} - ".$lesson->date->format('d M Y').' '.$lesson->start_time->format('H:i'),
-                'metadata' => [
-                    'lesson_id' => $lesson->id,
-                    'order_id' => $lesson->order_id,
-                    'package_id' => $package->id,
-                ],
-            ]);
-
-            // Create and finalize invoice
+            // Create draft invoice first, then attach the line item to it
             $invoice = $this->stripe->invoices->create([
                 'customer' => $student->stripe_customer_id,
                 'auto_advance' => true,
@@ -455,8 +451,24 @@ class StripeService
                 'days_until_due' => 1,
                 'metadata' => [
                     'lesson_id' => $lesson->id,
+                    'lesson_payment_id' => $lessonPaymentId,
                     'order_id' => $lesson->order_id,
                     'payment_mode' => 'weekly',
+                ],
+            ]);
+
+            // Create invoice item attached directly to the invoice
+            $invoiceItem = $this->stripe->invoiceItems->create([
+                'customer' => $student->stripe_customer_id,
+                'invoice' => $invoice->id,
+                'amount' => $amountPence,
+                'currency' => 'gbp',
+                'description' => "Lesson payment for {$package->name} - ".$lesson->date->format('d M Y').' '.$lesson->start_time->format('H:i'),
+                'metadata' => [
+                    'lesson_id' => $lesson->id,
+                    'lesson_payment_id' => $lessonPaymentId,
+                    'order_id' => $lesson->order_id,
+                    'package_id' => $package->id,
                 ],
             ]);
 
@@ -472,6 +484,7 @@ class StripeService
         } catch (ApiErrorException $e) {
             Log::error('Stripe Invoice creation failed', [
                 'lesson_id' => $lesson->id,
+                'amount_pence' => $amountPence,
                 'error' => $e->getMessage(),
             ]);
 
