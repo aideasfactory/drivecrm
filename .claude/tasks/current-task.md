@@ -1,21 +1,26 @@
-# Task: Show each student's next booked lesson on the instructor pupils screen
+# Task: Populate Instructor Student Payments Tab
 
 ## Overview
-The next lesson field on the instructor pupils screen is always blank because GetInstructorPupilsAction compares the LessonStatus enum with plain strings, which always returns false in PHP 8.1+.
+Build out the payments tab on the instructor-side student screen to show the student's actual payment records (LessonPayment records linked through Orders -> Lessons).
 
-## Phase 1: Planning - Complete
-- [x] Identify root cause
-- [x] Frontend already handles display correctly
+## Phase 1: Planning ✅
+- [x] Analyze existing data structures (LessonPayment, Order, Lesson models)
+- [x] Review existing tab patterns (LessonsSubTab as reference)
+- [x] Plan backend endpoint and frontend component
 
-## Phase 2: Implementation - Complete
-- [x] Fix enum comparison for next lesson lookup
-- [x] Fix enum comparison for completed count
-- [x] Add date filter for today+ only
-- [x] Fix start_time serialization
+### Reflection
+Data flows: Student -> Orders -> Lessons -> LessonPayment. Each LessonPayment has amount_pence, status (due/paid/refunded), due_date, paid_at. Orders have payment_mode (upfront/weekly). Will create a new Action + controller method + route, then build out the Vue component following LessonsSubTab pattern.
 
-## Phase 3: Final Review - Complete
-- [x] Verify changes follow backend coding standards
-- [x] Write .phase_done sentinel
+## Phase 2: Implementation 🔄
+- [ ] Create GetStudentPaymentsAction in app/Actions/Student/Payment/
+- [ ] Add payments() method to PupilController
+- [ ] Add route in web.php
+- [ ] Implement PaymentsSubTab.vue with table, summary cards, loading/empty states
 
+## Phase 3: Polish & Completion ⏸️
+- [ ] Final review of data flow
+- [ ] Update current-task.md with reflection
+- [ ] Write .phase_done sentinel
+
+## Status: Phase 2 - In Progress
 Last Updated: 2026-03-30
-Status: Complete

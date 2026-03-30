@@ -18,6 +18,7 @@ use App\Actions\Student\Checklist\GetStudentChecklistAction;
 use App\Actions\Student\Checklist\ToggleChecklistItemAction;
 use App\Actions\Student\Contact\AutoCreateEmergencyContactAction;
 use App\Actions\Student\GetStudentDetailAction;
+use App\Actions\Student\Payment\GetStudentPaymentsAction;
 use App\Actions\Student\PickupPoint\CreatePickupPointAction;
 use App\Actions\Student\PickupPoint\DeletePickupPointAction;
 use App\Actions\Student\PickupPoint\GetStudentPickupPointsAction;
@@ -316,6 +317,18 @@ class PupilController extends Controller
 
         return response()->json([
             'lessons' => $lessons,
+        ]);
+    }
+
+    /**
+     * Get payment records for a student.
+     */
+    public function payments(Student $student): JsonResponse
+    {
+        $payments = app(GetStudentPaymentsAction::class)($student);
+
+        return response()->json([
+            'payments' => $payments,
         ]);
     }
 
