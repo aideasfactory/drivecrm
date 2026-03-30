@@ -11,10 +11,13 @@ use App\Models\Lesson;
 use App\Models\LessonPayment;
 use App\Models\Order;
 use App\Models\WebhookEvent;
+use App\Notifications\InstructorLessonPaymentReceivedNotification;
+use App\Notifications\LessonPaymentReceivedNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 
 class WebhookController extends Controller
 {
@@ -291,17 +294,24 @@ class WebhookController extends Controller
     {
         $invoice = $event->data->object;
 
-        Log::info('Webhook: Processing invoice.paid', [
+        Log::info('Webhook [invoice.paid]: START', [
             'invoice_id' => $invoice->id,
             'amount_paid' => $invoice->amount_paid ?? null,
+            'customer' => $invoice->customer ?? null,
+            'metadata' => isset($invoice->metadata) ? (array) $invoice->metadata : [],
         ]);
 
         // Try lesson_payment_id first (new invoices), fall back to lesson_id lookup
         $lessonPaymentId = $invoice->metadata->lesson_payment_id ?? null;
         $lessonId = $invoice->metadata->lesson_id ?? null;
 
+        Log::info('Webhook [invoice.paid]: Extracted metadata', [
+            'lesson_payment_id' => $lessonPaymentId,
+            'lesson_id' => $lessonId,
+        ]);
+
         if (! $lessonPaymentId && ! $lessonId) {
-            Log::warning('Webhook: Invoice has no lesson identifiers in metadata', [
+            Log::warning('Webhook [invoice.paid]: No lesson identifiers in metadata — skipping', [
                 'invoice_id' => $invoice->id,
             ]);
 
@@ -314,7 +324,7 @@ class WebhookController extends Controller
             : LessonPayment::where('lesson_id', $lessonId)->first();
 
         if (! $lessonPayment) {
-            Log::warning('Webhook: Lesson payment not found', [
+            Log::error('Webhook [invoice.paid]: Lesson payment NOT FOUND in database', [
                 'lesson_payment_id' => $lessonPaymentId,
                 'lesson_id' => $lessonId,
                 'invoice_id' => $invoice->id,
@@ -323,6 +333,12 @@ class WebhookController extends Controller
             return;
         }
 
+        Log::info('Webhook [invoice.paid]: Found lesson payment', [
+            'lesson_payment_id' => $lessonPayment->id,
+            'current_status' => $lessonPayment->status->value,
+            'amount_pence' => $lessonPayment->amount_pence,
+        ]);
+
         // Mark lesson payment as paid
         $lessonPayment->update([
             'status' => PaymentStatus::PAID,
@@ -330,25 +346,49 @@ class WebhookController extends Controller
             'paid_at' => now(),
         ]);
 
-        // Update the calendar item status to BOOKED if still in DRAFT/RESERVED
+        Log::info('Webhook [invoice.paid]: Lesson payment updated to PAID', [
+            'lesson_payment_id' => $lessonPayment->id,
+        ]);
+
+        // Load relationships for notifications
         $lesson = $lessonPayment->lesson;
+        $order = $lesson?->order;
+        $student = $order?->student;
+        $instructor = $order?->instructor;
+
+        Log::info('Webhook [invoice.paid]: Loaded relationships', [
+            'lesson_id' => $lesson?->id,
+            'lesson_date' => $lesson?->date?->format('Y-m-d'),
+            'order_id' => $order?->id,
+            'student_id' => $student?->id,
+            'instructor_id' => $instructor?->id,
+        ]);
+
+        // Update the calendar item status to BOOKED if still in DRAFT/RESERVED
         if ($lesson && $lesson->calendarItem) {
             $calendarItem = $lesson->calendarItem;
+            $previousStatus = $calendarItem->status?->value;
+
             if (in_array($calendarItem->status, [\App\Enums\CalendarItemStatus::DRAFT, \App\Enums\CalendarItemStatus::RESERVED])) {
                 $calendarItem->update(['status' => \App\Enums\CalendarItemStatus::BOOKED]);
 
-                Log::info('Webhook: Calendar item updated to BOOKED', [
+                Log::info('Webhook [invoice.paid]: Calendar item updated to BOOKED', [
                     'calendar_item_id' => $calendarItem->id,
-                    'lesson_id' => $lesson->id,
+                    'previous_status' => $previousStatus,
+                ]);
+            } else {
+                Log::info('Webhook [invoice.paid]: Calendar item already in correct status', [
+                    'calendar_item_id' => $calendarItem->id,
+                    'status' => $previousStatus,
                 ]);
             }
         }
 
         // Log activity for the student
-        if ($lesson) {
-            $student = $lesson->order?->student;
-            if ($student) {
-                $lessonDate = $lesson->date?->format('d M Y') ?? 'N/A';
+        if ($student) {
+            $lessonDate = $lesson->date?->format('d M Y') ?? 'N/A';
+
+            try {
                 app(LogActivityAction::class)(
                     $student,
                     "Payment received for lesson on {$lessonDate} ({$lessonPayment->formatted_amount})",
@@ -360,14 +400,81 @@ class WebhookController extends Controller
                         'invoice_id' => $invoice->id,
                     ]
                 );
+
+                Log::info('Webhook [invoice.paid]: Activity logged for student');
+            } catch (\Exception $e) {
+                Log::error('Webhook [invoice.paid]: Failed to log activity', [
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
 
-        Log::info('Webhook: Lesson payment marked as paid', [
+        // Send payment confirmation email to student/contact
+        $this->sendPaymentReceivedEmails($lessonPayment, $student, $instructor);
+
+        Log::info('Webhook [invoice.paid]: COMPLETE', [
             'lesson_payment_id' => $lessonPayment->id,
             'lesson_id' => $lessonPayment->lesson_id,
             'invoice_id' => $invoice->id,
         ]);
+    }
+
+    /**
+     * Send payment received confirmation emails to student and instructor.
+     */
+    protected function sendPaymentReceivedEmails(LessonPayment $lessonPayment, ?\App\Models\Student $student, ?\App\Models\Instructor $instructor): void
+    {
+        if (! $student) {
+            Log::warning('Webhook [invoice.paid]: No student found — skipping emails');
+
+            return;
+        }
+
+        $isBookedByContact = ! $student->owns_account;
+
+        // Email to student or contact
+        try {
+            $recipientEmail = $isBookedByContact
+                ? $student->contact_email
+                : $student->email;
+
+            if ($recipientEmail) {
+                Notification::route('mail', $recipientEmail)
+                    ->notify(new LessonPaymentReceivedNotification($lessonPayment, $student, $isBookedByContact));
+
+                Log::info('Webhook [invoice.paid]: Payment confirmation email queued for student', [
+                    'recipient_email' => $recipientEmail,
+                    'lesson_payment_id' => $lessonPayment->id,
+                ]);
+            } else {
+                Log::warning('Webhook [invoice.paid]: No student email — skipping student notification');
+            }
+        } catch (\Exception $e) {
+            Log::error('Webhook [invoice.paid]: Failed to send student payment confirmation', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // Email to instructor
+        try {
+            $instructorEmail = $instructor?->user?->email;
+
+            if ($instructorEmail) {
+                Notification::route('mail', $instructorEmail)
+                    ->notify(new InstructorLessonPaymentReceivedNotification($lessonPayment, $student));
+
+                Log::info('Webhook [invoice.paid]: Payment notification email queued for instructor', [
+                    'instructor_email' => $instructorEmail,
+                    'lesson_payment_id' => $lessonPayment->id,
+                ]);
+            } else {
+                Log::warning('Webhook [invoice.paid]: No instructor email — skipping instructor notification');
+            }
+        } catch (\Exception $e) {
+            Log::error('Webhook [invoice.paid]: Failed to send instructor payment notification', [
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
