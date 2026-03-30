@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Actions\Instructor;
 
+use App\Enums\LessonStatus;
 use App\Models\Instructor;
 use App\Models\Student;
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
 class GetInstructorPupilsAction
@@ -49,16 +51,17 @@ class GetInstructorPupilsAction
 
             foreach ($student->orders as $order) {
                 $lessonsTotal += $order->lessons->count();
-                $lessonsCompleted += $order->lessons->where('status', 'completed')->count();
+                $lessonsCompleted += $order->lessons->where('status', LessonStatus::COMPLETED)->count();
                 $revenuePence += $order->package_total_price_pence ?? 0;
             }
 
-            // Find next upcoming lesson
+            // Find next upcoming lesson (today or future, pending status)
+            $today = Carbon::today();
             $nextLesson = null;
             foreach ($student->orders as $order) {
                 foreach ($order->lessons as $lesson) {
-                    if ($lesson->status === 'pending' && $lesson->date) {
-                        if (! $nextLesson || $lesson->date < $nextLesson->date) {
+                    if ($lesson->status === LessonStatus::PENDING && $lesson->date && $lesson->date->gte($today)) {
+                        if (! $nextLesson || $lesson->date->lt($nextLesson->date)) {
                             $nextLesson = $lesson;
                         }
                     }
@@ -78,7 +81,7 @@ class GetInstructorPupilsAction
                 'lessons_completed' => $lessonsCompleted,
                 'lessons_total' => $lessonsTotal,
                 'next_lesson_date' => $nextLesson?->date?->format('Y-m-d'),
-                'next_lesson_time' => $nextLesson?->start_time,
+                'next_lesson_time' => $nextLesson?->start_time?->format('H:i'),
                 'revenue_pence' => $revenuePence,
                 'has_app' => $student->user_id !== null,
                 'status' => $student->status ?? 'active',
