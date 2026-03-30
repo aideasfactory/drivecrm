@@ -2,6 +2,10 @@
 
 namespace App\Models;
 
+use App\Enums\OrderStatus;
+use App\Enums\PaymentMode;
+use App\Enums\PaymentStatus;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -39,6 +43,36 @@ class Student extends Model
         'contact_communications' => 'boolean',
         'owns_account' => 'boolean',
     ];
+
+    /**
+     * Calculate the total revenue in pence from all student orders.
+     */
+    protected function totalRevenuePence(): Attribute
+    {
+        return Attribute::make(
+            get: function (): int {
+                $this->loadMissing('orders.lessons.lessonPayment');
+
+                $total = 0;
+
+                foreach ($this->orders as $order) {
+                    if ($order->payment_mode === PaymentMode::UPFRONT) {
+                        if (in_array($order->status, [OrderStatus::ACTIVE, OrderStatus::COMPLETED])) {
+                            $total += $order->package_total_price_pence ?? 0;
+                        }
+                    } else {
+                        foreach ($order->lessons as $lesson) {
+                            if ($lesson->lessonPayment?->status === PaymentStatus::PAID) {
+                                $total += $lesson->lessonPayment->amount_pence;
+                            }
+                        }
+                    }
+                }
+
+                return $total;
+            },
+        );
+    }
 
     /**
      * Get the user that owns this student profile.

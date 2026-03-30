@@ -5,9 +5,6 @@ declare(strict_types=1);
 namespace App\Actions\Instructor;
 
 use App\Enums\LessonStatus;
-use App\Enums\OrderStatus;
-use App\Enums\PaymentMode;
-use App\Enums\PaymentStatus;
 use App\Models\Instructor;
 use App\Models\Student;
 use Carbon\Carbon;
@@ -50,25 +47,10 @@ class GetInstructorPupilsAction
             $activeOrder = $student->orders->first();
             $lessonsTotal = 0;
             $lessonsCompleted = 0;
-            $revenuePence = 0;
 
             foreach ($student->orders as $order) {
                 $lessonsTotal += $order->lessons->count();
                 $lessonsCompleted += $order->lessons->where('status', LessonStatus::COMPLETED)->count();
-
-                if ($order->payment_mode === PaymentMode::UPFRONT) {
-                    // Upfront orders are paid in full at checkout — only count if actually paid
-                    if (in_array($order->status, [OrderStatus::ACTIVE, OrderStatus::COMPLETED])) {
-                        $revenuePence += $order->package_total_price_pence ?? 0;
-                    }
-                } else {
-                    // Weekly orders — sum only lesson payments that have actually been received
-                    foreach ($order->lessons as $lesson) {
-                        if ($lesson->lessonPayment?->status === PaymentStatus::PAID) {
-                            $revenuePence += $lesson->lessonPayment->amount_pence;
-                        }
-                    }
-                }
             }
 
             // Find next upcoming lesson (today or future, pending status)
@@ -98,7 +80,7 @@ class GetInstructorPupilsAction
                 'lessons_total' => $lessonsTotal,
                 'next_lesson_date' => $nextLesson?->date?->format('Y-m-d'),
                 'next_lesson_time' => $nextLesson?->start_time?->format('H:i'),
-                'revenue_pence' => $revenuePence,
+                'revenue_pence' => $student->total_revenue_pence,
                 'has_app' => $student->user_id !== null,
                 'status' => $student->status ?? 'active',
             ];
