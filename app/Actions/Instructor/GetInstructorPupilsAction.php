@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Actions\Instructor;
 
 use App\Enums\LessonStatus;
+use App\Enums\OrderStatus;
+use App\Enums\PaymentMode;
+use App\Enums\PaymentStatus;
 use App\Models\Instructor;
 use App\Models\Student;
 use Carbon\Carbon;
@@ -23,7 +26,7 @@ class GetInstructorPupilsAction
     public function __invoke(Instructor $instructor, ?string $search = null, string $status = 'active'): Collection
     {
         $query = Student::where('instructor_id', $instructor->id)
-            ->with(['user', 'orders.lessons']);
+            ->with(['user', 'orders.lessons.lessonPayment']);
 
         if ($status !== 'all') {
             $query->where('status', $status);
@@ -52,7 +55,20 @@ class GetInstructorPupilsAction
             foreach ($student->orders as $order) {
                 $lessonsTotal += $order->lessons->count();
                 $lessonsCompleted += $order->lessons->where('status', LessonStatus::COMPLETED)->count();
-                $revenuePence += $order->package_total_price_pence ?? 0;
+
+                if ($order->payment_mode === PaymentMode::UPFRONT) {
+                    // Upfront orders are paid in full at checkout — only count if actually paid
+                    if (in_array($order->status, [OrderStatus::ACTIVE, OrderStatus::COMPLETED])) {
+                        $revenuePence += $order->package_total_price_pence ?? 0;
+                    }
+                } else {
+                    // Weekly orders — sum only lesson payments that have actually been received
+                    foreach ($order->lessons as $lesson) {
+                        if ($lesson->lessonPayment?->status === PaymentStatus::PAID) {
+                            $revenuePence += $lesson->lessonPayment->amount_pence;
+                        }
+                    }
+                }
             }
 
             // Find next upcoming lesson (today or future, pending status)
