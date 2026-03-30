@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Payment;
 
+use App\Actions\Shared\LogActivityAction;
 use App\Models\LessonPayment;
 use App\Models\Student;
 use App\Notifications\LessonPaymentReminderNotification;
@@ -14,7 +15,8 @@ use Illuminate\Support\Facades\Notification;
 class SendLessonInvoiceAction
 {
     public function __construct(
-        protected StripeService $stripeService
+        protected StripeService $stripeService,
+        protected LogActivityAction $logActivity
     ) {}
 
     /**
@@ -112,6 +114,20 @@ class SendLessonInvoiceAction
             Notification::send(
                 $recipient,
                 new LessonPaymentReminderNotification($lessonPayment, $student, $hostedInvoiceUrl, $isBookedByContact)
+            );
+
+            $lessonDate = $lessonPayment->lesson?->date?->format('d M Y') ?? 'N/A';
+
+            ($this->logActivity)(
+                $student,
+                "Payment reminder email sent to {$recipientEmail} for lesson on {$lessonDate}",
+                'notification',
+                [
+                    'type' => 'lesson_payment_reminder',
+                    'lesson_payment_id' => $lessonPayment->id,
+                    'recipient_email' => $recipientEmail,
+                    'is_booked_by_contact' => $isBookedByContact,
+                ]
             );
         } catch (\Exception $e) {
             Log::error('Failed to send payment reminder notification', [

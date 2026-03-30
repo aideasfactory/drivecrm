@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Onboarding;
 
+use App\Actions\Shared\LogActivityAction;
 use App\Models\Order;
 use App\Models\Student;
 use App\Notifications\OrderConfirmationNotification;
@@ -12,6 +13,10 @@ use Illuminate\Support\Facades\Notification;
 
 class SendOrderConfirmationEmailAction
 {
+    public function __construct(
+        protected LogActivityAction $logActivity
+    ) {}
+
     /**
      * Send order confirmation email to the appropriate recipient.
      *
@@ -45,25 +50,9 @@ class SendOrderConfirmationEmailAction
                 return;
             }
 
-            // Create a temporary notifiable object for the email
-            $recipient = new class($recipientEmail, $recipientName)
-            {
-                public function __construct(
-                    public string $email,
-                    public string $name
-                ) {}
-
-                public function routeNotificationForMail(): string
-                {
-                    return $this->email;
-                }
-            };
-
-            // Send notification
-            Notification::send(
-                $recipient,
-                new OrderConfirmationNotification($order, $student, $isBookedByContact)
-            );
+            // Send on-demand notification (serializable for queues)
+            Notification::route('mail', $recipientEmail)
+                ->notify(new OrderConfirmationNotification($order, $student, $isBookedByContact));
 
             Log::info('Order confirmation email queued', [
                 'order_id' => $order->id,
@@ -71,6 +60,34 @@ class SendOrderConfirmationEmailAction
                 'recipient_email' => $recipientEmail,
                 'is_booked_by_contact' => $isBookedByContact,
             ]);
+
+            // Log notification activity for the student
+            ($this->logActivity)(
+                $student,
+                "Booking confirmation email sent to {$recipientEmail}",
+                'notification',
+                [
+                    'type' => 'order_confirmation',
+                    'order_id' => $order->id,
+                    'recipient_email' => $recipientEmail,
+                    'is_booked_by_contact' => $isBookedByContact,
+                ]
+            );
+
+            // Log notification activity for the instructor
+            if ($order->instructor) {
+                ($this->logActivity)(
+                    $order->instructor,
+                    "Booking confirmation email sent to {$recipientName} ({$recipientEmail})",
+                    'notification',
+                    [
+                        'type' => 'order_confirmation',
+                        'order_id' => $order->id,
+                        'student_id' => $student->id,
+                        'recipient_email' => $recipientEmail,
+                    ]
+                );
+            }
 
         } catch (\Exception $e) {
             Log::error('Failed to send order confirmation email', [

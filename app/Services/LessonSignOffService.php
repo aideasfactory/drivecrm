@@ -16,8 +16,10 @@ use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Payout;
 use App\Models\Student;
+use App\Notifications\LessonSignedOffNotification;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 
 class LessonSignOffService extends BaseService
 {
@@ -94,6 +96,9 @@ class LessonSignOffService extends BaseService
             ]
         );
 
+        // Send lesson signed off notification to student and instructor
+        $this->sendLessonSignedOffNotification($lesson, $student, $instructor);
+
         // Send feedback request email to student
         $this->sendFeedbackEmail($lesson, $student, $instructor);
 
@@ -103,6 +108,77 @@ class LessonSignOffService extends BaseService
         }
 
         return $result;
+    }
+
+    /**
+     * Send lesson signed off notification to student and instructor, and log notification activity.
+     */
+    protected function sendLessonSignedOffNotification(Lesson $lesson, Student $student, Instructor $instructor): void
+    {
+        $lessonDate = $lesson->date?->format('d M Y') ?? 'N/A';
+        $isBookedByContact = ! $student->owns_account;
+
+        // Determine student-side recipient (learner or parent)
+        if ($isBookedByContact) {
+            $recipientEmail = $student->contact_email;
+            $recipientName = trim(($student->contact_first_name ?? '').' '.($student->contact_surname ?? ''));
+        } else {
+            $recipientEmail = $student->email;
+            $recipientName = trim(($student->first_name ?? '').' '.($student->surname ?? ''));
+        }
+
+        // Send to student/parent
+        if ($recipientEmail) {
+            $studentRecipient = new class($recipientEmail, $recipientName)
+            {
+                public function __construct(
+                    public string $email,
+                    public string $name
+                ) {}
+
+                public function routeNotificationForMail(): string
+                {
+                    return $this->email;
+                }
+            };
+
+            Notification::send(
+                $studentRecipient,
+                new LessonSignedOffNotification($lesson, $student, $instructor, false)
+            );
+
+            ($this->logActivity)(
+                $student,
+                "Lesson signed off notification sent to {$recipientEmail} for lesson on {$lessonDate}",
+                'notification',
+                [
+                    'type' => 'lesson_signed_off',
+                    'lesson_id' => $lesson->id,
+                    'recipient_email' => $recipientEmail,
+                ]
+            );
+        }
+
+        // Send to instructor
+        $instructorUser = $instructor->user;
+        if ($instructorUser?->email) {
+            Notification::send(
+                $instructorUser,
+                new LessonSignedOffNotification($lesson, $student, $instructor, true)
+            );
+
+            ($this->logActivity)(
+                $instructor,
+                "Lesson signed off confirmation sent to {$instructorUser->email} for lesson on {$lessonDate}",
+                'notification',
+                [
+                    'type' => 'lesson_signed_off',
+                    'lesson_id' => $lesson->id,
+                    'student_id' => $student->id,
+                    'recipient_email' => $instructorUser->email,
+                ]
+            );
+        }
     }
 
     /**
@@ -118,6 +194,19 @@ class LessonSignOffService extends BaseService
 
         Mail::to($recipientEmail)->queue(
             new LessonFeedbackRequest($lesson, $student, $instructor)
+        );
+
+        $lessonDate = $lesson->date?->format('d M Y') ?? 'N/A';
+
+        ($this->logActivity)(
+            $student,
+            "Feedback request email sent to {$recipientEmail} for lesson on {$lessonDate}",
+            'notification',
+            [
+                'type' => 'lesson_feedback_request',
+                'lesson_id' => $lesson->id,
+                'recipient_email' => $recipientEmail,
+            ]
         );
     }
 }

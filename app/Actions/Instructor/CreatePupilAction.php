@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Instructor;
 
+use App\Actions\Shared\LogActivityAction;
 use App\Enums\UserRole;
 use App\Models\Instructor;
 use App\Models\Student;
@@ -14,6 +15,10 @@ use Illuminate\Support\Str;
 
 class CreatePupilAction
 {
+    public function __construct(
+        protected LogActivityAction $logActivity
+    ) {}
+
     /**
      * Create a new pupil (user + student record) for an instructor.
      *
@@ -43,6 +48,30 @@ class CreatePupilAction
         ]);
 
         $user->notify(new WelcomeStudentNotification($temporaryPassword, $instructor));
+
+        // Log notification activity for student
+        ($this->logActivity)(
+            $student,
+            "Welcome email sent to {$user->email}",
+            'notification',
+            [
+                'type' => 'welcome_student',
+                'recipient_email' => $user->email,
+                'instructor_id' => $instructor->id,
+            ]
+        );
+
+        // Log notification activity for instructor
+        ($this->logActivity)(
+            $instructor,
+            "Welcome email sent to new student {$data['first_name']} {$data['surname']} ({$user->email})",
+            'notification',
+            [
+                'type' => 'welcome_student',
+                'recipient_email' => $user->email,
+                'student_id' => $student->id,
+            ]
+        );
 
         return $student;
     }

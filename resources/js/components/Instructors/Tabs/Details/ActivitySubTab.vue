@@ -17,6 +17,7 @@ import {
     Search,
     Activity,
     Loader2,
+    Mail,
 } from 'lucide-vue-next'
 import { toast } from '@/components/ui/toast'
 import type { InstructorDetail } from '@/types/instructor'
@@ -57,6 +58,7 @@ const categories = [
     { key: 'message', label: 'Messages', icon: MessageSquare },
     { key: 'payment', label: 'Payments', icon: CreditCard },
     { key: 'profile', label: 'Profile', icon: User },
+    { key: 'notification', label: 'Notifications', icon: Mail },
 ]
 
 const categoryIconMap: Record<string, typeof Car> = {
@@ -68,6 +70,7 @@ const categoryIconMap: Record<string, typeof Car> = {
     package: Package,
     student: Users,
     instructor: User,
+    notification: Mail,
 }
 
 // Computed
