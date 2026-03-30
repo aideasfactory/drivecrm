@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Actions\Package\CalculatePackagePricingAction;
 use App\Actions\Package\CreateAdminPackageAction;
+use App\Actions\Package\DeletePackageAction;
 use App\Actions\Package\GetAllPackagesAction;
 use App\Actions\Package\UpdatePackageAction;
 use App\Models\Package;
@@ -15,6 +16,7 @@ class PackageService extends BaseService
         protected GetAllPackagesAction $getAllPackages,
         protected CreateAdminPackageAction $createAdminPackage,
         protected UpdatePackageAction $updatePackage,
+        protected DeletePackageAction $deletePackage,
         protected CalculatePackagePricingAction $calculatePricing
     ) {}
 
@@ -44,6 +46,14 @@ class PackageService extends BaseService
     public function update(Package $package, array $data): Package
     {
         return ($this->updatePackage)($package, $data);
+    }
+
+    /**
+     * Delete a package.
+     */
+    public function delete(Package $package): void
+    {
+        ($this->deletePackage)($package);
     }
 
     /**

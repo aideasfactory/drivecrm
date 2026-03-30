@@ -72,8 +72,8 @@ watch(
                 bio: instructor.bio || '',
                 transmission_type: instructor.transmission_type,
                 status: instructor.status,
-                pdi_status: '',
-                address: '',
+                pdi_status: instructor.pdi_status || '',
+                address: instructor.address || '',
                 postcode: instructor.postcode || '',
             }
         } else {

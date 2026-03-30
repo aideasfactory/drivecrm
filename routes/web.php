@@ -101,6 +101,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('packages.store');
     Route::put('/packages/{package}', [\App\Http\Controllers\PackageController::class, 'update'])
         ->name('packages.update');
+    Route::delete('/packages/{package}', [\App\Http\Controllers\PackageController::class, 'destroy'])
+        ->name('packages.destroy');
 
     // Discount Codes
     Route::get('/discount-codes', [\App\Http\Controllers\DiscountCodeController::class, 'index'])

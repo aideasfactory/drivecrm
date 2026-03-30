@@ -87,4 +87,14 @@ class PackageController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Delete a package.
+     */
+    public function destroy(Package $package): JsonResponse
+    {
+        $this->packageService->delete($package);
+
+        return response()->json(null, 204);
+    }
 }

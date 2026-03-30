@@ -16,6 +16,7 @@ import {
     CalendarRange,
     Car,
     ClipboardCheck,
+    User,
 } from 'lucide-vue-next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -96,6 +97,30 @@ const travelTimeOptions = [
     { value: 30, label: '30 minutes' },
     { value: 45, label: '45 minutes' },
 ]
+
+// ── Student list for practical test assignment ─────────
+interface StudentOption {
+    id: number
+    name: string
+}
+const students = ref<StudentOption[]>([])
+const studentsLoading = ref(false)
+const selectedStudentId = ref<number | null>(null)
+
+async function loadStudents() {
+    studentsLoading.value = true
+    try {
+        const response = await axios.get(`/instructors/${props.instructorId}/pupils`)
+        students.value = (response.data.pupils || []).map((p: any) => ({
+            id: p.id,
+            name: p.name ?? `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim(),
+        }))
+    } catch {
+        // Silently fail – dropdown will just be empty
+    } finally {
+        studentsLoading.value = false
+    }
+}
 
 // ── Form state ───────────────────────────────────────────
 const createForm = ref<CalendarItemFormData>({
@@ -210,7 +235,7 @@ watch(() => createForm.value.start_time, (newStart) => {
     }
 })
 
-// When practical test checkbox changes, recalculate end time
+// When practical test checkbox changes, recalculate end time and reset student
 watch(() => createForm.value.is_practical_test, (isPracticalTest) => {
     if (createForm.value.start_time) {
         if (isPracticalTest) {
@@ -221,6 +246,17 @@ watch(() => createForm.value.is_practical_test, (isPracticalTest) => {
             // Regular slot: 2hr duration
             createForm.value.end_time = calcEndTime(createForm.value.start_time)
             createForm.value.is_available = true
+            selectedStudentId.value = null
+        }
+    }
+})
+
+// When a student is selected for practical test, update notes with their name
+watch(selectedStudentId, (studentId) => {
+    if (studentId && createForm.value.is_practical_test) {
+        const student = students.value.find(s => s.id === studentId)
+        if (student) {
+            createForm.value.notes = student.name
         }
     }
 })
@@ -356,6 +392,7 @@ function handleSlotClick(date: string, time: string) {
         travel_time_minutes: 30,
         is_practical_test: false,
     }
+    selectedStudentId.value = null
     isCreateSheetOpen.value = true
 }
 
@@ -371,6 +408,7 @@ function handleDayClick(date: string) {
         travel_time_minutes: 30,
         is_practical_test: false,
     }
+    selectedStudentId.value = null
     isCreateSheetOpen.value = true
 }
 
@@ -606,6 +644,7 @@ function formatMonthLabel(date: Date): string {
 onMounted(() => {
     loading.value = true
     loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
+    loadStudents()
 })
 </script>
 
@@ -758,6 +797,33 @@ onMounted(() => {
                         </p>
                     </div>
 
+                    <!-- Assign Student (only shown for practical tests) -->
+                    <div v-if="createForm.is_practical_test" class="space-y-2">
+                        <Label for="create-student">
+                            <span class="flex items-center gap-1.5">
+                                <User class="h-4 w-4" />
+                                Assign Student
+                            </span>
+                        </Label>
+                        <select
+                            id="create-student"
+                            v-model.number="selectedStudentId"
+                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                            <option :value="null">— No student assigned —</option>
+                            <option
+                                v-for="student in students"
+                                :key="student.id"
+                                :value="student.id"
+                            >
+                                {{ student.name }}
+                            </option>
+                        </select>
+                        <p class="text-xs text-muted-foreground">
+                            Student name will be added to the notes field.
+                        </p>
+                    </div>
+
                     <!-- Travel Time (only shown when available and not practical test) -->
                     <div v-if="createForm.is_available && !createForm.is_practical_test" class="space-y-2">
                         <Label for="create-travel">
@@ -846,8 +912,8 @@ onMounted(() => {
                         </div>
                     </div>
 
-                    <!-- Notes Field -->
-                    <div class="space-y-2">
+                    <!-- Notes Field (hidden for practical tests since student dropdown populates it) -->
+                    <div v-if="!createForm.is_practical_test" class="space-y-2">
                         <Label for="create-notes">Notes</Label>
                         <textarea
                             id="create-notes"
@@ -861,8 +927,8 @@ onMounted(() => {
                         </p>
                     </div>
 
-                    <!-- Unavailability Reason Field (shown only when unavailable) -->
-                    <div v-if="!createForm.is_available" class="space-y-2">
+                    <!-- Unavailability Reason Field (shown only when unavailable and NOT a practical test) -->
+                    <div v-if="!createForm.is_available && !createForm.is_practical_test" class="space-y-2">
                         <Label for="create-unavailability-reason">
                             Unavailability Reason <span class="text-destructive">*</span>
                         </Label>
@@ -946,14 +1012,15 @@ onMounted(() => {
                         </p>
                     </div>
                     <div class="space-y-2">
+                        <p v-if="editForm.notes" class="text-sm">
+                            <strong class="flex items-center gap-1.5"><User class="h-4 w-4" /> Student:</strong>
+                            <span class="ml-1">{{ editForm.notes }}</span>
+                        </p>
                         <p class="text-sm text-muted-foreground">
                             <strong>Date:</strong> {{ editForm.date }}
                         </p>
                         <p class="text-sm text-muted-foreground">
                             <strong>Full Block:</strong> {{ editForm.start_time }} - {{ editForm.end_time }}
-                        </p>
-                        <p v-if="editForm.notes" class="text-sm text-muted-foreground">
-                            <strong>Notes:</strong> {{ editForm.notes }}
                         </p>
                     </div>
                     <div class="flex gap-2">

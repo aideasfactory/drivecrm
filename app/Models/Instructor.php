@@ -21,6 +21,7 @@ class Instructor extends Model
         'charges_enabled',
         'payouts_enabled',
         'bio',
+        'phone',
         'rating',
         'transmission_type',
         'status',

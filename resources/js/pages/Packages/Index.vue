@@ -14,9 +14,19 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table'
-import { Search, Plus, PackagePlus } from 'lucide-vue-next'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Search, Plus, PackagePlus, MoreHorizontal, Pencil, Trash2 } from 'lucide-vue-next'
 import CreatePackageSheet from '@/components/Packages/CreatePackageSheet.vue'
+import EditPackageSheet from '@/components/Packages/EditPackageSheet.vue'
+import { toast } from '@/components/ui/sonner'
 import { router } from '@inertiajs/vue3'
+import axios from 'axios'
+import type { Package } from '@/types/instructor'
 
 interface PackageItem {
     id: number
@@ -39,6 +49,9 @@ const props = defineProps<Props>()
 
 const searchQuery = ref('')
 const isCreateSheetOpen = ref(false)
+const isEditSheetOpen = ref(false)
+const editingPackage = ref<Package | null>(null)
+const deleting = ref<number | null>(null)
 
 const filteredPackages = computed(() => {
     if (!searchQuery.value) {
@@ -53,6 +66,32 @@ const filteredPackages = computed(() => {
 
 const handlePackageCreated = () => {
     router.reload()
+}
+
+const handlePackageUpdated = () => {
+    router.reload()
+}
+
+const handleEdit = (pkg: PackageItem) => {
+    editingPackage.value = pkg as unknown as Package
+    isEditSheetOpen.value = true
+}
+
+const handleDelete = async (pkg: PackageItem) => {
+    if (!confirm(`Are you sure you want to delete "${pkg.name}"?`)) return
+
+    deleting.value = pkg.id
+
+    try {
+        await axios.delete(`/packages/${pkg.id}`)
+        toast.success('Package deleted successfully!')
+        router.reload()
+    } catch (error: any) {
+        const message = error.response?.data?.message || 'Failed to delete package'
+        toast.error(message)
+    } finally {
+        deleting.value = null
+    }
 }
 
 const breadcrumbs = [{ title: 'Packages' }]
@@ -105,6 +144,7 @@ const breadcrumbs = [{ title: 'Packages' }]
                                 <TableHead>Per Lesson</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead>Created</TableHead>
+                                <TableHead class="w-[50px]"></TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -161,9 +201,32 @@ const breadcrumbs = [{ title: 'Packages' }]
                                         {{ pkg.created_at }}
                                     </span>
                                 </TableCell>
+                                <TableCell>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger as-child>
+                                            <Button variant="ghost" size="icon" class="h-8 w-8">
+                                                <MoreHorizontal class="h-4 w-4" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            <DropdownMenuItem @click="handleEdit(pkg)">
+                                                <Pencil class="mr-2 h-4 w-4" />
+                                                Edit
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                class="text-destructive"
+                                                @click="handleDelete(pkg)"
+                                                :disabled="deleting === pkg.id"
+                                            >
+                                                <Trash2 class="mr-2 h-4 w-4" />
+                                                Delete
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </TableCell>
                             </TableRow>
                             <TableRow v-if="filteredPackages.length === 0">
-                                <TableCell colspan="6" class="text-center">
+                                <TableCell colspan="7" class="text-center">
                                     <div class="py-8 text-muted-foreground">
                                         No packages found
                                     </div>
@@ -179,6 +242,13 @@ const breadcrumbs = [{ title: 'Packages' }]
         <CreatePackageSheet
             v-model:open="isCreateSheetOpen"
             @package-created="handlePackageCreated"
+        />
+
+        <!-- Edit Package Sheet -->
+        <EditPackageSheet
+            v-model:open="isEditSheetOpen"
+            :package="editingPackage"
+            @package-updated="handlePackageUpdated"
         />
     </AppLayout>
 </template>
