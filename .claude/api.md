@@ -31,7 +31,9 @@
     - [Checklist Items](#get-apiv1studentsstudentchecklist-items)
     - [Pickup Points (List)](#get-apiv1studentsstudentpickup-points)
     - [Pickup Points (Create)](#post-apiv1studentsstudentpickup-points)
-    - [Orders](#post-apiv1studentsstudentorders)
+    - [Orders (List)](#get-apiv1studentsstudentorders)
+    - [Order Detail](#get-apiv1studentsstudentordersorder)
+    - [Orders (Create)](#post-apiv1studentsstudentorders)
   - [Resources](#get-apiv1resources)
   - [Messages](#messages)
     - [Conversations List](#get-apiv1messagesconversations)
@@ -2304,11 +2306,183 @@ Creates a new pickup point for a student. The postcode is geocoded automatically
 
 ---
 
+#### `GET /api/v1/students/{student}/orders`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+List all orders for a student, including lessons and weekly lesson payment data. Orders are returned newest-first.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": [
+    {
+      "id": 2,
+      "student_id": 1,
+      "instructor_id": 1,
+      "package_id": 1,
+      "package_name": "10 Hour Package",
+      "package_total_price_pence": 35000,
+      "package_lesson_price_pence": 3500,
+      "package_lessons_count": 10,
+      "booking_fee_pence": 1999,
+      "digital_fee_pence": 3990,
+      "total_price_pence": 40989,
+      "payment_mode": "weekly",
+      "status": "active",
+      "lessons": [
+        {
+          "id": 1,
+          "order_id": 2,
+          "instructor_id": 1,
+          "amount_pence": 3500,
+          "status": "pending",
+          "date": "2026-04-01",
+          "start_time": "09:00",
+          "end_time": "10:00",
+          "lesson_payment": {
+            "id": 1,
+            "lesson_id": 1,
+            "amount_pence": 3500,
+            "status": "due",
+            "due_date": "2026-03-31T00:00:00+00:00",
+            "paid_at": null,
+            "stripe_invoice_id": null
+          }
+        }
+      ],
+      "created_at": "2026-03-23T10:00:00+00:00"
+    }
+  ]
+}
+```
+
+**Lesson Object Fields (within order):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Lesson record ID |
+| `order_id` | integer | Parent order ID |
+| `instructor_id` | integer | Assigned instructor ID |
+| `amount_pence` | integer | Lesson cost in pence |
+| `status` | string | `draft`, `pending`, `in_progress`, `completed`, `cancelled` |
+| `date` | string | Lesson date (YYYY-MM-DD) |
+| `start_time` | string | Start time (HH:MM) |
+| `end_time` | string | End time (HH:MM) |
+| `lesson_payment` | object\|null | Payment record (weekly orders only) |
+
+**Lesson Payment Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Lesson payment record ID |
+| `lesson_id` | integer | Associated lesson ID |
+| `amount_pence` | integer | Payment amount in pence |
+| `status` | string | `due`, `paid`, `refunded` |
+| `due_date` | string\|null | ISO 8601 — when payment is due (24h before lesson) |
+| `paid_at` | string\|null | ISO 8601 — when payment was received |
+| `stripe_invoice_id` | string\|null | Stripe invoice reference |
+
+**Error Response (not authorised):** `403 Forbidden`
+
+---
+
+#### `GET /api/v1/students/{student}/orders/{order}`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Get a single order with full lesson schedule and payment details. The order must belong to the specified student.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+| `order` | integer | The order record ID |
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 2,
+    "student_id": 1,
+    "instructor_id": 1,
+    "package_id": 1,
+    "package_name": "10 Hour Package",
+    "package_total_price_pence": 35000,
+    "package_lesson_price_pence": 3500,
+    "package_lessons_count": 10,
+    "booking_fee_pence": 1999,
+    "digital_fee_pence": 3990,
+    "total_price_pence": 40989,
+    "payment_mode": "weekly",
+    "status": "active",
+    "lessons": [
+      {
+        "id": 1,
+        "order_id": 2,
+        "instructor_id": 1,
+        "amount_pence": 3500,
+        "status": "pending",
+        "date": "2026-04-01",
+        "start_time": "09:00",
+        "end_time": "10:00",
+        "lesson_payment": {
+          "id": 1,
+          "lesson_id": 1,
+          "amount_pence": 3500,
+          "status": "due",
+          "due_date": "2026-03-31T00:00:00+00:00",
+          "paid_at": null,
+          "stripe_invoice_id": null
+        }
+      },
+      {
+        "id": 2,
+        "order_id": 2,
+        "instructor_id": 1,
+        "amount_pence": 3500,
+        "status": "pending",
+        "date": "2026-04-08",
+        "start_time": "09:00",
+        "end_time": "10:00",
+        "lesson_payment": {
+          "id": 2,
+          "lesson_id": 2,
+          "amount_pence": 3500,
+          "status": "due",
+          "due_date": "2026-04-07T00:00:00+00:00",
+          "paid_at": null,
+          "stripe_invoice_id": null
+        }
+      }
+    ],
+    "created_at": "2026-03-23T10:00:00+00:00"
+  }
+}
+```
+
+> **Notes:**
+> - For **weekly** orders, each lesson includes a `lesson_payment` object showing payment status and due dates.
+> - For **upfront** orders, `lesson_payment` will be `null` (the entire package was paid at checkout).
+> - The `due_date` is set to 24 hours before the lesson. Stripe invoices are sent ~48 hours before.
+
+**Error Response (order does not belong to student):** `404 Not Found`
+**Error Response (not authorised):** `403 Forbidden`
+
+---
+
 #### `POST /api/v1/students/{student}/orders`
 
 **Auth required:** Yes (Bearer token — student or instructor)
 
-Book lessons — creates an order, calendar items, and lessons. For `upfront` payment, initiates a Stripe Checkout session and returns a URL for the mobile app to open. For `weekly` payment, the order is activated immediately.
+Book lessons — creates an order, calendar items, and lessons. For `upfront` payment, initiates a Stripe Checkout session and returns a URL for the mobile app to open. For `weekly` payment, the order is activated immediately and a confirmation email is sent.
 
 **URL Parameters:**
 
@@ -2378,11 +2552,39 @@ Book lessons — creates an order, calendar items, and lessons. For `upfront` pa
     "total_price_pence": 40989,
     "payment_mode": "weekly",
     "status": "active",
-    "lessons_count": 10,
-    "created_at": "2026-03-23T10:00:00.000000Z"
+    "lessons": [
+      {
+        "id": 1,
+        "order_id": 2,
+        "instructor_id": 1,
+        "amount_pence": 3500,
+        "status": "pending",
+        "date": "2026-04-01",
+        "start_time": "09:00",
+        "end_time": "10:00",
+        "lesson_payment": {
+          "id": 1,
+          "lesson_id": 1,
+          "amount_pence": 3500,
+          "status": "due",
+          "due_date": "2026-03-31T00:00:00+00:00",
+          "paid_at": null,
+          "stripe_invoice_id": null
+        }
+      }
+    ],
+    "created_at": "2026-03-23T10:00:00+00:00"
   }
 }
 ```
+
+> **Weekly Payment Flow:**
+> 1. POST to create order with `payment_mode: "weekly"` — order is immediately `active`
+> 2. Lessons are created as `pending` with `lesson_payment` records showing `due` status
+> 3. A confirmation email is sent to the student
+> 4. ~48 hours before each lesson, a Stripe invoice is created and emailed to the student
+> 5. Student pays via the Stripe invoice link
+> 6. Webhook confirms payment → `lesson_payment.status` becomes `paid`
 
 **Order Object Fields:**
 
@@ -2909,6 +3111,8 @@ The `role` field is always returned in user responses. Use it to determine which
 | PUT | `/api/v1/students/{student}/checklist-items/{item}` | Yes | Both | Update checklist item |
 | GET | `/api/v1/students/{student}/pickup-points` | Yes | Both | List pickup points |
 | POST | `/api/v1/students/{student}/pickup-points` | Yes | Both | Create pickup point |
+| GET | `/api/v1/students/{student}/orders` | Yes | Both | List student orders |
+| GET | `/api/v1/students/{student}/orders/{order}` | Yes | Both | Order detail with lessons & payments |
 | POST | `/api/v1/students/{student}/orders` | Yes | Both | Create order/booking |
 | GET | `/api/v1/orders/{order}/checkout/verify` | Yes | Both | Verify payment |
 | GET | `/api/v1/packages/{package}/pricing` | Yes | Any | Package pricing breakdown |
@@ -2944,6 +3148,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-24 | Added package pricing endpoint — returns full fee breakdown (booking fee, digital fee per lesson, promo discounts, totals) as raw numeric values for mobile consumption | Package Pricing (show) |
 | 2026-03-24 | Fixed Stripe charge amount — now includes booking fee (£19.99) + digital fees (£3.99 × lessons) in the total sent to Stripe. Added `booking_fee_pence`, `digital_fee_pence`, `total_price_pence` to order response. | Orders (store), Checkout |
 | 2026-03-25 | Extended messages API for student mobile app — added `GET conversations/instructor` (auto-resolves instructor from student record), made `recipient_id` optional for students on `POST /messages` (auto-resolves to assigned instructor) | Messages (conversations/instructor, store) |
+| 2026-03-30 | Added order listing and detail endpoints (`GET /students/{student}/orders`, `GET /students/{student}/orders/{order}`) with full lesson schedule and lesson payment data. Enhanced `POST /students/{student}/orders` weekly response to include lessons with payment records. Weekly order creation now sends confirmation email. Added `OrderLessonResource` and `LessonPaymentResource`. | Orders (index, show, store) |
 
 ---
 

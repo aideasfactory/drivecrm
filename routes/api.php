@@ -94,6 +94,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('packages/{package}/pricing', [PackagePricingController::class, 'show']);
 
         // Order routes
+        Route::get('students/{student}/orders', [StudentOrderController::class, 'index']);
+        Route::get('students/{student}/orders/{order}', [StudentOrderController::class, 'show']);
         Route::post('students/{student}/orders', [StudentOrderController::class, 'store']);
         Route::get('orders/{order}/checkout/verify', [StudentOrderController::class, 'verify']);
 

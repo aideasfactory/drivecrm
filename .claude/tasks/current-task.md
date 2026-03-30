@@ -1,58 +1,39 @@
-# Task: Fix Onboarding Flow to Reuse Existing Users Without Duplication
+# Task: Expose Weekly Lesson-Payment Onboarding Workflow Through API
 
 ## Overview
-When someone completes onboarding with an email that already exists in the system, the flow should reuse the existing user and student records instead of failing or creating duplicates. The `CreateUserAndStudentFromEnquiryAction` already checks for existing users, but there are gaps: student data isn't updated for returning users, and there's no safeguard for edge cases like instructor/admin emails.
+Built API support for the existing weekly lesson-payment onboarding workflow. The core order creation logic already existed (`CreateOrderFromApiAction`). This task filled the remaining gaps: confirmation emails, order/lesson-payment retrieval endpoints, and enhanced API resources.
 
----
+## Phases
 
-## Phase 1: Planning ✅ Complete
+### Phase 1: Planning ✅
 **Status:** ✅ Complete
-**Last Updated:** 2026-03-24
 
-### Tasks
-- [x] Review `CreateUserAndStudentFromEnquiryAction` for all edge cases
-- [x] Review `CreateOrderFromEnquiryAction` for returning-user handling
-- [x] Review `StepSixController` payment flow for existing user compatibility
-- [x] Identify all code changes needed
-- [x] Document the fix strategy
-
-### Decisions & Notes
-- Only one file needs changes: `CreateUserAndStudentFromEnquiryAction`
-- Core fix: `Student::firstOrCreate()` → `Student::updateOrCreate()`
-- User reuse already works correctly
-- Stripe customer handling already works correctly
-- `CreateOrderFromEnquiryAction` needs no changes (orders are per-enquiry)
-- Non-student users (instructor/owner) can safely go through onboarding — their role isn't changed
-
-### Reflection
-Clean analysis — only one file needs modification. The existing architecture handles most edge cases already.
-
----
-
-## Phase 2: Implementation ✅ Complete
+### Phase 2: Implementation ✅
 **Status:** ✅ Complete
-**Last Updated:** 2026-03-24
 
-### Tasks
-- [x] Change `Student::firstOrCreate()` to `Student::updateOrCreate()` in `CreateUserAndStudentFromEnquiryAction`
-- [x] Remove redundant instructor assignment update block
-- [x] Add logging for existing student updates
-- [x] Verify the `getStudentData()` method produces correct data for both new and returning users
-- [x] Remove unused `Instructor` import
+**Tasks:**
+- [x] 1. Send order confirmation email for weekly API orders (reuse `SendOrderConfirmationEmailAction`)
+- [x] 2. Create `LessonPaymentResource` in `app/Http/Resources/V1/`
+- [x] 3. Create `OrderLessonResource` for lesson data in order context
+- [x] 4. Enhance `OrderResource` to include lessons and lesson_payments when loaded
+- [x] 5. Add `getStudentOrders()` and `getOrderDetail()` methods to `OrderService`
+- [x] 6. Add `GET /api/v1/students/{student}/orders` endpoint (list orders)
+- [x] 7. Add `GET /api/v1/students/{student}/orders/{order}` endpoint (order detail)
+- [x] 8. Add routes to `routes/api.php`
+- [x] 9. Write tests for new endpoints
 
-### Reflection
-Minimal, focused change. The `updateOrCreate()` call now handles both new and returning students in a single operation — no need for the separate instructor update block.
+**Reflection:** Reused existing Actions and Services per coding standards. No new Actions or Services created — only added methods to `OrderService`. The `SendOrderConfirmationEmailAction` from the onboarding domain was cleanly reused.
 
----
-
-## Phase 3: Documentation & Finalization ✅ Complete
+### Phase 3: API Documentation ✅
 **Status:** ✅ Complete
-**Last Updated:** 2026-03-24
 
-### Tasks
-- [x] Final review of all changes for consistency
-- [x] Verify both new-user and returning-user paths work correctly
-- [x] Write `.phase_done` sentinel
+**Tasks:**
+- [x] 1. Document `GET /api/v1/students/{student}/orders` in api.md
+- [x] 2. Document `GET /api/v1/students/{student}/orders/{order}` in api.md
+- [x] 3. Update existing `POST /api/v1/students/{student}/orders` docs with enhanced response
+- [x] 4. Update changelog
 
-### Reflection
-Single-file fix with no new dependencies, no new services, no migrations. Both new and returning user paths verified logically. The `updateOrCreate` approach is idiomatic Laravel and handles all edge cases: new users, returning students, and non-student users (instructor/owner) going through onboarding.
+**Reflection:** Full documentation including request/response examples, field descriptions, and weekly payment flow notes.
+
+## Last Updated
+2026-03-30

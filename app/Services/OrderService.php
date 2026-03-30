@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
 use App\Actions\Student\Order\CreateDraftCalendarItemsAction;
 use App\Actions\Student\Order\CreateOrderFromApiAction;
 use App\Actions\Student\Order\VerifyCheckoutAction;
@@ -11,6 +12,7 @@ use App\Enums\PaymentMode;
 use App\Models\Order;
 use App\Models\Package;
 use App\Models\Student;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
 
 class OrderService extends BaseService
@@ -19,6 +21,7 @@ class OrderService extends BaseService
         protected CreateDraftCalendarItemsAction $createDraftCalendarItems,
         protected CreateOrderFromApiAction $createOrderFromApi,
         protected VerifyCheckoutAction $verifyCheckout,
+        protected SendOrderConfirmationEmailAction $sendOrderConfirmationEmail,
         protected StripeService $stripeService
     ) {}
 
@@ -59,8 +62,12 @@ class OrderService extends BaseService
             $checkoutUrl = $this->createCheckoutSession($order, $package, $student);
         }
 
+        if ($paymentMode === PaymentMode::WEEKLY) {
+            $this->sendOrderConfirmationEmail->execute($order, $student);
+        }
+
         return [
-            'order' => $order->fresh(['lessons']),
+            'order' => $order->fresh(['lessons.lessonPayment']),
             'checkout_url' => $checkoutUrl,
         ];
     }
@@ -114,6 +121,27 @@ class OrderService extends BaseService
         ]);
 
         return null;
+    }
+
+    /**
+     * Get all orders for a student with lessons and payment data.
+     *
+     * @return Collection<int, Order>
+     */
+    public function getStudentOrders(Student $student): Collection
+    {
+        return Order::where('student_id', $student->id)
+            ->with(['lessons.lessonPayment'])
+            ->orderByDesc('created_at')
+            ->get();
+    }
+
+    /**
+     * Get a single order with full lesson and payment details.
+     */
+    public function getOrderDetail(Order $order): Order
+    {
+        return $order->load(['lessons.lessonPayment', 'package']);
     }
 
     /**

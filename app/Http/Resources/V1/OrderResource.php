@@ -29,6 +29,7 @@ class OrderResource extends JsonResource
             'payment_mode' => $this->payment_mode->value,
             'status' => $this->status->value,
             'lessons_count' => $this->whenCounted('lessons', $this->lessons_count),
+            'lessons' => $this->whenLoaded('lessons', fn () => OrderLessonResource::collection($this->lessons)),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

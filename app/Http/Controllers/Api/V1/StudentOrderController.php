@@ -14,6 +14,7 @@ use App\Models\Student;
 use App\Services\OrderService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Gate;
 
 class StudentOrderController extends Controller
@@ -21,6 +22,34 @@ class StudentOrderController extends Controller
     public function __construct(
         protected OrderService $orderService
     ) {}
+
+    /**
+     * List all orders for a student with lessons and payment data.
+     */
+    public function index(Student $student): AnonymousResourceCollection
+    {
+        Gate::authorize('view', $student);
+
+        $orders = $this->orderService->getStudentOrders($student);
+
+        return OrderResource::collection($orders);
+    }
+
+    /**
+     * Show a single order with full lesson and payment details.
+     */
+    public function show(Student $student, Order $order): OrderResource
+    {
+        Gate::authorize('view', $student);
+
+        if ($order->student_id !== $student->id) {
+            abort(404);
+        }
+
+        $order = $this->orderService->getOrderDetail($order);
+
+        return new OrderResource($order);
+    }
 
     /**
      * Book lessons: create order, calendar items, lessons, and initiate payment.
