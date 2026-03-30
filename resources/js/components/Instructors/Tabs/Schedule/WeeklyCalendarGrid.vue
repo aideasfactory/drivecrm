@@ -325,11 +325,15 @@ function handlePointerUp(_e: PointerEvent) {
                 <div
                     v-for="(label, i) in timeLabels"
                     :key="i"
-                    class="flex items-start justify-end border-b border-border pr-2 text-xs text-muted-foreground"
+                    class="relative border-b border-border pr-2 text-xs text-muted-foreground"
                     :style="{ height: `${ROW_HEIGHT}px` }"
-                    :class="i % 2 === 0 ? '-mt-2' : 'opacity-0'"
                 >
-                    {{ label }}
+                    <span
+                        v-if="i % 2 === 0"
+                        class="absolute right-2 top-0 -translate-y-1/2 bg-background px-1"
+                    >
+                        {{ label }}
+                    </span>
                 </div>
             </div>
 
