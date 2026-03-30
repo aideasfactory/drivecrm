@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\Shared\AdminResetPasswordAction;
 use App\Actions\Shared\Contact\CreateContactAction;
 use App\Actions\Shared\Contact\DeleteContactAction;
 use App\Actions\Shared\Contact\SetPrimaryContactAction;
@@ -24,6 +25,7 @@ use App\Actions\Student\PickupPoint\SetDefaultPickupPointAction;
 use App\Actions\Student\PickupPoint\UpdatePickupPointAction;
 use App\Actions\Student\Status\RemoveStudentFromInstructorAction;
 use App\Actions\Student\Status\UpdateStudentStatusAction;
+use App\Http\Requests\AdminResetPasswordRequest;
 use App\Http\Requests\StorePickupPointRequest;
 use App\Http\Requests\UpdatePickupPointRequest;
 use App\Http\Requests\UpdateStudentStatusRequest;
@@ -454,6 +456,22 @@ class PupilController extends Controller
 
         return response()->json([
             'pickup_point' => $pickupPoint,
+        ]);
+    }
+
+    /**
+     * Reset a student's password (admin action).
+     */
+    public function updatePassword(AdminResetPasswordRequest $request, Student $student): JsonResponse
+    {
+        if (! $student->user_id) {
+            return response()->json(['message' => 'Student does not have a user account.'], 422);
+        }
+
+        (new AdminResetPasswordAction)($student->user, $request->validated('password'));
+
+        return response()->json([
+            'message' => 'Password has been reset successfully.',
         ]);
     }
 

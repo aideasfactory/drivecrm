@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Loader2, UserPlus, UserPen, Save, Trash2, AlertTriangle } from 'lucide-vue-next'
+import PasswordResetSection from '@/components/Shared/PasswordResetSection.vue'
 import type { CreateInstructorData, InstructorDetail } from '@/types/instructor'
 
 interface Props {
@@ -371,6 +372,11 @@ const handleRequestDeletion = () => {
                     </Button>
                 </div>
             </form>
+
+            <!-- Password Reset (Edit Mode Only) -->
+            <div v-if="isEditMode && instructor" class="mt-8 border-t px-6 py-6">
+                <PasswordResetSection :reset-url="`/instructors/${instructor.id}/password`" />
+            </div>
 
             <!-- Danger Zone -->
             <div v-if="isEditMode && instructor" class="mt-8 border-t border-destructive/20 px-6 py-6">
