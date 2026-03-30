@@ -18,6 +18,7 @@
     - [Lessons](#get-apiv1instructorlessonsdate)
     - [Notify On Way](#post-apiv1instructorlessonslessonnotify-on-way)
     - [Notify Arrived](#post-apiv1instructorlessonslessonnotify-arrived)
+    - [Update Mileage](#patch-apiv1instructorlessonslessonmileage)
     - [Packages](#get-apiv1instructorpackages)
     - [Calendar Items](#get-apiv1instructorcalendaritems)
   - [Package Pricing](#get-apiv1packagespackagepricing)
@@ -925,6 +926,58 @@ Logs that the instructor has arrived at the lesson pickup point. Currently write
 ```
 
 > **Note:** This is a stub endpoint. The activity is logged but no push notification is sent yet. The mobile app should call this endpoint so the integration is ready when push notifications are implemented.
+
+---
+
+#### `PATCH /api/v1/instructor/lessons/{lesson}/mileage`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Records or updates the mileage (miles driven) for a lesson. The lesson must belong to the authenticated instructor.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `lesson` | integer | Lesson ID. Must belong to the authenticated instructor. |
+
+**Request Body:**
+
+| Field | Type | Required | Validation | Description |
+|-------|------|----------|------------|-------------|
+| `mileage` | integer\|null | No | min:0, max:9999 | Miles driven during the lesson. Send `null` to clear. |
+
+**Example Request:**
+```json
+{
+  "mileage": 42
+}
+```
+
+**Success Response:** `200 OK`
+```json
+{
+  "message": "Mileage updated successfully.",
+  "mileage": 42
+}
+```
+
+**Error Response (not your lesson):** `403 Forbidden`
+```json
+{
+  "message": "This lesson does not belong to you."
+}
+```
+
+**Error Response (validation):** `422 Unprocessable Entity`
+```json
+{
+  "message": "The mileage field must be an integer.",
+  "errors": {
+    "mileage": ["The mileage field must be an integer."]
+  }
+}
+```
 
 ---
 
@@ -2895,6 +2948,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | DELETE | `/api/v1/instructor/profile/picture` | Yes | Instructor | Delete profile picture |
 | GET | `/api/v1/instructor/students` | Yes | Instructor | List students (grouped) |
 | GET | `/api/v1/instructor/lessons/{date}` | Yes | Instructor | Day view lessons |
+| PATCH | `/api/v1/instructor/lessons/{lesson}/mileage` | Yes | Instructor | Update lesson mileage |
 | GET | `/api/v1/instructor/packages` | Yes | Instructor | List packages |
 | GET | `/api/v1/instructor/calendar/items` | Yes | Instructor | List calendar items for a date |
 | POST | `/api/v1/instructor/calendar/items` | Yes | Instructor | Create calendar item |
@@ -2951,6 +3005,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-24 | Fixed Stripe charge amount — now includes booking fee (£19.99) + digital fees (£3.99 × lessons) in the total sent to Stripe. Added `booking_fee_pence`, `digital_fee_pence`, `total_price_pence` to order response. | Orders (store), Checkout |
 | 2026-03-25 | Extended messages API for student mobile app — added `GET conversations/instructor` (auto-resolves instructor from student record), made `recipient_id` optional for students on `POST /messages` (auto-resolves to assigned instructor) | Messages (conversations/instructor, store) |
 | 2026-03-30 | Added confirmation email for weekly and upfront API orders — weekly orders send email on creation, upfront orders send email after checkout verification. Matches web onboarding behaviour. Documented weekly payment flow in Orders endpoint. | Orders (store), Checkout (verify) |
+| 2026-03-30 | Added mileage update endpoint for instructors — PATCH to record miles driven per lesson | Instructor Lessons (mileage) |
 
 ---
 

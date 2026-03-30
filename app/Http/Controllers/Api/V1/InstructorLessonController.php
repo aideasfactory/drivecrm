@@ -67,4 +67,25 @@ class InstructorLessonController extends Controller
             'message' => 'Arrived notification logged successfully.',
         ]);
     }
+
+    /**
+     * Update mileage for a completed lesson.
+     */
+    public function updateMileage(Request $request, Lesson $lesson): JsonResponse
+    {
+        $instructor = $request->user()->instructor;
+
+        abort_unless($lesson->instructor_id === $instructor->id, 403, 'This lesson does not belong to you.');
+
+        $validated = $request->validate([
+            'mileage' => ['nullable', 'integer', 'min:0', 'max:9999'],
+        ]);
+
+        $lesson = $this->instructorService->updateLessonMileage($lesson, $validated['mileage'] ?? null);
+
+        return response()->json([
+            'message' => 'Mileage updated successfully.',
+            'mileage' => $lesson->mileage,
+        ]);
+    }
 }

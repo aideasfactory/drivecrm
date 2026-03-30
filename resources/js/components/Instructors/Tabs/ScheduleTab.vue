@@ -17,6 +17,10 @@ import {
     Car,
     ClipboardCheck,
     User,
+    Gauge,
+    BookOpen,
+    Flag,
+    Save,
 } from 'lucide-vue-next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -42,7 +46,7 @@ import WeeklyCalendarGrid from './Schedule/WeeklyCalendarGrid.vue'
 import MonthlyCalendarGrid from './Schedule/MonthlyCalendarGrid.vue'
 import type { CalendarEvent } from './Schedule/CalendarEventBlock.vue'
 import { useCalendarNavigation } from '@/composables/useCalendarNavigation'
-import type { CalendarItemFormData, CalendarItemResponse, RecurrencePattern } from '@/types/instructor'
+import type { CalendarItemFormData, CalendarItemResponse, RecurrencePattern, ReflectiveLogData } from '@/types/instructor'
 
 interface Props {
     instructorId: number
@@ -176,6 +180,24 @@ const editItemIsTravel = computed(() => {
 const editItemIsPracticalTest = computed(() => {
     return editForm.value.item_type === 'practical_test'
 })
+
+/** Whether the item being edited is a completed lesson */
+const editItemIsCompleted = computed(() => {
+    const item = itemsMap.value.get(editForm.value.id)
+    return item?.status === 'completed'
+})
+
+/** Whether the item being edited is a booked lesson */
+const editItemIsBooked = computed(() => {
+    const item = itemsMap.value.get(editForm.value.id)
+    return item?.status === 'booked'
+})
+
+// ── Mileage state for completed lessons ────────────────
+const mileageInput = ref<number | null>(null)
+const mileageSaving = ref(false)
+const editItemLessonId = ref<number | null>(null)
+const editItemReflectiveLog = ref<ReflectiveLogData | null>(null)
 
 // ── Time slot options (15-min increments, 08:00–16:00) ───
 const SLOT_DURATION_HOURS = 2
@@ -321,6 +343,10 @@ async function loadCalendarRange(startDate: string, endDate: string) {
                     unavailability_reason: item.unavailability_reason ?? null,
                     student_name: item.student_name ?? null,
                     is_paid: item.is_paid ?? null,
+                    lesson_id: item.lesson_id ?? null,
+                    mileage: item.mileage ?? null,
+                    summary: item.summary ?? null,
+                    reflective_log: item.reflective_log ?? null,
                     recurrence_pattern: item.recurrence_pattern ?? 'none',
                     recurrence_end_date: item.recurrence_end_date ?? null,
                     recurrence_group_id: item.recurrence_group_id ?? null,
@@ -510,6 +536,12 @@ function handleEventClick(event: CalendarEvent) {
         item_type: item.item_type ?? 'slot',
         travel_time_minutes: item.travel_time_minutes ?? 0,
     }
+
+    // Populate lesson details for completed/booked items
+    editItemLessonId.value = item.lesson_id ?? null
+    mileageInput.value = item.mileage ?? null
+    editItemReflectiveLog.value = item.reflective_log ?? null
+
     isEditSheetOpen.value = true
 }
 
@@ -638,6 +670,32 @@ function formatWeekLabel(days: Date[]): string {
 
 function formatMonthLabel(date: Date): string {
     return `${monthNames[date.getMonth()]} ${date.getFullYear()}`
+}
+
+// ── Save mileage for completed lesson ───────────────────
+async function handleSaveMileage() {
+    if (!editItemLessonId.value) return
+
+    mileageSaving.value = true
+    try {
+        await axios.patch(
+            `/instructors/${props.instructorId}/lessons/${editItemLessonId.value}/mileage`,
+            { mileage: mileageInput.value },
+        )
+
+        // Update the local item data
+        const item = itemsMap.value.get(editForm.value.id)
+        if (item) {
+            item.mileage = mileageInput.value
+        }
+
+        toast({ title: 'Mileage saved successfully!' })
+    } catch (error: any) {
+        const message = error.response?.data?.message || 'Failed to save mileage'
+        toast({ title: message, variant: 'destructive' })
+    } finally {
+        mileageSaving.value = false
+    }
 }
 
 // ── Mount ────────────────────────────────────────────────
@@ -965,8 +1023,9 @@ onMounted(() => {
                     <SheetTitle class="flex items-center gap-2">
                         <Car v-if="editItemIsTravel" class="h-5 w-5" />
                         <ClipboardCheck v-else-if="editItemIsPracticalTest" class="h-5 w-5 text-teal-600" />
+                        <Flag v-else-if="editItemIsCompleted" class="h-5 w-5 text-green-600" />
                         <Clock v-else class="h-5 w-5" />
-                        {{ editItemIsTravel ? 'Travel Time' : editItemIsPracticalTest ? 'Practical Test' : 'Edit Time Slot' }}
+                        {{ editItemIsTravel ? 'Travel Time' : editItemIsPracticalTest ? 'Practical Test' : editItemIsCompleted ? 'Completed Lesson' : 'Edit Time Slot' }}
                         <span v-if="editItemIsRecurring" class="ml-auto flex items-center gap-1 text-xs font-normal text-muted-foreground">
                             <Repeat class="h-3.5 w-3.5" />
                             Recurring
@@ -1040,6 +1099,110 @@ onMounted(() => {
                             Delete
                         </Button>
                     </div>
+                </div>
+
+                <!-- Completed lesson view (read-only details + mileage) -->
+                <div v-else-if="editItemIsCompleted" class="mt-6 space-y-4 overflow-y-auto px-6 py-4">
+                    <div class="rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
+                        <p class="text-sm font-medium text-green-800 dark:text-green-300">
+                            This lesson has been completed.
+                        </p>
+                    </div>
+
+                    <!-- Student Details -->
+                    <div v-if="itemsMap.get(editForm.id)?.student_name" class="space-y-1">
+                        <p class="text-sm font-medium flex items-center gap-1.5">
+                            <User class="h-4 w-4" /> Student
+                        </p>
+                        <p class="text-sm text-muted-foreground">{{ itemsMap.get(editForm.id)?.student_name }}</p>
+                    </div>
+
+                    <!-- Date & Time -->
+                    <div class="space-y-1">
+                        <p class="text-sm text-muted-foreground">
+                            <strong>Date:</strong> {{ editForm.date }}
+                        </p>
+                        <p class="text-sm text-muted-foreground">
+                            <strong>Time:</strong> {{ editForm.start_time }} - {{ editForm.end_time }}
+                        </p>
+                    </div>
+
+                    <!-- Summary (instructor sign-off notes) -->
+                    <div v-if="itemsMap.get(editForm.id)?.summary" class="space-y-1">
+                        <p class="text-sm font-medium flex items-center gap-1.5">
+                            <BookOpen class="h-4 w-4" /> Lesson Summary
+                        </p>
+                        <p class="text-sm text-muted-foreground">{{ itemsMap.get(editForm.id)?.summary }}</p>
+                    </div>
+
+                    <!-- Reflective Log (hidden for now) -->
+                    <!-- <div v-if="editItemReflectiveLog" class="space-y-3">
+                        <p class="text-sm font-medium flex items-center gap-1.5">
+                            <BookOpen class="h-4 w-4" /> Reflective Log
+                        </p>
+                        <div class="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                            <div v-if="editItemReflectiveLog.what_i_learned">
+                                <p class="text-xs font-medium text-muted-foreground">What I Learned</p>
+                                <p class="text-sm">{{ editItemReflectiveLog.what_i_learned }}</p>
+                            </div>
+                            <div v-if="editItemReflectiveLog.what_went_well">
+                                <p class="text-xs font-medium text-muted-foreground">What Went Well</p>
+                                <p class="text-sm">{{ editItemReflectiveLog.what_went_well }}</p>
+                            </div>
+                            <div v-if="editItemReflectiveLog.what_to_improve">
+                                <p class="text-xs font-medium text-muted-foreground">What To Improve</p>
+                                <p class="text-sm">{{ editItemReflectiveLog.what_to_improve }}</p>
+                            </div>
+                            <div v-if="editItemReflectiveLog.additional_notes">
+                                <p class="text-xs font-medium text-muted-foreground">Additional Notes</p>
+                                <p class="text-sm">{{ editItemReflectiveLog.additional_notes }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div v-else class="rounded-md border border-dashed border-border p-3 text-center">
+                        <p class="text-xs text-muted-foreground">No reflective log recorded for this lesson.</p>
+                    </div> -->
+
+                    <!-- Mileage Input -->
+                    <div class="space-y-2">
+                        <Label for="edit-mileage">
+                            <span class="flex items-center gap-1.5">
+                                <Gauge class="h-4 w-4" />
+                                Mileage
+                            </span>
+                        </Label>
+                        <div class="flex gap-2">
+                            <Input
+                                id="edit-mileage"
+                                v-model.number="mileageInput"
+                                type="number"
+                                placeholder="Enter miles driven"
+                                min="0"
+                                max="9999"
+                                class="flex-1"
+                            />
+                            <Button
+                                :disabled="mileageSaving"
+                                class="min-w-[100px]"
+                                @click="handleSaveMileage"
+                            >
+                                <Loader2 v-if="mileageSaving" class="mr-2 h-4 w-4 animate-spin" />
+                                <Save v-else class="mr-2 h-4 w-4" />
+                                Save
+                            </Button>
+                        </div>
+                        <p class="text-xs text-muted-foreground">
+                            Record the miles driven during this lesson.
+                        </p>
+                    </div>
+
+                    <Button
+                        variant="outline"
+                        class="w-full"
+                        @click="isEditSheetOpen = false"
+                    >
+                        Close
+                    </Button>
                 </div>
 
                 <!-- Regular slot edit form -->

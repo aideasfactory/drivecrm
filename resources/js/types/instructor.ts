@@ -107,6 +107,13 @@ export interface CalendarItemFormData {
   is_practical_test?: boolean
 }
 
+export interface ReflectiveLogData {
+  what_i_learned: string | null
+  what_went_well: string | null
+  what_to_improve: string | null
+  additional_notes: string | null
+}
+
 export interface CalendarItemResponse {
   id: number
   calendar_id: number
@@ -122,6 +129,10 @@ export interface CalendarItemResponse {
   unavailability_reason: string | null
   student_name: string | null
   is_paid: boolean | null
+  lesson_id: number | null
+  mileage: number | null
+  summary: string | null
+  reflective_log: ReflectiveLogData | null
   recurrence_pattern: RecurrencePattern
   recurrence_end_date: string | null
   recurrence_group_id: string | null

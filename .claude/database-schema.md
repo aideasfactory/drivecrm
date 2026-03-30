@@ -413,6 +413,7 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 | `calendar_item_id` | bigint unsigned | FOREIGN KEY (calendar_items.id), NULLABLE, ON DELETE SET NULL | Associated calendar slot |
 | `completed_at` | datetime | NULLABLE | When lesson was completed |
 | `summary` | text | NULLABLE | Instructor's summary of the lesson (written at sign-off, used for AI resource matching) |
+| `mileage` | unsigned integer | NULLABLE | Miles driven during this lesson |
 | `status` | enum('draft', 'pending', 'completed', 'cancelled') | DEFAULT 'pending' | Lesson status |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
@@ -441,6 +442,7 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 - Links to calendar_item for slot availability tracking
 - Instructor gets paid after lesson is completed
 - `summary` is written by the instructor at sign-off time; used by AI (AWS Bedrock Nova) to match against resource tags and recommend relevant videos/PDFs to the student
+- `mileage` is recorded by the instructor after the lesson is completed, via the schedule view
 
 ---
 

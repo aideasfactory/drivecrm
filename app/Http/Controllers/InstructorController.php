@@ -19,6 +19,7 @@ use App\Http\Requests\StoreLocationRequest;
 use App\Http\Requests\StorePackageRequest;
 use App\Http\Requests\UpdateCalendarItemRequest;
 use App\Http\Requests\UpdateInstructorRequest;
+use Illuminate\Http\Request;
 use App\Models\CalendarItem;
 use App\Models\Contact;
 use App\Models\Instructor;
@@ -878,6 +879,23 @@ class InstructorController extends Controller
             'imported' => $result['imported'],
             'skipped' => $result['skipped'],
             'errors' => $result['errors'],
+        ]);
+    }
+
+    /**
+     * Update mileage for a completed lesson.
+     */
+    public function updateLessonMileage(Request $request, Instructor $instructor, Lesson $lesson): JsonResponse
+    {
+        $validated = $request->validate([
+            'mileage' => ['nullable', 'integer', 'min:0', 'max:9999'],
+        ]);
+
+        $lesson = $this->instructorService->updateLessonMileage($lesson, $validated['mileage'] ?? null);
+
+        return response()->json([
+            'message' => 'Mileage updated successfully.',
+            'mileage' => $lesson->mileage,
         ]);
     }
 }

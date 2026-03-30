@@ -25,6 +25,7 @@ use App\Actions\Instructor\GetInstructorPupilsAction;
 use App\Actions\Instructor\UpdateCalendarItemAction;
 use App\Actions\Instructor\UpdateInstructorProfileAction;
 use App\Actions\Instructor\UploadInstructorProfilePictureAction;
+use App\Actions\Lesson\UpdateLessonMileageAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Shared\Message\SendBroadcastMessageAction;
 use App\Enums\RecurrencePattern;
@@ -69,7 +70,8 @@ class InstructorService extends BaseService
         protected UpdateInstructorProfileAction $updateInstructorProfile,
         protected UploadInstructorProfilePictureAction $uploadProfilePicture,
         protected DeleteInstructorProfilePictureAction $deleteProfilePicture,
-        protected DetectCalendarClashesAction $detectCalendarClashes
+        protected DetectCalendarClashesAction $detectCalendarClashes,
+        protected UpdateLessonMileageAction $updateLessonMileage
     ) {}
 
     /**
@@ -714,5 +716,13 @@ class InstructorService extends BaseService
         fclose($handle);
 
         return $rows;
+    }
+
+    /**
+     * Update mileage for a completed lesson.
+     */
+    public function updateLessonMileage(Lesson $lesson, ?int $mileage): Lesson
+    {
+        return ($this->updateLessonMileage)($lesson, $mileage);
     }
 }

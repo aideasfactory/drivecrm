@@ -58,6 +58,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('instructors.calendar.items.update');
     Route::delete('/instructors/{instructor}/calendar/items/{calendarItem}', [\App\Http\Controllers\InstructorController::class, 'destroyCalendarItem'])
         ->name('instructors.calendar.items.destroy');
+    Route::patch('/instructors/{instructor}/lessons/{lesson}/mileage', [\App\Http\Controllers\InstructorController::class, 'updateLessonMileage'])
+        ->name('instructors.lessons.mileage.update');
 
     // Stripe Connect Onboarding Routes
     Route::post('/instructors/{instructor}/stripe/onboarding/start', [\App\Http\Controllers\InstructorController::class, 'startStripeOnboarding'])

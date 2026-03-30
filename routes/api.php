@@ -52,6 +52,7 @@ Route::prefix('v1')->group(function (): void {
             Route::get('lessons/{date}', [InstructorLessonController::class, 'index']);
             Route::post('lessons/{lesson}/notify-on-way', [InstructorLessonController::class, 'notifyOnWay']);
             Route::post('lessons/{lesson}/notify-arrived', [InstructorLessonController::class, 'notifyArrived']);
+            Route::patch('lessons/{lesson}/mileage', [InstructorLessonController::class, 'updateMileage']);
             Route::get('packages', [InstructorPackageController::class, 'index']);
             Route::get('calendar/items', [InstructorCalendarController::class, 'index']);
             Route::post('calendar/items', [InstructorCalendarController::class, 'store']);

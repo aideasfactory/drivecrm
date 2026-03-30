@@ -33,7 +33,7 @@ class GetInstructorCalendarAction
             ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->with(['items' => function ($query) {
                 $query->orderBy('start_time');
-            }, 'items.lessons.order.student', 'items.lessons.lessonPayment'])
+            }, 'items.lessons.order.student', 'items.lessons.lessonPayment', 'items.lessons.reflectiveLog'])
             ->orderBy('date')
             ->get();
 
@@ -59,6 +59,26 @@ class GetInstructorCalendarAction
                         }
                     }
 
+                    $lessonId = null;
+                    $mileage = null;
+                    $summary = null;
+                    $reflectiveLog = null;
+
+                    if ($lesson) {
+                        $lessonId = $lesson->id;
+                        $mileage = $lesson->mileage;
+                        $summary = $lesson->summary;
+
+                        if ($lesson->reflectiveLog) {
+                            $reflectiveLog = [
+                                'what_i_learned' => $lesson->reflectiveLog->what_i_learned,
+                                'what_went_well' => $lesson->reflectiveLog->what_went_well,
+                                'what_to_improve' => $lesson->reflectiveLog->what_to_improve,
+                                'additional_notes' => $lesson->reflectiveLog->additional_notes,
+                            ];
+                        }
+                    }
+
                     return [
                         'id' => $item->id,
                         'calendar_id' => $calendar->id,
@@ -72,6 +92,10 @@ class GetInstructorCalendarAction
                         'parent_item_id' => $item->parent_item_id,
                         'student_name' => $studentName,
                         'is_paid' => $isPaid,
+                        'lesson_id' => $lessonId,
+                        'mileage' => $mileage,
+                        'summary' => $summary,
+                        'reflective_log' => $reflectiveLog,
                         'notes' => $item->notes,
                         'unavailability_reason' => $item->unavailability_reason,
                         'recurrence_pattern' => $item->recurrence_pattern?->value ?? 'none',
