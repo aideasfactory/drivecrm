@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
 use App\Actions\Student\Order\CreateDraftCalendarItemsAction;
 use App\Actions\Student\Order\CreateOrderFromApiAction;
 use App\Actions\Student\Order\VerifyCheckoutAction;
@@ -19,6 +20,7 @@ class OrderService extends BaseService
         protected CreateDraftCalendarItemsAction $createDraftCalendarItems,
         protected CreateOrderFromApiAction $createOrderFromApi,
         protected VerifyCheckoutAction $verifyCheckout,
+        protected SendOrderConfirmationEmailAction $sendConfirmationEmail,
         protected StripeService $stripeService
     ) {}
 
@@ -57,6 +59,11 @@ class OrderService extends BaseService
 
         if ($paymentMode === PaymentMode::UPFRONT) {
             $checkoutUrl = $this->createCheckoutSession($order, $package, $student);
+        }
+
+        // Send confirmation email for weekly orders (activated immediately)
+        if ($paymentMode === PaymentMode::WEEKLY) {
+            $this->sendConfirmationEmail->execute($order, $student);
         }
 
         return [
@@ -123,6 +130,13 @@ class OrderService extends BaseService
      */
     public function verifyCheckout(Order $order, string $sessionId): array
     {
-        return ($this->verifyCheckout)($order, $sessionId);
+        $result = ($this->verifyCheckout)($order, $sessionId);
+
+        // Send confirmation email when upfront payment is verified
+        if ($result['verified']) {
+            $this->sendConfirmationEmail->execute($result['order'], $result['order']->student);
+        }
+
+        return $result;
     }
 }

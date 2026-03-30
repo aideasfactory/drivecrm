@@ -2426,7 +2426,13 @@ Book lessons — creates an order, calendar items, and lessons. For `upfront` pa
 > 1. POST to create order → receive `checkout_url`
 > 2. Open `checkout_url` in an in-app browser / WebView
 > 3. After Stripe redirects back, call the verify endpoint to confirm payment
-> 4. On success, the order becomes `active`
+> 4. On success, the order becomes `active` and a confirmation email is sent
+>
+> **Mobile App Flow (weekly payment):**
+> 1. POST to create order with `payment_mode: "weekly"` → order is immediately `active`
+> 2. A confirmation email is sent to the student (or contact if booked on their behalf)
+> 3. The hourly `lessons:send-invoices` cron job sends Stripe invoices 48 hours before each lesson
+> 4. Stripe webhooks (`invoice.paid`) automatically mark lesson payments as paid
 
 ---
 
@@ -2434,7 +2440,7 @@ Book lessons — creates an order, calendar items, and lessons. For `upfront` pa
 
 **Auth required:** Yes (Bearer token — student or instructor)
 
-Verify a Stripe Checkout payment and activate the order. Call this after the user completes payment in the Stripe Checkout flow.
+Verify a Stripe Checkout payment and activate the order. Call this after the user completes payment in the Stripe Checkout flow. On successful verification, a confirmation email is sent to the student.
 
 **URL Parameters:**
 
@@ -2944,6 +2950,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-24 | Added package pricing endpoint — returns full fee breakdown (booking fee, digital fee per lesson, promo discounts, totals) as raw numeric values for mobile consumption | Package Pricing (show) |
 | 2026-03-24 | Fixed Stripe charge amount — now includes booking fee (£19.99) + digital fees (£3.99 × lessons) in the total sent to Stripe. Added `booking_fee_pence`, `digital_fee_pence`, `total_price_pence` to order response. | Orders (store), Checkout |
 | 2026-03-25 | Extended messages API for student mobile app — added `GET conversations/instructor` (auto-resolves instructor from student record), made `recipient_id` optional for students on `POST /messages` (auto-resolves to assigned instructor) | Messages (conversations/instructor, store) |
+| 2026-03-30 | Added confirmation email for weekly and upfront API orders — weekly orders send email on creation, upfront orders send email after checkout verification. Matches web onboarding behaviour. Documented weekly payment flow in Orders endpoint. | Orders (store), Checkout (verify) |
 
 ---
 
