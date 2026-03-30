@@ -89,6 +89,30 @@ test('an instructor can be updated to both transmission type', function () {
     ]);
 });
 
+test('updating an instructor profile preserves the existing transmission type', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    $instructor = Instructor::factory()->create([
+        'transmission_type' => 'automatic',
+    ]);
+
+    $response = $this->put(route('instructors.update', $instructor), [
+        'name' => $instructor->user->name,
+        'email' => $instructor->user->email,
+        'transmission_type' => 'automatic',
+        'bio' => 'Updated bio text',
+    ]);
+
+    $response->assertRedirect();
+
+    $this->assertDatabaseHas('instructors', [
+        'id' => $instructor->id,
+        'transmission_type' => 'automatic',
+        'bio' => 'Updated bio text',
+    ]);
+});
+
 test('an instructor cannot be updated with an invalid transmission type', function () {
     $user = User::factory()->create();
     $this->actingAs($user);
