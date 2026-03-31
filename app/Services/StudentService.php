@@ -8,7 +8,9 @@ use App\Actions\Instructor\CreatePupilAction;
 use App\Actions\Student\GetAllStudentsAction;
 use App\Actions\Student\GetStudentByIdAction;
 use App\Actions\Student\PickupPoint\CreatePickupPointAction;
+use App\Actions\Student\PickupPoint\DeletePickupPointAction;
 use App\Actions\Student\PickupPoint\GetStudentPickupPointsAction;
+use App\Actions\Student\PickupPoint\SetDefaultPickupPointAction;
 use App\Actions\Student\Status\RemoveStudentFromInstructorAction;
 use App\Actions\Student\UpdateStudentAction;
 use App\Models\Instructor;
@@ -24,7 +26,9 @@ class StudentService extends BaseService
         protected UpdateStudentAction $updateStudent,
         protected RemoveStudentFromInstructorAction $removeStudent,
         protected GetStudentPickupPointsAction $getStudentPickupPoints,
-        protected CreatePickupPointAction $createPickupPoint
+        protected CreatePickupPointAction $createPickupPoint,
+        protected DeletePickupPointAction $deletePickupPoint,
+        protected SetDefaultPickupPointAction $setDefaultPickupPoint
     ) {}
 
     /**
@@ -115,5 +119,21 @@ class StudentService extends BaseService
     public function storePickupPoint(Student $student, array $data): \App\Models\StudentPickupPoint
     {
         return ($this->createPickupPoint)($student, $data);
+    }
+
+    /**
+     * Delete a pickup point.
+     */
+    public function deletePickupPoint(\App\Models\StudentPickupPoint $pickupPoint): void
+    {
+        ($this->deletePickupPoint)($pickupPoint);
+    }
+
+    /**
+     * Set a pickup point as the default for its student.
+     */
+    public function setDefaultPickupPoint(\App\Models\StudentPickupPoint $pickupPoint): \App\Models\StudentPickupPoint
+    {
+        return ($this->setDefaultPickupPoint)($pickupPoint);
     }
 }

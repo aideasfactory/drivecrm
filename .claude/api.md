@@ -32,6 +32,8 @@
     - [Checklist Items](#get-apiv1studentsstudentchecklist-items)
     - [Pickup Points (List)](#get-apiv1studentsstudentpickup-points)
     - [Pickup Points (Create)](#post-apiv1studentsstudentpickup-points)
+    - [Pickup Points (Delete)](#delete-apiv1studentsstudentpickup-pointspickuppoint)
+    - [Pickup Points (Set Default)](#patch-apiv1studentsstudentpickup-pointspickuppointdefault)
     - [Orders](#post-apiv1studentsstudentorders)
   - [Resources](#get-apiv1resources)
   - [Messages](#messages)
@@ -2357,6 +2359,76 @@ Creates a new pickup point for a student. The postcode is geocoded automatically
 
 ---
 
+#### `DELETE /api/v1/students/{student}/pickup-points/{pickupPoint}`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Deletes a pickup point for a student. Access requires `update` permission on the student.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+| `pickupPoint` | integer | The pickup point ID |
+
+**Success Response:** `200 OK`
+```json
+{
+  "message": "Pickup point deleted successfully."
+}
+```
+
+**Error Response (not authorised):** `403 Forbidden`
+**Error Response (wrong student):** `404 Not Found`
+```json
+{
+  "message": "Pickup point not found for this student."
+}
+```
+
+---
+
+#### `PATCH /api/v1/students/{student}/pickup-points/{pickupPoint}/default`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Sets a pickup point as the default (primary) for a student. Automatically unsets any other default pickup point for the same student. Access requires `update` permission on the student.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+| `pickupPoint` | integer | The pickup point ID to set as default |
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 3,
+    "label": "Home",
+    "address": "1 High Street, Middlesbrough",
+    "postcode": "TS1 1AA",
+    "latitude": "54.57623000",
+    "longitude": "-1.23456000",
+    "is_default": true,
+    "created_at": "2026-03-25T10:00:00+00:00",
+    "updated_at": "2026-03-31T14:00:00+00:00"
+  }
+}
+```
+
+**Error Response (not authorised):** `403 Forbidden`
+**Error Response (wrong student):** `404 Not Found`
+```json
+{
+  "message": "Pickup point not found for this student."
+}
+```
+
+---
+
 #### `POST /api/v1/students/{student}/orders`
 
 **Auth required:** Yes (Bearer token — student or instructor)
@@ -2969,6 +3041,8 @@ The `role` field is always returned in user responses. Use it to determine which
 | PUT | `/api/v1/students/{student}/checklist-items/{item}` | Yes | Both | Update checklist item |
 | GET | `/api/v1/students/{student}/pickup-points` | Yes | Both | List pickup points |
 | POST | `/api/v1/students/{student}/pickup-points` | Yes | Both | Create pickup point |
+| DELETE | `/api/v1/students/{student}/pickup-points/{pickupPoint}` | Yes | Both | Delete pickup point |
+| PATCH | `/api/v1/students/{student}/pickup-points/{pickupPoint}/default` | Yes | Both | Set default pickup point |
 | POST | `/api/v1/students/{student}/orders` | Yes | Both | Create order/booking |
 | GET | `/api/v1/orders/{order}/checkout/verify` | Yes | Both | Verify payment |
 | GET | `/api/v1/packages/{package}/pricing` | Yes | Any | Package pricing breakdown |
@@ -3006,6 +3080,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-25 | Extended messages API for student mobile app — added `GET conversations/instructor` (auto-resolves instructor from student record), made `recipient_id` optional for students on `POST /messages` (auto-resolves to assigned instructor) | Messages (conversations/instructor, store) |
 | 2026-03-30 | Added confirmation email for weekly and upfront API orders — weekly orders send email on creation, upfront orders send email after checkout verification. Matches web onboarding behaviour. Documented weekly payment flow in Orders endpoint. | Orders (store), Checkout (verify) |
 | 2026-03-30 | Added mileage update endpoint for instructors — PATCH to record miles driven per lesson | Instructor Lessons (mileage) |
+| 2026-03-31 | Added delete and set-default endpoints for student pickup points — reuses existing web Actions | Pickup Points (destroy, default) |
 
 ---
 

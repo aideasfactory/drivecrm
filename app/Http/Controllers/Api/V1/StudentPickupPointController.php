@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StorePickupPointRequest;
 use App\Http\Resources\V1\StudentPickupPointResource;
 use App\Models\Student;
+use App\Models\StudentPickupPoint;
 use App\Services\StudentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -46,5 +47,37 @@ class StudentPickupPointController extends Controller
         return (new StudentPickupPointResource($pickupPoint))
             ->response()
             ->setStatusCode(201);
+    }
+
+    /**
+     * Delete a pickup point for a student.
+     */
+    public function destroy(Request $request, Student $student, StudentPickupPoint $pickupPoint): JsonResponse
+    {
+        Gate::authorize('update', $student);
+
+        if ($pickupPoint->student_id !== $student->id) {
+            return response()->json(['message' => 'Pickup point not found for this student.'], 404);
+        }
+
+        $this->studentService->deletePickupPoint($pickupPoint);
+
+        return response()->json(['message' => 'Pickup point deleted successfully.']);
+    }
+
+    /**
+     * Set a pickup point as the default (primary) for a student.
+     */
+    public function setDefault(Request $request, Student $student, StudentPickupPoint $pickupPoint): StudentPickupPointResource|JsonResponse
+    {
+        Gate::authorize('update', $student);
+
+        if ($pickupPoint->student_id !== $student->id) {
+            return response()->json(['message' => 'Pickup point not found for this student.'], 404);
+        }
+
+        $pickupPoint = $this->studentService->setDefaultPickupPoint($pickupPoint);
+
+        return new StudentPickupPointResource($pickupPoint);
     }
 }
