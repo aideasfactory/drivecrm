@@ -23,9 +23,9 @@ class StudentOrderController extends Controller
     ) {}
 
     /**
-     * Book lessons: create order, calendar items, lessons, and initiate payment.
+     * Book lessons: create order, calendar items, lessons, and handle payment.
      *
-     * For upfront payment: returns a checkout_url for Stripe Checkout.
+     * For upfront payment: emails a Stripe payment link to the student.
      * For weekly payment: order is activated immediately.
      */
     public function store(CreateOrderRequest $request, Student $student): JsonResponse
@@ -53,18 +53,14 @@ class StudentOrderController extends Controller
             $validated['end_time']
         );
 
-        $response = [
-            'message' => $paymentMode === PaymentMode::WEEKLY
-                ? 'Order created and activated. Lesson invoices will be sent before each lesson.'
-                : 'Order created. Complete payment to activate.',
+        $message = $paymentMode === PaymentMode::WEEKLY
+            ? 'Order created and activated. Lesson invoices will be sent before each lesson.'
+            : 'Order created. A payment link has been emailed to the student.';
+
+        return response()->json([
+            'message' => $message,
             'data' => new OrderResource($result['order']),
-        ];
-
-        if ($result['checkout_url']) {
-            $response['checkout_url'] = $result['checkout_url'];
-        }
-
-        return response()->json($response, 201);
+        ], 201);
     }
 
     /**

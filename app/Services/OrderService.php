@@ -9,6 +9,7 @@ use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Student\Order\CreateDraftCalendarItemsAction;
 use App\Actions\Student\Order\CreateOrderFromApiAction;
+use App\Actions\Student\Order\SendPaymentLinkEmailAction;
 use App\Actions\Student\Order\VerifyCheckoutAction;
 use App\Enums\PaymentMode;
 use App\Models\CalendarItem;
@@ -27,6 +28,7 @@ class OrderService extends BaseService
         protected CreateOrderFromApiAction $createOrderFromApi,
         protected VerifyCheckoutAction $verifyCheckout,
         protected SendOrderConfirmationEmailAction $sendConfirmationEmail,
+        protected SendPaymentLinkEmailAction $sendPaymentLinkEmail,
         protected StripeService $stripeService,
         protected DetectCalendarClashesAction $detectCalendarClashes,
         protected LogActivityAction $logActivity
@@ -35,7 +37,7 @@ class OrderService extends BaseService
     /**
      * Book lessons: create calendar items, order, lessons, and handle payment.
      *
-     * @return array{order: Order, checkout_url: string|null}
+     * @return array{order: Order}
      */
     public function bookLessons(
         Student $student,
@@ -65,10 +67,12 @@ class OrderService extends BaseService
             $calendarItemIds
         );
 
-        $checkoutUrl = null;
-
         if ($paymentMode === PaymentMode::UPFRONT) {
             $checkoutUrl = $this->createCheckoutSession($order, $package, $student);
+
+            if ($checkoutUrl) {
+                $this->sendPaymentLinkEmail->execute($order, $student, $checkoutUrl);
+            }
         }
 
         // Send confirmation email for weekly orders (activated immediately)
@@ -78,7 +82,6 @@ class OrderService extends BaseService
 
         return [
             'order' => $order->fresh(['lessons']),
-            'checkout_url' => $checkoutUrl,
         ];
     }
 

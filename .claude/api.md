@@ -2798,7 +2798,7 @@ Sets a pickup point as the default (primary) for a student. Automatically unsets
 
 **Auth required:** Yes (Bearer token — student or instructor)
 
-Book lessons — creates an order, calendar items, and lessons. For `upfront` payment, initiates a Stripe Checkout session and returns a URL for the mobile app to open. For `weekly` payment, the order is activated immediately.
+Book lessons — creates an order, calendar items, and lessons. For `upfront` payment, a Stripe Checkout session is created and the payment link is emailed to the student (or their contact person). The API does **not** return the checkout URL. For `weekly` payment, the order is activated immediately.
 
 **URL Parameters:**
 
@@ -2828,7 +2828,7 @@ Book lessons — creates an order, calendar items, and lessons. For `upfront` pa
 **Success Response (upfront payment):** `201 Created`
 ```json
 {
-  "message": "Order created. Complete payment to activate.",
+  "message": "Order created. A payment link has been emailed to the student.",
   "data": {
     "id": 1,
     "student_id": 1,
@@ -2845,8 +2845,7 @@ Book lessons — creates an order, calendar items, and lessons. For `upfront` pa
     "status": "pending",
     "lessons_count": 10,
     "created_at": "2026-03-23T10:00:00.000000Z"
-  },
-  "checkout_url": "https://checkout.stripe.com/c/pay/cs_test_abc123..."
+  }
 }
 ```
 
@@ -2913,9 +2912,9 @@ Book lessons — creates an order, calendar items, and lessons. For `upfront` pa
 ```
 
 > **Mobile App Flow (upfront payment):**
-> 1. POST to create order → receive `checkout_url`
-> 2. Open `checkout_url` in an in-app browser / WebView
-> 3. After Stripe redirects back, call the verify endpoint to confirm payment
+> 1. POST to create order → a payment link is emailed to the student (no `checkout_url` in the response)
+> 2. The student opens the payment link from their email and completes Stripe Checkout
+> 3. After payment, the Stripe success URL calls the verify endpoint to confirm payment
 > 4. On success, the order becomes `active` and a confirmation email is sent
 >
 > **Mobile App Flow (weekly payment):**
@@ -3455,6 +3454,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-31 | Added create and update endpoints for instructor packages — reuses existing CreateInstructorPackageAction and UpdatePackageAction, with ownership check on update | Instructor Packages (store, update) |
 | 2026-03-31 | Added instructor finances API — CRUD endpoints for recording payments and expenses, with recurring support (weekly/monthly/yearly) | Instructor Finances (index, store, update, destroy) |
 | 2026-03-31 | Added `status` as an updatable field on PUT students endpoint — accepts: active, inactive, on_hold, passed, failed, completed | Student (update) |
+| 2026-03-31 | Upfront payment no longer returns `checkout_url` — instead emails the Stripe payment link to the student (or contact person). API response confirms email was sent. | Orders (store) |
 
 ---
 
