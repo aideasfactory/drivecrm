@@ -424,7 +424,31 @@ class InstructorService extends BaseService
      */
     public function removeRecurringCalendarItems(CalendarItem $calendarItem): int
     {
-        return ($this->deleteRecurringCalendarItems)($calendarItem);
+        $calendarItem->load('calendar');
+        $instructorId = $calendarItem->calendar?->instructor_id;
+
+        // Collect all affected dates before deletion so we can bust the cache
+        $affectedDates = collect();
+        if ($calendarItem->recurrence_group_id) {
+            $affectedDates = CalendarItem::where('recurrence_group_id', $calendarItem->recurrence_group_id)
+                ->whereHas('calendar', fn ($q) => $q->where('date', '>=', $calendarItem->calendar->date))
+                ->whereDoesntHave('lessons')
+                ->with('calendar')
+                ->get()
+                ->pluck('calendar.date')
+                ->unique();
+        }
+
+        $count = ($this->deleteRecurringCalendarItems)($calendarItem);
+
+        if ($instructorId && $affectedDates->isNotEmpty()) {
+            $calendarService = app(InstructorCalendarService::class);
+            foreach ($affectedDates as $date) {
+                $calendarService->invalidateCalendarCache($instructorId, $date instanceof \Carbon\Carbon ? $date->format('Y-m-d') : (string) $date);
+            }
+        }
+
+        return $count;
     }
 
     /**
