@@ -122,6 +122,11 @@ Users (1) ──┬── (1) Instructors ──┬── (Many) Packages
    - Morphs to `instructors` or `students`
    - Tracks all significant activities with categories
 
+10. **instructor_finances** - Instructor payments and expenses
+    - Many-to-one with `instructors` (via `instructor_id`)
+    - Tracks payments received and expenses incurred
+    - Supports recurring entries (weekly, monthly, yearly)
+
 ### Support Tables
 
 10. **webhook_events** - Stripe webhook logging
@@ -926,6 +931,31 @@ Tracks progress through standard checklist items for each student (e.g., theory 
 - Checking an item opens a date picker modal; instructor adds a date and optional notes
 - Unchecking an item clears the date and notes
 - Items are grouped by category in the UI (3-column grid)
+
+---
+
+### 22. **instructor_finances**
+
+Tracks payments received and expenses incurred by instructors. Supports recurring entries.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Finance record ID |
+| `instructor_id` | bigint unsigned | FOREIGN KEY → instructors.id, CASCADE DELETE, INDEXED | Owning instructor |
+| `type` | enum('payment','expense') | NOT NULL | Whether this is income or an expense |
+| `description` | varchar(255) | NOT NULL | Description of the payment/expense |
+| `amount_pence` | integer | NOT NULL | Amount in pence (e.g., 3500 = £35.00) |
+| `is_recurring` | boolean | NOT NULL, DEFAULT false | Whether this is a recurring entry |
+| `recurrence_frequency` | varchar(255) | NULLABLE | Frequency: `weekly`, `monthly`, `yearly` |
+| `date` | date | NOT NULL | Date of the payment/expense |
+| `notes` | text | NULLABLE | Additional notes |
+| `created_at` | timestamp | NULLABLE | Created timestamp |
+| `updated_at` | timestamp | NULLABLE | Updated timestamp |
+
+**Indexes:** `(instructor_id, type)`, `(instructor_id, date)`
+
+**Relationships:**
+- `instructor_finances.instructor_id` → `instructors.id` (CASCADE DELETE)
 
 ---
 

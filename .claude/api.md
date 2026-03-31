@@ -19,8 +19,14 @@
     - [Notify On Way](#post-apiv1instructorlessonslessonnotify-on-way)
     - [Notify Arrived](#post-apiv1instructorlessonslessonnotify-arrived)
     - [Update Mileage](#patch-apiv1instructorlessonslessonmileage)
-    - [Packages](#get-apiv1instructorpackages)
+    - [Packages (List)](#get-apiv1instructorpackages)
+    - [Packages (Create)](#post-apiv1instructorpackages)
+    - [Packages (Update)](#put-apiv1instructorpackagespackage)
     - [Calendar Items](#get-apiv1instructorcalendaritems)
+    - [Finances (List)](#get-apiv1instructorfinances)
+    - [Finances (Create)](#post-apiv1instructorfinances)
+    - [Finances (Update)](#put-apiv1instructorfinancesfinance)
+    - [Finances (Delete)](#delete-apiv1instructorfinancesfinance)
   - [Package Pricing](#get-apiv1packagespackagepricing)
   - [Students](#students)
     - [CRUD](#post-apiv1students)
@@ -1038,6 +1044,364 @@ Returns all active packages for the authenticated instructor.
 
 ---
 
+#### `POST /api/v1/instructor/packages`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Creates a new bespoke package for the authenticated instructor. The instructor must have completed Stripe Connect onboarding (`charges_enabled: true`). A Stripe Product and Price are automatically created during this process.
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Package name (max 255 characters) |
+| `description` | string | No | Package description |
+| `total_price_pence` | integer | Yes | Total price in pence (e.g., 35000 = £350.00). Min: 0 |
+| `lessons_count` | integer | Yes | Number of lessons in the package. Min: 1 |
+
+**Example Request:**
+```json
+{
+  "name": "5 Hour Starter Package",
+  "description": "Five one-hour driving lessons for beginners",
+  "total_price_pence": 17500,
+  "lessons_count": 5
+}
+```
+
+**Success Response:** `201 Created`
+```json
+{
+  "data": {
+    "id": 12,
+    "name": "5 Hour Starter Package",
+    "description": "Five one-hour driving lessons for beginners",
+    "total_price_pence": 17500,
+    "lessons_count": 5,
+    "lesson_price_pence": 3500,
+    "formatted_total_price": "£175.00",
+    "formatted_lesson_price": "£35.00",
+    "booking_fee": "10.00",
+    "digital_fee": "5.00",
+    "total_price": "175.00",
+    "weekly_payment": "35.00",
+    "active": true,
+    "has_stripe_price": true
+  }
+}
+```
+
+**Error Responses:**
+
+`422 Unprocessable Entity` — Validation failed:
+```json
+{
+  "message": "The name field is required.",
+  "errors": {
+    "name": ["Package name is required"]
+  }
+}
+```
+
+`500 Internal Server Error` — Stripe onboarding incomplete:
+```json
+{
+  "message": "Instructor must complete Stripe Connect onboarding before creating packages."
+}
+```
+
+---
+
+#### `PUT /api/v1/instructor/packages/{package}`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Updates an existing package owned by the authenticated instructor. Returns `403` if the package does not belong to the instructor.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `package` | integer | Package ID |
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Package name (max 255 characters) |
+| `description` | string | No | Package description |
+| `total_price_pence` | integer | Yes | Total price in pence (e.g., 35000 = £350.00). Min: 0 |
+| `lessons_count` | integer | Yes | Number of lessons in the package. Min: 1 |
+
+**Example Request:**
+```json
+{
+  "name": "5 Hour Starter Package (Updated)",
+  "description": "Five one-hour driving lessons — now with free resources",
+  "total_price_pence": 16000,
+  "lessons_count": 5
+}
+```
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 12,
+    "name": "5 Hour Starter Package (Updated)",
+    "description": "Five one-hour driving lessons — now with free resources",
+    "total_price_pence": 16000,
+    "lessons_count": 5,
+    "lesson_price_pence": 3200,
+    "formatted_total_price": "£160.00",
+    "formatted_lesson_price": "£32.00",
+    "booking_fee": "10.00",
+    "digital_fee": "5.00",
+    "total_price": "160.00",
+    "weekly_payment": "32.00",
+    "active": true,
+    "has_stripe_price": true
+  }
+}
+```
+
+**Error Responses:**
+
+`403 Forbidden` — Package not owned by this instructor:
+```json
+{
+  "message": "You do not own this package."
+}
+```
+
+`422 Unprocessable Entity` — Validation failed:
+```json
+{
+  "message": "The name field is required.",
+  "errors": {
+    "name": ["Package name is required"]
+  }
+}
+```
+
+---
+
+### Instructor Finances
+
+---
+
+#### `GET /api/v1/instructor/finances`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Returns all finance records (payments and expenses) for the authenticated instructor, ordered by date descending.
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "type": "payment",
+      "description": "Weekly lesson payment from Jane Doe",
+      "amount_pence": 3500,
+      "formatted_amount": "£35.00",
+      "is_recurring": true,
+      "recurrence_frequency": "weekly",
+      "date": "2026-03-31",
+      "notes": "Regular weekly payment",
+      "created_at": "2026-03-31T09:00:00+00:00",
+      "updated_at": "2026-03-31T09:00:00+00:00"
+    },
+    {
+      "id": 2,
+      "type": "expense",
+      "description": "Fuel costs",
+      "amount_pence": 5000,
+      "formatted_amount": "£50.00",
+      "is_recurring": false,
+      "recurrence_frequency": null,
+      "date": "2026-03-30",
+      "notes": null,
+      "created_at": "2026-03-30T14:00:00+00:00",
+      "updated_at": "2026-03-30T14:00:00+00:00"
+    }
+  ]
+}
+```
+
+**Finance Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Finance record ID |
+| `type` | string | `payment` or `expense` |
+| `description` | string | Description of the payment/expense |
+| `amount_pence` | integer | Amount in pence (e.g., 3500 = £35.00) |
+| `formatted_amount` | string | Human-readable amount (e.g., "£35.00") |
+| `is_recurring` | boolean | Whether this is a recurring entry |
+| `recurrence_frequency` | string\|null | Frequency: `weekly`, `monthly`, or `yearly` (null if not recurring) |
+| `date` | string | Date of the payment/expense (YYYY-MM-DD) |
+| `notes` | string\|null | Additional notes |
+| `created_at` | string | ISO 8601 timestamp |
+| `updated_at` | string | ISO 8601 timestamp |
+
+---
+
+#### `POST /api/v1/instructor/finances`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Creates a new finance record for the authenticated instructor.
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | `payment` or `expense` |
+| `description` | string | Yes | Description (max 255 characters) |
+| `amount_pence` | integer | Yes | Amount in pence (min: 1) |
+| `is_recurring` | boolean | No | Whether this is recurring (default: false) |
+| `recurrence_frequency` | string | Conditional | Required when `is_recurring` is true. One of: `weekly`, `monthly`, `yearly` |
+| `date` | string | Yes | Date in YYYY-MM-DD format |
+| `notes` | string | No | Additional notes (max 1000 characters) |
+
+**Example Request:**
+```json
+{
+  "type": "expense",
+  "description": "Car insurance",
+  "amount_pence": 15000,
+  "is_recurring": true,
+  "recurrence_frequency": "monthly",
+  "date": "2026-03-31",
+  "notes": "Monthly direct debit"
+}
+```
+
+**Success Response:** `201 Created`
+```json
+{
+  "data": {
+    "id": 3,
+    "type": "expense",
+    "description": "Car insurance",
+    "amount_pence": 15000,
+    "formatted_amount": "£150.00",
+    "is_recurring": true,
+    "recurrence_frequency": "monthly",
+    "date": "2026-03-31",
+    "notes": "Monthly direct debit",
+    "created_at": "2026-03-31T10:00:00+00:00",
+    "updated_at": "2026-03-31T10:00:00+00:00"
+  }
+}
+```
+
+**Error Response (validation):** `422 Unprocessable Entity`
+```json
+{
+  "message": "The type field is required.",
+  "errors": {
+    "type": ["The type field is required."]
+  }
+}
+```
+
+---
+
+#### `PUT /api/v1/instructor/finances/{finance}`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Updates an existing finance record. The record must belong to the authenticated instructor.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `finance` | integer | Finance record ID |
+
+**Request Body (all fields optional):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | No | `payment` or `expense` |
+| `description` | string | No | Description (max 255 characters) |
+| `amount_pence` | integer | No | Amount in pence (min: 1) |
+| `is_recurring` | boolean | No | Whether this is recurring |
+| `recurrence_frequency` | string | No | One of: `weekly`, `monthly`, `yearly` |
+| `date` | string | No | Date in YYYY-MM-DD format |
+| `notes` | string | No | Additional notes (max 1000 characters) |
+
+**Example Request:**
+```json
+{
+  "amount_pence": 16000,
+  "notes": "Monthly direct debit — increased premium"
+}
+```
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 3,
+    "type": "expense",
+    "description": "Car insurance",
+    "amount_pence": 16000,
+    "formatted_amount": "£160.00",
+    "is_recurring": true,
+    "recurrence_frequency": "monthly",
+    "date": "2026-03-31",
+    "notes": "Monthly direct debit — increased premium",
+    "created_at": "2026-03-31T10:00:00+00:00",
+    "updated_at": "2026-03-31T10:30:00+00:00"
+  }
+}
+```
+
+**Error Response (not owned):** `403 Forbidden`
+```json
+{
+  "message": "You do not own this finance record."
+}
+```
+
+---
+
+#### `DELETE /api/v1/instructor/finances/{finance}`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Deletes a finance record. The record must belong to the authenticated instructor.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `finance` | integer | Finance record ID |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "message": "Finance record deleted successfully."
+}
+```
+
+**Error Response (not owned):** `403 Forbidden`
+```json
+{
+  "message": "You do not own this finance record."
+}
+```
+
+---
+
 ### Package Pricing
 
 #### `GET /api/v1/packages/{package}/pricing`
@@ -1508,6 +1872,7 @@ Updates an existing student record. Access is controlled by the same policy as t
 | `contact_email` | string\|null | No | Booker's email |
 | `contact_phone` | string\|null | No | Booker's phone (max 50) |
 | `owns_account` | boolean\|null | No | Whether the student owns the account |
+| `status` | string\|null | No | One of: `active`, `inactive`, `on_hold`, `passed`, `failed`, `completed` |
 
 > Only send the fields you want to update. Omitted fields remain unchanged.
 
@@ -3022,9 +3387,15 @@ The `role` field is always returned in user responses. Use it to determine which
 | GET | `/api/v1/instructor/lessons/{date}` | Yes | Instructor | Day view lessons |
 | PATCH | `/api/v1/instructor/lessons/{lesson}/mileage` | Yes | Instructor | Update lesson mileage |
 | GET | `/api/v1/instructor/packages` | Yes | Instructor | List packages |
+| POST | `/api/v1/instructor/packages` | Yes | Instructor | Create package |
+| PUT | `/api/v1/instructor/packages/{package}` | Yes | Instructor | Update package |
 | GET | `/api/v1/instructor/calendar/items` | Yes | Instructor | List calendar items for a date |
 | POST | `/api/v1/instructor/calendar/items` | Yes | Instructor | Create calendar item |
 | DELETE | `/api/v1/instructor/calendar/items/{calendarItem}` | Yes | Instructor | Delete calendar item |
+| GET | `/api/v1/instructor/finances` | Yes | Instructor | List finance records |
+| POST | `/api/v1/instructor/finances` | Yes | Instructor | Create finance record |
+| PUT | `/api/v1/instructor/finances/{finance}` | Yes | Instructor | Update finance record |
+| DELETE | `/api/v1/instructor/finances/{finance}` | Yes | Instructor | Delete finance record |
 | POST | `/api/v1/students` | Yes | Instructor | Create student |
 | GET | `/api/v1/students/{student}` | Yes | Both | View student |
 | PUT | `/api/v1/students/{student}` | Yes | Both | Update student |
@@ -3081,6 +3452,9 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-30 | Added confirmation email for weekly and upfront API orders — weekly orders send email on creation, upfront orders send email after checkout verification. Matches web onboarding behaviour. Documented weekly payment flow in Orders endpoint. | Orders (store), Checkout (verify) |
 | 2026-03-30 | Added mileage update endpoint for instructors — PATCH to record miles driven per lesson | Instructor Lessons (mileage) |
 | 2026-03-31 | Added delete and set-default endpoints for student pickup points — reuses existing web Actions | Pickup Points (destroy, default) |
+| 2026-03-31 | Added create and update endpoints for instructor packages — reuses existing CreateInstructorPackageAction and UpdatePackageAction, with ownership check on update | Instructor Packages (store, update) |
+| 2026-03-31 | Added instructor finances API — CRUD endpoints for recording payments and expenses, with recurring support (weekly/monthly/yearly) | Instructor Finances (index, store, update, destroy) |
+| 2026-03-31 | Added `status` as an updatable field on PUT students endpoint — accepts: active, inactive, on_hold, passed, failed, completed | Student (update) |
 
 ---
 

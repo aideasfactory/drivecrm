@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Api\V1;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateStudentRequest extends FormRequest
 {
@@ -33,6 +34,7 @@ class UpdateStudentRequest extends FormRequest
             'contact_email' => ['sometimes', 'nullable', 'string', 'email', 'max:255'],
             'contact_phone' => ['sometimes', 'nullable', 'string', 'max:50'],
             'owns_account' => ['sometimes', 'boolean'],
+            'status' => ['sometimes', 'string', Rule::in(['active', 'inactive', 'on_hold', 'passed', 'failed', 'completed'])],
         ];
     }
 }

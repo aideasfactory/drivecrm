@@ -7,22 +7,26 @@ use App\Actions\FetchPostcodeCoordinatesAction;
 use App\Actions\FindInstructorsByPostcodeSectorAction;
 use App\Actions\Instructor\BulkImportInstructorsAction;
 use App\Actions\Instructor\CreateCalendarItemAction;
+use App\Actions\Instructor\CreateInstructorFinanceAction;
 use App\Actions\Instructor\CreateInstructorLocationAction;
 use App\Actions\Instructor\CreateInstructorPackageAction;
 use App\Actions\Instructor\CreatePupilAction;
 use App\Actions\Instructor\CreateRecurringCalendarItemsAction;
 use App\Actions\Instructor\DeleteCalendarItemAction;
+use App\Actions\Instructor\DeleteInstructorFinanceAction;
 use App\Actions\Instructor\DeleteInstructorLocationAction;
 use App\Actions\Instructor\DeleteInstructorProfilePictureAction;
 use App\Actions\Instructor\DeleteRecurringCalendarItemsAction;
 use App\Actions\Instructor\GetGroupedStudentsAction;
 use App\Actions\Instructor\GetInstructorCalendarAction;
 use App\Actions\Instructor\GetInstructorDayLessonsAction;
+use App\Actions\Instructor\GetInstructorFinancesAction;
 use App\Actions\Instructor\GetInstructorLocationsAction;
 use App\Actions\Instructor\GetInstructorPackagesAction;
 use App\Actions\Instructor\GetInstructorPayoutsAction;
 use App\Actions\Instructor\GetInstructorPupilsAction;
 use App\Actions\Instructor\UpdateCalendarItemAction;
+use App\Actions\Instructor\UpdateInstructorFinanceAction;
 use App\Actions\Instructor\UpdateInstructorProfileAction;
 use App\Actions\Instructor\UploadInstructorProfilePictureAction;
 use App\Actions\Lesson\UpdateLessonMileageAction;
@@ -32,6 +36,7 @@ use App\Enums\RecurrencePattern;
 use App\Enums\UserRole;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
+use App\Models\InstructorFinance;
 use App\Models\Lesson;
 use App\Models\Location;
 use App\Models\User;
@@ -71,7 +76,11 @@ class InstructorService extends BaseService
         protected UploadInstructorProfilePictureAction $uploadProfilePicture,
         protected DeleteInstructorProfilePictureAction $deleteProfilePicture,
         protected DetectCalendarClashesAction $detectCalendarClashes,
-        protected UpdateLessonMileageAction $updateLessonMileage
+        protected UpdateLessonMileageAction $updateLessonMileage,
+        protected GetInstructorFinancesAction $getInstructorFinances,
+        protected CreateInstructorFinanceAction $createInstructorFinance,
+        protected UpdateInstructorFinanceAction $updateInstructorFinance,
+        protected DeleteInstructorFinanceAction $deleteInstructorFinance
     ) {}
 
     /**
@@ -724,5 +733,37 @@ class InstructorService extends BaseService
     public function updateLessonMileage(Lesson $lesson, ?int $mileage): Lesson
     {
         return ($this->updateLessonMileage)($lesson, $mileage);
+    }
+
+    /**
+     * Get all finance records for an instructor.
+     */
+    public function getFinances(Instructor $instructor): Collection
+    {
+        return ($this->getInstructorFinances)($instructor);
+    }
+
+    /**
+     * Create a new finance record for an instructor.
+     */
+    public function createFinance(Instructor $instructor, array $data): InstructorFinance
+    {
+        return ($this->createInstructorFinance)($instructor, $data);
+    }
+
+    /**
+     * Update an existing finance record.
+     */
+    public function updateFinance(InstructorFinance $finance, array $data): InstructorFinance
+    {
+        return ($this->updateInstructorFinance)($finance, $data);
+    }
+
+    /**
+     * Delete a finance record.
+     */
+    public function deleteFinance(InstructorFinance $finance): bool
+    {
+        return ($this->deleteInstructorFinance)($finance);
     }
 }

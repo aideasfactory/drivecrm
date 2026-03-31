@@ -19,10 +19,10 @@ use App\Http\Requests\StoreLocationRequest;
 use App\Http\Requests\StorePackageRequest;
 use App\Http\Requests\UpdateCalendarItemRequest;
 use App\Http\Requests\UpdateInstructorRequest;
-use Illuminate\Http\Request;
 use App\Models\CalendarItem;
 use App\Models\Contact;
 use App\Models\Instructor;
+use App\Models\InstructorFinance;
 use App\Models\Lesson;
 use App\Models\Location;
 use App\Models\Student;
@@ -32,6 +32,7 @@ use App\Services\StripeService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
@@ -880,6 +881,113 @@ class InstructorController extends Controller
             'skipped' => $result['skipped'],
             'errors' => $result['errors'],
         ]);
+    }
+
+    /**
+     * Get all finance records for an instructor.
+     */
+    public function finances(Instructor $instructor): JsonResponse
+    {
+        $finances = $this->instructorService->getFinances($instructor);
+
+        return response()->json([
+            'finances' => $finances->map(fn (InstructorFinance $f) => [
+                'id' => $f->id,
+                'type' => $f->type,
+                'description' => $f->description,
+                'amount_pence' => $f->amount_pence,
+                'formatted_amount' => $f->formatted_amount,
+                'is_recurring' => $f->is_recurring,
+                'recurrence_frequency' => $f->recurrence_frequency,
+                'date' => $f->date->format('Y-m-d'),
+                'notes' => $f->notes,
+                'created_at' => $f->created_at?->toIso8601String(),
+            ]),
+        ]);
+    }
+
+    /**
+     * Create a new finance record for an instructor.
+     */
+    public function storeFinance(Request $request, Instructor $instructor): JsonResponse
+    {
+        $data = $request->validate([
+            'type' => 'required|string|in:payment,expense',
+            'description' => 'required|string|max:255',
+            'amount_pence' => 'required|integer|min:1',
+            'is_recurring' => 'sometimes|boolean',
+            'recurrence_frequency' => 'nullable|string|in:weekly,monthly,yearly',
+            'date' => 'required|date|date_format:Y-m-d',
+            'notes' => 'nullable|string|max:1000',
+        ]);
+
+        $finance = $this->instructorService->createFinance($instructor, $data);
+
+        return response()->json([
+            'finance' => [
+                'id' => $finance->id,
+                'type' => $finance->type,
+                'description' => $finance->description,
+                'amount_pence' => $finance->amount_pence,
+                'formatted_amount' => $finance->formatted_amount,
+                'is_recurring' => $finance->is_recurring,
+                'recurrence_frequency' => $finance->recurrence_frequency,
+                'date' => $finance->date->format('Y-m-d'),
+                'notes' => $finance->notes,
+                'created_at' => $finance->created_at?->toIso8601String(),
+            ],
+        ], 201);
+    }
+
+    /**
+     * Update a finance record for an instructor.
+     */
+    public function updateFinance(Request $request, Instructor $instructor, InstructorFinance $finance): JsonResponse
+    {
+        if ($finance->instructor_id !== $instructor->id) {
+            return response()->json(['message' => 'Finance record not found for this instructor.'], 404);
+        }
+
+        $data = $request->validate([
+            'type' => 'sometimes|string|in:payment,expense',
+            'description' => 'sometimes|string|max:255',
+            'amount_pence' => 'sometimes|integer|min:1',
+            'is_recurring' => 'sometimes|boolean',
+            'recurrence_frequency' => 'nullable|string|in:weekly,monthly,yearly',
+            'date' => 'sometimes|date|date_format:Y-m-d',
+            'notes' => 'nullable|string|max:1000',
+        ]);
+
+        $finance = $this->instructorService->updateFinance($finance, $data);
+
+        return response()->json([
+            'finance' => [
+                'id' => $finance->id,
+                'type' => $finance->type,
+                'description' => $finance->description,
+                'amount_pence' => $finance->amount_pence,
+                'formatted_amount' => $finance->formatted_amount,
+                'is_recurring' => $finance->is_recurring,
+                'recurrence_frequency' => $finance->recurrence_frequency,
+                'date' => $finance->date->format('Y-m-d'),
+                'notes' => $finance->notes,
+                'created_at' => $finance->created_at?->toIso8601String(),
+            ],
+        ]);
+    }
+
+    /**
+     * Delete a finance record for an instructor.
+     */
+    public function destroyFinance(Instructor $instructor, InstructorFinance $finance): JsonResponse
+    {
+        if ($finance->instructor_id !== $instructor->id) {
+            return response()->json(['message' => 'Finance record not found for this instructor.'], 404);
+        }
+
+        $this->instructorService->deleteFinance($finance);
+
+        return response()->json(['message' => 'Finance record deleted successfully.']);
     }
 
     /**

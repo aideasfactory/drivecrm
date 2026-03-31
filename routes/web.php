@@ -97,6 +97,16 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
     Route::put('/instructors/{instructor}/password', [\App\Http\Controllers\InstructorController::class, 'updatePassword'])
         ->name('instructors.password.update');
 
+    // Instructor Finances
+    Route::get('/instructors/{instructor}/finances', [\App\Http\Controllers\InstructorController::class, 'finances'])
+        ->name('instructors.finances');
+    Route::post('/instructors/{instructor}/finances', [\App\Http\Controllers\InstructorController::class, 'storeFinance'])
+        ->name('instructors.finances.store');
+    Route::put('/instructors/{instructor}/finances/{finance}', [\App\Http\Controllers\InstructorController::class, 'updateFinance'])
+        ->name('instructors.finances.update');
+    Route::delete('/instructors/{instructor}/finances/{finance}', [\App\Http\Controllers\InstructorController::class, 'destroyFinance'])
+        ->name('instructors.finances.destroy');
+
     Route::get('/packages', [\App\Http\Controllers\PackageController::class, 'index'])
         ->name('packages.index');
     Route::post('/packages', [\App\Http\Controllers\PackageController::class, 'store'])

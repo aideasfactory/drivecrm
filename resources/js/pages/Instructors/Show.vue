@@ -8,6 +8,7 @@ import DetailsTab from '@/components/Instructors/Tabs/DetailsTab.vue'
 import ActivePupilsTab from '@/components/Instructors/Tabs/ActivePupilsTab.vue'
 import ActionsTab from '@/components/Instructors/Tabs/ActionsTab.vue'
 import ReportsTab from '@/components/Instructors/Tabs/ReportsTab.vue'
+import FinancesTab from '@/components/Instructors/Tabs/FinancesTab.vue'
 import StudentTab from '@/components/Instructors/Tabs/StudentTab.vue'
 import AddInstructorSheet from '@/components/Instructors/AddInstructorSheet.vue'
 import type { InstructorDetail } from '@/types/instructor'
@@ -26,13 +27,14 @@ const props = withDefaults(defineProps<Props>(), {
 
 const isEditSheetOpen = ref(false)
 
-type TabType = 'schedule' | 'details' | 'active-pupils' | 'reports' | 'actions' | 'student'
+type TabType = 'schedule' | 'details' | 'active-pupils' | 'reports' | 'finances' | 'actions' | 'student'
 
 const tabs: { key: TabType; label: string }[] = [
     { key: 'schedule', label: 'Schedule' },
     { key: 'details', label: 'Details' },
     { key: 'active-pupils', label: 'Pupils' },
     { key: 'reports', label: 'Reports' },
+    { key: 'finances', label: 'Finances' },
     // { key: 'actions', label: 'Actions' }, // Temporarily hidden — will revisit once functionality is defined
 ]
 
@@ -105,6 +107,12 @@ const breadcrumbs = [
                 <!-- Active Pupils Tab -->
                 <ActivePupilsTab
                     v-if="activeTab === 'active-pupils'"
+                    :instructor="instructor"
+                />
+
+                <!-- Finances Tab -->
+                <FinancesTab
+                    v-if="activeTab === 'finances'"
                     :instructor="instructor"
                 />
 

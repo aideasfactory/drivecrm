@@ -126,6 +126,14 @@ class Instructor extends Model
     }
 
     /**
+     * Get finance records for this instructor.
+     */
+    public function finances(): HasMany
+    {
+        return $this->hasMany(InstructorFinance::class);
+    }
+
+    /**
      * Get activity logs for this instructor.
      */
     public function activityLogs(): MorphMany

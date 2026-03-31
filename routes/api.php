@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\InstructorCalendarController;
+use App\Http\Controllers\Api\V1\InstructorFinanceController;
 use App\Http\Controllers\Api\V1\InstructorLessonController;
 use App\Http\Controllers\Api\V1\InstructorPackageController;
 use App\Http\Controllers\Api\V1\InstructorProfileController;
@@ -54,9 +55,15 @@ Route::prefix('v1')->group(function (): void {
             Route::post('lessons/{lesson}/notify-arrived', [InstructorLessonController::class, 'notifyArrived']);
             Route::patch('lessons/{lesson}/mileage', [InstructorLessonController::class, 'updateMileage']);
             Route::get('packages', [InstructorPackageController::class, 'index']);
+            Route::post('packages', [InstructorPackageController::class, 'store']);
+            Route::put('packages/{package}', [InstructorPackageController::class, 'update']);
             Route::get('calendar/items', [InstructorCalendarController::class, 'index']);
             Route::post('calendar/items', [InstructorCalendarController::class, 'store']);
             Route::delete('calendar/items/{calendarItem}', [InstructorCalendarController::class, 'destroy']);
+            Route::get('finances', [InstructorFinanceController::class, 'index']);
+            Route::post('finances', [InstructorFinanceController::class, 'store']);
+            Route::put('finances/{finance}', [InstructorFinanceController::class, 'update']);
+            Route::delete('finances/{finance}', [InstructorFinanceController::class, 'destroy']);
         });
 
         // Student routes
