@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\Payment\ResendLessonInvoiceAction;
 use App\Actions\Shared\AdminResetPasswordAction;
 use App\Actions\Shared\Contact\CreateContactAction;
 use App\Actions\Shared\Contact\DeleteContactAction;
@@ -436,6 +437,38 @@ class PupilController extends Controller
         return response()->json([
             'message' => 'Lesson sign-off is being processed.',
         ]);
+    }
+
+    /**
+     * Resend the invoice email for a lesson payment.
+     */
+    public function resendLessonInvoice(Student $student, Lesson $lesson, ResendLessonInvoiceAction $resendInvoice): JsonResponse
+    {
+        $lessonBelongsToStudent = $student->orders()
+            ->whereHas('lessons', fn ($q) => $q->where('id', $lesson->id))
+            ->exists();
+
+        if (! $lessonBelongsToStudent) {
+            return response()->json(['message' => 'Lesson not found for this student.'], 404);
+        }
+
+        $lessonPayment = $lesson->lessonPayment;
+
+        if (! $lessonPayment || ! $lessonPayment->stripe_invoice_id) {
+            return response()->json(['message' => 'No invoice exists for this lesson.'], 422);
+        }
+
+        if ($lessonPayment->isPaid()) {
+            return response()->json(['message' => 'This lesson has already been paid.'], 422);
+        }
+
+        $result = $resendInvoice($lessonPayment);
+
+        if (! $result['success']) {
+            return response()->json(['message' => $result['error'] ?? 'Failed to resend invoice.'], 500);
+        }
+
+        return response()->json(['message' => 'Invoice email has been resent.']);
     }
 
     /**

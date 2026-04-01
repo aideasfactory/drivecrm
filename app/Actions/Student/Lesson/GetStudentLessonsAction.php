@@ -28,7 +28,7 @@ class GetStudentLessonsAction
                     ->with([
                         'instructor.user:id,name',
                         'calendarItem.calendar:id,date',
-                        'lessonPayment:id,lesson_id,amount_pence,status,paid_at',
+                        'lessonPayment:id,lesson_id,amount_pence,status,paid_at,stripe_invoice_id',
                         'payout:id,lesson_id,status,amount_pence,stripe_transfer_id,paid_at',
                         'reflectiveLog:id,lesson_id',
                         'resources:id,title,resource_type,video_url,file_path,file_name,file_size,mime_type,thumbnail_url',
@@ -52,7 +52,9 @@ class GetStudentLessonsAction
                     'status' => $lesson->status->value,
                     'completed_at' => $lesson->completed_at?->toISOString(),
                     'summary' => $lesson->summary,
+                    'lesson_payment_id' => $lesson->lessonPayment?->id,
                     'payment_status' => $lesson->lessonPayment?->status?->value ?? ($order->isUpfront() && $order->isActive() ? 'paid' : null),
+                    'has_stripe_invoice' => $lesson->lessonPayment?->stripe_invoice_id !== null,
                     'payment_mode' => $order->payment_mode->value,
                     'payout_status' => $lesson->payout?->status?->value,
                     'has_payout' => $lesson->payout !== null,

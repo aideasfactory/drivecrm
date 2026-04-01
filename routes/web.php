@@ -174,6 +174,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('students.lessons');
     Route::post('/students/{student}/lessons/{lesson}/sign-off', [\App\Http\Controllers\PupilController::class, 'signOffLesson'])
         ->name('students.lessons.sign-off');
+    Route::post('/students/{student}/lessons/{lesson}/resend-invoice', [\App\Http\Controllers\PupilController::class, 'resendLessonInvoice'])
+        ->name('students.lessons.resend-invoice');
 
     // Student Pickup Points
     Route::get('/students/{student}/pickup-points', [\App\Http\Controllers\PupilController::class, 'pickupPoints'])

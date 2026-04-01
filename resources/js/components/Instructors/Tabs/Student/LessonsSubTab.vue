@@ -40,6 +40,7 @@ import {
     ClipboardCheck,
     CalendarDays,
     FileText,
+    Send,
 } from 'lucide-vue-next'
 import { toast } from '@/components/ui/sonner'
 
@@ -56,7 +57,9 @@ interface Lesson {
     status: 'pending' | 'completed' | 'cancelled'
     completed_at: string | null
     summary: string | null
+    lesson_payment_id: number | null
     payment_status: 'due' | 'paid' | 'refunded' | null
+    has_stripe_invoice: boolean
     payment_mode: 'upfront' | 'weekly'
     payout_status: 'pending' | 'paid' | 'failed' | null
     has_payout: boolean
@@ -83,6 +86,9 @@ const errors = ref<Record<string, string>>({})
 // View summary dialog state
 const isViewSummaryOpen = ref(false)
 const viewSummaryTarget = ref<Lesson | null>(null)
+
+// Resend invoice state
+const resendingInvoiceId = ref<number | null>(null)
 
 // Computed
 const pendingLessons = computed(() => lessons.value.filter((l) => l.status === 'pending'))
@@ -167,6 +173,20 @@ const loadLessons = async () => {
 const openViewSummary = (lesson: Lesson) => {
     viewSummaryTarget.value = lesson
     isViewSummaryOpen.value = true
+}
+
+// Resend invoice
+const resendInvoice = async (lesson: Lesson) => {
+    resendingInvoiceId.value = lesson.id
+    try {
+        await axios.post(`/students/${props.studentId}/lessons/${lesson.id}/resend-invoice`)
+        toast.success('Invoice email has been resent')
+    } catch (error: any) {
+        const message = error.response?.data?.message || 'Failed to resend invoice'
+        toast.error(message)
+    } finally {
+        resendingInvoiceId.value = null
+    }
 }
 
 // Sign-off flow
@@ -336,12 +356,26 @@ onMounted(() => {
                                 </Badge>
                             </TableCell>
                             <TableCell>
-                                <Badge :variant="paymentBadgeVariant(lesson.payment_status)" class="gap-1">
-                                    <PoundSterling class="h-3 w-3" />
-                                    {{ lesson.payment_status
-                                        ? lesson.payment_status.charAt(0).toUpperCase() + lesson.payment_status.slice(1)
-                                        : '—' }}
-                                </Badge>
+                                <div class="flex items-center gap-2">
+                                    <Badge :variant="paymentBadgeVariant(lesson.payment_status)" class="gap-1">
+                                        <PoundSterling class="h-3 w-3" />
+                                        {{ lesson.payment_status
+                                            ? lesson.payment_status.charAt(0).toUpperCase() + lesson.payment_status.slice(1)
+                                            : '—' }}
+                                    </Badge>
+                                    <Button
+                                        v-if="lesson.payment_status === 'due' && lesson.has_stripe_invoice"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="h-7 gap-1 px-2 text-xs"
+                                        :disabled="resendingInvoiceId === lesson.id"
+                                        @click="resendInvoice(lesson)"
+                                    >
+                                        <Loader2 v-if="resendingInvoiceId === lesson.id" class="h-3 w-3 animate-spin" />
+                                        <Send v-else class="h-3 w-3" />
+                                        Resend
+                                    </Button>
+                                </div>
                             </TableCell>
                             <TableCell class="text-right">
                                 <Button
