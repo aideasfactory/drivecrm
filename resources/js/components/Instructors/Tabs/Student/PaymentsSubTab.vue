@@ -13,11 +13,18 @@ import {
     TableRow,
 } from '@/components/ui/table'
 import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from '@/components/ui/tooltip'
+import {
     CreditCard,
     PoundSterling,
     CheckCircle2,
     Clock,
     RotateCcw,
+    ArrowRightLeft,
 } from 'lucide-vue-next'
 import { toast } from '@/components/ui/sonner'
 
@@ -33,6 +40,8 @@ interface Payment {
     due_date: string | null
     paid_at: string | null
     created_at: string | null
+    transferred: boolean
+    transferred_at: string | null
 }
 
 interface Props {
@@ -213,6 +222,7 @@ onMounted(() => {
                             <TableHead>Status</TableHead>
                             <TableHead>Due Date</TableHead>
                             <TableHead>Paid At</TableHead>
+                            <TableHead class="text-center">Transferred</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -249,6 +259,19 @@ onMounted(() => {
                             </TableCell>
                             <TableCell>
                                 {{ formatDateTime(payment.paid_at) }}
+                            </TableCell>
+                            <TableCell class="text-center">
+                                <TooltipProvider v-if="payment.transferred">
+                                    <Tooltip>
+                                        <TooltipTrigger>
+                                            <ArrowRightLeft class="mx-auto h-4 w-4 text-green-600" />
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>Transferred to instructor {{ payment.transferred_at ? formatDateTime(payment.transferred_at) : '' }}</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                                <span v-else class="text-muted-foreground">—</span>
                             </TableCell>
                         </TableRow>
                     </TableBody>

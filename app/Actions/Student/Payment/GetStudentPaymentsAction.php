@@ -24,12 +24,17 @@ class GetStudentPaymentsAction
         return LessonPayment::whereHas('lesson', function ($query) use ($orderIds) {
             $query->whereIn('order_id', $orderIds);
         })
-            ->with(['lesson:id,order_id,date,start_time,end_time', 'lesson.order:id,package_name,payment_mode'])
+            ->with([
+                'lesson:id,order_id,date,start_time,end_time',
+                'lesson.order:id,package_name,payment_mode',
+                'lesson.payout:id,lesson_id,status,paid_at',
+            ])
             ->orderByDesc('created_at')
             ->get()
             ->map(function (LessonPayment $payment) {
                 $lesson = $payment->lesson;
                 $order = $lesson?->order;
+                $payout = $lesson?->payout;
 
                 return [
                     'id' => $payment->id,
@@ -43,6 +48,8 @@ class GetStudentPaymentsAction
                     'due_date' => $payment->due_date?->format('Y-m-d'),
                     'paid_at' => $payment->paid_at?->toIso8601String(),
                     'created_at' => $payment->created_at?->toIso8601String(),
+                    'transferred' => $payout !== null && $payout->status->value === 'paid',
+                    'transferred_at' => $payout?->paid_at?->toIso8601String(),
                 ];
             });
     }
