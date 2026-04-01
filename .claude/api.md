@@ -1709,6 +1709,94 @@ Deletes a calendar item belonging to the authenticated instructor. For recurring
 
 ---
 
+### Student Home Feed
+
+---
+
+#### `GET /api/v1/student/home-feed`
+
+**Auth required:** Yes (Bearer token — student only)
+
+Returns the student home page feed payload including instructor assignment status, upcoming lessons, special offer, purchased hours, learning resources, and instructor bio data. Student derived from authenticated token.
+
+**Request Body:** None (GET request)
+
+**Response (200 OK):**
+```json
+{
+  "data": {
+    "has_instructor": true,
+    "next_lesson": {
+      "id": 42,
+      "order_id": 10,
+      "instructor_id": 5,
+      "amount_pence": 3500,
+      "date": "2026-04-03",
+      "start_time": "10:00",
+      "end_time": "11:00",
+      "status": "pending",
+      "summary": null
+    },
+    "following_lesson": {
+      "id": 43,
+      "order_id": 10,
+      "instructor_id": 5,
+      "amount_pence": 3500,
+      "date": "2026-04-07",
+      "start_time": "14:00",
+      "end_time": "15:00",
+      "status": "pending",
+      "summary": null
+    },
+    "special_offer": "20% off your first 10 lessons!",
+    "purchased_hours": 10,
+    "learning_resources": [
+      {
+        "id": 1,
+        "title": "Roundabout Navigation Guide",
+        "description": "How to safely navigate roundabouts",
+        "tags": ["roundabouts", "junctions"],
+        "resource_type": "video",
+        "video_url": "https://example.com/video.mp4",
+        "file_path": null,
+        "file_name": null,
+        "file_size": null,
+        "mime_type": null,
+        "thumbnail_url": "https://example.com/thumb.jpg"
+      }
+    ],
+    "instructor": {
+      "id": 5,
+      "name": "John Smith",
+      "bio": "10 years of experience teaching learner drivers...",
+      "profile_picture_url": "https://s3.example.com/instructors/profile.jpg",
+      "transmission_type": "manual",
+      "rating": 4.8
+    }
+  }
+}
+```
+
+**Response when student has no instructor (200 OK):**
+```json
+{
+  "data": {
+    "has_instructor": false,
+    "next_lesson": null,
+    "following_lesson": null,
+    "special_offer": null,
+    "purchased_hours": 0,
+    "learning_resources": [],
+    "instructor": null
+  }
+}
+```
+
+**Error Responses:**
+- `401 Unauthorized` — Missing or invalid Bearer token
+
+---
+
 ### Students
 
 ---
@@ -3395,6 +3483,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | POST | `/api/v1/instructor/finances` | Yes | Instructor | Create finance record |
 | PUT | `/api/v1/instructor/finances/{finance}` | Yes | Instructor | Update finance record |
 | DELETE | `/api/v1/instructor/finances/{finance}` | Yes | Instructor | Delete finance record |
+| GET | `/api/v1/student/home-feed` | Yes | Student | Student home page feed |
 | POST | `/api/v1/students` | Yes | Instructor | Create student |
 | GET | `/api/v1/students/{student}` | Yes | Both | View student |
 | PUT | `/api/v1/students/{student}` | Yes | Both | Update student |
@@ -3454,6 +3543,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-31 | Added create and update endpoints for instructor packages — reuses existing CreateInstructorPackageAction and UpdatePackageAction, with ownership check on update | Instructor Packages (store, update) |
 | 2026-03-31 | Added instructor finances API — CRUD endpoints for recording payments and expenses, with recurring support (weekly/monthly/yearly) | Instructor Finances (index, store, update, destroy) |
 | 2026-03-31 | Added `status` as an updatable field on PUT students endpoint — accepts: active, inactive, on_hold, passed, failed, completed | Student (update) |
+| 2026-04-01 | Added student home feed endpoint — returns instructor assignment, upcoming lessons, special offer, purchased hours, learning resources, and instructor bio. Identity from token. | Student Home Feed (home-feed) |
 | 2026-03-31 | Upfront payment no longer returns `checkout_url` — instead emails the Stripe payment link to the student (or contact person). API response confirms email was sent. | Orders (store) |
 
 ---

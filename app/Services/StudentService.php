@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Actions\Instructor\CreatePupilAction;
 use App\Actions\Student\GetAllStudentsAction;
 use App\Actions\Student\GetStudentByIdAction;
+use App\Actions\Student\GetStudentHomeFeedAction;
 use App\Actions\Student\PickupPoint\CreatePickupPointAction;
 use App\Actions\Student\PickupPoint\DeletePickupPointAction;
 use App\Actions\Student\PickupPoint\GetStudentPickupPointsAction;
@@ -28,7 +29,8 @@ class StudentService extends BaseService
         protected GetStudentPickupPointsAction $getStudentPickupPoints,
         protected CreatePickupPointAction $createPickupPoint,
         protected DeletePickupPointAction $deletePickupPoint,
-        protected SetDefaultPickupPointAction $setDefaultPickupPoint
+        protected SetDefaultPickupPointAction $setDefaultPickupPoint,
+        protected GetStudentHomeFeedAction $getStudentHomeFeed
     ) {}
 
     /**
@@ -135,5 +137,17 @@ class StudentService extends BaseService
     public function setDefaultPickupPoint(\App\Models\StudentPickupPoint $pickupPoint): \App\Models\StudentPickupPoint
     {
         return ($this->setDefaultPickupPoint)($pickupPoint);
+    }
+
+    /**
+     * Get the student home page feed data.
+     *
+     * @return array<string, mixed>
+     */
+    public function getHomeFeed(Student $student): array
+    {
+        $key = $this->cacheKey('student', $student->id, 'home_feed');
+
+        return $this->remember($key, fn () => ($this->getStudentHomeFeed)($student));
     }
 }

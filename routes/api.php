@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\V1\PackagePricingController;
 use App\Http\Controllers\Api\V1\ResourceController;
 use App\Http\Controllers\Api\V1\StudentChecklistItemController;
 use App\Http\Controllers\Api\V1\StudentController;
+use App\Http\Controllers\Api\V1\StudentHomeFeedController;
 use App\Http\Controllers\Api\V1\StudentLessonController;
 use App\Http\Controllers\Api\V1\StudentNoteController;
 use App\Http\Controllers\Api\V1\StudentOrderController;
@@ -65,6 +66,9 @@ Route::prefix('v1')->group(function (): void {
             Route::put('finances/{finance}', [InstructorFinanceController::class, 'update']);
             Route::delete('finances/{finance}', [InstructorFinanceController::class, 'destroy']);
         });
+
+        // Student home feed
+        Route::get('student/home-feed', StudentHomeFeedController::class);
 
         // Student routes
         Route::post('students', [StudentController::class, 'store']);

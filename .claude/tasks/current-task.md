@@ -1,26 +1,38 @@
-# Task: Populate Instructor Student Payments Tab
+# Task: Student Home Page Feed API Endpoint
 
 ## Overview
-Build out the payments tab on the instructor-side student screen to show the student's actual payment records (LessonPayment records linked through Orders -> Lessons).
+Create a dedicated home page feed API endpoint for students that returns instructor assignment status, upcoming lessons, special offers, purchased hours, learning resources, and instructor bio data.
 
 ## Phase 1: Planning ✅
-- [x] Analyze existing data structures (LessonPayment, Order, Lesson models)
-- [x] Review existing tab patterns (LessonsSubTab as reference)
-- [x] Plan backend endpoint and frontend component
+**Status:** Complete
 
 ### Reflection
-Data flows: Student -> Orders -> Lessons -> LessonPayment. Each LessonPayment has amount_pence, status (due/paid/refunded), due_date, paid_at. Orders have payment_mode (upfront/weekly). Will create a new Action + controller method + route, then build out the Vue component following LessonsSubTab pattern.
+- Reusing existing patterns: Controller -> Service -> Action
+- Identity from token, not request parameter
+- Special offer comes from Instructor.meta['special_offer']
+- Purchased hours = total non-draft/non-cancelled lesson count across all orders
 
-## Phase 2: Implementation 🔄
-- [ ] Create GetStudentPaymentsAction in app/Actions/Student/Payment/
-- [ ] Add payments() method to PupilController
-- [ ] Add route in web.php
-- [ ] Implement PaymentsSubTab.vue with table, summary cards, loading/empty states
+## Phase 2: Implementation ✅
+**Status:** Complete
 
-## Phase 3: Polish & Completion ⏸️
-- [ ] Final review of data flow
-- [ ] Update current-task.md with reflection
-- [ ] Write .phase_done sentinel
+### Tasks
+- [x] Create GetStudentHomeFeedAction
+- [x] Add getHomeFeed to StudentService (with caching)
+- [x] Create StudentHomeFeedResource
+- [x] Create StudentHomeFeedController
+- [x] Add route to api.php (GET /api/v1/student/home-feed)
+- [x] Write Pest test (5 test cases)
+- [x] Update api.md (endpoint docs, quick reference, changelog)
 
-## Status: Phase 2 - In Progress
-Last Updated: 2026-03-30
+### Reflection
+- Followed Controller -> Service -> Action pattern strictly
+- Service extends BaseService with caching via remember()
+- Reused existing ResourceResource for learning_resources
+- Action handles all data aggregation: upcoming lessons, purchased hours, learning resources, instructor data
+- No new migrations needed
+- Identity resolved from token via ResolveApiProfile middleware
+
+## Phase 3: Finalization ✅
+**Status:** Complete
+
+**Last Updated:** 2026-04-01
