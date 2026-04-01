@@ -78,6 +78,7 @@ class OrderService extends BaseService
 
         // Send confirmation email for weekly orders (activated immediately)
         if ($paymentMode === PaymentMode::WEEKLY) {
+            $this->ensureStripeCustomerExists($student);
             $this->sendConfirmationEmail->execute($order, $student);
         }
 
@@ -198,6 +199,33 @@ class OrderService extends BaseService
         }
 
         return $result;
+    }
+
+    /**
+     * Ensure the student's user has a Stripe customer ID (required for weekly invoice sending).
+     */
+    protected function ensureStripeCustomerExists(Student $student): void
+    {
+        $user = $student->user;
+
+        if ($user->stripe_customer_id) {
+            return;
+        }
+
+        $customerResult = $this->stripeService->createOrGetCustomer($user);
+
+        if (! $customerResult['success']) {
+            Log::warning('Failed to create Stripe customer for weekly order', [
+                'user_id' => $user->id,
+                'student_id' => $student->id,
+                'error' => $customerResult['error'] ?? 'Unknown',
+            ]);
+
+            return;
+        }
+
+        $user->stripe_customer_id = $customerResult['customer_id'];
+        $user->save();
     }
 
     /**
