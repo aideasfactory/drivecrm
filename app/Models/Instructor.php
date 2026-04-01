@@ -160,13 +160,12 @@ class Instructor extends Model
     /**
      * Check if instructor can receive platform transfers (lesson payouts).
      *
-     * Requires charges_enabled (NOT payouts_enabled).
-     * payouts_enabled only controls bank payouts from the connected account,
-     * it does not block platform-initiated transfers.
+     * payouts_enabled correlates with Stripe's 'transfers' capability.
+     * Without it, platform transfers to the connected account will be rejected.
      */
     public function canReceiveTransfers(): bool
     {
-        return $this->charges_enabled && $this->stripe_account_id !== null;
+        return $this->payouts_enabled && $this->stripe_account_id !== null;
     }
 
     /**

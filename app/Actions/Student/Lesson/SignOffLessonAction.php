@@ -48,8 +48,10 @@ class SignOffLessonAction
             throw new LessonAlreadyCompletedException;
         }
 
-        // Guard: instructor onboarding complete and charges enabled (required for platform transfers)
-        if (! $instructor->onboarding_complete || ! $instructor->charges_enabled) {
+        // Guard: instructor onboarding complete and payouts enabled
+        // payouts_enabled correlates with Stripe's 'transfers' capability — without it,
+        // platform transfers to the connected account will fail
+        if (! $instructor->onboarding_complete || ! $instructor->payouts_enabled) {
             throw new InstructorNotOnboardedException;
         }
 

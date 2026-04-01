@@ -39,8 +39,10 @@ class CreateLessonPayoutAction
             throw new PayoutAlreadyProcessedException;
         }
 
-        // Guard: instructor must be onboarded and charges enabled (required for platform transfers)
-        if (! $instructor->onboarding_complete || ! $instructor->charges_enabled) {
+        // Guard: instructor must be onboarded and payouts enabled
+        // payouts_enabled correlates with Stripe's 'transfers' capability — without it,
+        // platform transfers to the connected account will fail
+        if (! $instructor->onboarding_complete || ! $instructor->payouts_enabled) {
             throw new InstructorNotOnboardedException;
         }
 
