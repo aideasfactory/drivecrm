@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/sonner'
-import { ArrowLeft, Phone, Mail, StickyNote } from 'lucide-vue-next'
+import { ArrowLeft, Phone, Mail, StickyNote, CalendarPlus } from 'lucide-vue-next'
 import type { InstructorDetail } from '@/types/instructor'
 import OverviewSubTab from './Student/OverviewSubTab.vue'
 import LessonsSubTab from './Student/LessonsSubTab.vue'
@@ -18,6 +18,7 @@ import EmergencyContactSubTab from './Student/EmergencyContactSubTab.vue'
 import MessagesSubTab from './Student/MessagesSubTab.vue'
 import ActionsSubTab from './Student/ActionsSubTab.vue'
 import LogSubTab from './Student/LogSubTab.vue'
+import BookLessonSection from './Student/Actions/BookLessonSection.vue'
 
 interface StudentDetail {
     id: number
@@ -176,7 +177,14 @@ onMounted(() => {
                             </div>
                         </div>
                     </div>
- 
+
+                    <!-- Book Lessons -->
+                    <BookLessonSection
+                        v-if="student.instructor_id"
+                        :student-id="studentId"
+                        :instructor-id="student.instructor_id"
+                        header-mode
+                    />
                 </div>
             </CardContent>
         </Card>

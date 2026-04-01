@@ -163,6 +163,12 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
     Route::get('/students/{student}/payments', [\App\Http\Controllers\PupilController::class, 'payments'])
         ->name('students.payments');
 
+    // Student Orders
+    Route::get('/students/{student}/available-slots', [\App\Http\Controllers\PupilController::class, 'availableSlots'])
+        ->name('students.available-slots');
+    Route::post('/students/{student}/orders', [\App\Http\Controllers\PupilController::class, 'storeOrder'])
+        ->name('students.orders.store');
+
     // Student Lessons
     Route::get('/students/{student}/lessons', [\App\Http\Controllers\PupilController::class, 'lessons'])
         ->name('students.lessons');

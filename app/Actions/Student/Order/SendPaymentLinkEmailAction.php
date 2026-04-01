@@ -27,10 +27,10 @@ class SendPaymentLinkEmailAction
 
             if ($isBookedByContact) {
                 $recipientEmail = $student->contact_email;
-                $recipientName = trim(($student->contact_first_name ?? '') . ' ' . ($student->contact_surname ?? ''));
+                $recipientName = trim(($student->contact_first_name ?? '').' '.($student->contact_surname ?? ''));
             } else {
                 $recipientEmail = $student->email;
-                $recipientName = trim(($student->first_name ?? '') . ' ' . ($student->surname ?? ''));
+                $recipientName = trim(($student->first_name ?? '').' '.($student->surname ?? ''));
             }
 
             if (! $recipientEmail) {

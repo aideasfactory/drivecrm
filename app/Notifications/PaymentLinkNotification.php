@@ -35,7 +35,7 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
         $order = $this->order;
         $instructor = $order->instructor;
         $firstLesson = $order->lessons()->orderBy('date')->first();
-        $totalFormatted = '£' . number_format($order->total_price_pence / 100, 2);
+        $totalFormatted = '£'.number_format($order->total_price_pence / 100, 2);
 
         $message = (new MailMessage)
             ->subject('Complete Your Payment for Driving Lessons')
@@ -48,7 +48,7 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
             ->line("Total: {$totalFormatted}");
 
         if ($firstLesson) {
-            $message->line('First lesson: ' . \Carbon\Carbon::parse($firstLesson->date)->format('l, F j, Y'));
+            $message->line('First lesson: '.\Carbon\Carbon::parse($firstLesson->date)->format('l, F j, Y'));
         }
 
         $message->line('')
@@ -57,7 +57,7 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
             ->line('This payment link will expire after 24 hours.');
 
         if ($this->isBookedByContact) {
-            $learnerName = $this->student->first_name . ' ' . $this->student->surname;
+            $learnerName = $this->student->first_name.' '.$this->student->surname;
             $message->line('')
                 ->line("This booking was made for: **{$learnerName}**");
         }
@@ -86,7 +86,7 @@ The Driving School Team');
         $instructorName = $this->order->instructor->user->name;
 
         if ($this->isBookedByContact) {
-            $learnerName = $this->student->first_name . ' ' . $this->student->surname;
+            $learnerName = $this->student->first_name.' '.$this->student->surname;
 
             return "Your instructor **{$instructorName}** has booked driving lessons for **{$learnerName}**. Please complete the payment to confirm the booking.";
         }
