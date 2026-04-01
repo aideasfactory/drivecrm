@@ -158,11 +158,15 @@ class Instructor extends Model
     }
 
     /**
-     * Check if instructor can receive payouts.
+     * Check if instructor can receive platform transfers (lesson payouts).
+     *
+     * Requires charges_enabled (NOT payouts_enabled).
+     * payouts_enabled only controls bank payouts from the connected account,
+     * it does not block platform-initiated transfers.
      */
-    public function canReceivePayouts(): bool
+    public function canReceiveTransfers(): bool
     {
-        return $this->payouts_enabled;
+        return $this->charges_enabled && $this->stripe_account_id !== null;
     }
 
     /**

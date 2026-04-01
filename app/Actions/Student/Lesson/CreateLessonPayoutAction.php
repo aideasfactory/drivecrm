@@ -39,8 +39,8 @@ class CreateLessonPayoutAction
             throw new PayoutAlreadyProcessedException;
         }
 
-        // Guard: instructor must be onboarded and payouts enabled
-        if (! $instructor->onboarding_complete || ! $instructor->payouts_enabled) {
+        // Guard: instructor must be onboarded and charges enabled (required for platform transfers)
+        if (! $instructor->onboarding_complete || ! $instructor->charges_enabled) {
             throw new InstructorNotOnboardedException;
         }
 
