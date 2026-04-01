@@ -18,6 +18,7 @@ import {
     CreditCard,
     UserCog,
     Filter,
+    ExternalLink,
 } from 'lucide-vue-next'
 
 interface ActivityLog {
@@ -244,6 +245,16 @@ onMounted(() => {
                             {{ log.category }}
                         </Badge>
                     </div>
+                    <a
+                        v-if="log.metadata?.invoice_url"
+                        :href="log.metadata.invoice_url as string"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                        <ExternalLink class="h-3 w-3" />
+                        View Invoice
+                    </a>
                     <p class="text-xs text-muted-foreground">
                         {{ formatDate(log.created_at) }}
                     </p>

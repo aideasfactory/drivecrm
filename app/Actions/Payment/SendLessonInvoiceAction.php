@@ -112,6 +112,7 @@ class SendLessonInvoiceAction
                     'lesson_payment_id' => $lessonPayment->id,
                     'recipient_email' => $recipientEmail,
                     'is_booked_by_contact' => $isBookedByContact,
+                    'invoice_url' => $hostedInvoiceUrl,
                 ]
             );
         } catch (\Exception $e) {
