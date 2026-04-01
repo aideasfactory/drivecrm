@@ -155,6 +155,9 @@ class WebhookController extends Controller
                     // Send confirmation email (for onboarding orders)
                     $this->sendOrderConfirmationEmail($order);
 
+                    // Create lesson payment records for upfront orders (marked as PAID immediately)
+                    $this->createUpfrontLessonPayments($order);
+
                     // Transition calendar items from DRAFT to BOOKED now that payment is confirmed
                     app(ConfirmCalendarItemsAction::class)($order);
 
@@ -547,6 +550,34 @@ class WebhookController extends Controller
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Create lesson payment records for upfront orders (marked as PAID immediately).
+     */
+    protected function createUpfrontLessonPayments(Order $order): void
+    {
+        $lessons = $order->lessons()->orderBy('date')->get();
+
+        foreach ($lessons as $lesson) {
+            // Skip if a payment record already exists for this lesson
+            if (LessonPayment::where('lesson_id', $lesson->id)->exists()) {
+                continue;
+            }
+
+            LessonPayment::create([
+                'lesson_id' => $lesson->id,
+                'amount_pence' => $lesson->amount_pence,
+                'status' => PaymentStatus::PAID,
+                'due_date' => $lesson->date,
+                'paid_at' => now(),
+            ]);
+        }
+
+        Log::info('Webhook: Created upfront lesson payment records', [
+            'order_id' => $order->id,
+            'payments_count' => $lessons->count(),
+        ]);
     }
 
     /**
