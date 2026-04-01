@@ -18,6 +18,7 @@ use App\Models\Order;
 use App\Models\Package;
 use App\Models\Student;
 use App\Services\InstructorCalendarService;
+use App\Services\InstructorService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -164,6 +165,9 @@ class CreateOrderFromEnquiryAction
 
             // Invalidate calendar cache for affected dates (after transaction commits)
             $this->invalidateCalendarCacheForItems($calendarItemIds, $instructorId);
+
+            // Invalidate grouped students cache so the instructor sees the new booking immediately
+            $this->invalidateStudentCacheForInstructor($instructorId);
 
             return $order;
 
@@ -348,6 +352,22 @@ class CreateOrderFromEnquiryAction
 
         foreach ($dates as $date) {
             $calendarService->invalidateCalendarCache($instructorId, $date);
+        }
+    }
+
+    /**
+     * Invalidate the instructor's grouped students cache after a booking is created.
+     */
+    protected function invalidateStudentCacheForInstructor(?int $instructorId): void
+    {
+        if (! $instructorId) {
+            return;
+        }
+
+        $instructor = \App\Models\Instructor::find($instructorId);
+
+        if ($instructor) {
+            app(InstructorService::class)->invalidateStudentCache($instructor);
         }
     }
 }

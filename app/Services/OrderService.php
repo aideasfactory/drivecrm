@@ -31,7 +31,8 @@ class OrderService extends BaseService
         protected SendPaymentLinkEmailAction $sendPaymentLinkEmail,
         protected StripeService $stripeService,
         protected DetectCalendarClashesAction $detectCalendarClashes,
-        protected LogActivityAction $logActivity
+        protected LogActivityAction $logActivity,
+        protected InstructorService $instructorService
     ) {}
 
     /**
@@ -79,6 +80,9 @@ class OrderService extends BaseService
         if ($paymentMode === PaymentMode::WEEKLY) {
             $this->sendConfirmationEmail->execute($order, $student);
         }
+
+        // Invalidate grouped students cache so the instructor sees the new booking immediately
+        $this->invalidateStudentCacheForBooking($student->instructor_id);
 
         return [
             'order' => $order->fresh(['lessons']),
@@ -188,8 +192,27 @@ class OrderService extends BaseService
         // Send confirmation email when upfront payment is verified
         if ($result['verified']) {
             $this->sendConfirmationEmail->execute($result['order'], $result['order']->student);
+
+            // Invalidate grouped students cache after payment confirmation
+            $this->invalidateStudentCacheForBooking($order->instructor_id);
         }
 
         return $result;
+    }
+
+    /**
+     * Invalidate the instructor's grouped students cache after a booking change.
+     */
+    protected function invalidateStudentCacheForBooking(?int $instructorId): void
+    {
+        if (! $instructorId) {
+            return;
+        }
+
+        $instructor = Instructor::find($instructorId);
+
+        if ($instructor) {
+            $this->instructorService->invalidateStudentCache($instructor);
+        }
     }
 }

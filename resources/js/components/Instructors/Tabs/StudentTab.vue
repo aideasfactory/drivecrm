@@ -17,6 +17,7 @@ import TransferSubTab from './Student/TransferSubTab.vue'
 import EmergencyContactSubTab from './Student/EmergencyContactSubTab.vue'
 import MessagesSubTab from './Student/MessagesSubTab.vue'
 import ActionsSubTab from './Student/ActionsSubTab.vue'
+import LogSubTab from './Student/LogSubTab.vue'
 
 interface StudentDetail {
     id: number
@@ -47,7 +48,7 @@ const props = withDefaults(defineProps<Props>(), {
 const student = ref<StudentDetail | null>(null)
 const loading = ref(true)
 
-type SubTabType = 'overview' | 'lessons' | 'payments' | 'transfer' | 'emergency' | 'messages' | 'actions'
+type SubTabType = 'overview' | 'lessons' | 'payments' | 'transfer' | 'emergency' | 'messages' | 'actions' | 'log'
 
 const subTabs: { key: SubTabType; label: string }[] = [
     { key: 'overview', label: 'Overview' },
@@ -56,6 +57,7 @@ const subTabs: { key: SubTabType; label: string }[] = [
     // { key: 'emergency', label: 'Emergency Contact' },
     { key: 'messages', label: 'Messages' },
     { key: 'actions', label: 'Actions' },
+    { key: 'log', label: 'Log' },
 ]
 
 const activeSubTab = computed(() => props.subtab || 'overview')
@@ -226,6 +228,10 @@ onMounted(() => {
                 />
                 <ActionsSubTab
                     v-if="activeSubTab === 'actions'"
+                    :student-id="studentId"
+                />
+                <LogSubTab
+                    v-if="activeSubTab === 'log'"
                     :student-id="studentId"
                 />
             </CardContent>

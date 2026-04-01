@@ -6,7 +6,9 @@ namespace App\Actions\Student\Order;
 
 use App\Actions\Calendar\ConfirmCalendarItemsAction;
 use App\Enums\OrderStatus;
+use App\Models\Instructor;
 use App\Models\Order;
+use App\Services\InstructorService;
 use Illuminate\Support\Facades\Log;
 use Stripe\Checkout\Session;
 
@@ -39,6 +41,9 @@ class VerifyCheckoutAction
                     // Transition calendar items from DRAFT to BOOKED now that payment is confirmed
                     app(ConfirmCalendarItemsAction::class)($order);
 
+                    // Invalidate grouped students cache so the instructor sees the confirmed booking
+                    $this->invalidateStudentCache($order->instructor_id);
+
                     Log::info('Order activated via API checkout verification', [
                         'order_id' => $order->id,
                         'session_id' => $sessionId,
@@ -69,6 +74,19 @@ class VerifyCheckoutAction
                 'order' => $order,
                 'message' => 'Failed to verify payment.',
             ];
+        }
+    }
+
+    protected function invalidateStudentCache(?int $instructorId): void
+    {
+        if (! $instructorId) {
+            return;
+        }
+
+        $instructor = Instructor::find($instructorId);
+
+        if ($instructor) {
+            app(InstructorService::class)->invalidateStudentCache($instructor);
         }
     }
 }
