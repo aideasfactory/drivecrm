@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\ChangePasswordRequest;
 use App\Http\Requests\Api\V1\LoginRequest;
 use App\Http\Requests\Api\V1\RegisterInstructorRequest;
 use App\Http\Requests\Api\V1\RegisterStudentRequest;
@@ -67,6 +68,20 @@ class AuthController extends Controller
             'token' => $result['token'],
             'user' => new UserResource($result['user']),
         ], 201);
+    }
+
+    /**
+     * Change the authenticated user's password.
+     */
+    public function changePassword(ChangePasswordRequest $request): JsonResponse
+    {
+        $this->authService->changePassword(
+            $request->user(),
+            $request->validated('current_password'),
+            $request->validated('password')
+        );
+
+        return response()->json(['success' => true]);
     }
 
     /**

@@ -42,6 +42,7 @@ Route::prefix('v1')->group(function (): void {
         Route::prefix('auth')->group(function (): void {
             Route::post('logout', [AuthController::class, 'logout']);
             Route::get('user', [AuthController::class, 'user']);
+            Route::post('change-password', [AuthController::class, 'changePassword']);
         });
 
         // Instructor routes

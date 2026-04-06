@@ -79,6 +79,7 @@ Users (1) ──┬── (1) Instructors ──┬── (Many) Packages
    - Polymorphic based on `role` enum: `owner`, `instructor`, `student`
    - Has one-to-one relationship with either `instructors` or `students` table
    - Belongs to a `team` via `current_team_id` (nullable foreign key)
+   - `password_change_required` (boolean, default false) — set to true when a temporary password is issued (instructor-created pupils, onboarding, admin reset); cleared when user changes password via API
 
 2. **instructors** - Instructor profiles
    - One-to-one with `users` (via `user_id`)

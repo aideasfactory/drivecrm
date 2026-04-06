@@ -34,6 +34,7 @@ class CreatePupilAction
             'name' => $data['first_name'].' '.$data['surname'],
             'email' => $data['email'],
             'password' => Hash::make($temporaryPassword),
+            'password_change_required' => true,
             'role' => UserRole::STUDENT,
         ]);
 

@@ -16,6 +16,7 @@ class AdminResetPasswordAction
     {
         $user->update([
             'password' => $password,
+            'password_change_required' => true,
         ]);
 
         (new LogActivityAction)(
