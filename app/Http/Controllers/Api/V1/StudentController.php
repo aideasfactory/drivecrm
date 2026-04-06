@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\AttachToInstructorRequest;
 use App\Http\Requests\Api\V1\StoreStudentRequest;
 use App\Http\Requests\Api\V1\UpdateStudentRequest;
 use App\Http\Resources\V1\StudentResource;
+use App\Models\Instructor;
 use App\Services\StudentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -66,6 +68,34 @@ class StudentController extends Controller
         $student = $this->studentService->update($student, $request->validated());
 
         return new StudentResource($student);
+    }
+
+    /**
+     * Attach the authenticated student to an instructor via PIN.
+     *
+     * Only students without an assigned instructor can use this endpoint.
+     */
+    public function attachToInstructor(AttachToInstructorRequest $request): JsonResponse
+    {
+        $student = $request->user()->student;
+
+        if ($student->hasInstructor()) {
+            return response()->json([
+                'message' => 'You are already attached to an instructor.',
+            ], 422);
+        }
+
+        $instructor = Instructor::where('pin', $request->validated('pin'))->first();
+
+        if (! $instructor) {
+            return response()->json([
+                'message' => 'The PIN you entered does not match any instructor.',
+            ], 422);
+        }
+
+        $this->studentService->attachToInstructor($student, $instructor);
+
+        return response()->json(true);
     }
 
     /**

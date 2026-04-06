@@ -29,6 +29,7 @@
     - [Finances (Delete)](#delete-apiv1instructorfinancesfinance)
   - [Package Pricing](#get-apiv1packagespackagepricing)
   - [Students](#students)
+    - [Attach to Instructor](#post-apiv1studentsattach)
     - [CRUD](#post-apiv1students)
     - [Lessons](#get-apiv1studentsstudentlessons)
     - [Lesson Detail](#get-apiv1studentsstudentlessonslesson)
@@ -1710,6 +1711,54 @@ Deletes a calendar item belonging to the authenticated instructor. For recurring
 ---
 
 ### Students
+
+---
+
+#### `POST /api/v1/students/attach`
+
+**Auth required:** Yes (Bearer token — student only)
+
+Attaches the authenticated student to an instructor using the instructor's PIN code. The student must not already be attached to an instructor.
+
+**Request Body:**
+```json
+{
+  "pin": "ABC123"
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `pin` | string | Yes | Instructor's unique PIN code (max 10 characters) |
+
+**Success Response (200):**
+```json
+true
+```
+
+**Error Response — already attached (422):**
+```json
+{
+  "message": "You are already attached to an instructor."
+}
+```
+
+**Error Response — invalid PIN (422):**
+```json
+{
+  "message": "The PIN you entered does not match any instructor."
+}
+```
+
+**Error Response — validation (422):**
+```json
+{
+  "message": "The pin field is required.",
+  "errors": {
+    "pin": ["The pin field is required."]
+  }
+}
+```
 
 ---
 
@@ -3396,6 +3445,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | PUT | `/api/v1/instructor/finances/{finance}` | Yes | Instructor | Update finance record |
 | DELETE | `/api/v1/instructor/finances/{finance}` | Yes | Instructor | Delete finance record |
 | POST | `/api/v1/students` | Yes | Instructor | Create student |
+| POST | `/api/v1/students/attach` | Yes | Student | Attach to instructor via PIN |
 | GET | `/api/v1/students/{student}` | Yes | Both | View student |
 | PUT | `/api/v1/students/{student}` | Yes | Both | Update student |
 | DELETE | `/api/v1/students/{student}` | Yes | Both | Remove student (soft) |
@@ -3455,6 +3505,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-31 | Added instructor finances API — CRUD endpoints for recording payments and expenses, with recurring support (weekly/monthly/yearly) | Instructor Finances (index, store, update, destroy) |
 | 2026-03-31 | Added `status` as an updatable field on PUT students endpoint — accepts: active, inactive, on_hold, passed, failed, completed | Student (update) |
 | 2026-03-31 | Upfront payment no longer returns `checkout_url` — instead emails the Stripe payment link to the student (or contact person). API response confirms email was sent. | Orders (store) |
+| 2026-04-06 | Added student-to-instructor attach endpoint — student submits instructor PIN to link themselves. Requires `pin` column on instructors table (migration included). | Students (attach) |
 
 ---
 

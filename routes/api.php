@@ -67,6 +67,7 @@ Route::prefix('v1')->group(function (): void {
         });
 
         // Student routes
+        Route::post('students/attach', [StudentController::class, 'attachToInstructor']);
         Route::post('students', [StudentController::class, 'store']);
         Route::get('students/{student}', [StudentController::class, 'show']);
         Route::put('students/{student}', [StudentController::class, 'update']);

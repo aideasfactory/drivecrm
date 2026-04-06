@@ -242,6 +242,8 @@ Extended profile for users with instructor role.
 | `charges_enabled` | boolean | DEFAULT false | Stripe charges enabled status |
 | `payouts_enabled` | boolean | DEFAULT false | Stripe payouts enabled status |
 | `bio` | text | NULLABLE | Instructor biography for display |
+| `phone` | varchar(20) | NULLABLE | Instructor phone number |
+| `pin` | varchar(10) | NULLABLE, UNIQUE | Instructor PIN code for student attachment |
 | `rating` | float(3,2) | NULLABLE | Instructor rating (0.00-5.00) |
 | `transmission_type` | enum('manual', 'automatic') | NOT NULL | Vehicle transmission type |
 | `status` | varchar(50) | DEFAULT 'active' | Instructor status |
@@ -258,6 +260,7 @@ Extended profile for users with instructor role.
 **Indexes:**
 - `stripe_account_id`
 - Composite index on `(latitude, longitude)` named `instructors_coordinates_index`
+- `pin` (unique)
 
 **Relationships:**
 - Belongs to one `User`

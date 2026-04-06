@@ -32,6 +32,7 @@ class Instructor extends Model
         'latitude',
         'longitude',
         'meta',
+        'pin',
         'profile_picture_path',
     ];
 
