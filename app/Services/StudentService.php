@@ -6,8 +6,10 @@ namespace App\Services;
 
 use App\Actions\Instructor\CreatePupilAction;
 use App\Actions\Student\AttachStudentToInstructorAction;
+use App\Actions\Student\DeleteStudentProfilePictureAction;
 use App\Actions\Student\GetAllStudentsAction;
 use App\Actions\Student\GetStudentByIdAction;
+use App\Actions\Student\UploadStudentProfilePictureAction;
 use App\Actions\Student\PickupPoint\CreatePickupPointAction;
 use App\Actions\Student\PickupPoint\DeletePickupPointAction;
 use App\Actions\Student\PickupPoint\GetStudentPickupPointsAction;
@@ -17,6 +19,7 @@ use App\Actions\Student\UpdateStudentAction;
 use App\Models\Instructor;
 use App\Models\Student;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Http\UploadedFile;
 
 class StudentService extends BaseService
 {
@@ -30,7 +33,9 @@ class StudentService extends BaseService
         protected CreatePickupPointAction $createPickupPoint,
         protected DeletePickupPointAction $deletePickupPoint,
         protected SetDefaultPickupPointAction $setDefaultPickupPoint,
-        protected AttachStudentToInstructorAction $attachStudentToInstructor
+        protected AttachStudentToInstructorAction $attachStudentToInstructor,
+        protected UploadStudentProfilePictureAction $uploadProfilePicture,
+        protected DeleteStudentProfilePictureAction $deleteProfilePictureAction
     ) {}
 
     /**
@@ -103,6 +108,22 @@ class StudentService extends BaseService
         $this->invalidateInstructorStudentCache($instructor);
 
         return $result;
+    }
+
+    /**
+     * Upload or replace a student's profile picture.
+     */
+    public function updateProfilePicture(Student $student, UploadedFile $file): Student
+    {
+        return ($this->uploadProfilePicture)($student, $file);
+    }
+
+    /**
+     * Delete a student's profile picture.
+     */
+    public function deleteProfilePicture(Student $student): Student
+    {
+        return ($this->deleteProfilePictureAction)($student);
     }
 
     /**

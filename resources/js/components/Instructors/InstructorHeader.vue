@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Mail, Phone, MapPin, Edit, CreditCard, Loader2, CheckCircle, LogOut } from 'lucide-vue-next'
@@ -112,6 +112,7 @@ onMounted(() => {
             <div class="flex items-start gap-4">
                 <!-- Large Avatar -->
                 <Avatar class="h-20 w-20">
+                    <AvatarImage v-if="instructor.avatar" :src="instructor.avatar" :alt="instructor.name" />
                     <AvatarFallback class="text-2xl">
                         {{ getInitials(instructor.name) }}
                     </AvatarFallback>

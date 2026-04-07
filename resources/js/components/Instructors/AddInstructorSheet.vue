@@ -16,10 +16,12 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, UserPlus, UserPen, Save, Trash2, AlertTriangle } from 'lucide-vue-next'
+import { Loader2, UserPlus, UserPen, Save, Trash2, AlertTriangle, Camera, X } from 'lucide-vue-next'
+import { toast } from '@/components/ui/toast'
 import PasswordResetSection from '@/components/Shared/PasswordResetSection.vue'
 import type { CreateInstructorData, InstructorDetail } from '@/types/instructor'
 
@@ -58,6 +60,73 @@ const form = ref<CreateInstructorData>({
 })
 
 const errors = ref<Record<string, string>>({})
+const isUploadingPicture = ref(false)
+const isDeletingPicture = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
+
+const getInitials = (name: string) => {
+    return name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
+}
+
+const handleAvatarUpload = (event: Event) => {
+    const target = event.target as HTMLInputElement
+    const file = target.files?.[0]
+    if (!file || !props.instructor) return
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+        toast({ title: 'Invalid file type. Please use JPG, PNG, or WebP.', variant: 'destructive' })
+        return
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+        toast({ title: 'File too large. Maximum size is 5MB.', variant: 'destructive' })
+        return
+    }
+
+    isUploadingPicture.value = true
+
+    router.post(`/instructors/${props.instructor.id}/profile-picture`, {
+        profile_picture: file,
+    }, {
+        forceFormData: true,
+        preserveScroll: true,
+        onSuccess: () => {
+            toast({ title: 'Profile picture updated.' })
+        },
+        onError: () => {
+            toast({ title: 'Failed to upload profile picture.', variant: 'destructive' })
+        },
+        onFinish: () => {
+            isUploadingPicture.value = false
+            if (fileInput.value) fileInput.value.value = ''
+        },
+    })
+}
+
+const handleAvatarDelete = () => {
+    if (!props.instructor) return
+
+    isDeletingPicture.value = true
+
+    router.delete(`/instructors/${props.instructor.id}/profile-picture`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            toast({ title: 'Profile picture removed.' })
+        },
+        onError: () => {
+            toast({ title: 'Failed to remove profile picture.', variant: 'destructive' })
+        },
+        onFinish: () => {
+            isDeletingPicture.value = false
+        },
+    })
+}
 
 // Watch for instructor prop changes and populate form
 watch(
@@ -188,6 +257,53 @@ const handleRequestDeletion = () => {
                     }}
                 </SheetDescription>
             </SheetHeader>
+
+            <!-- Avatar Upload (Edit Mode Only) -->
+            <div v-if="isEditMode && instructor" class="mt-6 px-6">
+                <div class="flex items-center gap-4">
+                    <Avatar class="h-16 w-16">
+                        <AvatarImage v-if="instructor.avatar" :src="instructor.avatar" :alt="instructor.name" />
+                        <AvatarFallback class="text-lg">
+                            {{ getInitials(instructor.name) }}
+                        </AvatarFallback>
+                    </Avatar>
+                    <div class="flex flex-col gap-2">
+                        <div class="flex items-center gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                :disabled="isUploadingPicture"
+                                @click="fileInput?.click()"
+                            >
+                                <Loader2 v-if="isUploadingPicture" class="mr-2 h-4 w-4 animate-spin" />
+                                <Camera v-else class="mr-2 h-4 w-4" />
+                                {{ instructor.avatar ? 'Change Photo' : 'Upload Photo' }}
+                            </Button>
+                            <Button
+                                v-if="instructor.avatar"
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                :disabled="isDeletingPicture"
+                                @click="handleAvatarDelete"
+                            >
+                                <Loader2 v-if="isDeletingPicture" class="mr-2 h-4 w-4 animate-spin" />
+                                <X v-else class="mr-2 h-4 w-4" />
+                                Remove
+                            </Button>
+                        </div>
+                        <p class="text-xs text-muted-foreground">JPG, PNG or WebP. Max 5MB.</p>
+                    </div>
+                    <input
+                        ref="fileInput"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        class="hidden"
+                        @change="handleAvatarUpload"
+                    />
+                </div>
+            </div>
 
             <form @submit.prevent="handleSubmit" class="mt-6 space-y-6 px-6 py-4">
                 <!-- Basic Information -->

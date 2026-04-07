@@ -20,7 +20,7 @@ class UploadInstructorProfilePictureAction
             Storage::disk('s3')->delete($instructor->profile_picture_path);
         }
 
-        $path = $file->store("instructors/{$instructor->id}/profile", 's3');
+        $path = $file->storePublicly("instructors/{$instructor->id}/profile", 's3');
 
         $instructor->update(['profile_picture_path' => $path]);
 

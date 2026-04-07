@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\ResourceController;
 use App\Http\Controllers\Api\V1\StudentChecklistItemController;
 use App\Http\Controllers\Api\V1\StudentController;
 use App\Http\Controllers\Api\V1\StudentLessonController;
+use App\Http\Controllers\Api\V1\StudentProfilePictureController;
 use App\Http\Controllers\Api\V1\StudentNoteController;
 use App\Http\Controllers\Api\V1\StudentOrderController;
 use App\Http\Controllers\Api\V1\StudentPickupPointController;
@@ -73,6 +74,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('students/{student}', [StudentController::class, 'show']);
         Route::put('students/{student}', [StudentController::class, 'update']);
         Route::delete('students/{student}', [StudentController::class, 'destroy']);
+        Route::post('students/{student}/profile-picture', [StudentProfilePictureController::class, 'store']);
+        Route::delete('students/{student}/profile-picture', [StudentProfilePictureController::class, 'destroy']);
         Route::get('students/{student}/lessons', [StudentLessonController::class, 'index']);
         Route::get('students/{student}/lessons/{lesson}', [StudentLessonController::class, 'show']);
         Route::get('students/{student}/pickup-points', [StudentPickupPointController::class, 'index']);

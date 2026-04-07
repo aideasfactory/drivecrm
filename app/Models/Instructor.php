@@ -217,7 +217,7 @@ class Instructor extends Model
         return Attribute::make(
             get: function () {
                 if ($this->profile_picture_path) {
-                    return Storage::disk('s3')->temporaryUrl($this->profile_picture_path, now()->addMinutes(60));
+                    return Storage::disk('s3')->url($this->profile_picture_path);
                 }
 
                 return null;
@@ -226,14 +226,14 @@ class Instructor extends Model
     }
 
     /**
-     * Get the profile picture URL (temporary S3 URL or null).
+     * Get the profile picture URL (public S3 URL or null).
      */
     protected function profilePictureUrl(): Attribute
     {
         return Attribute::make(
             get: function () {
                 if ($this->profile_picture_path) {
-                    return Storage::disk('s3')->temporaryUrl($this->profile_picture_path, now()->addMinutes(60));
+                    return Storage::disk('s3')->url($this->profile_picture_path);
                 }
 
                 return null;
