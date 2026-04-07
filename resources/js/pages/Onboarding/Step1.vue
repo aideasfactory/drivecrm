@@ -75,8 +75,16 @@
             </CardHeader>
 
             <CardContent>
+              <!-- Prefilled user info banner -->
+              <div v-if="hasPrefill" class="mb-6 rounded-md border bg-muted/50 p-4">
+                <p class="text-sm font-medium">Purchasing lessons as:</p>
+                <p class="text-sm text-muted-foreground mt-1">
+                  {{ form.first_name }} {{ form.last_name }} ({{ form.email }})
+                </p>
+              </div>
+
               <form @submit.prevent="submit" class="space-y-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div v-if="!hasPrefill" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div class="space-y-2">
                     <Label for="first_name">
                       First name <span class="text-destructive">*</span>
@@ -114,7 +122,7 @@
                   </div>
                 </div>
 
-                <div class="space-y-2">
+                <div v-if="!hasPrefill" class="space-y-2">
                   <Label for="email">
                     Email address <span class="text-destructive">*</span>
                   </Label>
@@ -275,11 +283,17 @@ import {
 const page = usePage()
 
 const existingData = page.props.enquiry?.data?.steps?.step1 || {}
+const prefill = (page.props.prefill || {}) as Record<string, string>
+
+// Determine if name/email are prefilled (should be hidden)
+const hasPrefill = computed(() => {
+  return !!(prefill.first_name && prefill.last_name && prefill.email)
+})
 
 const form = useForm({
-  first_name: existingData.first_name || '',
-  last_name: existingData.last_name || '',
-  email: existingData.email || '',
+  first_name: existingData.first_name || prefill.first_name || '',
+  last_name: existingData.last_name || prefill.last_name || '',
+  email: existingData.email || prefill.email || '',
   phone: existingData.phone || '',
   postcode: existingData.postcode || '',
   privacy_consent: existingData.privacy_consent || false,
@@ -304,7 +318,9 @@ const isFormValid = computed(() => {
 
   if (!hasRequiredFields) return false;
 
-  const hasValidFields = validateEmail(form.email) &&
+  // When prefilled, name/email validation is not needed (trusted data)
+  const emailValid = hasPrefill.value || validateEmail(form.email);
+  const hasValidFields = emailValid &&
                         validatePhone(form.phone) &&
                         validatePostcode(form.postcode);
 

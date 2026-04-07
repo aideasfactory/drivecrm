@@ -12,6 +12,7 @@ class StepOneController extends Controller
     public function show(Request $request)
     {
         $enquiry = $request->get('enquiry');
+        $prefill = $enquiry->data['prefill'] ?? [];
 
         return Inertia::render('Onboarding/Step1', [
             'enquiry' => [
@@ -24,6 +25,7 @@ class StepOneController extends Controller
             'totalSteps' => 6,
             'stepData' => $enquiry->getStepData(1),
             'maxStepReached' => $enquiry->max_step_reached,
+            'prefill' => $prefill,
         ]);
     }
 
@@ -49,6 +51,18 @@ class StepOneController extends Controller
         // Update enquiry with step 1 data
         $enquiry->setStepData(1, $validated);
         $enquiry->current_step = max($enquiry->current_step, 1);
+
+        // If instructor_id is prefilled, bypass step 2 and go straight to step 3
+        $prefill = $enquiry->data['prefill'] ?? [];
+        if (! empty($prefill['instructor_id'])) {
+            // Step 2 was already populated during start(), advance to step 3
+            $enquiry->max_step_reached = max($enquiry->max_step_reached, 3);
+            $enquiry->current_step = max($enquiry->current_step, 2);
+            $enquiry->save();
+
+            return redirect()->route('onboarding.step3', ['uuid' => $enquiry->id]);
+        }
+
         $enquiry->max_step_reached = max($enquiry->max_step_reached, 2);
         $enquiry->save();
 
