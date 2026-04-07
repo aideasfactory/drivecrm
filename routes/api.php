@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\LessonResourceController;
 use App\Http\Controllers\Api\V1\LessonSignOffController;
 use App\Http\Controllers\Api\V1\MessageController;
 use App\Http\Controllers\Api\V1\PackagePricingController;
+use App\Http\Controllers\Api\V1\PushNotificationController;
 use App\Http\Controllers\Api\V1\ResourceController;
 use App\Http\Controllers\Api\V1\StudentChecklistItemController;
 use App\Http\Controllers\Api\V1\StudentController;
@@ -108,6 +109,9 @@ Route::prefix('v1')->group(function (): void {
         // Order routes
         Route::post('students/{student}/orders', [StudentOrderController::class, 'store']);
         Route::get('orders/{order}/checkout/verify', [StudentOrderController::class, 'verify']);
+
+        // Push notification routes
+        Route::post('push-token', [PushNotificationController::class, 'storeToken']);
 
     });
 

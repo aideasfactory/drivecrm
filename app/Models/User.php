@@ -31,6 +31,7 @@ class User extends Authenticatable
         'password_change_required',
         'role',
         'stripe_customer_id',
+        'expo_push_token',
         'current_team_id',
     ];
 
@@ -105,6 +106,14 @@ class User extends Authenticatable
     public function receivedMessages(): HasMany
     {
         return $this->hasMany(Message::class, 'to');
+    }
+
+    /**
+     * Get push notifications for this user.
+     */
+    public function pushNotifications(): HasMany
+    {
+        return $this->hasMany(PushNotification::class);
     }
 
     /**
