@@ -217,6 +217,10 @@ onMounted(() => {
                 <LessonsSubTab
                     v-if="activeSubTab === 'lessons'"
                     :student-id="studentId"
+                    :student-first-name="student?.first_name"
+                    :student-last-name="student?.surname"
+                    :student-email="student?.email"
+                    :instructor-id="student?.instructor_id"
                 />
                 <PaymentsSubTab
                     v-if="activeSubTab === 'payments'"

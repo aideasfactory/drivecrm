@@ -41,6 +41,7 @@ import {
     CalendarDays,
     FileText,
     Send,
+    ShoppingCart,
 } from 'lucide-vue-next'
 import { toast } from '@/components/ui/sonner'
 
@@ -68,6 +69,10 @@ interface Lesson {
 
 interface Props {
     studentId: number
+    studentFirstName?: string | null
+    studentLastName?: string | null
+    studentEmail?: string | null
+    instructorId?: number | null
 }
 
 const props = defineProps<Props>()
@@ -93,6 +98,20 @@ const resendingInvoiceId = ref<number | null>(null)
 // Computed
 const pendingLessons = computed(() => lessons.value.filter((l) => l.status === 'pending'))
 const completedLessons = computed(() => lessons.value.filter((l) => l.status === 'completed'))
+
+// Purchase lessons URL
+const canPurchaseLessons = computed(() => {
+    return !!(props.studentFirstName && props.studentLastName && props.studentEmail && props.instructorId)
+})
+
+const purchaseLessonsUrl = computed(() => {
+    const params = new URLSearchParams()
+    if (props.studentFirstName) params.set('first_name', props.studentFirstName)
+    if (props.studentLastName) params.set('last_name', props.studentLastName)
+    if (props.studentEmail) params.set('email', props.studentEmail)
+    if (props.instructorId) params.set('instructor_id', String(props.instructorId))
+    return `/onboarding?${params.toString()}`
+})
 
 // Formatting helpers
 const formatCurrency = (pence: number): string => {
@@ -294,11 +313,21 @@ onMounted(() => {
 
         <!-- Lessons Table -->
         <Card>
-            <CardHeader>
+            <CardHeader class="flex flex-row items-center justify-between">
                 <CardTitle class="flex items-center gap-2">
                     <CalendarDays class="h-5 w-5" />
                     Lessons
                 </CardTitle>
+                <a
+                    v-if="canPurchaseLessons"
+                    :href="purchaseLessonsUrl"
+                    target="_blank"
+                >
+                    <Button size="sm" class="gap-2">
+                        <ShoppingCart class="h-4 w-4" />
+                        Purchase More Lessons
+                    </Button>
+                </a>
             </CardHeader>
             <CardContent>
                 <!-- Loading Skeleton -->
