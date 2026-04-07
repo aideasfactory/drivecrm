@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Actions\Auth\ChangePasswordAction;
 use App\Actions\Auth\LoginAction;
 use App\Actions\Auth\LogoutAction;
 use App\Actions\Auth\RegisterInstructorAction;
@@ -15,11 +16,20 @@ use App\Models\User;
 class AuthService
 {
     public function __construct(
+        protected ChangePasswordAction $changePassword,
         protected LoginAction $login,
         protected LogoutAction $logout,
         protected RegisterStudentAction $registerStudent,
         protected RegisterInstructorAction $registerInstructor
     ) {}
+
+    /**
+     * Change the authenticated user's password.
+     */
+    public function changePassword(User $user, string $currentPassword, string $newPassword): void
+    {
+        ($this->changePassword)($user, $currentPassword, $newPassword);
+    }
 
     /**
      * Authenticate a user and return a token.

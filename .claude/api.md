@@ -282,6 +282,7 @@ Login and receive a Bearer token for subsequent API calls.
     "name": "John Smith",
     "email": "instructor@example.com",
     "role": "instructor",
+    "password_change_required": false,
     "email_verified_at": "2026-03-14T10:00:00.000000Z",
     "created_at": "2026-01-15T08:30:00.000000Z",
     "profile": {
@@ -301,7 +302,8 @@ Login and receive a Bearer token for subsequent API calls.
 ```
 
 > **Note:** The `profile` object contains role-specific data. For `instructor` users it returns instructor fields; for `student` users it returns student fields. See [Profile Object by Role](#profile-object-by-role) below.
-
+>
+> **Note:** When `password_change_required` is `true`, the mobile app should force the user to change their password before proceeding. This is set when a temporary password is issued (e.g., instructor-created student accounts, admin resets). Use `POST /api/v1/auth/change-password` to update.
 **Error Response (bad credentials):** `422 Unprocessable Entity`
 ```json
 {
@@ -347,6 +349,60 @@ Revokes the current token. Other device tokens remain active.
 
 ---
 
+#### `POST /api/v1/auth/change-password`
+
+**Auth required:** Yes (Bearer token)
+
+Change the authenticated user's password. Validates the current password, updates to the new password, and clears the `password_change_required` flag. Use this endpoint to complete the forced password change flow after logging in with a temporary password.
+
+**Request Body:**
+```json
+{
+  "current_password": "temporaryPassword123",
+  "password": "newSecurePassword456",
+  "password_confirmation": "newSecurePassword456"
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `current_password` | string | Yes | User's current password (the temporary password they received) |
+| `password` | string | Yes | New password (must meet Laravel's default password rules) |
+| `password_confirmation` | string | Yes | Must match `password` |
+
+**Success Response:** `200 OK`
+```json
+{
+  "success": true
+}
+```
+
+**Error Response (wrong current password):** `422 Unprocessable Entity`
+```json
+{
+  "message": "The provided password does not match your current password.",
+  "errors": {
+    "current_password": [
+      "The provided password does not match your current password."
+    ]
+  }
+}
+```
+
+**Error Response (validation):** `422 Unprocessable Entity`
+```json
+{
+  "message": "The password field confirmation does not match.",
+  "errors": {
+    "password": [
+      "The password field confirmation does not match."
+    ]
+  }
+}
+```
+
+---
+
 #### `GET /api/v1/auth/user`
 
 **Auth required:** Yes (Bearer token)
@@ -363,6 +419,7 @@ Returns the authenticated user's profile with role-specific data.
     "name": "John Smith",
     "email": "instructor@example.com",
     "role": "instructor",
+    "password_change_required": false,
     "email_verified_at": "2026-03-14T10:00:00.000000Z",
     "created_at": "2026-01-15T08:30:00.000000Z",
     "profile": {
@@ -489,6 +546,7 @@ Register a new instructor account. Creates a base user record with the `instruct
     "name": "John Smith",
     "email": "john@example.com",
     "role": "instructor",
+    "password_change_required": false,
     "email_verified_at": null,
     "created_at": "2026-03-15T12:05:00.000000Z",
     "profile": {
@@ -3427,6 +3485,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | POST | `/api/v1/auth/register/student` | No | — | Register student |
 | POST | `/api/v1/auth/register/instructor` | No | — | Register instructor |
 | POST | `/api/v1/auth/logout` | Yes | Any | Logout |
+| POST | `/api/v1/auth/change-password` | Yes | Any | Change password (clears forced-change flag) |
 | GET | `/api/v1/auth/user` | Yes | Any | Get current user |
 | PUT | `/api/v1/instructor/profile` | Yes | Instructor | Update profile |
 | POST | `/api/v1/instructor/profile/picture` | Yes | Instructor | Upload profile picture |
@@ -3504,6 +3563,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-03-31 | Added create and update endpoints for instructor packages — reuses existing CreateInstructorPackageAction and UpdatePackageAction, with ownership check on update | Instructor Packages (store, update) |
 | 2026-03-31 | Added instructor finances API — CRUD endpoints for recording payments and expenses, with recurring support (weekly/monthly/yearly) | Instructor Finances (index, store, update, destroy) |
 | 2026-03-31 | Added `status` as an updatable field on PUT students endpoint — accepts: active, inactive, on_hold, passed, failed, completed | Student (update) |
+| 2026-04-06 | Added `password_change_required` field to users table and all user responses. Added `POST /api/v1/auth/change-password` endpoint for forced password change flow. Flag is set when temporary passwords are issued (instructor-created pupils, onboarding, admin resets) and cleared on password change. | Auth (login, user, change-password), User responses |
 | 2026-03-31 | Upfront payment no longer returns `checkout_url` — instead emails the Stripe payment link to the student (or contact person). API response confirms email was sent. | Orders (store) |
 | 2026-04-06 | Added student-to-instructor attach endpoint — student submits instructor PIN to link themselves. Requires `pin` column on instructors table (migration included). | Students (attach) |
 

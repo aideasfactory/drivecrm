@@ -63,6 +63,7 @@ class CreateUserAndStudentFromEnquiryAction
                     'name' => $userName,
                     'email' => $userEmail,
                     'password' => Hash::make(Str::random(32)), // Temporary password
+                    'password_change_required' => true,
                     'role' => UserRole::STUDENT,
                     'email_verified_at' => null, // Require verification later
                 ]);
