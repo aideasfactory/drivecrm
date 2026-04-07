@@ -15,10 +15,10 @@ use App\Http\Controllers\Api\V1\ResourceController;
 use App\Http\Controllers\Api\V1\StudentChecklistItemController;
 use App\Http\Controllers\Api\V1\StudentController;
 use App\Http\Controllers\Api\V1\StudentLessonController;
-use App\Http\Controllers\Api\V1\StudentProfilePictureController;
 use App\Http\Controllers\Api\V1\StudentNoteController;
 use App\Http\Controllers\Api\V1\StudentOrderController;
 use App\Http\Controllers\Api\V1\StudentPickupPointController;
+use App\Http\Controllers\Api\V1\StudentProfilePictureController;
 use App\Http\Middleware\ResolveApiProfile;
 use Illuminate\Support\Facades\Route;
 
