@@ -17,6 +17,9 @@ export interface InstructorDetail {
   rating: number | null
   transmission_type: 'manual' | 'automatic' | 'both'
   status: string
+  pdi_status: string | null
+  address: string | null
+  avatar: string | null
   stats: InstructorStats
   booking_hours: BookingHours
   locations: Location[]

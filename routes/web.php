@@ -40,6 +40,10 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('instructors.show');
     Route::put('/instructors/{instructor}', [\App\Http\Controllers\InstructorController::class, 'update'])
         ->name('instructors.update');
+    Route::post('/instructors/{instructor}/profile-picture', [\App\Http\Controllers\InstructorController::class, 'updateProfilePicture'])
+        ->name('instructors.profile-picture.update');
+    Route::delete('/instructors/{instructor}/profile-picture', [\App\Http\Controllers\InstructorController::class, 'deleteProfilePicture'])
+        ->name('instructors.profile-picture.destroy');
     Route::get('/instructors/{instructor}/packages', [\App\Http\Controllers\InstructorController::class, 'packages'])
         ->name('instructors.packages');
     Route::post('/instructors/{instructor}/packages', [\App\Http\Controllers\InstructorController::class, 'createPackage'])

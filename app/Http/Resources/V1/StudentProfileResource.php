@@ -23,6 +23,7 @@ class StudentProfileResource extends JsonResource
             'phone' => $this->phone,
             'status' => $this->status,
             'instructor_id' => $this->instructor_id,
+            'profile_picture_url' => $this->profile_picture_url,
         ];
     }
 }

@@ -138,6 +138,7 @@ class InstructorController extends Controller
                 'transmission_type' => $instructor->transmission_type,
                 'status' => $instructor->status,
                 'pdi_status' => $instructor->pdi_status,
+                'avatar' => $instructor->avatar,
                 'stats' => $stats,
                 'booking_hours' => $bookingHours,
                 'locations' => $locations,
@@ -175,6 +176,30 @@ class InstructorController extends Controller
 
             $instructor = $this->instructorService->updateProfile($instructor, $request->validated());
         });
+
+        return redirect()->back();
+    }
+
+    /**
+     * Upload or replace an instructor's profile picture (admin action).
+     */
+    public function updateProfilePicture(Request $request, Instructor $instructor): RedirectResponse
+    {
+        $request->validate([
+            'profile_picture' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ]);
+
+        $this->instructorService->updateProfilePicture($instructor, $request->file('profile_picture'));
+
+        return redirect()->back();
+    }
+
+    /**
+     * Delete an instructor's profile picture (admin action).
+     */
+    public function deleteProfilePicture(Instructor $instructor): RedirectResponse
+    {
+        $this->instructorService->deleteProfilePicture($instructor);
 
         return redirect()->back();
     }

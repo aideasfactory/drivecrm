@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Facades\Storage;
 
 class Student extends Model
 {
@@ -34,6 +35,11 @@ class Student extends Model
         'owns_account',
         'status',
         'inactive_reason',
+        'profile_picture_path',
+    ];
+
+    protected $appends = [
+        'avatar',
     ];
 
     protected $casts = [
@@ -70,6 +76,35 @@ class Student extends Model
                 }
 
                 return $total;
+            },
+        );
+    }
+
+    protected function avatar(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                if ($this->profile_picture_path) {
+                    return Storage::disk('s3')->url($this->profile_picture_path);
+                }
+
+                return null;
+            },
+        );
+    }
+
+    /**
+     * Get the profile picture URL (public S3 URL or null).
+     */
+    protected function profilePictureUrl(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                if ($this->profile_picture_path) {
+                    return Storage::disk('s3')->url($this->profile_picture_path);
+                }
+
+                return null;
             },
         );
     }
