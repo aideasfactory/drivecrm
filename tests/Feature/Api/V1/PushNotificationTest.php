@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\PushNotificationStatus;
 use App\Enums\UserRole;
 use App\Models\PushNotification;
 use App\Models\Student;

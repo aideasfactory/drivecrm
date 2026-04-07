@@ -13,11 +13,13 @@ use App\Http\Controllers\Api\V1\MessageController;
 use App\Http\Controllers\Api\V1\PackagePricingController;
 use App\Http\Controllers\Api\V1\PushNotificationController;
 use App\Http\Controllers\Api\V1\ResourceController;
+use App\Http\Controllers\Api\V1\StudentCalendarController;
 use App\Http\Controllers\Api\V1\StudentChecklistItemController;
 use App\Http\Controllers\Api\V1\StudentController;
 use App\Http\Controllers\Api\V1\StudentLessonController;
 use App\Http\Controllers\Api\V1\StudentNoteController;
 use App\Http\Controllers\Api\V1\StudentOrderController;
+use App\Http\Controllers\Api\V1\StudentPackageController;
 use App\Http\Controllers\Api\V1\StudentPickupPointController;
 use App\Http\Controllers\Api\V1\StudentProfilePictureController;
 use App\Http\Middleware\ResolveApiProfile;
@@ -67,6 +69,12 @@ Route::prefix('v1')->group(function (): void {
             Route::post('finances', [InstructorFinanceController::class, 'store']);
             Route::put('finances/{finance}', [InstructorFinanceController::class, 'update']);
             Route::delete('finances/{finance}', [InstructorFinanceController::class, 'destroy']);
+        });
+
+        // Student-scoped booking routes (packages + calendar slots from attached instructor)
+        Route::prefix('student')->group(function (): void {
+            Route::get('packages', [StudentPackageController::class, 'index']);
+            Route::get('calendar/items', [StudentCalendarController::class, 'index']);
         });
 
         // Student routes

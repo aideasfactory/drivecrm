@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\PaymentMode;
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\CreateOrderRequest;
 use App\Http\Resources\V1\OrderResource;
@@ -25,8 +26,12 @@ class StudentOrderController extends Controller
     /**
      * Book lessons: create order, calendar items, lessons, and handle payment.
      *
-     * For upfront payment: emails a Stripe payment link to the student.
-     * For weekly payment: order is activated immediately.
+     * Upfront payment behaviour depends on who initiates the booking:
+     *   - Student (mobile app): the Stripe checkout URL is returned in the response
+     *     so the mobile app can load it in an in-app browser.
+     *   - Instructor: a payment link is emailed to the student.
+     *
+     * Weekly payment: order is activated immediately and a confirmation email is sent.
      */
     public function store(CreateOrderRequest $request, Student $student): JsonResponse
     {
@@ -43,6 +48,7 @@ class StudentOrderController extends Controller
         }
 
         $paymentMode = PaymentMode::from($validated['payment_mode']);
+        $isStudentInitiated = $request->user()->role === UserRole::STUDENT;
 
         $result = $this->orderService->bookLessons(
             $student,
@@ -50,17 +56,28 @@ class StudentOrderController extends Controller
             $paymentMode,
             $validated['first_lesson_date'],
             $validated['start_time'],
-            $validated['end_time']
+            $validated['end_time'],
+            returnCheckoutUrl: $isStudentInitiated
         );
 
-        $message = $paymentMode === PaymentMode::WEEKLY
-            ? 'Order created and activated. Lesson invoices will be sent before each lesson.'
-            : 'Order created. A payment link has been emailed to the student.';
+        if ($paymentMode === PaymentMode::WEEKLY) {
+            $message = 'Order created and activated. Lesson invoices will be sent before each lesson.';
+        } elseif ($isStudentInitiated) {
+            $message = 'Order created. Open the checkout URL to complete payment.';
+        } else {
+            $message = 'Order created. A payment link has been emailed to the student.';
+        }
 
-        return response()->json([
+        $response = [
             'message' => $message,
             'data' => new OrderResource($result['order']),
-        ], 201);
+        ];
+
+        if ($isStudentInitiated && $paymentMode === PaymentMode::UPFRONT) {
+            $response['checkout_url'] = $result['checkout_url'] ?? null;
+        }
+
+        return response()->json($response, 201);
     }
 
     /**

@@ -79,6 +79,12 @@ class StudentController extends Controller
     {
         $student = $request->user()->student;
 
+        if (! $student) {
+            return response()->json([
+                'message' => 'No student profile is associated with your account.',
+            ], 422);
+        }
+
         if ($student->hasInstructor()) {
             return response()->json([
                 'message' => 'You are already attached to an instructor.',

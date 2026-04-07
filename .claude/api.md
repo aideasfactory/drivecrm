@@ -1768,6 +1768,112 @@ Deletes a calendar item belonging to the authenticated instructor. For recurring
 
 ---
 
+### Student Booking (attached instructor)
+
+These endpoints expose the authenticated student's **attached instructor's** packages and available calendar slots, so the student mobile app can render its booking sheet without needing access to instructor-scoped endpoints. The student must be attached to an instructor (via `POST /students/attach`) before calling these routes.
+
+---
+
+#### `GET /api/v1/student/packages`
+
+**Auth required:** Yes (Bearer token — student only)
+
+Returns the active packages belonging to the authenticated student's attached instructor. Response shape matches `GET /api/v1/instructor/packages`.
+
+**Example:** `GET /api/v1/student/packages`
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "10 Hour Package",
+      "lessons_count": 10,
+      "price_pence": 35000,
+      "lesson_price_pence": 3500,
+      "payment_mode": "upfront",
+      "active": true
+    }
+  ]
+}
+```
+
+**Error Response — no attached instructor (422):**
+```json
+{
+  "message": "You must be attached to an instructor before you can view packages."
+}
+```
+
+**Error Response — student profile missing (404):**
+```json
+{
+  "message": "Student profile not found for the authenticated user."
+}
+```
+
+> Use `GET /api/v1/packages/{package}/pricing` to get the full fee breakdown for a selected package before showing the confirmation screen.
+
+---
+
+#### `GET /api/v1/student/calendar/items`
+
+**Auth required:** Yes (Bearer token — student only)
+
+Returns available calendar slots for the authenticated student's attached instructor on a given date. Unlike the instructor endpoint, this route always filters to **available slots only** and **excludes drafts** — students cannot see travel items, practical test items, unavailable slots, or draft items.
+
+**Query Parameters:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `date` | string | **Yes** | Date in `Y-m-d` format (e.g., `2026-04-10`) |
+
+**Example:** `GET /api/v1/student/calendar/items?date=2026-04-10`
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": [
+    {
+      "id": 42,
+      "date": "2026-04-10",
+      "start_time": "09:00",
+      "end_time": "10:00",
+      "is_available": true,
+      "status": "published",
+      "item_type": "slot",
+      "travel_time_minutes": null,
+      "parent_item_id": null,
+      "notes": null,
+      "unavailability_reason": null,
+      "recurrence_pattern": "none",
+      "recurrence_end_date": null,
+      "recurrence_group_id": null
+    }
+  ]
+}
+```
+
+**Error Response — no attached instructor (422):**
+```json
+{
+  "message": "You must be attached to an instructor before you can view available slots."
+}
+```
+
+**Error Response — validation (422):**
+```json
+{
+  "message": "The date field is required.",
+  "errors": {
+    "date": ["The date field is required."]
+  }
+}
+```
+
+---
+
 ### Students
 
 ---
@@ -2905,7 +3011,13 @@ Sets a pickup point as the default (primary) for a student. Automatically unsets
 
 **Auth required:** Yes (Bearer token — student or instructor)
 
-Book lessons — creates an order, calendar items, and lessons. For `upfront` payment, a Stripe Checkout session is created and the payment link is emailed to the student (or their contact person). The API does **not** return the checkout URL. For `weekly` payment, the order is activated immediately.
+Book lessons — creates an order, calendar items, and lessons.
+
+For `upfront` payment the Stripe Checkout session is handled differently based on who is booking:
+- **Student (mobile app):** the Stripe Checkout URL is returned in the response as `checkout_url`. The mobile app should load this URL in an in-app browser so the student can complete payment.
+- **Instructor:** the payment link is emailed to the student (or their contact person). No `checkout_url` is returned.
+
+For `weekly` payment the order is activated immediately and a confirmation email is sent.
 
 **URL Parameters:**
 
@@ -2932,7 +3044,34 @@ Book lessons — creates an order, calendar items, and lessons. For `upfront` pa
 | `start_time` | string | Yes | Lesson start time (HH:MM format) |
 | `end_time` | string | Yes | Lesson end time (HH:MM format, must be after start_time) |
 
-**Success Response (upfront payment):** `201 Created`
+**Success Response (upfront payment — student-initiated):** `201 Created`
+```json
+{
+  "message": "Order created. Open the checkout URL to complete payment.",
+  "checkout_url": "https://checkout.stripe.com/c/pay/cs_test_abc123...",
+  "data": {
+    "id": 1,
+    "student_id": 1,
+    "instructor_id": 1,
+    "package_id": 1,
+    "package_name": "10 Hour Package",
+    "package_total_price_pence": 35000,
+    "package_lesson_price_pence": 3500,
+    "package_lessons_count": 10,
+    "booking_fee_pence": 1999,
+    "digital_fee_pence": 3990,
+    "total_price_pence": 40989,
+    "payment_mode": "upfront",
+    "status": "pending",
+    "lessons_count": 10,
+    "created_at": "2026-03-23T10:00:00.000000Z"
+  }
+}
+```
+
+> The `checkout_url` field is only included when the request is authenticated as a **student**. If Stripe session creation fails, `checkout_url` will be `null` — the client should treat this as an error and not proceed to the in-app browser.
+
+**Success Response (upfront payment — instructor-initiated):** `201 Created`
 ```json
 {
   "message": "Order created. A payment link has been emailed to the student.",
@@ -3018,10 +3157,16 @@ Book lessons — creates an order, calendar items, and lessons. For `upfront` pa
 }
 ```
 
-> **Mobile App Flow (upfront payment):**
-> 1. POST to create order → a payment link is emailed to the student (no `checkout_url` in the response)
-> 2. The student opens the payment link from their email and completes Stripe Checkout
-> 3. After payment, the Stripe success URL calls the verify endpoint to confirm payment
+> **Mobile App Flow (upfront payment — student booking via mobile app):**
+> 1. POST to create order as an authenticated student → response includes `checkout_url`
+> 2. Open `checkout_url` in an in-app browser so the student can complete Stripe Checkout
+> 3. After payment, Stripe redirects to the verify endpoint which confirms payment server-side
+> 4. On success, the order becomes `active` and a confirmation email is sent
+>
+> **Mobile App Flow (upfront payment — instructor booking on behalf of a student):**
+> 1. POST to create order as an authenticated instructor → no `checkout_url` returned
+> 2. A Stripe Checkout link is emailed to the student
+> 3. The student opens the email link and completes Stripe Checkout
 > 4. On success, the order becomes `active` and a confirmation email is sent
 >
 > **Mobile App Flow (weekly payment):**
@@ -3503,6 +3648,8 @@ The `role` field is always returned in user responses. Use it to determine which
 | POST | `/api/v1/instructor/finances` | Yes | Instructor | Create finance record |
 | PUT | `/api/v1/instructor/finances/{finance}` | Yes | Instructor | Update finance record |
 | DELETE | `/api/v1/instructor/finances/{finance}` | Yes | Instructor | Delete finance record |
+| GET | `/api/v1/student/packages` | Yes | Student | List attached instructor's packages |
+| GET | `/api/v1/student/calendar/items` | Yes | Student | List attached instructor's available slots |
 | POST | `/api/v1/students` | Yes | Instructor | Create student |
 | POST | `/api/v1/students/attach` | Yes | Student | Attach to instructor via PIN |
 | GET | `/api/v1/students/{student}` | Yes | Both | View student |
@@ -3566,6 +3713,8 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-04-06 | Added `password_change_required` field to users table and all user responses. Added `POST /api/v1/auth/change-password` endpoint for forced password change flow. Flag is set when temporary passwords are issued (instructor-created pupils, onboarding, admin resets) and cleared on password change. | Auth (login, user, change-password), User responses |
 | 2026-03-31 | Upfront payment no longer returns `checkout_url` — instead emails the Stripe payment link to the student (or contact person). API response confirms email was sent. | Orders (store) |
 | 2026-04-06 | Added student-to-instructor attach endpoint — student submits instructor PIN to link themselves. Requires `pin` column on instructors table (migration included). | Students (attach) |
+| 2026-04-07 | Added student-scoped booking endpoints — `GET /student/packages` and `GET /student/calendar/items` expose the attached instructor's packages and available slots so the mobile app can render the student booking sheet. Student calendar endpoint always filters to available, non-draft slots. | Student Booking (packages, calendar/items) |
+| 2026-04-07 | Upfront order creation now returns `checkout_url` when the request is student-initiated (mobile app loads it in an in-app browser) instead of emailing the payment link. Instructor-initiated upfront orders still email the link as before. | Orders (store) |
 
 ---
 

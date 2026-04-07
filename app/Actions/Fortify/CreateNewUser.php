@@ -2,6 +2,7 @@
 
 namespace App\Actions\Fortify;
 
+use App\Actions\Auth\RegisterStudentAction;
 use App\Concerns\PasswordValidationRules;
 use App\Concerns\ProfileValidationRules;
 use App\Models\User;
@@ -12,8 +13,15 @@ class CreateNewUser implements CreatesNewUsers
 {
     use PasswordValidationRules, ProfileValidationRules;
 
+    public function __construct(
+        protected RegisterStudentAction $registerStudent
+    ) {}
+
     /**
      * Validate and create a newly registered user.
+     *
+     * Web registration creates a student by default. Instructors are
+     * created via the dedicated mobile API endpoint.
      *
      * @param  array<string, string>  $input
      */
@@ -24,11 +32,12 @@ class CreateNewUser implements CreatesNewUsers
             'password' => $this->passwordRules(),
         ])->validate();
 
-        return User::create([
+        $result = ($this->registerStudent)([
             'name' => $input['name'],
             'email' => $input['email'],
             'password' => $input['password'],
-            'current_team_id' => 1,
         ]);
+
+        return $result['user'];
     }
 }

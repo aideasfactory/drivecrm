@@ -38,7 +38,12 @@ class OrderService extends BaseService
     /**
      * Book lessons: create calendar items, order, lessons, and handle payment.
      *
-     * @return array{order: Order}
+     * When $returnCheckoutUrl is true (student-initiated mobile bookings), the Stripe
+     * checkout URL is returned in the response instead of being emailed to the student.
+     * The mobile app is expected to load this URL in an in-app browser. When false
+     * (instructor-initiated bookings), the URL is emailed to the student.
+     *
+     * @return array{order: Order, checkout_url?: string|null}
      */
     public function bookLessons(
         Student $student,
@@ -46,7 +51,8 @@ class OrderService extends BaseService
         PaymentMode $paymentMode,
         string $firstLessonDate,
         string $startTime,
-        string $endTime
+        string $endTime,
+        bool $returnCheckoutUrl = false
     ): array {
         $calendarItemIds = ($this->createDraftCalendarItems)(
             $student->instructor_id,
@@ -68,10 +74,12 @@ class OrderService extends BaseService
             $calendarItemIds
         );
 
+        $checkoutUrl = null;
+
         if ($paymentMode === PaymentMode::UPFRONT) {
             $checkoutUrl = $this->createCheckoutSession($order, $package, $student);
 
-            if ($checkoutUrl) {
+            if ($checkoutUrl && ! $returnCheckoutUrl) {
                 $this->sendPaymentLinkEmail->execute($order, $student, $checkoutUrl);
             }
         }
@@ -87,6 +95,7 @@ class OrderService extends BaseService
 
         return [
             'order' => $order->fresh(['lessons']),
+            'checkout_url' => $returnCheckoutUrl ? $checkoutUrl : null,
         ];
     }
 
