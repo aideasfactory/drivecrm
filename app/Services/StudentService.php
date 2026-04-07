@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Actions\Instructor\CreatePupilAction;
+use App\Actions\Student\AttachStudentToInstructorAction;
 use App\Actions\Student\GetAllStudentsAction;
 use App\Actions\Student\GetStudentByIdAction;
 use App\Actions\Student\PickupPoint\CreatePickupPointAction;
@@ -28,7 +29,8 @@ class StudentService extends BaseService
         protected GetStudentPickupPointsAction $getStudentPickupPoints,
         protected CreatePickupPointAction $createPickupPoint,
         protected DeletePickupPointAction $deletePickupPoint,
-        protected SetDefaultPickupPointAction $setDefaultPickupPoint
+        protected SetDefaultPickupPointAction $setDefaultPickupPoint,
+        protected AttachStudentToInstructorAction $attachStudentToInstructor
     ) {}
 
     /**
@@ -87,6 +89,18 @@ class StudentService extends BaseService
         if ($instructor) {
             $this->invalidateInstructorStudentCache($instructor);
         }
+
+        return $result;
+    }
+
+    /**
+     * Attach a student to an instructor (resolved from PIN).
+     */
+    public function attachToInstructor(Student $student, Instructor $instructor): Student
+    {
+        $result = ($this->attachStudentToInstructor)($student, $instructor);
+
+        $this->invalidateInstructorStudentCache($instructor);
 
         return $result;
     }

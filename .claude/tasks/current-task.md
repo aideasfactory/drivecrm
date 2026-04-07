@@ -1,26 +1,28 @@
-# Task: Populate Instructor Student Payments Tab
+# Task: Create API Endpoint to Attach Student to Instructor via PIN
 
 ## Overview
-Build out the payments tab on the instructor-side student screen to show the student's actual payment records (LessonPayment records linked through Orders -> Lessons).
+Create an API endpoint that allows a student to attach themselves to an instructor by entering the instructor's PIN code.
 
 ## Phase 1: Planning ✅
-- [x] Analyze existing data structures (LessonPayment, Order, Lesson models)
-- [x] Review existing tab patterns (LessonsSubTab as reference)
-- [x] Plan backend endpoint and frontend component
+- [x] Review existing student/instructor models and relationships
+- [x] Review existing API patterns and coding standards
+- [x] Plan implementation approach
 
-### Reflection
-Data flows: Student -> Orders -> Lessons -> LessonPayment. Each LessonPayment has amount_pence, status (due/paid/refunded), due_date, paid_at. Orders have payment_mode (upfront/weekly). Will create a new Action + controller method + route, then build out the Vue component following LessonsSubTab pattern.
+## Phase 2: Implementation ✅
+- [x] Create migration to add pin to instructors table
+- [x] Update Instructor model fillable
+- [x] Create AttachStudentToInstructorAction
+- [x] Create AttachToInstructorRequest FormRequest
+- [x] Add attachToInstructor() to StudentService
+- [x] Add attachToInstructor() to StudentController
+- [x] Add route to routes/api.php
+- [x] Update api.md
+- [x] Update database-schema.md
+- [x] Write Pest tests
 
-## Phase 2: Implementation 🔄
-- [ ] Create GetStudentPaymentsAction in app/Actions/Student/Payment/
-- [ ] Add payments() method to PupilController
-- [ ] Add route in web.php
-- [ ] Implement PaymentsSubTab.vue with table, summary cards, loading/empty states
+## Phase 3: Final Review ✅
+- [x] All files follow coding standards
+- [x] api.md updated
+- [x] database-schema.md updated
 
-## Phase 3: Polish & Completion ⏸️
-- [ ] Final review of data flow
-- [ ] Update current-task.md with reflection
-- [ ] Write .phase_done sentinel
-
-## Status: Phase 2 - In Progress
-Last Updated: 2026-03-30
+**Last Updated:** 2026-04-06
