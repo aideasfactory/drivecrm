@@ -408,7 +408,7 @@ onMounted(() => {
                             </TableCell>
                             <TableCell class="text-right">
                                 <Button
-                                    v-if="lesson.status === 'pending'"
+                                    v-if="lesson.status === 'pending' && lesson.payment_status === 'paid'"
                                     variant="outline"
                                     size="sm"
                                     @click="openSignOffSheet(lesson)"
@@ -417,6 +417,12 @@ onMounted(() => {
                                     <ClipboardCheck class="h-4 w-4" />
                                     Sign Off
                                 </Button>
+                                <span
+                                    v-else-if="lesson.status === 'pending' && lesson.payment_status !== 'paid'"
+                                    class="text-xs text-muted-foreground"
+                                >
+                                    Awaiting payment
+                                </span>
                                 <Button
                                     v-else-if="lesson.status === 'completed' && lesson.summary"
                                     variant="ghost"

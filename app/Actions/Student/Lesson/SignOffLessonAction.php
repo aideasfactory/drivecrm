@@ -55,7 +55,7 @@ class SignOffLessonAction
             throw new InstructorNotOnboardedException;
         }
 
-        // Guard: for weekly payment mode, lesson payment must be received
+        // Guard: lesson payment must be received before sign-off
         if ($lesson->order->isWeekly()) {
             if (! $lesson->lessonPayment) {
                 throw new Exception('Lesson payment record not found.');
@@ -63,7 +63,11 @@ class SignOffLessonAction
 
             if (! $lesson->lessonPayment->isPaid()) {
                 $dueDate = $lesson->lessonPayment->due_date?->format('d M Y') ?? 'unknown';
-                throw new Exception("Cannot complete lesson. Weekly payment has not been received yet. Due date: {$dueDate}");
+                throw new Exception("Cannot sign off lesson. Payment has not been received yet. Due date: {$dueDate}");
+            }
+        } elseif ($lesson->order->isUpfront()) {
+            if (! $lesson->order->isActive()) {
+                throw new Exception('Cannot sign off lesson. The order has not been paid for.');
             }
         }
 
