@@ -101,7 +101,22 @@ class StudentController extends Controller
 
         $this->studentService->attachToInstructor($student, $instructor);
 
-        return response()->json(true);
+        $thankYouMessages = [
+            "You're all set! Your instructor can't wait to get you on the road.",
+            "Welcome aboard! Your learning journey starts here.",
+            "Connected! Get ready for an amazing driving adventure.",
+            "Success! You're one step closer to passing your test.",
+            "You're in! Your instructor is excited to help you become a confident driver.",
+        ];
+
+        return response()->json([
+            'message' => $thankYouMessages[array_rand($thankYouMessages)],
+            'instructor' => [
+                'id' => $instructor->id,
+                'name' => $instructor->name,
+                'avatar' => $instructor->avatar,
+            ],
+        ]);
     }
 
     /**

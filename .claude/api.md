@@ -1897,8 +1897,22 @@ Attaches the authenticated student to an instructor using the instructor's PIN c
 
 **Success Response (200):**
 ```json
-true
+{
+  "message": "You're all set! Your instructor can't wait to get you on the road.",
+  "instructor": {
+    "id": 12,
+    "name": "Jane Smith",
+    "avatar": "https://s3.eu-west-2.amazonaws.com/drivecrm/instructors/12/avatar.jpg"
+  }
+}
 ```
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `message` | string | Randomly selected thank-you message (one of 5) — display this to the user after successful attachment |
+| `instructor.id` | integer | Instructor's ID |
+| `instructor.name` | string | Instructor's full name |
+| `instructor.avatar` | string\|null | Public URL of instructor's profile picture, or `null` if not set |
 
 **Error Response — already attached (422):**
 ```json
@@ -3715,6 +3729,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-04-06 | Added student-to-instructor attach endpoint — student submits instructor PIN to link themselves. Requires `pin` column on instructors table (migration included). | Students (attach) |
 | 2026-04-07 | Added student-scoped booking endpoints — `GET /student/packages` and `GET /student/calendar/items` expose the attached instructor's packages and available slots so the mobile app can render the student booking sheet. Student calendar endpoint always filters to available, non-draft slots. | Student Booking (packages, calendar/items) |
 | 2026-04-07 | Upfront order creation now returns `checkout_url` when the request is student-initiated (mobile app loads it in an in-app browser) instead of emailing the payment link. Instructor-initiated upfront orders still email the link as before. | Orders (store) |
+| 2026-04-08 | `POST /api/v1/students/attach` now returns a JSON object containing a randomly selected thank-you message (1 of 5) and the attached instructor's `id`, `name`, and `avatar` URL — replaces the previous `true` response. | Students (attach) |
 
 ---
 
