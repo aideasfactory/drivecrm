@@ -313,6 +313,15 @@ Route::get('/resources/view/{resource}', [\App\Http\Controllers\ResourceControll
 Route::post('/webhook/stripe', [\App\Http\Controllers\WebhookController::class, 'handle'])
     ->name('webhook.stripe');
 
+// Payment-link checkout return (instructor-sent Stripe payment links).
+// Unauthenticated — the student is clicking through from an email and has
+// no app session. Security comes from matching the Stripe session_id against
+// the order's stored stripe_checkout_session_id.
+Route::get('/orders/{order}/payment-link/success', [\App\Http\Controllers\PaymentLinkCheckoutController::class, 'success'])
+    ->name('payment-link.checkout.success');
+Route::get('/orders/{order}/payment-link/cancel', [\App\Http\Controllers\PaymentLinkCheckoutController::class, 'cancel'])
+    ->name('payment-link.checkout.cancel');
+
 // Route::get('/dashboard', function () {
 //     $user = auth()->user();
 

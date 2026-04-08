@@ -123,8 +123,13 @@ class OrderService extends BaseService
             $user->save();
         }
 
-        $successUrl = config('app.url').'/api/v1/orders/'.$order->id.'/checkout/verify?session_id={CHECKOUT_SESSION_ID}';
-        $cancelUrl = config('app.url').'/api/v1/orders/'.$order->id.'/checkout/cancelled';
+        // Route Stripe's redirect back to unauthenticated web pages that verify
+        // the session and render a human-facing confirmation. The previous API
+        // URLs forced the student onto the login page because they were Sanctum
+        // protected. The mobile in-app browser can still detect these URLs by
+        // path to close the webview after payment if needed.
+        $successUrl = route('payment-link.checkout.success', ['order' => $order->id]).'?session_id={CHECKOUT_SESSION_ID}';
+        $cancelUrl = route('payment-link.checkout.cancel', ['order' => $order->id]);
 
         $result = $this->stripeService->createCheckoutSession(
             $order,
