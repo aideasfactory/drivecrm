@@ -22,6 +22,7 @@ class LessonResource extends JsonResource
             'id' => $this['id'],
             'order_id' => $this['order_id'],
             'instructor_name' => $this['instructor_name'],
+            'instructor_avatar' => $this['instructor_avatar'],
             'package_name' => $this['package_name'],
             'date' => $this['date'],
             'start_time' => $this['start_time'],

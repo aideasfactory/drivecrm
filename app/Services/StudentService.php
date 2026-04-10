@@ -9,6 +9,8 @@ use App\Actions\Student\AttachStudentToInstructorAction;
 use App\Actions\Student\DeleteStudentProfilePictureAction;
 use App\Actions\Student\GetAllStudentsAction;
 use App\Actions\Student\GetStudentByIdAction;
+use App\Actions\Student\GetStudentInstructorProfileAction;
+use App\Actions\Student\GetStudentPracticeHoursAction;
 use App\Actions\Student\PickupPoint\CreatePickupPointAction;
 use App\Actions\Student\PickupPoint\DeletePickupPointAction;
 use App\Actions\Student\PickupPoint\GetStudentPickupPointsAction;
@@ -35,7 +37,9 @@ class StudentService extends BaseService
         protected SetDefaultPickupPointAction $setDefaultPickupPoint,
         protected AttachStudentToInstructorAction $attachStudentToInstructor,
         protected UploadStudentProfilePictureAction $uploadProfilePicture,
-        protected DeleteStudentProfilePictureAction $deleteProfilePictureAction
+        protected DeleteStudentProfilePictureAction $deleteProfilePictureAction,
+        protected GetStudentInstructorProfileAction $getInstructorProfile,
+        protected GetStudentPracticeHoursAction $getPracticeHours
     ) {}
 
     /**
@@ -170,5 +174,44 @@ class StudentService extends BaseService
     public function setDefaultPickupPoint(\App\Models\StudentPickupPoint $pickupPoint): \App\Models\StudentPickupPoint
     {
         return ($this->setDefaultPickupPoint)($pickupPoint);
+    }
+
+    /**
+     * Get the public profile of the student's attached instructor.
+     */
+    public function getInstructorProfile(Student $student): ?Instructor
+    {
+        if (! $student->instructor_id) {
+            return null;
+        }
+
+        $key = $this->cacheKey('student', $student->id, 'instructor_profile');
+
+        return $this->remember($key, fn () => ($this->getInstructorProfile)($student));
+    }
+
+    /**
+     * Get the student's dashboard data (practice hours).
+     *
+     * @return array{practice_hours: array{completed: float, total: float}}
+     */
+    public function getDashboard(Student $student): array
+    {
+        $key = $this->cacheKey('student', $student->id, 'dashboard');
+
+        return $this->remember($key, fn () => [
+            'practice_hours' => ($this->getPracticeHours)($student),
+        ]);
+    }
+
+    /**
+     * Invalidate student dashboard caches.
+     */
+    public function invalidateStudentDashboardCache(Student $student): void
+    {
+        $this->invalidate([
+            $this->cacheKey('student', $student->id, 'instructor_profile'),
+            $this->cacheKey('student', $student->id, 'dashboard'),
+        ]);
     }
 }

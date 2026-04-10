@@ -13,20 +13,31 @@ use Illuminate\Support\Collection;
 class GetStudentLessonsAction
 {
     /**
-     * Fetch all lessons for a student across all orders.
+     * Fetch lessons for a student across all orders.
      *
      * Returns lessons with related order, instructor, calendar item,
      * lesson payment, payout, reflective log, and resource data.
      * Each lesson includes a computed card_status.
+     *
+     * @param  array{status?: string, from_date?: string, sort?: string, limit?: int}  $filters
      */
-    public function __invoke(Student $student): Collection
+    public function __invoke(Student $student, array $filters = []): Collection
     {
         $lessons = $student->orders()
             ->with([
                 'lessons' => fn ($query) => $query
                     ->where('status', '!=', LessonStatus::DRAFT)
+                    ->when(
+                        isset($filters['status']),
+                        fn ($q) => $q->where('status', $filters['status'])
+                    )
+                    ->when(
+                        isset($filters['from_date']),
+                        fn ($q) => $q->where('date', '>=', $filters['from_date'])
+                    )
                     ->with([
                         'instructor.user:id,name',
+                        'instructor:id,user_id,profile_picture_path',
                         'calendarItem.calendar:id,date',
                         'lessonPayment:id,lesson_id,amount_pence,status,paid_at,stripe_invoice_id',
                         'payout:id,lesson_id,status,amount_pence,stripe_transfer_id,paid_at',
@@ -44,6 +55,7 @@ class GetStudentLessonsAction
                     'order_id' => $order->id,
                     'instructor_id' => $lesson->instructor_id,
                     'instructor_name' => $lesson->instructor?->user?->name,
+                    'instructor_avatar' => $lesson->instructor?->profile_picture_url,
                     'package_name' => $order->package_name ?? $order->package?->name,
                     'amount_pence' => $lesson->amount_pence,
                     'date' => $lesson->date?->format('Y-m-d'),
@@ -74,7 +86,9 @@ class GetStudentLessonsAction
         $today = Carbon::today();
         $nextLessonFound = false;
 
-        return $lessons->map(function (array $lesson) use ($today, &$nextLessonFound) {
+        $sortDirection = ($filters['sort'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+
+        $result = $lessons->map(function (array $lesson) use ($today, &$nextLessonFound) {
             $lessonDate = $lesson['_date_obj'];
             $isCompleted = $lesson['_completed_at'] !== null;
             $isPast = $lessonDate && $lessonDate->lt($today);
@@ -97,9 +111,15 @@ class GetStudentLessonsAction
             return $lesson;
         })
             ->sortBy([
-                ['date', 'desc'],
-                ['start_time', 'desc'],
+                ['date', $sortDirection],
+                ['start_time', $sortDirection],
             ])
             ->values();
+
+        if (isset($filters['limit'])) {
+            $result = $result->take((int) $filters['limit']);
+        }
+
+        return $result;
     }
 }

@@ -103,8 +103,8 @@ class StudentController extends Controller
 
         $thankYouMessages = [
             "You're all set! Your instructor can't wait to get you on the road.",
-            "Welcome aboard! Your learning journey starts here.",
-            "Connected! Get ready for an amazing driving adventure.",
+            'Welcome aboard! Your learning journey starts here.',
+            'Connected! Get ready for an amazing driving adventure.',
             "Success! You're one step closer to passing your test.",
             "You're in! Your instructor is excited to help you become a confident driver.",
         ];

@@ -33,11 +33,13 @@ class LessonSignOffService extends BaseService
     ) {}
 
     /**
-     * Get all lessons for a student.
+     * Get lessons for a student, optionally filtered.
+     *
+     * @param  array{status?: string, from_date?: string, sort?: string, limit?: int}  $filters
      */
-    public function getStudentLessons(Student $student): Collection
+    public function getStudentLessons(Student $student, array $filters = []): Collection
     {
-        return ($this->getStudentLessons)($student);
+        return ($this->getStudentLessons)($student, $filters);
     }
 
     /**

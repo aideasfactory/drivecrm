@@ -27,6 +27,9 @@
     - [Finances (Create)](#post-apiv1instructorfinances)
     - [Finances (Update)](#put-apiv1instructorfinancesfinance)
     - [Finances (Delete)](#delete-apiv1instructorfinancesfinance)
+  - [Student Home](#student-home)
+    - [Instructor Profile](#get-apiv1studentinstructor)
+    - [Dashboard](#get-apiv1studentdashboard)
   - [Package Pricing](#get-apiv1packagespackagepricing)
   - [Students](#students)
     - [Attach to Instructor](#post-apiv1studentsattach)
@@ -1874,6 +1877,63 @@ Returns available calendar slots for the authenticated student's attached instru
 
 ---
 
+#### `GET /api/v1/student/instructor`
+
+**Auth required:** Yes (Bearer token — student only)
+
+Returns the public profile of the authenticated student's attached instructor. The student must be attached to an instructor (via PIN).
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 1,
+    "name": "Michael Roberts",
+    "bio": "ADI qualified instructor with 15 years experience...",
+    "profile_picture_url": "https://s3.example.com/instructor-pictures/abc.jpg"
+  }
+}
+```
+
+**Error Response — no attached instructor (422):**
+```json
+{
+  "message": "You must be attached to an instructor to view their profile."
+}
+```
+
+---
+
+#### `GET /api/v1/student/dashboard`
+
+**Auth required:** Yes (Bearer token — student only)
+
+Returns aggregated dashboard data for the student home screen. Currently returns practice hours; designed to be extended with additional sections in the future.
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "practice_hours": {
+      "completed": 24.5,
+      "total": 40.0
+    }
+  }
+}
+```
+
+**Practice Hours Calculation:**
+- `completed` — sum of duration (hours) of all lessons with status `completed`
+- `total` — sum of duration (hours) of ALL non-draft lessons across all orders (completed + pending + cancelled)
+
+Duration is derived from each lesson's `start_time` and `end_time`.
+
+---
+
 ### Students
 
 ---
@@ -2165,7 +2225,7 @@ Removes a student from their assigned instructor. This is a **soft remove** — 
 
 **Auth required:** Yes (Bearer token — student or instructor)
 
-Returns all lessons for a given student across all their orders. Sorted by date descending, then start time descending (most recent first).
+Returns lessons for a given student across all their orders. Supports optional filtering, sorting, and limiting via query parameters.
 
 **URL Parameters:**
 
@@ -2173,7 +2233,18 @@ Returns all lessons for a given student across all their orders. Sorted by date 
 |-----------|------|-------------|
 | `student` | integer | The student record ID |
 
+**Query Parameters (all optional):**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `status` | string | — | Filter by lesson status: `pending`, `completed`, or `cancelled` |
+| `from_date` | string | — | Only return lessons on or after this date (YYYY-MM-DD) |
+| `sort` | string | `desc` | Sort direction by date/time: `asc` or `desc` |
+| `limit` | integer | — | Maximum number of results to return |
+
 **Request Body:** None
+
+**Example:** `GET /api/v1/students/5/lessons?status=pending&from_date=2026-04-10&sort=asc&limit=3`
 
 **Success Response:** `200 OK`
 ```json
@@ -2183,6 +2254,7 @@ Returns all lessons for a given student across all their orders. Sorted by date 
       "id": 1,
       "order_id": 1,
       "instructor_name": "John Smith",
+      "instructor_avatar": "https://s3.example.com/instructor-pictures/abc.jpg",
       "package_name": "10 Hour Package",
       "date": "2026-03-20",
       "start_time": "09:00",
@@ -2198,6 +2270,7 @@ Returns all lessons for a given student across all their orders. Sorted by date 
       "id": 2,
       "order_id": 1,
       "instructor_name": "John Smith",
+      "instructor_avatar": "https://s3.example.com/instructor-pictures/abc.jpg",
       "package_name": "10 Hour Package",
       "date": "2026-03-18",
       "start_time": "14:00",
@@ -2220,6 +2293,7 @@ Returns all lessons for a given student across all their orders. Sorted by date 
 | `id` | integer | Lesson record ID |
 | `order_id` | integer | The order this lesson belongs to |
 | `instructor_name` | string\|null | Instructor's full name |
+| `instructor_avatar` | string\|null | Instructor's profile picture URL (S3) |
 | `package_name` | string\|null | Name of the package the lesson is part of |
 | `date` | string\|null | Lesson date (YYYY-MM-DD) |
 | `start_time` | string\|null | Start time (HH:MM) |
@@ -3664,6 +3738,8 @@ The `role` field is always returned in user responses. Use it to determine which
 | DELETE | `/api/v1/instructor/finances/{finance}` | Yes | Instructor | Delete finance record |
 | GET | `/api/v1/student/packages` | Yes | Student | List attached instructor's packages |
 | GET | `/api/v1/student/calendar/items` | Yes | Student | List attached instructor's available slots |
+| GET | `/api/v1/student/instructor` | Yes | Student | View attached instructor's public profile |
+| GET | `/api/v1/student/dashboard` | Yes | Student | Student dashboard data (practice hours) |
 | POST | `/api/v1/students` | Yes | Instructor | Create student |
 | POST | `/api/v1/students/attach` | Yes | Student | Attach to instructor via PIN |
 | GET | `/api/v1/students/{student}` | Yes | Both | View student |
@@ -3730,6 +3806,9 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-04-07 | Added student-scoped booking endpoints — `GET /student/packages` and `GET /student/calendar/items` expose the attached instructor's packages and available slots so the mobile app can render the student booking sheet. Student calendar endpoint always filters to available, non-draft slots. | Student Booking (packages, calendar/items) |
 | 2026-04-07 | Upfront order creation now returns `checkout_url` when the request is student-initiated (mobile app loads it in an in-app browser) instead of emailing the payment link. Instructor-initiated upfront orders still email the link as before. | Orders (store) |
 | 2026-04-08 | `POST /api/v1/students/attach` now returns a JSON object containing a randomly selected thank-you message (1 of 5) and the attached instructor's `id`, `name`, and `avatar` URL — replaces the previous `true` response. | Students (attach) |
+| 2026-04-10 | Enhanced student lessons endpoint with query parameters: `status`, `from_date`, `sort`, `limit` for filtering/sorting/limiting. Added `instructor_avatar` field to lesson list responses. | Student Lessons (index) |
+| 2026-04-10 | Added `GET /student/instructor` — returns attached instructor's public profile (name, bio, avatar). Returns 422 if no instructor attached. | Student Home (instructor) |
+| 2026-04-10 | Added `GET /student/dashboard` — returns aggregated student dashboard data. Currently includes practice hours (completed vs total, derived from lesson durations). Designed to be extended with future sections. | Student Home (dashboard) |
 
 ---
 

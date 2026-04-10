@@ -20,15 +20,23 @@ class StudentLessonController extends Controller
     ) {}
 
     /**
-     * Return all lessons for a student.
+     * Return lessons for a student, with optional filtering.
      *
+     * Query params: status, from_date, sort (asc|desc), limit.
      * Authorised for the student themselves or their assigned instructor.
      */
     public function index(Request $request, Student $student): LessonCollection
     {
         Gate::authorize('viewAny', [Lesson::class, $student]);
 
-        $lessons = $this->lessonSignOffService->getStudentLessons($student);
+        $filters = array_filter([
+            'status' => $request->query('status'),
+            'from_date' => $request->query('from_date'),
+            'sort' => $request->query('sort'),
+            'limit' => $request->query('limit') ? (int) $request->query('limit') : null,
+        ], fn ($value) => $value !== null);
+
+        $lessons = $this->lessonSignOffService->getStudentLessons($student, $filters);
 
         return new LessonCollection($lessons);
     }

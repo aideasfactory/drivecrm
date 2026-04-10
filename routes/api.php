@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\V1\ResourceController;
 use App\Http\Controllers\Api\V1\StudentCalendarController;
 use App\Http\Controllers\Api\V1\StudentChecklistItemController;
 use App\Http\Controllers\Api\V1\StudentController;
+use App\Http\Controllers\Api\V1\StudentDashboardController;
 use App\Http\Controllers\Api\V1\StudentLessonController;
 use App\Http\Controllers\Api\V1\StudentNoteController;
 use App\Http\Controllers\Api\V1\StudentOrderController;
@@ -71,10 +72,12 @@ Route::prefix('v1')->group(function (): void {
             Route::delete('finances/{finance}', [InstructorFinanceController::class, 'destroy']);
         });
 
-        // Student-scoped booking routes (packages + calendar slots from attached instructor)
+        // Student-scoped routes (identity from token, not URL)
         Route::prefix('student')->group(function (): void {
             Route::get('packages', [StudentPackageController::class, 'index']);
             Route::get('calendar/items', [StudentCalendarController::class, 'index']);
+            Route::get('instructor', [StudentDashboardController::class, 'instructor']);
+            Route::get('dashboard', [StudentDashboardController::class, 'dashboard']);
         });
 
         // Student routes
