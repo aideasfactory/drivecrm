@@ -14,6 +14,9 @@ This document provides a comprehensive overview of the database structure for th
 - `ResourceWatch` → Tracks which resources a user has watched (user_id + resource_id, unique)
 - `StudentPickupPoint` → Pickup/drop-off locations per student (geocoded)
 - `StudentChecklistItem` → Progress tracking items per student (theory test, practical test, etc.)
+- `MockTestQuestion` → Theory test question bank (~2,923 questions across 4 categories)
+- `MockTest` → Student test session (score, pass/fail, timestamps)
+- `MockTestAnswer` → Individual answers per test (right/wrong, for category performance tracking)
 
 **Key Relationships:**
 ```
@@ -1281,3 +1284,72 @@ UUID-based discount codes for the onboarding flow. Each code maps to a percentag
 5. **Money Handling:** All monetary values stored in pence (smallest currency unit) as integers to prevent precision errors.
 
 6. **Webhook Idempotency:** `webhook_events` table ensures each Stripe event is processed exactly once.
+
+---
+
+## Mock Test System Tables
+
+### mock_test_questions
+
+Theory test question bank imported from DVSA-style Excel files. ~2,923 questions across 4 categories.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| item_code | varchar(20) | No | Original question code (e.g. AB2001). Unique index. |
+| category | varchar(50) | No | Top-level category: Car, ADI, Motorcycle, LGV-PCV. Indexed. |
+| topic | varchar(100) | No | Sub-category/topic (e.g. "Alertness", "Road and traffic signs"). Indexed. |
+| stem | text | No | The question text |
+| option_a | text | Yes | Option A text (null if image-only option) |
+| option_b | text | Yes | Option B text |
+| option_c | text | Yes | Option C text |
+| option_d | text | Yes | Option D text |
+| correct_answer | char(1) | No | A, B, C, or D |
+| explanation | text | Yes | Explanation shown after answering |
+| stem_image | varchar(255) | Yes | Image filename for the question |
+| option_a_image | varchar(255) | Yes | Image filename for option A |
+| option_b_image | varchar(255) | Yes | Image filename for option B |
+| option_c_image | varchar(255) | Yes | Image filename for option C |
+| option_d_image | varchar(255) | Yes | Image filename for option D |
+| created_at | timestamp | Yes | |
+| updated_at | timestamp | Yes | |
+
+**Relationships:** HasMany → MockTestAnswer
+
+### mock_tests
+
+One row per test attempt by a student. Stores the final score and pass/fail result.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| student_id | bigint FK | No | References students.id. Cascade on delete. |
+| category | varchar(50) | No | Which question bank was used. Indexed. |
+| topic | varchar(100) | Yes | If filtered to a specific topic (null = mixed). Indexed. |
+| total_questions | smallint unsigned | No | Number of questions (default 50) |
+| correct_answers | smallint unsigned | No | Final correct count (default 0) |
+| passed | boolean | No | Whether score >= pass mark (default false) |
+| started_at | timestamp | No | When the test was started |
+| completed_at | timestamp | Yes | When submitted (null = in progress) |
+| created_at | timestamp | Yes | |
+| updated_at | timestamp | Yes | |
+
+**Indexes:** (student_id, completed_at) composite index for summary queries.
+**Relationships:** BelongsTo → Student, HasMany → MockTestAnswer
+
+### mock_test_answers
+
+Individual answers per test. Enables category performance tracking and test review.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| mock_test_id | bigint FK | No | References mock_tests.id. Cascade on delete. |
+| mock_test_question_id | bigint FK | No | References mock_test_questions.id. Cascade on delete. |
+| selected_answer | char(1) | No | What the student chose (A/B/C/D) |
+| is_correct | boolean | No | Whether the answer was correct |
+| created_at | timestamp | Yes | |
+| updated_at | timestamp | Yes | |
+
+**Unique constraint:** (mock_test_id, mock_test_question_id) — one answer per question per test.
+**Relationships:** BelongsTo → MockTest, BelongsTo → MockTestQuestion

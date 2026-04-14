@@ -53,6 +53,11 @@
     - [Send Message](#post-apiv1messages)
   - [Push Notifications](#push-notifications)
     - [Store Push Token](#post-apiv1push-token)
+  - [Mock Tests](#mock-tests)
+    - [Summary](#get-apiv1studentmock-testssummary)
+    - [Start Test](#post-apiv1studentmock-testsstart)
+    - [Submit Test](#post-apiv1studentmock-testsmocktestsubmit)
+    - [Review Test](#get-apiv1studentmock-testsmocktestreview)
 - [Profile Object by Role](#profile-object-by-role)
 - [Appendix: User Roles](#appendix-user-roles)
 - [Changelog](#changelog)
@@ -4152,6 +4157,229 @@ The `role` field is always returned in user responses. Use it to determine which
 | GET | `/api/v1/messages/conversations/instructor` | Yes | Student | View conversation with assigned instructor |
 | GET | `/api/v1/messages/conversations/{user}` | Yes | Both | View conversation by user ID |
 | POST | `/api/v1/messages` | Yes | Both | Send message (students: recipient_id optional) |
+| GET | `/api/v1/student/mock-tests/summary` | Yes | Student | Mock test dashboard summary |
+| POST | `/api/v1/student/mock-tests/start` | Yes | Student | Start a new mock test (generates 50 random questions) |
+| POST | `/api/v1/student/mock-tests/{mockTest}/submit` | Yes | Student | Submit answers for a mock test |
+| GET | `/api/v1/student/mock-tests/{mockTest}/review` | Yes | Student | Review a completed mock test |
+
+---
+
+## Mock Tests
+
+Mock theory test system. Students take randomised 50-question tests from a bank of ~2,923 questions across 4 categories (Car, ADI, Motorcycle, LGV-PCV). Records every answer for per-category performance tracking.
+
+### `GET /api/v1/student/mock-tests/summary`
+
+Returns aggregated mock test statistics for the authenticated student. Includes tests taken, average score, pass count, last 5 scores, a random test-taking tip, and per-category performance breakdown.
+
+**Auth:** Bearer token (student role)
+
+**Query Parameters:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| category | string | No | Filter to a specific category: `Car`, `ADI`, `Motorcycle`, `LGV-PCV` |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "tests_taken": 12,
+    "average_score": 84.5,
+    "tests_passed": 9,
+    "recent_scores": [
+      {
+        "id": 45,
+        "category": "Car",
+        "topic": null,
+        "total_questions": 50,
+        "correct_answers": 43,
+        "passed": true,
+        "started_at": "2026-04-14T10:00:00+00:00",
+        "completed_at": "2026-04-14T10:30:00+00:00"
+      }
+    ],
+    "tip": "Focus on understanding the 'why' behind each answer, not just memorising.",
+    "category_performance": [
+      {
+        "topic": "Alertness",
+        "total_answered": 15,
+        "correct": 12,
+        "percentage": 80.0
+      },
+      {
+        "topic": "Road and traffic signs",
+        "total_answered": 30,
+        "correct": 18,
+        "percentage": 60.0
+      }
+    ]
+  }
+}
+```
+
+---
+
+### `POST /api/v1/student/mock-tests/start`
+
+Starts a new mock test. Generates 50 random questions from the specified category (optionally filtered by topic). Returns the test ID and all questions (without correct answers).
+
+**Auth:** Bearer token (student role)
+
+**Request Body:**
+
+| Field | Type | Required | Validation | Description |
+|-------|------|----------|------------|-------------|
+| category | string | Yes | `in:Car,ADI,Motorcycle,LGV-PCV` | Question bank to draw from |
+| topic | string | No | max:100 | Filter to a specific topic (e.g. "Alertness", "Road and traffic signs") |
+
+**Response (201):**
+
+```json
+{
+  "data": {
+    "mock_test": {
+      "id": 46,
+      "category": "Car",
+      "topic": null,
+      "total_questions": 50,
+      "correct_answers": 0,
+      "passed": false,
+      "started_at": "2026-04-14T11:00:00+00:00",
+      "completed_at": null
+    },
+    "questions": [
+      {
+        "id": 123,
+        "stem": "What should you do before making a U-turn?",
+        "stem_image": null,
+        "option_a": "Give an arm signal as well as using your indicators",
+        "option_a_image": null,
+        "option_b": "Check road markings to see that U-turns are permitted",
+        "option_b_image": null,
+        "option_c": "Look over your shoulder for a final check",
+        "option_c_image": null,
+        "option_d": "Select a higher gear than normal",
+        "option_d_image": null,
+        "topic": "Alertness"
+      },
+      {
+        "id": 456,
+        "stem": "Which instrument-panel warning light would show that headlights are on main beam?",
+        "stem_image": null,
+        "option_a": null,
+        "option_a_image": "/storage/mock-test-images/Car/BB1591a.gif",
+        "option_b": null,
+        "option_b_image": "/storage/mock-test-images/Car/BB1591b.gif",
+        "option_c": null,
+        "option_c_image": "/storage/mock-test-images/Car/BB1591c.gif",
+        "option_d": null,
+        "option_d_image": "/storage/mock-test-images/Car/BB1591d.gif",
+        "topic": "Attitude"
+      }
+    ]
+  }
+}
+```
+
+**Notes:**
+- Questions are returned WITHOUT the correct answer — the mobile app should not know the answer until submission
+- If `option_a` is null but `option_a_image` is not, the answer is image-based — render the image instead of text
+- Image URLs are relative to the API base URL (or absolute when using S3)
+
+---
+
+### `POST /api/v1/student/mock-tests/{mockTest}/submit`
+
+Submits all answers for a mock test. Scores the test, records each answer, and returns the full review with correct answers and explanations.
+
+**Auth:** Bearer token (student role)
+
+**URL Parameters:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| mockTest | integer | The mock test ID (from the start endpoint) |
+
+**Request Body:**
+
+| Field | Type | Required | Validation | Description |
+|-------|------|----------|------------|-------------|
+| answers | array | Yes | min:1 | Array of answer objects |
+| answers.*.question_id | integer | Yes | exists:mock_test_questions,id | Question ID |
+| answers.*.selected_answer | string | Yes | in:A,B,C,D,a,b,c,d | Selected answer |
+
+**Example Request:**
+
+```json
+{
+  "answers": [
+    { "question_id": 123, "selected_answer": "C" },
+    { "question_id": 456, "selected_answer": "A" }
+  ]
+}
+```
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "id": 46,
+    "category": "Car",
+    "topic": null,
+    "total_questions": 50,
+    "correct_answers": 43,
+    "passed": true,
+    "started_at": "2026-04-14T11:00:00+00:00",
+    "completed_at": "2026-04-14T11:25:00+00:00",
+    "answers": [
+      {
+        "question_id": 123,
+        "stem": "What should you do before making a U-turn?",
+        "stem_image": null,
+        "option_a": "Give an arm signal as well as using your indicators",
+        "option_a_image": null,
+        "option_b": "Check road markings to see that U-turns are permitted",
+        "option_b_image": null,
+        "option_c": "Look over your shoulder for a final check",
+        "option_c_image": null,
+        "option_d": "Select a higher gear than normal",
+        "option_d_image": null,
+        "topic": "Alertness",
+        "selected_answer": "C",
+        "correct_answer": "C",
+        "is_correct": true,
+        "explanation": "If you have to make a U-turn, slow down and make sure that the road is clear..."
+      }
+    ]
+  }
+}
+```
+
+**Error Responses:**
+- `403` — Mock test does not belong to the authenticated student
+- `422` — Test has already been submitted (`completed_at` is not null)
+
+---
+
+### `GET /api/v1/student/mock-tests/{mockTest}/review`
+
+Returns the full review of a completed mock test, including all questions, the student's answers, correct answers, and explanations.
+
+**Auth:** Bearer token (student role)
+
+**URL Parameters:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| mockTest | integer | The mock test ID |
+
+**Response (200):** Same shape as the submit response (see above).
+
+**Error Responses:**
+- `403` — Mock test does not belong to the authenticated student
 
 ---
 
@@ -4198,6 +4426,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-04-14 | Added student resources API — `GET /student/resources` returns full folder tree with published resources (annotated with `is_suggested` and `is_watched` booleans) plus a flat `my_resources` array derived from `lesson_resource` pivot. `GET /student/resources/{resource}` returns single resource with video_url or signed S3 file_url. `POST /student/resources/{resource}/watched` marks a resource as watched (idempotent). New `resource_watches` table tracks watched state. | Student Resources (index, show, watched) |
 | 2026-04-14 | Added `GET /student/resource-summary` — aggregated dashboard for Resources tab. Returns recent activity (last 10 watched), stats (total/watched counts, hardcoded mock test & hazard perception scores), per-folder study progress, recommended resources (from lesson sign-offs, unwatched first), and a random study tip from 20 seeded tips. | Student Resources (resource-summary) |
 | 2026-04-14 | Extended `GET /student/dashboard` — now includes `suggested_resources` array alongside `practice_hours`. Uses existing `getMyResources()` from ResourceApiService to return resources suggested via lesson sign-offs, each with `is_watched` status. | Student Home (dashboard) |
+| 2026-04-14 | Added mock test system — `GET /student/mock-tests/summary` returns dashboard stats (tests taken, avg score, pass count, last 5 scores, random tip, per-category performance). `POST /student/mock-tests/start` generates 50 random questions. `POST /student/mock-tests/{id}/submit` scores and records all answers. `GET /student/mock-tests/{id}/review` returns full test review with correct answers and explanations. New tables: `mock_test_questions` (2,923 questions), `mock_tests`, `mock_test_answers`. | Mock Tests (summary, start, submit, review) |
 
 ---
 

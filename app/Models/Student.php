@@ -211,6 +211,11 @@ class Student extends Model
         return $this->hasMany(StudentChecklistItem::class);
     }
 
+    public function mockTests(): HasMany
+    {
+        return $this->hasMany(MockTest::class);
+    }
+
     /**
      * Check if student is active.
      */

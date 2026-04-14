@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\InstructorStudentController;
 use App\Http\Controllers\Api\V1\LessonResourceController;
 use App\Http\Controllers\Api\V1\LessonSignOffController;
 use App\Http\Controllers\Api\V1\MessageController;
+use App\Http\Controllers\Api\V1\MockTestController;
 use App\Http\Controllers\Api\V1\PackagePricingController;
 use App\Http\Controllers\Api\V1\PushNotificationController;
 use App\Http\Controllers\Api\V1\ResourceController;
@@ -83,6 +84,12 @@ Route::prefix('v1')->group(function (): void {
             Route::get('resources', [StudentResourceController::class, 'index']);
             Route::get('resources/{resource}', [StudentResourceController::class, 'show']);
             Route::post('resources/{resource}/watched', [StudentResourceController::class, 'markWatched']);
+
+            // Mock test routes
+            Route::get('mock-tests/summary', [MockTestController::class, 'summary']);
+            Route::post('mock-tests/start', [MockTestController::class, 'start']);
+            Route::post('mock-tests/{mockTest}/submit', [MockTestController::class, 'submit']);
+            Route::get('mock-tests/{mockTest}/review', [MockTestController::class, 'review']);
         });
 
         // Student routes
