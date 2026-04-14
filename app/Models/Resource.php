@@ -56,6 +56,14 @@ class Resource extends Model
     }
 
     /**
+     * Get the users who have watched this resource.
+     */
+    public function watches(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'resource_watches')->withTimestamps();
+    }
+
+    /**
      * Scope to only published resources.
      */
     public function scopePublished(Builder $query): Builder

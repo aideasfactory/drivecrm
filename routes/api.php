@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\V1\StudentOrderController;
 use App\Http\Controllers\Api\V1\StudentPackageController;
 use App\Http\Controllers\Api\V1\StudentPickupPointController;
 use App\Http\Controllers\Api\V1\StudentProfilePictureController;
+use App\Http\Controllers\Api\V1\StudentResourceController;
 use App\Http\Middleware\ResolveApiProfile;
 use Illuminate\Support\Facades\Route;
 
@@ -78,6 +79,10 @@ Route::prefix('v1')->group(function (): void {
             Route::get('calendar/items', [StudentCalendarController::class, 'index']);
             Route::get('instructor', [StudentDashboardController::class, 'instructor']);
             Route::get('dashboard', [StudentDashboardController::class, 'dashboard']);
+            Route::get('resource-summary', [StudentResourceController::class, 'summary']);
+            Route::get('resources', [StudentResourceController::class, 'index']);
+            Route::get('resources/{resource}', [StudentResourceController::class, 'show']);
+            Route::post('resources/{resource}/watched', [StudentResourceController::class, 'markWatched']);
         });
 
         // Student routes

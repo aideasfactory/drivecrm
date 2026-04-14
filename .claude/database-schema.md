@@ -11,6 +11,7 @@ This document provides a comprehensive overview of the database structure for th
 - `Student` → Purchases `Orders` → Contains `Lessons`
 - `Order` = Student + Instructor + Package
 - `ResourceFolder` → Nested folders (self-referencing) → Contains `Resource` items (videos, PDFs)
+- `ResourceWatch` → Tracks which resources a user has watched (user_id + resource_id, unique)
 - `StudentPickupPoint` → Pickup/drop-off locations per student (geocoded)
 - `StudentChecklistItem` → Progress tracking items per student (theory test, practical test, etc.)
 
@@ -1123,7 +1124,27 @@ Many-to-many pivot table linking lessons to resources. Allows attaching multiple
 
 ---
 
-### 28. **discount_codes**
+### 28. **resource_watches**
+
+Tracks which resources a user has marked as watched. Used to display "Watched" badges in the student mobile app resource library.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique identifier |
+| `user_id` | bigint unsigned | FOREIGN KEY → users(id) ON DELETE CASCADE | The user who watched |
+| `resource_id` | bigint unsigned | FOREIGN KEY → resources(id) ON DELETE CASCADE | The resource that was watched |
+| `created_at` | timestamp | NULLABLE | When the resource was marked as watched |
+
+**Indexes:**
+- Unique on `(user_id, resource_id)` (prevents duplicates, enables idempotent marking)
+
+**Relationships:**
+- Belongs to `User`
+- Belongs to `Resource`
+
+---
+
+### 29. **discount_codes**
 
 UUID-based discount codes for the onboarding flow. Each code maps to a percentage tier (5%, 10%, 15%, or 20%) and can be shared via URL.
 

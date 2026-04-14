@@ -1936,6 +1936,299 @@ Duration is derived from each lesson's `start_time` and `end_time`.
 
 ---
 
+### Student Resources
+
+---
+
+#### `GET /api/v1/student/resource-summary`
+
+**Auth:** Bearer token (student only)
+
+Returns an aggregated summary of the authenticated student's resource activity for the Resources tab dashboard. One call powers the entire screen.
+
+**Success Response:** `200 OK`
+
+```json
+{
+  "data": {
+    "recent_activity": [
+      {
+        "id": 2,
+        "title": "Parallel Parking Tutorial",
+        "type": "video",
+        "watched_at": "2026-04-14T14:30:00.000000Z"
+      },
+      {
+        "id": 10,
+        "title": "Highway Code Summary",
+        "type": "file",
+        "watched_at": "2026-04-13T09:15:00.000000Z"
+      }
+    ],
+    "stats": {
+      "total_resources": 45,
+      "videos_watched": 24,
+      "files_opened": 8,
+      "mock_test_average": "41/50",
+      "mock_test_percentage": 82,
+      "hazard_perception_average": "38/50",
+      "hazard_perception_percentage": 76
+    },
+    "study_progress": [
+      {
+        "folder_name": "Manoeuvres",
+        "total": 12,
+        "watched": 9,
+        "percentage": 75
+      },
+      {
+        "folder_name": "Road Safety",
+        "total": 8,
+        "watched": 6,
+        "percentage": 75
+      }
+    ],
+    "recommended": [
+      {
+        "id": 5,
+        "title": "Roundabout Navigation",
+        "resource_type": "video_link",
+        "thumbnail_url": null,
+        "folder_name": "Road Safety"
+      }
+    ],
+    "study_tip": "Practice hazard perception tests regularly. The more scenarios you see, the better you'll recognise potential dangers on the road."
+  }
+}
+```
+
+**Field Breakdown:**
+
+| Section | Description |
+|---------|-------------|
+| `recent_activity` | Last 10 resource interactions (newest first). `type` is `video` or `file` derived from `resource_type`. |
+| `stats.total_resources` | Total published resources available. |
+| `stats.videos_watched` | Count of `video_link` resources this student has watched. |
+| `stats.files_opened` | Count of `file` resources this student has watched. |
+| `stats.mock_test_*` | Hardcoded test data — will be replaced when mock test feature is built. |
+| `stats.hazard_perception_*` | Hardcoded test data — will be replaced when hazard perception feature is built. |
+| `study_progress` | Per top-level folder: total resources (including children), watched count, percentage. Only folders with ≥1 resource. |
+| `recommended` | Resources suggested via lesson sign-offs (`lesson_resource` pivot). Unwatched first, then watched. Limit 5. |
+| `study_tip` | Random driving study tip from a pool of 20. |
+
+**Error Responses:**
+
+| Status | When |
+|--------|------|
+| 401 | Missing or invalid Bearer token |
+| 403 | Authenticated user is not a student |
+
+---
+
+#### `GET /api/v1/student/resources`
+
+**Auth required:** Yes (Bearer token — student only)
+
+Returns the full resource library for the student. The response contains two top-level keys:
+
+- **`folders`** — the complete folder tree with all published resources nested inside. Each resource includes `is_suggested` (assigned to the student via a lesson sign-off) and `is_watched` booleans.
+- **`my_resources`** — a flat array of resources specifically suggested to this student (via `lesson_resource` pivot), for the "My Resources" tab.
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "folders": [
+      {
+        "id": 1,
+        "name": "Learn to Drive",
+        "slug": "learn-to-drive",
+        "children": [
+          {
+            "id": 3,
+            "name": "Moving Off & Stopping",
+            "slug": "moving-off-stopping",
+            "resources": [
+              {
+                "id": 2,
+                "title": "Moving Off & Stopping - Introduction",
+                "description": "In this video, we introduce you to the topic of moving off & stopping.",
+                "resource_type": "video_link",
+                "thumbnail_url": null,
+                "tags": ["moving off and stopping", "moving off", "stopping"],
+                "is_suggested": true,
+                "is_watched": false
+              }
+            ]
+          }
+        ],
+        "resources": []
+      }
+    ],
+    "my_resources": [
+      {
+        "id": 2,
+        "title": "Moving Off & Stopping - Introduction",
+        "resource_type": "video_link",
+        "thumbnail_url": null,
+        "folder_name": "Moving Off & Stopping",
+        "is_watched": false,
+        "suggested_at": "2026-03-22T18:30:00.000000Z"
+      }
+    ]
+  }
+}
+```
+
+**Folder Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Folder ID |
+| `name` | string | Folder display name (e.g. "Manoeuvres") |
+| `slug` | string | URL-safe slug |
+| `children` | array | Nested child folders (same structure, recursive) |
+| `resources` | array | Published resources in this folder |
+
+**Resource Object Fields (within folders):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Resource ID |
+| `title` | string | Resource title |
+| `description` | string\|null | Resource description |
+| `resource_type` | string | `video_link` or `file` |
+| `thumbnail_url` | string\|null | Thumbnail image URL |
+| `tags` | array\|null | Tag strings for search/filtering |
+| `is_suggested` | boolean | Whether this resource was assigned to the student via a lesson |
+| `is_watched` | boolean | Whether the student has marked this resource as watched |
+
+**My Resources Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Resource ID |
+| `title` | string | Resource title |
+| `resource_type` | string | `video_link` or `file` |
+| `thumbnail_url` | string\|null | Thumbnail image URL |
+| `folder_name` | string\|null | Name of the parent folder |
+| `is_watched` | boolean | Whether the student has watched this resource |
+| `suggested_at` | string | ISO 8601 timestamp of when the resource was assigned |
+
+> **Note:** `video_url` and `file_url` are intentionally excluded from this endpoint to keep the payload lightweight. Use `GET /student/resources/{resource}` to retrieve the actual content URL when the user taps a resource.
+
+---
+
+#### `GET /api/v1/student/resources/{resource}`
+
+**Auth required:** Yes (Bearer token — student only)
+
+Returns a single resource with its full details including the actual content URL. For `video_link` resources, this is the YouTube/Vimeo URL. For `file` resources, this is a time-limited signed S3 URL (valid for 30 minutes).
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `resource` | integer | Resource ID |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+
+**Video link example:**
+```json
+{
+  "data": {
+    "id": 2,
+    "title": "Moving Off & Stopping - Introduction",
+    "description": "In this video, we introduce you to the topic of moving off & stopping.",
+    "resource_type": "video_link",
+    "video_url": "https://youtu.be/a3BEcrNZOkE?si=qpoSxbKfpm75SFnk",
+    "file_url": null,
+    "thumbnail_url": null,
+    "file_name": null,
+    "tags": ["moving off and stopping", "moving off", "stopping"],
+    "is_watched": true
+  }
+}
+```
+
+**File example:**
+```json
+{
+  "data": {
+    "id": 10,
+    "title": "Highway Code Summary",
+    "description": "A quick-reference PDF of the Highway Code.",
+    "resource_type": "file",
+    "video_url": null,
+    "file_url": "https://drivecrm.s3.eu-west-2.amazonaws.com/resources/highway-code.pdf?X-Amz-Expires=1800&...",
+    "thumbnail_url": null,
+    "file_name": "highway-code.pdf",
+    "tags": ["highway code", "theory"],
+    "is_watched": false
+  }
+}
+```
+
+**Resource Detail Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Resource ID |
+| `title` | string | Resource title |
+| `description` | string\|null | Full description |
+| `resource_type` | string | `video_link` or `file` |
+| `video_url` | string\|null | YouTube/Vimeo URL (video_link resources only) |
+| `file_url` | string\|null | Signed S3 URL, valid 30 minutes (file resources only) |
+| `thumbnail_url` | string\|null | Thumbnail image URL |
+| `file_name` | string\|null | Original file name (file resources only) |
+| `tags` | array\|null | Tag strings |
+| `is_watched` | boolean | Whether the student has watched this resource |
+
+**Error Response — resource not found:** `404 Not Found`
+```json
+{
+  "message": "No query results for model [App\\Models\\Resource] 999."
+}
+```
+
+---
+
+#### `POST /api/v1/student/resources/{resource}/watched`
+
+**Auth required:** Yes (Bearer token — student only)
+
+Marks a resource as watched by the authenticated student. This endpoint is **idempotent** — calling it multiple times for the same resource will not create duplicate records or return an error.
+
+Call this endpoint when the student finishes watching a video or opens a PDF document.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `resource` | integer | Resource ID |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "message": "Resource marked as watched."
+}
+```
+
+**Error Response — resource not found:** `404 Not Found`
+```json
+{
+  "message": "No query results for model [App\\Models\\Resource] 999."
+}
+```
+
+---
+
 ### Students
 
 ---
@@ -3802,6 +4095,10 @@ The `role` field is always returned in user responses. Use it to determine which
 | GET | `/api/v1/student/calendar/items` | Yes | Student | List attached instructor's available slots |
 | GET | `/api/v1/student/instructor` | Yes | Student | View attached instructor's public profile |
 | GET | `/api/v1/student/dashboard` | Yes | Student | Student dashboard data (practice hours) |
+| GET | `/api/v1/student/resource-summary` | Yes | Student | Aggregated resource dashboard (recent activity, stats, progress, tips) |
+| GET | `/api/v1/student/resources` | Yes | Student | Full resource library (folder tree + my resources + watched flags) |
+| GET | `/api/v1/student/resources/{resource}` | Yes | Student | Single resource detail with video/file URL |
+| POST | `/api/v1/student/resources/{resource}/watched` | Yes | Student | Mark resource as watched (idempotent) |
 | POST | `/api/v1/students` | Yes | Instructor | Create student |
 | POST | `/api/v1/students/attach` | Yes | Student | Attach to instructor via PIN |
 | GET | `/api/v1/students/{student}` | Yes | Both | View student |
@@ -3872,6 +4169,8 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-04-10 | Added `GET /student/instructor` — returns attached instructor's public profile (name, bio, avatar). Returns 422 if no instructor attached. | Student Home (instructor) |
 | 2026-04-10 | Added `GET /student/dashboard` — returns aggregated student dashboard data. Currently includes practice hours (completed vs total, derived from lesson durations). Designed to be extended with future sections. | Student Home (dashboard) |
 | 2026-04-14 | Documented `POST /api/v1/push-token` endpoint — stores Expo push token on user record for push notification delivery. Accepts `expo_push_token` (must match `ExponentPushToken[...]` format). | Push Notifications (push-token) |
+| 2026-04-14 | Added student resources API — `GET /student/resources` returns full folder tree with published resources (annotated with `is_suggested` and `is_watched` booleans) plus a flat `my_resources` array derived from `lesson_resource` pivot. `GET /student/resources/{resource}` returns single resource with video_url or signed S3 file_url. `POST /student/resources/{resource}/watched` marks a resource as watched (idempotent). New `resource_watches` table tracks watched state. | Student Resources (index, show, watched) |
+| 2026-04-14 | Added `GET /student/resource-summary` — aggregated dashboard for Resources tab. Returns recent activity (last 10 watched), stats (total/watched counts, hardcoded mock test & hazard perception scores), per-folder study progress, recommended resources (from lesson sign-offs, unwatched first), and a random study tip from 20 seeded tips. | Student Resources (resource-summary) |
 
 ---
 
