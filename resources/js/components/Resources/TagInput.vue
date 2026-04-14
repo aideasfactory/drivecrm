@@ -44,6 +44,12 @@ const handleKeydown = (e: KeyboardEvent) => {
         removeTag(props.modelValue[props.modelValue.length - 1]);
     }
 };
+
+const handleBlur = () => {
+    if (inputValue.value.trim()) {
+        addTag();
+    }
+};
 </script>
 
 <template>
@@ -74,6 +80,7 @@ const handleKeydown = (e: KeyboardEvent) => {
             :placeholder="placeholder || 'Type a tag and press Enter'"
             :disabled="disabled"
             @keydown="handleKeydown"
+            @blur="handleBlur"
         />
     </div>
 </template>

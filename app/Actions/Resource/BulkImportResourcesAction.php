@@ -41,7 +41,7 @@ class BulkImportResourcesAction
             // Validate the row
             $validator = Validator::make($row, [
                 'title' => ['required', 'string', 'max:255'],
-                'video_url' => ['required', 'url', 'max:500', 'regex:/^https?:\/\/(www\.)?(youtube\.com|youtu\.be|vimeo\.com)\/.+/i'],
+                'video_url' => ['required', 'url', 'max:500', 'regex:/^https?:\/\/([a-z0-9-]+\.)*(youtube\.com|youtu\.be|vimeo\.com)\/.+/i'],
                 'description' => ['nullable', 'string', 'max:5000'],
                 'tags' => ['nullable', 'string'],
                 'folder' => ['nullable', 'string', 'max:500'],

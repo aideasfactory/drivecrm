@@ -153,6 +153,29 @@ class ResourceApiService extends BaseService
     }
 
     /**
+     * Get 5 random published resources (fallback when student has no suggestions).
+     *
+     * Returns the same column shape as getMyResources() so MyResourceResource works.
+     */
+    public function getRandomPublishedResources(int $limit = 5): Collection
+    {
+        return DB::table('resources')
+            ->leftJoin('resource_folders', 'resource_folders.id', '=', 'resources.resource_folder_id')
+            ->where('resources.status', 'published')
+            ->select([
+                'resources.id as resource_id',
+                'resources.title as resource_title',
+                'resources.resource_type',
+                'resources.thumbnail_url',
+                'resource_folders.name as folder_name',
+                DB::raw('NULL as suggested_at'),
+            ])
+            ->inRandomOrder()
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
      * Assign resources to a lesson and email the student.
      *
      * @param  array<int>  $resourceIds

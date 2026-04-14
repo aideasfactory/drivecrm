@@ -1912,7 +1912,7 @@ Returns the public profile of the authenticated student's attached instructor. T
 
 **Auth required:** Yes (Bearer token — student only)
 
-Returns aggregated dashboard data for the student home screen. Currently returns practice hours; designed to be extended with additional sections in the future.
+Returns aggregated dashboard data for the student home screen. Includes practice hours and suggested learning resources from lesson sign-offs.
 
 **Request Body:** None
 
@@ -1923,7 +1923,27 @@ Returns aggregated dashboard data for the student home screen. Currently returns
     "practice_hours": {
       "completed": 24.5,
       "total": 40.0
-    }
+    },
+    "suggested_resources": [
+      {
+        "id": 2,
+        "title": "Parallel Parking Tutorial",
+        "resource_type": "video_link",
+        "thumbnail_url": "https://img.youtube.com/vi/abc123/mqdefault.jpg",
+        "folder_name": "Manoeuvres",
+        "is_watched": false,
+        "suggested_at": "2026-04-10T10:30:00.000000Z"
+      },
+      {
+        "id": 10,
+        "title": "Highway Code Summary",
+        "resource_type": "file",
+        "thumbnail_url": null,
+        "folder_name": "Theory",
+        "is_watched": true,
+        "suggested_at": "2026-04-08T14:00:00.000000Z"
+      }
+    ]
   }
 }
 ```
@@ -1933,6 +1953,12 @@ Returns aggregated dashboard data for the student home screen. Currently returns
 - `total` — sum of duration (hours) of ALL non-draft lessons across all orders (completed + pending + cancelled)
 
 Duration is derived from each lesson's `start_time` and `end_time`.
+
+**Suggested Resources:**
+- Derived from the `lesson_resource` pivot — resources attached to the student's lessons via sign-offs
+- Each resource includes an `is_watched` boolean based on the `resource_watches` table
+- Ordered by most recently suggested first
+- Returns all suggested resources (not paginated)
 
 ---
 
@@ -4094,7 +4120,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | GET | `/api/v1/student/packages` | Yes | Student | List attached instructor's packages |
 | GET | `/api/v1/student/calendar/items` | Yes | Student | List attached instructor's available slots |
 | GET | `/api/v1/student/instructor` | Yes | Student | View attached instructor's public profile |
-| GET | `/api/v1/student/dashboard` | Yes | Student | Student dashboard data (practice hours) |
+| GET | `/api/v1/student/dashboard` | Yes | Student | Student dashboard data (practice hours, suggested resources) |
 | GET | `/api/v1/student/resource-summary` | Yes | Student | Aggregated resource dashboard (recent activity, stats, progress, tips) |
 | GET | `/api/v1/student/resources` | Yes | Student | Full resource library (folder tree + my resources + watched flags) |
 | GET | `/api/v1/student/resources/{resource}` | Yes | Student | Single resource detail with video/file URL |
@@ -4171,6 +4197,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-04-14 | Documented `POST /api/v1/push-token` endpoint — stores Expo push token on user record for push notification delivery. Accepts `expo_push_token` (must match `ExponentPushToken[...]` format). | Push Notifications (push-token) |
 | 2026-04-14 | Added student resources API — `GET /student/resources` returns full folder tree with published resources (annotated with `is_suggested` and `is_watched` booleans) plus a flat `my_resources` array derived from `lesson_resource` pivot. `GET /student/resources/{resource}` returns single resource with video_url or signed S3 file_url. `POST /student/resources/{resource}/watched` marks a resource as watched (idempotent). New `resource_watches` table tracks watched state. | Student Resources (index, show, watched) |
 | 2026-04-14 | Added `GET /student/resource-summary` — aggregated dashboard for Resources tab. Returns recent activity (last 10 watched), stats (total/watched counts, hardcoded mock test & hazard perception scores), per-folder study progress, recommended resources (from lesson sign-offs, unwatched first), and a random study tip from 20 seeded tips. | Student Resources (resource-summary) |
+| 2026-04-14 | Extended `GET /student/dashboard` — now includes `suggested_resources` array alongside `practice_hours`. Uses existing `getMyResources()` from ResourceApiService to return resources suggested via lesson sign-offs, each with `is_watched` status. | Student Home (dashboard) |
 
 ---
 

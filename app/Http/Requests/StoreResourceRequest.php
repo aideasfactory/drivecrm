@@ -29,7 +29,7 @@ class StoreResourceRequest extends FormRequest
         ];
 
         if ($this->input('resource_type') === 'video_link') {
-            $rules['video_url'] = ['required', 'url', 'max:500', 'regex:/^https?:\/\/(www\.)?(youtube\.com|youtu\.be|vimeo\.com)\/.+/i'];
+            $rules['video_url'] = ['required', 'url', 'max:500', 'regex:/^https?:\/\/([a-z0-9-]+\.)*(youtube\.com|youtu\.be|vimeo\.com)\/.+/i'];
             $rules['thumbnail_url'] = ['nullable', 'url', 'max:500'];
         } else {
             $rules['file'] = ['required', 'file', 'max:512000', 'mimes:mp4,webm,mov,avi,mkv,pdf'];

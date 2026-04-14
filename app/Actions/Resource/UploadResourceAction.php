@@ -25,6 +25,7 @@ class UploadResourceAction
 
         return Resource::create([
             'resource_folder_id' => $folder->id,
+            'resource_type' => 'file',
             'title' => $title,
             'description' => $description,
             'tags' => $tags,
