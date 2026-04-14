@@ -51,6 +51,8 @@
     - [Conversation with Instructor (Student)](#get-apiv1messagesconversationsinstructor)
     - [Conversation by User ID](#get-apiv1messagesconversationsuser)
     - [Send Message](#post-apiv1messages)
+  - [Push Notifications](#push-notifications)
+    - [Store Push Token](#post-apiv1push-token)
 - [Profile Object by Role](#profile-object-by-role)
 - [Appendix: User Roles](#appendix-user-roles)
 - [Changelog](#changelog)
@@ -3664,6 +3666,66 @@ Send a new message to another user. Authorization ensures only instructor-studen
 
 ---
 
+### Push Notifications
+
+#### `POST /api/v1/push-token`
+
+**Auth required:** Yes (Bearer token)
+
+Stores the user's Expo push token for receiving push notifications. If the user already has a token stored, it will be overwritten with the new one. Works for both instructors and students.
+
+**Request Body:**
+```json
+{
+  "expo_push_token": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]"
+}
+```
+
+| Field | Type | Required | Rules | Description |
+|-------|------|----------|-------|-------------|
+| `expo_push_token` | string | Yes | Must match format `ExponentPushToken[...]` | The Expo push token obtained from the device |
+
+**Success Response:** `200 OK`
+```json
+{
+  "message": "Push token stored successfully."
+}
+```
+
+**Error Response (validation):** `422 Unprocessable Entity`
+```json
+{
+  "message": "The expo push token field is required.",
+  "errors": {
+    "expo_push_token": ["The expo push token field is required."]
+  }
+}
+```
+
+**Error Response (invalid format):** `422 Unprocessable Entity`
+```json
+{
+  "message": "The expo push token field format is invalid.",
+  "errors": {
+    "expo_push_token": ["The expo push token field format is invalid."]
+  }
+}
+```
+
+**Error Response (unauthenticated):** `401 Unauthorized`
+```json
+{
+  "message": "Unauthenticated."
+}
+```
+
+**Mobile Integration Notes:**
+- Call this endpoint after login and whenever the Expo push token changes (e.g., app reinstall, token refresh).
+- The token is stored directly on the user record (`expo_push_token` column).
+- Only one token per user is stored — the latest call wins.
+
+---
+
 ## Profile Object by Role
 
 The `profile` key in user responses contains role-specific data. The shape depends on the user's `role`:
@@ -3809,6 +3871,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | 2026-04-10 | Enhanced student lessons endpoint with query parameters: `status`, `from_date`, `sort`, `limit` for filtering/sorting/limiting. Added `instructor_avatar` field to lesson list responses. | Student Lessons (index) |
 | 2026-04-10 | Added `GET /student/instructor` — returns attached instructor's public profile (name, bio, avatar). Returns 422 if no instructor attached. | Student Home (instructor) |
 | 2026-04-10 | Added `GET /student/dashboard` — returns aggregated student dashboard data. Currently includes practice hours (completed vs total, derived from lesson durations). Designed to be extended with future sections. | Student Home (dashboard) |
+| 2026-04-14 | Documented `POST /api/v1/push-token` endpoint — stores Expo push token on user record for push notification delivery. Accepts `expo_push_token` (must match `ExponentPushToken[...]` format). | Push Notifications (push-token) |
 
 ---
 

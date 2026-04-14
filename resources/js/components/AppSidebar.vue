@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 import {
+    Bell,
     BookOpen,
     FileText,
     GraduationCap,
@@ -34,6 +35,7 @@ import { index as discountCodesIndex } from '@/routes/discount-codes';
 import { index as packagesIndex } from '@/routes/packages';
 import { index as pupilsIndex } from '@/routes/pupils';
 import { index as reportsIndex } from '@/routes/reports';
+import { index as pushNotificationsIndex } from '@/routes/push-notifications';
 import { index as resourcesIndex } from '@/routes/resources';
 import { index as teamsIndex } from '@/routes/teams';
 import { type NavItem } from '@/types';
@@ -75,6 +77,12 @@ const allNavItems: NavItem[] = [
         title: 'Reports',
         href: reportsIndex(),
         icon: FileText,
+    },
+    {
+        title: 'Push Notifications',
+        href: pushNotificationsIndex(),
+        icon: Bell,
+        roles: ['owner'],
     },
     {
         title: 'Resources',

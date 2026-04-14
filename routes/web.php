@@ -211,6 +211,14 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('teams.index');
     Route::get('/reports', [\App\Http\Controllers\ReportController::class, 'index'])
         ->name('reports.index');
+    // Push Notifications (Owner Only)
+    Route::middleware([\App\Http\Middleware\EnsureOwner::class])->group(function () {
+        Route::get('/push-notifications', [\App\Http\Controllers\PushNotificationController::class, 'index'])
+            ->name('push-notifications.index');
+        Route::post('/push-notifications', [\App\Http\Controllers\PushNotificationController::class, 'store'])
+            ->name('push-notifications.store');
+    });
+
     // Resources (Owner Only)
     Route::middleware([\App\Http\Middleware\EnsureOwner::class])->group(function () {
         Route::get('/resources', [\App\Http\Controllers\ResourceController::class, 'index'])
