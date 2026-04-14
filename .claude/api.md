@@ -4223,7 +4223,7 @@ Returns aggregated mock test statistics for the authenticated student. Includes 
 
 ### `POST /api/v1/student/mock-tests/start`
 
-Starts a new mock test. Generates 50 random questions from the specified category (optionally filtered by topic). Returns the test ID and all questions (without correct answers).
+Starts a new mock test. Generates 50 random questions. If no category is provided, questions are drawn from all categories (stored as `"Mixed"`). Optionally filter by topic within a category. Returns the test ID and all questions (without correct answers).
 
 **Auth:** Bearer token (student role)
 
@@ -4231,7 +4231,7 @@ Starts a new mock test. Generates 50 random questions from the specified categor
 
 | Field | Type | Required | Validation | Description |
 |-------|------|----------|------------|-------------|
-| category | string | Yes | `in:Car,ADI,Motorcycle,LGV-PCV` | Question bank to draw from |
+| category | string | No | `in:Car,ADI,Motorcycle,LGV-PCV` | Question bank to draw from. Omit for a mixed test across all categories. |
 | topic | string | No | max:100 | Filter to a specific topic (e.g. "Alertness", "Road and traffic signs") |
 
 **Response (201):**
@@ -4262,7 +4262,8 @@ Starts a new mock test. Generates 50 random questions from the specified categor
         "option_c_image": null,
         "option_d": "Select a higher gear than normal",
         "option_d_image": null,
-        "topic": "Alertness"
+        "topic": "Alertness",
+        "explanation": "If you have to make a U-turn, slow down and make sure that the road is clear..."
       },
       {
         "id": 456,
@@ -4276,7 +4277,8 @@ Starts a new mock test. Generates 50 random questions from the specified categor
         "option_c_image": "/storage/mock-test-images/Car/BB1591c.gif",
         "option_d": null,
         "option_d_image": "/storage/mock-test-images/Car/BB1591d.gif",
-        "topic": "Attitude"
+        "topic": "Attitude",
+        "explanation": "You should be aware of all the warning lights and visual aids on the vehicle..."
       }
     ]
   }

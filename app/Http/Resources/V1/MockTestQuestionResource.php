@@ -29,6 +29,7 @@ class MockTestQuestionResource extends JsonResource
             'option_d' => $this->option_d,
             'option_d_image' => $this->option_d_image ? "{$imageBaseUrl}/{$this->category}/{$this->option_d_image}" : null,
             'topic' => $this->topic,
+            'explanation' => $this->explanation,
         ];
     }
 }

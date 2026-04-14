@@ -20,7 +20,7 @@ class MockTestService extends BaseService
         protected GetCategoryPerformanceAction $getCategoryPerformance,
     ) {}
 
-    public function startTest(Student $student, string $category, ?string $topic = null): array
+    public function startTest(Student $student, ?string $category = null, ?string $topic = null): array
     {
         return ($this->generateRandomTest)($student, $category, $topic);
     }
@@ -59,6 +59,7 @@ class MockTestService extends BaseService
             $this->cacheKey('student', $studentId, 'mock_test_summary:ADI'),
             $this->cacheKey('student', $studentId, 'mock_test_summary:Motorcycle'),
             $this->cacheKey('student', $studentId, 'mock_test_summary:LGV-PCV'),
+            $this->cacheKey('student', $studentId, 'mock_test_summary:Mixed'),
         ]);
     }
 }

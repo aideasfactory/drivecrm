@@ -10,10 +10,12 @@ use App\Models\Student;
 
 class GenerateRandomTestAction
 {
-    public function __invoke(Student $student, string $category, ?string $topic = null, int $count = 50): array
+    public function __invoke(Student $student, ?string $category = null, ?string $topic = null): array
     {
+        $count = config('mock_tests.questions_per_test');
+
         $questions = MockTestQuestion::query()
-            ->where('category', $category)
+            ->when($category, fn ($q) => $q->where('category', $category))
             ->when($topic, fn ($q) => $q->where('topic', $topic))
             ->inRandomOrder()
             ->limit($count)
@@ -21,7 +23,7 @@ class GenerateRandomTestAction
 
         $mockTest = MockTest::create([
             'student_id' => $student->id,
-            'category' => $category,
+            'category' => $category ?? 'Mixed',
             'topic' => $topic,
             'total_questions' => $questions->count(),
             'started_at' => now(),
