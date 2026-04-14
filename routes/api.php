@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\HazardPerceptionController;
 use App\Http\Controllers\Api\V1\InstructorCalendarController;
 use App\Http\Controllers\Api\V1\InstructorFinanceController;
 use App\Http\Controllers\Api\V1\InstructorLessonController;
@@ -90,6 +91,11 @@ Route::prefix('v1')->group(function (): void {
             Route::post('mock-tests/start', [MockTestController::class, 'start']);
             Route::post('mock-tests/{mockTest}/submit', [MockTestController::class, 'submit']);
             Route::get('mock-tests/{mockTest}/review', [MockTestController::class, 'review']);
+
+            // Hazard perception routes
+            Route::get('hazard-perception/videos', [HazardPerceptionController::class, 'index']);
+            Route::post('hazard-perception/videos/{hazardPerceptionVideo}/submit', [HazardPerceptionController::class, 'submit']);
+            Route::get('hazard-perception/summary', [HazardPerceptionController::class, 'summary']);
         });
 
         // Student routes

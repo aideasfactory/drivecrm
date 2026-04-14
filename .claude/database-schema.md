@@ -17,6 +17,8 @@ This document provides a comprehensive overview of the database structure for th
 - `MockTestQuestion` → Theory test question bank (~2,923 questions across 4 categories)
 - `MockTest` → Student test session (score, pass/fail, timestamps)
 - `MockTestAnswer` → Individual answers per test (right/wrong, for category performance tracking)
+- `HazardPerceptionVideo` → Hazard perception video clips with hazard timing windows and categorisation
+- `HazardPerceptionAttempt` → Student attempt scores per video (response times, per-hazard scores)
 
 **Key Relationships:**
 ```
@@ -1353,3 +1355,53 @@ Individual answers per test. Enables category performance tracking and test revi
 
 **Unique constraint:** (mock_test_id, mock_test_question_id) — one answer per question per test.
 **Relationships:** BelongsTo → MockTest, BelongsTo → MockTestQuestion
+
+---
+
+### hazard_perception_videos
+
+Hazard perception video clips. Each clip has 1 or 2 developing hazards with scored timing windows. Videos are categorised by category (Car, ADI, Motorcycle, LGV-PCV) and topic for filtered browsing.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| title | varchar(255) | No | Video title |
+| description | text | Yes | Brief description of the clip scenario |
+| category | varchar(50) | No | Category: Car, ADI, Motorcycle, LGV-PCV |
+| topic | varchar(100) | No | Topic within category (e.g., Junctions, Roundabouts) |
+| video_url | varchar(255) | No | Path/URL to the video file |
+| duration_seconds | int unsigned | No | Video length in seconds |
+| hazard_1_start | decimal(6,2) | No | Seconds when hazard 1 scoring window opens |
+| hazard_1_end | decimal(6,2) | No | Seconds when hazard 1 scoring window closes |
+| hazard_2_start | decimal(6,2) | Yes | Seconds when hazard 2 scoring window opens (double hazard only) |
+| hazard_2_end | decimal(6,2) | Yes | Seconds when hazard 2 scoring window closes (double hazard only) |
+| is_double_hazard | boolean | No | Whether this clip has two hazards (default false) |
+| thumbnail_url | varchar(255) | Yes | Optional thumbnail image URL |
+| created_at | timestamp | Yes | |
+| updated_at | timestamp | Yes | |
+
+**Indexes:** category, topic, is_double_hazard
+**Relationships:** HasMany → HazardPerceptionAttempt
+
+### hazard_perception_attempts
+
+Records each student attempt at a hazard perception video. Stores response times and calculated scores per hazard.
+
+Scoring: Each hazard's timing window is divided into 5 equal bands. Responding in band 1 (earliest) = 5 points, band 5 (latest) = 1 point, outside window = 0 points. Single hazard clips max 5 points, double hazard clips max 10 points.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| student_id | bigint FK | No | References students.id. Cascade on delete. |
+| hazard_perception_video_id | bigint FK | No | References hazard_perception_videos.id. Cascade on delete. |
+| hazard_1_response_time | decimal(6,2) | Yes | Seconds into video when student flagged hazard 1 (null = missed) |
+| hazard_1_score | tinyint unsigned | No | Score 0-5 for hazard 1 (default 0) |
+| hazard_2_response_time | decimal(6,2) | Yes | Seconds into video when student flagged hazard 2 (null = missed or single hazard) |
+| hazard_2_score | tinyint unsigned | Yes | Score 0-5 for hazard 2 (null if single hazard clip) |
+| total_score | tinyint unsigned | No | Combined score: h1 + h2 (max 5 single, max 10 double) |
+| completed_at | timestamp | Yes | When attempt was completed |
+| created_at | timestamp | Yes | |
+| updated_at | timestamp | Yes | |
+
+**Indexes:** (student_id, hazard_perception_video_id) composite index
+**Relationships:** BelongsTo → Student, BelongsTo → HazardPerceptionVideo

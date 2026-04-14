@@ -58,6 +58,10 @@
     - [Start Test](#post-apiv1studentmock-testsstart)
     - [Submit Test](#post-apiv1studentmock-testsmocktestsubmit)
     - [Review Test](#get-apiv1studentmock-testsmocktestreview)
+  - [Hazard Perception](#hazard-perception)
+    - [Videos (List)](#get-apiv1studenthazard-perceptionvideos)
+    - [Submit Attempt](#post-apiv1studenthazard-perceptionvideoshazardperceptionvideosubmit)
+    - [Summary](#get-apiv1studenthazard-perceptionsummary)
 - [Profile Object by Role](#profile-object-by-role)
 - [Appendix: User Roles](#appendix-user-roles)
 - [Changelog](#changelog)
@@ -4385,6 +4389,209 @@ Returns the full review of a completed mock test, including all questions, the s
 
 ---
 
+## Hazard Perception
+
+Hazard perception video system for the student mobile app. Students watch video clips and identify developing hazards by tapping at the right moment. Each clip has 1 or 2 hazards with scored timing windows. Videos are categorised by category and topic.
+
+**Scoring:** Each hazard's timing window is divided into 5 equal bands. Responding in the earliest band scores 5 points, the latest band scores 1 point. Responding outside the window scores 0. Single hazard clips have a max score of 5, double hazard clips have a max score of 10.
+
+---
+
+#### `GET /api/v1/student/hazard-perception/videos`
+
+**Auth required:** Yes (Bearer token — student only)
+
+Returns all hazard perception videos grouped by category and topic. Optionally filter by category.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `category` | string | No | Filter by category: `Car`, `ADI`, `Motorcycle`, `LGV-PCV` |
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "Car": {
+      "Junctions": [
+        {
+          "id": 1,
+          "title": "Junction approach with pedestrian",
+          "description": "A car approaching a T-junction with a pedestrian stepping into the road.",
+          "category": "Car",
+          "topic": "Junctions",
+          "video_url": "hazard-perception/abc123.mp4",
+          "duration_seconds": 60,
+          "is_double_hazard": false,
+          "thumbnail_url": null
+        }
+      ],
+      "Roundabouts": [
+        {
+          "id": 2,
+          "title": "Roundabout with cyclist",
+          "description": "Approaching a roundabout with a cyclist merging from the left.",
+          "category": "Car",
+          "topic": "Roundabouts",
+          "video_url": "hazard-perception/def456.mp4",
+          "duration_seconds": 75,
+          "is_double_hazard": true,
+          "thumbnail_url": null
+        }
+      ]
+    }
+  }
+}
+```
+
+**Video Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Video record ID |
+| `title` | string | Video title |
+| `description` | string\|null | Brief scenario description |
+| `category` | string | Category: Car, ADI, Motorcycle, LGV-PCV |
+| `topic` | string | Topic within category |
+| `video_url` | string | Path/URL to the video file |
+| `duration_seconds` | integer | Video length in seconds |
+| `is_double_hazard` | boolean | Whether this clip has two hazards (max score 10 instead of 5) |
+| `thumbnail_url` | string\|null | Optional thumbnail image URL |
+
+> **Note:** Hazard timing windows are NOT returned to the client — scoring is calculated server-side when the student submits response times.
+
+---
+
+#### `POST /api/v1/student/hazard-perception/videos/{hazardPerceptionVideo}/submit`
+
+**Auth required:** Yes (Bearer token — student only)
+
+Submit all of the student's tap timestamps from the video. The mobile app sends every tap the user made during playback as an array of seconds. The backend looks up the video's hazard timing windows, finds the best-matching tap for each hazard, and calculates scores based on closeness to the hazard start time.
+
+**Scoring algorithm:**
+- The scoring window runs from `hazard_X_start` to `hazard_X_end` (stored on the video, not sent to the client).
+- The window is divided into 5 equal bands based on elapsed time from the start.
+- A tap in the **first 20%** of the window (closest to the hazard appearing) = **5 points**.
+- **20%-40%** = 4 points, **40%-60%** = 3 points, **60%-80%** = 2 points, **80%-100%** = 1 point.
+- A tap **outside** the window = 0 points.
+- If multiple taps land in the window, the **best-scoring** tap is used.
+- For double hazard clips, each hazard is scored independently (max 10 total).
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `hazardPerceptionVideo` | integer | The hazard perception video ID |
+
+**Request Body:**
+
+| Field | Type | Required | Validation | Description |
+|-------|------|----------|------------|-------------|
+| `taps` | array | Yes | array of numbers | Every tap timestamp in seconds (e.g., every time the user tapped the screen during the video) |
+| `taps.*` | number | Yes | numeric, min:0 | Individual tap timestamp (seconds into the video) |
+
+**Example Request:**
+```json
+{
+  "taps": [3.20, 12.85, 23.50, 31.00, 45.20, 58.10]
+}
+```
+
+**Success Response:** `201 Created`
+```json
+{
+  "data": {
+    "id": 1,
+    "hazard_perception_video_id": 2,
+    "hazard_1_response_time": "23.50",
+    "hazard_1_score": 4,
+    "hazard_2_response_time": "45.20",
+    "hazard_2_score": 3,
+    "total_score": 7,
+    "completed_at": "2026-04-14T15:30:00+00:00"
+  }
+}
+```
+
+> **Note:** `hazard_1_response_time` / `hazard_2_response_time` are the specific taps the backend selected as the best match for each hazard window. They will be `null` if no tap fell within that hazard's window (score = 0).
+
+**Attempt Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Attempt record ID |
+| `hazard_perception_video_id` | integer | The video this attempt is for |
+| `hazard_1_response_time` | string\|null | The best-matching tap for hazard 1 (null if no tap hit the window) |
+| `hazard_1_score` | integer | Score 0-5 for hazard 1 |
+| `hazard_2_response_time` | string\|null | The best-matching tap for hazard 2 (null if single hazard or no tap hit the window) |
+| `hazard_2_score` | integer\|null | Score 0-5 for hazard 2 (null if single hazard clip) |
+| `total_score` | integer | Combined score (max 5 single, max 10 double) |
+| `completed_at` | string | ISO 8601 timestamp |
+
+**Error Response (validation):** `422 Unprocessable Entity`
+
+---
+
+#### `GET /api/v1/student/hazard-perception/summary`
+
+**Auth required:** Yes (Bearer token — student only)
+
+Returns the student's hazard perception performance summary. Optionally filter by category.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `category` | string | No | Filter by category: `Car`, `ADI`, `Motorcycle`, `LGV-PCV` |
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "attempts_taken": 15,
+    "average_score": 3.8,
+    "best_score": 5,
+    "recent_attempts": [
+      {
+        "id": 15,
+        "hazard_perception_video_id": 8,
+        "hazard_1_response_time": "18.30",
+        "hazard_1_score": 5,
+        "hazard_2_response_time": null,
+        "hazard_2_score": null,
+        "total_score": 5,
+        "completed_at": "2026-04-14T15:00:00+00:00"
+      }
+    ],
+    "topic_performance": [
+      {
+        "topic": "Junctions",
+        "total_attempts": 5,
+        "average_score": 4.2
+      },
+      {
+        "topic": "Roundabouts",
+        "total_attempts": 3,
+        "average_score": 3.0
+      }
+    ]
+  }
+}
+```
+
+**Summary Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `attempts_taken` | integer | Total completed attempts |
+| `average_score` | number | Average score across all attempts |
+| `best_score` | integer | Highest single attempt score |
+| `recent_attempts` | array | Last 10 completed attempts (most recent first) |
+| `topic_performance` | array | Per-topic breakdown with attempt count and average score |
+
+---
+
 ## Changelog
 
 | Date | Change | Endpoints Affected |
@@ -4428,6 +4635,7 @@ Returns the full review of a completed mock test, including all questions, the s
 | 2026-04-14 | Added student resources API — `GET /student/resources` returns full folder tree with published resources (annotated with `is_suggested` and `is_watched` booleans) plus a flat `my_resources` array derived from `lesson_resource` pivot. `GET /student/resources/{resource}` returns single resource with video_url or signed S3 file_url. `POST /student/resources/{resource}/watched` marks a resource as watched (idempotent). New `resource_watches` table tracks watched state. | Student Resources (index, show, watched) |
 | 2026-04-14 | Added `GET /student/resource-summary` — aggregated dashboard for Resources tab. Returns recent activity (last 10 watched), stats (total/watched counts, hardcoded mock test & hazard perception scores), per-folder study progress, recommended resources (from lesson sign-offs, unwatched first), and a random study tip from 20 seeded tips. | Student Resources (resource-summary) |
 | 2026-04-14 | Extended `GET /student/dashboard` — now includes `suggested_resources` array alongside `practice_hours`. Uses existing `getMyResources()` from ResourceApiService to return resources suggested via lesson sign-offs, each with `is_watched` status. | Student Home (dashboard) |
+| 2026-04-14 | Added hazard perception system — `GET /student/hazard-perception/videos` returns all clips grouped by category/topic. `POST /student/hazard-perception/videos/{id}/submit` records student response times and calculates 5-band scores per hazard. `GET /student/hazard-perception/summary` returns performance stats (attempts taken, avg/best score, per-topic breakdown). Supports double hazard clips (max 10 points). New tables: `hazard_perception_videos`, `hazard_perception_attempts`. | Hazard Perception (videos, submit, summary) |
 | 2026-04-14 | Added mock test system — `GET /student/mock-tests/summary` returns dashboard stats (tests taken, avg score, pass count, last 5 scores, random tip, per-category performance). `POST /student/mock-tests/start` generates 50 random questions. `POST /student/mock-tests/{id}/submit` scores and records all answers. `GET /student/mock-tests/{id}/review` returns full test review with correct answers and explanations. New tables: `mock_test_questions` (2,923 questions), `mock_tests`, `mock_test_answers`. | Mock Tests (summary, start, submit, review) |
 
 ---

@@ -216,6 +216,11 @@ class Student extends Model
         return $this->hasMany(MockTest::class);
     }
 
+    public function hazardPerceptionAttempts(): HasMany
+    {
+        return $this->hasMany(HazardPerceptionAttempt::class);
+    }
+
     /**
      * Check if student is active.
      */
