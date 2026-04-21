@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Actions\Resource;
 
+use App\Models\HazardPerceptionAttempt;
+use App\Models\MockTest;
 use App\Models\Resource;
 use App\Models\ResourceFolder;
 use App\Models\Student;
@@ -13,6 +15,10 @@ use Illuminate\Support\Facades\DB;
 
 class GetResourceSummaryAction
 {
+    public function __construct(
+        protected GetStudentBadgesAction $getStudentBadges,
+    ) {}
+
     private const STUDY_TIPS = [
         'Practice hazard perception tests regularly. The more scenarios you see, the better you\'ll recognise potential dangers on the road.',
         'Review the Highway Code for at least 15 minutes each day rather than cramming before your theory test.',
@@ -39,15 +45,16 @@ class GetResourceSummaryAction
     /**
      * Get the full resource summary for a student's dashboard.
      *
-     * @return array{recent_activity: Collection, stats: array, study_progress: Collection, recommended: Collection, study_tip: string}
+     * @return array{recent_activity: Collection, stats: array, study_progress: Collection, recommended: Collection, badges: array, study_tip: string}
      */
     public function __invoke(Student $student, User $user): array
     {
         return [
             'recent_activity' => $this->getRecentActivity($user),
-            'stats' => $this->getStats($user),
+            'stats' => $this->getStats($student, $user),
             'study_progress' => $this->getStudyProgress($user),
             'recommended' => $this->getRecommended($student, $user),
+            'badges' => ($this->getStudentBadges)($student, $user),
             'study_tip' => self::STUDY_TIPS[array_rand(self::STUDY_TIPS)],
         ];
     }
@@ -81,9 +88,15 @@ class GetResourceSummaryAction
     /**
      * Get aggregate stats for the student.
      */
-    private function getStats(User $user): array
+    private function getStats(Student $student, User $user): array
     {
-        $totalResources = Resource::published()->count();
+        $resourceCounts = Resource::query()
+            ->published()
+            ->selectRaw("
+                SUM(CASE WHEN resource_type = 'video_link' THEN 1 ELSE 0 END) as total_videos,
+                SUM(CASE WHEN resource_type = 'file' THEN 1 ELSE 0 END) as total_files
+            ")
+            ->first();
 
         $watchCounts = DB::table('resource_watches')
             ->join('resources', 'resources.id', '=', 'resource_watches.resource_id')
@@ -96,13 +109,90 @@ class GetResourceSummaryAction
             ->first();
 
         return [
-            'total_resources' => $totalResources,
+            'total_videos' => (int) ($resourceCounts->total_videos ?? 0),
+            'total_files' => (int) ($resourceCounts->total_files ?? 0),
             'videos_watched' => (int) ($watchCounts->videos_watched ?? 0),
             'files_opened' => (int) ($watchCounts->files_opened ?? 0),
-            'mock_test_average' => '41/50',
-            'mock_test_percentage' => 82,
-            'hazard_perception_average' => '38/50',
-            'hazard_perception_percentage' => 76,
+            ...$this->getMockTestStats($student),
+            ...$this->getHazardPerceptionStats($student),
+        ];
+    }
+
+    /**
+     * Aggregate completed mock tests for the student.
+     *
+     * @return array{mock_tests_taken: int, mock_test_average: string, mock_test_percentage: int}
+     */
+    private function getMockTestStats(Student $student): array
+    {
+        $row = MockTest::query()
+            ->where('student_id', $student->id)
+            ->whereNotNull('completed_at')
+            ->selectRaw('
+                COUNT(*) as tests_taken,
+                AVG(correct_answers) as avg_correct,
+                AVG(total_questions) as avg_total,
+                AVG(correct_answers / total_questions) as avg_ratio
+            ')
+            ->first();
+
+        $testsTaken = (int) ($row->tests_taken ?? 0);
+
+        if ($testsTaken === 0) {
+            return [
+                'mock_tests_taken' => 0,
+                'mock_test_average' => '0/50',
+                'mock_test_percentage' => 0,
+            ];
+        }
+
+        $avgCorrect = (int) round((float) $row->avg_correct);
+        $avgTotal = (int) round((float) $row->avg_total);
+        $percentage = (int) round(((float) $row->avg_ratio) * 100);
+
+        return [
+            'mock_tests_taken' => $testsTaken,
+            'mock_test_average' => "{$avgCorrect}/{$avgTotal}",
+            'mock_test_percentage' => $percentage,
+        ];
+    }
+
+    /**
+     * Aggregate hazard perception attempts for the student.
+     *
+     * Scores are normalised to a /5 scale: double-hazard attempts (max 10) are
+     * halved so the denominator is stable across all clips.
+     *
+     * @return array{hazard_attempts_taken: int, hazard_perception_average: string, hazard_perception_percentage: int}
+     */
+    private function getHazardPerceptionStats(Student $student): array
+    {
+        $row = HazardPerceptionAttempt::query()
+            ->join('hazard_perception_videos', 'hazard_perception_videos.id', '=', 'hazard_perception_attempts.hazard_perception_video_id')
+            ->where('hazard_perception_attempts.student_id', $student->id)
+            ->selectRaw('
+                COUNT(*) as attempts_taken,
+                AVG(CASE WHEN hazard_perception_videos.is_double_hazard THEN hazard_perception_attempts.total_score / 2.0 ELSE hazard_perception_attempts.total_score END) as avg_normalised
+            ')
+            ->first();
+
+        $attemptsTaken = (int) ($row->attempts_taken ?? 0);
+
+        if ($attemptsTaken === 0) {
+            return [
+                'hazard_attempts_taken' => 0,
+                'hazard_perception_average' => '0/5',
+                'hazard_perception_percentage' => 0,
+            ];
+        }
+
+        $avgNormalised = round((float) $row->avg_normalised, 1);
+        $percentage = (int) round(($avgNormalised / 5) * 100);
+
+        return [
+            'hazard_attempts_taken' => $attemptsTaken,
+            'hazard_perception_average' => "{$avgNormalised}/5",
+            'hazard_perception_percentage' => $percentage,
         ];
     }
 

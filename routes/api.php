@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\MockTestController;
 use App\Http\Controllers\Api\V1\PackagePricingController;
 use App\Http\Controllers\Api\V1\PushNotificationController;
 use App\Http\Controllers\Api\V1\ResourceController;
+use App\Http\Controllers\Api\V1\StudentActivityLogController;
 use App\Http\Controllers\Api\V1\StudentCalendarController;
 use App\Http\Controllers\Api\V1\StudentChecklistItemController;
 use App\Http\Controllers\Api\V1\StudentController;
@@ -96,6 +97,9 @@ Route::prefix('v1')->group(function (): void {
             Route::get('hazard-perception/videos', [HazardPerceptionController::class, 'index']);
             Route::post('hazard-perception/videos/{hazardPerceptionVideo}/submit', [HazardPerceptionController::class, 'submit']);
             Route::get('hazard-perception/summary', [HazardPerceptionController::class, 'summary']);
+
+            // Activity log
+            Route::get('activity-logs', [StudentActivityLogController::class, 'index']);
         });
 
         // Student routes

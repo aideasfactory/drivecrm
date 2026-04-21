@@ -62,6 +62,7 @@
     - [Videos (List)](#get-apiv1studenthazard-perceptionvideos)
     - [Submit Attempt](#post-apiv1studenthazard-perceptionvideoshazardperceptionvideosubmit)
     - [Summary](#get-apiv1studenthazard-perceptionsummary)
+  - [Student Activity Log](#get-apiv1studentactivity-logs)
 - [Profile Object by Role](#profile-object-by-role)
 - [Appendix: User Roles](#appendix-user-roles)
 - [Changelog](#changelog)
@@ -2001,12 +2002,15 @@ Returns an aggregated summary of the authenticated student's resource activity f
       }
     ],
     "stats": {
-      "total_resources": 45,
+      "total_videos": 30,
+      "total_files": 15,
       "videos_watched": 24,
       "files_opened": 8,
+      "mock_tests_taken": 12,
       "mock_test_average": "41/50",
       "mock_test_percentage": 82,
-      "hazard_perception_average": "38/50",
+      "hazard_attempts_taken": 15,
+      "hazard_perception_average": "3.8/5",
       "hazard_perception_percentage": 76
     },
     "study_progress": [
@@ -2032,6 +2036,30 @@ Returns an aggregated summary of the authenticated student's resource activity f
         "folder_name": "Road Safety"
       }
     ],
+    "badges": {
+      "first_test": {
+        "earned": true,
+        "earned_at": "2026-04-10T09:30:00+00:00"
+      },
+      "top_score": {
+        "earned": false,
+        "earned_at": null
+      },
+      "seven_day_streak": {
+        "earned": false,
+        "earned_at": null,
+        "current_streak_days": 4
+      },
+      "expert": {
+        "earned": false,
+        "earned_at": null,
+        "criteria": {
+          "perfect_mock": false,
+          "perfect_hazard": false,
+          "all_resources_watched": false
+        }
+      }
+    },
     "study_tip": "Practice hazard perception tests regularly. The more scenarios you see, the better you'll recognise potential dangers on the road."
   }
 }
@@ -2042,13 +2070,22 @@ Returns an aggregated summary of the authenticated student's resource activity f
 | Section | Description |
 |---------|-------------|
 | `recent_activity` | Last 10 resource interactions (newest first). `type` is `video` or `file` derived from `resource_type`. |
-| `stats.total_resources` | Total published resources available. |
+| `stats.total_videos` | Count of published resources where `resource_type = 'video_link'`. |
+| `stats.total_files` | Count of published resources where `resource_type = 'file'`. |
 | `stats.videos_watched` | Count of `video_link` resources this student has watched. |
 | `stats.files_opened` | Count of `file` resources this student has watched. |
-| `stats.mock_test_*` | Hardcoded test data — will be replaced when mock test feature is built. |
-| `stats.hazard_perception_*` | Hardcoded test data — will be replaced when hazard perception feature is built. |
+| `stats.mock_tests_taken` | Number of mock tests the student has completed (`completed_at IS NOT NULL`). |
+| `stats.mock_test_average` | Average correct/total across completed mock tests, formatted as `"{correct}/{total}"`. Returns `"0/50"` if none taken. |
+| `stats.mock_test_percentage` | Average score percentage across completed mock tests. `0` if none taken. |
+| `stats.hazard_attempts_taken` | Number of hazard perception attempts the student has made. |
+| `stats.hazard_perception_average` | Average score normalised to a /5 scale — double-hazard attempts (max 10) are halved before averaging, so the denominator is always `/5`. Format `"{avg}/5"` to 1 decimal. Returns `"0/5"` if none. |
+| `stats.hazard_perception_percentage` | Normalised hazard average as a percentage of the max (`/5`). `0` if none taken. |
 | `study_progress` | Per top-level folder: total resources (including children), watched count, percentage. Only folders with ≥1 resource. |
 | `recommended` | Resources suggested via lesson sign-offs (`lesson_resource` pivot). Unwatched first, then watched. Limit 5. |
+| `badges.first_test` | Earned when the student has ≥1 completed mock test. `earned_at` = `completed_at` of the earliest completed test. |
+| `badges.top_score` | Earned when the student has any completed mock test where `correct_answers = total_questions`. `earned_at` = earliest such test's `completed_at`. |
+| `badges.seven_day_streak` | Earned when the student has taken ≥1 completed mock test on each of 7 consecutive calendar days (hazard perception attempts do **not** count). `earned_at` = the 7th day of the first qualifying run. `current_streak_days` counts the ongoing run ending today or yesterday; any missed day resets it to `0`. Once earned, stays earned — a broken streak does not revoke the badge. |
+| `badges.expert` | Earned when **all three** `criteria` are true: `perfect_mock` (any 50/50 mock test), `perfect_hazard` (any hazard attempt where `total_score` = max for that clip — 5 single, 10 double), `all_resources_watched` (a `resource_watches` row exists for every published resource). `earned_at` = latest of the three timestamps. |
 | `study_tip` | Random driving study tip from a pool of 20. |
 
 **Error Responses:**
@@ -4592,6 +4629,94 @@ Returns the student's hazard perception performance summary. Optionally filter b
 
 ---
 
+### Student Activity Log
+
+---
+
+#### `GET /api/v1/student/activity-logs`
+
+**Auth required:** Yes (Bearer token — student only)
+
+Returns paginated activity log entries for the authenticated student, newest first. The student is resolved from the token — no ID in the URL.
+
+Entries are written automatically by the backend (lesson events, bookings, payments, notes, messages, notifications, profile changes, etc.) — this endpoint is read-only.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `category` | string | No | Filter by category. Common values: `lesson`, `booking`, `payment`, `note`, `message`, `notification`, `profile`. Pass `all` or omit for no filter. |
+| `search` | string | No | Case-insensitive substring match on the `message` field. |
+| `page` | integer | No | Page number (default `1`). Laravel standard pagination. |
+| `per_page` | integer | No | Items per page (default `20`). |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": [
+    {
+      "id": 482,
+      "category": "payment",
+      "message": "Paid £199.99 for 5-hour lesson package",
+      "metadata": {
+        "invoice_url": "https://invoice.stripe.com/i/acct_xxx/test_xxx",
+        "amount_pence": 19999,
+        "order_id": 37
+      },
+      "created_at": "2026-04-20T14:12:05+00:00"
+    },
+    {
+      "id": 481,
+      "category": "lesson",
+      "message": "Lesson completed with John Smith",
+      "metadata": {
+        "lesson_id": 204,
+        "duration_minutes": 60
+      },
+      "created_at": "2026-04-20T10:45:00+00:00"
+    },
+    {
+      "id": 480,
+      "category": "note",
+      "message": "Instructor added a note",
+      "metadata": null,
+      "created_at": "2026-04-19T16:30:12+00:00"
+    }
+  ],
+  "links": {
+    "first": "https://drivecrm.test/api/v1/student/activity-logs?page=1",
+    "last": "https://drivecrm.test/api/v1/student/activity-logs?page=8",
+    "prev": null,
+    "next": "https://drivecrm.test/api/v1/student/activity-logs?page=2"
+  },
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "last_page": 8,
+    "path": "https://drivecrm.test/api/v1/student/activity-logs",
+    "per_page": 20,
+    "to": 20,
+    "total": 156
+  }
+}
+```
+
+**Activity Log Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Activity log record ID |
+| `category` | string | Category bucket (e.g. `lesson`, `booking`, `payment`, `note`, `message`, `notification`, `profile`). Use for grouping / filtering in the UI. |
+| `message` | string | Human-readable description of the event. |
+| `metadata` | object\|null | Extra context keyed per category (e.g. `invoice_url`, `lesson_id`, `amount_pence`). Shape is not fixed — treat as opaque and check for keys you need. |
+| `created_at` | string | ISO 8601 timestamp of when the event was logged. |
+
+> **Pagination:** Response follows Laravel's standard `AnonymousResourceCollection` format (`data`, `links`, `meta`). Use `meta.current_page` / `meta.last_page` to drive load-more.
+
+---
+
 ## Changelog
 
 | Date | Change | Endpoints Affected |
@@ -4637,6 +4762,8 @@ Returns the student's hazard perception performance summary. Optionally filter b
 | 2026-04-14 | Extended `GET /student/dashboard` — now includes `suggested_resources` array alongside `practice_hours`. Uses existing `getMyResources()` from ResourceApiService to return resources suggested via lesson sign-offs, each with `is_watched` status. | Student Home (dashboard) |
 | 2026-04-14 | Added hazard perception system — `GET /student/hazard-perception/videos` returns all clips grouped by category/topic. `POST /student/hazard-perception/videos/{id}/submit` records student response times and calculates 5-band scores per hazard. `GET /student/hazard-perception/summary` returns performance stats (attempts taken, avg/best score, per-topic breakdown). Supports double hazard clips (max 10 points). New tables: `hazard_perception_videos`, `hazard_perception_attempts`. | Hazard Perception (videos, submit, summary) |
 | 2026-04-14 | Added mock test system — `GET /student/mock-tests/summary` returns dashboard stats (tests taken, avg score, pass count, last 5 scores, random tip, per-category performance). `POST /student/mock-tests/start` generates 50 random questions. `POST /student/mock-tests/{id}/submit` scores and records all answers. `GET /student/mock-tests/{id}/review` returns full test review with correct answers and explanations. New tables: `mock_test_questions` (2,923 questions), `mock_tests`, `mock_test_answers`. | Mock Tests (summary, start, submit, review) |
+| 2026-04-21 | Added student activity log API — `GET /api/v1/student/activity-logs` exposes the existing `activity_logs` table for the mobile app. Student is resolved from the token (no ID in URL). Supports `category` / `search` / `page` / `per_page` query params. Read-only — activity entries are still written exclusively by the backend via `LogActivityAction`. | Student Activity Log (index) |
+| 2026-04-21 | Extended `GET /student/resource-summary` — replaced hardcoded mock-test/hazard stats with live aggregates; split `total_resources` into `total_videos` + `total_files`; added `mock_tests_taken` and `hazard_attempts_taken`; normalised hazard average to a /5 scale (double-hazard scores halved before averaging); added `badges` object with earned/locked state + progress for First Test, Top Score, 7 Day Streak, and Expert. Streak badge, once earned, stays earned regardless of later gaps. | Student Resources (resource-summary) |
 
 ---
 
