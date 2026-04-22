@@ -21,21 +21,18 @@ class SendMessageAction
     /**
      * Send a message from one user to another.
      *
-     * Creates the message record, logs activity on both student and instructor
-     * entities, and dispatches an email notification to the recipient.
-     *
-     * @param  User  $sender  The user sending the message
-     * @param  User  $recipient  The user receiving the message
-     * @param  string  $messageText  The message content
-     * @param  Student  $student  The student entity (for activity logging)
-     * @param  Instructor  $instructor  The instructor entity (for activity logging)
+     * Creates the message record and dispatches an email notification to the
+     * recipient. If both $student and $instructor are supplied, the message
+     * is logged to each of their activity feeds (admin DM / mobile DM case).
+     * Pass null for support-channel messages where no student/instructor
+     * scope applies.
      */
     public function __invoke(
         User $sender,
         User $recipient,
         string $messageText,
-        Student $student,
-        Instructor $instructor
+        ?Student $student = null,
+        ?Instructor $instructor = null
     ): Message {
         $message = Message::create([
             'from' => $sender->id,
@@ -43,23 +40,22 @@ class SendMessageAction
             'message' => $messageText,
         ]);
 
-        $truncated = Str::limit($messageText, 100);
+        if ($student && $instructor) {
+            $truncated = Str::limit($messageText, 100);
 
-        // Log activity on student entity
-        ($this->logActivity)(
-            $student,
-            'Message sent to '.$student->first_name.': '.$truncated,
-            'message'
-        );
+            ($this->logActivity)(
+                $student,
+                'Message sent to '.$student->first_name.': '.$truncated,
+                'message'
+            );
 
-        // Log activity on instructor entity
-        ($this->logActivity)(
-            $instructor,
-            'Message sent to '.$student->first_name.' '.$student->surname.': '.$truncated,
-            'message'
-        );
+            ($this->logActivity)(
+                $instructor,
+                'Message sent to '.$student->first_name.' '.$student->surname.': '.$truncated,
+                'message'
+            );
+        }
 
-        // Send email notification to recipient
         $recipient->notify(new NewMessageNotification($message, $sender));
 
         return $message;

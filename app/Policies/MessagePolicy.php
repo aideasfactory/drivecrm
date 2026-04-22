@@ -42,14 +42,20 @@ class MessagePolicy
     }
 
     /**
-     * Check if two users have an instructor-student relationship.
+     * Check if two users have a valid messaging relationship.
      *
      * Valid relationships:
+     * - Either user is an owner (admin) — supports the support channel
+     *   where any instructor or student can message the admin directly
      * - User A is an instructor and User B is their student
      * - User A is a student and User B is their instructor
      */
     private function hasMessagingRelationship(User $userA, User $userB): bool
     {
+        if ($userA->isOwner() || $userB->isOwner()) {
+            return true;
+        }
+
         if ($userA->isInstructor() && $userB->isStudent()) {
             return $userB->student?->instructor_id === $userA->instructor?->id;
         }

@@ -42,13 +42,17 @@ class MessageService extends BaseService
 
     /**
      * Send a message from one user to another.
+     *
+     * $student and $instructor are optional — supply them for admin/mobile
+     * DMs so activity is logged on both entities. Omit for support-channel
+     * messages where no student/instructor scope applies.
      */
     public function sendMessage(
         User $sender,
         User $recipient,
         string $messageText,
-        Student $student,
-        Instructor $instructor
+        ?Student $student = null,
+        ?Instructor $instructor = null
     ): Message {
         return ($this->sendMessage)($sender, $recipient, $messageText, $student, $instructor);
     }

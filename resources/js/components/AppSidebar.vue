@@ -7,6 +7,7 @@ import {
     GraduationCap,
     Grid3x3,
     LayoutGrid,
+    MessageSquare,
     Package,
     Percent,
     Settings,
@@ -37,6 +38,7 @@ import { index as pupilsIndex } from '@/routes/pupils';
 import { index as reportsIndex } from '@/routes/reports';
 import { index as pushNotificationsIndex } from '@/routes/push-notifications';
 import { index as resourcesIndex } from '@/routes/resources';
+import { index as supportMessagesIndex } from '@/routes/support-messages';
 import { index as teamsIndex } from '@/routes/teams';
 import { type NavItem } from '@/types';
 import AppLogo from './AppLogo.vue';
@@ -82,6 +84,12 @@ const allNavItems: NavItem[] = [
         title: 'Push Notifications',
         href: pushNotificationsIndex(),
         icon: Bell,
+        roles: ['owner'],
+    },
+    {
+        title: 'Support Messages',
+        href: supportMessagesIndex(),
+        icon: MessageSquare,
         roles: ['owner'],
     },
     {

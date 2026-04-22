@@ -799,6 +799,7 @@ Stores broadcast and direct messages between users. Supports soft deletes for au
 - Used for broadcast messages from instructors to their students
 - Soft deletes enabled for audit trail
 - One record created per recipient in a broadcast
+- **Support inbox:** the admin's "Support Messages" page is simply the logged-in admin's messages inbox — the same `MessageService::getConversations()` path used by every other user. From the mobile app, students/instructors send to the admin's user id (1 in the default seeded data) via the existing `POST /api/v1/messages` endpoint. No sentinel id, no virtual participant, no schema change.
 
 ---
 

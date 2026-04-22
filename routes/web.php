@@ -219,6 +219,14 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
             ->name('push-notifications.store');
     });
 
+    // Support Messages (Owner Only)
+    Route::middleware([\App\Http\Middleware\EnsureOwner::class])->group(function () {
+        Route::get('/support-messages', [\App\Http\Controllers\SupportMessagesController::class, 'index'])
+            ->name('support-messages.index');
+        Route::post('/support-messages/{user}', [\App\Http\Controllers\SupportMessagesController::class, 'store'])
+            ->name('support-messages.store');
+    });
+
     // Resources (Owner Only)
     Route::middleware([\App\Http\Middleware\EnsureOwner::class])->group(function () {
         Route::get('/resources', [\App\Http\Controllers\ResourceController::class, 'index'])

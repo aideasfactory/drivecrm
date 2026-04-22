@@ -129,12 +129,19 @@ class MessageController extends Controller
     /**
      * Resolve the conversation partner's User model.
      *
-     * If the authenticated user is an instructor, the ID is a student ID
-     * and we look up the parent user_id from the students table.
-     * If the authenticated user is a student, the ID is already a user ID.
+     * Owners (admin/support) are addressed directly by user id from either
+     * role — instructors and students can both open a thread with the admin.
+     * Otherwise the existing instructor↔student convention applies: for an
+     * instructor, the id is a student id (resolve to its parent user);
+     * for a student, the id is already a user id.
      */
     private function resolveConversationUser(User $authUser, int $id): User
     {
+        $asUser = User::find($id);
+        if ($asUser?->isOwner()) {
+            return $asUser;
+        }
+
         if ($authUser->isInstructor()) {
             $student = Student::findOrFail($id);
 
