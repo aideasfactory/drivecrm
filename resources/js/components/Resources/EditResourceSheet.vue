@@ -12,8 +12,10 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet';
 import { toast } from '@/components/ui/sonner';
-import { Pencil, Loader2, Save } from 'lucide-vue-next';
+import { Pencil, Loader2, Save, GraduationCap, UserCog } from 'lucide-vue-next';
 import TagInput from '@/components/Resources/TagInput.vue';
+
+type Audience = 'student' | 'instructor';
 
 interface ResourceItem {
     id: number;
@@ -21,6 +23,7 @@ interface ResourceItem {
     description: string | null;
     tags: string[] | null;
     resource_type: 'file' | 'video_link';
+    audience: Audience;
     video_url: string | null;
     file_name: string | null;
     file_size: number | null;
@@ -47,6 +50,7 @@ const form = ref({
     description: '',
     tags: [] as string[],
     thumbnail_url: '',
+    audience: 'student' as Audience,
 });
 
 watch(
@@ -58,6 +62,7 @@ watch(
                 description: props.resource.description || '',
                 tags: props.resource.tags || [],
                 thumbnail_url: props.resource.thumbnail_url || '',
+                audience: props.resource.audience || 'student',
             };
             errors.value = {};
         }
@@ -73,6 +78,7 @@ const handleSubmit = async () => {
     try {
         await axios.put(`/resources/files/${props.resource.id}`, {
             title: form.value.title,
+            audience: form.value.audience,
             description: form.value.description || null,
             tags: form.value.tags.length > 0 ? form.value.tags : null,
             thumbnail_url: form.value.thumbnail_url || null,
@@ -137,6 +143,39 @@ const handleSubmit = async () => {
                             {{ resource.mime_type }}
                         </p>
                     </template>
+                </div>
+
+                <!-- Audience -->
+                <div class="space-y-2">
+                    <Label>Audience *</Label>
+                    <div class="flex gap-2">
+                        <Button
+                            type="button"
+                            :variant="form.audience === 'student' ? 'default' : 'outline'"
+                            class="flex-1"
+                            :disabled="isSubmitting"
+                            @click="form.audience = 'student'"
+                        >
+                            <GraduationCap class="mr-2 h-4 w-4" />
+                            Student
+                        </Button>
+                        <Button
+                            type="button"
+                            :variant="form.audience === 'instructor' ? 'default' : 'outline'"
+                            class="flex-1"
+                            :disabled="isSubmitting"
+                            @click="form.audience = 'instructor'"
+                        >
+                            <UserCog class="mr-2 h-4 w-4" />
+                            Instructor
+                        </Button>
+                    </div>
+                    <p
+                        v-if="errors.audience"
+                        class="text-destructive text-sm"
+                    >
+                        {{ errors.audience }}
+                    </p>
                 </div>
 
                 <!-- Title -->

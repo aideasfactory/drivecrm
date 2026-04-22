@@ -46,6 +46,7 @@
     - [Pickup Points (Set Default)](#patch-apiv1studentsstudentpickup-pointspickuppointdefault)
     - [Orders](#post-apiv1studentsstudentorders)
   - [Resources](#get-apiv1resources)
+    - [Resource Detail](#get-apiv1resourcesresource)
   - [Messages](#messages)
     - [Conversations List](#get-apiv1messagesconversations)
     - [Conversation with Instructor (Student)](#get-apiv1messagesconversationsinstructor)
@@ -3706,7 +3707,13 @@ GET /api/v1/orders/1/checkout/verify?session_id=cs_test_abc123...
 
 **Auth required:** Yes (Bearer token)
 
-Returns all published learning resources. Resources can be videos or files (PDFs, documents, images, etc.).
+Returns published learning resources, optionally filtered by audience. Resources can be videos or files (PDFs, documents, images, etc.). Use this endpoint to power either a student-only or instructor-only resource library in the mobile app.
+
+**Query Parameters:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `audience` | string | No | `student` → only student resources. `instructor` → only instructor resources. Omit to return both. |
 
 **Request Body:** None
 
@@ -3719,6 +3726,7 @@ Returns all published learning resources. Resources can be videos or files (PDFs
       "title": "Highway Code - Roundabouts",
       "description": "Official Highway Code section on roundabouts",
       "tags": ["roundabouts", "junctions", "highway code"],
+      "audience": "student",
       "resource_type": "file",
       "video_url": null,
       "file_path": "resources/highway-code-roundabouts.pdf",
@@ -3729,9 +3737,10 @@ Returns all published learning resources. Resources can be videos or files (PDFs
     },
     {
       "id": 2,
-      "title": "Parallel Parking Tutorial",
-      "description": "Video tutorial on parallel parking technique",
-      "tags": ["parking", "manoeuvres"],
+      "title": "Instructor Training — Managing Nervous Pupils",
+      "description": "Coaching techniques for first-time drivers",
+      "tags": ["coaching", "soft skills"],
+      "audience": "instructor",
       "resource_type": "video_link",
       "video_url": "https://www.youtube.com/watch?v=example",
       "file_path": null,
@@ -3752,6 +3761,7 @@ Returns all published learning resources. Resources can be videos or files (PDFs
 | `title` | string | Resource title |
 | `description` | string\|null | Resource description |
 | `tags` | array | Array of tag strings for categorisation |
+| `audience` | string | `student` or `instructor` — who this resource is intended for |
 | `resource_type` | string | Type: `video_link` or `file` |
 | `video_url` | string\|null | Video URL (for `video_link` type) |
 | `file_path` | string\|null | File storage path (for `file` type) |
@@ -3760,7 +3770,91 @@ Returns all published learning resources. Resources can be videos or files (PDFs
 | `mime_type` | string\|null | MIME type (e.g., `application/pdf`, `image/png`) |
 | `thumbnail_url` | string\|null | Thumbnail URL if available |
 
-> **Note:** Only published resources are returned. Use `tags` for filtering/categorising in the mobile app UI.
+**Validation Errors:** `422 Unprocessable Entity`
+- `audience` must be `student` or `instructor` if provided.
+
+> **Notes:**
+> - Only published resources are returned.
+> - The instructor mobile app should call `GET /api/v1/resources?audience=instructor`; the student app can either call this with `?audience=student` or use the richer `/api/v1/student/resources` tree view.
+> - All `/api/v1/student/...` resource endpoints (`/student/resources`, `/student/resources/{resource}`, `/student/resource-summary`) are hard-filtered server-side to `audience = 'student'`. Instructor resources never appear in the student app, even if dropped into a shared folder. No client-side filtering needed.
+
+---
+
+#### `GET /api/v1/resources/{resource}`
+
+**Auth required:** Yes (Bearer token — any authenticated user)
+
+Returns a single published resource with its full details including the actual content URL. For `video_link` resources, this is the YouTube/Vimeo URL. For `file` resources, this is a time-limited signed S3 URL (valid for 30 minutes).
+
+Unlike `GET /api/v1/student/resources/{resource}`, this endpoint is **not student-scoped** — no `is_watched` / `is_suggested` flags are returned, and instructors can call it. Use this from the instructor mobile app (or whenever the caller is not a student).
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `resource` | integer | Resource ID |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+
+**Video link example:**
+```json
+{
+  "data": {
+    "id": 2,
+    "title": "Instructor Training — Managing Nervous Pupils",
+    "description": "Coaching techniques for first-time drivers.",
+    "tags": ["coaching", "soft skills"],
+    "audience": "instructor",
+    "resource_type": "video_link",
+    "video_url": "https://www.youtube.com/watch?v=example",
+    "file_url": null,
+    "file_name": null,
+    "thumbnail_url": null
+  }
+}
+```
+
+**File example:**
+```json
+{
+  "data": {
+    "id": 10,
+    "title": "Highway Code — Roundabouts",
+    "description": "Official Highway Code section on roundabouts.",
+    "tags": ["roundabouts", "junctions"],
+    "audience": "student",
+    "resource_type": "file",
+    "video_url": null,
+    "file_url": "https://drivecrm.s3.eu-west-2.amazonaws.com/resources/highway-code-roundabouts.pdf?X-Amz-Expires=1800&...",
+    "file_name": "highway-code-roundabouts.pdf",
+    "thumbnail_url": null
+  }
+}
+```
+
+**Resource Detail Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Resource ID |
+| `title` | string | Resource title |
+| `description` | string\|null | Full description |
+| `tags` | array\|null | Tag strings |
+| `audience` | string | `student` or `instructor` |
+| `resource_type` | string | `video_link` or `file` |
+| `video_url` | string\|null | YouTube/Vimeo URL (video_link resources only) |
+| `file_url` | string\|null | Signed S3 URL, valid 30 minutes (file resources only) |
+| `file_name` | string\|null | Original file name (file resources only) |
+| `thumbnail_url` | string\|null | Thumbnail image URL |
+
+**Error Response — resource not found or unpublished:** `404 Not Found`
+```json
+{
+  "message": "No query results for model [App\\Models\\Resource] 999."
+}
+```
 
 ---
 
@@ -4194,6 +4288,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | GET | `/api/v1/orders/{order}/checkout/verify` | Yes | Both | Verify payment |
 | GET | `/api/v1/packages/{package}/pricing` | Yes | Any | Package pricing breakdown |
 | GET | `/api/v1/resources` | Yes | Any | List resources |
+| GET | `/api/v1/resources/{resource}` | Yes | Any | Resource detail with signed file URL |
 | GET | `/api/v1/messages/conversations` | Yes | Both | List conversations |
 | GET | `/api/v1/messages/conversations/instructor` | Yes | Student | View conversation with assigned instructor |
 | GET | `/api/v1/messages/conversations/{user}` | Yes | Both | View conversation by user ID |
@@ -4764,6 +4859,8 @@ Entries are written automatically by the backend (lesson events, bookings, payme
 | 2026-04-14 | Added mock test system — `GET /student/mock-tests/summary` returns dashboard stats (tests taken, avg score, pass count, last 5 scores, random tip, per-category performance). `POST /student/mock-tests/start` generates 50 random questions. `POST /student/mock-tests/{id}/submit` scores and records all answers. `GET /student/mock-tests/{id}/review` returns full test review with correct answers and explanations. New tables: `mock_test_questions` (2,923 questions), `mock_tests`, `mock_test_answers`. | Mock Tests (summary, start, submit, review) |
 | 2026-04-21 | Added student activity log API — `GET /api/v1/student/activity-logs` exposes the existing `activity_logs` table for the mobile app. Student is resolved from the token (no ID in URL). Supports `category` / `search` / `page` / `per_page` query params. Read-only — activity entries are still written exclusively by the backend via `LogActivityAction`. | Student Activity Log (index) |
 | 2026-04-21 | Extended `GET /student/resource-summary` — replaced hardcoded mock-test/hazard stats with live aggregates; split `total_resources` into `total_videos` + `total_files`; added `mock_tests_taken` and `hazard_attempts_taken`; normalised hazard average to a /5 scale (double-hazard scores halved before averaging); added `badges` object with earned/locked state + progress for First Test, Top Score, 7 Day Streak, and Expert. Streak badge, once earned, stays earned regardless of later gaps. | Student Resources (resource-summary) |
+| 2026-04-22 | Added `audience` flag to resources (`student` or `instructor`). `GET /api/v1/resources` accepts `?audience=student\|instructor` (omit for all) and returns `audience` on every resource. All `/api/v1/student/...` resource endpoints are hard-filtered server-side to `audience=student` (folder tree, single resource, my_resources, random fallback, summary stats, Expert badge denominator). Admin upload/edit requires an audience; CSV import template gains an `audience` column. | Resources (index), Student Resources (index, show, summary) |
+| 2026-04-22 | Added `GET /api/v1/resources/{resource}` — instructor-accessible single-resource endpoint. Reuses the 30-minute signed S3 URL logic from `GET /api/v1/student/resources/{resource}` but is not student-scoped: no `is_watched` / `is_suggested` fields, no policy restricting to students. 404 on unpublished resources. | Resources (show) |
 
 ---
 

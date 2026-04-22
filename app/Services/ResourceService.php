@@ -14,6 +14,7 @@ use App\Actions\Resource\StoreVideoLinkResourceAction;
 use App\Actions\Resource\UpdateFolderAction;
 use App\Actions\Resource\UpdateResourceAction;
 use App\Actions\Resource\UploadResourceAction;
+use App\Enums\ResourceAudience;
 use App\Models\Resource;
 use App\Models\ResourceFolder;
 use Illuminate\Http\UploadedFile;
@@ -84,10 +85,11 @@ class ResourceService
         ResourceFolder $folder,
         UploadedFile $file,
         string $title,
+        ResourceAudience $audience,
         ?string $description = null,
         ?array $tags = null
     ): Resource {
-        return ($this->uploadResource)($folder, $file, $title, $description, $tags);
+        return ($this->uploadResource)($folder, $file, $title, $audience, $description, $tags);
     }
 
     /**
@@ -97,19 +99,26 @@ class ResourceService
         ResourceFolder $folder,
         string $videoUrl,
         string $title,
+        ResourceAudience $audience,
         ?string $description = null,
         ?array $tags = null,
         ?string $thumbnailUrl = null
     ): Resource {
-        return ($this->storeVideoLinkResource)($folder, $videoUrl, $title, $description, $tags, $thumbnailUrl);
+        return ($this->storeVideoLinkResource)($folder, $videoUrl, $title, $audience, $description, $tags, $thumbnailUrl);
     }
 
     /**
      * Update resource metadata.
      */
-    public function updateResource(Resource $resource, string $title, ?string $description = null, ?array $tags = null, ?string $thumbnailUrl = null): Resource
-    {
-        return ($this->updateResource)($resource, $title, $description, $tags, $thumbnailUrl);
+    public function updateResource(
+        Resource $resource,
+        string $title,
+        ?string $description = null,
+        ?array $tags = null,
+        ?string $thumbnailUrl = null,
+        ?ResourceAudience $audience = null
+    ): Resource {
+        return ($this->updateResource)($resource, $title, $description, $tags, $thumbnailUrl, $audience);
     }
 
     /**

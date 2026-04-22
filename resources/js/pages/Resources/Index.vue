@@ -55,6 +55,7 @@ interface ResourceItem {
     description: string | null;
     tags: string[] | null;
     resource_type: 'file' | 'video_link';
+    audience: 'student' | 'instructor';
     video_url: string | null;
     file_name: string | null;
     file_size: number | null;

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\ResourceAudience;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\V1\MyResourceResource;
 use App\Http\Resources\V1\ResourceFolderTreeResource;
@@ -66,7 +67,7 @@ class StudentResourceController extends Controller
     public function show(Request $request, int $resource): JsonResponse
     {
         $user = $request->user();
-        $resourceModel = $this->resourceService->getPublishedResource($resource);
+        $resourceModel = $this->resourceService->getPublishedResource($resource, ResourceAudience::STUDENT);
 
         $watchedIds = $this->resourceService->getWatchedResourceIds($user);
 
@@ -86,7 +87,7 @@ class StudentResourceController extends Controller
     public function markWatched(Request $request, int $resource): JsonResponse
     {
         $user = $request->user();
-        $resourceModel = $this->resourceService->getPublishedResource($resource);
+        $resourceModel = $this->resourceService->getPublishedResource($resource, ResourceAudience::STUDENT);
 
         $this->resourceService->markAsWatched($user, $resourceModel);
 

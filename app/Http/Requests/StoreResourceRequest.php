@@ -21,6 +21,7 @@ class StoreResourceRequest extends FormRequest
     {
         $rules = [
             'resource_type' => ['required', 'string', 'in:file,video_link'],
+            'audience' => ['required', 'string', 'in:student,instructor'],
             'title' => ['required', 'string', 'max:255'],
             'resource_folder_id' => ['required', 'integer', 'exists:resource_folders,id'],
             'description' => ['nullable', 'string', 'max:5000'],
@@ -46,6 +47,8 @@ class StoreResourceRequest extends FormRequest
         return [
             'resource_type.required' => 'Please select a resource type.',
             'resource_type.in' => 'The resource type must be file or video link.',
+            'audience.required' => 'Please choose whether this resource is for students or instructors.',
+            'audience.in' => 'The audience must be student or instructor.',
             'file.required' => 'Please select a file to upload.',
             'file.max' => 'The file must not be larger than 500MB.',
             'file.mimes' => 'The file must be a video (mp4, webm, mov, avi, mkv) or PDF.',

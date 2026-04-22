@@ -158,11 +158,12 @@ class GetStudentBadgesAction
             ->orderBy('hazard_perception_attempts.completed_at')
             ->value('hazard_perception_attempts.completed_at');
 
-        $publishedCount = Resource::published()->count();
+        $publishedCount = Resource::published()->where('audience', 'student')->count();
         $watchedCount = DB::table('resource_watches')
             ->join('resources', 'resources.id', '=', 'resource_watches.resource_id')
             ->where('resource_watches.user_id', $user->id)
             ->where('resources.status', 'published')
+            ->where('resources.audience', 'student')
             ->count();
 
         $allWatched = $publishedCount > 0 && $watchedCount >= $publishedCount;
@@ -172,6 +173,7 @@ class GetStudentBadgesAction
                 ->join('resources', 'resources.id', '=', 'resource_watches.resource_id')
                 ->where('resource_watches.user_id', $user->id)
                 ->where('resources.status', 'published')
+                ->where('resources.audience', 'student')
                 ->max('resource_watches.created_at');
             $allWatchedAt = $allWatchedAt ? Carbon::parse($allWatchedAt) : null;
         }

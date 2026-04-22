@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\ResourceAudience;
 use App\Enums\ResourceStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -27,6 +28,7 @@ class Resource extends Model
         'thumbnail_url',
         'sort_order',
         'status',
+        'audience',
     ];
 
     protected function casts(): array
@@ -36,6 +38,7 @@ class Resource extends Model
             'file_size' => 'integer',
             'sort_order' => 'integer',
             'status' => ResourceStatus::class,
+            'audience' => ResourceAudience::class,
         ];
     }
 

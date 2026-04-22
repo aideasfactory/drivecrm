@@ -11,6 +11,7 @@ interface ResourceItem {
     description: string | null;
     tags: string[] | null;
     resource_type: 'file' | 'video_link';
+    audience: 'student' | 'instructor';
     video_url: string | null;
     file_name: string | null;
     file_size: number | null;
@@ -97,6 +98,14 @@ const formattedSize = computed(() => {
                             {{ resource.file_name }} &middot;
                             {{ formattedSize }}
                         </p>
+                        <div class="mt-2">
+                            <Badge
+                                :variant="resource.audience === 'instructor' ? 'default' : 'secondary'"
+                                class="text-xs capitalize"
+                            >
+                                {{ resource.audience }}
+                            </Badge>
+                        </div>
                         <div
                             v-if="resource.tags && resource.tags.length > 0"
                             class="mt-2 flex flex-wrap gap-1"

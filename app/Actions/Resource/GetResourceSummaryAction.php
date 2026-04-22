@@ -68,6 +68,7 @@ class GetResourceSummaryAction
             ->join('resources', 'resources.id', '=', 'resource_watches.resource_id')
             ->where('resource_watches.user_id', $user->id)
             ->where('resources.status', 'published')
+            ->where('resources.audience', 'student')
             ->select([
                 'resources.id',
                 'resources.title',
@@ -92,6 +93,7 @@ class GetResourceSummaryAction
     {
         $resourceCounts = Resource::query()
             ->published()
+            ->where('audience', 'student')
             ->selectRaw("
                 SUM(CASE WHEN resource_type = 'video_link' THEN 1 ELSE 0 END) as total_videos,
                 SUM(CASE WHEN resource_type = 'file' THEN 1 ELSE 0 END) as total_files
@@ -102,6 +104,7 @@ class GetResourceSummaryAction
             ->join('resources', 'resources.id', '=', 'resource_watches.resource_id')
             ->where('resource_watches.user_id', $user->id)
             ->where('resources.status', 'published')
+            ->where('resources.audience', 'student')
             ->select(DB::raw("
                 SUM(CASE WHEN resources.resource_type = 'video_link' THEN 1 ELSE 0 END) as videos_watched,
                 SUM(CASE WHEN resources.resource_type = 'file' THEN 1 ELSE 0 END) as files_opened
@@ -205,8 +208,8 @@ class GetResourceSummaryAction
         $folders = ResourceFolder::query()
             ->whereNull('parent_id')
             ->with([
-                'resources' => fn ($q) => $q->published(),
-                'children.resources' => fn ($q) => $q->published(),
+                'resources' => fn ($q) => $q->published()->where('audience', 'student'),
+                'children.resources' => fn ($q) => $q->published()->where('audience', 'student'),
             ])
             ->orderBy('sort_order')
             ->orderBy('name')
@@ -259,6 +262,7 @@ class GetResourceSummaryAction
             ->leftJoin('resource_folders', 'resource_folders.id', '=', 'resources.resource_folder_id')
             ->where('orders.student_id', $student->id)
             ->where('resources.status', 'published')
+            ->where('resources.audience', 'student')
             ->select([
                 'resources.id',
                 'resources.title',

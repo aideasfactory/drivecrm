@@ -46,11 +46,14 @@ class BulkImportResourcesAction
                 'tags' => ['nullable', 'string'],
                 'folder' => ['nullable', 'string', 'max:500'],
                 'thumbnail_url' => ['nullable', 'url', 'max:500'],
+                'audience' => ['required', 'string', 'in:student,instructor'],
             ], [
                 'title.required' => 'Title is required.',
                 'video_url.required' => 'Video URL is required.',
                 'video_url.url' => 'Video URL must be a valid URL.',
                 'video_url.regex' => 'Video URL must be a YouTube or Vimeo link.',
+                'audience.required' => 'Audience is required (student or instructor).',
+                'audience.in' => 'Audience must be "student" or "instructor".',
             ]);
 
             if ($validator->fails()) {
@@ -86,6 +89,7 @@ class BulkImportResourcesAction
                 Resource::create([
                     'resource_folder_id' => $targetFolder->id,
                     'resource_type' => 'video_link',
+                    'audience' => $validated['audience'],
                     'video_url' => $validated['video_url'],
                     'title' => $validated['title'],
                     'description' => $validated['description'] ?? null,

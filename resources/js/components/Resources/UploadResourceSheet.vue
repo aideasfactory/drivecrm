@@ -12,10 +12,11 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet';
 import { toast } from '@/components/ui/sonner';
-import { Upload, Loader2, Save, FileUp, Link } from 'lucide-vue-next';
+import { Upload, Loader2, Save, FileUp, Link, GraduationCap, UserCog } from 'lucide-vue-next';
 import TagInput from '@/components/Resources/TagInput.vue';
 
 type ResourceType = 'file' | 'video_link';
+type Audience = 'student' | 'instructor';
 
 const props = defineProps<{
     open: boolean;
@@ -33,6 +34,7 @@ const errors = ref<Record<string, string>>({});
 const fileInput = ref<HTMLInputElement | null>(null);
 const selectedFile = ref<File | null>(null);
 const resourceType = ref<ResourceType>('file');
+const audience = ref<Audience>('student');
 const form = ref({
     title: '',
     description: '',
@@ -50,6 +52,7 @@ watch(
             uploadProgress.value = 0;
             errors.value = {};
             resourceType.value = 'file';
+            audience.value = 'student';
             if (fileInput.value) {
                 fileInput.value.value = '';
             }
@@ -84,6 +87,7 @@ const handleSubmit = async () => {
 
     const formData = new FormData();
     formData.append('resource_type', resourceType.value);
+    formData.append('audience', audience.value);
     formData.append('title', form.value.title);
     formData.append('resource_folder_id', String(props.folderId));
 
@@ -184,6 +188,42 @@ const handleSubmit = async () => {
                             Video Link
                         </Button>
                     </div>
+                </div>
+
+                <!-- Audience Selector -->
+                <div class="space-y-2">
+                    <Label>Audience *</Label>
+                    <div class="flex gap-2">
+                        <Button
+                            type="button"
+                            :variant="audience === 'student' ? 'default' : 'outline'"
+                            class="flex-1"
+                            :disabled="isSubmitting"
+                            @click="audience = 'student'"
+                        >
+                            <GraduationCap class="mr-2 h-4 w-4" />
+                            Student
+                        </Button>
+                        <Button
+                            type="button"
+                            :variant="audience === 'instructor' ? 'default' : 'outline'"
+                            class="flex-1"
+                            :disabled="isSubmitting"
+                            @click="audience = 'instructor'"
+                        >
+                            <UserCog class="mr-2 h-4 w-4" />
+                            Instructor
+                        </Button>
+                    </div>
+                    <p class="text-muted-foreground text-xs">
+                        Student resources show in the student app; instructor resources in the instructor app.
+                    </p>
+                    <p
+                        v-if="errors.audience"
+                        class="text-destructive text-sm"
+                    >
+                        {{ errors.audience }}
+                    </p>
                 </div>
 
                 <!-- File Input (only for file type) -->

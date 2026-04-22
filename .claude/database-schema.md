@@ -855,11 +855,13 @@ Stores uploaded files (videos, PDFs) or video links (Vimeo/YouTube) with metadat
 | `thumbnail_url` | varchar(500) | NULLABLE | External thumbnail URL (for video_link resources) |
 | `sort_order` | integer | DEFAULT 0 | Display ordering within folder |
 | `status` | varchar(255) | DEFAULT 'published' | Resource visibility: 'published' or 'draft' |
+| `audience` | varchar(20) | NOT NULL, DEFAULT 'student' | Who this resource is for: 'student' or 'instructor' |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
 **Indexes:**
 - Index on `resource_folder_id`
+- Index on `audience`
 
 **Relationships:**
 - Belongs to one `ResourceFolder`
@@ -873,6 +875,7 @@ Stores uploaded files (videos, PDFs) or video links (Vimeo/YouTube) with metadat
 - `resource_type` + `mime_type` determines rendering: embedded player for video links, video player for uploaded videos, PDF viewer/download for PDFs
 - Deleting a file-type resource also removes the file from S3; deleting a video_link resource only removes the DB record
 - `thumbnail_url` stores an external image URL for video link resources (e.g. YouTube thumbnail)
+- `audience` partitions resources between the student and instructor mobile apps. Admins must pick one on create/edit (and in the CSV import). The generic `GET /api/v1/resources` endpoint accepts `?audience=student|instructor`; omit to return all. Existing rows default to `student`.
 
 ---
 

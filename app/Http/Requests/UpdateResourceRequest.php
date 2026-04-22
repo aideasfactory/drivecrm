@@ -21,6 +21,7 @@ class UpdateResourceRequest extends FormRequest
     {
         return [
             'title' => ['required', 'string', 'max:255'],
+            'audience' => ['required', 'string', 'in:student,instructor'],
             'description' => ['nullable', 'string', 'max:5000'],
             'tags' => ['nullable', 'array'],
             'tags.*' => ['string', 'max:100'],

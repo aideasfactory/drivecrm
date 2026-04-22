@@ -11,6 +11,7 @@ use App\Actions\Resource\GetStudentSuggestedResourceIdsAction;
 use App\Actions\Resource\GetUserWatchedResourceIdsAction;
 use App\Actions\Resource\MarkResourceWatchedAction;
 use App\Actions\Student\Lesson\AssignResourcesToLessonAction;
+use App\Enums\ResourceAudience;
 use App\Models\Lesson;
 use App\Models\Resource;
 use App\Models\Student;
@@ -33,10 +34,14 @@ class ResourceApiService extends BaseService
     ) {}
 
     /**
-     * Get all published resources.
+     * Get all published resources, optionally filtered by audience.
      */
-    public function getPublishedResources(): Collection
+    public function getPublishedResources(?ResourceAudience $audience = null): Collection
     {
+        if ($audience !== null) {
+            return ($this->getPublishedResources)($audience);
+        }
+
         return $this->remember('resources:published', fn () => ($this->getPublishedResources)());
     }
 
@@ -91,6 +96,7 @@ class ResourceApiService extends BaseService
                 ->leftJoin('resource_folders', 'resource_folders.id', '=', 'resources.resource_folder_id')
                 ->where('orders.student_id', $student->id)
                 ->where('resources.status', 'published')
+                ->where('resources.audience', 'student')
                 ->select([
                     'resources.id as resource_id',
                     'resources.title as resource_title',
@@ -118,12 +124,13 @@ class ResourceApiService extends BaseService
     }
 
     /**
-     * Get a single published resource by ID.
+     * Get a single published resource by ID, optionally scoped to an audience.
      */
-    public function getPublishedResource(int $resourceId): Resource
+    public function getPublishedResource(int $resourceId, ?ResourceAudience $audience = null): Resource
     {
         return Resource::query()
             ->published()
+            ->when($audience, fn ($q, $a) => $q->where('audience', $a))
             ->findOrFail($resourceId);
     }
 
@@ -162,6 +169,7 @@ class ResourceApiService extends BaseService
         return DB::table('resources')
             ->leftJoin('resource_folders', 'resource_folders.id', '=', 'resources.resource_folder_id')
             ->where('resources.status', 'published')
+            ->where('resources.audience', 'student')
             ->select([
                 'resources.id as resource_id',
                 'resources.title as resource_title',
@@ -186,6 +194,11 @@ class ResourceApiService extends BaseService
 
         $this->invalidate([
             'resources:published',
+            'resources:published:'.ResourceAudience::STUDENT->value,
+            'resources:published:'.ResourceAudience::INSTRUCTOR->value,
+            'resources:folder_tree',
+            'resources:folder_tree:'.ResourceAudience::STUDENT->value,
+            'resources:folder_tree:'.ResourceAudience::INSTRUCTOR->value,
             $this->cacheKey('student', $student->id, 'suggested_resource_ids'),
             $this->cacheKey('student', $student->id, 'my_resources'),
         ]);

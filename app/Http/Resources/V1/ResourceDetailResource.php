@@ -7,8 +7,13 @@ namespace App\Http\Resources\V1;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-class ResourceResource extends JsonResource
+class ResourceDetailResource extends JsonResource
 {
+    /**
+     * Signed file URL (for file resources) or null.
+     */
+    public ?string $fileUrl = null;
+
     /**
      * @return array<string, mixed>
      */
@@ -22,10 +27,8 @@ class ResourceResource extends JsonResource
             'audience' => $this->audience?->value,
             'resource_type' => $this->resource_type,
             'video_url' => $this->video_url,
-            'file_path' => $this->file_path,
+            'file_url' => $this->fileUrl,
             'file_name' => $this->file_name,
-            'file_size' => $this->file_size,
-            'mime_type' => $this->mime_type,
             'thumbnail_url' => $this->thumbnail_url,
         ];
     }

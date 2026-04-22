@@ -120,6 +120,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('students/{student}/lessons/{lesson}/sign-off', [LessonSignOffController::class, 'store']);
         // Resources
         Route::get('resources', [ResourceController::class, 'index']);
+        Route::get('resources/{resource}', [ResourceController::class, 'show']);
 
         // Messaging routes
         Route::prefix('messages')->group(function (): void {

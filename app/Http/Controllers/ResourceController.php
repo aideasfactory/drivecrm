@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Enums\ResourceAudience;
 use App\Http\Requests\ImportResourcesCsvRequest;
 use App\Http\Requests\StoreFolderRequest;
 use App\Http\Requests\StoreResourceRequest;
@@ -103,12 +104,14 @@ class ResourceController extends Controller
     public function storeResource(StoreResourceRequest $request): JsonResponse
     {
         $folder = ResourceFolder::findOrFail($request->validated('resource_folder_id'));
+        $audience = ResourceAudience::from($request->validated('audience'));
 
         if ($request->validated('resource_type') === 'video_link') {
             $resource = $this->resourceService->storeVideoLinkResource(
                 $folder,
                 $request->validated('video_url'),
                 $request->validated('title'),
+                $audience,
                 $request->validated('description'),
                 $request->validated('tags'),
                 $request->validated('thumbnail_url')
@@ -118,6 +121,7 @@ class ResourceController extends Controller
                 $folder,
                 $request->file('file'),
                 $request->validated('title'),
+                $audience,
                 $request->validated('description'),
                 $request->validated('tags')
             );
@@ -139,7 +143,8 @@ class ResourceController extends Controller
             $request->validated('title'),
             $request->validated('description'),
             $request->validated('tags'),
-            $request->validated('thumbnail_url')
+            $request->validated('thumbnail_url'),
+            ResourceAudience::from($request->validated('audience'))
         );
 
         return response()->json([
@@ -206,8 +211,8 @@ class ResourceController extends Controller
      */
     public function downloadCsvTemplate(): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $headers = ['title', 'video_url', 'description', 'tags', 'folder', 'thumbnail_url'];
-        $exampleRow = ['Introduction to Driving Theory', 'https://www.youtube.com/watch?v=example', 'A video covering basic driving theory', 'theory,beginner,driving', 'Theory/Basics', 'https://img.youtube.com/vi/example/0.jpg'];
+        $headers = ['title', 'video_url', 'description', 'tags', 'folder', 'thumbnail_url', 'audience'];
+        $exampleRow = ['Introduction to Driving Theory', 'https://www.youtube.com/watch?v=example', 'A video covering basic driving theory', 'theory,beginner,driving', 'Theory/Basics', 'https://img.youtube.com/vi/example/0.jpg', 'student'];
 
         return response()->streamDownload(function () use ($headers, $exampleRow) {
             $handle = fopen('php://output', 'w');

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Resource;
 
+use App\Enums\ResourceAudience;
 use App\Models\Resource;
 use App\Models\ResourceFolder;
 use Illuminate\Http\UploadedFile;
@@ -17,6 +18,7 @@ class UploadResourceAction
         ResourceFolder $folder,
         UploadedFile $file,
         string $title,
+        ResourceAudience $audience,
         ?string $description = null,
         ?array $tags = null
     ): Resource {
@@ -26,6 +28,7 @@ class UploadResourceAction
         return Resource::create([
             'resource_folder_id' => $folder->id,
             'resource_type' => 'file',
+            'audience' => $audience,
             'title' => $title,
             'description' => $description,
             'tags' => $tags,
