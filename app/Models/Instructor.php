@@ -143,6 +143,14 @@ class Instructor extends Model
     }
 
     /**
+     * Get this instructor's progress-tracker framework categories.
+     */
+    public function progressCategories(): HasMany
+    {
+        return $this->hasMany(ProgressCategory::class);
+    }
+
+    /**
      * Helper method to log activity.
      */
     public function logActivity(string $message, string $category, ?array $metadata = null): void

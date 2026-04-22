@@ -101,6 +101,26 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
     Route::put('/instructors/{instructor}/password', [\App\Http\Controllers\InstructorController::class, 'updatePassword'])
         ->name('instructors.password.update');
 
+    // Instructor Progress Tracker (framework CRUD — axios-fed)
+    Route::get('/instructors/{instructor}/progress-tracker/framework', [\App\Http\Controllers\ProgressTrackerController::class, 'framework'])
+        ->name('instructors.progress-tracker.framework');
+    Route::post('/instructors/{instructor}/progress-tracker/categories', [\App\Http\Controllers\ProgressTrackerController::class, 'storeCategory'])
+        ->name('instructors.progress-tracker.categories.store');
+    Route::put('/instructors/{instructor}/progress-tracker/categories/{category}', [\App\Http\Controllers\ProgressTrackerController::class, 'updateCategory'])
+        ->name('instructors.progress-tracker.categories.update');
+    Route::delete('/instructors/{instructor}/progress-tracker/categories/{category}', [\App\Http\Controllers\ProgressTrackerController::class, 'destroyCategory'])
+        ->name('instructors.progress-tracker.categories.destroy');
+    Route::post('/instructors/{instructor}/progress-tracker/categories/reorder', [\App\Http\Controllers\ProgressTrackerController::class, 'reorderCategories'])
+        ->name('instructors.progress-tracker.categories.reorder');
+    Route::post('/instructors/{instructor}/progress-tracker/categories/{category}/subcategories', [\App\Http\Controllers\ProgressTrackerController::class, 'storeSubcategory'])
+        ->name('instructors.progress-tracker.subcategories.store');
+    Route::put('/instructors/{instructor}/progress-tracker/subcategories/{subcategory}', [\App\Http\Controllers\ProgressTrackerController::class, 'updateSubcategory'])
+        ->name('instructors.progress-tracker.subcategories.update');
+    Route::delete('/instructors/{instructor}/progress-tracker/subcategories/{subcategory}', [\App\Http\Controllers\ProgressTrackerController::class, 'destroySubcategory'])
+        ->name('instructors.progress-tracker.subcategories.destroy');
+    Route::post('/instructors/{instructor}/progress-tracker/categories/{category}/subcategories/reorder', [\App\Http\Controllers\ProgressTrackerController::class, 'reorderSubcategories'])
+        ->name('instructors.progress-tracker.subcategories.reorder');
+
     // Instructor Finances
     Route::get('/instructors/{instructor}/finances', [\App\Http\Controllers\InstructorController::class, 'finances'])
         ->name('instructors.finances');

@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\InstructorLessonController;
 use App\Http\Controllers\Api\V1\InstructorPackageController;
 use App\Http\Controllers\Api\V1\InstructorProfileController;
 use App\Http\Controllers\Api\V1\InstructorStudentController;
+use App\Http\Controllers\Api\V1\InstructorStudentProgressController;
 use App\Http\Controllers\Api\V1\LessonResourceController;
 use App\Http\Controllers\Api\V1\LessonSignOffController;
 use App\Http\Controllers\Api\V1\MessageController;
@@ -26,6 +27,7 @@ use App\Http\Controllers\Api\V1\StudentOrderController;
 use App\Http\Controllers\Api\V1\StudentPackageController;
 use App\Http\Controllers\Api\V1\StudentPickupPointController;
 use App\Http\Controllers\Api\V1\StudentProfilePictureController;
+use App\Http\Controllers\Api\V1\StudentProgressController;
 use App\Http\Controllers\Api\V1\StudentResourceController;
 use App\Http\Middleware\ResolveApiProfile;
 use Illuminate\Support\Facades\Route;
@@ -74,6 +76,9 @@ Route::prefix('v1')->group(function (): void {
             Route::post('finances', [InstructorFinanceController::class, 'store']);
             Route::put('finances/{finance}', [InstructorFinanceController::class, 'update']);
             Route::delete('finances/{finance}', [InstructorFinanceController::class, 'destroy']);
+
+            Route::get('students/{student}/progress', [InstructorStudentProgressController::class, 'show']);
+            Route::post('students/{student}/progress', [InstructorStudentProgressController::class, 'update']);
         });
 
         // Student-scoped routes (identity from token, not URL)
@@ -82,6 +87,7 @@ Route::prefix('v1')->group(function (): void {
             Route::get('calendar/items', [StudentCalendarController::class, 'index']);
             Route::get('instructor', [StudentDashboardController::class, 'instructor']);
             Route::get('dashboard', [StudentDashboardController::class, 'dashboard']);
+            Route::get('progress', [StudentProgressController::class, 'show']);
             Route::get('resource-summary', [StudentResourceController::class, 'summary']);
             Route::get('resources', [StudentResourceController::class, 'index']);
             Route::get('resources/{resource}', [StudentResourceController::class, 'show']);

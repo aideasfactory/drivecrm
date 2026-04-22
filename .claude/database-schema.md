@@ -1409,3 +1409,55 @@ Scoring: Each hazard's timing window is divided into 5 equal bands. Responding i
 
 **Indexes:** (student_id, hazard_perception_video_id) composite index
 **Relationships:** BelongsTo → Student, BelongsTo → HazardPerceptionVideo
+
+## Progress Tracker Tables
+
+Per-instructor progress tracking framework. Each instructor owns their own editable copy of a default template (seeded from `config/progress_tracker.php` on instructor creation and via `php artisan progress-tracker:backfill`). Students are scored 1–5 on each subcategory. Soft deletes on categories/subcategories preserve historical student scores while removing the items from the instructor's editable framework.
+
+### progress_categories
+
+Top-level progress-tracker category, owned by a single instructor.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| instructor_id | bigint FK | No | References instructors.id. Cascade on delete. |
+| name | varchar(100) | No | Category name (e.g. "Junctions") |
+| sort_order | int unsigned | No | Display order within the instructor's framework (default 0) |
+| created_at / updated_at | timestamp | Yes | |
+| deleted_at | timestamp | Yes | Soft delete — hides from framework but keeps history |
+
+**Indexes:** (instructor_id, sort_order) composite
+**Relationships:** BelongsTo → Instructor, HasMany → ProgressSubcategory
+
+### progress_subcategories
+
+Second-level item inside a category. Scoring happens at this level.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| progress_category_id | bigint FK | No | References progress_categories.id. Cascade on delete. |
+| name | varchar(100) | No | Subcategory name (e.g. "Left Turn") |
+| sort_order | int unsigned | No | Display order within the category (default 0) |
+| created_at / updated_at | timestamp | Yes | |
+| deleted_at | timestamp | Yes | Soft delete — hides from framework but keeps history |
+
+**Indexes:** (progress_category_id, sort_order) composite
+**Relationships:** BelongsTo → ProgressCategory, HasMany → StudentProgress
+
+### student_progress
+
+One row per (student, subcategory) pair. Upserted on save — no history is kept.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| student_id | bigint FK | No | References students.id. Cascade on delete. |
+| progress_subcategory_id | bigint FK | No | References progress_subcategories.id. Cascade on delete. |
+| score | tinyint unsigned | No | 1 = Introduced, 2 = Instructed, 3 = Prompted, 4 = Seldom prompted, 5 = Independent |
+| created_at / updated_at | timestamp | Yes | |
+
+**Indexes:** UNIQUE (student_id, progress_subcategory_id) — also the upsert target
+**Relationships:** BelongsTo → Student, BelongsTo → ProgressSubcategory
+**Business rule:** `SaveStudentProgressAction` silently ignores attempts to score against a soft-deleted subcategory or one that does not belong to the student's current instructor.

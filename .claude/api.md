@@ -66,6 +66,7 @@
   - [Student Activity Log](#get-apiv1studentactivity-logs)
 - [Profile Object by Role](#profile-object-by-role)
 - [Appendix: User Roles](#appendix-user-roles)
+- [Progress Tracker](#progress-tracker)
 - [Changelog](#changelog)
 
 ---
@@ -4812,6 +4813,86 @@ Entries are written automatically by the backend (lesson events, bookings, payme
 
 ---
 
+## Progress Tracker
+
+Each instructor owns a personal framework of driving-skill categories and subcategories (seeded from `config/progress_tracker.php` on instructor creation). Instructors score their students 1–5 on each subcategory. Scores overwrite in place (no history kept). Soft-deleted subcategories are hidden from new scoring but still returned in the payload (with `archived: true`) if the student has an existing score against them, so the app can render past progress read-only.
+
+The 1–5 scale labels are returned in the top-level `score_labels` field on every response:
+
+```json
+{
+  "1": "Introduced",
+  "2": "Instructed",
+  "3": "Prompted",
+  "4": "Seldom prompted",
+  "5": "Independent"
+}
+```
+
+### GET `/api/v1/student/progress`
+
+Returns the authenticated student's progress across their instructor's framework.
+
+**Auth:** Bearer token (student role). Fails with 404 if the authenticated user has no student profile.
+
+**Response 200:**
+
+```json
+{
+  "data": [
+    {
+      "id": 3,
+      "name": "Junctions",
+      "sort_order": 2,
+      "subcategories": [
+        { "id": 17, "name": "Left Turn", "sort_order": 0, "score": 4, "archived": false },
+        { "id": 18, "name": "Right Turn", "sort_order": 1, "score": 3, "archived": false },
+        { "id": 19, "name": "Emerging", "sort_order": 2, "score": null, "archived": false }
+      ]
+    }
+  ],
+  "score_labels": { "1": "Introduced", "2": "Instructed", "3": "Prompted", "4": "Seldom prompted", "5": "Independent" }
+}
+```
+
+`score` is `null` when the student has not yet been scored on that subcategory.
+
+### GET `/api/v1/instructor/students/{student}/progress`
+
+Returns a specific student's progress for the authenticated instructor.
+
+**Auth:** Bearer token (instructor role). Returns 403 if the target student is not taught by this instructor.
+
+**Response:** Identical shape to `GET /api/v1/student/progress`.
+
+### POST `/api/v1/instructor/students/{student}/progress`
+
+Bulk-upserts scores for a student. One request per save click (payload holds every changed score at once).
+
+**Auth:** Bearer token (instructor role). Returns 403 if the target student is not taught by this instructor.
+
+**Request body:**
+
+```json
+{
+  "scores": [
+    { "progress_subcategory_id": 17, "score": 4 },
+    { "progress_subcategory_id": 18, "score": 3 }
+  ]
+}
+```
+
+**Validation:**
+- `scores` — required array, min 1 entry.
+- `scores.*.progress_subcategory_id` — required, must exist in `progress_subcategories`.
+- `scores.*.score` — required integer between 1 and 5.
+
+**Silent filtering:** Entries whose subcategory is soft-deleted or belongs to a different instructor are silently skipped (not an error). The mobile app shouldn't attempt to POST archived items, but the server defends either way.
+
+**Response 200:** Same shape as `GET /api/v1/instructor/students/{student}/progress` — returns the full refreshed progress payload so the app can replace its local state without a second round-trip.
+
+---
+
 ## Changelog
 
 | Date | Change | Endpoints Affected |
@@ -4861,6 +4942,7 @@ Entries are written automatically by the backend (lesson events, bookings, payme
 | 2026-04-21 | Extended `GET /student/resource-summary` — replaced hardcoded mock-test/hazard stats with live aggregates; split `total_resources` into `total_videos` + `total_files`; added `mock_tests_taken` and `hazard_attempts_taken`; normalised hazard average to a /5 scale (double-hazard scores halved before averaging); added `badges` object with earned/locked state + progress for First Test, Top Score, 7 Day Streak, and Expert. Streak badge, once earned, stays earned regardless of later gaps. | Student Resources (resource-summary) |
 | 2026-04-22 | Added `audience` flag to resources (`student` or `instructor`). `GET /api/v1/resources` accepts `?audience=student\|instructor` (omit for all) and returns `audience` on every resource. All `/api/v1/student/...` resource endpoints are hard-filtered server-side to `audience=student` (folder tree, single resource, my_resources, random fallback, summary stats, Expert badge denominator). Admin upload/edit requires an audience; CSV import template gains an `audience` column. | Resources (index), Student Resources (index, show, summary) |
 | 2026-04-22 | Added `GET /api/v1/resources/{resource}` — instructor-accessible single-resource endpoint. Reuses the 30-minute signed S3 URL logic from `GET /api/v1/student/resources/{resource}` but is not student-scoped: no `is_watched` / `is_suggested` fields, no policy restricting to students. 404 on unpublished resources. | Resources (show) |
+| 2026-04-22 | Added progress-tracker API — instructors score their students 1–5 on driving-skill subcategories (framework is per-instructor, editable via admin). `GET /api/v1/student/progress` returns own scores; `GET /api/v1/instructor/students/{student}/progress` returns a specific student's scores; `POST` of the same URL bulk-upserts scores (scores overwrite — no history). Soft-deleted subcategories with existing scores are returned with `archived: true` for read-only display. New tables: `progress_categories`, `progress_subcategories`, `student_progress`. | Progress Tracker (student/progress, instructor/students/.../progress) |
 
 ---
 

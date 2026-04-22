@@ -6,6 +6,7 @@ import EditDetailsSubTab from './Details/EditDetailsSubTab.vue'
 import CoverageSubTab from './Details/CoverageSubTab.vue'
 import ActivitySubTab from './Details/ActivitySubTab.vue'
 import EmergencyContactSubTab from './Details/EmergencyContactSubTab.vue'
+import TrackerSubTab from './Details/TrackerSubTab.vue'
 import type { InstructorDetail } from '@/types/instructor'
 
 interface Props {
@@ -17,12 +18,13 @@ const props = withDefaults(defineProps<Props>(), {
     subtab: 'summary',
 })
 
-type SubTabType = 'summary' | 'edit' | 'coverage' | 'activity' | 'emergency'
+type SubTabType = 'summary' | 'edit' | 'coverage' | 'activity' | 'emergency' | 'tracker'
 
 const subTabs: { key: SubTabType; label: string }[] = [
     { key: 'summary', label: 'Summary' },
     { key: 'edit', label: 'Packages' },
     { key: 'coverage', label: 'Coverage' },
+    { key: 'tracker', label: 'Tracker' },
     { key: 'activity', label: 'Activity' },
     { key: 'emergency', label: 'Emergency Contact' },
 ]
@@ -73,6 +75,10 @@ const isActiveSubTab = (subTabKey: SubTabType) => {
             />
             <CoverageSubTab
                 v-if="activeSubTab === 'coverage'"
+                :instructor="instructor"
+            />
+            <TrackerSubTab
+                v-if="activeSubTab === 'tracker'"
                 :instructor="instructor"
             />
             <ActivitySubTab

@@ -30,6 +30,7 @@ use App\Actions\Instructor\UpdateInstructorFinanceAction;
 use App\Actions\Instructor\UpdateInstructorProfileAction;
 use App\Actions\Instructor\UploadInstructorProfilePictureAction;
 use App\Actions\Lesson\UpdateLessonMileageAction;
+use App\Actions\ProgressTracker\SeedInstructorProgressTrackerAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Shared\Message\SendBroadcastMessageAction;
 use App\Enums\RecurrencePattern;
@@ -80,7 +81,8 @@ class InstructorService extends BaseService
         protected GetInstructorFinancesAction $getInstructorFinances,
         protected CreateInstructorFinanceAction $createInstructorFinance,
         protected UpdateInstructorFinanceAction $updateInstructorFinance,
-        protected DeleteInstructorFinanceAction $deleteInstructorFinance
+        protected DeleteInstructorFinanceAction $deleteInstructorFinance,
+        protected SeedInstructorProgressTrackerAction $seedInstructorProgressTracker
     ) {}
 
     /**
@@ -149,6 +151,9 @@ class InstructorService extends BaseService
                     ]);
                 }
             }
+
+            // 5. Seed default progress-tracker framework
+            ($this->seedInstructorProgressTracker)($instructor);
 
             DB::commit();
 
