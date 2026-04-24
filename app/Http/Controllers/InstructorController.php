@@ -25,6 +25,7 @@ use App\Models\Instructor;
 use App\Models\InstructorFinance;
 use App\Models\Lesson;
 use App\Models\Location;
+use App\Models\MileageLog;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\InstructorService;
@@ -35,6 +36,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -916,18 +918,8 @@ class InstructorController extends Controller
         $finances = $this->instructorService->getFinances($instructor);
 
         return response()->json([
-            'finances' => $finances->map(fn (InstructorFinance $f) => [
-                'id' => $f->id,
-                'type' => $f->type,
-                'description' => $f->description,
-                'amount_pence' => $f->amount_pence,
-                'formatted_amount' => $f->formatted_amount,
-                'is_recurring' => $f->is_recurring,
-                'recurrence_frequency' => $f->recurrence_frequency,
-                'date' => $f->date->format('Y-m-d'),
-                'notes' => $f->notes,
-                'created_at' => $f->created_at?->toIso8601String(),
-            ]),
+            'finances' => $finances->map(fn (InstructorFinance $f) => $this->serializeFinance($f)),
+            'config' => $this->financeConfigPayload(),
         ]);
     }
 
@@ -937,30 +929,21 @@ class InstructorController extends Controller
     public function storeFinance(Request $request, Instructor $instructor): JsonResponse
     {
         $data = $request->validate([
-            'type' => 'required|string|in:payment,expense',
-            'description' => 'required|string|max:255',
-            'amount_pence' => 'required|integer|min:1',
-            'is_recurring' => 'sometimes|boolean',
-            'recurrence_frequency' => 'nullable|string|in:weekly,monthly,yearly',
-            'date' => 'required|date|date_format:Y-m-d',
-            'notes' => 'nullable|string|max:1000',
+            'type' => ['required', 'string', 'in:payment,expense'],
+            'category' => ['required', 'string', Rule::in($this->categoryKeysFor($request->input('type')))],
+            'payment_method' => ['nullable', 'string', Rule::in(array_keys(config('finances.payment_methods', [])))],
+            'description' => ['required', 'string', 'max:255'],
+            'amount_pence' => ['required', 'integer', 'min:1'],
+            'is_recurring' => ['sometimes', 'boolean'],
+            'recurrence_frequency' => ['nullable', 'string', 'in:weekly,monthly,yearly', 'required_if:is_recurring,true'],
+            'date' => ['required', 'date', 'date_format:Y-m-d'],
+            'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $finance = $this->instructorService->createFinance($instructor, $data);
 
         return response()->json([
-            'finance' => [
-                'id' => $finance->id,
-                'type' => $finance->type,
-                'description' => $finance->description,
-                'amount_pence' => $finance->amount_pence,
-                'formatted_amount' => $finance->formatted_amount,
-                'is_recurring' => $finance->is_recurring,
-                'recurrence_frequency' => $finance->recurrence_frequency,
-                'date' => $finance->date->format('Y-m-d'),
-                'notes' => $finance->notes,
-                'created_at' => $finance->created_at?->toIso8601String(),
-            ],
+            'finance' => $this->serializeFinance($finance),
         ], 201);
     }
 
@@ -973,31 +956,24 @@ class InstructorController extends Controller
             return response()->json(['message' => 'Finance record not found for this instructor.'], 404);
         }
 
+        $effectiveType = $request->input('type', $finance->type);
+
         $data = $request->validate([
-            'type' => 'sometimes|string|in:payment,expense',
-            'description' => 'sometimes|string|max:255',
-            'amount_pence' => 'sometimes|integer|min:1',
-            'is_recurring' => 'sometimes|boolean',
-            'recurrence_frequency' => 'nullable|string|in:weekly,monthly,yearly',
-            'date' => 'sometimes|date|date_format:Y-m-d',
-            'notes' => 'nullable|string|max:1000',
+            'type' => ['sometimes', 'string', 'in:payment,expense'],
+            'category' => ['sometimes', 'string', Rule::in($this->categoryKeysFor($effectiveType))],
+            'payment_method' => ['nullable', 'string', Rule::in(array_keys(config('finances.payment_methods', [])))],
+            'description' => ['sometimes', 'string', 'max:255'],
+            'amount_pence' => ['sometimes', 'integer', 'min:1'],
+            'is_recurring' => ['sometimes', 'boolean'],
+            'recurrence_frequency' => ['nullable', 'string', 'in:weekly,monthly,yearly'],
+            'date' => ['sometimes', 'date', 'date_format:Y-m-d'],
+            'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $finance = $this->instructorService->updateFinance($finance, $data);
 
         return response()->json([
-            'finance' => [
-                'id' => $finance->id,
-                'type' => $finance->type,
-                'description' => $finance->description,
-                'amount_pence' => $finance->amount_pence,
-                'formatted_amount' => $finance->formatted_amount,
-                'is_recurring' => $finance->is_recurring,
-                'recurrence_frequency' => $finance->recurrence_frequency,
-                'date' => $finance->date->format('Y-m-d'),
-                'notes' => $finance->notes,
-                'created_at' => $finance->created_at?->toIso8601String(),
-            ],
+            'finance' => $this->serializeFinance($finance),
         ]);
     }
 
@@ -1013,6 +989,201 @@ class InstructorController extends Controller
         $this->instructorService->deleteFinance($finance);
 
         return response()->json(['message' => 'Finance record deleted successfully.']);
+    }
+
+    /**
+     * Upload (or replace) a receipt for a finance record.
+     */
+    public function uploadFinanceReceipt(Request $request, Instructor $instructor, InstructorFinance $finance): JsonResponse
+    {
+        if ($finance->instructor_id !== $instructor->id) {
+            return response()->json(['message' => 'Finance record not found for this instructor.'], 404);
+        }
+
+        $maxKb = (int) config('finances.receipt.max_size_kb', 10240);
+        $allowedMimes = implode(',', config('finances.receipt.allowed_mimes', ['pdf', 'jpg', 'jpeg', 'png']));
+
+        $request->validate([
+            'receipt' => ['required', 'file', "mimes:{$allowedMimes}", "max:{$maxKb}"],
+        ]);
+
+        $finance = $this->instructorService->uploadFinanceReceipt($finance, $request->file('receipt'));
+
+        return response()->json([
+            'finance' => $this->serializeFinance($finance),
+        ]);
+    }
+
+    /**
+     * Remove a receipt from a finance record.
+     */
+    public function destroyFinanceReceipt(Instructor $instructor, InstructorFinance $finance): JsonResponse
+    {
+        if ($finance->instructor_id !== $instructor->id) {
+            return response()->json(['message' => 'Finance record not found for this instructor.'], 404);
+        }
+
+        $finance = $this->instructorService->deleteFinanceReceipt($finance);
+
+        return response()->json([
+            'finance' => $this->serializeFinance($finance),
+        ]);
+    }
+
+    /**
+     * List mileage log entries for an instructor.
+     */
+    public function mileage(Instructor $instructor): JsonResponse
+    {
+        $logs = $this->instructorService->getMileageLogs($instructor);
+
+        return response()->json([
+            'mileage' => $logs->map(fn (MileageLog $log) => $this->serializeMileageLog($log)),
+        ]);
+    }
+
+    /**
+     * Create a mileage log entry.
+     */
+    public function storeMileage(Request $request, Instructor $instructor): JsonResponse
+    {
+        $data = $request->validate([
+            'date' => ['required', 'date', 'date_format:Y-m-d'],
+            'start_mileage' => ['required', 'integer', 'min:0'],
+            'end_mileage' => ['required', 'integer', 'min:0', 'gte:start_mileage'],
+            'type' => ['required', 'string', Rule::in(array_keys(config('finances.mileage_types', [])))],
+            'notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $log = $this->instructorService->createMileageLog($instructor, $data);
+
+        return response()->json([
+            'mileage_log' => $this->serializeMileageLog($log),
+        ], 201);
+    }
+
+    /**
+     * Update a mileage log entry.
+     */
+    public function updateMileage(Request $request, Instructor $instructor, MileageLog $mileageLog): JsonResponse
+    {
+        if ($mileageLog->instructor_id !== $instructor->id) {
+            return response()->json(['message' => 'Mileage log not found for this instructor.'], 404);
+        }
+
+        $data = $request->validate([
+            'date' => ['sometimes', 'date', 'date_format:Y-m-d'],
+            'start_mileage' => ['sometimes', 'integer', 'min:0'],
+            'end_mileage' => ['sometimes', 'integer', 'min:0'],
+            'type' => ['sometimes', 'string', Rule::in(array_keys(config('finances.mileage_types', [])))],
+            'notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        // Enforce end >= start regardless of which of the two fields was sent.
+        $effectiveStart = $data['start_mileage'] ?? $mileageLog->start_mileage;
+        $effectiveEnd = $data['end_mileage'] ?? $mileageLog->end_mileage;
+        if ($effectiveEnd < $effectiveStart) {
+            return response()->json([
+                'message' => 'The end mileage must be greater than or equal to the start mileage.',
+                'errors' => ['end_mileage' => ['The end mileage must be greater than or equal to the start mileage.']],
+            ], 422);
+        }
+
+        $log = $this->instructorService->updateMileageLog($mileageLog, $data);
+
+        return response()->json([
+            'mileage_log' => $this->serializeMileageLog($log),
+        ]);
+    }
+
+    /**
+     * Delete a mileage log entry.
+     */
+    public function destroyMileage(Instructor $instructor, MileageLog $mileageLog): JsonResponse
+    {
+        if ($mileageLog->instructor_id !== $instructor->id) {
+            return response()->json(['message' => 'Mileage log not found for this instructor.'], 404);
+        }
+
+        $this->instructorService->deleteMileageLog($mileageLog);
+
+        return response()->json(['message' => 'Mileage log deleted successfully.']);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function categoryKeysFor(?string $type): array
+    {
+        $source = $type === 'payment' ? 'payment_categories' : 'expense_categories';
+
+        return array_keys(config("finances.{$source}", []));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeFinance(InstructorFinance $f): array
+    {
+        return [
+            'id' => $f->id,
+            'type' => $f->type,
+            'category' => $f->category,
+            'category_label' => $f->category_label,
+            'payment_method' => $f->payment_method,
+            'payment_method_label' => $f->payment_method_label,
+            'description' => $f->description,
+            'amount_pence' => $f->amount_pence,
+            'formatted_amount' => $f->formatted_amount,
+            'is_recurring' => $f->is_recurring,
+            'recurrence_frequency' => $f->recurrence_frequency,
+            'date' => $f->date->format('Y-m-d'),
+            'notes' => $f->notes,
+            'receipt' => $f->receipt_path ? [
+                'url' => $f->receipt_url,
+                'original_name' => $f->receipt_original_name,
+                'mime_type' => $f->receipt_mime_type,
+                'size_bytes' => $f->receipt_size_bytes,
+            ] : null,
+            'created_at' => $f->created_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeMileageLog(MileageLog $log): array
+    {
+        return [
+            'id' => $log->id,
+            'date' => $log->date->format('Y-m-d'),
+            'start_mileage' => $log->start_mileage,
+            'end_mileage' => $log->end_mileage,
+            'miles' => $log->miles,
+            'type' => $log->type,
+            'type_label' => config("finances.mileage_types.{$log->type}"),
+            'notes' => $log->notes,
+            'created_at' => $log->created_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Enum payload for the finance UI (dropdown options).
+     *
+     * @return array<string, array<string, string>>
+     */
+    private function financeConfigPayload(): array
+    {
+        return [
+            'expense_categories' => config('finances.expense_categories', []),
+            'payment_categories' => config('finances.payment_categories', []),
+            'payment_methods' => config('finances.payment_methods', []),
+            'mileage_types' => config('finances.mileage_types', []),
+            'receipt' => [
+                'max_size_kb' => (int) config('finances.receipt.max_size_kb', 10240),
+                'allowed_mimes' => config('finances.receipt.allowed_mimes', []),
+            ],
+        ];
     }
 
     /**

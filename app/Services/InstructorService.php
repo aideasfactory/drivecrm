@@ -13,6 +13,7 @@ use App\Actions\Instructor\CreateInstructorPackageAction;
 use App\Actions\Instructor\CreatePupilAction;
 use App\Actions\Instructor\CreateRecurringCalendarItemsAction;
 use App\Actions\Instructor\DeleteCalendarItemAction;
+use App\Actions\Instructor\DeleteFinanceReceiptAction;
 use App\Actions\Instructor\DeleteInstructorFinanceAction;
 use App\Actions\Instructor\DeleteInstructorLocationAction;
 use App\Actions\Instructor\DeleteInstructorProfilePictureAction;
@@ -25,9 +26,14 @@ use App\Actions\Instructor\GetInstructorLocationsAction;
 use App\Actions\Instructor\GetInstructorPackagesAction;
 use App\Actions\Instructor\GetInstructorPayoutsAction;
 use App\Actions\Instructor\GetInstructorPupilsAction;
+use App\Actions\Instructor\Mileage\CreateMileageLogAction;
+use App\Actions\Instructor\Mileage\DeleteMileageLogAction;
+use App\Actions\Instructor\Mileage\GetMileageLogsAction;
+use App\Actions\Instructor\Mileage\UpdateMileageLogAction;
 use App\Actions\Instructor\UpdateCalendarItemAction;
 use App\Actions\Instructor\UpdateInstructorFinanceAction;
 use App\Actions\Instructor\UpdateInstructorProfileAction;
+use App\Actions\Instructor\UploadFinanceReceiptAction;
 use App\Actions\Instructor\UploadInstructorProfilePictureAction;
 use App\Actions\Lesson\UpdateLessonMileageAction;
 use App\Actions\ProgressTracker\SeedInstructorProgressTrackerAction;
@@ -40,6 +46,7 @@ use App\Models\Instructor;
 use App\Models\InstructorFinance;
 use App\Models\Lesson;
 use App\Models\Location;
+use App\Models\MileageLog;
 use App\Models\User;
 use App\Notifications\CalendarClashDetectedNotification;
 use App\Notifications\LessonRescheduledNotification;
@@ -82,6 +89,12 @@ class InstructorService extends BaseService
         protected CreateInstructorFinanceAction $createInstructorFinance,
         protected UpdateInstructorFinanceAction $updateInstructorFinance,
         protected DeleteInstructorFinanceAction $deleteInstructorFinance,
+        protected UploadFinanceReceiptAction $uploadFinanceReceipt,
+        protected DeleteFinanceReceiptAction $deleteFinanceReceipt,
+        protected GetMileageLogsAction $getMileageLogs,
+        protected CreateMileageLogAction $createMileageLog,
+        protected UpdateMileageLogAction $updateMileageLog,
+        protected DeleteMileageLogAction $deleteMileageLog,
         protected SeedInstructorProgressTrackerAction $seedInstructorProgressTracker
     ) {}
 
@@ -794,5 +807,168 @@ class InstructorService extends BaseService
     public function deleteFinance(InstructorFinance $finance): bool
     {
         return ($this->deleteInstructorFinance)($finance);
+    }
+
+    /**
+     * Upload (or replace) the receipt attached to a finance record.
+     */
+    public function uploadFinanceReceipt(InstructorFinance $finance, \Illuminate\Http\UploadedFile $file): InstructorFinance
+    {
+        return ($this->uploadFinanceReceipt)($finance, $file);
+    }
+
+    /**
+     * Remove the receipt attached to a finance record.
+     */
+    public function deleteFinanceReceipt(InstructorFinance $finance): InstructorFinance
+    {
+        return ($this->deleteFinanceReceipt)($finance);
+    }
+
+    /**
+     * Get all mileage log entries for an instructor.
+     */
+    public function getMileageLogs(Instructor $instructor): Collection
+    {
+        return ($this->getMileageLogs)($instructor);
+    }
+
+    /**
+     * Create a mileage log entry for an instructor.
+     */
+    public function createMileageLog(Instructor $instructor, array $data): MileageLog
+    {
+        return ($this->createMileageLog)($instructor, $data);
+    }
+
+    /**
+     * Update a mileage log entry.
+     */
+    public function updateMileageLog(MileageLog $log, array $data): MileageLog
+    {
+        return ($this->updateMileageLog)($log, $data);
+    }
+
+    /**
+     * Delete a mileage log entry.
+     */
+    public function deleteMileageLog(MileageLog $log): bool
+    {
+        return ($this->deleteMileageLog)($log);
+    }
+
+    /**
+     * Resolve the effective `[from, to]` for a finance/mileage query.
+     * Defaults to the last 30 days (inclusive) when either bound is missing.
+     *
+     * @return array{from: Carbon, to: Carbon, default_applied: bool}
+     */
+    public function resolveFinanceDateRange(?string $from, ?string $to): array
+    {
+        $defaultApplied = ! $from || ! $to;
+
+        $toDate = $to ? Carbon::parse($to)->endOfDay() : Carbon::today()->endOfDay();
+        $fromDate = $from ? Carbon::parse($from)->startOfDay() : $toDate->copy()->subDays(29)->startOfDay();
+
+        return [
+            'from' => $fromDate,
+            'to' => $toDate,
+            'default_applied' => $defaultApplied,
+        ];
+    }
+
+    /**
+     * Cursor-paginated finance records in a date range, optionally filtered by type.
+     */
+    public function getFinancesInRange(
+        Instructor $instructor,
+        ?string $from,
+        ?string $to,
+        ?string $type = null,
+        int $perPage = 25
+    ): \Illuminate\Contracts\Pagination\CursorPaginator {
+        $range = $this->resolveFinanceDateRange($from, $to);
+
+        return $instructor->finances()
+            ->whereBetween('date', [$range['from']->toDateString(), $range['to']->toDateString()])
+            ->when($type !== null, fn ($q) => $q->where('type', $type))
+            ->orderByDesc('date')
+            ->orderByDesc('id')
+            ->cursorPaginate($perPage);
+    }
+
+    /**
+     * Cursor-paginated mileage logs in a date range.
+     */
+    public function getMileageLogsInRange(
+        Instructor $instructor,
+        ?string $from,
+        ?string $to,
+        int $perPage = 25
+    ): \Illuminate\Contracts\Pagination\CursorPaginator {
+        $range = $this->resolveFinanceDateRange($from, $to);
+
+        return $instructor->mileageLogs()
+            ->whereBetween('date', [$range['from']->toDateString(), $range['to']->toDateString()])
+            ->orderByDesc('date')
+            ->orderByDesc('id')
+            ->cursorPaginate($perPage);
+    }
+
+    /**
+     * Full-range finances + mileage + stats for the overview screen.
+     *
+     * @return array{
+     *     date_range: array{from: string, to: string, default_applied: bool},
+     *     finances: \Illuminate\Support\Collection,
+     *     mileage: \Illuminate\Support\Collection,
+     *     stats: array<string, int|string>
+     * }
+     */
+    public function getFinanceSummary(Instructor $instructor, ?string $from, ?string $to): array
+    {
+        $range = $this->resolveFinanceDateRange($from, $to);
+        $fromDate = $range['from']->toDateString();
+        $toDate = $range['to']->toDateString();
+
+        $finances = $instructor->finances()
+            ->whereBetween('date', [$fromDate, $toDate])
+            ->orderByDesc('date')
+            ->orderByDesc('id')
+            ->get();
+
+        $mileage = $instructor->mileageLogs()
+            ->whereBetween('date', [$fromDate, $toDate])
+            ->orderByDesc('date')
+            ->orderByDesc('id')
+            ->get();
+
+        $totalPayments = (int) $finances->where('type', 'payment')->sum('amount_pence');
+        $totalExpenses = (int) $finances->where('type', 'expense')->sum('amount_pence');
+        $businessMiles = (int) $mileage->where('type', 'business')->sum('miles');
+        $personalMiles = (int) $mileage->where('type', 'personal')->sum('miles');
+
+        return [
+            'date_range' => [
+                'from' => $fromDate,
+                'to' => $toDate,
+                'default_applied' => $range['default_applied'],
+            ],
+            'finances' => $finances,
+            'mileage' => $mileage,
+            'stats' => [
+                'total_records' => $finances->count(),
+                'total_payments_pence' => $totalPayments,
+                'total_payments_formatted' => '£'.number_format($totalPayments / 100, 2),
+                'total_expenses_pence' => $totalExpenses,
+                'total_expenses_formatted' => '£'.number_format($totalExpenses / 100, 2),
+                'net_balance_pence' => $totalPayments - $totalExpenses,
+                'net_balance_formatted' => '£'.number_format(($totalPayments - $totalExpenses) / 100, 2),
+                'total_trips' => $mileage->count(),
+                'business_miles' => $businessMiles,
+                'personal_miles' => $personalMiles,
+                'total_miles' => $businessMiles + $personalMiles,
+            ],
+        ];
     }
 }

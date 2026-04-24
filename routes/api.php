@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\HazardPerceptionController;
 use App\Http\Controllers\Api\V1\InstructorCalendarController;
 use App\Http\Controllers\Api\V1\InstructorFinanceController;
 use App\Http\Controllers\Api\V1\InstructorLessonController;
+use App\Http\Controllers\Api\V1\InstructorMileageController;
 use App\Http\Controllers\Api\V1\InstructorPackageController;
 use App\Http\Controllers\Api\V1\InstructorProfileController;
 use App\Http\Controllers\Api\V1\InstructorStudentController;
@@ -72,10 +73,21 @@ Route::prefix('v1')->group(function (): void {
             Route::get('calendar/items', [InstructorCalendarController::class, 'index']);
             Route::post('calendar/items', [InstructorCalendarController::class, 'store']);
             Route::delete('calendar/items/{calendarItem}', [InstructorCalendarController::class, 'destroy']);
+            Route::get('finances/config', [InstructorFinanceController::class, 'config']);
+            Route::get('finances/summary', [InstructorFinanceController::class, 'summary']);
             Route::get('finances', [InstructorFinanceController::class, 'index']);
             Route::post('finances', [InstructorFinanceController::class, 'store']);
+            Route::get('finances/{finance}', [InstructorFinanceController::class, 'show']);
             Route::put('finances/{finance}', [InstructorFinanceController::class, 'update']);
             Route::delete('finances/{finance}', [InstructorFinanceController::class, 'destroy']);
+            Route::post('finances/{finance}/receipt', [InstructorFinanceController::class, 'uploadReceipt']);
+            Route::delete('finances/{finance}/receipt', [InstructorFinanceController::class, 'destroyReceipt']);
+
+            Route::get('mileage', [InstructorMileageController::class, 'index']);
+            Route::post('mileage', [InstructorMileageController::class, 'store']);
+            Route::get('mileage/{mileageLog}', [InstructorMileageController::class, 'show']);
+            Route::put('mileage/{mileageLog}', [InstructorMileageController::class, 'update']);
+            Route::delete('mileage/{mileageLog}', [InstructorMileageController::class, 'destroy']);
 
             Route::get('students/{student}/progress', [InstructorStudentProgressController::class, 'show']);
             Route::post('students/{student}/progress', [InstructorStudentProgressController::class, 'update']);

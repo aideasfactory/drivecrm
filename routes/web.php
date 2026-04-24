@@ -130,6 +130,20 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('instructors.finances.update');
     Route::delete('/instructors/{instructor}/finances/{finance}', [\App\Http\Controllers\InstructorController::class, 'destroyFinance'])
         ->name('instructors.finances.destroy');
+    Route::post('/instructors/{instructor}/finances/{finance}/receipt', [\App\Http\Controllers\InstructorController::class, 'uploadFinanceReceipt'])
+        ->name('instructors.finances.receipt.upload');
+    Route::delete('/instructors/{instructor}/finances/{finance}/receipt', [\App\Http\Controllers\InstructorController::class, 'destroyFinanceReceipt'])
+        ->name('instructors.finances.receipt.destroy');
+
+    // Instructor Mileage Logs
+    Route::get('/instructors/{instructor}/mileage', [\App\Http\Controllers\InstructorController::class, 'mileage'])
+        ->name('instructors.mileage');
+    Route::post('/instructors/{instructor}/mileage', [\App\Http\Controllers\InstructorController::class, 'storeMileage'])
+        ->name('instructors.mileage.store');
+    Route::put('/instructors/{instructor}/mileage/{mileageLog}', [\App\Http\Controllers\InstructorController::class, 'updateMileage'])
+        ->name('instructors.mileage.update');
+    Route::delete('/instructors/{instructor}/mileage/{mileageLog}', [\App\Http\Controllers\InstructorController::class, 'destroyMileage'])
+        ->name('instructors.mileage.destroy');
 
     Route::get('/packages', [\App\Http\Controllers\PackageController::class, 'index'])
         ->name('packages.index');

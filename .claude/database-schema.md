@@ -133,6 +133,11 @@ Users (1) ──┬── (1) Instructors ──┬── (Many) Packages
     - Many-to-one with `instructors` (via `instructor_id`)
     - Tracks payments received and expenses incurred
     - Supports recurring entries (weekly, monthly, yearly)
+    - Config-backed `category` + `payment_method` slugs; optional receipt file on private S3
+
+11. **mileage_logs** - Instructor mileage records (business/personal)
+    - Many-to-one with `instructors` (via `instructor_id`)
+    - Separate ledger from `instructor_finances`; fuel expenses are NOT linked here
 
 ### Support Tables
 
@@ -950,26 +955,61 @@ Tracks progress through standard checklist items for each student (e.g., theory 
 
 ### 22. **instructor_finances**
 
-Tracks payments received and expenses incurred by instructors. Supports recurring entries.
+Tracks payments received and expenses incurred by instructors. Supports recurring entries, category classification, payment method, and an optional receipt attachment (private S3).
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Finance record ID |
 | `instructor_id` | bigint unsigned | FOREIGN KEY → instructors.id, CASCADE DELETE, INDEXED | Owning instructor |
 | `type` | enum('payment','expense') | NOT NULL | Whether this is income or an expense |
+| `category` | varchar(64) | NOT NULL, DEFAULT 'none' | Slug from `config/finances.php` — `expense_categories` when type=expense, `payment_categories` when type=payment |
+| `payment_method` | varchar(32) | NULLABLE | Slug from `config('finances.payment_methods')` |
 | `description` | varchar(255) | NOT NULL | Description of the payment/expense |
 | `amount_pence` | integer | NOT NULL | Amount in pence (e.g., 3500 = £35.00) |
 | `is_recurring` | boolean | NOT NULL, DEFAULT false | Whether this is a recurring entry |
 | `recurrence_frequency` | varchar(255) | NULLABLE | Frequency: `weekly`, `monthly`, `yearly` |
 | `date` | date | NOT NULL | Date of the payment/expense |
 | `notes` | text | NULLABLE | Additional notes |
+| `receipt_path` | varchar(255) | NULLABLE | Private S3 path — viewed via temporary signed URLs |
+| `receipt_original_name` | varchar(255) | NULLABLE | Original filename for display/download |
+| `receipt_mime_type` | varchar(64) | NULLABLE | Upload MIME (PDF/JPG/PNG) |
+| `receipt_size_bytes` | int unsigned | NULLABLE | Upload size, bytes |
 | `created_at` | timestamp | NULLABLE | Created timestamp |
 | `updated_at` | timestamp | NULLABLE | Updated timestamp |
 
-**Indexes:** `(instructor_id, type)`, `(instructor_id, date)`
+**Indexes:** `(instructor_id, type)`, `(instructor_id, date)`, `(instructor_id, category)`
 
 **Relationships:**
 - `instructor_finances.instructor_id` → `instructors.id` (CASCADE DELETE)
+
+**Notes:**
+- Category slugs are config-backed (`config/finances.php`), not enum'd in the DB — lists can grow without migration. Validation at controller level gates the slug by `type`.
+- Receipts live on the private S3 disk. The `receipt_url` accessor returns a time-limited signed URL (TTL from `config('finances.receipt.signed_url_ttl_minutes')`).
+- Existing pre-migration rows were backfilled to `category = 'none'`.
+
+---
+
+### 23. **mileage_logs**
+
+Separate ledger for instructor mileage — not a sub-type of `instructor_finances`. Business vs personal classification for HMRC tax reporting. Fuel expenses are logged independently in `instructor_finances` with `category = 'fuel'`; there is no foreign-key link between the two.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Mileage log ID |
+| `instructor_id` | bigint unsigned | FOREIGN KEY → instructors.id, CASCADE DELETE, INDEXED | Owning instructor |
+| `date` | date | NOT NULL | Date of the trip |
+| `start_mileage` | int unsigned | NOT NULL | Starting odometer reading |
+| `end_mileage` | int unsigned | NOT NULL | Ending odometer reading (must be ≥ start_mileage — enforced in controller) |
+| `miles` | int unsigned | NOT NULL | Denormalised `end - start`, set server-side |
+| `type` | enum('business','personal') | NOT NULL | Trip classification |
+| `notes` | text | NULLABLE | Optional notes |
+| `created_at` | timestamp | NULLABLE | Created timestamp |
+| `updated_at` | timestamp | NULLABLE | Updated timestamp |
+
+**Indexes:** `(instructor_id, date)`, `(instructor_id, type)`
+
+**Relationships:**
+- `mileage_logs.instructor_id` → `instructors.id` (CASCADE DELETE)
 
 ---
 

@@ -135,6 +135,14 @@ class Instructor extends Model
     }
 
     /**
+     * Get mileage log entries for this instructor.
+     */
+    public function mileageLogs(): HasMany
+    {
+        return $this->hasMany(MileageLog::class);
+    }
+
+    /**
      * Get activity logs for this instructor.
      */
     public function activityLogs(): MorphMany

@@ -23,10 +23,20 @@
     - [Packages (Create)](#post-apiv1instructorpackages)
     - [Packages (Update)](#put-apiv1instructorpackagespackage)
     - [Calendar Items](#get-apiv1instructorcalendaritems)
+    - [Finances (Config)](#get-apiv1instructorfinancesconfig)
+    - [Finances (Summary)](#get-apiv1instructorfinancessummary)
     - [Finances (List)](#get-apiv1instructorfinances)
+    - [Finances (Show)](#get-apiv1instructorfinancesfinance)
     - [Finances (Create)](#post-apiv1instructorfinances)
     - [Finances (Update)](#put-apiv1instructorfinancesfinance)
     - [Finances (Delete)](#delete-apiv1instructorfinancesfinance)
+    - [Finances — Upload Receipt](#post-apiv1instructorfinancesfinancereceipt)
+    - [Finances — Delete Receipt](#delete-apiv1instructorfinancesfinancereceipt)
+    - [Mileage (List)](#get-apiv1instructormileage)
+    - [Mileage (Show)](#get-apiv1instructormileagemileagelog)
+    - [Mileage (Create)](#post-apiv1instructormileage)
+    - [Mileage (Update)](#put-apiv1instructormileagemileagelog)
+    - [Mileage (Delete)](#delete-apiv1instructormileagemileagelog)
   - [Student Home](#student-home)
     - [Instructor Profile](#get-apiv1studentinstructor)
     - [Dashboard](#get-apiv1studentdashboard)
@@ -1264,65 +1274,213 @@ Updates an existing package owned by the authenticated instructor. Returns `403`
 
 ### Instructor Finances
 
+Payments and expenses tracking. Every finance record has an optional receipt (PDF/JPG/PNG) on private S3 — the `receipt.url` field is a short-lived signed URL (20-minute TTL), re-fetch the record to get a fresh URL before rendering.
+
+**Finance Object (shared across all Finance endpoints):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Finance record ID |
+| `type` | string | `payment` or `expense` |
+| `category` | string | Slug from `/finances/config`. Default `none` (uncategorised). Valid list depends on `type`: expense categories for expenses, payment categories for payments. |
+| `category_label` | string\|null | Human-readable label (e.g., `"Fuel"`). `null` only when `category` is set to an unknown slug. |
+| `payment_method` | string\|null | Slug from `/finances/config` (e.g., `bank_transfer`, `card`). `null` when unspecified. |
+| `payment_method_label` | string\|null | Human-readable label (e.g., `"Bank Transfer"`). |
+| `description` | string | Description (max 255 chars) |
+| `amount_pence` | integer | Amount in pence (e.g., 3500 = £35.00) |
+| `formatted_amount` | string | Human-readable GBP amount (e.g., `"£35.00"`) |
+| `is_recurring` | boolean | Whether this is a recurring entry. **Display-only flag — the backend does not auto-generate future occurrences.** |
+| `recurrence_frequency` | string\|null | `weekly`, `monthly`, `yearly`, or `null` when not recurring |
+| `date` | string | YYYY-MM-DD |
+| `notes` | string\|null | Free-text notes (max 1000 chars) |
+| `receipt` | object\|null | `null` when no receipt. Object has `url` (signed S3 URL, 20-min TTL), `original_name`, `mime_type`, `size_bytes`. |
+| `created_at` | string | ISO 8601 |
+| `updated_at` | string | ISO 8601 |
+
 ---
 
-#### `GET /api/v1/instructor/finances`
+#### `GET /api/v1/instructor/finances/config`
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Returns all finance records (payments and expenses) for the authenticated instructor, ordered by date descending.
+Returns the dropdown options used by the finance screens. **Cache this client-side on login and refresh on-demand** — the contents change rarely.
 
 **Request Body:** None
 
 **Success Response:** `200 OK`
 ```json
 {
-  "data": [
-    {
-      "id": 1,
-      "type": "payment",
-      "description": "Weekly lesson payment from Jane Doe",
-      "amount_pence": 3500,
-      "formatted_amount": "£35.00",
-      "is_recurring": true,
-      "recurrence_frequency": "weekly",
-      "date": "2026-03-31",
-      "notes": "Regular weekly payment",
-      "created_at": "2026-03-31T09:00:00+00:00",
-      "updated_at": "2026-03-31T09:00:00+00:00"
-    },
-    {
-      "id": 2,
-      "type": "expense",
-      "description": "Fuel costs",
-      "amount_pence": 5000,
-      "formatted_amount": "£50.00",
-      "is_recurring": false,
-      "recurrence_frequency": null,
-      "date": "2026-03-30",
-      "notes": null,
-      "created_at": "2026-03-30T14:00:00+00:00",
-      "updated_at": "2026-03-30T14:00:00+00:00"
-    }
-  ]
+  "expense_categories": {
+    "none": "None",
+    "fuel": "Fuel",
+    "insurance": "Insurance",
+    "mot": "MOT"
+  },
+  "payment_categories": {
+    "none": "None",
+    "franchise_payout": "Franchise Payout",
+    "hmrc_tax": "HMRC Tax",
+    "referral": "Referral"
+  },
+  "payment_methods": {
+    "bank_transfer": "Bank Transfer",
+    "card": "Card",
+    "cash": "Cash",
+    "cheque": "Cheque",
+    "direct_debit": "Direct Debit",
+    "paypal": "PayPal",
+    "standing_order": "Standing Order"
+  },
+  "mileage_types": {
+    "business": "Business",
+    "personal": "Personal"
+  },
+  "receipt": {
+    "max_size_kb": 10240,
+    "allowed_mimes": ["pdf", "jpg", "jpeg", "png"]
+  }
 }
 ```
 
-**Finance Object Fields:**
+Category + payment-method keys above are illustrative — the full list lives in `config/finances.php` on the server. When creating or updating a record, send the **slug** (e.g., `"fuel"`), not the label.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | integer | Finance record ID |
-| `type` | string | `payment` or `expense` |
-| `description` | string | Description of the payment/expense |
-| `amount_pence` | integer | Amount in pence (e.g., 3500 = £35.00) |
-| `formatted_amount` | string | Human-readable amount (e.g., "£35.00") |
-| `is_recurring` | boolean | Whether this is a recurring entry |
-| `recurrence_frequency` | string\|null | Frequency: `weekly`, `monthly`, or `yearly` (null if not recurring) |
-| `date` | string | Date of the payment/expense (YYYY-MM-DD) |
-| `notes` | string\|null | Additional notes |
-| `created_at` | string | ISO 8601 timestamp |
-| `updated_at` | string | ISO 8601 timestamp |
+---
+
+#### `GET /api/v1/instructor/finances/summary`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Overview screen: finances + mileage for the date range, plus aggregate stats. Designed as a single call the app makes when the finance dashboard loads.
+
+**Query Params:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `from` | string | No | YYYY-MM-DD. Defaults to 30 days before `to`. |
+| `to` | string | No | YYYY-MM-DD. Defaults to today. |
+
+When both `from` and `to` are omitted, the response covers **the last 30 days** and returns `date_range.default_applied: true` so the app can show a "Last 30 days" badge.
+
+**Success Response:** `200 OK`
+```json
+{
+  "date_range": {
+    "from": "2026-03-25",
+    "to": "2026-04-24",
+    "default_applied": true
+  },
+  "finances": [
+    { "id": 12, "type": "expense", "category": "fuel", "category_label": "Fuel", "payment_method": "card", "payment_method_label": "Card", "description": "BP Fillup", "amount_pence": 7500, "formatted_amount": "£75.00", "is_recurring": false, "recurrence_frequency": null, "date": "2026-04-22", "notes": null, "receipt": { "url": "https://...", "original_name": "receipt.pdf", "mime_type": "application/pdf", "size_bytes": 45123 }, "created_at": "2026-04-22T08:12:00+00:00", "updated_at": "2026-04-22T08:12:00+00:00" }
+  ],
+  "mileage": [
+    { "id": 5, "date": "2026-04-22", "start_mileage": 45210, "end_mileage": 45250, "miles": 40, "type": "business", "type_label": "Business", "notes": null, "created_at": "2026-04-22T16:00:00+00:00", "updated_at": "2026-04-22T16:00:00+00:00" }
+  ],
+  "stats": {
+    "total_records": 42,
+    "total_payments_pence": 123456,
+    "total_payments_formatted": "£1,234.56",
+    "total_expenses_pence": 65432,
+    "total_expenses_formatted": "£654.32",
+    "net_balance_pence": 58024,
+    "net_balance_formatted": "£580.24",
+    "total_trips": 15,
+    "business_miles": 450,
+    "personal_miles": 80,
+    "total_miles": 530
+  }
+}
+```
+
+**Notes:**
+- `/summary` is unpaginated within its date range — intended for the overview screen where stats need to reflect the full window.
+- For infinite-scroll through history, use `/finances` and `/mileage` list endpoints instead, which cursor-paginate.
+- `stats.total_records` counts finance rows only (not mileage).
+
+---
+
+#### `GET /api/v1/instructor/finances`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Cursor-paginated list of finance records, ordered by date descending. Intended for the "all finances" scrolling view.
+
+**Query Params:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | No | Filter to `payment` or `expense`. Omit for both. |
+| `from` | string | No | YYYY-MM-DD. Defaults to 30 days before `to`. |
+| `to` | string | No | YYYY-MM-DD. Defaults to today. |
+| `cursor` | string | No | Opaque cursor from a previous response (`next_cursor`). |
+| `per_page` | integer | No | 1–100. Default 25. |
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": [
+    { "id": 12, "type": "expense", "category": "fuel", "category_label": "Fuel", "payment_method": "card", "payment_method_label": "Card", "description": "BP Fillup", "amount_pence": 7500, "formatted_amount": "£75.00", "is_recurring": false, "recurrence_frequency": null, "date": "2026-04-22", "notes": null, "receipt": null, "created_at": "2026-04-22T08:12:00+00:00", "updated_at": "2026-04-22T08:12:00+00:00" }
+  ],
+  "path": "https://example.test/api/v1/instructor/finances",
+  "per_page": 25,
+  "next_cursor": "eyJpZCI6MTIsImRhdGUiOiIyMDI2LTA0LTIyIn0",
+  "next_page_url": "https://example.test/api/v1/instructor/finances?cursor=eyJpZCI6MTIsImRhdGUiOiIyMDI2LTA0LTIyIn0",
+  "prev_cursor": null,
+  "prev_page_url": null
+}
+```
+
+**Pagination protocol:**
+1. First call: omit `cursor`.
+2. Response includes `next_cursor`. If it is `null`, there are no more results.
+3. Otherwise, make the next call with `?cursor=<next_cursor>` (plus the same `from`/`to`/`type` params) to get the next page.
+
+---
+
+#### `GET /api/v1/instructor/finances/{finance}`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Fetch a single finance record by ID. The record must belong to the authenticated instructor (403 otherwise). Useful for detail screens or to refresh a stale `receipt.url`.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `finance` | integer | Finance record ID |
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 12,
+    "type": "expense",
+    "category": "fuel",
+    "category_label": "Fuel",
+    "payment_method": "card",
+    "payment_method_label": "Card",
+    "description": "BP Fillup",
+    "amount_pence": 7500,
+    "formatted_amount": "£75.00",
+    "is_recurring": false,
+    "recurrence_frequency": null,
+    "date": "2026-04-22",
+    "notes": null,
+    "receipt": {
+      "url": "https://s3.../receipt.pdf?X-Amz-Signature=...",
+      "original_name": "bp-fillup.pdf",
+      "mime_type": "application/pdf",
+      "size_bytes": 45123
+    },
+    "created_at": "2026-04-22T08:12:00+00:00",
+    "updated_at": "2026-04-22T08:12:00+00:00"
+  }
+}
+```
+
+**Error Response (not owned):** `403 Forbidden`
+```json
+{ "message": "You do not own this finance record." }
+```
 
 ---
 
@@ -1330,61 +1488,40 @@ Returns all finance records (payments and expenses) for the authenticated instru
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Creates a new finance record for the authenticated instructor.
+Creates a finance record. Create first (JSON), then upload a receipt separately via `POST /finances/{finance}/receipt` if desired — this keeps the create call small and makes receipt upload independently retryable over flaky networks.
 
 **Request Body:**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `type` | string | Yes | `payment` or `expense` |
-| `description` | string | Yes | Description (max 255 characters) |
-| `amount_pence` | integer | Yes | Amount in pence (min: 1) |
-| `is_recurring` | boolean | No | Whether this is recurring (default: false) |
-| `recurrence_frequency` | string | Conditional | Required when `is_recurring` is true. One of: `weekly`, `monthly`, `yearly` |
-| `date` | string | Yes | Date in YYYY-MM-DD format |
-| `notes` | string | No | Additional notes (max 1000 characters) |
+| `category` | string | Yes | Slug from `/finances/config`. Must be a key of `expense_categories` (when `type=expense`) or `payment_categories` (when `type=payment`). Use `"none"` for uncategorised. |
+| `payment_method` | string | No | Slug from `/finances/config.payment_methods`. Omit for unspecified. |
+| `description` | string | Yes | Max 255 chars |
+| `amount_pence` | integer | Yes | Min 1 |
+| `is_recurring` | boolean | No | Default false. **Display-only flag.** |
+| `recurrence_frequency` | string | Conditional | Required when `is_recurring=true`. One of `weekly`, `monthly`, `yearly`. |
+| `date` | string | Yes | YYYY-MM-DD |
+| `notes` | string | No | Max 1000 chars |
 
 **Example Request:**
 ```json
 {
   "type": "expense",
+  "category": "insurance",
+  "payment_method": "direct_debit",
   "description": "Car insurance",
   "amount_pence": 15000,
   "is_recurring": true,
   "recurrence_frequency": "monthly",
-  "date": "2026-03-31",
-  "notes": "Monthly direct debit"
+  "date": "2026-04-24",
+  "notes": "Monthly DD"
 }
 ```
 
-**Success Response:** `201 Created`
-```json
-{
-  "data": {
-    "id": 3,
-    "type": "expense",
-    "description": "Car insurance",
-    "amount_pence": 15000,
-    "formatted_amount": "£150.00",
-    "is_recurring": true,
-    "recurrence_frequency": "monthly",
-    "date": "2026-03-31",
-    "notes": "Monthly direct debit",
-    "created_at": "2026-03-31T10:00:00+00:00",
-    "updated_at": "2026-03-31T10:00:00+00:00"
-  }
-}
-```
+**Success Response:** `201 Created` — returns the created record in the same shape as `GET /finances/{finance}`.
 
-**Error Response (validation):** `422 Unprocessable Entity`
-```json
-{
-  "message": "The type field is required.",
-  "errors": {
-    "type": ["The type field is required."]
-  }
-}
-```
+**Error Response (validation):** `422 Unprocessable Entity` — `errors` object keyed by field.
 
 ---
 
@@ -1392,59 +1529,15 @@ Creates a new finance record for the authenticated instructor.
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Updates an existing finance record. The record must belong to the authenticated instructor.
+Updates a finance record. All fields optional. Category validation uses the **effective** type (either the new `type` in the payload or the record's current type).
 
-**URL Parameters:**
+**URL Parameters:** `finance` (integer)
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `finance` | integer | Finance record ID |
+**Request Body:** any subset of the `POST` fields.
 
-**Request Body (all fields optional):**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `type` | string | No | `payment` or `expense` |
-| `description` | string | No | Description (max 255 characters) |
-| `amount_pence` | integer | No | Amount in pence (min: 1) |
-| `is_recurring` | boolean | No | Whether this is recurring |
-| `recurrence_frequency` | string | No | One of: `weekly`, `monthly`, `yearly` |
-| `date` | string | No | Date in YYYY-MM-DD format |
-| `notes` | string | No | Additional notes (max 1000 characters) |
-
-**Example Request:**
-```json
-{
-  "amount_pence": 16000,
-  "notes": "Monthly direct debit — increased premium"
-}
-```
-
-**Success Response:** `200 OK`
-```json
-{
-  "data": {
-    "id": 3,
-    "type": "expense",
-    "description": "Car insurance",
-    "amount_pence": 16000,
-    "formatted_amount": "£160.00",
-    "is_recurring": true,
-    "recurrence_frequency": "monthly",
-    "date": "2026-03-31",
-    "notes": "Monthly direct debit — increased premium",
-    "created_at": "2026-03-31T10:00:00+00:00",
-    "updated_at": "2026-03-31T10:30:00+00:00"
-  }
-}
-```
+**Success Response:** `200 OK` — returns the updated record.
 
 **Error Response (not owned):** `403 Forbidden`
-```json
-{
-  "message": "You do not own this finance record."
-}
-```
 
 ---
 
@@ -1452,29 +1545,174 @@ Updates an existing finance record. The record must belong to the authenticated 
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Deletes a finance record. The record must belong to the authenticated instructor.
+Deletes a finance record. If a receipt is attached, it is deleted from S3 automatically.
 
-**URL Parameters:**
+**Success Response:** `200 OK`
+```json
+{ "message": "Finance record deleted successfully." }
+```
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `finance` | integer | Finance record ID |
+**Error Response (not owned):** `403 Forbidden`
 
-**Request Body:** None
+---
+
+#### `POST /api/v1/instructor/finances/{finance}/receipt`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Uploads (or replaces) a receipt for a finance record. Multipart request. If a receipt already exists on the record, it is deleted from S3 before the new one is stored.
+
+**URL Parameters:** `finance` (integer)
+
+**Multipart Field:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `receipt` | file | Yes | PDF, JPG/JPEG, or PNG. Max size from `/finances/config.receipt.max_size_kb` (default 10 MB). |
+
+**Success Response:** `200 OK` — returns the updated record with the new `receipt` object populated.
+
+**Error Responses:**
+- `403 Forbidden` — record not owned.
+- `422 Unprocessable Entity` — file missing, wrong mime, or over max size.
+
+---
+
+#### `DELETE /api/v1/instructor/finances/{finance}/receipt`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Removes the receipt from a finance record. The record itself is unaffected; only the attachment is cleared. No-op if there's no receipt.
+
+**Success Response:** `200 OK` — returns the updated record with `receipt: null`.
+
+**Error Response (not owned):** `403 Forbidden`
+
+---
+
+### Instructor Mileage
+
+Mileage logs are a separate ledger from finances. Fuel expenses are **not** linked to mileage logs — they're independent records. Business vs personal classification supports HMRC tax reporting.
+
+**Mileage Log Object:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Mileage log ID |
+| `date` | string | YYYY-MM-DD |
+| `start_mileage` | integer | Starting odometer reading |
+| `end_mileage` | integer | Ending odometer reading (≥ start) |
+| `miles` | integer | Server-calculated `end - start` |
+| `type` | string | `business` or `personal` |
+| `type_label` | string | `"Business"` or `"Personal"` |
+| `notes` | string\|null | Free-text notes (max 1000 chars) |
+| `created_at` | string | ISO 8601 |
+| `updated_at` | string | ISO 8601 |
+
+---
+
+#### `GET /api/v1/instructor/mileage`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Cursor-paginated list of mileage logs, ordered by date descending.
+
+**Query Params:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `from` | string | No | YYYY-MM-DD. Defaults to 30 days before `to`. |
+| `to` | string | No | YYYY-MM-DD. Defaults to today. |
+| `cursor` | string | No | Opaque cursor from a previous response. |
+| `per_page` | integer | No | 1–100. Default 25. |
+
+**Success Response:** `200 OK` — same cursor-paginated envelope as `/finances` (see above), with `data` as an array of mileage logs.
+
+---
+
+#### `GET /api/v1/instructor/mileage/{mileageLog}`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Fetch a single mileage log by ID. 403 if not owned.
 
 **Success Response:** `200 OK`
 ```json
 {
-  "message": "Finance record deleted successfully."
+  "data": {
+    "id": 5,
+    "date": "2026-04-22",
+    "start_mileage": 45210,
+    "end_mileage": 45250,
+    "miles": 40,
+    "type": "business",
+    "type_label": "Business",
+    "notes": "Lesson with Jane",
+    "created_at": "2026-04-22T16:00:00+00:00",
+    "updated_at": "2026-04-22T16:00:00+00:00"
+  }
 }
 ```
 
-**Error Response (not owned):** `403 Forbidden`
+---
+
+#### `POST /api/v1/instructor/mileage`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Creates a mileage log. `miles` is calculated server-side from `end_mileage - start_mileage`.
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `date` | string | Yes | YYYY-MM-DD |
+| `start_mileage` | integer | Yes | Starting odometer reading (min 0) |
+| `end_mileage` | integer | Yes | Ending odometer reading. Must be ≥ `start_mileage`. |
+| `type` | string | Yes | `business` or `personal` |
+| `notes` | string | No | Max 1000 chars |
+
+**Example Request:**
 ```json
 {
-  "message": "You do not own this finance record."
+  "date": "2026-04-22",
+  "start_mileage": 45210,
+  "end_mileage": 45250,
+  "type": "business",
+  "notes": "Lesson with Jane"
 }
 ```
+
+**Success Response:** `201 Created` — returns the created mileage log.
+
+**Error Response (validation):** `422 Unprocessable Entity` — includes `end_mileage` error when end < start.
+
+---
+
+#### `PUT /api/v1/instructor/mileage/{mileageLog}`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Updates a mileage log. All fields optional. `miles` is recomputed whenever either `start_mileage` or `end_mileage` changes. The **effective** end must still be ≥ the effective start, so you can send only `end_mileage` and the server validates against the stored `start_mileage`.
+
+**Success Response:** `200 OK` — returns the updated log.
+
+**Error Responses:**
+- `403 Forbidden` — not owned.
+- `422 Unprocessable Entity` — includes `end_mileage` error if effective end < effective start.
+
+---
+
+#### `DELETE /api/v1/instructor/mileage/{mileageLog}`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+**Success Response:** `200 OK`
+```json
+{ "message": "Mileage log deleted successfully." }
+```
+
+**Error Response (not owned):** `403 Forbidden`
 
 ---
 
@@ -4943,6 +5181,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-04-22 | Added `audience` flag to resources (`student` or `instructor`). `GET /api/v1/resources` accepts `?audience=student\|instructor` (omit for all) and returns `audience` on every resource. All `/api/v1/student/...` resource endpoints are hard-filtered server-side to `audience=student` (folder tree, single resource, my_resources, random fallback, summary stats, Expert badge denominator). Admin upload/edit requires an audience; CSV import template gains an `audience` column. | Resources (index), Student Resources (index, show, summary) |
 | 2026-04-22 | Added `GET /api/v1/resources/{resource}` — instructor-accessible single-resource endpoint. Reuses the 30-minute signed S3 URL logic from `GET /api/v1/student/resources/{resource}` but is not student-scoped: no `is_watched` / `is_suggested` fields, no policy restricting to students. 404 on unpublished resources. | Resources (show) |
 | 2026-04-22 | Added progress-tracker API — instructors score their students 1–5 on driving-skill subcategories (framework is per-instructor, editable via admin). `GET /api/v1/student/progress` returns own scores; `GET /api/v1/instructor/students/{student}/progress` returns a specific student's scores; `POST` of the same URL bulk-upserts scores (scores overwrite — no history). Soft-deleted subcategories with existing scores are returned with `archived: true` for read-only display. New tables: `progress_categories`, `progress_subcategories`, `student_progress`. | Progress Tracker (student/progress, instructor/students/.../progress) |
+| 2026-04-24 | Extended instructor finances API with `category` (type-gated, config-backed), `payment_method`, and receipt attachment. Added `GET /finances/config` (dropdown options for the app to cache), `GET /finances/summary` (overview with stats + full-range finances & mileage for a date range, default last 30 days), `GET /finances/{finance}` (single-record detail), `POST`/`DELETE /finances/{finance}/receipt` (multipart receipt upload + removal on private S3, 20-min signed URLs). List endpoint is now cursor-paginated with `type`/`from`/`to`/`per_page` filters. Added full instructor mileage API (`GET/POST /mileage`, `GET/PUT/DELETE /mileage/{mileageLog}`) — mileage is an independent ledger from finances (not linked to fuel expenses). | Instructor Finances (all), Instructor Mileage (all) |
 
 ---
 
