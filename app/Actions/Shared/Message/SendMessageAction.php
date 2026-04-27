@@ -15,7 +15,8 @@ use Illuminate\Support\Str;
 class SendMessageAction
 {
     public function __construct(
-        protected LogActivityAction $logActivity
+        protected LogActivityAction $logActivity,
+        protected SendMessagePushNotificationAction $sendMessagePushNotification,
     ) {}
 
     /**
@@ -57,6 +58,8 @@ class SendMessageAction
         }
 
         $recipient->notify(new NewMessageNotification($message, $sender));
+
+        ($this->sendMessagePushNotification)($message, $sender, $recipient);
 
         return $message;
     }

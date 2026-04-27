@@ -10,6 +10,10 @@ use Illuminate\Support\Collection;
 
 class SendBroadcastMessageAction
 {
+    public function __construct(
+        protected SendMessagePushNotificationAction $sendMessagePushNotification,
+    ) {}
+
     /**
      * Send a broadcast message to multiple recipients.
      *
@@ -21,15 +25,22 @@ class SendBroadcastMessageAction
     public function __invoke(User $sender, array $recipientUserIds, string $message): Collection
     {
         $messages = collect();
+        $recipients = User::whereIn('id', $recipientUserIds)->get()->keyBy('id');
 
         foreach ($recipientUserIds as $recipientUserId) {
-            $messages->push(
-                Message::create([
-                    'from' => $sender->id,
-                    'to' => $recipientUserId,
-                    'message' => $message,
-                ])
-            );
+            $createdMessage = Message::create([
+                'from' => $sender->id,
+                'to' => $recipientUserId,
+                'message' => $message,
+            ]);
+
+            $messages->push($createdMessage);
+
+            $recipient = $recipients->get($recipientUserId);
+
+            if ($recipient) {
+                ($this->sendMessagePushNotification)($createdMessage, $sender, $recipient);
+            }
         }
 
         return $messages;
