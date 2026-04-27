@@ -13,11 +13,17 @@ use App\Models\LessonPayment;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Manual catch-up command. Weekly invoices are now sent event-driven (at booking
+ * time and on lesson sign-off) via OrderService::sendNextDueInvoice(). This command
+ * is no longer scheduled — keep it as a fallback for sweeping any LessonPayments
+ * that slipped through (e.g. an event-driven send failed).
+ */
 class SendLessonInvoices extends Command
 {
     protected $signature = 'lessons:send-invoices';
 
-    protected $description = 'Send Stripe invoices for weekly lessons scheduled in the next 48 hours';
+    protected $description = 'Manual fallback: sweep weekly LessonPayments that have not been invoiced yet';
 
     public function handle(SendLessonInvoiceAction $sendInvoice): int
     {

@@ -3101,6 +3101,7 @@ Sign off a lesson as completed. This is an asynchronous operation — a backgrou
 - Triggers Stripe payout processing (if applicable)
 - Creates activity log entries
 - Sends feedback email to the student
+- For weekly orders: immediately issues the next lesson's Stripe invoice + payment-link email
 - Generates AI resource recommendations
 
 ---
@@ -3867,8 +3868,11 @@ For `weekly` payment the order is activated immediately and a confirmation email
 > **Mobile App Flow (weekly payment):**
 > 1. POST to create order with `payment_mode: "weekly"` → order is immediately `active`
 > 2. A confirmation email is sent to the student (or contact if booked on their behalf)
-> 3. The hourly `lessons:send-invoices` cron job sends Stripe invoices 48 hours before each lesson
-> 4. Stripe webhooks (`invoice.paid`) automatically mark lesson payments as paid
+> 3. The first Stripe invoice + payment-link email is sent **immediately at booking time** for the earliest scheduled lesson
+> 4. Each subsequent invoice + payment-link email is sent **immediately when the previous lesson is signed off**, for the next earliest unpaid lesson
+> 5. Stripe webhooks (`invoice.paid`) automatically mark lesson payments as paid
+>
+> The legacy `lessons:send-invoices` command remains as a manual fallback to sweep any LessonPayments that slipped through (e.g. if a Stripe call failed during the event-driven send) but is no longer scheduled.
 
 ---
 
@@ -5183,6 +5187,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-04-22 | Added progress-tracker API — instructors score their students 1–5 on driving-skill subcategories (framework is per-instructor, editable via admin). `GET /api/v1/student/progress` returns own scores; `GET /api/v1/instructor/students/{student}/progress` returns a specific student's scores; `POST` of the same URL bulk-upserts scores (scores overwrite — no history). Soft-deleted subcategories with existing scores are returned with `archived: true` for read-only display. New tables: `progress_categories`, `progress_subcategories`, `student_progress`. | Progress Tracker (student/progress, instructor/students/.../progress) |
 | 2026-04-24 | Extended instructor finances API with `category` (type-gated, config-backed), `payment_method`, and receipt attachment. Added `GET /finances/config` (dropdown options for the app to cache), `GET /finances/summary` (overview with stats + full-range finances & mileage for a date range, default last 30 days), `GET /finances/{finance}` (single-record detail), `POST`/`DELETE /finances/{finance}/receipt` (multipart receipt upload + removal on private S3, 20-min signed URLs). List endpoint is now cursor-paginated with `type`/`from`/`to`/`per_page` filters. Added full instructor mileage API (`GET/POST /mileage`, `GET/PUT/DELETE /mileage/{mileageLog}`) — mileage is an independent ledger from finances (not linked to fuel expenses). | Instructor Finances (all), Instructor Mileage (all) |
 | 2026-04-27 | `unavailability_reason` on calendar items is now fully optional — instructors can save an unavailable diary entry without entering a reason. Field still accepts up to 500 chars when supplied. | Instructor Calendar (store, update) |
+| 2026-04-27 | Weekly-payment invoice + email is now event-driven: the first invoice is issued immediately at booking, and each subsequent invoice is issued immediately when the previous lesson is signed off. The hourly `lessons:send-invoices` cron has been unscheduled — the command is retained as a manual fallback only. No request/response shape changed; only documented side-effects updated on `POST /students/{student}/lessons/{lesson}/sign-off` and the weekly-payment booking flow. | Booking Flow (weekly), Lesson Sign-Off |
 
 ---
 

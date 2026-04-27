@@ -18,6 +18,7 @@ use App\Models\Payout;
 use App\Models\Student;
 use App\Notifications\LessonSignedOffNotification;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 
@@ -29,7 +30,8 @@ class LessonSignOffService extends BaseService
         protected ComputeLessonCardStatusAction $computeCardStatus,
         protected SignOffLessonAction $signOffLesson,
         protected SaveLessonSummaryAction $saveLessonSummary,
-        protected LogActivityAction $logActivity
+        protected LogActivityAction $logActivity,
+        protected OrderService $orderService
     ) {}
 
     /**
@@ -103,6 +105,19 @@ class LessonSignOffService extends BaseService
 
         // Send feedback request email to student
         $this->sendFeedbackEmail($lesson, $student, $instructor);
+
+        // Trigger the next weekly invoice + payment-link email immediately. The Service
+        // method no-ops for non-weekly orders. Wrapped in try/catch so a Stripe failure
+        // never blocks lesson sign-off.
+        try {
+            $this->orderService->sendNextDueInvoice($lesson->order);
+        } catch (\Exception $e) {
+            Log::error('Failed to send next weekly invoice on lesson sign-off', [
+                'lesson_id' => $lesson->id,
+                'order_id' => $lesson->order_id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         // Dispatch AI resource recommendations (separate async job)
         if ($summary !== '') {
