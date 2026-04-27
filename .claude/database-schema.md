@@ -1501,3 +1501,81 @@ One row per (student, subcategory) pair. Upserted on save — no history is kept
 **Indexes:** UNIQUE (student_id, progress_subcategory_id) — also the upsert target
 **Relationships:** BelongsTo → Student, BelongsTo → ProgressSubcategory
 **Business rule:** `SaveStudentProgressAction` silently ignores attempts to score against a soft-deleted subcategory or one that does not belong to the student's current instructor.
+
+---
+
+## HMRC MTD Integration Tables (Phase 1: OAuth foundation)
+
+These tables back the OAuth + Hello World round-trip against HMRC's sandbox. All HMRC token material is encrypted at rest via Laravel's `encrypted` cast on top of the application key.
+
+### hmrc_oauth_states
+
+Short-lived per-user CSRF + PKCE state for the in-flight OAuth handshake. One row is created at the start of an authorization request and deleted on successful exchange (or swept after expiry).
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| user_id | bigint FK | No | References users.id. Cascade on delete. |
+| state | string | No | Opaque CSRF token returned by HMRC on callback. **Unique.** |
+| code_verifier | text | No | PKCE verifier paired with the stored `state`. |
+| scopes | json | No | Array of scopes requested for this authorization. |
+| redirect_uri | string | No | Snapshot of the redirect URI used (must match the token exchange). |
+| expires_at | timestamp | No | Typically ~10 minutes from creation. Indexed for sweep. |
+| created_at | timestamp | Yes | Created timestamp. |
+
+**Indexes:** UNIQUE (state); INDEX (expires_at)
+**Relationships:** BelongsTo → User
+
+### hmrc_tokens
+
+The instructor's persistent HMRC OAuth token pair. Single row per user (UNIQUE on `user_id`). Access and refresh tokens are encrypted at rest.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| user_id | bigint FK | No | References users.id. **Unique.** Cascade on delete. |
+| access_token | text (encrypted) | No | Bearer token for HMRC API calls. ~4-hour lifetime. |
+| refresh_token | text (encrypted) | No | Refresh token. ~18-month lifetime, rotated on every refresh. |
+| token_type | string | No | Defaults to `bearer`. |
+| scopes | json | No | Array of scopes currently granted by HMRC. |
+| expires_at | timestamp | No | Access-token expiry. |
+| refresh_expires_at | timestamp | No | Refresh-token expiry — instructor must re-auth after this. |
+| last_refreshed_at | timestamp | Yes | Set every time the access token is refreshed. |
+| last_expiry_warning_at | timestamp | Yes | Used by `MonitorHmrcTokenExpiry` to dedupe T-30/T-7 warnings. |
+| connected_at | timestamp | No | First successful connection time (preserved across refreshes). |
+| created_at / updated_at | timestamp | Yes | |
+
+**Indexes:** UNIQUE (user_id)
+**Relationships:** BelongsTo → User; HasMany → HmrcTokenRefreshLog
+
+### hmrc_device_identifiers
+
+Stable per-user device identifier used for HMRC's `Gov-Client-Device-ID` fraud-prevention header. **Persists across token churn** — kept in its own table so disconnect/reconnect does not mint a new device ID. Mirrored to a long-lived secure cookie (`hmrc_device_id`).
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| user_id | bigint FK | No | References users.id. **Unique.** Cascade on delete. |
+| device_id | uuid | No | UUID generated client-side on first OAuth visit, mirrored server-side on first sight. |
+| first_seen_at | timestamp | No | When the row was created. |
+| last_seen_at | timestamp | No | Updated on every interactive HMRC action. |
+| created_at / updated_at | timestamp | Yes | |
+
+**Indexes:** UNIQUE (user_id)
+**Relationships:** BelongsTo → User
+
+### hmrc_token_refresh_logs
+
+Append-only log of every refresh attempt for ops monitoring. Powers the failure-rate dashboard and per-user diagnostics.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| user_id | bigint FK | No | References users.id. Cascade on delete. |
+| outcome | enum | No | `success`, `failure_invalid_grant`, `failure_network`, `failure_other`. |
+| error_code | string | Yes | HMRC error code if HMRC returned one. |
+| attempted_at | timestamp | No | Time of the refresh attempt. |
+| created_at / updated_at | timestamp | Yes | |
+
+**Indexes:** INDEX (outcome, attempted_at)
+**Relationships:** BelongsTo → User

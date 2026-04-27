@@ -9,6 +9,9 @@ use App\Http\Controllers\Onboarding\StepSixController;
 use App\Http\Controllers\Onboarding\StepThreeController;
 use App\Http\Controllers\Onboarding\StepTwoController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Hmrc\HmrcConnectionController;
+use App\Http\Controllers\Hmrc\HmrcHelloWorldController;
+use App\Http\Middleware\EnsureInstructor;
 use App\Http\Middleware\RestrictInstructor;
 use App\Http\Middleware\ValidateEnquiryUuid;
 use App\Http\Middleware\ValidateStepAccess;
@@ -292,6 +295,18 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
     Route::get('/apps', [\App\Http\Controllers\AppController::class, 'index'])
         ->name('apps.index');
 });
+
+// HMRC Making Tax Digital — instructor-only
+Route::middleware(['auth', 'verified', EnsureInstructor::class])
+    ->prefix('hmrc')
+    ->name('hmrc.')
+    ->group(function () {
+        Route::get('/', [HmrcConnectionController::class, 'index'])->name('index');
+        Route::get('/connect', [HmrcConnectionController::class, 'connect'])->name('connect');
+        Route::get('/oauth/callback', [HmrcConnectionController::class, 'callback'])->name('callback');
+        Route::post('/disconnect', [HmrcConnectionController::class, 'disconnect'])->name('disconnect');
+        Route::post('/test/hello-world', HmrcHelloWorldController::class)->name('test.hello-world');
+    });
 
 // Onboarding Routes (Public - no auth required)
 // Entry point — creates new enquiry
