@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Payment;
 
+use App\Actions\PushNotification\QueuePushNotificationAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Models\LessonPayment;
 use App\Models\Student;
@@ -17,7 +18,8 @@ class ResendLessonInvoiceAction
     protected StripeClient $stripe;
 
     public function __construct(
-        protected LogActivityAction $logActivity
+        protected LogActivityAction $logActivity,
+        protected QueuePushNotificationAction $queuePushNotification
     ) {
         $this->stripe = new StripeClient(config('services.stripe.secret'));
     }
@@ -102,5 +104,31 @@ class ResendLessonInvoiceAction
                 'invoice_url' => $hostedInvoiceUrl,
             ]
         );
+
+        $this->sendPaymentReminderPush($student);
+    }
+
+    protected function sendPaymentReminderPush(Student $student): void
+    {
+        $user = $student->user;
+
+        if (! $user || ! $user->expo_push_token) {
+            return;
+        }
+
+        try {
+            ($this->queuePushNotification)(
+                $user,
+                'Lesson Payment Due',
+                'It\'s time to pay for your upcoming lesson. Please check your email and complete your payment.',
+                ['type' => 'lesson_payment_reminder']
+            );
+        } catch (\Exception $e) {
+            Log::warning('Failed to queue payment reminder push notification', [
+                'student_id' => $student->id,
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }
