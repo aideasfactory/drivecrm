@@ -59,10 +59,10 @@
                     {{ step }}
                   </span>
                 </div>
-                <Separator
+                <div
                   v-if="index < steps.length - 1"
                   class="w-12 mx-3"
-                  orientation="horizontal"
+                  aria-hidden="true"
                 />
               </div>
             </div>
@@ -93,7 +93,6 @@ import { Link } from '@inertiajs/vue3'
 import { usePage } from '@inertiajs/vue3'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { step1, step2, step3, step4, step5, step6 } from '@/routes/onboarding'
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 
