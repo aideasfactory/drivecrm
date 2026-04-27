@@ -34,6 +34,13 @@ class LoginAction
             ]);
         }
 
+        // Temporarily block student access to the CRM
+        if ($user->role === UserRole::STUDENT) {
+            throw ValidationException::withMessages([
+                'email' => [__('Student access is temporarily unavailable. Please try again later.')],
+            ]);
+        }
+
         $user->load($this->profileRelation($user));
 
         $token = $user->createToken($deviceName)->plainTextToken;

@@ -31,6 +31,7 @@ use App\Http\Controllers\Api\V1\StudentProfilePictureController;
 use App\Http\Controllers\Api\V1\StudentProgressController;
 use App\Http\Controllers\Api\V1\StudentResourceController;
 use App\Http\Middleware\ResolveApiProfile;
+use App\Http\Middleware\RestrictStudent;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -49,7 +50,7 @@ Route::prefix('v1')->group(function (): void {
     });
 
     // Protected routes — profile is auto-resolved from token
-    Route::middleware(['auth:sanctum', ResolveApiProfile::class])->group(function (): void {
+    Route::middleware(['auth:sanctum', ResolveApiProfile::class, RestrictStudent::class])->group(function (): void {
 
         Route::prefix('auth')->group(function (): void {
             Route::post('logout', [AuthController::class, 'logout']);

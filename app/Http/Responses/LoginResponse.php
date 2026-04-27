@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Responses;
 
+use Illuminate\Support\Facades\Auth;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -16,6 +17,19 @@ class LoginResponse implements LoginResponseContract
     {
         /** @var \App\Models\User $user */
         $user = $request->user();
+
+        // Temporarily block student access to the CRM
+        if ($user->isStudent()) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return $request->wantsJson()
+                ? response()->json(['message' => 'Student access is temporarily unavailable.'], 403)
+                : redirect()->route('login')->withErrors([
+                    'email' => 'Student access to the CRM is temporarily unavailable. Please try again later.',
+                ]);
+        }
 
         $redirectUrl = $this->resolveRedirectUrl($user);
 

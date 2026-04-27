@@ -1,28 +1,39 @@
-# Task: Create API Endpoint to Attach Student to Instructor via PIN
+# Task: Temporarily Block Student CRM Login
 
 ## Overview
-Create an API endpoint that allows a student to attach themselves to an instructor by entering the instructor's PIN code.
+Block student users from accessing the CRM (both web and API) until the student experience is properly built out. This is a temporary restriction.
 
 ## Phase 1: Planning ✅
-- [x] Review existing student/instructor models and relationships
-- [x] Review existing API patterns and coding standards
+- [x] Review current student login flow (web + API)
+- [x] Identify all entry points where students can authenticate
 - [x] Plan implementation approach
 
 ## Phase 2: Implementation ✅
-- [x] Create migration to add pin to instructors table
-- [x] Update Instructor model fillable
-- [x] Create AttachStudentToInstructorAction
-- [x] Create AttachToInstructorRequest FormRequest
-- [x] Add attachToInstructor() to StudentService
-- [x] Add attachToInstructor() to StudentController
-- [x] Add route to routes/api.php
-- [x] Update api.md
-- [x] Update database-schema.md
-- [x] Write Pest tests
+- [x] Add student block check in LoginResponse.php (web login)
+- [x] Add student block check in LoginAction.php (API login)
+- [x] Block token issuance in AuthController::registerStudent()
+- [x] Create RestrictStudent middleware for existing sessions
+- [x] Register middleware in web.php, api.php, and settings.php routes
+- [x] Update existing tests that expected student login to succeed
+- [x] Write new Pest tests for student login block
 
-## Phase 3: Final Review ✅
-- [x] All files follow coding standards
-- [x] api.md updated
-- [x] database-schema.md updated
+## Phase 3: Reflection ✅
+### What went well
+- Clean separation: login block at action level, session block at middleware level
+- Temporary nature is clear — easy to remove later by reverting these changes
+- All entry points covered: web login, API login, API registration, existing sessions
 
-**Last Updated:** 2026-04-06
+### Decisions made
+- Blocked at LoginResponse (post-auth) for web rather than custom Fortify pipeline — simpler
+- Blocked at LoginAction for API — consistent error handling via ValidationException
+- Blocked API registration at controller level to keep RegisterStudentAction reusable
+- Created RestrictStudent middleware for defense in depth against existing sessions
+
+### Future removal
+- Remove RestrictStudent middleware and its route registrations
+- Remove student check from LoginResponse.php
+- Remove student check from LoginAction.php
+- Restore registerStudent() in AuthController.php
+- Revert test changes
+
+**Last Updated:** 2026-04-27

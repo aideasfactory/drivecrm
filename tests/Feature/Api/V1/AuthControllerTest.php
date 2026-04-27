@@ -13,13 +13,14 @@ use App\Models\User;
 
 test('a user can login via the API and receive a token', function () {
     $user = User::factory()->create([
-        'role' => UserRole::STUDENT,
+        'role' => UserRole::INSTRUCTOR,
     ]);
 
     $response = $this->postJson('/api/v1/auth/login', [
         'email' => $user->email,
         'password' => 'password',
         'device_name' => 'Test Device',
+        'role' => 'instructor',
     ]);
 
     $response->assertOk()
@@ -27,7 +28,7 @@ test('a user can login via the API and receive a token', function () {
             'token',
             'user' => ['id', 'name', 'email', 'role', 'email_verified_at', 'created_at'],
         ])
-        ->assertJsonPath('user.role', 'student');
+        ->assertJsonPath('user.role', 'instructor');
 });
 
 test('login returns the correct role for instructors', function () {
@@ -99,7 +100,7 @@ test('logout requires authentication', function () {
 
 test('an authenticated user can retrieve their profile', function () {
     $user = User::factory()->create([
-        'role' => UserRole::STUDENT,
+        'role' => UserRole::INSTRUCTOR,
     ]);
     $token = $user->createToken('Test Device')->plainTextToken;
 
@@ -112,7 +113,7 @@ test('an authenticated user can retrieve their profile', function () {
             'data' => ['id', 'name', 'email', 'role', 'email_verified_at', 'created_at'],
         ])
         ->assertJsonPath('data.id', $user->id)
-        ->assertJsonPath('data.role', 'student');
+        ->assertJsonPath('data.role', 'instructor');
 });
 
 test('get user requires authentication', function () {
@@ -127,7 +128,7 @@ test('get user requires authentication', function () {
 |--------------------------------------------------------------------------
 */
 
-test('a student can register via the API', function () {
+test('student registration is temporarily blocked', function () {
     $response = $this->postJson('/api/v1/auth/register/student', [
         'name' => 'Jane Doe',
         'email' => 'jane@example.com',
@@ -137,26 +138,8 @@ test('a student can register via the API', function () {
         'device_name' => 'iPhone 15',
     ]);
 
-    $response->assertCreated()
-        ->assertJsonStructure([
-            'token',
-            'user' => ['id', 'name', 'email', 'role', 'email_verified_at', 'created_at'],
-        ])
-        ->assertJsonPath('user.role', 'student')
-        ->assertJsonPath('user.name', 'Jane Doe');
-
-    $this->assertDatabaseHas('users', [
-        'email' => 'jane@example.com',
-        'role' => UserRole::STUDENT->value,
-    ]);
-
-    $this->assertDatabaseHas('students', [
-        'email' => 'jane@example.com',
-        'first_name' => 'Jane',
-        'surname' => 'Doe',
-        'owns_account' => true,
-        'status' => 'active',
-    ]);
+    $response->assertForbidden()
+        ->assertJson(['message' => 'Student registration is temporarily unavailable. Please try again later.']);
 });
 
 test('student registration fails with duplicate email', function () {

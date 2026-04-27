@@ -40,18 +40,14 @@ class AuthController extends Controller
 
     /**
      * Register a new student and receive a Bearer token.
+     *
+     * Temporarily blocked until the student CRM experience is built out.
      */
     public function registerStudent(RegisterStudentRequest $request): JsonResponse
     {
-        $result = $this->authService->registerStudent(
-            $request->safe()->only(['name', 'email', 'password', 'phone']),
-            $request->validated('device_name')
-        );
-
         return response()->json([
-            'token' => $result['token'],
-            'user' => new UserResource($result['user']),
-        ], 201);
+            'message' => 'Student registration is temporarily unavailable. Please try again later.',
+        ], 403);
     }
 
     /**
