@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Onboarding;
 use App\Actions\Calendar\ConfirmCalendarItemsAction;
 use App\Actions\Onboarding\CreateOrderFromEnquiryAction;
 use App\Actions\Onboarding\CreateUserAndStudentFromEnquiryAction;
+use App\Actions\Onboarding\SendOnboardingWelcomeAction;
 use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
@@ -19,6 +20,7 @@ use App\Services\StripeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -30,7 +32,8 @@ class StepSixController extends Controller
         protected StripeService $stripeService,
         protected CreateUserAndStudentFromEnquiryAction $createUserAndStudentAction,
         protected CreateOrderFromEnquiryAction $createOrderAction,
-        protected SendOrderConfirmationEmailAction $sendEmailAction
+        protected SendOrderConfirmationEmailAction $sendEmailAction,
+        protected SendOnboardingWelcomeAction $sendWelcomeAction
     ) {}
 
     /**
@@ -217,14 +220,21 @@ class StepSixController extends Controller
                 'enquiry_id' => $enquiry->id,
             ]);
 
-            // Save order details to enquiry
-            $enquiry->setStepData(6, [
+            // Save order details to enquiry (including new-user flag for welcome email)
+            $step6Data = [
                 'payment_mode' => $paymentMode->value,
                 'user_id' => $user->id,
                 'student_id' => $student->id,
                 'order_id' => $order->id,
                 'payment_status' => 'pending',
-            ]);
+                'is_new_user' => $result['is_new_user'],
+            ];
+
+            if ($result['is_new_user'] && $result['temporary_password']) {
+                $step6Data['temporary_password'] = Crypt::encryptString($result['temporary_password']);
+            }
+
+            $enquiry->setStepData(6, $step6Data);
             $enquiry->current_step = 6;
             $enquiry->max_step_reached = max($enquiry->max_step_reached, 6);
             $enquiry->save();
@@ -445,8 +455,11 @@ class StepSixController extends Controller
             // Send confirmation email
             $this->sendEmailAction->execute($order, $order->student);
 
+            // Send temporary password email to first-time pupils
+            ($this->sendWelcomeAction)($enquiry);
+
             // Update enquiry
-            $enquiry->setStepData(6, array_merge($step6, [
+            $enquiry->setStepData(6, array_merge($enquiry->getStepData(6) ?? [], [
                 'payment_status' => 'completed',
             ]));
             $enquiry->save();
@@ -488,8 +501,11 @@ class StepSixController extends Controller
                 // Send confirmation email
                 $this->sendEmailAction->execute($order, $order->student);
 
+                // Send temporary password email to first-time pupils
+                ($this->sendWelcomeAction)($enquiry);
+
                 // Update enquiry
-                $enquiry->setStepData(6, array_merge($step6, [
+                $enquiry->setStepData(6, array_merge($enquiry->getStepData(6) ?? [], [
                     'payment_status' => 'completed',
                     'stripe_session_id' => $sessionId,
                 ]));

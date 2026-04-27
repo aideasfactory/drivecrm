@@ -23,7 +23,7 @@ class CreateUserAndStudentFromEnquiryAction
     /**
      * Create or retrieve user and student from enquiry data.
      *
-     * @return array{user: User, student: Student, is_new_user: bool}
+     * @return array{user: User, student: Student, is_new_user: bool, temporary_password: string|null}
      *
      * @throws \Exception
      */
@@ -56,13 +56,16 @@ class CreateUserAndStudentFromEnquiryAction
             // Check if user already exists
             $user = User::where('email', $userEmail)->first();
             $isNewUser = false;
+            $temporaryPassword = null;
 
             if (! $user) {
-                // Create new user
+                // Create new user with a readable temporary password
+                $temporaryPassword = Str::random(12);
+
                 $user = User::create([
                     'name' => $userName,
                     'email' => $userEmail,
-                    'password' => Hash::make(Str::random(32)), // Temporary password
+                    'password' => Hash::make($temporaryPassword),
                     'password_change_required' => true,
                     'role' => UserRole::STUDENT,
                     'email_verified_at' => null, // Require verification later
@@ -130,6 +133,7 @@ class CreateUserAndStudentFromEnquiryAction
                 'user' => $user,
                 'student' => $student,
                 'is_new_user' => $isNewUser,
+                'temporary_password' => $temporaryPassword,
             ];
 
         } catch (\Exception $e) {

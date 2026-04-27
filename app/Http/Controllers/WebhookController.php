@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Calendar\ConfirmCalendarItemsAction;
+use App\Actions\Onboarding\SendOnboardingWelcomeAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
@@ -10,6 +11,7 @@ use App\Enums\PaymentStatus;
 use App\Models\Lesson;
 use App\Models\LessonPayment;
 use App\Models\Order;
+use App\Models\Enquiry;
 use App\Models\WebhookEvent;
 use App\Notifications\InstructorLessonPaymentReceivedNotification;
 use App\Notifications\LessonPaymentReceivedNotification;
@@ -154,6 +156,9 @@ class WebhookController extends Controller
 
                     // Send confirmation email (for onboarding orders)
                     $this->sendOrderConfirmationEmail($order);
+
+                    // Send temporary password email to first-time pupils (fallback if success redirect missed)
+                    $this->sendOnboardingWelcomeEmail($order);
 
                     // Create lesson payment records for upfront orders (marked as PAID immediately)
                     $this->createUpfrontLessonPayments($order);
@@ -578,6 +583,33 @@ class WebhookController extends Controller
             'order_id' => $order->id,
             'payments_count' => $lessons->count(),
         ]);
+    }
+
+    /**
+     * Send onboarding welcome email with temporary password to first-time pupils.
+     * Looks up the enquiry by order ID and delegates to SendOnboardingWelcomeAction.
+     */
+    protected function sendOnboardingWelcomeEmail(Order $order): void
+    {
+        try {
+            $enquiry = Enquiry::where('data->steps->step6->order_id', $order->id)->first();
+
+            if (! $enquiry) {
+                Log::info('Webhook: No enquiry found for order — skipping welcome email', [
+                    'order_id' => $order->id,
+                ]);
+
+                return;
+            }
+
+            app(SendOnboardingWelcomeAction::class)($enquiry);
+        } catch (\Exception $e) {
+            // Log but don't throw - welcome email failure shouldn't break webhook
+            Log::error('Webhook: Failed to send onboarding welcome email', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
