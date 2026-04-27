@@ -84,28 +84,7 @@ class StoreCalendarItemRequest extends FormRequest
             }
 
             $this->checkForOverlap($validator);
-            $this->checkUnavailabilityReason($validator);
         });
-    }
-
-    /**
-     * Check unavailability reason is provided when marking as unavailable.
-     */
-    protected function checkUnavailabilityReason(Validator $validator): void
-    {
-        if ($this->boolean('is_practical_test')) {
-            return;
-        }
-
-        $isAvailable = $this->boolean('is_available', true);
-        $unavailabilityReason = $this->input('unavailability_reason');
-
-        if (! $isAvailable && empty($unavailabilityReason)) {
-            $validator->errors()->add(
-                'unavailability_reason',
-                'Please provide a reason when marking this slot as unavailable.'
-            );
-        }
     }
 
     /**

@@ -77,29 +77,7 @@ class UpdateCalendarItemRequest extends FormRequest
             }
 
             $this->checkForOverlap($validator);
-            $this->checkUnavailabilityReason($validator);
         });
-    }
-
-    /**
-     * Check unavailability reason is provided when marking as unavailable.
-     */
-    protected function checkUnavailabilityReason(Validator $validator): void
-    {
-        // Only validate if is_available is being updated to false
-        if (! $this->has('is_available')) {
-            return;
-        }
-
-        $isAvailable = $this->boolean('is_available');
-        $unavailabilityReason = $this->input('unavailability_reason');
-
-        if (! $isAvailable && empty($unavailabilityReason)) {
-            $validator->errors()->add(
-                'unavailability_reason',
-                'Please provide a reason when marking this slot as unavailable.'
-            );
-        }
     }
 
     /**

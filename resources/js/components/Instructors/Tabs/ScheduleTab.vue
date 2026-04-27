@@ -450,12 +450,6 @@ async function handleCreateSubmit() {
         return
     }
 
-    // Validate unavailability reason when marking as unavailable (skip for practical tests)
-    if (!createForm.value.is_practical_test && !createForm.value.is_available && !createForm.value.unavailability_reason?.trim()) {
-        toast({ title: 'Please provide a reason for unavailability', variant: 'destructive' })
-        return
-    }
-
     formLoading.value = true
     try {
         const isPracticalTest = createForm.value.is_practical_test || false
@@ -547,12 +541,6 @@ function handleEventClick(event: CalendarEvent) {
 
 // ── Edit time slot ───────────────────────────────────────
 async function handleEditSubmit() {
-    // Validate unavailability reason when marking as unavailable
-    if (!editForm.value.is_available && !editItemIsTravel.value && !editForm.value.unavailability_reason?.trim()) {
-        toast({ title: 'Please provide a reason for unavailability', variant: 'destructive' })
-        return
-    }
-
     formLoading.value = true
     try {
         const travelMinutes = editForm.value.is_available ? (editForm.value.travel_time_minutes || 0) : 0
@@ -988,13 +976,12 @@ onMounted(() => {
                     <!-- Unavailability Reason Field (shown only when unavailable and NOT a practical test) -->
                     <div v-if="!createForm.is_available && !createForm.is_practical_test" class="space-y-2">
                         <Label for="create-unavailability-reason">
-                            Unavailability Reason <span class="text-destructive">*</span>
+                            Unavailability Reason
                         </Label>
                         <textarea
                             id="create-unavailability-reason"
                             v-model="createForm.unavailability_reason"
-                            placeholder="Why is this slot unavailable?"
-                            required
+                            placeholder="Why is this slot unavailable? (optional)"
                             class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                             maxlength="500"
                         />
@@ -1312,13 +1299,12 @@ onMounted(() => {
                     <!-- Unavailability Reason Field (shown only when unavailable) -->
                     <div v-if="!editForm.is_available" class="space-y-2">
                         <Label for="edit-unavailability-reason">
-                            Unavailability Reason <span class="text-destructive">*</span>
+                            Unavailability Reason
                         </Label>
                         <textarea
                             id="edit-unavailability-reason"
                             v-model="editForm.unavailability_reason"
-                            placeholder="Why is this slot unavailable?"
-                            required
+                            placeholder="Why is this slot unavailable? (optional)"
                             class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                             maxlength="500"
                         />
