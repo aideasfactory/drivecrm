@@ -29,6 +29,7 @@ class User extends Authenticatable
         'email',
         'password',
         'password_change_required',
+        'welcome_email_pending',
         'role',
         'stripe_customer_id',
         'expo_push_token',
@@ -56,6 +57,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'password_change_required' => 'boolean',
+            'welcome_email_pending' => 'boolean',
             'role' => UserRole::class,
         ];
     }
