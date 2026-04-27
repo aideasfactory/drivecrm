@@ -132,6 +132,7 @@ class InstructorController extends Controller
                 'onboarding_complete' => $instructor->onboarding_complete,
                 'charges_enabled' => $instructor->charges_enabled,
                 'payouts_enabled' => $instructor->payouts_enabled,
+                'pin' => $instructor->pin,
                 'phone' => $instructor->phone,
                 'postcode' => $instructor->postcode,
                 'address' => $instructor->address,

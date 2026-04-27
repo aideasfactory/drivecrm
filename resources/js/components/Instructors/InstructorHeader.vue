@@ -4,7 +4,7 @@ import axios from 'axios'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Mail, Phone, MapPin, Edit, CreditCard, Loader2, CheckCircle, LogOut } from 'lucide-vue-next'
+import { Mail, Phone, MapPin, Edit, CreditCard, Loader2, CheckCircle, LogOut, Copy, Hash } from 'lucide-vue-next'
 import { router } from '@inertiajs/vue3'
 import { toast } from '@/components/ui/toast'
 import type { InstructorDetail } from '@/types/instructor'
@@ -101,6 +101,16 @@ const handleStripeConnect = async () => {
     }
 }
 
+const copied = ref(false)
+
+const copyPin = async () => {
+    if (!props.instructor.pin) return
+    await navigator.clipboard.writeText(props.instructor.pin)
+    copied.value = true
+    toast({ title: 'Instructor code copied to clipboard' })
+    setTimeout(() => { copied.value = false }, 2000)
+}
+
 onMounted(() => {
     checkStripeStatus()
 })
@@ -120,7 +130,22 @@ onMounted(() => {
 
                 <!-- Instructor Info -->
                 <div class="flex flex-col gap-3">
-                    <h2 class="text-3xl font-bold">{{ instructor.name }}</h2>
+                    <div class="flex items-center gap-3">
+                        <h2 class="text-3xl font-bold">{{ instructor.name }}</h2>
+
+                        <!-- Instructor Code Badge -->
+                        <button
+                            v-if="instructor.pin"
+                            @click="copyPin"
+                            class="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/10 px-3 py-1 text-sm font-semibold text-primary transition-colors hover:bg-primary/20 cursor-pointer"
+                            title="Click to copy instructor code"
+                        >
+                            <Hash class="h-3.5 w-3.5" />
+                            {{ instructor.pin }}
+                            <Copy v-if="!copied" class="h-3.5 w-3.5 ml-1 opacity-60" />
+                            <CheckCircle v-else class="h-3.5 w-3.5 ml-1 text-green-600" />
+                        </button>
+                    </div>
 
                     <!-- Contact Info Row -->
                     <div class="flex flex-wrap items-center gap-4 text-sm">
