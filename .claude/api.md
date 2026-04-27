@@ -1863,8 +1863,8 @@ Creates a new calendar item (time slot) for the authenticated instructor. Suppor
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `date` | string | **Yes** | Date in `Y-m-d` format. Cannot be in the past. |
-| `start_time` | string | **Yes** | Start time in `H:i` format (e.g., `09:00`) |
-| `end_time` | string | **Yes** | End time in `H:i` format. Must be after `start_time`. |
+| `start_time` | string | **Yes** | Start time in `H:i` format (e.g., `09:00`). Must be at or after `06:00`. |
+| `end_time` | string | **Yes** | End time in `H:i` format. Must be after `start_time` and at or before `21:00`. |
 | `is_available` | boolean | No | Whether the slot is available for booking. Default: `true`. |
 | `notes` | string\|null | No | Optional notes (max 1000 characters) |
 | `unavailability_reason` | string\|null | No | Optional reason for unavailability (max 500 chars). May be supplied when `is_available=false`; not required. |
@@ -1967,6 +1967,7 @@ Creates a new calendar item (time slot) for the authenticated instructor. Suppor
 **Validation errors (422):**
 - Overlapping time slots (including travel time and practical test buffers) are rejected.
 - `unavailability_reason` is optional and may be omitted when `is_available=false`.
+- `start_time` before `06:00` or `end_time` after `21:00` is rejected (allowed diary window is `06:00`–`21:00`, governed by `config/diary.php`).
 
 ---
 
@@ -5183,6 +5184,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-04-22 | Added progress-tracker API — instructors score their students 1–5 on driving-skill subcategories (framework is per-instructor, editable via admin). `GET /api/v1/student/progress` returns own scores; `GET /api/v1/instructor/students/{student}/progress` returns a specific student's scores; `POST` of the same URL bulk-upserts scores (scores overwrite — no history). Soft-deleted subcategories with existing scores are returned with `archived: true` for read-only display. New tables: `progress_categories`, `progress_subcategories`, `student_progress`. | Progress Tracker (student/progress, instructor/students/.../progress) |
 | 2026-04-24 | Extended instructor finances API with `category` (type-gated, config-backed), `payment_method`, and receipt attachment. Added `GET /finances/config` (dropdown options for the app to cache), `GET /finances/summary` (overview with stats + full-range finances & mileage for a date range, default last 30 days), `GET /finances/{finance}` (single-record detail), `POST`/`DELETE /finances/{finance}/receipt` (multipart receipt upload + removal on private S3, 20-min signed URLs). List endpoint is now cursor-paginated with `type`/`from`/`to`/`per_page` filters. Added full instructor mileage API (`GET/POST /mileage`, `GET/PUT/DELETE /mileage/{mileageLog}`) — mileage is an independent ledger from finances (not linked to fuel expenses). | Instructor Finances (all), Instructor Mileage (all) |
 | 2026-04-27 | `unavailability_reason` on calendar items is now fully optional — instructors can save an unavailable diary entry without entering a reason. Field still accepts up to 500 chars when supplied. | Instructor Calendar (store, update) |
+| 2026-04-27 | Widened the allowed diary time window from `08:00`–`18:00` to `06:00`–`21:00`. `start_time` must now be ≥ `06:00` and `end_time` ≤ `21:00` on `POST /api/v1/instructor/calendar/items` (and the matching web Form Requests). Bounds are sourced from `config/diary.php`; frontend mirror is `resources/js/lib/diary-hours.ts`. | Instructor Calendar (store) |
 
 ---
 
