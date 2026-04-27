@@ -10,12 +10,14 @@ use App\Models\Message;
 use App\Models\Student;
 use App\Models\User;
 use App\Notifications\NewMessageNotification;
+use App\Services\PushNotificationService;
 use Illuminate\Support\Str;
 
 class SendMessageAction
 {
     public function __construct(
-        protected LogActivityAction $logActivity
+        protected LogActivityAction $logActivity,
+        protected PushNotificationService $pushNotificationService
     ) {}
 
     /**
@@ -57,6 +59,24 @@ class SendMessageAction
         }
 
         $recipient->notify(new NewMessageNotification($message, $sender));
+
+        // Additive push notification — fires only when the recipient has a
+        // registered Expo push token. The in-app message + email notification
+        // above are unaffected by any push-side failure.
+        $senderName = $sender->name ?: 'Someone';
+        $pushTitle = "New message from {$senderName}";
+        $pushBody = Str::limit($messageText, 140);
+
+        $this->pushNotificationService->queueIfHasToken(
+            $recipient,
+            $pushTitle,
+            $pushBody,
+            [
+                'type' => 'message',
+                'message_id' => $message->id,
+                'from_user_id' => $sender->id,
+            ]
+        );
 
         return $message;
     }
