@@ -22,6 +22,9 @@ Route::get('/', function () {
     ]);
 })->name('home');
 
+Route::get('/no-access', fn () => Inertia::render('NoAccess'))
+    ->name('no-access');
+
 Route::get('dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])
     ->middleware(['auth', 'verified', RestrictInstructor::class])
     ->name('dashboard');
