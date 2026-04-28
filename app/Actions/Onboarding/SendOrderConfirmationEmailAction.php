@@ -145,8 +145,7 @@ class SendOrderConfirmationEmailAction
                 return;
             }
 
-            Notification::route('mail', $user->email)
-                ->notify(new WelcomeStudentNotification($temporaryPassword, $instructor));
+            $user->notify(new WelcomeStudentNotification($temporaryPassword, $instructor));
 
             Log::info('Pupil welcome email queued', [
                 'order_id' => $order->id,

@@ -60,12 +60,11 @@ class OrderConfirmationNotification extends Notification implements ShouldQueue
             $message->line('Payment: Paid in full (£'.number_format($order->package_total_price_pence / 100, 2).')');
         } else {
             $message->line('Payment: Weekly (£'.number_format($order->package_lesson_price_pence / 100, 2).' per lesson)');
-            $message->line('You will receive invoice emails 48 hours before each lesson.');
         }
 
         $message->line('')
             ->line('**Next Steps:**')
-            ->line('1. You can log in to your account to view your lesson schedule')
+            ->line('1. Download the app to view your lesson schedule')
             ->line('2. Your instructor will contact you to confirm the details')
             ->line('3. Make sure to arrive 5 minutes early for your first lesson');
 
@@ -75,7 +74,7 @@ class OrderConfirmationNotification extends Notification implements ShouldQueue
                 ->line("This booking was made for: **{$learnerName}**");
         }
 
-        $message->action('View My Lessons', url('/student/orders/'.$this->order->id))
+        $message->action('Download app', url('/get-app'))
             ->line('Thank you for choosing us for your driving lessons!')
             ->salutation('Safe driving,
 The Driving School Team');

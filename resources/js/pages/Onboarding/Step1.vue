@@ -355,7 +355,7 @@ function submit() {
   }
 
   form.post(`/onboarding/${page.props.enquiry.id}/step/1`, {
-    preserveScroll: true,
+    preserveScroll: 'errors',
     onSuccess: () => {
       // Success is handled by flash messages in layout
     },

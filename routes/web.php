@@ -296,6 +296,10 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('apps.index');
 });
 
+// Public mobile-app brochure (linked from welcome email)
+Route::get('/get-app', [\App\Http\Controllers\GetAppController::class, 'index'])
+    ->name('get-app');
+
 // Onboarding Routes (Public - no auth required)
 // Entry point — creates new enquiry
 Route::get('/onboarding', [OnboardingController::class, 'start'])

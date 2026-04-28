@@ -47,8 +47,8 @@ class WelcomeStudentNotification extends Notification implements ShouldQueue
             ->line('Your temporary login details are:')
             ->line('**Email:** '.$notifiable->email)
             ->line('**Password:** '.$this->temporaryPassword)
-            ->action('Log In Now', url('/login'))
-            ->line('Please change your password after your first login.')
+            ->action('Download App Now', route('get-app'))
+            ->line('Please change your password the first time you sign in.')
             ->salutation('Thanks, '.$appName);
     }
 
