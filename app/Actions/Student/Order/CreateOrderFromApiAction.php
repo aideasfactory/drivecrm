@@ -70,6 +70,11 @@ class CreateOrderFromApiAction
                 ? CalendarItemStatus::DRAFT
                 : CalendarItemStatus::RESERVED;
 
+            $nextLessonNumber = (int) Lesson::whereHas('order', fn ($q) => $q->where('student_id', $student->id))
+                ->lockForUpdate()
+                ->max('student_lesson_number') + 1;
+            $firstLessonNumber = $nextLessonNumber;
+
             for ($i = 0; $i < $package->lessons_count; $i++) {
                 $scheduledDate = Carbon::parse($firstLessonDate)->addWeeks($i);
                 $calendarItemId = $calendarItemIds[$i] ?? null;
@@ -96,6 +101,7 @@ class CreateOrderFromApiAction
                     'start_time' => $startTime,
                     'end_time' => $endTime,
                     'calendar_item_id' => $calendarItemId,
+                    'student_lesson_number' => $nextLessonNumber++,
                 ]);
 
                 if ($paymentMode === PaymentMode::WEEKLY) {
@@ -116,6 +122,8 @@ class CreateOrderFromApiAction
             Log::info('Order creation complete', [
                 'order_id' => $order->id,
                 'lessons_created' => $package->lessons_count,
+                'first_student_lesson_number' => $firstLessonNumber,
+                'last_student_lesson_number' => $nextLessonNumber - 1,
                 'status' => $order->status->value,
             ]);
 

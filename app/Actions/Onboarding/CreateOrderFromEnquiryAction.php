@@ -222,6 +222,10 @@ class CreateOrderFromEnquiryAction
             'order_id' => $order->id,
         ]);
 
+        $nextLessonNumber = (int) Lesson::whereHas('order', fn ($q) => $q->where('student_id', $order->student_id))
+            ->lockForUpdate()
+            ->max('student_lesson_number') + 1;
+
         for ($i = 0; $i < $package->lessons_count; $i++) {
             // Schedule each lesson one week apart
             $scheduledDate = $firstLessonDate->copy()->addWeeks($i);
@@ -283,6 +287,7 @@ class CreateOrderFromEnquiryAction
                 'start_time' => $startTime,
                 'end_time' => $endTime,
                 'calendar_item_id' => $calendarItem->id,
+                'student_lesson_number' => $nextLessonNumber++,
             ];
 
             $lesson = Lesson::create($lessonData);
@@ -290,6 +295,7 @@ class CreateOrderFromEnquiryAction
             Log::info('Created lesson linked to updated calendar item', [
                 'lesson_id' => $lesson->id,
                 'lesson_number' => $i + 1,
+                'student_lesson_number' => $lesson->student_lesson_number,
                 'date' => $lessonData['date'],
                 'start_time' => $lessonData['start_time'],
                 'end_time' => $lessonData['end_time'],

@@ -437,6 +437,7 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 | `completed_at` | datetime | NULLABLE | When lesson was completed |
 | `summary` | text | NULLABLE | Instructor's summary of the lesson (written at sign-off, used for AI resource matching) |
 | `mileage` | unsigned integer | NULLABLE | Miles driven during this lesson |
+| `student_lesson_number` | unsigned integer | NOT NULL, INDEX | Per-student running lesson number — starts at 1 for each student and increments across all their orders. Used as the user-facing lesson reference for support queries. Stable for life (cancelled / cleaned drafts keep their number; gaps are allowed). |
 | `status` | enum('draft', 'pending', 'completed', 'cancelled') | DEFAULT 'pending' | Lesson status |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
@@ -445,6 +446,7 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 - Composite index on `(order_id, status)`
 - Index on `instructor_id`
 - Index on `calendar_item_id`
+- Index on `student_lesson_number`
 
 **Relationships:**
 - Belongs to one `Order`
@@ -466,6 +468,7 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 - Instructor gets paid after lesson is completed
 - `summary` is written by the instructor at sign-off time; used by AI (AWS Bedrock Nova) to match against resource tags and recommend relevant videos/PDFs to the student
 - `mileage` is recorded by the instructor after the lesson is completed, via the schedule view
+- `student_lesson_number` is assigned at lesson creation time inside the order's transaction. Computed as `MAX(student_lesson_number) + 1` over the student's existing lessons (across all orders), with `lockForUpdate()` on the existing rows to serialise concurrent same-student order creations. Numbers are immutable after assignment — a cancelled or cleaned-up draft lesson keeps its number, so gaps in the sequence are expected and intentional
 
 ---
 

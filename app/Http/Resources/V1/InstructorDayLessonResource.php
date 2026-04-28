@@ -24,6 +24,7 @@ class InstructorDayLessonResource extends JsonResource
 
         return [
             'id' => $this->id,
+            'student_lesson_number' => $this->student_lesson_number,
             'order_id' => $this->order_id,
             'date' => $this->date?->format('Y-m-d'),
             'start_time' => $this->start_time?->format('H:i'),

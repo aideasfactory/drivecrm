@@ -52,6 +52,7 @@ class GetStudentLessonsAction
             ->flatMap(fn ($order) => $order->lessons->map(function ($lesson) use ($order) {
                 return [
                     'id' => $lesson->id,
+                    'student_lesson_number' => $lesson->student_lesson_number,
                     'order_id' => $order->id,
                     'instructor_id' => $lesson->instructor_id,
                     'instructor_name' => $lesson->instructor?->user?->name,

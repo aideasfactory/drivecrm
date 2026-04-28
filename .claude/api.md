@@ -863,6 +863,7 @@ Returns the authenticated instructor's lessons for a specific date, ordered by s
   "data": [
     {
       "id": 1,
+      "student_lesson_number": 11,
       "order_id": 1,
       "date": "2026-03-20",
       "start_time": "09:00",
@@ -903,7 +904,8 @@ Returns the authenticated instructor's lessons for a specific date, ordered by s
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | integer | Lesson record ID |
+| `id` | integer | Lesson record ID (internal — used for routing) |
+| `student_lesson_number` | integer | Per-student running lesson number (1, 2, 3, …). Increments across all of the student's orders and is the user-facing reference shown in the UI |
 | `order_id` | integer | The order this lesson belongs to |
 | `date` | string\|null | Lesson date (YYYY-MM-DD) |
 | `start_time` | string\|null | Start time (HH:MM) |
@@ -2861,6 +2863,7 @@ Returns lessons for a given student across all their orders. Supports optional f
   "data": [
     {
       "id": 1,
+      "student_lesson_number": 11,
       "order_id": 1,
       "instructor_name": "John Smith",
       "instructor_avatar": "https://s3.example.com/instructor-pictures/abc.jpg",
@@ -2877,6 +2880,7 @@ Returns lessons for a given student across all their orders. Supports optional f
     },
     {
       "id": 2,
+      "student_lesson_number": 10,
       "order_id": 1,
       "instructor_name": "John Smith",
       "instructor_avatar": "https://s3.example.com/instructor-pictures/abc.jpg",
@@ -2899,7 +2903,8 @@ Returns lessons for a given student across all their orders. Supports optional f
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | integer | Lesson record ID |
+| `id` | integer | Lesson record ID (internal — used for routing) |
+| `student_lesson_number` | integer | Per-student running lesson number (1, 2, 3, …). Increments across all of the student's orders and is the user-facing reference shown in the UI |
 | `order_id` | integer | The order this lesson belongs to |
 | `instructor_name` | string\|null | Instructor's full name |
 | `instructor_avatar` | string\|null | Instructor's profile picture URL (S3) |
@@ -2945,6 +2950,7 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 {
   "data": {
     "id": 2,
+    "student_lesson_number": 10,
     "order_id": 1,
     "instructor_id": 1,
     "instructor_name": "John Smith",
@@ -2993,7 +2999,8 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | integer | Lesson record ID |
+| `id` | integer | Lesson record ID (internal — used for routing) |
+| `student_lesson_number` | integer | Per-student running lesson number (1, 2, 3, …). Increments across all of the student's orders and is the user-facing reference shown in the UI |
 | `order_id` | integer | The order this lesson belongs to |
 | `instructor_id` | integer | The instructor's record ID |
 | `instructor_name` | string\|null | Instructor's full name |
@@ -5265,6 +5272,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-04-27 | `unavailability_reason` on calendar items is now fully optional — instructors can save an unavailable diary entry without entering a reason. Field still accepts up to 500 chars when supplied. | Instructor Calendar (store, update) |
 | 2026-04-27 | Widened the allowed diary time window from `08:00`–`18:00` to `06:00`–`21:00`. `start_time` must now be ≥ `06:00` and `end_time` ≤ `21:00` on `POST /api/v1/instructor/calendar/items` (and the matching web Form Requests). Bounds are sourced from `config/diary.php`; frontend mirror is `resources/js/lib/diary-hours.ts`. | Instructor Calendar (store) |
 | 2026-04-28 | Added pickup-point update endpoint — closes the last missing CRUD on student pickup points. Reuses existing `UpdatePickupPointAction`, `UpdatePickupPointRequest`, `StudentPickupPointResource`, and the dual-role `PickupPointPolicy`. Postcode is re-geocoded only when it changes; setting `is_default: true` unsets any other default for the student. Response shape matches POST exactly. | Pickup Points (update) |
+| 2026-04-28 | Added `student_lesson_number` field to lesson responses — a per-student running lesson number (starts at 1, increments across all the student's orders, immutable after assignment). Now exposed on `GET /api/v1/students/{student}/lessons`, `GET /api/v1/students/{student}/lessons/{lesson}`, and `GET /api/v1/instructor/lessons/{date}`. The internal `id` is retained for routing/internal references; `student_lesson_number` is the user-facing reference for support queries. Backed by a new `lessons.student_lesson_number` column populated via backfill migration. | Student Lessons (index, show), Instructor Lessons (day) |
 
 ---
 
