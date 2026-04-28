@@ -45,6 +45,7 @@ class InstructorCalendarService extends BaseService
         $this->invalidate([
             $this->cacheKey('instructor', $instructorId, "calendar:{$date}"),
             $this->cacheKey('instructor', $instructorId, "calendar:{$date}:all"),
+            $this->cacheKey('instructor', $instructorId, "calendar:{$date}:drafts"),
             $this->cacheKey('instructor', $instructorId, "calendar:{$date}:all:drafts"),
         ]);
     }
