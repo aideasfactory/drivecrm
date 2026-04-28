@@ -8,6 +8,7 @@ use App\Actions\Shared\LogActivityAction;
 use App\Models\LessonPayment;
 use App\Models\Student;
 use App\Notifications\LessonPaymentReminderNotification;
+use App\Services\PushNotificationService;
 use App\Services\StripeService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
@@ -16,7 +17,8 @@ class SendLessonInvoiceAction
 {
     public function __construct(
         protected StripeService $stripeService,
-        protected LogActivityAction $logActivity
+        protected LogActivityAction $logActivity,
+        protected PushNotificationService $pushNotificationService
     ) {}
 
     /**
@@ -115,11 +117,57 @@ class SendLessonInvoiceAction
                     'invoice_url' => $hostedInvoiceUrl,
                 ]
             );
+
+            // Additive push notification — only fires when the student owns the
+            // account AND has registered an Expo push token. Contact-booked
+            // accounts have no app login, so $student->user has no token; the
+            // helper no-ops in that case. Push failure never affects the email.
+            $this->sendReminderPush($lessonPayment, $student, $hostedInvoiceUrl);
         } catch (\Exception $e) {
             Log::error('Failed to send payment reminder notification', [
                 'lesson_payment_id' => $lessonPayment->id,
                 'error' => $e->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * Queue a push notification mirroring the payment reminder email. No-ops
+     * when the student's user has no Expo push token registered.
+     */
+    protected function sendReminderPush(LessonPayment $lessonPayment, Student $student, string $hostedInvoiceUrl): void
+    {
+        $user = $student->user;
+
+        if (! $user || ! $user->expo_push_token) {
+            return;
+        }
+
+        $lesson = $lessonPayment->lesson;
+        $lessonDateShort = $lesson?->date?->format('D j M') ?? 'soon';
+
+        $title = 'Time to pay for your lesson';
+        $body = "Check your email to pay for your upcoming lesson on {$lessonDateShort}.";
+        $data = [
+            'type' => 'lesson_payment',
+            'lesson_payment_id' => $lessonPayment->id,
+            'lesson_id' => $lessonPayment->lesson_id,
+            'hosted_invoice_url' => $hostedInvoiceUrl,
+        ];
+
+        $pushNotification = $this->pushNotificationService->queueIfHasToken($user, $title, $body, $data);
+
+        if ($pushNotification) {
+            ($this->logActivity)(
+                $student,
+                "Payment reminder push notification queued for user #{$user->id}",
+                'notification',
+                [
+                    'type' => 'lesson_payment_reminder_push',
+                    'lesson_payment_id' => $lessonPayment->id,
+                    'push_notification_id' => $pushNotification->id,
+                ]
+            );
         }
     }
 }

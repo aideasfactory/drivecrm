@@ -3116,6 +3116,7 @@ Sign off a lesson as completed. This is an asynchronous operation — a backgrou
 - Triggers Stripe payout processing (if applicable)
 - Creates activity log entries
 - Sends feedback email to the student
+- For weekly orders: immediately issues the next lesson's Stripe invoice + payment-link email — and queues a push notification on the student's user when a registered Expo push token exists
 - Generates AI resource recommendations
 
 ---
@@ -3959,8 +3960,13 @@ For `weekly` payment the order is activated immediately and a confirmation email
 > **Mobile App Flow (weekly payment):**
 > 1. POST to create order with `payment_mode: "weekly"` → order is immediately `active`
 > 2. A confirmation email is sent to the student (or contact if booked on their behalf)
-> 3. The hourly `lessons:send-invoices` cron job sends Stripe invoices 48 hours before each lesson
-> 4. Stripe webhooks (`invoice.paid`) automatically mark lesson payments as paid
+> 3. The first Stripe invoice + payment-link email is sent **immediately at booking time** for the earliest scheduled lesson
+> 4. Each subsequent invoice + payment-link email is sent **immediately when the previous lesson is signed off**, for the next earliest unpaid lesson
+> 5. Stripe webhooks (`invoice.paid`) automatically mark lesson payments as paid
+>
+> Whenever the payment-reminder email is sent, an **additive push notification** is also queued for the student's user — but only when an Expo push token is registered on that user. If the student does not own the account (parent/contact booked on their behalf) or has not registered a push token, the email still goes out and no push is queued. Push delivery is processed by the every-minute `push:send-queued` cron and uses payload `{ type: "lesson_payment", lesson_payment_id, lesson_id, hosted_invoice_url }`.
+>
+> The legacy `lessons:send-invoices` command remains as a manual fallback to sweep any LessonPayments that slipped through (e.g. if a Stripe call failed during the event-driven send) but is no longer scheduled.
 
 ---
 
@@ -4513,6 +4519,15 @@ Stores the user's Expo push token for receiving push notifications. If the user 
 - Call this endpoint after login and whenever the Expo push token changes (e.g., app reinstall, token refresh).
 - The token is stored directly on the user record (`expo_push_token` column).
 - Only one token per user is stored — the latest call wins.
+
+**Events that queue a push notification (additive — fires only when `expo_push_token` is set on the recipient):**
+
+| Event | Title | Body | Data payload |
+|-------|-------|------|--------------|
+| New in-app message received | `"New message from {sender name}"` | First 140 chars of the message text | `{ type: "message", message_id, from_user_id }` |
+| Weekly-payment reminder issued (booking-time and on prior-lesson sign-off) | `"Time to pay for your lesson"` | `"Check your email to pay for your upcoming lesson on {Day D Mon}."` | `{ type: "lesson_payment", lesson_payment_id, lesson_id, hosted_invoice_url }` |
+
+Pushes are queued to the `push_notifications` table and delivered by the every-minute `push:send-queued` cron (so up to ~60s latency is normal). Email and in-app delivery are unaffected by push success or failure — push is a strictly additive layer.
 
 ---
 
@@ -5277,6 +5292,8 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-04-22 | Added progress-tracker API — instructors score their students 1–5 on driving-skill subcategories (framework is per-instructor, editable via admin). `GET /api/v1/student/progress` returns own scores; `GET /api/v1/instructor/students/{student}/progress` returns a specific student's scores; `POST` of the same URL bulk-upserts scores (scores overwrite — no history). Soft-deleted subcategories with existing scores are returned with `archived: true` for read-only display. New tables: `progress_categories`, `progress_subcategories`, `student_progress`. | Progress Tracker (student/progress, instructor/students/.../progress) |
 | 2026-04-24 | Extended instructor finances API with `category` (type-gated, config-backed), `payment_method`, and receipt attachment. Added `GET /finances/config` (dropdown options for the app to cache), `GET /finances/summary` (overview with stats + full-range finances & mileage for a date range, default last 30 days), `GET /finances/{finance}` (single-record detail), `POST`/`DELETE /finances/{finance}/receipt` (multipart receipt upload + removal on private S3, 20-min signed URLs). List endpoint is now cursor-paginated with `type`/`from`/`to`/`per_page` filters. Added full instructor mileage API (`GET/POST /mileage`, `GET/PUT/DELETE /mileage/{mileageLog}`) — mileage is an independent ledger from finances (not linked to fuel expenses). | Instructor Finances (all), Instructor Mileage (all) |
 | 2026-04-27 | `unavailability_reason` on calendar items is now fully optional — instructors can save an unavailable diary entry without entering a reason. Field still accepts up to 500 chars when supplied. | Instructor Calendar (store, update) |
+| 2026-04-27 | Weekly-payment invoice + email is now event-driven: the first invoice is issued immediately at booking, and each subsequent invoice is issued immediately when the previous lesson is signed off. The hourly `lessons:send-invoices` cron has been unscheduled — the command is retained as a manual fallback only. No request/response shape changed; only documented side-effects updated on `POST /students/{student}/lessons/{lesson}/sign-off` and the weekly-payment booking flow. | Booking Flow (weekly), Lesson Sign-Off |
+| 2026-04-27 | Push notifications are now queued additively alongside existing emails for two events: (1) new in-app messages — push is queued for the recipient when they have a registered Expo token; (2) weekly-payment reminders — push is queued for the student's user on every event-driven send (booking-time, on prior-lesson sign-off, and the manual fallback command), again only when an Expo token is present. Email + in-app delivery is unchanged and unaffected by push outcome. No request/response shape changes; documented in the Push Notifications section. | Push Notifications, Booking Flow (weekly), Lesson Sign-Off, Messages (any send) |
 | 2026-04-27 | Widened the allowed diary time window from `08:00`–`18:00` to `06:00`–`21:00`. `start_time` must now be ≥ `06:00` and `end_time` ≤ `21:00` on `POST /api/v1/instructor/calendar/items` (and the matching web Form Requests). Bounds are sourced from `config/diary.php`; frontend mirror is `resources/js/lib/diary-hours.ts`. | Instructor Calendar (store) |
 | 2026-04-28 | Added pickup-point update endpoint — closes the last missing CRUD on student pickup points. Reuses existing `UpdatePickupPointAction`, `UpdatePickupPointRequest`, `StudentPickupPointResource`, and the dual-role `PickupPointPolicy`. Postcode is re-geocoded only when it changes; setting `is_default: true` unsets any other default for the student. Response shape matches POST exactly. | Pickup Points (update) |
 | 2026-04-28 | Added `student_lesson_number` field to lesson responses — a per-student running lesson number (starts at 1, increments across all the student's orders, immutable after assignment). Now exposed on `GET /api/v1/students/{student}/lessons`, `GET /api/v1/students/{student}/lessons/{lesson}`, and `GET /api/v1/instructor/lessons/{date}`. The internal `id` is retained for routing/internal references; `student_lesson_number` is the user-facing reference for support queries. Backed by a new `lessons.student_lesson_number` column populated via backfill migration. | Student Lessons (index, show), Instructor Lessons (day) |

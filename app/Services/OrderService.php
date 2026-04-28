@@ -6,14 +6,18 @@ namespace App\Services;
 
 use App\Actions\Calendar\DetectCalendarClashesAction;
 use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
+use App\Actions\Payment\SendLessonInvoiceAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Student\Order\CreateDraftCalendarItemsAction;
 use App\Actions\Student\Order\CreateOrderFromApiAction;
 use App\Actions\Student\Order\SendPaymentLinkEmailAction;
 use App\Actions\Student\Order\VerifyCheckoutAction;
+use App\Enums\LessonStatus;
 use App\Enums\PaymentMode;
+use App\Enums\PaymentStatus;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
+use App\Models\LessonPayment;
 use App\Models\Order;
 use App\Models\Package;
 use App\Models\Student;
@@ -32,7 +36,8 @@ class OrderService extends BaseService
         protected StripeService $stripeService,
         protected DetectCalendarClashesAction $detectCalendarClashes,
         protected LogActivityAction $logActivity,
-        protected InstructorService $instructorService
+        protected InstructorService $instructorService,
+        protected SendLessonInvoiceAction $sendLessonInvoice
     ) {}
 
     /**
@@ -84,10 +89,13 @@ class OrderService extends BaseService
             }
         }
 
-        // Send confirmation email for weekly orders (activated immediately)
+        // Send confirmation email for weekly orders (activated immediately) and
+        // immediately raise the first Stripe invoice so the student receives their
+        // payment email at booking time instead of waiting for the old 48h cron.
         if ($paymentMode === PaymentMode::WEEKLY) {
             $this->ensureStripeCustomerExists($student);
             $this->sendConfirmationEmail->execute($order, $student);
+            $this->sendNextDueInvoice($order);
         }
 
         // Invalidate grouped students cache so the instructor sees the new booking immediately
@@ -240,6 +248,54 @@ class OrderService extends BaseService
 
         $user->stripe_customer_id = $customerResult['customer_id'];
         $user->save();
+    }
+
+    /**
+     * Send a Stripe invoice (and the accompanying payment-link email) for the next
+     * unpaid lesson on a weekly order. No-ops for non-weekly or inactive orders, and
+     * is idempotent — the underlying action only creates an invoice when the
+     * LessonPayment has no stripe_invoice_id yet.
+     *
+     * @return array{success: bool, invoice_id?: string, hosted_invoice_url?: string, error?: string}|null
+     */
+    public function sendNextDueInvoice(Order $order): ?array
+    {
+        if (! $order->isWeekly() || ! $order->isActive()) {
+            return null;
+        }
+
+        $lessonPayment = LessonPayment::query()
+            ->join('lessons', 'lessons.id', '=', 'lesson_payments.lesson_id')
+            ->where('lessons.order_id', $order->id)
+            ->where('lessons.status', '!=', LessonStatus::CANCELLED)
+            ->whereNotNull('lessons.date')
+            ->where('lesson_payments.status', PaymentStatus::DUE)
+            ->whereNull('lesson_payments.stripe_invoice_id')
+            ->orderBy('lessons.date')
+            ->orderBy('lessons.start_time')
+            ->select('lesson_payments.*')
+            ->with('lesson.order.student.user')
+            ->first();
+
+        if (! $lessonPayment) {
+            Log::info('No outstanding lesson payment to invoice for order', [
+                'order_id' => $order->id,
+            ]);
+
+            return null;
+        }
+
+        try {
+            return ($this->sendLessonInvoice)($lessonPayment);
+        } catch (\Exception $e) {
+            Log::error('Failed to send next due lesson invoice', [
+                'order_id' => $order->id,
+                'lesson_payment_id' => $lessonPayment->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
     }
 
     /**

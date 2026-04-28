@@ -15,6 +15,7 @@ use App\Http\Requests\Onboarding\StepSixRequest;
 use App\Models\Instructor;
 use App\Models\Order;
 use App\Models\Package;
+use App\Services\OrderService;
 use App\Services\StripeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -30,7 +31,8 @@ class StepSixController extends Controller
         protected StripeService $stripeService,
         protected CreateUserAndStudentFromEnquiryAction $createUserAndStudentAction,
         protected CreateOrderFromEnquiryAction $createOrderAction,
-        protected SendOrderConfirmationEmailAction $sendEmailAction
+        protected SendOrderConfirmationEmailAction $sendEmailAction,
+        protected OrderService $orderService
     ) {}
 
     /**
@@ -407,6 +409,18 @@ class StepSixController extends Controller
         // Activate order immediately for weekly payments
         $order->status = OrderStatus::ACTIVE;
         $order->save();
+
+        // Issue the first weekly invoice + payment-link email immediately. Wrapped
+        // in try/catch so a Stripe failure does not block the booking redirect.
+        try {
+            $this->orderService->sendNextDueInvoice($order);
+        } catch (\Exception $e) {
+            Log::error('Failed to send first weekly invoice at booking', [
+                'order_id' => $order->id,
+                'enquiry_id' => $enquiry->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         // Redirect to success page
         $successUrl = route('onboarding.checkout.success', ['uuid' => $enquiry->id]);
