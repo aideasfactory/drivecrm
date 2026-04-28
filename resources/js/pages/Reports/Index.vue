@@ -11,14 +11,14 @@ interface InstructorAnalytics {
     id: number;
     name: string;
     avatar: string | null;
-    total_available: number;
+    total_slots: number;
     total_booked: number;
     total_free: number;
     utilization_rate: number;
 }
 
 interface AnalyticsSummary {
-    total_available: number;
+    total_slots: number;
     total_booked: number;
     total_free: number;
     overall_utilization: number;
@@ -51,8 +51,8 @@ const getUtilizationVariant = (rate: number): 'default' | 'secondary' | 'destruc
 
 const summaryCards = computed(() => [
     {
-        title: 'Total Available Slots',
-        value: props.analytics.summary.total_available,
+        title: 'Total Slots',
+        value: props.analytics.summary.total_slots,
         icon: CalendarDays,
     },
     {
@@ -61,7 +61,7 @@ const summaryCards = computed(() => [
         icon: CalendarCheck,
     },
     {
-        title: 'Unavailable',
+        title: 'Free',
         value: props.analytics.summary.total_free,
         icon: Users,
     },
@@ -104,9 +104,9 @@ const summaryCards = computed(() => [
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Instructor</TableHead>
-                                <TableHead class="text-right">Available</TableHead>
+                                <TableHead class="text-right">Total</TableHead>
                                 <TableHead class="text-right">Booked</TableHead>
-                                <TableHead class="text-right">Unavailable</TableHead>
+                                <TableHead class="text-right">Free</TableHead>
                                 <TableHead class="text-right">Utilization</TableHead>
                                 <TableHead class="w-[200px]">Performance</TableHead>
                             </TableRow>
@@ -122,7 +122,7 @@ const summaryCards = computed(() => [
                                         <span class="font-medium">{{ instructor.name }}</span>
                                     </div>
                                 </TableCell>
-                                <TableCell class="text-right">{{ instructor.total_available }}</TableCell>
+                                <TableCell class="text-right">{{ instructor.total_slots }}</TableCell>
                                 <TableCell class="text-right">{{ instructor.total_booked }}</TableCell>
                                 <TableCell class="text-right">{{ instructor.total_free }}</TableCell>
                                 <TableCell class="text-right">

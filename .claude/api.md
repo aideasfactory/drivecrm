@@ -52,6 +52,7 @@
     - [Checklist Items](#get-apiv1studentsstudentchecklist-items)
     - [Pickup Points (List)](#get-apiv1studentsstudentpickup-points)
     - [Pickup Points (Create)](#post-apiv1studentsstudentpickup-points)
+    - [Pickup Points (Update)](#put-apiv1studentsstudentpickup-pointspickuppoint)
     - [Pickup Points (Delete)](#delete-apiv1studentsstudentpickup-pointspickuppoint)
     - [Pickup Points (Set Default)](#patch-apiv1studentsstudentpickup-pointspickuppointdefault)
     - [Orders](#post-apiv1studentsstudentorders)
@@ -3633,6 +3634,83 @@ Creates a new pickup point for a student. The postcode is geocoded automatically
 
 ---
 
+#### `PUT /api/v1/students/{student}/pickup-points/{pickupPoint}`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Updates an existing pickup point. The postcode is re-geocoded only when it changes (normalised, case- and whitespace-insensitive). If `is_default: true` is provided, any other default pickup point for the same student is unset. Access requires `update` permission on the student (same dual-role policy as Create / Delete / Set Default — students may only edit their own; instructors may only edit pickup points of students assigned to them).
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+| `pickupPoint` | integer | The pickup point ID to update |
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `label` | string | Yes | Human-readable label (e.g., "Home", "School"). Max 255 chars |
+| `address` | string | Yes | Full address. Max 1000 chars |
+| `postcode` | string | Yes | Valid UK postcode. Max 10 chars |
+| `is_default` | boolean | No | Set as default pickup point (unsets any existing default for this student) |
+
+```json
+{
+  "label": "Home",
+  "address": "1 High Street, Middlesbrough",
+  "postcode": "TS1 1AA",
+  "is_default": true
+}
+```
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 3,
+    "label": "Home",
+    "address": "1 High Street, Middlesbrough",
+    "postcode": "TS1 1AA",
+    "latitude": "54.57623000",
+    "longitude": "-1.23456000",
+    "is_default": true,
+    "created_at": "2026-03-25T10:00:00+00:00",
+    "updated_at": "2026-04-28T14:00:00+00:00"
+  }
+}
+```
+
+**Validation Errors:** `422 Unprocessable Entity`
+```json
+{
+  "message": "A label for this pickup point is required.",
+  "errors": {
+    "label": ["A label for this pickup point is required."],
+    "postcode": ["Please enter a valid UK postcode."]
+  }
+}
+```
+
+**Error Response (not authorised):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+**Error Response (wrong student):** `404 Not Found`
+```json
+{
+  "message": "Pickup point not found for this student."
+}
+```
+
+> **Note:** The response shape is identical to `POST /api/v1/students/{student}/pickup-points`. The mobile app uses the same `PickupPoint` type for both flows.
+
+---
+
 #### `DELETE /api/v1/students/{student}/pickup-points/{pickupPoint}`
 
 **Auth required:** Yes (Bearer token — student or instructor)
@@ -4522,6 +4600,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | PUT | `/api/v1/students/{student}/checklist-items/{item}` | Yes | Both | Update checklist item |
 | GET | `/api/v1/students/{student}/pickup-points` | Yes | Both | List pickup points |
 | POST | `/api/v1/students/{student}/pickup-points` | Yes | Both | Create pickup point |
+| PUT | `/api/v1/students/{student}/pickup-points/{pickupPoint}` | Yes | Both | Update pickup point |
 | DELETE | `/api/v1/students/{student}/pickup-points/{pickupPoint}` | Yes | Both | Delete pickup point |
 | PATCH | `/api/v1/students/{student}/pickup-points/{pickupPoint}/default` | Yes | Both | Set default pickup point |
 | POST | `/api/v1/students/{student}/orders` | Yes | Both | Create order/booking |
@@ -5185,6 +5264,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-04-24 | Extended instructor finances API with `category` (type-gated, config-backed), `payment_method`, and receipt attachment. Added `GET /finances/config` (dropdown options for the app to cache), `GET /finances/summary` (overview with stats + full-range finances & mileage for a date range, default last 30 days), `GET /finances/{finance}` (single-record detail), `POST`/`DELETE /finances/{finance}/receipt` (multipart receipt upload + removal on private S3, 20-min signed URLs). List endpoint is now cursor-paginated with `type`/`from`/`to`/`per_page` filters. Added full instructor mileage API (`GET/POST /mileage`, `GET/PUT/DELETE /mileage/{mileageLog}`) — mileage is an independent ledger from finances (not linked to fuel expenses). | Instructor Finances (all), Instructor Mileage (all) |
 | 2026-04-27 | `unavailability_reason` on calendar items is now fully optional — instructors can save an unavailable diary entry without entering a reason. Field still accepts up to 500 chars when supplied. | Instructor Calendar (store, update) |
 | 2026-04-27 | Widened the allowed diary time window from `08:00`–`18:00` to `06:00`–`21:00`. `start_time` must now be ≥ `06:00` and `end_time` ≤ `21:00` on `POST /api/v1/instructor/calendar/items` (and the matching web Form Requests). Bounds are sourced from `config/diary.php`; frontend mirror is `resources/js/lib/diary-hours.ts`. | Instructor Calendar (store) |
+| 2026-04-28 | Added pickup-point update endpoint — closes the last missing CRUD on student pickup points. Reuses existing `UpdatePickupPointAction`, `UpdatePickupPointRequest`, `StudentPickupPointResource`, and the dual-role `PickupPointPolicy`. Postcode is re-geocoded only when it changes; setting `is_default: true` unsets any other default for the student. Response shape matches POST exactly. | Pickup Points (update) |
 
 ---
 

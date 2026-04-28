@@ -132,6 +132,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('students/{student}/lessons/{lesson}', [StudentLessonController::class, 'show']);
         Route::get('students/{student}/pickup-points', [StudentPickupPointController::class, 'index']);
         Route::post('students/{student}/pickup-points', [StudentPickupPointController::class, 'store']);
+        Route::put('students/{student}/pickup-points/{pickupPoint}', [StudentPickupPointController::class, 'update']);
         Route::delete('students/{student}/pickup-points/{pickupPoint}', [StudentPickupPointController::class, 'destroy']);
         Route::patch('students/{student}/pickup-points/{pickupPoint}/default', [StudentPickupPointController::class, 'setDefault']);
         Route::post('students/{student}/lessons/{lesson}/resources', [LessonResourceController::class, 'store']);
