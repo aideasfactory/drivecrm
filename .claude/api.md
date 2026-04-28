@@ -320,6 +320,7 @@ Login and receive a Bearer token for subsequent API calls.
       "status": "active",
       "address": "1 High Street",
       "postcode": "TS7 0AB",
+      "pin": "4827",
       "onboarding_complete": false,
       "charges_enabled": false,
       "payouts_enabled": false,
@@ -457,6 +458,7 @@ Returns the authenticated user's profile with role-specific data.
       "status": "active",
       "address": "1 High Street",
       "postcode": "TS7 0AB",
+      "pin": "4827",
       "onboarding_complete": false,
       "charges_enabled": false,
       "payouts_enabled": false,
@@ -584,6 +586,7 @@ Register a new instructor account. Creates a base user record with the `instruct
       "status": null,
       "address": "1 High Street",
       "postcode": "TS7 0AB",
+      "pin": "4827",
       "onboarding_complete": false,
       "charges_enabled": false,
       "payouts_enabled": false,
@@ -646,6 +649,7 @@ Update the authenticated instructor's own profile. The instructor is derived fro
     "status": "active",
     "address": "10 High Street",
     "postcode": "TS7 0AB",
+    "pin": "4827",
     "onboarding_complete": false,
     "charges_enabled": false,
     "payouts_enabled": false,
@@ -707,6 +711,7 @@ curl -X POST https://drivecrm.test/api/v1/instructor/profile/picture \
     "status": "active",
     "address": "10 High Street",
     "postcode": "TS7 0AB",
+    "pin": "4827",
     "onboarding_complete": false,
     "charges_enabled": false,
     "payouts_enabled": false,
@@ -749,6 +754,7 @@ Delete the instructor's profile picture.
     "status": "active",
     "address": "10 High Street",
     "postcode": "TS7 0AB",
+    "pin": "4827",
     "onboarding_complete": false,
     "charges_enabled": false,
     "payouts_enabled": false,
@@ -4524,6 +4530,7 @@ The `profile` key in user responses contains role-specific data. The shape depen
 | `status` | string\|null | Instructor status |
 | `address` | string\|null | Business address |
 | `postcode` | string\|null | Business postcode |
+| `pin` | string\|null | Instructor's attach PIN — students enter this on the mobile app to link themselves to the instructor (`POST /api/v1/students/attach`) |
 | `onboarding_complete` | boolean | Whether Stripe onboarding is done |
 | `charges_enabled` | boolean | Whether Stripe charges are enabled |
 | `payouts_enabled` | boolean | Whether Stripe payouts are enabled |
@@ -5273,6 +5280,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-04-27 | Widened the allowed diary time window from `08:00`–`18:00` to `06:00`–`21:00`. `start_time` must now be ≥ `06:00` and `end_time` ≤ `21:00` on `POST /api/v1/instructor/calendar/items` (and the matching web Form Requests). Bounds are sourced from `config/diary.php`; frontend mirror is `resources/js/lib/diary-hours.ts`. | Instructor Calendar (store) |
 | 2026-04-28 | Added pickup-point update endpoint — closes the last missing CRUD on student pickup points. Reuses existing `UpdatePickupPointAction`, `UpdatePickupPointRequest`, `StudentPickupPointResource`, and the dual-role `PickupPointPolicy`. Postcode is re-geocoded only when it changes; setting `is_default: true` unsets any other default for the student. Response shape matches POST exactly. | Pickup Points (update) |
 | 2026-04-28 | Added `student_lesson_number` field to lesson responses — a per-student running lesson number (starts at 1, increments across all the student's orders, immutable after assignment). Now exposed on `GET /api/v1/students/{student}/lessons`, `GET /api/v1/students/{student}/lessons/{lesson}`, and `GET /api/v1/instructor/lessons/{date}`. The internal `id` is retained for routing/internal references; `student_lesson_number` is the user-facing reference for support queries. Backed by a new `lessons.student_lesson_number` column populated via backfill migration. | Student Lessons (index, show), Instructor Lessons (day) |
+| 2026-04-28 | Added `pin` field to the instructor profile object — surfaces the instructor's attach PIN (the same PIN students enter on `POST /api/v1/students/attach`) so the mobile app can display it after the instructor logs in. Returned on every endpoint that already returns the instructor profile object: login, `/auth/user`, instructor registration, `PUT /instructor/profile`, and the profile-picture upload/delete endpoints. | Auth (login, user, register/instructor), Instructor (profile, profile/picture) |
 
 ---
 
