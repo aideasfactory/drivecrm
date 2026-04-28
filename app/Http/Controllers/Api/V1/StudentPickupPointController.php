@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StorePickupPointRequest;
+use App\Http\Requests\UpdatePickupPointRequest;
 use App\Http\Resources\V1\StudentPickupPointResource;
 use App\Models\Student;
 use App\Models\StudentPickupPoint;
@@ -47,6 +48,22 @@ class StudentPickupPointController extends Controller
         return (new StudentPickupPointResource($pickupPoint))
             ->response()
             ->setStatusCode(201);
+    }
+
+    /**
+     * Update an existing pickup point for a student.
+     */
+    public function update(UpdatePickupPointRequest $request, Student $student, StudentPickupPoint $pickupPoint): StudentPickupPointResource|JsonResponse
+    {
+        Gate::authorize('update', $student);
+
+        if ($pickupPoint->student_id !== $student->id) {
+            return response()->json(['message' => 'Pickup point not found for this student.'], 404);
+        }
+
+        $pickupPoint = $this->studentService->updatePickupPoint($pickupPoint, $request->validated());
+
+        return new StudentPickupPointResource($pickupPoint);
     }
 
     /**

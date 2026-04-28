@@ -31,11 +31,13 @@ class StoreCalendarItemRequest extends FormRequest
             'start_time' => [
                 'required',
                 'date_format:H:i',
+                'after_or_equal:'.config('diary.start_time'),
             ],
             'end_time' => [
                 'required',
                 'date_format:H:i',
                 'after:start_time',
+                'before_or_equal:'.config('diary.end_time'),
             ],
             'is_available' => [
                 'sometimes',
@@ -150,9 +152,11 @@ class StoreCalendarItemRequest extends FormRequest
             'date.after_or_equal' => 'Cannot create time slots in the past.',
             'start_time.required' => 'Please provide a start time.',
             'start_time.date_format' => 'Start time must be in HH:MM format.',
+            'start_time.after_or_equal' => 'Start time must be at or after '.config('diary.start_time').'.',
             'end_time.required' => 'Please provide an end time.',
             'end_time.date_format' => 'End time must be in HH:MM format.',
             'end_time.after' => 'End time must be after start time.',
+            'end_time.before_or_equal' => 'End time must be at or before '.config('diary.end_time').'.',
             'notes.max' => 'Notes cannot exceed 1000 characters.',
             'unavailability_reason.max' => 'Unavailability reason cannot exceed 500 characters.',
             'recurrence_pattern' => 'Please select a valid recurrence pattern.',

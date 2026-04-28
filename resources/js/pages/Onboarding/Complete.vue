@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-screen flex flex-col">
-    <OnboardingHeader :current-step="7" :total-steps="6" :max-step-reached="6" />
+    <OnboardingHeader :current-step="6" :total-steps="6" :max-step-reached="6" />
 
     <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex-1">
       <!-- Success Icon -->

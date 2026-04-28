@@ -62,8 +62,9 @@ class CreateUserAndStudentFromEnquiryAction
                 $user = User::create([
                     'name' => $userName,
                     'email' => $userEmail,
-                    'password' => Hash::make(Str::random(32)), // Temporary password
+                    'password' => Hash::make(Str::random(32)), // Placeholder; replaced when welcome email fires
                     'password_change_required' => true,
+                    'welcome_email_pending' => true,
                     'role' => UserRole::STUDENT,
                     'email_verified_at' => null, // Require verification later
                 ]);

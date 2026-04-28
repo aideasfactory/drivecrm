@@ -47,6 +47,7 @@ import { toast } from '@/components/ui/sonner'
 
 interface Lesson {
     id: number
+    student_lesson_number: number
     order_id: number
     instructor_id: number
     instructor_name: string | null
@@ -352,6 +353,7 @@ onMounted(() => {
                 <Table v-else>
                     <TableHeader>
                         <TableRow>
+                            <TableHead>Lesson #</TableHead>
                             <TableHead>Date</TableHead>
                             <TableHead>Time</TableHead>
                             <TableHead>Package</TableHead>
@@ -363,6 +365,9 @@ onMounted(() => {
                     </TableHeader>
                     <TableBody>
                         <TableRow v-for="lesson in lessons" :key="lesson.id">
+                            <TableCell class="font-medium tabular-nums">
+                                #{{ lesson.student_lesson_number }}
+                            </TableCell>
                             <TableCell class="font-medium">
                                 {{ formatDate(lesson.date) }}
                             </TableCell>

@@ -46,6 +46,12 @@ import WeeklyCalendarGrid from './Schedule/WeeklyCalendarGrid.vue'
 import MonthlyCalendarGrid from './Schedule/MonthlyCalendarGrid.vue'
 import type { CalendarEvent } from './Schedule/CalendarEventBlock.vue'
 import { useCalendarNavigation } from '@/composables/useCalendarNavigation'
+import {
+    DIARY_START_HOUR,
+    DIARY_END_HOUR,
+    DIARY_START_MINUTES,
+    DIARY_END_MINUTES,
+} from '@/lib/diary-hours'
 import type { CalendarItemFormData, CalendarItemResponse, RecurrencePattern, ReflectiveLogData } from '@/types/instructor'
 
 interface Props {
@@ -199,14 +205,15 @@ const mileageSaving = ref(false)
 const editItemLessonId = ref<number | null>(null)
 const editItemReflectiveLog = ref<ReflectiveLogData | null>(null)
 
-// ── Time slot options (15-min increments, 08:00–16:00) ───
+// ── Time slot options (15-min increments, DIARY_START_HOUR..DIARY_END_HOUR) ───
 const SLOT_DURATION_HOURS = 2
+const MAX_START_HOUR = DIARY_END_HOUR - SLOT_DURATION_HOURS
 const startTimeOptions = computed(() => {
     const options: { value: string; label: string }[] = []
-    for (let h = 8; h <= 16; h++) {
+    for (let h = DIARY_START_HOUR; h <= MAX_START_HOUR; h++) {
         for (let m = 0; m < 60; m += 15) {
-            // Don't go past 16:00 (a 2-hour slot ending at 18:00)
-            if (h === 16 && m > 0) break
+            // Don't go past MAX_START_HOUR (so a 2-hour slot still ends by DIARY_END_HOUR)
+            if (h === MAX_START_HOUR && m > 0) break
             const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
             options.push({ value: time, label: time })
         }
@@ -240,8 +247,9 @@ function snapToStartOption(time: string): string {
     const minutes = timeToMinutes(time)
     // Round down to nearest 15-minute increment
     const snappedMinutes = Math.floor(minutes / 15) * 15
-    // Clamp between 08:00 (480) and 16:00 (960)
-    const clamped = Math.max(480, Math.min(snappedMinutes, 960))
+    // Clamp so a 2-hour slot still fits within DIARY_START_MINUTES..DIARY_END_MINUTES
+    const maxStart = DIARY_END_MINUTES - SLOT_DURATION_HOURS * 60
+    const clamped = Math.max(DIARY_START_MINUTES, Math.min(snappedMinutes, maxStart))
     return minutesToTime(clamped)
 }
 

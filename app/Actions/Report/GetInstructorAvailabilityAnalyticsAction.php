@@ -13,7 +13,12 @@ class GetInstructorAvailabilityAnalyticsAction
     /**
      * Get availability and booking analytics for all active instructors.
      *
-     * @return array{instructors: Collection, summary: array{total_available: int, total_booked: int, total_free: int, overall_utilization: float}}
+     * Utilisation is computed as booked / (booked + free) × 100, where:
+     *   - booked = calendar items with status BOOKED or COMPLETED
+     *   - free   = calendar items with is_available=true (booked items have is_available=false in production)
+     * Lunch / holiday / unavailability blocks (is_available=false, no booked status) are excluded from the denominator.
+     *
+     * @return array{instructors: Collection, summary: array{total_slots: int, total_booked: int, total_free: int, overall_utilization: float}}
      */
     public function __invoke(): array
     {
@@ -23,7 +28,7 @@ class GetInstructorAvailabilityAnalyticsAction
             ->get();
 
         $analytics = $instructors->map(function (Instructor $instructor) {
-            $totalAvailable = $instructor->calendars()
+            $totalFree = $instructor->calendars()
                 ->join('calendar_items', 'calendars.id', '=', 'calendar_items.calendar_id')
                 ->where('calendar_items.is_available', true)
                 ->count();
@@ -36,33 +41,33 @@ class GetInstructorAvailabilityAnalyticsAction
                 ])
                 ->count();
 
-            $totalFree = max(0, $totalAvailable - $totalBooked);
-            $utilizationRate = $totalAvailable > 0
-                ? round(($totalBooked / $totalAvailable) * 100, 1)
+            $totalSlots = $totalFree + $totalBooked;
+            $utilizationRate = $totalSlots > 0
+                ? round(($totalBooked / $totalSlots) * 100, 1)
                 : 0.0;
 
             return [
                 'id' => $instructor->id,
                 'name' => $instructor->name,
                 'avatar' => $instructor->avatar,
-                'total_available' => $totalAvailable,
+                'total_slots' => $totalSlots,
                 'total_booked' => $totalBooked,
                 'total_free' => $totalFree,
                 'utilization_rate' => $utilizationRate,
             ];
         });
 
-        $totalAvailable = $analytics->sum('total_available');
+        $totalSlots = $analytics->sum('total_slots');
         $totalBooked = $analytics->sum('total_booked');
 
         return [
             'instructors' => $analytics->sortByDesc('utilization_rate')->values(),
             'summary' => [
-                'total_available' => $totalAvailable,
+                'total_slots' => $totalSlots,
                 'total_booked' => $totalBooked,
-                'total_free' => max(0, $totalAvailable - $totalBooked),
-                'overall_utilization' => $totalAvailable > 0
-                    ? round(($totalBooked / $totalAvailable) * 100, 1)
+                'total_free' => max(0, $totalSlots - $totalBooked),
+                'overall_utilization' => $totalSlots > 0
+                    ? round(($totalBooked / $totalSlots) * 100, 1)
                     : 0.0,
             ],
         ];

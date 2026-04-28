@@ -15,6 +15,7 @@ use App\Actions\Student\PickupPoint\CreatePickupPointAction;
 use App\Actions\Student\PickupPoint\DeletePickupPointAction;
 use App\Actions\Student\PickupPoint\GetStudentPickupPointsAction;
 use App\Actions\Student\PickupPoint\SetDefaultPickupPointAction;
+use App\Actions\Student\PickupPoint\UpdatePickupPointAction;
 use App\Actions\Student\Status\RemoveStudentFromInstructorAction;
 use App\Actions\Student\UpdateStudentAction;
 use App\Actions\Student\UploadStudentProfilePictureAction;
@@ -33,6 +34,7 @@ class StudentService extends BaseService
         protected RemoveStudentFromInstructorAction $removeStudent,
         protected GetStudentPickupPointsAction $getStudentPickupPoints,
         protected CreatePickupPointAction $createPickupPoint,
+        protected UpdatePickupPointAction $updatePickupPoint,
         protected DeletePickupPointAction $deletePickupPoint,
         protected SetDefaultPickupPointAction $setDefaultPickupPoint,
         protected AttachStudentToInstructorAction $attachStudentToInstructor,
@@ -158,6 +160,16 @@ class StudentService extends BaseService
     public function storePickupPoint(Student $student, array $data): \App\Models\StudentPickupPoint
     {
         return ($this->createPickupPoint)($student, $data);
+    }
+
+    /**
+     * Update an existing pickup point. Re-geocodes if the postcode changed.
+     *
+     * @param  array{label: string, address: string, postcode: string, is_default?: bool}  $data
+     */
+    public function updatePickupPoint(\App\Models\StudentPickupPoint $pickupPoint, array $data): \App\Models\StudentPickupPoint
+    {
+        return ($this->updatePickupPoint)($pickupPoint, $data);
     }
 
     /**

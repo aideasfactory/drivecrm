@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import CalendarEventBlock from './CalendarEventBlock.vue'
 import type { CalendarEvent } from './CalendarEventBlock.vue'
 import { formatDate } from '@/composables/useCalendarNavigation'
+import { DIARY_START_HOUR, DIARY_END_HOUR } from '@/lib/diary-hours'
 
 interface Props {
     weekDays: Date[]
@@ -18,10 +19,10 @@ const emit = defineEmits<{
 }>()
 
 // ── Constants ────────────────────────────────────────────
-const DAY_START_HOUR = 8
-const DAY_END_HOUR = 18
+const DAY_START_HOUR = DIARY_START_HOUR
+const DAY_END_HOUR = DIARY_END_HOUR
 const ROW_HEIGHT = 40 // px per 30-min slot (visual grid row)
-const SLOT_COUNT = (DAY_END_HOUR - DAY_START_HOUR) * 2 // 20 half-hour visual rows
+const SLOT_COUNT = (DAY_END_HOUR - DAY_START_HOUR) * 2 // half-hour visual rows
 const SLOT_DURATION_HOURS = 2 // lesson slots are always 2 hours
 const SNAP_MINUTES = 15 // drag & click snap to 15-minute increments
 const SNAP_PX = ROW_HEIGHT / 2 // 15 min = half a visual row = 20px
@@ -162,7 +163,7 @@ function handleSlotClick(dayDate: Date, slotIndex: number) {
     // Round down to nearest 15-min increment
     const snappedMinutes = Math.floor(totalMinutes / SNAP_MINUTES) * SNAP_MINUTES
     // Clamp so the 2-hour slot fits within the day
-    const maxStart = (DAY_END_HOUR - SLOT_DURATION_HOURS) * 60 // 16:00
+    const maxStart = (DAY_END_HOUR - SLOT_DURATION_HOURS) * 60
     const clampedMinutes = Math.max(DAY_START_HOUR * 60, Math.min(snappedMinutes, maxStart))
     const time = minutesToTime(clampedMinutes)
     emit('clickSlot', date, time)
