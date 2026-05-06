@@ -10,14 +10,64 @@ import ActionsTab from '@/components/Instructors/Tabs/ActionsTab.vue'
 import ReportsTab from '@/components/Instructors/Tabs/ReportsTab.vue'
 import FinancesTab from '@/components/Instructors/Tabs/FinancesTab.vue'
 import StudentTab from '@/components/Instructors/Tabs/StudentTab.vue'
+import HmrcTab from '@/components/Instructors/Tabs/HmrcTab.vue'
 import AddInstructorSheet from '@/components/Instructors/AddInstructorSheet.vue'
 import type { InstructorDetail } from '@/types/instructor'
+
+interface ConnectionStatus {
+    connected: boolean
+    connected_at: string | null
+    expires_at: string | null
+    refresh_expires_at: string | null
+    scopes: string[]
+    days_until_refresh_expiry: number | null
+}
+
+interface TaxProfile {
+    completed_at: string | null
+    business_type: string | null
+    vat_registered: boolean
+    vrn: string | null
+    utr: string | null
+    nino: string | null
+    companies_house_number: string | null
+}
+
+interface ItsaThreshold {
+    date: string
+    income: number
+    label: string
+}
+
+interface Applicability {
+    profile_complete: boolean
+    business_type: string | null
+    vat: { applies: boolean; vrn: string | null }
+    itsa: { applies: boolean; status: string; thresholds: ItsaThreshold[] }
+    corporation_tax: { applies: false; reason: string }
+    summary: string
+}
+
+interface BusinessTypeOption {
+    value: string
+    label: string
+}
+
+interface HmrcData {
+    environment: string
+    connection: ConnectionStatus
+    helloWorldResponse: Record<string, unknown> | null
+    taxProfile: TaxProfile | null
+    applicability: Applicability | null
+    businessTypes: BusinessTypeOption[]
+}
 
 interface Props {
     instructor: InstructorDetail
     tab?: string
     subtab?: string
     student?: number
+    hmrc?: HmrcData | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -27,7 +77,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const isEditSheetOpen = ref(false)
 
-type TabType = 'schedule' | 'details' | 'active-pupils' | 'reports' | 'finances' | 'actions' | 'student'
+type TabType = 'schedule' | 'details' | 'active-pupils' | 'reports' | 'finances' | 'actions' | 'student' | 'hmrc'
 
 const tabs: { key: TabType; label: string }[] = [
     { key: 'schedule', label: 'Schedule' },
@@ -69,8 +119,8 @@ const breadcrumbs = [
                 @edit="isEditSheetOpen = true"
             />
 
-            <!-- Tab Navigation (hidden when viewing a student) -->
-            <div class="flex gap-1 border-b" v-if="instructor.onboarding_complete && activeTab !== 'student'">
+            <!-- Tab Navigation (hidden when viewing a student or HMRC sub-page) -->
+            <div class="flex gap-1 border-b" v-if="instructor.onboarding_complete && activeTab !== 'student' && activeTab !== 'hmrc'">
                 <button
                     v-for="tab in tabs"
                     :key="tab.key"
@@ -125,6 +175,13 @@ const breadcrumbs = [
                     :instructor="instructor"
                     :student-id="student"
                     :subtab="subtab"
+                />
+
+                <!-- HMRC Tab -->
+                <HmrcTab
+                    v-if="activeTab === 'hmrc' && hmrc"
+                    :instructor-id="instructor.id"
+                    :hmrc="hmrc"
                 />
             </div>
         </div>

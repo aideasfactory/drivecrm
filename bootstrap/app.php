@@ -20,6 +20,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('calendar:cleanup-drafts')->dailyAt('00:00');
         $schedule->command('push:send-queued')->everyMinute();
         $schedule->command('hmrc:monitor-token-expiry')->dailyAt('07:00');
+        $schedule->command('hmrc:sync-itsa-obligations')->dailyAt('07:15');
+        $schedule->command('hmrc:check-refresh-health')->hourly();
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);

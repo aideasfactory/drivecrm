@@ -69,6 +69,8 @@ return [
 
     'scopes' => [
         'hello_world' => ['hello'],
+        'itsa' => ['read:self-assessment', 'write:self-assessment'],
+        'vat' => ['read:vat', 'write:vat'],
     ],
 
     /*
@@ -107,6 +109,27 @@ return [
     'device_cookie' => [
         'name' => 'hmrc_device_id',
         'lifetime_minutes' => 60 * 24 * 365 * 10,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Fraud-prevention headers (Phase 2)
+    |--------------------------------------------------------------------------
+    |
+    | DRIVE declares connection method WEB_APP_VIA_SERVER. These values feed
+    | the Gov-Vendor-* headers and frame how Gov-Client-* values are composed.
+    | See .claude/hmrc-fraud-headers.md for the per-header source of truth.
+    */
+
+    'fraud_headers' => [
+        'connection_method' => 'WEB_APP_VIA_SERVER',
+        'vendor_product_name' => env('HMRC_VENDOR_PRODUCT_NAME', 'Drive CRM'),
+        'vendor_version' => env('HMRC_VENDOR_VERSION', '1.0.0'),
+        'vendor_public_ip' => env('HMRC_VENDOR_PUBLIC_IP'),
+        'user_id_key' => env('HMRC_USER_ID_KEY', 'drivecrm'),
+        // Maximum age (minutes) for an HmrcClientFingerprint before an interactive
+        // action must re-capture it. Keeps the device snapshot recent for HMRC.
+        'fingerprint_max_age_minutes' => 30,
     ],
 
 ];

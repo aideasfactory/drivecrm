@@ -246,13 +246,13 @@ const roleVariant = (role: string): 'default' | 'secondary' | 'outline' => {
                         <CardDescription>Weekly order revenue from active &amp; completed orders</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div class="flex h-48 items-end gap-2">
+                        <div class="flex h-44 gap-2">
                             <div
                                 v-for="point in metrics.revenueTrend"
                                 :key="point.week"
-                                class="group flex flex-1 flex-col items-center gap-1"
+                                class="group relative flex flex-1 flex-col justify-end"
                             >
-                                <div class="text-[10px] font-medium opacity-0 group-hover:opacity-100">
+                                <div class="absolute -top-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-medium opacity-0 group-hover:opacity-100">
                                     {{ formatPence(point.value) }}
                                 </div>
                                 <div
@@ -262,9 +262,15 @@ const roleVariant = (role: string): 'default' | 'secondary' | 'outline' => {
                                         minHeight: '2px',
                                     }"
                                 />
-                                <div class="text-[10px] text-muted-foreground">
-                                    {{ point.week }}
-                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-1 flex gap-2">
+                            <div
+                                v-for="point in metrics.revenueTrend"
+                                :key="`label-${point.week}`"
+                                class="flex-1 text-center text-[10px] text-muted-foreground"
+                            >
+                                {{ point.week }}
                             </div>
                         </div>
                     </CardContent>
@@ -279,13 +285,13 @@ const roleVariant = (role: string): 'default' | 'secondary' | 'outline' => {
                         <CardDescription>Weekly student registrations</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div class="flex h-48 items-end gap-2">
+                        <div class="flex h-44 gap-2">
                             <div
                                 v-for="point in metrics.signupsTrend"
                                 :key="point.week"
-                                class="group flex flex-1 flex-col items-center gap-1"
+                                class="group relative flex flex-1 flex-col justify-end"
                             >
-                                <div class="text-[10px] font-medium opacity-0 group-hover:opacity-100">
+                                <div class="absolute -top-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-medium opacity-0 group-hover:opacity-100">
                                     {{ formatNumber(point.value) }}
                                 </div>
                                 <div
@@ -295,9 +301,15 @@ const roleVariant = (role: string): 'default' | 'secondary' | 'outline' => {
                                         minHeight: '2px',
                                     }"
                                 />
-                                <div class="text-[10px] text-muted-foreground">
-                                    {{ point.week }}
-                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-1 flex gap-2">
+                            <div
+                                v-for="point in metrics.signupsTrend"
+                                :key="`label-${point.week}`"
+                                class="flex-1 text-center text-[10px] text-muted-foreground"
+                            >
+                                {{ point.week }}
                             </div>
                         </div>
                     </CardContent>

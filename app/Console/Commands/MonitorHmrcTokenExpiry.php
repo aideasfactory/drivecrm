@@ -75,7 +75,7 @@ class MonitorHmrcTokenExpiry extends Command
     }
 
     /**
-     * @param  array<int, int>  $thresholds Ascending list, e.g. [7, 30]
+     * @param  array<int, int>  $thresholds  Ascending list, e.g. [7, 30]
      */
     private function thresholdHit(int $days, array $thresholds): ?int
     {

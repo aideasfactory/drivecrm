@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Hmrc;
 
+use App\Enums\BusinessType;
 use App\Exceptions\Hmrc\HmrcApiException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UpdateInstructorTaxProfileRequest;
 use App\Models\HmrcDeviceIdentifier;
+use App\Models\User;
 use App\Services\HmrcService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,13 +26,38 @@ class HmrcConnectionController extends Controller
     public function index(Request $request): Response
     {
         $user = $request->user();
+        $instructor = $user->instructor;
         $environment = (string) config('hmrc.environment', 'sandbox');
 
         return Inertia::render('Hmrc/Connection', [
             'environment' => $environment,
             'connection' => $this->hmrc->connectionStatusFor($user),
             'helloWorldResponse' => $request->session()->get('hmrc_hello_world'),
+            'taxProfile' => $instructor ? $this->hmrc->getTaxProfile($instructor) : null,
+            'applicability' => $instructor ? $this->hmrc->getMtdApplicability($instructor) : null,
+            'businessTypes' => $this->businessTypeOptions(),
         ]);
+    }
+
+    public function updateTaxProfile(UpdateInstructorTaxProfileRequest $request): RedirectResponse
+    {
+        $instructor = $request->user()->instructor;
+
+        $this->hmrc->updateTaxProfile($instructor, $request->validated());
+
+        return redirect($this->hmrcAreaUrl())
+            ->with('success', 'Tax profile updated.');
+    }
+
+    /**
+     * @return array<int, array{value: string, label: string}>
+     */
+    private function businessTypeOptions(): array
+    {
+        return array_map(
+            fn (BusinessType $type) => ['value' => $type->value, 'label' => $type->label()],
+            BusinessType::cases(),
+        );
     }
 
     public function connect(Request $request): RedirectResponse
@@ -71,8 +99,7 @@ class HmrcConnectionController extends Controller
                 ->with('error', $exception->userMessage());
         }
 
-        return redirect()
-            ->route('hmrc.index')
+        return redirect($this->hmrcAreaUrl())
             ->with('success', 'Connected to HMRC successfully.');
     }
 
@@ -80,9 +107,20 @@ class HmrcConnectionController extends Controller
     {
         $this->hmrc->disconnect($request->user());
 
-        return redirect()
-            ->route('hmrc.index')
+        return redirect($this->hmrcAreaUrl())
             ->with('success', 'HMRC connection removed.');
+    }
+
+    private function hmrcAreaUrl(?User $user = null): string
+    {
+        $user = $user ?? request()->user();
+        $instructor = $user?->instructor;
+
+        if ($instructor) {
+            return url("/instructors/{$instructor->id}?tab=hmrc");
+        }
+
+        return route('hmrc.index');
     }
 
     private function ensureDeviceIdentifier(Request $request, int $userId): void

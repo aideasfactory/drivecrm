@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class HmrcOAuthState extends Model
 {
+    protected $table = 'hmrc_oauth_states';
+
     public $timestamps = false;
 
     protected $fillable = [

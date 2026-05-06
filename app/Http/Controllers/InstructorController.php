@@ -10,6 +10,7 @@ use App\Actions\Shared\Contact\DeleteContactAction;
 use App\Actions\Shared\Contact\SetPrimaryContactAction;
 use App\Actions\Shared\Contact\UpdateContactAction;
 use App\Actions\Shared\LogActivityAction;
+use App\Enums\BusinessType;
 use App\Enums\RecurrencePattern;
 use App\Http\Requests\AdminResetPasswordRequest;
 use App\Http\Requests\ImportInstructorsCsvRequest;
@@ -28,6 +29,7 @@ use App\Models\Location;
 use App\Models\MileageLog;
 use App\Models\Student;
 use App\Models\User;
+use App\Services\HmrcService;
 use App\Services\InstructorService;
 use App\Services\StripeService;
 use Carbon\Carbon;
@@ -44,7 +46,8 @@ class InstructorController extends Controller
 {
     public function __construct(
         protected InstructorService $instructorService,
-        protected StripeService $stripeService
+        protected StripeService $stripeService,
+        protected HmrcService $hmrc,
     ) {}
 
     /**
@@ -124,6 +127,23 @@ class InstructorController extends Controller
         // Get locations
         $locations = $this->instructorService->getLocations($instructor);
 
+        $tab = (string) request()->query('tab', 'schedule');
+
+        $hmrc = null;
+        if ($tab === 'hmrc') {
+            $hmrc = [
+                'environment' => (string) config('hmrc.environment', 'sandbox'),
+                'connection' => $this->hmrc->connectionStatusFor($instructor->user),
+                'helloWorldResponse' => request()->session()->get('hmrc_hello_world'),
+                'taxProfile' => $this->hmrc->getTaxProfile($instructor),
+                'applicability' => $this->hmrc->getMtdApplicability($instructor),
+                'businessTypes' => array_map(
+                    fn (BusinessType $type) => ['value' => $type->value, 'label' => $type->label()],
+                    BusinessType::cases(),
+                ),
+            ];
+        }
+
         return Inertia::render('Instructors/Show', [
             'instructor' => [
                 'id' => $instructor->id,
@@ -144,10 +164,12 @@ class InstructorController extends Controller
                 'stats' => $stats,
                 'booking_hours' => $bookingHours,
                 'locations' => $locations,
+                'hmrc_connected' => $instructor->user->hmrcToken()->exists(),
             ],
-            'tab' => request()->query('tab', 'schedule'),
+            'tab' => $tab,
             'subtab' => request()->query('subtab', 'summary'),
             'student' => request()->query('student') ? (int) request()->query('student') : null,
+            'hmrc' => $hmrc,
         ]);
     }
 

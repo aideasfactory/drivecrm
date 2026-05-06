@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Actions\Hmrc;
 
 use App\Exceptions\Hmrc\HmrcApiException;
+use App\Exceptions\Hmrc\MissingFraudFingerprintException;
+use App\Models\HmrcClientFingerprint;
+use App\Models\HmrcToken;
 use App\Models\User;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -14,17 +17,20 @@ class CallHmrcApiAction
 {
     public function __construct(
         private readonly GetValidAccessTokenAction $getValidAccessToken,
+        private readonly BuildFraudPreventionHeadersAction $buildFraudHeaders,
     ) {}
 
     /**
      * Call an HMRC endpoint with the user's access token.
      *
      * @param  string  $method  HTTP verb (GET/POST/PUT/DELETE).
-     * @param  string  $path    Path relative to the API base (e.g. `/hello/user`).
-     * @param  string  $version HMRC API version pinned via the Accept header (e.g. `1.0`).
+     * @param  string  $path  Path relative to the API base (e.g. `/hello/user`).
+     * @param  string  $version  HMRC API version pinned via the Accept header (e.g. `1.0`).
      * @param  array<string, mixed>  $payload  Body for POST/PUT requests.
-     * @param  array<string, string>  $extraHeaders  Optional additional headers (e.g. fraud-prevention headers).
+     * @param  array<string, string>  $extraHeaders  Optional additional headers (caller-supplied; merged on top of fraud headers if both are present).
      * @param  array<string, mixed>  $query  Optional query parameters.
+     * @param  bool  $withFraudHeaders  When true, build the WEB_APP_VIA_SERVER fraud-prevention header set from the user's stored fingerprint and merge it.
+     * @param  array{ip?: ?string, port?: ?string, has_mfa?: bool}  $fraudContext  Per-request context for fraud headers (IP, port, MFA marker).
      * @return array<string, mixed>
      */
     public function __invoke(
@@ -35,6 +41,8 @@ class CallHmrcApiAction
         array $payload = [],
         array $extraHeaders = [],
         array $query = [],
+        bool $withFraudHeaders = false,
+        array $fraudContext = [],
     ): array {
         $token = ($this->getValidAccessToken)($user);
 
@@ -42,11 +50,16 @@ class CallHmrcApiAction
         $base = (string) config("hmrc.urls.{$environment}.api");
         $url = $base.'/'.ltrim($path, '/');
 
+        $headers = ['Accept' => "application/vnd.hmrc.{$version}+json"];
+
+        if ($withFraudHeaders) {
+            $headers = array_merge($headers, $this->resolveFraudHeaders($user, $fraudContext));
+        }
+
+        $headers = array_merge($headers, $extraHeaders);
+
         $request = Http::withToken($token)
-            ->acceptJson()
-            ->withHeaders(array_merge([
-                'Accept' => "application/vnd.hmrc.{$version}+json",
-            ], $extraHeaders));
+            ->withHeaders($headers);
 
         $verb = strtoupper($method);
 
@@ -65,7 +78,14 @@ class CallHmrcApiAction
             throw $this->toException($response);
         }
 
-        return is_array($body = $response->json()) ? $body : [];
+        $body = is_array($body = $response->json()) ? $body : [];
+
+        $correlationId = $response->header('X-CorrelationId');
+        if (is_string($correlationId) && $correlationId !== '') {
+            $body['_correlationId'] = $correlationId;
+        }
+
+        return $body;
     }
 
     private function toException(Response $response): HmrcApiException
@@ -91,5 +111,36 @@ class CallHmrcApiAction
             'path' => $path,
             'status' => $response->status(),
         ]);
+    }
+
+    /**
+     * @param  array{ip?: ?string, port?: ?string, has_mfa?: bool}  $context
+     * @return array<string, string>
+     */
+    private function resolveFraudHeaders(User $user, array $context): array
+    {
+        $token = HmrcToken::query()->where('user_id', $user->id)->first();
+        if ($token === null) {
+            throw new MissingFraudFingerprintException(
+                'No HMRC token on file — connect to HMRC before calling protected endpoints.',
+            );
+        }
+
+        $fingerprint = HmrcClientFingerprint::query()
+            ->where('hmrc_token_id', $token->id)
+            ->first();
+
+        if ($fingerprint === null) {
+            throw new MissingFraudFingerprintException;
+        }
+
+        $maxAge = (int) config('hmrc.fraud_headers.fingerprint_max_age_minutes', 30);
+        if ($fingerprint->isStale($maxAge)) {
+            throw new MissingFraudFingerprintException(
+                'Your device fingerprint is older than '.$maxAge.' minutes. Refresh the page and retry.',
+            );
+        }
+
+        return ($this->buildFraudHeaders)($user, $fingerprint, $context);
     }
 }

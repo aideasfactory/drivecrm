@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\BusinessType;
+use App\Enums\ItsaEnrolmentStatus;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -34,6 +36,15 @@ class Instructor extends Model
         'meta',
         'pin',
         'profile_picture_path',
+        'business_type',
+        'vat_registered',
+        'vrn',
+        'utr',
+        'nino',
+        'companies_house_number',
+        'tax_profile_completed_at',
+        'mtd_itsa_status',
+        'mtd_itsa_status_checked_at',
     ];
 
     protected function casts(): array
@@ -44,6 +55,12 @@ class Instructor extends Model
             'payouts_enabled' => 'boolean',
             'priority' => 'boolean',
             'meta' => 'array',
+            'business_type' => BusinessType::class,
+            'vat_registered' => 'boolean',
+            'nino' => 'encrypted',
+            'tax_profile_completed_at' => 'datetime',
+            'mtd_itsa_status' => ItsaEnrolmentStatus::class,
+            'mtd_itsa_status_checked_at' => 'datetime',
         ];
     }
 
