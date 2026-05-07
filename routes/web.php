@@ -1,6 +1,12 @@
 <?php
 
 use App\Enums\UserRole;
+use App\Http\Controllers\Hmrc\HmrcConnectionController;
+use App\Http\Controllers\Hmrc\HmrcFraudHeadersController;
+use App\Http\Controllers\Hmrc\HmrcHelloWorldController;
+use App\Http\Controllers\Hmrc\Itsa\FinalDeclarationController;
+use App\Http\Controllers\Hmrc\Itsa\ItsaController;
+use App\Http\Controllers\Hmrc\Vat\VatController;
 use App\Http\Controllers\Onboarding\OnboardingController;
 use App\Http\Controllers\Onboarding\StepFiveController;
 use App\Http\Controllers\Onboarding\StepFourController;
@@ -9,6 +15,8 @@ use App\Http\Controllers\Onboarding\StepSixController;
 use App\Http\Controllers\Onboarding\StepThreeController;
 use App\Http\Controllers\Onboarding\StepTwoController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Middleware\EnsureInstructor;
+use App\Http\Middleware\EnsureMtdEnrolled;
 use App\Http\Middleware\RestrictInstructor;
 use App\Http\Middleware\ValidateEnquiryUuid;
 use App\Http\Middleware\ValidateStepAccess;
@@ -304,6 +312,57 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('apps.index');
 });
 
+// HMRC Making Tax Digital — instructor-only
+Route::middleware(['auth', 'verified', EnsureInstructor::class])
+    ->prefix('hmrc')
+    ->name('hmrc.')
+    ->group(function () {
+        Route::get('/', [HmrcConnectionController::class, 'index'])->name('index');
+        Route::get('/connect', [HmrcConnectionController::class, 'connect'])->name('connect');
+        Route::get('/oauth/callback', [HmrcConnectionController::class, 'callback'])->name('callback');
+        Route::post('/disconnect', [HmrcConnectionController::class, 'disconnect'])->name('disconnect');
+        Route::post('/tax-profile', [HmrcConnectionController::class, 'updateTaxProfile'])->name('tax-profile.update');
+        Route::post('/fingerprint', [HmrcFraudHeadersController::class, 'storeFingerprint'])->name('fingerprint.store');
+        Route::post('/test/hello-world', HmrcHelloWorldController::class)->name('test.hello-world');
+        Route::post('/test/fraud-headers', [HmrcFraudHeadersController::class, 'validate'])->name('test.fraud-headers');
+
+        Route::prefix('vat')->name('vat.')->group(function () {
+            Route::get('/', [VatController::class, 'index'])->name('index');
+            Route::post('/sync-obligations', [VatController::class, 'syncObligations'])->name('sync-obligations');
+            Route::get('/{periodKey}/period', [VatController::class, 'period'])
+                ->where('periodKey', '.+')
+                ->name('period');
+            Route::post('/{periodKey}/period', [VatController::class, 'store'])
+                ->where('periodKey', '.+')
+                ->name('store');
+        });
+
+        Route::prefix('itsa')->name('itsa.')->group(function () {
+            Route::get('/', [ItsaController::class, 'index'])->name('index');
+            Route::post('/refresh-status', [ItsaController::class, 'refreshStatus'])->name('refresh-status');
+            Route::post('/sync-obligations', [ItsaController::class, 'syncObligations'])->name('sync-obligations');
+
+            Route::middleware(EnsureMtdEnrolled::class)->group(function () {
+                Route::get('/{businessId}/period/{periodKey}', [ItsaController::class, 'period'])
+                    ->where('periodKey', '.+')
+                    ->name('period');
+                Route::post('/{businessId}/period/{periodKey}', [ItsaController::class, 'store'])
+                    ->where('periodKey', '.+')
+                    ->name('store');
+                Route::put('/quarterly-updates/{quarterlyUpdate}', [ItsaController::class, 'amend'])->name('amend');
+
+                Route::prefix('final-declaration')->name('final-declaration.')->group(function () {
+                    Route::get('/{taxYear}', [FinalDeclarationController::class, 'index'])->name('index');
+                    Route::get('/{taxYear}/step/{type}', [FinalDeclarationController::class, 'step'])->name('step');
+                    Route::post('/{taxYear}/step/{type}', [FinalDeclarationController::class, 'storeStep'])->name('step.store');
+                    Route::post('/{taxYear}/calculate', [FinalDeclarationController::class, 'triggerCalculation'])->name('calculate');
+                    Route::get('/{taxYear}/calculation/{calculation}', [FinalDeclarationController::class, 'showCalculation'])->name('calculation');
+                    Route::get('/{taxYear}/calculation/{calculation}/poll', [FinalDeclarationController::class, 'pollCalculation'])->name('calculation.poll');
+                    Route::post('/{taxYear}/submit/{calculation}', [FinalDeclarationController::class, 'submit'])->name('submit');
+                });
+            });
+        });
+    });
 // Public mobile-app brochure (linked from welcome email)
 Route::get('/get-app', [\App\Http\Controllers\GetAppController::class, 'index'])
     ->name('get-app');

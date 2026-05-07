@@ -269,6 +269,15 @@ Extended profile for users with instructor role.
 | `postcode` | varchar(10) | NULLABLE | Instructor postcode |
 | `latitude` | decimal(10,8) | NULLABLE | Instructor location latitude |
 | `longitude` | decimal(11,8) | NULLABLE | Instructor location longitude |
+| `business_type` | varchar(32) | NULLABLE | HMRC tax-profile business type (`sole_trader`, `partnership`, `limited_company`) |
+| `vat_registered` | boolean | DEFAULT false | Instructor / business is VAT-registered |
+| `vrn` | varchar(9) | NULLABLE, UNIQUE | VAT Registration Number (9 digits, unique where present) |
+| `utr` | varchar(10) | NULLABLE | Unique Taxpayer Reference (10 digits) — sole trader / partnership |
+| `nino` | text | NULLABLE, ENCRYPTED | National Insurance Number — encrypted at rest (PII); plaintext is 9 chars |
+| `companies_house_number` | varchar(8) | NULLABLE | Companies House registration number — limited company only |
+| `tax_profile_completed_at` | timestamp | NULLABLE | When the instructor first completed their HMRC tax profile |
+| `mtd_itsa_status` | varchar(32) | DEFAULT 'unknown' | MTD ITSA enrolment state machine: `unknown`, `not_signed_up`, `income_source_missing`, `signed_up_voluntary`, `mandated` |
+| `mtd_itsa_status_checked_at` | timestamp | NULLABLE | When `mtd_itsa_status` was last refreshed against HMRC |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
@@ -276,6 +285,7 @@ Extended profile for users with instructor role.
 - `stripe_account_id`
 - Composite index on `(latitude, longitude)` named `instructors_coordinates_index`
 - `pin` (unique)
+- `vrn` (unique — MySQL allows multiple NULLs)
 
 **Relationships:**
 - Belongs to one `User`
@@ -1527,3 +1537,338 @@ One row per (student, subcategory) pair. Upserted on save — no history is kept
 **Indexes:** UNIQUE (student_id, progress_subcategory_id) — also the upsert target
 **Relationships:** BelongsTo → Student, BelongsTo → ProgressSubcategory
 **Business rule:** `SaveStudentProgressAction` silently ignores attempts to score against a soft-deleted subcategory or one that does not belong to the student's current instructor.
+
+---
+
+## HMRC MTD Integration Tables (Phase 1: OAuth foundation)
+
+These tables back the OAuth + Hello World round-trip against HMRC's sandbox. All HMRC token material is encrypted at rest via Laravel's `encrypted` cast on top of the application key.
+
+### hmrc_oauth_states
+
+Short-lived per-user CSRF + PKCE state for the in-flight OAuth handshake. One row is created at the start of an authorization request and deleted on successful exchange (or swept after expiry).
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| user_id | bigint FK | No | References users.id. Cascade on delete. |
+| state | string | No | Opaque CSRF token returned by HMRC on callback. **Unique.** |
+| code_verifier | text | No | PKCE verifier paired with the stored `state`. |
+| scopes | json | No | Array of scopes requested for this authorization. |
+| redirect_uri | string | No | Snapshot of the redirect URI used (must match the token exchange). |
+| expires_at | timestamp | No | Typically ~10 minutes from creation. Indexed for sweep. |
+| created_at | timestamp | Yes | Created timestamp. |
+
+**Indexes:** UNIQUE (state); INDEX (expires_at)
+**Relationships:** BelongsTo → User
+
+### hmrc_tokens
+
+The instructor's persistent HMRC OAuth token pair. Single row per user (UNIQUE on `user_id`). Access and refresh tokens are encrypted at rest.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| user_id | bigint FK | No | References users.id. **Unique.** Cascade on delete. |
+| access_token | text (encrypted) | No | Bearer token for HMRC API calls. ~4-hour lifetime. |
+| refresh_token | text (encrypted) | No | Refresh token. ~18-month lifetime, rotated on every refresh. |
+| token_type | string | No | Defaults to `bearer`. |
+| scopes | json | No | Array of scopes currently granted by HMRC. |
+| expires_at | timestamp | No | Access-token expiry. |
+| refresh_expires_at | timestamp | No | Refresh-token expiry — instructor must re-auth after this. |
+| last_refreshed_at | timestamp | Yes | Set every time the access token is refreshed. |
+| last_expiry_warning_at | timestamp | Yes | Used by `MonitorHmrcTokenExpiry` to dedupe T-30/T-7 warnings. |
+| connected_at | timestamp | No | First successful connection time (preserved across refreshes). |
+| created_at / updated_at | timestamp | Yes | |
+
+**Indexes:** UNIQUE (user_id)
+**Relationships:** BelongsTo → User; HasMany → HmrcTokenRefreshLog
+
+### hmrc_device_identifiers
+
+Stable per-user device identifier used for HMRC's `Gov-Client-Device-ID` fraud-prevention header. **Persists across token churn** — kept in its own table so disconnect/reconnect does not mint a new device ID. Mirrored to a long-lived secure cookie (`hmrc_device_id`).
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| user_id | bigint FK | No | References users.id. **Unique.** Cascade on delete. |
+| device_id | uuid | No | UUID generated client-side on first OAuth visit, mirrored server-side on first sight. |
+| first_seen_at | timestamp | No | When the row was created. |
+| last_seen_at | timestamp | No | Updated on every interactive HMRC action. |
+| created_at / updated_at | timestamp | Yes | |
+
+**Indexes:** UNIQUE (user_id)
+**Relationships:** BelongsTo → User
+
+### hmrc_token_refresh_logs
+
+Append-only log of every refresh attempt for ops monitoring. Powers the failure-rate dashboard and per-user diagnostics.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| user_id | bigint FK | No | References users.id. Cascade on delete. |
+| outcome | enum | No | `success`, `failure_invalid_grant`, `failure_network`, `failure_other`. |
+| error_code | string | Yes | HMRC error code if HMRC returned one. |
+| attempted_at | timestamp | No | Time of the refresh attempt. |
+| created_at / updated_at | timestamp | Yes | |
+
+**Indexes:** INDEX (outcome, attempted_at)
+**Relationships:** BelongsTo → User
+
+### hmrc_client_fingerprints
+
+Browser-side device fingerprint captured immediately before any interactive HMRC call requiring fraud-prevention headers. One row per `hmrc_token_id`; refreshed on each interactive submit-flow entry so the sent values reflect the device the instructor is actually using right now.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| hmrc_token_id | bigint FK | No | Unique. References hmrc_tokens.id. Cascade on delete. |
+| screens | json | No | Array of `{width, height, scaling-factor, colour-depth}` — one entry per monitor. |
+| window_size | json | No | `{width, height}` of the browser window when captured. |
+| timezone | json | No | `{iana, offset_minutes}` — server formats `UTC±hh:mm` for `Gov-Client-Timezone`. |
+| browser_user_agent | text | No | `navigator.userAgent` from the originating browser, sent as `Gov-Client-Browser-JS-User-Agent`. |
+| captured_at | timestamp | No | When the fingerprint was collected. Used to enforce freshness on submit flows. |
+| created_at / updated_at | timestamp | Yes | |
+
+**Constraints:** UNIQUE (hmrc_token_id)
+**Relationships:** BelongsTo → HmrcToken (and via HmrcToken to User)
+**Notes:** WEB_APP_VIA_SERVER does not require `Local-IPs`, `Browser-Plugins`, or `Browser-Do-Not-Track`, so we don't capture them. See `.claude/hmrc-fraud-headers.md`.
+
+### hmrc_itsa_businesses
+
+Cache of self-employment / property businesses returned by HMRC's Business Details API. Refreshed by `SyncHmrcItsaObligations` daily and on demand when the user opens the ITSA page.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| user_id | bigint FK | No | References users.id. Cascade on delete. |
+| instructor_id | bigint FK | Yes | References instructors.id. Null on delete (we keep the audit row even if the instructor profile is detached). |
+| business_id | string(64) | No | HMRC's businessId. Indexed. |
+| type_of_business | string(32) | No | `self-employment` / `uk-property` / `foreign-property`. |
+| trading_name | string(160) | Yes | Business trading name. |
+| accounting_type | string(16) | Yes | `CASH` / `ACCRUALS`. |
+| commencement_date | date | Yes | When the business started. |
+| cessation_date | date | Yes | When the business ended (if ceased). |
+| latency_details | json | Yes | HMRC's `latencyDetails` block — opaque structure used by HMRC for back-period eligibility. |
+| last_synced_at | timestamp | No | When this row was last refreshed from HMRC. |
+| created_at / updated_at | timestamp | Yes | |
+
+**Constraints:** UNIQUE (user_id, business_id)
+**Relationships:** BelongsTo → User, BelongsTo → Instructor
+
+### hmrc_itsa_obligations
+
+Cached open and recently-fulfilled quarterly obligations. Drives the deadline countdown banner on the dashboard, the Phase 3f reminder cron, and the obligations list on the ITSA page.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| user_id | bigint FK | No | References users.id. Cascade on delete. |
+| business_id | string(64) | No | HMRC businessId. Indexed. |
+| period_key | string(64) | No | HMRC's identifier for the obligation period. Indexed. |
+| period_start_date | date | No | First day of the period. |
+| period_end_date | date | No | Last day of the period. |
+| due_date | date | No | When the quarterly update must be filed. |
+| received_date | date | Yes | When HMRC marked the obligation fulfilled. |
+| status | string(16) | No | `Open` / `Fulfilled`. |
+| obligation_type | string(64) | No | Defaults to `Quarterly Update`. |
+| last_reminder_sent_at | timestamp | Yes | Used by the reminder cron to dedupe sends within a deadline window. |
+| last_synced_at | timestamp | No | When this row was last refreshed from HMRC. |
+| created_at / updated_at | timestamp | Yes | |
+
+**Constraints:** UNIQUE (user_id, business_id, period_key, obligation_type)
+**Indexes:** INDEX (status, due_date)
+**Relationships:** BelongsTo → User; soft-relates to HmrcItsaBusiness via (user_id, business_id).
+
+### hmrc_itsa_quarterly_updates
+
+Permanent audit record per quarterly submission. The row's current values represent the *latest* state of that period (post-amendments); the immutable history is in `hmrc_itsa_quarterly_update_revisions`.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| user_id | bigint FK | No | References users.id. Cascade on delete. |
+| instructor_id | bigint FK | Yes | References instructors.id. Null on delete. |
+| business_id | string(64) | No | HMRC businessId. Indexed. |
+| period_key | string(64) | No | HMRC's period identifier. Indexed. |
+| period_start_date | date | No | First day of the period. |
+| period_end_date | date | No | Last day of the period. |
+| turnover_pence | bigInteger | No | Income — turnover in pence. Default 0. |
+| other_income_pence | bigInteger | No | Income — other in pence. Default 0. |
+| consolidated_expenses_pence | bigInteger | Yes | Mutually exclusive with itemised expense fields below. |
+| cost_of_goods_pence | bigInteger | Yes | Itemised. |
+| payments_to_subcontractors_pence | bigInteger | Yes | Itemised. |
+| wages_and_staff_costs_pence | bigInteger | Yes | Itemised. |
+| car_van_travel_expenses_pence | bigInteger | Yes | Itemised. |
+| premises_running_costs_pence | bigInteger | Yes | Itemised. |
+| maintenance_costs_pence | bigInteger | Yes | Itemised. |
+| admin_costs_pence | bigInteger | Yes | Itemised. |
+| business_entertainment_costs_pence | bigInteger | Yes | Itemised. |
+| advertising_costs_pence | bigInteger | Yes | Itemised. |
+| interest_on_bank_other_loans_pence | bigInteger | Yes | Itemised. |
+| finance_charges_pence | bigInteger | Yes | Itemised. |
+| irrecoverable_debts_pence | bigInteger | Yes | Itemised. |
+| professional_fees_pence | bigInteger | Yes | Itemised. |
+| depreciation_pence | bigInteger | Yes | Itemised. |
+| other_expenses_pence | bigInteger | Yes | Itemised. |
+| submission_id | string(128) | Yes | HMRC's submission identifier from the most recent successful submit/amend. |
+| correlation_id | string(128) | Yes | HMRC's `X-CorrelationId` for support traceability. |
+| submitted_at | timestamp | Yes | When the latest successful submit/amend completed. |
+| request_payload | json | Yes | Last request JSON sent to HMRC. |
+| response_payload | json | Yes | Last response JSON received from HMRC. |
+| digital_records_attested_at | timestamp | Yes | Last time the user ticked the digital-records attestation. |
+| digital_records_attested_by_user_id | bigint FK | Yes | Whoever clicked submit (supports staff-assisted submissions). Null on delete. |
+| created_at / updated_at | timestamp | Yes | |
+
+**Constraints:** UNIQUE (user_id, business_id, period_key)
+**Relationships:** BelongsTo → User; BelongsTo → Instructor; HasMany → HmrcItsaQuarterlyUpdateRevision.
+
+### hmrc_itsa_quarterly_update_revisions
+
+Append-only audit trail for the 6-year retention requirement. Every successful submission writes revision 1; every amendment writes revision N+1; failed submissions/amendments are recorded too with `kind` = `failed_*`. **Never updated, never deleted.**
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| quarterly_update_id | bigint FK | No | References hmrc_itsa_quarterly_updates.id. Cascade on delete. |
+| user_id | bigint FK | No | References users.id. Cascade on delete. |
+| revision_number | unsigned int | No | 1, 2, 3, ... per parent row. |
+| kind | string(32) | No | `submission`, `amendment`, `failed_submission`, `failed_amendment`. |
+| request_payload | json | No | Exact payload sent to HMRC. |
+| response_payload | json | Yes | Exact response received (null only if a network error prevented even getting one). |
+| submission_id | string(128) | Yes | HMRC's submission identifier when present. |
+| correlation_id | string(128) | Yes | HMRC's `X-CorrelationId`. |
+| submitted_at | timestamp | No | When this revision was attempted. |
+| submitted_by_user_id | bigint FK | No | Whoever clicked submit/amend. Cascade on user delete. |
+| digital_records_attested_at | timestamp | Yes | Attestation timestamp captured per revision. |
+| created_at / updated_at | timestamp | Yes | |
+
+**Constraints:** UNIQUE (quarterly_update_id, revision_number)
+**Indexes:** INDEX (user_id, submitted_at) — used by the audit-log export.
+**Relationships:** BelongsTo → HmrcItsaQuarterlyUpdate, BelongsTo → User (twice — owner and submitter).
+
+### hmrc_itsa_calculations
+
+Triggered tax calculations (Phase 3.5). One row per `(user, calculation_id)`. HMRC issues a fresh calculationId for every trigger; we keep the history for audit and to let the user re-review prior calculations before submitting the final declaration. Phase 3.5 only triggers the `finalDeclaration` flavour, but the schema holds the other variants for future preview/in-year features.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| user_id | bigint FK | No | References users.id. Cascade on delete. |
+| nino | string(32) | No | Frozen at trigger time so a profile change doesn't break re-fetch. |
+| tax_year | string(16) | No | HMRC's dash form, e.g. `2025-26`. |
+| calculation_id | string(128) | No | HMRC's identifier returned by the trigger endpoint. |
+| calculation_type | string(32) | No | Cast to `ItsaCalculationType` (`inYear`, `intentToCrystallise`, `crystallisation`, `finalDeclaration`). |
+| status | string(16) | No | Cast to `ItsaCalculationStatus` (`pending`, `processed`, `errored`). |
+| triggered_at | timestamp | No | When the trigger POST returned 202. |
+| processed_at | timestamp | Yes | First time we observed `IS_PROCESSED`. |
+| summary_payload | json | Yes | The `liabilityAndCalculation` block (or equivalent) from HMRC. |
+| detail_payload | json | Yes | The full retrieve response, kept as the source for future drill-downs. |
+| error_payload | json | Yes | HMRC `errors[]` when status is `errored`. |
+| created_at / updated_at | timestamp | Yes | |
+
+**Constraints:** UNIQUE (user_id, calculation_id)
+**Indexes:** INDEX (calculation_id), INDEX (user_id, tax_year)
+**Relationships:** BelongsTo → User; HasOne → HmrcItsaFinalDeclaration via `calculation_id`.
+
+### hmrc_itsa_supplementary_data
+
+Latest figures for each supplementary submission type per (user, tax year). HMRC accepts repeat PUTs that overwrite the previous figures — we mirror this by upserting on the unique key. The full v1 form payload lives in `payload` so adding new fields later doesn't require a migration.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| user_id | bigint FK | No | References users.id. Cascade on delete. |
+| tax_year | string(16) | No | HMRC's dash form, e.g. `2025-26`. |
+| type | string(32) | No | Cast to `ItsaSupplementaryType` (`reliefs`, `disclosures`, `savings`, `dividends`, `individual_details`). |
+| payload | json | No | Exact JSON we PUT to HMRC for this type. |
+| submission_id | string(128) | Yes | When HMRC echoes one. |
+| correlation_id | string(128) | Yes | HMRC's `X-CorrelationId`. |
+| submitted_at | timestamp | Yes | Last successful PUT for this row. |
+| response_payload | json | Yes | Last response body for the row. |
+| created_at / updated_at | timestamp | Yes | |
+
+**Constraints:** UNIQUE (user_id, tax_year, type)
+**Relationships:** BelongsTo → User.
+
+### hmrc_itsa_final_declarations
+
+Permanent record of a Final Declaration submission. Created only on a successful `POST /final-declaration`. Failed attempts are reflected on the linked `hmrc_itsa_calculations` row's `error_payload` rather than as a row here. 6-year retention.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| user_id | bigint FK | No | References users.id. Cascade on delete. |
+| nino | string(32) | No | Frozen at submission time. |
+| tax_year | string(16) | No | HMRC's dash form. |
+| calculation_id | bigint FK | Yes | References hmrc_itsa_calculations.id. NullOnDelete. |
+| submitted_at | timestamp | No | When HMRC accepted the declaration. |
+| correlation_id | string(128) | Yes | HMRC's `X-CorrelationId` for audit. |
+| request_payload | json | Yes | We POST an empty body — the calculationId we asserted is captured here for the audit trail. |
+| response_payload | json | Yes | Full response body (HMRC returns 204 with headers; we capture what we have). |
+| digital_records_attested_at | timestamp | Yes | Attestation timestamp captured at submit. |
+| digital_records_attested_by_user_id | bigint FK | Yes | Whoever clicked submit. NullOnDelete. |
+| created_at / updated_at | timestamp | Yes | |
+
+**Constraints:** UNIQUE (user_id, tax_year)
+**Relationships:** BelongsTo → User, BelongsTo → HmrcItsaCalculation (`calculation_id`), BelongsTo → User (`digital_records_attested_by_user_id`).
+
+### hmrc_vat_obligations
+
+Cached VAT obligations refreshed by the daily `SyncHmrcItsaObligations` cron (which despite its name covers both ITSA and VAT for connected, scope-granted instructors). Drives the open-obligations list and the deadline-reminder notifications.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| user_id | bigint FK | No | References users.id. Cascade on delete. |
+| vrn | string(9) | No | Indexed. The instructor's VAT number. |
+| period_key | string(16) | No | HMRC's identifier for the period — used in submit/retrieve. |
+| period_start_date | date | No | |
+| period_end_date | date | No | |
+| due_date | date | No | |
+| received_date | date | Yes | Populated once HMRC marks the obligation `Fulfilled`. |
+| status | string(16) | No | `Open` or `Fulfilled`. |
+| last_reminder_sent_at | timestamp | Yes | Idempotency for the 30/14/7/1-day reminder cron. |
+| last_synced_at | timestamp | No | Last sync from HMRC. |
+| created_at / updated_at | timestamp | Yes | |
+
+**Constraints:** UNIQUE (user_id, vrn, period_key)
+**Indexes:** INDEX (status, due_date) for the dashboard banner / reminder queries.
+**Relationships:** BelongsTo → User.
+
+### hmrc_vat_returns
+
+Permanent audit record of a 9-box VAT return submission. **Immutable on HMRC's side** — there is no amendment endpoint, so this row is the single source of truth and corrections happen via a future-period adjustment. 6-year retention.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| user_id | bigint FK | No | References users.id. Cascade on delete. |
+| instructor_id | bigint FK | Yes | References instructors.id. NullOnDelete. |
+| vrn | string(9) | No | Indexed. |
+| period_key | string(16) | No | Indexed. |
+| vat_due_sales_pence | bigint | No | Box 1 — VAT due on sales. |
+| vat_due_acquisitions_pence | bigint | No | Box 2 — VAT due on EU acquisitions (typically 0 for sole-trader DI). |
+| total_vat_due_pence | bigint | No | Box 3 = Box 1 + Box 2. |
+| vat_reclaimed_curr_period_pence | bigint | No | Box 4 — VAT reclaimed on purchases. |
+| net_vat_due_pence | bigint | No | Box 5 = abs(Box 3 − Box 4). Non-negative. |
+| total_value_sales_ex_vat_pence | bigint | No | Box 6 (whole pounds at HMRC; stored in pence here). |
+| total_value_purchases_ex_vat_pence | bigint | No | Box 7 (whole pounds). |
+| total_value_goods_supplied_ex_vat_pence | bigint | No | Box 8 (whole pounds). |
+| total_acquisitions_ex_vat_pence | bigint | No | Box 9 (whole pounds). |
+| finalised | boolean | No | Always `true` in v1 — HMRC's binding declaration that the return is final. |
+| submitted_at | timestamp | Yes | When HMRC accepted the return. |
+| processing_date | timestamp | Yes | HMRC's `processingDate` from the response. |
+| form_bundle_number | string(32) | Yes | HMRC's `formBundleNumber` for charge tracking. |
+| charge_ref_number | string(32) | Yes | When HMRC echoes one (often present when net VAT > 0). |
+| payment_indicator | string(8) | Yes | HMRC's `paymentIndicator` (`DD` for direct debit, etc.). |
+| correlation_id | string(128) | Yes | HMRC's `X-CorrelationId`. |
+| request_payload | json | Yes | Exact payload sent to HMRC (audit). |
+| response_payload | json | Yes | Exact response body received. |
+| digital_records_attested_at | timestamp | Yes | Attestation captured at submit. |
+| digital_records_attested_by_user_id | bigint FK | Yes | Whoever clicked submit. NullOnDelete. |
+| created_at / updated_at | timestamp | Yes | |
+
+**Constraints:** UNIQUE (user_id, vrn, period_key) — represents the single authoritative submission per period.
+**Relationships:** BelongsTo → User, BelongsTo → Instructor, BelongsTo → User (`digital_records_attested_by_user_id`).

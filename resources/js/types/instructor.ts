@@ -24,6 +24,7 @@ export interface InstructorDetail {
   stats: InstructorStats
   booking_hours: BookingHours
   locations: Location[]
+  hmrc_connected?: boolean
 }
 
 export interface InstructorStats {

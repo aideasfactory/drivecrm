@@ -119,6 +119,22 @@ class User extends Authenticatable
     }
 
     /**
+     * Get the user's HMRC OAuth token (one per user).
+     */
+    public function hmrcToken(): HasOne
+    {
+        return $this->hasOne(HmrcToken::class);
+    }
+
+    /**
+     * Get the user's stable HMRC device identifier (one per user).
+     */
+    public function hmrcDeviceIdentifier(): HasOne
+    {
+        return $this->hasOne(HmrcDeviceIdentifier::class);
+    }
+
+    /**
      * Get the role-specific profile (Instructor or Student).
      *
      * Relies on the relationship being eager-loaded (e.g. by ResolveApiProfile middleware).

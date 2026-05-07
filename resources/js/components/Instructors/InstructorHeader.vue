@@ -4,7 +4,7 @@ import axios from 'axios'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Mail, Phone, MapPin, Edit, CreditCard, Loader2, CheckCircle, LogOut, Copy } from 'lucide-vue-next'
+import { Mail, Phone, MapPin, Edit, CreditCard, Loader2, CheckCircle, LogOut, ShieldCheck, Copy } from 'lucide-vue-next'
 import { router } from '@inertiajs/vue3'
 import { toast } from '@/components/ui/toast'
 import type { InstructorDetail } from '@/types/instructor'
@@ -30,7 +30,7 @@ interface StripeStatus {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
-const { isOwner } = useRole()
+const { isOwner, isInstructor } = useRole()
 
 const loading = ref(false)
 const checkingStatus = ref(true)
@@ -187,15 +187,16 @@ onMounted(() => {
             <div class="flex items-center gap-2">
                 <!-- Stripe Connection Status & Button -->
                 <div v-if="!checkingStatus" class="flex items-center gap-2">
-                    <!-- Fully Connected Badge -->
-                    <Badge
+                    <!-- Fully Connected — visual label only -->
+                    <Button
                         v-if="status.connected && status.onboarding_complete && status.charges_enabled"
                         variant="outline"
-                        class="gap-1.5 border-green-600 text-green-600 py-2.5"
+                        class="min-w-[180px] border-green-600 text-green-600 py-2.5 cursor-default hover:bg-transparent hover:text-green-600"
+                        tabindex="-1"
                     >
-                        <CheckCircle class="h-3.5 w-3.5" />
+                        <CheckCircle class="mr-2 h-4 w-4" />
                         Stripe Connected
-                    </Badge>
+                    </Button>
 
                     <!-- Connect/Complete Button -->
                     <Button
@@ -210,6 +211,28 @@ onMounted(() => {
                         {{ !status.connected ? 'Connect Stripe' : 'Complete Onboarding' }}
                     </Button>
                 </div>
+
+                <!-- HMRC Connected Button (instructor only, when token exists) -->
+                <Button
+                    v-if="isInstructor && instructor.hmrc_connected"
+                    variant="outline"
+                    class="min-w-[180px] border-green-600 text-green-600 py-2.5 hover:bg-green-50 hover:text-green-600 cursor-pointer"
+                    @click="router.visit(`/instructors/${instructor.id}`, { data: { tab: 'hmrc' }, preserveScroll: true })"
+                >
+                    <CheckCircle class="mr-2 h-4 w-4" />
+                    HMRC Connected
+                </Button>
+
+                <!-- HMRC / Tax Button (instructor only, when not connected) -->
+                <Button
+                    v-if="isInstructor && !instructor.hmrc_connected"
+                    variant="outline"
+                    class="min-w-[180px] py-2.5 cursor-pointer"
+                    @click="router.visit(`/instructors/${instructor.id}`, { data: { tab: 'hmrc' }, preserveScroll: true })"
+                >
+                    <ShieldCheck class="mr-2 h-4 w-4" />
+                    HMRC / Tax
+                </Button>
 
                 <!-- Edit Profile Button -->
                 <Button @click="emit('edit')">

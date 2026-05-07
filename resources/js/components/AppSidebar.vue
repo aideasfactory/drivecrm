@@ -12,6 +12,7 @@ import {
     Package,
     Percent,
     Settings,
+    ShieldCheck,
     Users,
     UsersRound,
 } from 'lucide-vue-next';
@@ -105,6 +106,12 @@ const allNavItems: NavItem[] = [
         href: resourcesIndex(),
         icon: BookOpen,
         roles: ['owner'], // Only visible to owners
+    },
+    {
+        title: 'HMRC / Tax',
+        href: '/hmrc',
+        icon: ShieldCheck,
+        roles: ['instructor'],
     },
     {
         title: 'Settings',
