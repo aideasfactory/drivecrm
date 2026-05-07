@@ -25,6 +25,7 @@ class Lesson extends Model
         'status',
         'summary',
         'mileage',
+        'student_lesson_number',
     ];
 
     protected function casts(): array

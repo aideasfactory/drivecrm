@@ -46,6 +46,12 @@ import WeeklyCalendarGrid from './Schedule/WeeklyCalendarGrid.vue'
 import MonthlyCalendarGrid from './Schedule/MonthlyCalendarGrid.vue'
 import type { CalendarEvent } from './Schedule/CalendarEventBlock.vue'
 import { useCalendarNavigation } from '@/composables/useCalendarNavigation'
+import {
+    DIARY_START_HOUR,
+    DIARY_END_HOUR,
+    DIARY_START_MINUTES,
+    DIARY_END_MINUTES,
+} from '@/lib/diary-hours'
 import type { CalendarItemFormData, CalendarItemResponse, RecurrencePattern, ReflectiveLogData } from '@/types/instructor'
 
 interface Props {
@@ -199,14 +205,15 @@ const mileageSaving = ref(false)
 const editItemLessonId = ref<number | null>(null)
 const editItemReflectiveLog = ref<ReflectiveLogData | null>(null)
 
-// ── Time slot options (15-min increments, 08:00–16:00) ───
+// ── Time slot options (15-min increments, DIARY_START_HOUR..DIARY_END_HOUR) ───
 const SLOT_DURATION_HOURS = 2
+const MAX_START_HOUR = DIARY_END_HOUR - SLOT_DURATION_HOURS
 const startTimeOptions = computed(() => {
     const options: { value: string; label: string }[] = []
-    for (let h = 8; h <= 16; h++) {
+    for (let h = DIARY_START_HOUR; h <= MAX_START_HOUR; h++) {
         for (let m = 0; m < 60; m += 15) {
-            // Don't go past 16:00 (a 2-hour slot ending at 18:00)
-            if (h === 16 && m > 0) break
+            // Don't go past MAX_START_HOUR (so a 2-hour slot still ends by DIARY_END_HOUR)
+            if (h === MAX_START_HOUR && m > 0) break
             const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
             options.push({ value: time, label: time })
         }
@@ -240,8 +247,9 @@ function snapToStartOption(time: string): string {
     const minutes = timeToMinutes(time)
     // Round down to nearest 15-minute increment
     const snappedMinutes = Math.floor(minutes / 15) * 15
-    // Clamp between 08:00 (480) and 16:00 (960)
-    const clamped = Math.max(480, Math.min(snappedMinutes, 960))
+    // Clamp so a 2-hour slot still fits within DIARY_START_MINUTES..DIARY_END_MINUTES
+    const maxStart = DIARY_END_MINUTES - SLOT_DURATION_HOURS * 60
+    const clamped = Math.max(DIARY_START_MINUTES, Math.min(snappedMinutes, maxStart))
     return minutesToTime(clamped)
 }
 
@@ -450,12 +458,6 @@ async function handleCreateSubmit() {
         return
     }
 
-    // Validate unavailability reason when marking as unavailable (skip for practical tests)
-    if (!createForm.value.is_practical_test && !createForm.value.is_available && !createForm.value.unavailability_reason?.trim()) {
-        toast({ title: 'Please provide a reason for unavailability', variant: 'destructive' })
-        return
-    }
-
     formLoading.value = true
     try {
         const isPracticalTest = createForm.value.is_practical_test || false
@@ -547,12 +549,6 @@ function handleEventClick(event: CalendarEvent) {
 
 // ── Edit time slot ───────────────────────────────────────
 async function handleEditSubmit() {
-    // Validate unavailability reason when marking as unavailable
-    if (!editForm.value.is_available && !editItemIsTravel.value && !editForm.value.unavailability_reason?.trim()) {
-        toast({ title: 'Please provide a reason for unavailability', variant: 'destructive' })
-        return
-    }
-
     formLoading.value = true
     try {
         const travelMinutes = editForm.value.is_available ? (editForm.value.travel_time_minutes || 0) : 0
@@ -987,14 +983,11 @@ onMounted(() => {
 
                     <!-- Unavailability Reason Field (shown only when unavailable and NOT a practical test) -->
                     <div v-if="!createForm.is_available && !createForm.is_practical_test" class="space-y-2">
-                        <Label for="create-unavailability-reason">
-                            Unavailability Reason <span class="text-destructive">*</span>
-                        </Label>
+                        <Label for="create-unavailability-reason">Unavailability Reason</Label>
                         <textarea
                             id="create-unavailability-reason"
                             v-model="createForm.unavailability_reason"
-                            placeholder="Why is this slot unavailable?"
-                            required
+                            placeholder="Why is this slot unavailable? (optional)"
                             class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                             maxlength="500"
                         />
@@ -1311,14 +1304,11 @@ onMounted(() => {
 
                     <!-- Unavailability Reason Field (shown only when unavailable) -->
                     <div v-if="!editForm.is_available" class="space-y-2">
-                        <Label for="edit-unavailability-reason">
-                            Unavailability Reason <span class="text-destructive">*</span>
-                        </Label>
+                        <Label for="edit-unavailability-reason">Unavailability Reason</Label>
                         <textarea
                             id="edit-unavailability-reason"
                             v-model="editForm.unavailability_reason"
-                            placeholder="Why is this slot unavailable?"
-                            required
+                            placeholder="Why is this slot unavailable? (optional)"
                             class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                             maxlength="500"
                         />

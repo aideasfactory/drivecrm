@@ -149,6 +149,7 @@ class InstructorController extends Controller
                 'id' => $instructor->id,
                 'name' => $instructor->user->name,
                 'email' => $instructor->user->email,
+                'pin' => $instructor->pin,
                 'onboarding_complete' => $instructor->onboarding_complete,
                 'charges_enabled' => $instructor->charges_enabled,
                 'payouts_enabled' => $instructor->payouts_enabled,

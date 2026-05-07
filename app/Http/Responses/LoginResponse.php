@@ -17,6 +17,16 @@ class LoginResponse implements LoginResponseContract
         /** @var \App\Models\User $user */
         $user = $request->user();
 
+        if ($user->isStudent()) {
+            auth()->guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return $request->wantsJson()
+                ? response()->json(['message' => 'Students cannot access the web app.'], 403)
+                : redirect()->route('no-access');
+        }
+
         $redirectUrl = $this->resolveRedirectUrl($user);
 
         return $request->wantsJson()

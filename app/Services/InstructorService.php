@@ -386,7 +386,7 @@ class InstructorService extends BaseService
     public function removeCalendarItem(CalendarItem $calendarItem): bool
     {
         $instructorId = $calendarItem->calendar?->instructor_id;
-        $date = $calendarItem->calendar?->date;
+        $date = $calendarItem->calendar?->date?->format('Y-m-d');
 
         $result = ($this->deleteCalendarItem)($calendarItem);
 

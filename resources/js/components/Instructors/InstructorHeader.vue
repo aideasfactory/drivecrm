@@ -4,7 +4,7 @@ import axios from 'axios'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Mail, Phone, MapPin, Edit, CreditCard, Loader2, CheckCircle, LogOut, ShieldCheck } from 'lucide-vue-next'
+import { Mail, Phone, MapPin, Edit, CreditCard, Loader2, CheckCircle, LogOut, ShieldCheck, Copy } from 'lucide-vue-next'
 import { router } from '@inertiajs/vue3'
 import { toast } from '@/components/ui/toast'
 import type { InstructorDetail } from '@/types/instructor'
@@ -40,6 +40,19 @@ const status = ref<StripeStatus>({
     charges_enabled: false,
     payouts_enabled: false
 })
+
+const copyPin = async () => {
+    if (!props.instructor.pin) {
+        return
+    }
+
+    try {
+        await navigator.clipboard.writeText(props.instructor.pin)
+        toast({ title: 'Instructor code copied to clipboard' })
+    } catch {
+        toast({ title: 'Failed to copy instructor code', variant: 'destructive' })
+    }
+}
 
 const getInitials = (name: string) => {
     return name
@@ -124,6 +137,28 @@ onMounted(() => {
 
                     <!-- Contact Info Row -->
                     <div class="flex flex-wrap items-center gap-4 text-sm">
+                        <div
+                            v-if="instructor.pin"
+                            class="flex items-center gap-2"
+                        >
+                            <span class="text-muted-foreground">Your instructor code</span>
+                            <Badge
+                                variant="secondary"
+                                class="px-3 py-1.5 font-mono text-base tracking-wider"
+                            >
+                                {{ instructor.pin }}
+                            </Badge>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                class="h-8 w-8"
+                                aria-label="Copy instructor code"
+                                @click="copyPin"
+                            >
+                                <Copy class="h-4 w-4" />
+                            </Button>
+                        </div>
+
                         <div
                             v-if="instructor.phone"
                             class="flex items-center gap-2 text-muted-foreground"

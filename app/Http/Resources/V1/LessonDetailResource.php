@@ -21,6 +21,7 @@ class LessonDetailResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'student_lesson_number' => $this->student_lesson_number,
             'order_id' => $this->order_id,
             'instructor_id' => $this->instructor_id,
             'instructor_name' => $this->instructor?->user?->name,

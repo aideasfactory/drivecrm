@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 import {
+    ArrowRightLeft,
     Bell,
     BookOpen,
     FileText,
@@ -39,6 +40,7 @@ import { index as pupilsIndex } from '@/routes/pupils';
 import { index as reportsIndex } from '@/routes/reports';
 import { index as pushNotificationsIndex } from '@/routes/push-notifications';
 import { index as resourcesIndex } from '@/routes/resources';
+import { index as studentTransfersIndex } from '@/routes/student-transfers';
 import { index as supportMessagesIndex } from '@/routes/support-messages';
 import { index as teamsIndex } from '@/routes/teams';
 import { type NavItem } from '@/types';
@@ -63,6 +65,12 @@ const allNavItems: NavItem[] = [
         title: 'Pupils',
         href: pupilsIndex(),
         icon: Users,
+    },
+    {
+        title: 'Transfer Student',
+        href: studentTransfersIndex(),
+        icon: ArrowRightLeft,
+        roles: ['owner'],
     },
     {
         title: 'Packages',

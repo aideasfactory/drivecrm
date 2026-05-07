@@ -16,7 +16,6 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withSchedule(function (Schedule $schedule): void {
-        $schedule->command('lessons:send-invoices')->hourly()->between('9:00', '17:00');
         $schedule->command('calendar:cleanup-drafts')->dailyAt('00:00');
         $schedule->command('push:send-queued')->everyMinute();
         $schedule->command('hmrc:monitor-token-expiry')->dailyAt('07:00');

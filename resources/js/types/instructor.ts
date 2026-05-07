@@ -11,6 +11,7 @@ export interface InstructorDetail {
   id: number
   name: string
   email: string
+  pin: string | null
   phone: string | null
   postcode: string | null
   bio: string | null

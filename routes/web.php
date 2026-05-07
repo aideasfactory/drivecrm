@@ -30,6 +30,9 @@ Route::get('/', function () {
     ]);
 })->name('home');
 
+Route::get('/no-access', fn () => Inertia::render('NoAccess'))
+    ->name('no-access');
+
 Route::get('dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])
     ->middleware(['auth', 'verified', RestrictInstructor::class])
     ->name('dashboard');
@@ -297,6 +300,14 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
             ->name('resources.import-csv');
     });
 
+    // Student Transfers (Owner Only)
+    Route::middleware([\App\Http\Middleware\EnsureOwner::class])->group(function () {
+        Route::get('/student-transfers', [\App\Http\Controllers\StudentTransferController::class, 'index'])
+            ->name('student-transfers.index');
+        Route::post('/student-transfers', [\App\Http\Controllers\StudentTransferController::class, 'store'])
+            ->name('student-transfers.store');
+    });
+
     Route::get('/apps', [\App\Http\Controllers\AppController::class, 'index'])
         ->name('apps.index');
 });
@@ -352,6 +363,9 @@ Route::middleware(['auth', 'verified', EnsureInstructor::class])
             });
         });
     });
+// Public mobile-app brochure (linked from welcome email)
+Route::get('/get-app', [\App\Http\Controllers\GetAppController::class, 'index'])
+    ->name('get-app');
 
 // Onboarding Routes (Public - no auth required)
 // Entry point — creates new enquiry

@@ -86,6 +86,7 @@ Users (1) ──┬── (1) Instructors ──┬── (Many) Packages
    - Has one-to-one relationship with either `instructors` or `students` table
    - Belongs to a `team` via `current_team_id` (nullable foreign key)
    - `password_change_required` (boolean, default false) — set to true when a temporary password is issued (instructor-created pupils, onboarding, admin reset); cleared when user changes password via API
+   - `welcome_email_pending` (boolean, default false) — set to true ONLY when a brand-new user is created during web onboarding (`CreateUserAndStudentFromEnquiryAction`). Cleared atomically by `SendOrderConfirmationEmailAction` once the welcome email (with a freshly generated temporary password) has been dispatched. Guarantees the temp-password welcome email is sent at most once and never to returning pupils.
 
 2. **instructors** - Instructor profiles
    - One-to-one with `users` (via `user_id`)
@@ -222,6 +223,8 @@ Core user table storing all users in the system (owners, instructors, and studen
 | `email` | varchar(255) | NOT NULL, UNIQUE | User's email address |
 | `email_verified_at` | timestamp | NULLABLE | Email verification timestamp |
 | `password` | varchar(255) | NOT NULL | Hashed password |
+| `password_change_required` | boolean | DEFAULT false | Forces password reset on next login (set when a temp password is issued) |
+| `welcome_email_pending` | boolean | DEFAULT false | True only between new-user creation in web onboarding and the welcome email being dispatched by `SendOrderConfirmationEmailAction`. One-shot flag — cleared atomically when the welcome email goes out. |
 | `role` | enum('owner', 'instructor', 'student') | DEFAULT 'student' | User role in the system |
 | `stripe_customer_id` | varchar(255) | NULLABLE, INDEXED | Stripe customer ID |
 | `current_team_id` | bigint unsigned | NULLABLE, FK → teams.id (ON DELETE SET NULL) | Current team assignment |
@@ -444,6 +447,7 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 | `completed_at` | datetime | NULLABLE | When lesson was completed |
 | `summary` | text | NULLABLE | Instructor's summary of the lesson (written at sign-off, used for AI resource matching) |
 | `mileage` | unsigned integer | NULLABLE | Miles driven during this lesson |
+| `student_lesson_number` | unsigned integer | NOT NULL, INDEX | Per-student running lesson number — starts at 1 for each student and increments across all their orders. Used as the user-facing lesson reference for support queries. Stable for life (cancelled / cleaned drafts keep their number; gaps are allowed). |
 | `status` | enum('draft', 'pending', 'completed', 'cancelled') | DEFAULT 'pending' | Lesson status |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
@@ -452,6 +456,7 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 - Composite index on `(order_id, status)`
 - Index on `instructor_id`
 - Index on `calendar_item_id`
+- Index on `student_lesson_number`
 
 **Relationships:**
 - Belongs to one `Order`
@@ -473,6 +478,7 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 - Instructor gets paid after lesson is completed
 - `summary` is written by the instructor at sign-off time; used by AI (AWS Bedrock Nova) to match against resource tags and recommend relevant videos/PDFs to the student
 - `mileage` is recorded by the instructor after the lesson is completed, via the schedule view
+- `student_lesson_number` is assigned at lesson creation time inside the order's transaction. Computed as `MAX(student_lesson_number) + 1` over the student's existing lessons (across all orders), with `lockForUpdate()` on the existing rows to serialise concurrent same-student order creations. Numbers are immutable after assignment — a cancelled or cleaned-up draft lesson keeps its number, so gaps in the sequence are expected and intentional
 
 ---
 
@@ -1268,6 +1274,26 @@ UUID-based discount codes for the onboarding flow. Each code maps to a percentag
    - `onboarding_complete = true`
    - `charges_enabled = true`
    - `payouts_enabled = true`
+
+### 5. Student Transfer Flow (Owner Only)
+
+Moves a student from one instructor to another. No money is moved at transfer time — Stripe routing happens later when each lesson is signed off, based on the lesson row's current `instructor_id`. Past completed lessons and their `Payout` records stay attached to the original instructor (immutable financial history).
+
+1. Owner picks a Student and a destination Instructor on `/student-transfers`. Destination dropdown is filtered to instructors with `payouts_enabled = true AND stripe_account_id IS NOT NULL` so the next lesson sign-off can complete a Stripe Transfer.
+2. In a single DB transaction:
+   - All future lessons (`date >= today AND no Payout record`) currently with the source instructor are re-pointed: `lessons.instructor_id` → destination.
+   - `students.instructor_id` → destination.
+3. **`orders.instructor_id` is intentionally NOT updated** — it records who originated the sale (sales attribution) and stays as historical fact. Money attribution is handled per-lesson via `Payout.instructor_id`.
+4. Three `activity_logs` rows are written (polymorphic) with shared metadata `{from_instructor_id, to_instructor_id, transferred_by_user_id, affected_lesson_ids, clashing_lesson_ids}`:
+   - On the Student (`category = 'instructor_transfer'`)
+   - On the source Instructor (`category = 'student_lost'`)
+   - On the destination Instructor (`category = 'student_gained'`)
+5. Three queued email notifications fire (student, source instructor, destination instructor). The destination instructor's email lists any lessons that clash with their existing diary so they can rebook.
+6. **Sign-off mechanics enforce correctness automatically:**
+   - Weekly lessons cannot be signed off until paid → no orphaned earnings on moved lessons.
+   - `CreateLessonPayoutAction` reads `$lesson->instructor` at the moment of sign-off → the source instructor cannot draw down on a lesson now owned by the destination.
+
+No new tables and no schema changes — the feature reuses `lessons.instructor_id`, `students.instructor_id`, and `activity_logs`.
 
 ---
 

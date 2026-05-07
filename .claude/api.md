@@ -52,6 +52,7 @@
     - [Checklist Items](#get-apiv1studentsstudentchecklist-items)
     - [Pickup Points (List)](#get-apiv1studentsstudentpickup-points)
     - [Pickup Points (Create)](#post-apiv1studentsstudentpickup-points)
+    - [Pickup Points (Update)](#put-apiv1studentsstudentpickup-pointspickuppoint)
     - [Pickup Points (Delete)](#delete-apiv1studentsstudentpickup-pointspickuppoint)
     - [Pickup Points (Set Default)](#patch-apiv1studentsstudentpickup-pointspickuppointdefault)
     - [Orders](#post-apiv1studentsstudentorders)
@@ -319,6 +320,7 @@ Login and receive a Bearer token for subsequent API calls.
       "status": "active",
       "address": "1 High Street",
       "postcode": "TS7 0AB",
+      "pin": "4827",
       "onboarding_complete": false,
       "charges_enabled": false,
       "payouts_enabled": false,
@@ -456,6 +458,7 @@ Returns the authenticated user's profile with role-specific data.
       "status": "active",
       "address": "1 High Street",
       "postcode": "TS7 0AB",
+      "pin": "4827",
       "onboarding_complete": false,
       "charges_enabled": false,
       "payouts_enabled": false,
@@ -583,6 +586,7 @@ Register a new instructor account. Creates a base user record with the `instruct
       "status": null,
       "address": "1 High Street",
       "postcode": "TS7 0AB",
+      "pin": "4827",
       "onboarding_complete": false,
       "charges_enabled": false,
       "payouts_enabled": false,
@@ -645,6 +649,7 @@ Update the authenticated instructor's own profile. The instructor is derived fro
     "status": "active",
     "address": "10 High Street",
     "postcode": "TS7 0AB",
+    "pin": "4827",
     "onboarding_complete": false,
     "charges_enabled": false,
     "payouts_enabled": false,
@@ -706,6 +711,7 @@ curl -X POST https://drivecrm.test/api/v1/instructor/profile/picture \
     "status": "active",
     "address": "10 High Street",
     "postcode": "TS7 0AB",
+    "pin": "4827",
     "onboarding_complete": false,
     "charges_enabled": false,
     "payouts_enabled": false,
@@ -748,6 +754,7 @@ Delete the instructor's profile picture.
     "status": "active",
     "address": "10 High Street",
     "postcode": "TS7 0AB",
+    "pin": "4827",
     "onboarding_complete": false,
     "charges_enabled": false,
     "payouts_enabled": false,
@@ -862,6 +869,7 @@ Returns the authenticated instructor's lessons for a specific date, ordered by s
   "data": [
     {
       "id": 1,
+      "student_lesson_number": 11,
       "order_id": 1,
       "date": "2026-03-20",
       "start_time": "09:00",
@@ -902,7 +910,8 @@ Returns the authenticated instructor's lessons for a specific date, ordered by s
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | integer | Lesson record ID |
+| `id` | integer | Lesson record ID (internal — used for routing) |
+| `student_lesson_number` | integer | Per-student running lesson number (1, 2, 3, …). Increments across all of the student's orders and is the user-facing reference shown in the UI |
 | `order_id` | integer | The order this lesson belongs to |
 | `date` | string\|null | Lesson date (YYYY-MM-DD) |
 | `start_time` | string\|null | Start time (HH:MM) |
@@ -1863,11 +1872,11 @@ Creates a new calendar item (time slot) for the authenticated instructor. Suppor
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `date` | string | **Yes** | Date in `Y-m-d` format. Cannot be in the past. |
-| `start_time` | string | **Yes** | Start time in `H:i` format (e.g., `09:00`) |
-| `end_time` | string | **Yes** | End time in `H:i` format. Must be after `start_time`. |
+| `start_time` | string | **Yes** | Start time in `H:i` format (e.g., `09:00`). Must be at or after `06:00`. |
+| `end_time` | string | **Yes** | End time in `H:i` format. Must be after `start_time` and at or before `21:00`. |
 | `is_available` | boolean | No | Whether the slot is available for booking. Default: `true`. |
 | `notes` | string\|null | No | Optional notes (max 1000 characters) |
-| `unavailability_reason` | string\|null | No | Reason for unavailability (max 500 chars). **Required** when `is_available=false` (unless `is_practical_test=true`). |
+| `unavailability_reason` | string\|null | No | Optional reason for unavailability (max 500 chars). May be supplied when `is_available=false`; not required. |
 | `recurrence_pattern` | string | No | One of: `none` (default), `weekly`, `biweekly`, `monthly` |
 | `recurrence_end_date` | string\|null | No | End date for recurring series in `Y-m-d` format. Must be after `date`. If omitted, defaults to 6 months from `date`. |
 | `travel_time_minutes` | integer\|null | No | Travel time block after the slot: `15`, `30`, or `45` minutes. Creates a separate travel item. |
@@ -1966,7 +1975,8 @@ Creates a new calendar item (time slot) for the authenticated instructor. Suppor
 
 **Validation errors (422):**
 - Overlapping time slots (including travel time and practical test buffers) are rejected.
-- `unavailability_reason` is required when `is_available=false` (except for practical tests).
+- `unavailability_reason` is optional and may be omitted when `is_available=false`.
+- `start_time` before `06:00` or `end_time` after `21:00` is rejected (allowed diary window is `06:00`–`21:00`, governed by `config/diary.php`).
 
 ---
 
@@ -2859,6 +2869,7 @@ Returns lessons for a given student across all their orders. Supports optional f
   "data": [
     {
       "id": 1,
+      "student_lesson_number": 11,
       "order_id": 1,
       "instructor_name": "John Smith",
       "instructor_avatar": "https://s3.example.com/instructor-pictures/abc.jpg",
@@ -2875,6 +2886,7 @@ Returns lessons for a given student across all their orders. Supports optional f
     },
     {
       "id": 2,
+      "student_lesson_number": 10,
       "order_id": 1,
       "instructor_name": "John Smith",
       "instructor_avatar": "https://s3.example.com/instructor-pictures/abc.jpg",
@@ -2897,7 +2909,8 @@ Returns lessons for a given student across all their orders. Supports optional f
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | integer | Lesson record ID |
+| `id` | integer | Lesson record ID (internal — used for routing) |
+| `student_lesson_number` | integer | Per-student running lesson number (1, 2, 3, …). Increments across all of the student's orders and is the user-facing reference shown in the UI |
 | `order_id` | integer | The order this lesson belongs to |
 | `instructor_name` | string\|null | Instructor's full name |
 | `instructor_avatar` | string\|null | Instructor's profile picture URL (S3) |
@@ -2943,6 +2956,7 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 {
   "data": {
     "id": 2,
+    "student_lesson_number": 10,
     "order_id": 1,
     "instructor_id": 1,
     "instructor_name": "John Smith",
@@ -2991,7 +3005,8 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | integer | Lesson record ID |
+| `id` | integer | Lesson record ID (internal — used for routing) |
+| `student_lesson_number` | integer | Per-student running lesson number (1, 2, 3, …). Increments across all of the student's orders and is the user-facing reference shown in the UI |
 | `order_id` | integer | The order this lesson belongs to |
 | `instructor_id` | integer | The instructor's record ID |
 | `instructor_name` | string\|null | Instructor's full name |
@@ -3101,6 +3116,7 @@ Sign off a lesson as completed. This is an asynchronous operation — a backgrou
 - Triggers Stripe payout processing (if applicable)
 - Creates activity log entries
 - Sends feedback email to the student
+- For weekly orders: immediately issues the next lesson's Stripe invoice + payment-link email — and queues a push notification on the student's user when a registered Expo push token exists
 - Generates AI resource recommendations
 
 ---
@@ -3632,6 +3648,83 @@ Creates a new pickup point for a student. The postcode is geocoded automatically
 
 ---
 
+#### `PUT /api/v1/students/{student}/pickup-points/{pickupPoint}`
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+Updates an existing pickup point. The postcode is re-geocoded only when it changes (normalised, case- and whitespace-insensitive). If `is_default: true` is provided, any other default pickup point for the same student is unset. Access requires `update` permission on the student (same dual-role policy as Create / Delete / Set Default — students may only edit their own; instructors may only edit pickup points of students assigned to them).
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+| `pickupPoint` | integer | The pickup point ID to update |
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `label` | string | Yes | Human-readable label (e.g., "Home", "School"). Max 255 chars |
+| `address` | string | Yes | Full address. Max 1000 chars |
+| `postcode` | string | Yes | Valid UK postcode. Max 10 chars |
+| `is_default` | boolean | No | Set as default pickup point (unsets any existing default for this student) |
+
+```json
+{
+  "label": "Home",
+  "address": "1 High Street, Middlesbrough",
+  "postcode": "TS1 1AA",
+  "is_default": true
+}
+```
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 3,
+    "label": "Home",
+    "address": "1 High Street, Middlesbrough",
+    "postcode": "TS1 1AA",
+    "latitude": "54.57623000",
+    "longitude": "-1.23456000",
+    "is_default": true,
+    "created_at": "2026-03-25T10:00:00+00:00",
+    "updated_at": "2026-04-28T14:00:00+00:00"
+  }
+}
+```
+
+**Validation Errors:** `422 Unprocessable Entity`
+```json
+{
+  "message": "A label for this pickup point is required.",
+  "errors": {
+    "label": ["A label for this pickup point is required."],
+    "postcode": ["Please enter a valid UK postcode."]
+  }
+}
+```
+
+**Error Response (not authorised):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+**Error Response (wrong student):** `404 Not Found`
+```json
+{
+  "message": "Pickup point not found for this student."
+}
+```
+
+> **Note:** The response shape is identical to `POST /api/v1/students/{student}/pickup-points`. The mobile app uses the same `PickupPoint` type for both flows.
+
+---
+
 #### `DELETE /api/v1/students/{student}/pickup-points/{pickupPoint}`
 
 **Auth required:** Yes (Bearer token — student or instructor)
@@ -3867,8 +3960,13 @@ For `weekly` payment the order is activated immediately and a confirmation email
 > **Mobile App Flow (weekly payment):**
 > 1. POST to create order with `payment_mode: "weekly"` → order is immediately `active`
 > 2. A confirmation email is sent to the student (or contact if booked on their behalf)
-> 3. The hourly `lessons:send-invoices` cron job sends Stripe invoices 48 hours before each lesson
-> 4. Stripe webhooks (`invoice.paid`) automatically mark lesson payments as paid
+> 3. The first Stripe invoice + payment-link email is sent **immediately at booking time** for the earliest scheduled lesson
+> 4. Each subsequent invoice + payment-link email is sent **immediately when the previous lesson is signed off**, for the next earliest unpaid lesson
+> 5. Stripe webhooks (`invoice.paid`) automatically mark lesson payments as paid
+>
+> Whenever the payment-reminder email is sent, an **additive push notification** is also queued for the student's user — but only when an Expo push token is registered on that user. If the student does not own the account (parent/contact booked on their behalf) or has not registered a push token, the email still goes out and no push is queued. Push delivery is processed by the every-minute `push:send-queued` cron and uses payload `{ type: "lesson_payment", lesson_payment_id, lesson_id, hosted_invoice_url }`.
+>
+> The legacy `lessons:send-invoices` command remains as a manual fallback to sweep any LessonPayments that slipped through (e.g. if a Stripe call failed during the event-driven send) but is no longer scheduled.
 
 ---
 
@@ -4422,6 +4520,15 @@ Stores the user's Expo push token for receiving push notifications. If the user 
 - The token is stored directly on the user record (`expo_push_token` column).
 - Only one token per user is stored — the latest call wins.
 
+**Events that queue a push notification (additive — fires only when `expo_push_token` is set on the recipient):**
+
+| Event | Title | Body | Data payload |
+|-------|-------|------|--------------|
+| New in-app message received | `"New message from {sender name}"` | First 140 chars of the message text | `{ type: "message", message_id, from_user_id }` |
+| Weekly-payment reminder issued (booking-time and on prior-lesson sign-off) | `"Time to pay for your lesson"` | `"Check your email to pay for your upcoming lesson on {Day D Mon}."` | `{ type: "lesson_payment", lesson_payment_id, lesson_id, hosted_invoice_url }` |
+
+Pushes are queued to the `push_notifications` table and delivered by the every-minute `push:send-queued` cron (so up to ~60s latency is normal). Email and in-app delivery are unaffected by push success or failure — push is a strictly additive layer.
+
 ---
 
 ## Profile Object by Role
@@ -4438,6 +4545,7 @@ The `profile` key in user responses contains role-specific data. The shape depen
 | `status` | string\|null | Instructor status |
 | `address` | string\|null | Business address |
 | `postcode` | string\|null | Business postcode |
+| `pin` | string\|null | Instructor's attach PIN — students enter this on the mobile app to link themselves to the instructor (`POST /api/v1/students/attach`) |
 | `onboarding_complete` | boolean | Whether Stripe onboarding is done |
 | `charges_enabled` | boolean | Whether Stripe charges are enabled |
 | `payouts_enabled` | boolean | Whether Stripe payouts are enabled |
@@ -4521,6 +4629,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | PUT | `/api/v1/students/{student}/checklist-items/{item}` | Yes | Both | Update checklist item |
 | GET | `/api/v1/students/{student}/pickup-points` | Yes | Both | List pickup points |
 | POST | `/api/v1/students/{student}/pickup-points` | Yes | Both | Create pickup point |
+| PUT | `/api/v1/students/{student}/pickup-points/{pickupPoint}` | Yes | Both | Update pickup point |
 | DELETE | `/api/v1/students/{student}/pickup-points/{pickupPoint}` | Yes | Both | Delete pickup point |
 | PATCH | `/api/v1/students/{student}/pickup-points/{pickupPoint}/default` | Yes | Both | Set default pickup point |
 | POST | `/api/v1/students/{student}/orders` | Yes | Both | Create order/booking |
@@ -5182,6 +5291,13 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-04-22 | Added `GET /api/v1/resources/{resource}` — instructor-accessible single-resource endpoint. Reuses the 30-minute signed S3 URL logic from `GET /api/v1/student/resources/{resource}` but is not student-scoped: no `is_watched` / `is_suggested` fields, no policy restricting to students. 404 on unpublished resources. | Resources (show) |
 | 2026-04-22 | Added progress-tracker API — instructors score their students 1–5 on driving-skill subcategories (framework is per-instructor, editable via admin). `GET /api/v1/student/progress` returns own scores; `GET /api/v1/instructor/students/{student}/progress` returns a specific student's scores; `POST` of the same URL bulk-upserts scores (scores overwrite — no history). Soft-deleted subcategories with existing scores are returned with `archived: true` for read-only display. New tables: `progress_categories`, `progress_subcategories`, `student_progress`. | Progress Tracker (student/progress, instructor/students/.../progress) |
 | 2026-04-24 | Extended instructor finances API with `category` (type-gated, config-backed), `payment_method`, and receipt attachment. Added `GET /finances/config` (dropdown options for the app to cache), `GET /finances/summary` (overview with stats + full-range finances & mileage for a date range, default last 30 days), `GET /finances/{finance}` (single-record detail), `POST`/`DELETE /finances/{finance}/receipt` (multipart receipt upload + removal on private S3, 20-min signed URLs). List endpoint is now cursor-paginated with `type`/`from`/`to`/`per_page` filters. Added full instructor mileage API (`GET/POST /mileage`, `GET/PUT/DELETE /mileage/{mileageLog}`) — mileage is an independent ledger from finances (not linked to fuel expenses). | Instructor Finances (all), Instructor Mileage (all) |
+| 2026-04-27 | `unavailability_reason` on calendar items is now fully optional — instructors can save an unavailable diary entry without entering a reason. Field still accepts up to 500 chars when supplied. | Instructor Calendar (store, update) |
+| 2026-04-27 | Weekly-payment invoice + email is now event-driven: the first invoice is issued immediately at booking, and each subsequent invoice is issued immediately when the previous lesson is signed off. The hourly `lessons:send-invoices` cron has been unscheduled — the command is retained as a manual fallback only. No request/response shape changed; only documented side-effects updated on `POST /students/{student}/lessons/{lesson}/sign-off` and the weekly-payment booking flow. | Booking Flow (weekly), Lesson Sign-Off |
+| 2026-04-27 | Push notifications are now queued additively alongside existing emails for two events: (1) new in-app messages — push is queued for the recipient when they have a registered Expo token; (2) weekly-payment reminders — push is queued for the student's user on every event-driven send (booking-time, on prior-lesson sign-off, and the manual fallback command), again only when an Expo token is present. Email + in-app delivery is unchanged and unaffected by push outcome. No request/response shape changes; documented in the Push Notifications section. | Push Notifications, Booking Flow (weekly), Lesson Sign-Off, Messages (any send) |
+| 2026-04-27 | Widened the allowed diary time window from `08:00`–`18:00` to `06:00`–`21:00`. `start_time` must now be ≥ `06:00` and `end_time` ≤ `21:00` on `POST /api/v1/instructor/calendar/items` (and the matching web Form Requests). Bounds are sourced from `config/diary.php`; frontend mirror is `resources/js/lib/diary-hours.ts`. | Instructor Calendar (store) |
+| 2026-04-28 | Added pickup-point update endpoint — closes the last missing CRUD on student pickup points. Reuses existing `UpdatePickupPointAction`, `UpdatePickupPointRequest`, `StudentPickupPointResource`, and the dual-role `PickupPointPolicy`. Postcode is re-geocoded only when it changes; setting `is_default: true` unsets any other default for the student. Response shape matches POST exactly. | Pickup Points (update) |
+| 2026-04-28 | Added `student_lesson_number` field to lesson responses — a per-student running lesson number (starts at 1, increments across all the student's orders, immutable after assignment). Now exposed on `GET /api/v1/students/{student}/lessons`, `GET /api/v1/students/{student}/lessons/{lesson}`, and `GET /api/v1/instructor/lessons/{date}`. The internal `id` is retained for routing/internal references; `student_lesson_number` is the user-facing reference for support queries. Backed by a new `lessons.student_lesson_number` column populated via backfill migration. | Student Lessons (index, show), Instructor Lessons (day) |
+| 2026-04-28 | Added `pin` field to the instructor profile object — surfaces the instructor's attach PIN (the same PIN students enter on `POST /api/v1/students/attach`) so the mobile app can display it after the instructor logs in. Returned on every endpoint that already returns the instructor profile object: login, `/auth/user`, instructor registration, `PUT /instructor/profile`, and the profile-picture upload/delete endpoints. | Auth (login, user, register/instructor), Instructor (profile, profile/picture) |
 
 ---
 
