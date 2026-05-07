@@ -1275,7 +1275,25 @@ UUID-based discount codes for the onboarding flow. Each code maps to a percentag
    - `charges_enabled = true`
    - `payouts_enabled = true`
 
-### 5. Student Transfer Flow (Owner Only)
+### 5. Bulk Lesson Reschedule Flow (Drag-and-Drop)
+
+When an admin drags a lesson on the calendar that has future un-signed-off siblings in the same order, they're prompted: *"Move just this lesson, or this and N future lessons in this booking?"* If they pick "all", the dragged lesson is the **anchor** and every future sibling snaps to the same day-of-week/time at weekly intervals from the new anchor date.
+
+1. Admin drags a calendar item containing a lesson booking. Frontend reads `future_siblings_count` from the calendar payload (computed in `GetInstructorCalendarAction` from the lesson's order siblings).
+2. If count > 0 → modal prompt; else → existing single-item behaviour.
+3. POST to `PUT /instructors/{id}/calendar/items/{calendarItem}` with `apply_to_future_in_order: true`.
+4. `MoveLessonAndFutureSiblingsAction` runs in a DB transaction:
+   - Resolves siblings: `order_id = anchor.order_id AND date > anchor.original_date AND status != COMPLETED AND no Payout row`.
+   - Calls the existing `UpdateCalendarItemAction` for the anchor (moves calendar_item to new Calendar via `Calendar::firstOrCreate`, updates start/end times, `syncLessonDates` updates the lesson row, `syncTravelBlock` shifts the travel item).
+   - For each sibling (chronologically), `new_date = anchor_new_date + (index × 7 days)` with `start_time` and `end_time` matching the anchor's new times. Calls `UpdateCalendarItemAction` for each.
+5. After commit:
+   - Two `activity_logs` rows (student + instructor) with metadata `{order_id, anchor_lesson_id, affected_lesson_ids, old_date, old_start_time, old_end_time, new_date, new_start_time, new_end_time, moved_by_user_id}`.
+   - Two queued summary notifications: `LessonsBulkRescheduledStudentNotification`, `LessonsBulkRescheduledInstructorNotification`. **One email per party**, NOT one per lesson.
+6. **Single-mode** (the existing path) is unchanged: `InstructorService::updateCalendarItem` continues to fire per-lesson `LessonRescheduledNotification` for the dragged item only.
+
+Clashes with the destination diary are tolerated — the calendar already supports overlapping items. No schema changes, no migrations.
+
+### 6. Student Transfer Flow (Owner Only)
 
 Moves a student from one instructor to another. No money is moved at transfer time — Stripe routing happens later when each lesson is signed off, based on the lesson row's current `instructor_id`. Past completed lessons and their `Payout` records stay attached to the original instructor (immutable financial history).
 

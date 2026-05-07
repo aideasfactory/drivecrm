@@ -135,6 +135,8 @@ export interface CalendarItemResponse {
   student_name: string | null
   is_paid: boolean | null
   lesson_id: number | null
+  order_id: number | null
+  future_siblings_count: number
   mileage: number | null
   summary: string | null
   reflective_log: ReflectiveLogData | null

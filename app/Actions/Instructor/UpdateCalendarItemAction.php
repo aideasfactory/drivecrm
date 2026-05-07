@@ -113,9 +113,12 @@ class UpdateCalendarItemAction
         $travelItem = $calendarItem->travelItem;
         $effectiveAvailable = $calendarItem->is_available;
         $effectiveMinutes = $travelTimeMinutes ?? $calendarItem->travel_time_minutes;
+        $hasLesson = $calendarItem->lessons()->exists();
 
-        // Remove travel block when travel time is explicitly set to 0 or slot is unavailable
-        if ($travelItem && ($travelTimeMinutes === 0 || ! $effectiveAvailable)) {
+        // Remove travel block when travel time is explicitly set to 0, or when the slot
+        // is genuinely unavailable (no lesson booked). Booked lessons set `is_available`
+        // to false because the slot is reserved — those still need their travel block.
+        if ($travelItem && ($travelTimeMinutes === 0 || (! $effectiveAvailable && ! $hasLesson))) {
             $travelItem->delete();
 
             return;

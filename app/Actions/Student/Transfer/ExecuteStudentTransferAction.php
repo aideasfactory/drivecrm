@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Actions\Student\Transfer;
 
+use App\Models\Calendar;
+use App\Models\CalendarItem;
 use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Student;
@@ -62,6 +64,26 @@ class ExecuteStudentTransferAction
         $clashingLessons = ($this->detectClashes)($destination, $futureLessons);
 
         DB::transaction(function () use ($student, $destination, $futureLessons): void {
+            foreach ($futureLessons as $lesson) {
+                if (! $lesson->calendar_item_id) {
+                    continue;
+                }
+
+                $destinationCalendar = Calendar::firstOrCreate([
+                    'instructor_id' => $destination->id,
+                    'date' => $lesson->date->toDateString(),
+                ]);
+
+                $calendarItem = CalendarItem::with('travelItem')->find($lesson->calendar_item_id);
+
+                if (! $calendarItem) {
+                    continue;
+                }
+
+                $calendarItem->update(['calendar_id' => $destinationCalendar->id]);
+                $calendarItem->travelItem?->update(['calendar_id' => $destinationCalendar->id]);
+            }
+
             if ($futureLessons->isNotEmpty()) {
                 Lesson::query()
                     ->whereIn('id', $futureLessons->pluck('id'))

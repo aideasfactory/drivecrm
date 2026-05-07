@@ -352,6 +352,8 @@ async function loadCalendarRange(startDate: string, endDate: string) {
                     student_name: item.student_name ?? null,
                     is_paid: item.is_paid ?? null,
                     lesson_id: item.lesson_id ?? null,
+                    order_id: item.order_id ?? null,
+                    future_siblings_count: item.future_siblings_count ?? 0,
                     mileage: item.mileage ?? null,
                     summary: item.summary ?? null,
                     reflective_log: item.reflective_log ?? null,
@@ -580,6 +582,16 @@ async function handleEditSubmit() {
 }
 
 // ── Drag-and-drop move ───────────────────────────────────
+const pendingBulkMove = ref<{
+    eventId: number
+    oldItem: CalendarItemResponse
+    newDate: string
+    newStartTime: string
+    newEndTime: string
+    isAvailable: boolean
+    siblingsCount: number
+} | null>(null)
+
 async function handleEventMove(eventId: number, newDate: string, newStartTime: string, newEndTime: string) {
     const item = itemsMap.value.get(eventId)
     if (!item) return
@@ -594,29 +606,88 @@ async function handleEventMove(eventId: number, newDate: string, newStartTime: s
     item.end_time = newEndTime
     rebuildEvents()
 
+    // If this lesson has future siblings in the same booking, prompt the admin
+    // before committing — they can choose to move just this one or all of them.
+    if (item.lesson_id && item.future_siblings_count > 0) {
+        pendingBulkMove.value = {
+            eventId,
+            oldItem: oldItem as CalendarItemResponse,
+            newDate,
+            newStartTime,
+            newEndTime,
+            isAvailable: item.is_available,
+            siblingsCount: item.future_siblings_count,
+        }
+        return
+    }
+
+    await commitMove(eventId, oldItem as CalendarItemResponse, newDate, newStartTime, newEndTime, item.is_available, false)
+}
+
+async function commitMove(
+    eventId: number,
+    oldItem: CalendarItemResponse,
+    newDate: string,
+    newStartTime: string,
+    newEndTime: string,
+    isAvailable: boolean,
+    applyToFutureInOrder: boolean,
+) {
     try {
-        await axios.put(
+        const response = await axios.put(
             `/instructors/${props.instructorId}/calendar/items/${eventId}`,
             {
                 date: newDate,
                 start_time: newStartTime,
                 end_time: newEndTime,
-                is_available: item.is_available,
+                is_available: isAvailable,
+                apply_to_future_in_order: applyToFutureInOrder,
             },
         )
 
-        // Reload to get updated travel items too
-        toast({ title: 'Time slot moved successfully! Student will be notified.' })
-        await loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
+        const movedCount = response.data?.moved_count
+        const message = applyToFutureInOrder && movedCount
+            ? `${movedCount} lessons rescheduled. Student and instructor will be notified.`
+            : 'Time slot moved successfully! Student will be notified.'
 
+        toast({ title: message })
+        await loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
     } catch (error: any) {
         // Revert on error
-        itemsMap.value.set(eventId, oldItem as CalendarItemResponse)
+        itemsMap.value.set(eventId, oldItem)
         rebuildEvents()
 
         const message = error.response?.data?.message || 'Failed to move time slot'
         toast({ title: message, variant: 'destructive' })
     }
+}
+
+async function confirmBulkMove(applyToFuture: boolean) {
+    const pending = pendingBulkMove.value
+    if (!pending) return
+
+    pendingBulkMove.value = null
+
+    await commitMove(
+        pending.eventId,
+        pending.oldItem,
+        pending.newDate,
+        pending.newStartTime,
+        pending.newEndTime,
+        pending.isAvailable,
+        applyToFuture,
+    )
+}
+
+function cancelBulkMove() {
+    const pending = pendingBulkMove.value
+    if (!pending) return
+
+    // Revert the optimistic update
+    itemsMap.value.set(pending.eventId, pending.oldItem)
+    rebuildEvents()
+
+    pendingBulkMove.value = null
 }
 
 // ── Delete time slot ─────────────────────────────────────
@@ -1415,6 +1486,34 @@ onMounted(() => {
                         <Loader2 v-if="formLoading" class="mr-2 h-4 w-4 animate-spin" />
                         <Trash2 v-else class="mr-2 h-4 w-4" />
                         {{ formLoading ? 'Removing...' : 'Remove' }}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        <!-- Bulk reschedule prompt: shown when admin drags a lesson that has future siblings in the same order -->
+        <Dialog
+            :open="pendingBulkMove !== null"
+            @update:open="(open) => { if (!open) cancelBulkMove() }"
+        >
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Move future lessons too?</DialogTitle>
+                    <DialogDescription>
+                        This lesson is part of a booking with
+                        {{ pendingBulkMove?.siblingsCount }}
+                        more upcoming
+                        {{ pendingBulkMove?.siblingsCount === 1 ? 'lesson' : 'lessons' }}.
+                        Do you want to move just this one, or shift the rest of the booking to the same day and time?
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter class="flex-col gap-2 sm:flex-row sm:justify-end">
+                    <Button variant="outline" @click="confirmBulkMove(false)">
+                        Just this lesson
+                    </Button>
+                    <Button @click="confirmBulkMove(true)">
+                        This and {{ pendingBulkMove?.siblingsCount }} future
+                        {{ pendingBulkMove?.siblingsCount === 1 ? 'lesson' : 'lessons' }}
                     </Button>
                 </DialogFooter>
             </DialogContent>

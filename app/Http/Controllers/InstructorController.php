@@ -48,6 +48,7 @@ class InstructorController extends Controller
         protected InstructorService $instructorService,
         protected StripeService $stripeService,
         protected HmrcService $hmrc,
+        protected \App\Actions\Calendar\MoveLessonAndFutureSiblingsAction $moveLessonAndFutureSiblings,
     ) {}
 
     /**
@@ -434,6 +435,25 @@ class InstructorController extends Controller
             ], 404);
         }
 
+        // Bulk-mode: move this lesson AND every future un-signed-off lesson in the same order
+        // to the same day-of-week + time, weekly cadence anchored on the new date.
+        if ($request->boolean('apply_to_future_in_order')) {
+            $result = ($this->moveLessonAndFutureSiblings)(
+                $instructor,
+                $calendarItem,
+                $request->input('date'),
+                $request->input('start_time'),
+                $request->input('end_time'),
+                $request->user(),
+            );
+
+            return response()->json([
+                'calendar_item' => $this->formatCalendarItem($result['anchor_item']),
+                'mode' => 'bulk',
+                'moved_count' => $result['moved_count'],
+            ]);
+        }
+
         $calendarItem = $this->instructorService->updateCalendarItem(
             $instructor,
             $calendarItem,
@@ -448,6 +468,7 @@ class InstructorController extends Controller
 
         return response()->json([
             'calendar_item' => $this->formatCalendarItem($calendarItem),
+            'mode' => 'single',
         ]);
     }
 

@@ -65,6 +65,10 @@ class UpdateCalendarItemRequest extends FormRequest
                 'sometimes',
                 'boolean',
             ],
+            'apply_to_future_in_order' => [
+                'sometimes',
+                'boolean',
+            ],
         ];
     }
 

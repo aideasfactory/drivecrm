@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Instructor;
 
 use App\Enums\CalendarItemStatus;
+use App\Enums\LessonStatus;
 use App\Models\Instructor;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -33,7 +34,7 @@ class GetInstructorCalendarAction
             ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->with(['items' => function ($query) {
                 $query->orderBy('start_time');
-            }, 'items.lessons.order.student', 'items.lessons.lessonPayment', 'items.lessons.reflectiveLog'])
+            }, 'items.lessons.order.student', 'items.lessons.order.lessons.payout', 'items.lessons.lessonPayment', 'items.lessons.reflectiveLog'])
             ->orderBy('date')
             ->get();
 
@@ -60,14 +61,26 @@ class GetInstructorCalendarAction
                     }
 
                     $lessonId = null;
+                    $orderId = null;
+                    $futureSiblingsCount = 0;
                     $mileage = null;
                     $summary = null;
                     $reflectiveLog = null;
 
                     if ($lesson) {
                         $lessonId = $lesson->id;
+                        $orderId = $lesson->order_id;
                         $mileage = $lesson->mileage;
                         $summary = $lesson->summary;
+
+                        if ($lesson->order) {
+                            $futureSiblingsCount = $lesson->order->lessons
+                                ->filter(fn ($sibling) => $sibling->id !== $lesson->id
+                                    && $sibling->date?->gt($lesson->date)
+                                    && $sibling->payout === null
+                                    && $sibling->status !== LessonStatus::COMPLETED)
+                                ->count();
+                        }
 
                         if ($lesson->reflectiveLog) {
                             $reflectiveLog = [
@@ -93,6 +106,8 @@ class GetInstructorCalendarAction
                         'student_name' => $studentName,
                         'is_paid' => $isPaid,
                         'lesson_id' => $lessonId,
+                        'order_id' => $orderId,
+                        'future_siblings_count' => $futureSiblingsCount,
                         'mileage' => $mileage,
                         'summary' => $summary,
                         'reflective_log' => $reflectiveLog,
