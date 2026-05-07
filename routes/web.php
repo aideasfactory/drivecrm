@@ -292,6 +292,14 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
             ->name('resources.import-csv');
     });
 
+    // Student Transfers (Owner Only)
+    Route::middleware([\App\Http\Middleware\EnsureOwner::class])->group(function () {
+        Route::get('/student-transfers', [\App\Http\Controllers\StudentTransferController::class, 'index'])
+            ->name('student-transfers.index');
+        Route::post('/student-transfers', [\App\Http\Controllers\StudentTransferController::class, 'store'])
+            ->name('student-transfers.store');
+    });
+
     Route::get('/apps', [\App\Http\Controllers\AppController::class, 'index'])
         ->name('apps.index');
 });

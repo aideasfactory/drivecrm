@@ -1265,6 +1265,26 @@ UUID-based discount codes for the onboarding flow. Each code maps to a percentag
    - `charges_enabled = true`
    - `payouts_enabled = true`
 
+### 5. Student Transfer Flow (Owner Only)
+
+Moves a student from one instructor to another. No money is moved at transfer time — Stripe routing happens later when each lesson is signed off, based on the lesson row's current `instructor_id`. Past completed lessons and their `Payout` records stay attached to the original instructor (immutable financial history).
+
+1. Owner picks a Student and a destination Instructor on `/student-transfers`. Destination dropdown is filtered to instructors with `payouts_enabled = true AND stripe_account_id IS NOT NULL` so the next lesson sign-off can complete a Stripe Transfer.
+2. In a single DB transaction:
+   - All future lessons (`date >= today AND no Payout record`) currently with the source instructor are re-pointed: `lessons.instructor_id` → destination.
+   - `students.instructor_id` → destination.
+3. **`orders.instructor_id` is intentionally NOT updated** — it records who originated the sale (sales attribution) and stays as historical fact. Money attribution is handled per-lesson via `Payout.instructor_id`.
+4. Three `activity_logs` rows are written (polymorphic) with shared metadata `{from_instructor_id, to_instructor_id, transferred_by_user_id, affected_lesson_ids, clashing_lesson_ids}`:
+   - On the Student (`category = 'instructor_transfer'`)
+   - On the source Instructor (`category = 'student_lost'`)
+   - On the destination Instructor (`category = 'student_gained'`)
+5. Three queued email notifications fire (student, source instructor, destination instructor). The destination instructor's email lists any lessons that clash with their existing diary so they can rebook.
+6. **Sign-off mechanics enforce correctness automatically:**
+   - Weekly lessons cannot be signed off until paid → no orphaned earnings on moved lessons.
+   - `CreateLessonPayoutAction` reads `$lesson->instructor` at the moment of sign-off → the source instructor cannot draw down on a lesson now owned by the destination.
+
+No new tables and no schema changes — the feature reuses `lessons.instructor_id`, `students.instructor_id`, and `activity_logs`.
+
 ---
 
 ## Data Integrity Rules
