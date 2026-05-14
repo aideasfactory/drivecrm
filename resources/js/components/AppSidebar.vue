@@ -7,6 +7,7 @@ import {
     FileText,
     GraduationCap,
     Grid3x3,
+    Inbox,
     LayoutGrid,
     MessageSquare,
     Package,
@@ -43,6 +44,7 @@ import { index as resourcesIndex } from '@/routes/resources';
 import { index as studentTransfersIndex } from '@/routes/student-transfers';
 import { index as supportMessagesIndex } from '@/routes/support-messages';
 import { index as teamsIndex } from '@/routes/teams';
+import { index as enquiriesIndex } from '@/routes/enquiries';
 import { type NavItem } from '@/types';
 import AppLogo from './AppLogo.vue';
 
@@ -99,6 +101,12 @@ const allNavItems: NavItem[] = [
         title: 'Support Messages',
         href: supportMessagesIndex(),
         icon: MessageSquare,
+        roles: ['owner'],
+    },
+    {
+        title: 'Enquiries',
+        href: enquiriesIndex(),
+        icon: Inbox,
         roles: ['owner'],
     },
     {

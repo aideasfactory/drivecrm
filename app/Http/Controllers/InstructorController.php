@@ -145,13 +145,21 @@ class InstructorController extends Controller
             ];
         }
 
+        // The booking-landing instructor (env: BOOKING_INSTRUCTOR_ID) shows full admin UI
+        // even before Stripe is connected, so the team can manage their schedule. Payouts and
+        // sign-offs still honour the real `onboarding_complete` flag — only the Show-page
+        // tabs gate is relaxed.
+        $bookingInstructorId = config('booking.instructor_id');
+        $displayOnboardingComplete = $instructor->onboarding_complete
+            || ($bookingInstructorId !== null && (int) $instructor->id === (int) $bookingInstructorId);
+
         return Inertia::render('Instructors/Show', [
             'instructor' => [
                 'id' => $instructor->id,
                 'name' => $instructor->user->name,
                 'email' => $instructor->user->email,
                 'pin' => $instructor->pin,
-                'onboarding_complete' => $instructor->onboarding_complete,
+                'onboarding_complete' => $displayOnboardingComplete,
                 'charges_enabled' => $instructor->charges_enabled,
                 'payouts_enabled' => $instructor->payouts_enabled,
                 'phone' => $instructor->phone,

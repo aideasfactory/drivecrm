@@ -1,6 +1,9 @@
 <?php
 
 use App\Enums\UserRole;
+use App\Http\Controllers\Booking\BookingController;
+use App\Http\Controllers\Booking\StepOneController as BookingStepOneController;
+use App\Http\Controllers\Booking\StepTwoController as BookingStepTwoController;
 use App\Http\Controllers\Hmrc\HmrcConnectionController;
 use App\Http\Controllers\Hmrc\HmrcFraudHeadersController;
 use App\Http\Controllers\Hmrc\HmrcHelloWorldController;
@@ -18,6 +21,8 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Middleware\EnsureInstructor;
 use App\Http\Middleware\EnsureMtdEnrolled;
 use App\Http\Middleware\RestrictInstructor;
+use App\Http\Middleware\ValidateBookingEnquiryUuid;
+use App\Http\Middleware\ValidateBookingStepAccess;
 use App\Http\Middleware\ValidateEnquiryUuid;
 use App\Http\Middleware\ValidateStepAccess;
 use Illuminate\Support\Facades\Route;
@@ -310,6 +315,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
 
     Route::get('/apps', [\App\Http\Controllers\AppController::class, 'index'])
         ->name('apps.index');
+
+    Route::get('/enquiries', [\App\Http\Controllers\EnquiryController::class, 'index'])
+        ->name('enquiries.index');
 });
 
 // HMRC Making Tax Digital — instructor-only
@@ -428,6 +436,22 @@ Route::prefix('/onboarding/{uuid}')
 Route::get('/onboarding/{uuid}/instructor/{instructor}/availability', [StepFourController::class, 'availability'])
     ->middleware([ValidateEnquiryUuid::class])
     ->name('onboarding.instructor.availability');
+
+// Booking Routes (Public — single-instructor coverage check landing page)
+Route::get('/booking', [BookingController::class, 'start'])
+    ->name('booking.start');
+
+Route::prefix('/booking/{uuid}')
+    ->middleware([ValidateBookingEnquiryUuid::class, ValidateBookingStepAccess::class])
+    ->group(function () {
+        Route::get('/step/1', [BookingStepOneController::class, 'show'])
+            ->name('booking.step1');
+        Route::post('/step/1', [BookingStepOneController::class, 'store'])
+            ->name('booking.step1.store');
+
+        Route::get('/step/2', [BookingStepTwoController::class, 'show'])
+            ->name('booking.step2');
+    });
 
 // Resource email view (signed URL — no auth required, students click from email)
 Route::get('/resources/view/{resource}', [\App\Http\Controllers\ResourceController::class, 'emailView'])
