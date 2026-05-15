@@ -11,17 +11,13 @@
               </span>
             </div>
             <div class="flex items-center gap-4 sm:gap-6 text-sm">
-              <span class="hidden sm:flex items-center text-muted-foreground">
-                <MapPin class="mr-1.5 h-4 w-4" />
-                London &amp; Surrounding Areas
-              </span>
-              <a href="tel:02012345678" class="hidden md:flex items-center hover:text-primary">
+              <a href="tel:08003689215" class="hidden md:flex items-center hover:text-primary">
                 <Phone class="mr-1.5 h-4 w-4" />
-                020 1234 5678
+                0800 368 9215
               </a>
-              <a href="mailto:hello@DRIVE.com" class="flex items-center hover:text-primary">
+              <a href="mailto:lessons@just-drive.co.uk" class="flex items-center hover:text-primary">
                 <Mail class="mr-1.5 h-4 w-4" />
-                hello@DRIVE.com
+                lessons@just-drive.co.uk
               </a>
             </div>
           </div>
@@ -72,7 +68,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Toaster } from '@/components/ui/toast'
 import AppLogoIcon from '@/components/AppLogoIcon.vue'
-import { CircleCheck, CircleX, MapPin, Phone, Mail } from 'lucide-vue-next'
+import { CircleCheck, CircleX, Phone, Mail } from 'lucide-vue-next'
 
 defineProps<{
   uuid: string

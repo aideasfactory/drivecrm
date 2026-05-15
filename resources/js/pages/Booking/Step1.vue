@@ -11,17 +11,13 @@
               </span>
             </div>
             <div class="flex items-center gap-4 sm:gap-6 text-sm">
-              <span class="hidden sm:flex items-center text-muted-foreground">
-                <MapPin class="mr-1.5 h-4 w-4" />
-                London &amp; Surrounding Areas
-              </span>
-              <a href="tel:02012345678" class="hidden md:flex items-center hover:text-primary">
+              <a href="tel:08003689215" class="hidden md:flex items-center hover:text-primary">
                 <Phone class="mr-1.5 h-4 w-4" />
-                020 1234 5678
+                0800 368 9215
               </a>
-              <a href="mailto:hello@DRIVE.com" class="flex items-center hover:text-primary">
+              <a href="mailto:lessons@just-drive.co.uk" class="flex items-center hover:text-primary">
                 <Mail class="mr-1.5 h-4 w-4" />
-                hello@DRIVE.com
+                lessons@just-drive.co.uk
               </a>
             </div>
           </div>
@@ -37,16 +33,12 @@
               <CardTitle>DRIVE Driving School</CardTitle>
               <CardDescription class="space-y-2">
                 <div class="flex items-center">
-                  <MapPin class="mr-2 h-4 w-4" />
-                  <span>London &amp; Surrounding Areas</span>
-                </div>
-                <div class="flex items-center">
                   <Phone class="mr-2 h-4 w-4" />
-                  <span>020 1234 5678</span>
+                  <span>0800 368 9215</span>
                 </div>
                 <div class="flex items-center">
                   <Mail class="mr-2 h-4 w-4" />
-                  <span>hello@DRIVE.com</span>
+                  <span>lessons@just-drive.co.uk</span>
                 </div>
               </CardDescription>
             </CardHeader>
@@ -55,7 +47,7 @@
               <div class="flex items-center flex-wrap gap-3">
                 <Badge variant="secondary" class="flex items-center bg-primary text-primary-foreground hover:bg-primary/90">
                   <Shield class="mr-1 h-3 w-3" />
-                  DVSA Approved
+                  DVSA-registered school
                 </Badge>
                 <Badge variant="secondary" class="flex items-center bg-primary text-primary-foreground hover:bg-primary/90">
                   <Lock class="mr-1 h-3 w-3" />
@@ -70,7 +62,7 @@
                 <ul class="space-y-2 text-sm">
                   <li class="flex items-start">
                     <CircleCheck class="mr-2 mt-0.5 h-4 w-4 flex-shrink-0" />
-                    <span>Full refund policy - cancel up to 24 hours before</span>
+                    <span>Flexible cancellation — 48 hours notice</span>
                   </li>
                   <li class="flex items-start">
                     <CircleCheck class="mr-2 mt-0.5 h-4 w-4 flex-shrink-0" />
@@ -78,7 +70,7 @@
                   </li>
                   <li class="flex items-start">
                     <CircleCheck class="mr-2 mt-0.5 h-4 w-4 flex-shrink-0" />
-                    <span>Qualified DVSA approved instructors</span>
+                    <span>DVSA-registered instructors</span>
                   </li>
                   <li class="flex items-start">
                     <CircleCheck class="mr-2 mt-0.5 h-4 w-4 flex-shrink-0" />
