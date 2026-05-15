@@ -3,16 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Calendar\ConfirmCalendarItemsAction;
+use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
 use App\Actions\Shared\LogActivityAction;
+use App\Enums\CalendarItemStatus;
 use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
+use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\LessonPayment;
 use App\Models\Order;
+use App\Models\Student;
 use App\Models\WebhookEvent;
 use App\Notifications\InstructorLessonPaymentReceivedNotification;
 use App\Notifications\LessonPaymentReceivedNotification;
+use App\Services\StripeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -37,7 +42,7 @@ class WebhookController extends Controller
 
         try {
             // Verify webhook signature
-            $verifyResult = app(\App\Services\StripeService::class)->verifyWebhookSignature($payload, $signature);
+            $verifyResult = app(StripeService::class)->verifyWebhookSignature($payload, $signature);
 
             if (! $verifyResult['success']) {
                 Log::error('Webhook: Signature verification failed', [
@@ -268,7 +273,7 @@ class WebhookController extends Controller
         ]);
 
         // Find instructor by Stripe account ID
-        $instructor = \App\Models\Instructor::where('stripe_account_id', $account->id)->first();
+        $instructor = Instructor::where('stripe_account_id', $account->id)->first();
 
         if (! $instructor) {
             Log::info('Webhook: No instructor found for account', [
@@ -372,8 +377,8 @@ class WebhookController extends Controller
             $calendarItem = $lesson->calendarItem;
             $previousStatus = $calendarItem->status?->value;
 
-            if (in_array($calendarItem->status, [\App\Enums\CalendarItemStatus::DRAFT, \App\Enums\CalendarItemStatus::RESERVED])) {
-                $calendarItem->update(['status' => \App\Enums\CalendarItemStatus::BOOKED]);
+            if (in_array($calendarItem->status, [CalendarItemStatus::DRAFT, CalendarItemStatus::RESERVED])) {
+                $calendarItem->update(['status' => CalendarItemStatus::BOOKED]);
 
                 Log::info('Webhook [invoice.paid]: Calendar item updated to BOOKED', [
                     'calendar_item_id' => $calendarItem->id,
@@ -425,7 +430,7 @@ class WebhookController extends Controller
     /**
      * Send payment received confirmation emails to student and instructor.
      */
-    protected function sendPaymentReceivedEmails(LessonPayment $lessonPayment, ?\App\Models\Student $student, ?\App\Models\Instructor $instructor): void
+    protected function sendPaymentReceivedEmails(LessonPayment $lessonPayment, ?Student $student, ?Instructor $instructor): void
     {
         if (! $student) {
             Log::warning('Webhook [invoice.paid]: No student found — skipping emails');
@@ -536,7 +541,7 @@ class WebhookController extends Controller
     protected function sendOrderConfirmationEmail(Order $order): void
     {
         try {
-            $sendEmailAction = app(\App\Actions\Onboarding\SendOrderConfirmationEmailAction::class);
+            $sendEmailAction = app(SendOrderConfirmationEmailAction::class);
             $sendEmailAction->execute($order, $order->student);
 
             Log::info('Webhook: Order confirmation email queued', [

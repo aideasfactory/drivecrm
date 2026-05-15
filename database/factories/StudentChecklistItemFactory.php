@@ -3,10 +3,11 @@
 namespace Database\Factories;
 
 use App\Models\Student;
+use App\Models\StudentChecklistItem;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\StudentChecklistItem>
+ * @extends Factory<StudentChecklistItem>
  */
 class StudentChecklistItemFactory extends Factory
 {

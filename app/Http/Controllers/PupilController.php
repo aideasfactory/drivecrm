@@ -27,6 +27,7 @@ use App\Actions\Student\PickupPoint\SetDefaultPickupPointAction;
 use App\Actions\Student\PickupPoint\UpdatePickupPointAction;
 use App\Actions\Student\Status\RemoveStudentFromInstructorAction;
 use App\Actions\Student\Status\UpdateStudentStatusAction;
+use App\Enums\PaymentMode;
 use App\Http\Requests\AdminResetPasswordRequest;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\StorePickupPointRequest;
@@ -34,8 +35,10 @@ use App\Http\Requests\UpdatePickupPointRequest;
 use App\Http\Requests\UpdateStudentStatusRequest;
 use App\Jobs\ProcessLessonSignOffJob;
 use App\Models\Contact;
+use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Note;
+use App\Models\Package;
 use App\Models\Student;
 use App\Models\StudentChecklistItem;
 use App\Models\StudentPickupPoint;
@@ -43,6 +46,7 @@ use App\Services\InstructorCalendarService;
 use App\Services\LessonSignOffService;
 use App\Services\OrderService;
 use App\Services\StudentService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -349,7 +353,7 @@ class PupilController extends Controller
             return response()->json(['slots' => []], 200);
         }
 
-        $instructor = \App\Models\Instructor::find($student->instructor_id);
+        $instructor = Instructor::find($student->instructor_id);
 
         if (! $instructor) {
             return response()->json(['slots' => []], 200);
@@ -360,8 +364,8 @@ class PupilController extends Controller
         return response()->json([
             'slots' => $items->map(fn ($item) => [
                 'id' => $item->id,
-                'start_time' => \Carbon\Carbon::parse($item->start_time)->format('H:i'),
-                'end_time' => \Carbon\Carbon::parse($item->end_time)->format('H:i'),
+                'start_time' => Carbon::parse($item->start_time)->format('H:i'),
+                'end_time' => Carbon::parse($item->end_time)->format('H:i'),
             ])->values(),
         ]);
     }
@@ -373,7 +377,7 @@ class PupilController extends Controller
     {
         $validated = $request->validated();
 
-        $package = \App\Models\Package::where('active', true)->findOrFail($validated['package_id']);
+        $package = Package::where('active', true)->findOrFail($validated['package_id']);
 
         if (! $student->instructor_id) {
             return response()->json([
@@ -381,7 +385,7 @@ class PupilController extends Controller
             ], 422);
         }
 
-        $paymentMode = \App\Enums\PaymentMode::from($validated['payment_mode']);
+        $paymentMode = PaymentMode::from($validated['payment_mode']);
 
         $result = $orderService->bookLessons(
             $student,
@@ -392,7 +396,7 @@ class PupilController extends Controller
             $validated['end_time']
         );
 
-        $message = $paymentMode === \App\Enums\PaymentMode::WEEKLY
+        $message = $paymentMode === PaymentMode::WEEKLY
             ? 'Order created and activated. Lesson invoices will be sent before each lesson.'
             : 'Order created. A payment link has been emailed to the student.';
 

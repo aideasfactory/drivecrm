@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Responses;
 
+use App\Models\User;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -14,7 +15,7 @@ class LoginResponse implements LoginResponseContract
      */
     public function toResponse($request): Response
     {
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = $request->user();
 
         if ($user->isStudent()) {
@@ -37,7 +38,7 @@ class LoginResponse implements LoginResponseContract
     /**
      * Resolve the post-login redirect URL based on the user's role.
      */
-    private function resolveRedirectUrl(\App\Models\User $user): string
+    private function resolveRedirectUrl(User $user): string
     {
         if ($user->isInstructor()) {
             $instructor = $user->instructor;

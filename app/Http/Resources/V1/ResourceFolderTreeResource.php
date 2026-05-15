@@ -6,20 +6,21 @@ namespace App\Http\Resources\V1;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Collection;
 
 class ResourceFolderTreeResource extends JsonResource
 {
     /**
      * The set of resource IDs suggested to this student.
      *
-     * @var \Illuminate\Support\Collection<int, int>
+     * @var Collection<int, int>
      */
     public static $suggestedIds;
 
     /**
      * The set of resource IDs watched by this user.
      *
-     * @var \Illuminate\Support\Collection<int, int>
+     * @var Collection<int, int>
      */
     public static $watchedIds;
 

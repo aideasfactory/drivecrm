@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace App\Actions\Resource;
 
 use App\Models\ResourceFolder;
+use Illuminate\Database\Eloquent\Collection;
 
 class GetFolderContentsAction
 {
     /**
      * Get subfolders and resources for a given folder (or root level).
      *
-     * @return array{folders: \Illuminate\Database\Eloquent\Collection, resources: \Illuminate\Database\Eloquent\Collection}
+     * @return array{folders: Collection, resources: Collection}
      */
     public function __invoke(?ResourceFolder $folder = null): array
     {

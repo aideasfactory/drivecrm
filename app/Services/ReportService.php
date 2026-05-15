@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Actions\Report\GetInstructorAvailabilityAnalyticsAction;
+use Illuminate\Support\Collection;
 
 class ReportService
 {
@@ -15,7 +16,7 @@ class ReportService
     /**
      * Get instructor availability and booking analytics.
      *
-     * @return array{instructors: \Illuminate\Support\Collection, summary: array{total_available: int, total_booked: int, total_free: int, overall_utilization: float}}
+     * @return array{instructors: Collection, summary: array{total_available: int, total_booked: int, total_free: int, overall_utilization: float}}
      */
     public function getAvailabilityAnalytics(): array
     {

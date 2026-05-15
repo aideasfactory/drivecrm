@@ -12,6 +12,7 @@ use App\Enums\PaymentStatus;
 use App\Models\Calendar;
 use App\Models\CalendarItem;
 use App\Models\Enquiry;
+use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\LessonPayment;
 use App\Models\Order;
@@ -370,7 +371,7 @@ class CreateOrderFromEnquiryAction
             return;
         }
 
-        $instructor = \App\Models\Instructor::find($instructorId);
+        $instructor = Instructor::find($instructorId);
 
         if ($instructor) {
             app(InstructorService::class)->invalidateStudentCache($instructor);

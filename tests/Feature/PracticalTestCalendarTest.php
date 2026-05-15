@@ -7,6 +7,8 @@ use App\Models\Calendar;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
 use App\Models\User;
+use App\Services\CalendarService;
+use Carbon\Carbon;
 
 test('creating a practical test slot calculates correct time block', function () {
     $instructor = Instructor::factory()->create();
@@ -91,11 +93,11 @@ test('practical test slot is excluded from booking availability', function () {
         isAvailable: true
     );
 
-    $calendarService = app(\App\Services\CalendarService::class);
+    $calendarService = app(CalendarService::class);
     $availability = $calendarService->getAvailability(
         $instructor->id,
         now()->addDays(3),
-        \Carbon\Carbon::parse('2026-04-07')
+        Carbon::parse('2026-04-07')
     );
 
     // Find the date entry for 2026-04-01

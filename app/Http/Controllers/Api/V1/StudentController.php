@@ -10,6 +10,7 @@ use App\Http\Requests\Api\V1\StoreStudentRequest;
 use App\Http\Requests\Api\V1\UpdateStudentRequest;
 use App\Http\Resources\V1\StudentResource;
 use App\Models\Instructor;
+use App\Models\Student;
 use App\Services\StudentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -29,7 +30,7 @@ class StudentController extends Controller
      */
     public function store(StoreStudentRequest $request): JsonResponse
     {
-        Gate::authorize('create', \App\Models\Student::class);
+        Gate::authorize('create', Student::class);
 
         $instructor = $request->user()->instructor;
 

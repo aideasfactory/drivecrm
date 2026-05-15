@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Calendar;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Carbon;
 
 class CalendarService
 {
@@ -44,8 +45,8 @@ class CalendarService
             $slots = $calendar->items->map(function ($item) {
                 return [
                     'id' => $item->id,
-                    'start_time' => \Illuminate\Support\Carbon::parse($item->start_time)->format('H:i'),
-                    'end_time' => \Illuminate\Support\Carbon::parse($item->end_time)->format('H:i'),
+                    'start_time' => Carbon::parse($item->start_time)->format('H:i'),
+                    'end_time' => Carbon::parse($item->end_time)->format('H:i'),
                 ];
             });
 

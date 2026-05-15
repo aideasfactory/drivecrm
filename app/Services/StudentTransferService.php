@@ -8,6 +8,7 @@ use App\Actions\Student\Transfer\ExecuteStudentTransferAction;
 use App\Actions\Student\Transfer\GetOnboardedInstructorsAction;
 use App\Actions\Student\Transfer\GetTransferableStudentsAction;
 use App\Models\Instructor;
+use App\Models\Lesson;
 use App\Models\Student;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
@@ -41,8 +42,8 @@ class StudentTransferService extends BaseService
      *     student: Student,
      *     source_instructor: Instructor,
      *     destination_instructor: Instructor,
-     *     moved_lessons: Collection<int, \App\Models\Lesson>,
-     *     clashing_lessons: Collection<int, \App\Models\Lesson>,
+     *     moved_lessons: Collection<int, Lesson>,
+     *     clashing_lessons: Collection<int, Lesson>,
      * }
      */
     public function transferStudent(Student $student, Instructor $destination, User $admin): array

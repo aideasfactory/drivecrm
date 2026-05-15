@@ -14,6 +14,7 @@ use App\Actions\Student\Lesson\AssignResourcesToLessonAction;
 use App\Enums\ResourceAudience;
 use App\Models\Lesson;
 use App\Models\Resource;
+use App\Models\ResourceFolder;
 use App\Models\Student;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -48,7 +49,7 @@ class ResourceApiService extends BaseService
     /**
      * Get the full resource folder tree with published resources.
      *
-     * @return EloquentCollection<int, \App\Models\ResourceFolder>
+     * @return EloquentCollection<int, ResourceFolder>
      */
     public function getResourceFolderTree(): EloquentCollection
     {
@@ -116,7 +117,7 @@ class ResourceApiService extends BaseService
      *
      * Not cached — contains random study tip and volatile watch data.
      *
-     * @return array{recent_activity: \Illuminate\Support\Collection, stats: array, study_progress: \Illuminate\Support\Collection, recommended: \Illuminate\Support\Collection, study_tip: string}
+     * @return array{recent_activity: Collection, stats: array, study_progress: Collection, recommended: Collection, study_tip: string}
      */
     public function getResourceSummary(Student $student, User $user): array
     {

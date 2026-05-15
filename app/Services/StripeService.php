@@ -13,6 +13,7 @@ use Stripe\Account;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Price;
 use Stripe\Product;
+use Stripe\Stripe;
 use Stripe\StripeClient;
 use Stripe\Transfer;
 use Stripe\Webhook;
@@ -24,7 +25,7 @@ class StripeService
     public function __construct()
     {
         // Set API key globally for all Stripe operations
-        \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+        Stripe::setApiKey(config('services.stripe.secret'));
 
         $this->stripe = new StripeClient(config('services.stripe.secret'));
     }

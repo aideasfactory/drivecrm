@@ -7,7 +7,7 @@ use App\Models\CalendarItem;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\CalendarItem>
+ * @extends Factory<CalendarItem>
  */
 class CalendarItemFactory extends Factory
 {

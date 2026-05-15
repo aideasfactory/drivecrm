@@ -8,6 +8,7 @@ use App\Enums\ItsaObligationStatus;
 use App\Models\HmrcItsaObligation;
 use App\Models\HmrcToken;
 use App\Models\HmrcVatObligation;
+use App\Models\User;
 use App\Notifications\ItsaObligationDueSoon;
 use App\Notifications\VatObligationDueSoon;
 use App\Services\HmrcItsaService;
@@ -97,7 +98,7 @@ class SyncHmrcItsaObligations extends Command
         return Command::SUCCESS;
     }
 
-    private function dispatchItsaReminders(\App\Models\User $user, PushNotificationService $push): int
+    private function dispatchItsaReminders(User $user, PushNotificationService $push): int
     {
         $count = 0;
         $now = now();
@@ -144,7 +145,7 @@ class SyncHmrcItsaObligations extends Command
         return $count;
     }
 
-    private function dispatchVatReminders(\App\Models\User $user, PushNotificationService $push): int
+    private function dispatchVatReminders(User $user, PushNotificationService $push): int
     {
         $count = 0;
         $now = now();

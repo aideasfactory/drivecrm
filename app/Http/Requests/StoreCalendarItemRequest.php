@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Enums\RecurrencePattern;
+use Carbon\Carbon;
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Enum;
 use Illuminate\Validation\Validator;
@@ -22,7 +24,7 @@ class StoreCalendarItemRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
@@ -113,14 +115,14 @@ class StoreCalendarItemRequest extends FormRequest
         $effectiveEndTime = $endTime;
 
         if ($isPracticalTest) {
-            $effectiveStartTime = \Carbon\Carbon::parse($startTime)
+            $effectiveStartTime = Carbon::parse($startTime)
                 ->subMinutes(60)
                 ->format('H:i');
-            $effectiveEndTime = \Carbon\Carbon::parse($endTime)
+            $effectiveEndTime = Carbon::parse($endTime)
                 ->addMinutes(30)
                 ->format('H:i');
         } elseif ($travelMinutes > 0) {
-            $effectiveEndTime = \Carbon\Carbon::parse($endTime)
+            $effectiveEndTime = Carbon::parse($endTime)
                 ->addMinutes($travelMinutes)
                 ->format('H:i');
         }

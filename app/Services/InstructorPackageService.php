@@ -22,7 +22,7 @@ class InstructorPackageService extends BaseService
     /**
      * Get active packages for an instructor.
      *
-     * @return Collection<int, \App\Models\Package>
+     * @return Collection<int, Package>
      */
     public function getPackages(Instructor $instructor): Collection
     {

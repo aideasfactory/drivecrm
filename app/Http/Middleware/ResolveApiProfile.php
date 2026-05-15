@@ -19,7 +19,7 @@ class ResolveApiProfile
      *   $request->user()->instructor  — Instructor|null (if instructor)
      *   $request->user()->student     — Student|null (if student)
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {

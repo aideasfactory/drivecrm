@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Actions\Shared\LogActivityAction;
 use App\Enums\BusinessType;
 use App\Enums\ItsaEnrolmentStatus;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -180,7 +181,7 @@ class Instructor extends Model
      */
     public function logActivity(string $message, string $category, ?array $metadata = null): void
     {
-        app(\App\Actions\Shared\LogActivityAction::class)($this, $message, $category, $metadata);
+        app(LogActivityAction::class)($this, $message, $category, $metadata);
     }
 
     /**

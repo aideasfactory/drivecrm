@@ -77,6 +77,11 @@ return [
             'channel' => env('MAIL_LOG_CHANNEL'),
         ],
 
+        'mandrill' => [
+            'transport' => 'mandrill',
+            'key' => env('MANDRILL_API_KEY'),
+        ],
+
         'array' => [
             'transport' => 'array',
         ],

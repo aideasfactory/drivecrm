@@ -17,6 +17,7 @@ use App\Actions\Resource\UploadResourceAction;
 use App\Enums\ResourceAudience;
 use App\Models\Resource;
 use App\Models\ResourceFolder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\UploadedFile;
 
 class ResourceService
@@ -37,7 +38,7 @@ class ResourceService
     /**
      * Get folder contents (subfolders + resources).
      *
-     * @return array{folders: \Illuminate\Database\Eloquent\Collection, resources: \Illuminate\Database\Eloquent\Collection}
+     * @return array{folders: Collection, resources: Collection}
      */
     public function getFolderContents(?ResourceFolder $folder = null): array
     {
@@ -146,7 +147,7 @@ class ResourceService
      *
      * @return array<int, array<string, string>>
      */
-    public function parseCsvFile(\Illuminate\Http\UploadedFile $file): array
+    public function parseCsvFile(UploadedFile $file): array
     {
         $rows = [];
         $handle = fopen($file->getRealPath(), 'r');

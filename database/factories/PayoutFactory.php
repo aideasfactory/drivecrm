@@ -9,7 +9,7 @@ use App\Models\Payout;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Payout>
+ * @extends Factory<Payout>
  */
 class PayoutFactory extends Factory
 {

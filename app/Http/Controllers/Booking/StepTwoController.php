@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Booking;
 
 use App\Http\Controllers\Controller;
 use App\Mail\BookingEnquirySubmittedMail;
+use App\Models\Enquiry;
 use App\Models\Instructor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -52,7 +53,7 @@ class StepTwoController extends Controller
         ]);
     }
 
-    private function notifyAdmin(\App\Models\Enquiry $enquiry): void
+    private function notifyAdmin(Enquiry $enquiry): void
     {
         $adminEmail = config('booking.admin_email');
 

@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
+use Stripe\Checkout\Session;
 
 class StepSixController extends Controller
 {
@@ -480,7 +481,7 @@ class StepSixController extends Controller
 
         try {
             // Retrieve the checkout session from Stripe
-            $session = \Stripe\Checkout\Session::retrieve($sessionId);
+            $session = Session::retrieve($sessionId);
 
             // Verify the session matches the order
             if ($session->id !== $order->stripe_checkout_session_id) {

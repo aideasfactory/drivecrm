@@ -7,6 +7,7 @@ namespace App\Notifications;
 use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Student;
+use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -39,7 +40,7 @@ class LessonRescheduledNotification extends Notification implements ShouldQueue
         $studentName = $this->student->first_name ?? 'there';
         $instructorName = $this->instructor->user?->name ?? 'your instructor';
 
-        $oldDateFormatted = \Carbon\Carbon::parse($this->oldDate)->format('l, j F Y');
+        $oldDateFormatted = Carbon::parse($this->oldDate)->format('l, j F Y');
         $oldTime = $this->oldStartTime.' - '.$this->oldEndTime;
 
         $newDateFormatted = $this->lesson->date?->format('l, j F Y') ?? 'N/A';

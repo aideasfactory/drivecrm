@@ -12,6 +12,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Hmrc\Itsa\FinalDeclaration\SubmitFinalDeclarationRequest;
 use App\Http\Requests\Hmrc\Itsa\FinalDeclaration\SubmitSupplementaryRequest;
 use App\Models\HmrcItsaCalculation;
+use App\Models\HmrcItsaSupplementaryData;
 use App\Services\HmrcItsaFinalDeclarationService;
 use App\Services\HmrcItsaService;
 use Illuminate\Http\JsonResponse;
@@ -211,7 +212,7 @@ class FinalDeclarationController extends Controller
     }
 
     /**
-     * @param  array<string, ?\App\Models\HmrcItsaSupplementaryData>  $supplementary
+     * @param  array<string, ?HmrcItsaSupplementaryData>  $supplementary
      * @return array<int, array<string, mixed>>
      */
     private function serialiseSteps(array $supplementary): array

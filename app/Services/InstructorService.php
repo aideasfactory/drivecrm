@@ -47,10 +47,13 @@ use App\Models\InstructorFinance;
 use App\Models\Lesson;
 use App\Models\Location;
 use App\Models\MileageLog;
+use App\Models\Package;
+use App\Models\Student;
 use App\Models\User;
 use App\Notifications\CalendarClashDetectedNotification;
 use App\Notifications\LessonRescheduledNotification;
 use Carbon\Carbon;
+use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -214,8 +217,8 @@ class InstructorService extends BaseService
             return null;
         }
 
-        $date = \Carbon\Carbon::parse($nextSlot->calendar_date);
-        $time = \Carbon\Carbon::parse($nextSlot->item_start_time);
+        $date = Carbon::parse($nextSlot->calendar_date);
+        $time = Carbon::parse($nextSlot->item_start_time);
 
         return $date->format('Y-m-d').' - '.$time->format('H:i:s');
     }
@@ -234,7 +237,7 @@ class InstructorService extends BaseService
     /**
      * Create a new bespoke package for an instructor.
      */
-    public function createPackage(Instructor $instructor, array $data): \App\Models\Package
+    public function createPackage(Instructor $instructor, array $data): Package
     {
         return ($this->createInstructorPackage)($instructor, $data);
     }
@@ -462,7 +465,7 @@ class InstructorService extends BaseService
         if ($instructorId && $affectedDates->isNotEmpty()) {
             $calendarService = app(InstructorCalendarService::class);
             foreach ($affectedDates as $date) {
-                $calendarService->invalidateCalendarCache($instructorId, $date instanceof \Carbon\Carbon ? $date->format('Y-m-d') : (string) $date);
+                $calendarService->invalidateCalendarCache($instructorId, $date instanceof Carbon ? $date->format('Y-m-d') : (string) $date);
             }
         }
 
@@ -602,7 +605,7 @@ class InstructorService extends BaseService
      */
     public function broadcastMessage(Instructor $instructor, string $message): Collection
     {
-        $students = \App\Models\Student::where('instructor_id', $instructor->id)
+        $students = Student::where('instructor_id', $instructor->id)
             ->whereNotNull('user_id')
             ->pluck('user_id')
             ->toArray();
@@ -622,9 +625,9 @@ class InstructorService extends BaseService
     /**
      * Create a new pupil assigned to an instructor.
      *
-     * @return \App\Models\Student The created student
+     * @return Student The created student
      */
-    public function addPupil(Instructor $instructor, array $data): \App\Models\Student
+    public function addPupil(Instructor $instructor, array $data): Student
     {
         $student = ($this->createPupil)($instructor, $data);
 
@@ -734,7 +737,7 @@ class InstructorService extends BaseService
      *
      * @return array<int, array<string, string>>
      */
-    public function parseCsvFile(\Illuminate\Http\UploadedFile $file): array
+    public function parseCsvFile(UploadedFile $file): array
     {
         $rows = [];
         $handle = fopen($file->getRealPath(), 'r');
@@ -812,7 +815,7 @@ class InstructorService extends BaseService
     /**
      * Upload (or replace) the receipt attached to a finance record.
      */
-    public function uploadFinanceReceipt(InstructorFinance $finance, \Illuminate\Http\UploadedFile $file): InstructorFinance
+    public function uploadFinanceReceipt(InstructorFinance $finance, UploadedFile $file): InstructorFinance
     {
         return ($this->uploadFinanceReceipt)($finance, $file);
     }
@@ -886,7 +889,7 @@ class InstructorService extends BaseService
         ?string $to,
         ?string $type = null,
         int $perPage = 25
-    ): \Illuminate\Contracts\Pagination\CursorPaginator {
+    ): CursorPaginator {
         $range = $this->resolveFinanceDateRange($from, $to);
 
         return $instructor->finances()
@@ -905,7 +908,7 @@ class InstructorService extends BaseService
         ?string $from,
         ?string $to,
         int $perPage = 25
-    ): \Illuminate\Contracts\Pagination\CursorPaginator {
+    ): CursorPaginator {
         $range = $this->resolveFinanceDateRange($from, $to);
 
         return $instructor->mileageLogs()
@@ -920,8 +923,8 @@ class InstructorService extends BaseService
      *
      * @return array{
      *     date_range: array{from: string, to: string, default_applied: bool},
-     *     finances: \Illuminate\Support\Collection,
-     *     mileage: \Illuminate\Support\Collection,
+     *     finances: Collection,
+     *     mileage: Collection,
      *     stats: array<string, int|string>
      * }
      */

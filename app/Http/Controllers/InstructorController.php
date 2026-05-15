@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\Calendar\MoveLessonAndFutureSiblingsAction;
 use App\Actions\Shared\AdminResetPasswordAction;
 use App\Actions\Shared\Contact\CreateContactAction;
 use App\Actions\Shared\Contact\DeleteContactAction;
@@ -27,6 +28,7 @@ use App\Models\InstructorFinance;
 use App\Models\Lesson;
 use App\Models\Location;
 use App\Models\MileageLog;
+use App\Models\Package;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\HmrcService;
@@ -41,6 +43,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class InstructorController extends Controller
 {
@@ -48,7 +51,7 @@ class InstructorController extends Controller
         protected InstructorService $instructorService,
         protected StripeService $stripeService,
         protected HmrcService $hmrc,
-        protected \App\Actions\Calendar\MoveLessonAndFutureSiblingsAction $moveLessonAndFutureSiblings,
+        protected MoveLessonAndFutureSiblingsAction $moveLessonAndFutureSiblings,
     ) {}
 
     /**
@@ -258,7 +261,7 @@ class InstructorController extends Controller
         $packages = $this->instructorService->getPackages($instructor);
 
         return response()->json([
-            'packages' => $packages->map(fn (\App\Models\Package $package) => [
+            'packages' => $packages->map(fn (Package $package) => [
                 'id' => $package->id,
                 'name' => $package->name,
                 'description' => $package->description,
@@ -921,7 +924,7 @@ class InstructorController extends Controller
     /**
      * Download the instructor CSV import template.
      */
-    public function downloadCsvTemplate(): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function downloadCsvTemplate(): StreamedResponse
     {
         $headers = ['name', 'email', 'transmission_type', 'phone', 'bio', 'status', 'pdi_status', 'address', 'postcode'];
         $exampleRow = ['John Smith', 'john@example.com', 'manual', '07700900000', 'Experienced instructor', 'active', '', '123 High Street', 'SW1A 1AA'];

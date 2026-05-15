@@ -6,6 +6,7 @@ namespace App\Notifications;
 
 use App\Models\Order;
 use App\Models\Student;
+use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -48,7 +49,7 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
             ->line("Total: {$totalFormatted}");
 
         if ($firstLesson) {
-            $message->line('First lesson: '.\Carbon\Carbon::parse($firstLesson->date)->format('l, F j, Y'));
+            $message->line('First lesson: '.Carbon::parse($firstLesson->date)->format('l, F j, Y'));
         }
 
         $message->line('')

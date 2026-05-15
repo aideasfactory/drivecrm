@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MockTest extends Model
@@ -42,7 +43,7 @@ class MockTest extends Model
         return $this->hasMany(MockTestAnswer::class);
     }
 
-    public function questions(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    public function questions(): BelongsToMany
     {
         return $this->belongsToMany(MockTestQuestion::class, 'mock_test_answers')
             ->withPivot(['selected_answer', 'is_correct'])

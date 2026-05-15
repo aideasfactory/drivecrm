@@ -8,7 +8,7 @@ use App\Models\LessonPayment;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\LessonPayment>
+ * @extends Factory<LessonPayment>
  */
 class LessonPaymentFactory extends Factory
 {

@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ResourceController extends Controller
 {
@@ -209,7 +210,7 @@ class ResourceController extends Controller
     /**
      * Download the resource CSV import template.
      */
-    public function downloadCsvTemplate(): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function downloadCsvTemplate(): StreamedResponse
     {
         $headers = ['title', 'video_url', 'description', 'tags', 'folder', 'thumbnail_url', 'audience'];
         $exampleRow = ['Introduction to Driving Theory', 'https://www.youtube.com/watch?v=example', 'A video covering basic driving theory', 'theory,beginner,driving', 'Theory/Basics', 'https://img.youtube.com/vi/example/0.jpg', 'student'];

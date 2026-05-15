@@ -21,6 +21,7 @@ use App\Actions\Student\UpdateStudentAction;
 use App\Actions\Student\UploadStudentProfilePictureAction;
 use App\Models\Instructor;
 use App\Models\Student;
+use App\Models\StudentPickupPoint;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\UploadedFile;
 
@@ -145,7 +146,7 @@ class StudentService extends BaseService
     /**
      * Get all pickup points for a student.
      *
-     * @return Collection<int, \App\Models\StudentPickupPoint>
+     * @return Collection<int, StudentPickupPoint>
      */
     public function getPickupPoints(Student $student): Collection
     {
@@ -157,7 +158,7 @@ class StudentService extends BaseService
      *
      * @param  array{label: string, address: string, postcode: string, is_default?: bool}  $data
      */
-    public function storePickupPoint(Student $student, array $data): \App\Models\StudentPickupPoint
+    public function storePickupPoint(Student $student, array $data): StudentPickupPoint
     {
         return ($this->createPickupPoint)($student, $data);
     }
@@ -167,7 +168,7 @@ class StudentService extends BaseService
      *
      * @param  array{label: string, address: string, postcode: string, is_default?: bool}  $data
      */
-    public function updatePickupPoint(\App\Models\StudentPickupPoint $pickupPoint, array $data): \App\Models\StudentPickupPoint
+    public function updatePickupPoint(StudentPickupPoint $pickupPoint, array $data): StudentPickupPoint
     {
         return ($this->updatePickupPoint)($pickupPoint, $data);
     }
@@ -175,7 +176,7 @@ class StudentService extends BaseService
     /**
      * Delete a pickup point.
      */
-    public function deletePickupPoint(\App\Models\StudentPickupPoint $pickupPoint): void
+    public function deletePickupPoint(StudentPickupPoint $pickupPoint): void
     {
         ($this->deletePickupPoint)($pickupPoint);
     }
@@ -183,7 +184,7 @@ class StudentService extends BaseService
     /**
      * Set a pickup point as the default for its student.
      */
-    public function setDefaultPickupPoint(\App\Models\StudentPickupPoint $pickupPoint): \App\Models\StudentPickupPoint
+    public function setDefaultPickupPoint(StudentPickupPoint $pickupPoint): StudentPickupPoint
     {
         return ($this->setDefaultPickupPoint)($pickupPoint);
     }

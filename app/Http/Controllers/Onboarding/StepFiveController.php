@@ -10,6 +10,7 @@ use App\Models\CalendarItem;
 use App\Models\Instructor;
 use App\Models\Location;
 use App\Models\Package;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -107,7 +108,7 @@ class StepFiveController extends Controller
                 'start_time' => $step4['start_time'] ?? null,
                 'end_time' => $step4['end_time'] ?? null,
                 'formatted_date' => ! empty($step4['date'])
-                    ? \Carbon\Carbon::parse($step4['date'])->format('l, F j, Y')
+                    ? Carbon::parse($step4['date'])->format('l, F j, Y')
                     : null,
             ],
 

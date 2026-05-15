@@ -5,6 +5,7 @@ use App\Enums\CalendarItemType;
 use App\Models\Calendar;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
+use Carbon\Carbon;
 
 test('newly created slots get travel blocks when first existing slot has travel time', function () {
     $instructor = Instructor::factory()->create();
@@ -89,7 +90,7 @@ test('reused existing slots preserve their travel blocks', function () {
 
     // Create existing available slots for all 3 weeks with travel blocks
     for ($i = 0; $i < 3; $i++) {
-        $date = \Carbon\Carbon::parse('2026-04-06')->addWeeks($i);
+        $date = Carbon::parse('2026-04-06')->addWeeks($i);
 
         $calendar = Calendar::factory()->create([
             'instructor_id' => $instructor->id,

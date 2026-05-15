@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Actions\CalendarItem\ResetDraftCalendarItemsAction;
+use App\Enums\CalendarItemStatus;
+use App\Models\CalendarItem;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
@@ -32,8 +34,8 @@ class CleanupDraftCalendarItems extends Command
         $cutoff = now()->startOfDay();
 
         if ($this->option('dry-run')) {
-            $count = \App\Models\CalendarItem::query()
-                ->where('status', \App\Enums\CalendarItemStatus::DRAFT)
+            $count = CalendarItem::query()
+                ->where('status', CalendarItemStatus::DRAFT)
                 ->where('created_at', '<', $cutoff)
                 ->count();
 
