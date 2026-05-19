@@ -14,6 +14,7 @@ class MileageLog extends Model
 
     protected $fillable = [
         'instructor_id',
+        'vehicle_id',
         'date',
         'start_mileage',
         'end_mileage',
@@ -35,6 +36,11 @@ class MileageLog extends Model
     public function instructor(): BelongsTo
     {
         return $this->belongsTo(Instructor::class);
+    }
+
+    public function vehicle(): BelongsTo
+    {
+        return $this->belongsTo(Vehicle::class);
     }
 
     public function scopeBusiness($query)

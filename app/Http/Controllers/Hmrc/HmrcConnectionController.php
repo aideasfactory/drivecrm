@@ -36,6 +36,11 @@ class HmrcConnectionController extends Controller
             'taxProfile' => $instructor ? $this->hmrc->getTaxProfile($instructor) : null,
             'applicability' => $instructor ? $this->hmrc->getMtdApplicability($instructor) : null,
             'businessTypes' => $this->businessTypeOptions(),
+            // Diagnostic cards are dev/ops only. The role-gate fallback in
+            // .claude/tasks/vehicles-and-method-choice.md §5 specifies env-gate
+            // when no admin role exists — and the current UserRole enum
+            // (owner/instructor/student) has no developer role.
+            'showDiagnostics' => $environment === 'sandbox' || app()->isLocal(),
         ]);
     }
 

@@ -132,4 +132,52 @@ return [
         'fingerprint_max_age_minutes' => 30,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Vehicle defaults (Phase 6)
+    |--------------------------------------------------------------------------
+    |
+    | actual_default_business_use_pct seeds the per-vehicle
+    | business_use_percentage column on creation. Not UI-exposed in v1.
+    | Locked to 95% based on the typical full-time ADI scenarios in
+    | .claude/hmrc-tax-categories-client-summary.md.
+    */
+
+    'actual_default_business_use_pct' => env('HMRC_ACTUAL_DEFAULT_BUSINESS_USE_PCT', 95),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Simplified mileage allowance rates (Phase 7)
+    |--------------------------------------------------------------------------
+    |
+    | HMRC's flat-rate mileage allowance. Unchanged since 2011 but kept as
+    | config so a future rate change is a one-line edit. Pence per mile.
+    | Threshold is per tax year (resets each 6 April), not per submission
+    | period.
+    */
+
+    'mileage_allowance' => [
+        'first_band_pence_per_mile' => 45,
+        'second_band_pence_per_mile' => 25,
+        'first_band_miles' => 10000,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Year-end archive (Phase 9)
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for the per-instructor, per-tax-year ZIP that DRIVE generates
+    | for end-of-year accountant handover. The download URL is a signed Laravel
+    | route (no S3 dependency for v1). Retention years drives the daily pruning
+    | command; HMRC currently requires 6 years from the end of the tax year.
+    */
+
+    'year_end_archive' => [
+        'disk' => env('HMRC_ARCHIVE_DISK', 'local'),
+        'path_template' => 'archives/{instructor_id}/{tax_year_start}.zip',
+        'download_url_ttl_hours' => (int) env('HMRC_ARCHIVE_DOWNLOAD_URL_TTL_HOURS', 24),
+        'retention_years' => (int) env('HMRC_ARCHIVE_RETENTION_YEARS', 6),
+    ],
+
 ];

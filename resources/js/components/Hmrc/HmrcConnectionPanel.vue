@@ -18,8 +18,10 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from '@/components/ui/sonner';
 import {
     AlertCircle,
+    Archive,
     Briefcase,
     CalendarClock,
+    Car,
     CheckCircle2,
     Fingerprint,
     Info,
@@ -91,9 +93,11 @@ const props = defineProps<{
     applicability: Applicability | null;
     businessTypes: BusinessTypeOption[];
     showHeader?: boolean;
+    showDiagnostics?: boolean;
 }>();
 
 const showHeader = computed(() => props.showHeader !== false);
+const showDiagnostics = computed(() => props.showDiagnostics === true);
 
 const page = usePage<PageProps>();
 
@@ -476,6 +480,42 @@ const handleValidateFraudHeaders = async () => {
                         </Button>
                     </div>
 
+                    <!-- Vehicles (Phase 6) — always shown when ITSA applies; drives car/van/travel calculations -->
+                    <div
+                        v-if="applicability.itsa.applies"
+                        class="rounded-md border bg-muted/30 p-4 flex flex-col gap-2"
+                    >
+                        <div class="flex items-center gap-2 font-medium">
+                            <Car class="h-4 w-4" />
+                            Vehicles
+                        </div>
+                        <p class="text-sm text-muted-foreground">
+                            Manage your tuition vehicles and choose Simplified vs Advanced for each. This drives how DRIVE
+                            calculates the car / van / travel bucket on every ITSA quarterly.
+                        </p>
+                        <Button as-child size="sm" variant="outline" class="w-fit">
+                            <a href="/hmrc/vehicles">Open Vehicles</a>
+                        </Button>
+                    </div>
+
+                    <!-- Year-end archives (Phase 9) — always available when MTD applies -->
+                    <div
+                        v-if="applicability.itsa.applies || applicability.vat.applies"
+                        class="rounded-md border bg-muted/30 p-4 flex flex-col gap-2"
+                    >
+                        <div class="flex items-center gap-2 font-medium">
+                            <Archive class="h-4 w-4" />
+                            Year-end archives
+                        </div>
+                        <p class="text-sm text-muted-foreground">
+                            Download a ZIP of your tax year — finance records, mileage, receipts, HMRC submission payloads
+                            and a cover-sheet PDF. For your accountant or as an HMRC enquiry pack. Retained 6 years.
+                        </p>
+                        <Button as-child size="sm" variant="outline" class="w-fit">
+                            <a href="/hmrc/archive">Open Archives</a>
+                        </Button>
+                    </div>
+
                     <!-- VAT -->
                     <div
                         v-if="applicability.vat.applies"
@@ -512,7 +552,7 @@ const handleValidateFraudHeaders = async () => {
         </Card>
 
         <!-- Diagnostic -->
-        <Card>
+        <Card v-if="showDiagnostics">
             <CardHeader>
                 <CardTitle class="flex items-center gap-2">
                     <Wand2 class="h-5 w-5" />
@@ -544,7 +584,7 @@ const handleValidateFraudHeaders = async () => {
         </Card>
 
         <!-- Fraud-prevention header validation -->
-        <Card>
+        <Card v-if="showDiagnostics">
             <CardHeader>
                 <CardTitle class="flex items-center gap-2">
                     <Fingerprint class="h-5 w-5" />

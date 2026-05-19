@@ -161,6 +161,22 @@ class Instructor extends Model
     }
 
     /**
+     * Get vehicles owned by this instructor (active + disposed).
+     */
+    public function vehicles(): HasMany
+    {
+        return $this->hasMany(Vehicle::class);
+    }
+
+    /**
+     * Year-end ZIP archives generated for this instructor.
+     */
+    public function yearEndArchives(): HasMany
+    {
+        return $this->hasMany(YearEndArchive::class);
+    }
+
+    /**
      * Get activity logs for this instructor.
      */
     public function activityLogs(): MorphMany

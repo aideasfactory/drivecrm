@@ -14,6 +14,7 @@ use App\Http\Requests\SubmitQuarterlyUpdateRequest;
 use App\Models\HmrcItsaQuarterlyUpdate;
 use App\Models\HmrcToken;
 use App\Services\HmrcItsaService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -132,6 +133,17 @@ class ItsaController extends Controller
                 ItsaExpenseCategory::cases(),
             ),
         ]);
+    }
+
+    public function prefill(Request $request, string $businessId, string $periodKey): JsonResponse
+    {
+        $prefill = $this->itsa->prefillForPeriod($request->user(), $businessId, $periodKey);
+
+        if ($prefill === null) {
+            return response()->json(['error' => 'Obligation not found.'], 404);
+        }
+
+        return response()->json($prefill);
     }
 
     public function store(SubmitQuarterlyUpdateRequest $request, string $businessId, string $periodKey): RedirectResponse

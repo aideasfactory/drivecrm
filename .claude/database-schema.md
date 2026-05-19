@@ -977,8 +977,9 @@ Tracks payments received and expenses incurred by instructors. Supports recurrin
 |--------|------|-------------|-------------|
 | `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Finance record ID |
 | `instructor_id` | bigint unsigned | FOREIGN KEY → instructors.id, CASCADE DELETE, INDEXED | Owning instructor |
+| `vehicle_id` | bigint unsigned | NULLABLE, FOREIGN KEY → vehicles.id, NULL ON DELETE | Vehicle this row belongs to. Nullable because non-vehicle categories (advertising, phone, accountant fees, business insurance, etc.) don't carry one. Populated by `BackfillPrimaryVehicleAction` for historical rows. |
 | `type` | enum('payment','expense') | NOT NULL | Whether this is income or an expense |
-| `category` | varchar(64) | NOT NULL, DEFAULT 'none' | Slug from `config/finances.php` — `expense_categories` when type=expense, `payment_categories` when type=payment |
+| `category` | varchar(64) | NOT NULL, DEFAULT 'none' | Slug from `config/finances.php` — `expense_categories` when type=expense, `payment_categories` when type=payment. Joined to `category_tax_mapping.category` for HMRC bucket + VAT treatment + method-dependence. |
 | `payment_method` | varchar(32) | NULLABLE | Slug from `config('finances.payment_methods')` |
 | `description` | varchar(255) | NOT NULL | Description of the payment/expense |
 | `amount_pence` | integer | NOT NULL | Amount in pence (e.g., 3500 = £35.00) |
@@ -993,10 +994,11 @@ Tracks payments received and expenses incurred by instructors. Supports recurrin
 | `created_at` | timestamp | NULLABLE | Created timestamp |
 | `updated_at` | timestamp | NULLABLE | Updated timestamp |
 
-**Indexes:** `(instructor_id, type)`, `(instructor_id, date)`, `(instructor_id, category)`
+**Indexes:** `(instructor_id, type)`, `(instructor_id, date)`, `(instructor_id, category)`, `(vehicle_id, date)`
 
 **Relationships:**
 - `instructor_finances.instructor_id` → `instructors.id` (CASCADE DELETE)
+- `instructor_finances.vehicle_id` → `vehicles.id` (NULL ON DELETE)
 
 **Notes:**
 - Category slugs are config-backed (`config/finances.php`), not enum'd in the DB — lists can grow without migration. Validation at controller level gates the slug by `type`.
@@ -1013,6 +1015,7 @@ Separate ledger for instructor mileage — not a sub-type of `instructor_finance
 |--------|------|-------------|-------------|
 | `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Mileage log ID |
 | `instructor_id` | bigint unsigned | FOREIGN KEY → instructors.id, CASCADE DELETE, INDEXED | Owning instructor |
+| `vehicle_id` | bigint unsigned | NULLABLE, FOREIGN KEY → vehicles.id, NULL ON DELETE | Vehicle this trip was driven in. Nullable on creation to allow backfill of historical rows by `BackfillPrimaryVehicleAction`; new rows enforce non-null at the application layer. |
 | `date` | date | NOT NULL | Date of the trip |
 | `start_mileage` | int unsigned | NOT NULL | Starting odometer reading |
 | `end_mileage` | int unsigned | NOT NULL | Ending odometer reading (must be ≥ start_mileage — enforced in controller) |
@@ -1022,10 +1025,11 @@ Separate ledger for instructor mileage — not a sub-type of `instructor_finance
 | `created_at` | timestamp | NULLABLE | Created timestamp |
 | `updated_at` | timestamp | NULLABLE | Updated timestamp |
 
-**Indexes:** `(instructor_id, date)`, `(instructor_id, type)`
+**Indexes:** `(instructor_id, date)`, `(instructor_id, type)`, `(vehicle_id, date)`
 
 **Relationships:**
 - `mileage_logs.instructor_id` → `instructors.id` (CASCADE DELETE)
+- `mileage_logs.vehicle_id` → `vehicles.id` (NULL ON DELETE)
 
 ---
 
@@ -1890,3 +1894,73 @@ Permanent audit record of a 9-box VAT return submission. **Immutable on HMRC's s
 
 **Constraints:** UNIQUE (user_id, vrn, period_key) — represents the single authoritative submission per period.
 **Relationships:** BelongsTo → User, BelongsTo → Instructor, BelongsTo → User (`digital_records_attested_by_user_id`).
+
+## HMRC Vehicles + Category Tax Mapping (Phase 6)
+
+These tables back per-vehicle Simplified vs Advanced (Actual) method choice and the method-aware expense picker. See `.claude/tasks/vehicles-and-method-choice.md` for the workshop decisions and full Phase 6/7/9 plan.
+
+### vehicles
+
+One row per instructor vehicle. The vehicle is the spine of ITSA derivation — every fuel receipt, every insurance row, every mileage entry, every quarterly calculation either belongs to a vehicle or is explicitly non-vehicle. Disposal is signalled by `disposed_on` (no soft-deletes). HMRC's lifetime-method-per-vehicle rule is captured via `method` + `lifetime_method_locked_at`; switching after the lock is a soft-warning, not a hard block.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| instructor_id | bigint FK | No | References instructors.id. Cascade on delete. |
+| display_name | string(100) | No | User-facing name, e.g. "My tuition car". |
+| registration | string(16) | Yes | Vehicle registration plate. |
+| engine_size_cc | smallint unsigned | Yes | Reserved for future VAT fuel scale charges. |
+| method | string(16) | No | `simplified` or `actual`. Default `simplified`. Cast to `App\Enums\VehicleMethod`. |
+| business_use_percentage | decimal(5,2) | No | Default 95.00. Seeded by `CreateVehicleAction` from `config('hmrc.actual_default_business_use_pct')`. Not UI-exposed in v1. |
+| acquired_on | date | No | When the instructor acquired the vehicle. Used for "year of acquisition" projection in MethodComparison. |
+| disposed_on | date | Yes | When the vehicle was disposed of. Hidden from active pickers when set; historical rows remain. |
+| lifetime_method_locked_at | timestamp | Yes | Set after the first successful ITSA quarterly submission for this vehicle. Triggers the soft-lock dialog on method change. |
+| created_at / updated_at | timestamp | Yes | |
+
+**Indexes:** INDEX (instructor_id, disposed_on); INDEX (instructor_id, method)
+**Relationships:** BelongsTo → Instructor; HasMany → InstructorFinance; HasMany → MileageLog.
+
+### category_tax_mapping
+
+Lookup table joining DRIVE's finance-category slugs to the HMRC ITSA expense bucket, VAT treatment, and behaviour flags that drive the method-aware expense picker and Phase 7 auto-derivation. Seeded by the migration; mutations are migration-driven only (no admin UI in v1). The DRIVE-to-HMRC mapping rules are documented in `.claude/hmrc-category-mapping.md` and the client-facing summary in `.claude/hmrc-tax-categories-client-summary.md`.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| category | string(64) | No | DRIVE slug (e.g. `fuel`, `vehicle_insurance`, `advertising`). **Unique** — primary join key against `instructor_finances.category`. |
+| vat_treatment | string(32) | No | `standard`, `exempt`, `zero`, or `outside_scope`. Reserved for the Phase 4 VAT auto-derivation pass; Phase 6 reads it only opportunistically. Default `exempt`. |
+| itsa_bucket | string(64) | Yes | One of the 15 HMRC ITSA bucket camelCase keys (e.g. `carVanTravelExpenses`, `advertisingCosts`, `professionalFees`). Null when the category is excluded from HMRC payloads (e.g. `hmrc_tax`, `food_drink`, `none`). |
+| claimable | bool | No | Whether this category contributes to the HMRC payload at all. False for personal/excluded categories. |
+| method_dependent | bool | No | True for vehicle running costs (fuel, MOT, servicing, repairs, road tax, vehicle insurance, breakdown cover). When true, the row is excluded from HMRC payloads for any vehicle on the `simplified` method (the mileage allowance covers them). Default false. |
+| selectable_in_picker | bool | No | Default true. Set false to hide a category from the expense form going forward while preserving historical rows (`food_drink` is the v1 example). |
+| created_at / updated_at | timestamp | Yes | |
+
+**Constraints:** UNIQUE (category)
+**Notes:**
+- Seeded baseline (migration `2026_05_19_075511_create_category_tax_mapping_table`): the 18 slugs from `config/finances.php` as of Phase 6.
+- Phase 6 additions (migration `2026_05_19_075511_update_finance_categories_for_method_aware_picker`): `servicing`, `repairs`, `road_tax`, `breakdown_cover`, `vehicle_insurance` (method-dependent vehicle running costs); `business_insurance`, `phone`, `accountant_fees` (general); plus `food_drink.selectable_in_picker = false`.
+- The legacy `insurance` slug remains in the table for historical-row integrity but new rows should use `vehicle_insurance` or `business_insurance`. The one-time `InsuranceReview` UI re-tags existing rows.
+
+### year_end_archives
+
+Tracks the asynchronous build, delivery, and 6-year HMRC-retention lifecycle of each per-instructor, per-tax-year ZIP archive. One archive row covers one UK tax year (6 Apr–5 Apr). Status transitions: `queued` → `building` → `ready` (file present, signed download available) → `expired` (file purged after 6-year retention, row kept so UI can offer "Regenerate"). Failures land as `failed` with `error_message` populated; the user can retry by deleting + recreating the row from the UI.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| instructor_id | bigint FK | No | References instructors.id. Cascade on delete. |
+| tax_year_start | smallint unsigned | No | The 4-digit year the tax year begins (e.g. `2026` = 2026/27 = 6 Apr 2026 to 5 Apr 2027). Unique with `instructor_id`. |
+| status | string(16) | No | `queued`, `building`, `ready`, `failed`, `expired`. Default `queued`. |
+| file_path | string | Yes | Relative path on the `local` disk: `archives/{instructor_id}/{tax_year_start}.zip`. Null until `status = ready`. Cleared on `expired`. |
+| file_size_bytes | bigint unsigned | Yes | Size of the ZIP at build time. Useful for the UI table. |
+| counts | json | Yes | `{ finances: N, mileage_logs: N, receipts: N, submissions: N }` snapshot at build time. Backs the index page's at-a-glance numbers. |
+| error_message | text | Yes | When `status = failed`, the human-readable reason. |
+| queued_at | timestamp | Yes | When the build job was queued. |
+| generated_at | timestamp | Yes | When the build finished successfully. |
+| expires_at | timestamp | Yes | 6 years after the end of the tax year. Used by `archive:prune` to decide when to purge the file. |
+| purged_at | timestamp | Yes | When the underlying file was deleted by the retention sweeper. |
+| created_at / updated_at | timestamp | Yes | |
+
+**Constraints:** UNIQUE (instructor_id, tax_year_start)
+**Indexes:** INDEX (status); INDEX (expires_at) for the daily pruning cron.
+**Relationships:** BelongsTo → Instructor.

@@ -12,9 +12,11 @@ use App\Http\Controllers\GetAppController;
 use App\Http\Controllers\Hmrc\HmrcConnectionController;
 use App\Http\Controllers\Hmrc\HmrcFraudHeadersController;
 use App\Http\Controllers\Hmrc\HmrcHelloWorldController;
+use App\Http\Controllers\Hmrc\Archive\ArchiveController;
 use App\Http\Controllers\Hmrc\Itsa\FinalDeclarationController;
 use App\Http\Controllers\Hmrc\Itsa\ItsaController;
 use App\Http\Controllers\Hmrc\Vat\VatController;
+use App\Http\Controllers\Hmrc\Vehicles\VehicleController;
 use App\Http\Controllers\InstructorController;
 use App\Http\Controllers\Onboarding\OnboardingController;
 use App\Http\Controllers\Onboarding\StepFiveController;
@@ -352,6 +354,25 @@ Route::middleware(['auth', 'verified', EnsureInstructor::class])
         Route::post('/test/hello-world', HmrcHelloWorldController::class)->name('test.hello-world');
         Route::post('/test/fraud-headers', [HmrcFraudHeadersController::class, 'validate'])->name('test.fraud-headers');
 
+        Route::prefix('archive')->name('archive.')->group(function () {
+            Route::get('/', [ArchiveController::class, 'index'])->name('index');
+            Route::get('/summary', [ArchiveController::class, 'summary'])->name('summary');
+            Route::post('/', [ArchiveController::class, 'store'])->name('store');
+            Route::post('/{archive}/regenerate', [ArchiveController::class, 'regenerate'])->name('regenerate');
+            Route::post('/{archive}/email-link', [ArchiveController::class, 'emailLink'])->name('email-link');
+        });
+
+        Route::prefix('vehicles')->name('vehicles.')->group(function () {
+            Route::get('/', [VehicleController::class, 'index'])->name('index');
+            Route::post('/', [VehicleController::class, 'store'])->name('store');
+            Route::post('/backfill-primary', [VehicleController::class, 'backfillPrimary'])->name('backfill');
+            Route::post('/review-insurance', [VehicleController::class, 'reviewInsurance'])->name('review-insurance');
+            Route::put('/{vehicle}', [VehicleController::class, 'update'])->name('update');
+            Route::delete('/{vehicle}', [VehicleController::class, 'dispose'])->name('dispose');
+            Route::post('/{vehicle}/switch-method', [VehicleController::class, 'switchMethod'])->name('switch-method');
+            Route::get('/{vehicle}/compare', [VehicleController::class, 'compare'])->name('compare');
+        });
+
         Route::prefix('vat')->name('vat.')->group(function () {
             Route::get('/', [VatController::class, 'index'])->name('index');
             Route::post('/sync-obligations', [VatController::class, 'syncObligations'])->name('sync-obligations');
@@ -369,6 +390,9 @@ Route::middleware(['auth', 'verified', EnsureInstructor::class])
             Route::post('/sync-obligations', [ItsaController::class, 'syncObligations'])->name('sync-obligations');
 
             Route::middleware(EnsureMtdEnrolled::class)->group(function () {
+                Route::get('/{businessId}/period/{periodKey}/prefill', [ItsaController::class, 'prefill'])
+                    ->where('periodKey', '.+')
+                    ->name('prefill');
                 Route::get('/{businessId}/period/{periodKey}', [ItsaController::class, 'period'])
                     ->where('periodKey', '.+')
                     ->name('period');
@@ -389,6 +413,13 @@ Route::middleware(['auth', 'verified', EnsureInstructor::class])
             });
         });
     });
+
+// Year-end archive download — accepts signed URLs from the Mandrill email
+// (no session required); in-session access falls back to an instructor-owner
+// check inside the controller.
+Route::get('/hmrc/archive/{archive}/download', [ArchiveController::class, 'download'])
+    ->name('hmrc.archive.download');
+
 // Public mobile-app brochure (linked from welcome email)
 Route::get('/get-app', [GetAppController::class, 'index'])
     ->name('get-app');

@@ -49,6 +49,7 @@ const props = defineProps<{
     taxProfile: TaxProfile | null;
     applicability: Applicability | null;
     businessTypes: BusinessTypeOption[];
+    showDiagnostics: boolean;
 }>();
 
 const breadcrumbs = [{ title: 'HMRC / Tax' }];
@@ -66,6 +67,7 @@ const breadcrumbs = [{ title: 'HMRC / Tax' }];
                 :tax-profile="props.taxProfile"
                 :applicability="props.applicability"
                 :business-types="props.businessTypes"
+                :show-diagnostics="props.showDiagnostics"
             />
         </div>
     </AppLayout>

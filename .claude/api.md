@@ -37,6 +37,7 @@
     - [Mileage (Create)](#post-apiv1instructormileage)
     - [Mileage (Update)](#put-apiv1instructormileagemileagelog)
     - [Mileage (Delete)](#delete-apiv1instructormileagemileagelog)
+    - [Vehicles (List)](#get-apiv1instructorvehicles)
   - [Student Home](#student-home)
     - [Instructor Profile](#get-apiv1studentinstructor)
     - [Dashboard](#get-apiv1studentdashboard)
@@ -1293,6 +1294,7 @@ Payments and expenses tracking. Every finance record has an optional receipt (PD
 | `type` | string | `payment` or `expense` |
 | `category` | string | Slug from `/finances/config`. Default `none` (uncategorised). Valid list depends on `type`: expense categories for expenses, payment categories for payments. |
 | `category_label` | string\|null | Human-readable label (e.g., `"Fuel"`). `null` only when `category` is set to an unknown slug. |
+| `vehicle_id` | integer\|null | When the row is attached to a vehicle (e.g. fuel, vehicle insurance, MOT, servicing, repairs, road tax, breakdown cover). `null` for non-vehicle categories (advertising, phone, accountant fees, business insurance, etc.). See `category_meta.{slug}.method_dependent` in `/finances/config` to decide when to require it. |
 | `payment_method` | string\|null | Slug from `/finances/config` (e.g., `bank_transfer`, `card`). `null` when unspecified. |
 | `payment_method_label` | string\|null | Human-readable label (e.g., `"Bank Transfer"`). |
 | `description` | string | Description (max 255 chars) |
@@ -1312,7 +1314,7 @@ Payments and expenses tracking. Every finance record has an optional receipt (PD
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Returns the dropdown options used by the finance screens. **Cache this client-side on login and refresh on-demand** — the contents change rarely.
+Returns the dropdown options used by the finance screens **plus** the per-category HMRC metadata and the instructor's active vehicles. **Cache this client-side on login and refresh after the user has been on the web app** (vehicles can change there).
 
 **Request Body:** None
 
@@ -1323,7 +1325,8 @@ Returns the dropdown options used by the finance screens. **Cache this client-si
     "none": "None",
     "fuel": "Fuel",
     "insurance": "Insurance",
-    "mot": "MOT"
+    "mot": "MOT",
+    "advertising": "Advertising"
   },
   "payment_categories": {
     "none": "None",
@@ -1347,11 +1350,46 @@ Returns the dropdown options used by the finance screens. **Cache this client-si
   "receipt": {
     "max_size_kb": 10240,
     "allowed_mimes": ["pdf", "jpg", "jpeg", "png"]
-  }
+  },
+  "category_meta": {
+    "fuel":       { "method_dependent": true,  "claimable": true,  "selectable_in_picker": true, "itsa_bucket": "carVanTravelExpenses" },
+    "mot":        { "method_dependent": true,  "claimable": true,  "selectable_in_picker": true, "itsa_bucket": "carVanTravelExpenses" },
+    "advertising":{ "method_dependent": false, "claimable": true,  "selectable_in_picker": true, "itsa_bucket": "advertisingCosts" },
+    "food_drink": { "method_dependent": false, "claimable": false, "selectable_in_picker": false, "itsa_bucket": null }
+  },
+  "vehicles": [
+    {
+      "id": 14,
+      "display_name": "My tuition car",
+      "registration": "AB12 CDE",
+      "engine_size_cc": 1600,
+      "method": "simplified",
+      "method_label": "Simplified",
+      "business_use_percentage": 95.0,
+      "acquired_on": "2024-09-01",
+      "disposed_on": null,
+      "method_locked": false,
+      "created_at": "2026-05-19T08:00:00+00:00",
+      "updated_at": "2026-05-19T08:00:00+00:00"
+    }
+  ]
 }
 ```
 
 Category + payment-method keys above are illustrative — the full list lives in `config/finances.php` on the server. When creating or updating a record, send the **slug** (e.g., `"fuel"`), not the label.
+
+**`category_meta` flags (per slug):**
+
+| Flag | Meaning |
+|------|---------|
+| `method_dependent` | `true` for vehicle running costs (fuel, MOT, servicing, repairs, road tax, vehicle insurance, breakdown cover). When `true`, the expense form **must show a vehicle picker** and `vehicle_id` should be sent on POST/PUT. When the picked vehicle has `method = "simplified"`, show a warning that the row will be kept for records but excluded from HMRC payloads (mileage allowance covers it). |
+| `claimable` | `false` for categories that never reach HMRC (`hmrc_tax`, `food_drink`, internal `our_account`, etc.). |
+| `selectable_in_picker` | `false` for categories that are kept in the table for historical-row integrity but hidden from new entry. Filter your dropdown by this. |
+| `itsa_bucket` | The HMRC ITSA expense bucket (camelCase) this category maps to. Informational — the mobile app does not need to send this anywhere. `null` when the category is excluded from HMRC payloads. |
+
+**`vehicles` list:**
+
+Active vehicles only (`disposed_on IS NULL`). If the instructor has no vehicles yet, the array is empty — the mobile app should still allow logging non-vehicle expenses (`category_meta.{slug}.method_dependent === false`) but should prompt the user to set up a vehicle on the web before logging anything vehicle-related. Use `/api/v1/instructor/vehicles?include_disposed=1` to retrieve disposed vehicles as well (e.g. for displaying historical rows that reference them).
 
 ---
 
@@ -1505,6 +1543,7 @@ Creates a finance record. Create first (JSON), then upload a receipt separately 
 |-------|------|----------|-------------|
 | `type` | string | Yes | `payment` or `expense` |
 | `category` | string | Yes | Slug from `/finances/config`. Must be a key of `expense_categories` (when `type=expense`) or `payment_categories` (when `type=payment`). Use `"none"` for uncategorised. |
+| `vehicle_id` | integer | Conditional | Required when `category_meta.{category}.method_dependent === true` (fuel, MOT, vehicle insurance, servicing, repairs, road tax, breakdown cover). Must be one of the vehicles returned by `/finances/config.vehicles`. Send `null` or omit for non-vehicle categories. |
 | `payment_method` | string | No | Slug from `/finances/config.payment_methods`. Omit for unspecified. |
 | `description` | string | Yes | Max 255 chars |
 | `amount_pence` | integer | Yes | Min 1 |
@@ -1513,18 +1552,28 @@ Creates a finance record. Create first (JSON), then upload a receipt separately 
 | `date` | string | Yes | YYYY-MM-DD |
 | `notes` | string | No | Max 1000 chars |
 
-**Example Request:**
+**Example Request (vehicle-bound expense):**
 ```json
 {
   "type": "expense",
-  "category": "insurance",
-  "payment_method": "direct_debit",
-  "description": "Car insurance",
-  "amount_pence": 15000,
-  "is_recurring": true,
-  "recurrence_frequency": "monthly",
-  "date": "2026-04-24",
-  "notes": "Monthly DD"
+  "category": "fuel",
+  "vehicle_id": 14,
+  "payment_method": "card",
+  "description": "BP fill-up",
+  "amount_pence": 7500,
+  "date": "2026-04-24"
+}
+```
+
+**Example Request (non-vehicle expense):**
+```json
+{
+  "type": "expense",
+  "category": "advertising",
+  "payment_method": "card",
+  "description": "Facebook ads",
+  "amount_pence": 4500,
+  "date": "2026-04-24"
 }
 ```
 
@@ -1542,7 +1591,9 @@ Updates a finance record. All fields optional. Category validation uses the **ef
 
 **URL Parameters:** `finance` (integer)
 
-**Request Body:** any subset of the `POST` fields.
+**Request Body:** any subset of the `POST` fields. Notes specific to a few:
+
+- `vehicle_id`: send an integer to attach, or `null` to detach (e.g. when changing category from `fuel` to `advertising`). Omitting the key leaves the existing value untouched.
 
 **Success Response:** `200 OK` — returns the updated record.
 
@@ -1609,6 +1660,7 @@ Mileage logs are a separate ledger from finances. Fuel expenses are **not** link
 |-------|------|-------------|
 | `id` | integer | Mileage log ID |
 | `date` | string | YYYY-MM-DD |
+| `vehicle_id` | integer\|null | The vehicle the trip was driven in. Nullable on historical rows from before vehicles existed; required on new business trips for HMRC mileage allowance calculations. |
 | `start_mileage` | integer | Starting odometer reading |
 | `end_mileage` | integer | Ending odometer reading (≥ start) |
 | `miles` | integer | Server-calculated `end - start` |
@@ -1676,6 +1728,7 @@ Creates a mileage log. `miles` is calculated server-side from `end_mileage - sta
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `date` | string | Yes | YYYY-MM-DD |
+| `vehicle_id` | integer | Recommended | The vehicle this trip was driven in. Must be one of the vehicles in `/finances/config.vehicles`. Nullable for backward compatibility, but business trips with `vehicle_id = null` are excluded from HMRC mileage-allowance calculations. |
 | `start_mileage` | integer | Yes | Starting odometer reading (min 0) |
 | `end_mileage` | integer | Yes | Ending odometer reading. Must be ≥ `start_mileage`. |
 | `type` | string | Yes | `business` or `personal` |
@@ -1685,6 +1738,7 @@ Creates a mileage log. `miles` is calculated server-side from `end_mileage - sta
 ```json
 {
   "date": "2026-04-22",
+  "vehicle_id": 14,
   "start_mileage": 45210,
   "end_mileage": 45250,
   "type": "business",
@@ -1704,6 +1758,8 @@ Creates a mileage log. `miles` is calculated server-side from `end_mileage - sta
 
 Updates a mileage log. All fields optional. `miles` is recomputed whenever either `start_mileage` or `end_mileage` changes. The **effective** end must still be ≥ the effective start, so you can send only `end_mileage` and the server validates against the stored `start_mileage`.
 
+`vehicle_id` can be set (integer), cleared (`null`), or left alone (omit the key).
+
 **Success Response:** `200 OK` — returns the updated log.
 
 **Error Responses:**
@@ -1722,6 +1778,71 @@ Updates a mileage log. All fields optional. `miles` is recomputed whenever eithe
 ```
 
 **Error Response (not owned):** `403 Forbidden`
+
+---
+
+### Instructor Vehicles
+
+Read-only in v1. The mobile app needs the vehicle list to power the vehicle picker on the expense form (for method-dependent categories like `fuel`, `vehicle_insurance`, `mot`) and to render historical rows that reference a vehicle. Vehicle CRUD lives on the web app — instructors set up Simplified vs Advanced (per HMRC's lifetime-per-vehicle rule) there. v2 may expose write endpoints; for now, the app can read but cannot edit.
+
+The same vehicle list is also embedded in `/finances/config.vehicles` for convenience — call this endpoint separately only when you need disposed vehicles too.
+
+**Vehicle Object:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Vehicle ID |
+| `display_name` | string | User-facing name (e.g. `"My tuition car"`) |
+| `registration` | string\|null | Vehicle registration plate |
+| `engine_size_cc` | integer\|null | Reserved for future VAT fuel scale charges |
+| `method` | string | `"simplified"` or `"actual"`. Lifetime per vehicle once a quarterly has been filed (`method_locked`). |
+| `method_label` | string | UI label — `"Simplified"` or `"Advanced"` (note: internally `actual` maps to the user-facing `"Advanced"`). |
+| `business_use_percentage` | float | 0–100. Only used for Advanced-method calculations; informational on Simplified. |
+| `acquired_on` | string\|null | YYYY-MM-DD |
+| `disposed_on` | string\|null | YYYY-MM-DD when the vehicle is no longer in service. Disposed vehicles stay attached to historical rows but cannot be selected on new ones. |
+| `method_locked` | boolean | `true` once a quarterly has been filed against this vehicle. Method changes from this point are a "soft-lock" — possible, but warned against. |
+| `created_at` | string | ISO 8601 |
+| `updated_at` | string | ISO 8601 |
+
+---
+
+#### `GET /api/v1/instructor/vehicles`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+List vehicles owned by the authenticated instructor.
+
+**Query Params:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `include_disposed` | boolean | No | Default `false` — active only. Set `1`/`true` to include disposed vehicles for historical context. |
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": [
+    {
+      "id": 14,
+      "display_name": "My tuition car",
+      "registration": "AB12 CDE",
+      "engine_size_cc": 1600,
+      "method": "simplified",
+      "method_label": "Simplified",
+      "business_use_percentage": 95.0,
+      "acquired_on": "2024-09-01",
+      "disposed_on": null,
+      "method_locked": false,
+      "created_at": "2026-05-19T08:00:00+00:00",
+      "updated_at": "2026-05-19T08:00:00+00:00"
+    }
+  ]
+}
+```
+
+**Notes:**
+- Empty `data` array means the instructor has no vehicles set up. Direct them to the web app to create one — vehicle CRUD is not exposed on the API in v1.
+- Method choice (`simplified` vs `actual`) drives whether vehicle running-cost expenses (`fuel`, `vehicle_insurance`, `mot`, etc.) get included in the HMRC quarterly payload — Simplified uses a flat mileage allowance instead. When the user picks a Simplified vehicle on a method-dependent category, show an inline warning that the row will be kept for records but excluded from HMRC payloads.
 
 ---
 
@@ -5298,6 +5419,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-04-28 | Added pickup-point update endpoint — closes the last missing CRUD on student pickup points. Reuses existing `UpdatePickupPointAction`, `UpdatePickupPointRequest`, `StudentPickupPointResource`, and the dual-role `PickupPointPolicy`. Postcode is re-geocoded only when it changes; setting `is_default: true` unsets any other default for the student. Response shape matches POST exactly. | Pickup Points (update) |
 | 2026-04-28 | Added `student_lesson_number` field to lesson responses — a per-student running lesson number (starts at 1, increments across all the student's orders, immutable after assignment). Now exposed on `GET /api/v1/students/{student}/lessons`, `GET /api/v1/students/{student}/lessons/{lesson}`, and `GET /api/v1/instructor/lessons/{date}`. The internal `id` is retained for routing/internal references; `student_lesson_number` is the user-facing reference for support queries. Backed by a new `lessons.student_lesson_number` column populated via backfill migration. | Student Lessons (index, show), Instructor Lessons (day) |
 | 2026-04-28 | Added `pin` field to the instructor profile object — surfaces the instructor's attach PIN (the same PIN students enter on `POST /api/v1/students/attach`) so the mobile app can display it after the instructor logs in. Returned on every endpoint that already returns the instructor profile object: login, `/auth/user`, instructor registration, `PUT /instructor/profile`, and the profile-picture upload/delete endpoints. | Auth (login, user, register/instructor), Instructor (profile, profile/picture) |
+| 2026-05-19 | Vehicles exposed to the mobile API (Phase 6/7 — HMRC MTD). Added `vehicle_id` to the finance + mileage object, POST, and PUT (validated to belong to the authenticated instructor). Extended `/finances/config` with `category_meta` (per-slug `method_dependent` / `claimable` / `selectable_in_picker` / `itsa_bucket` flags) and an embedded active `vehicles` list. Added read-only `GET /api/v1/instructor/vehicles` (with optional `?include_disposed=1`) for the expense form's vehicle picker. Vehicle CRUD remains web-only in v1 — the app can read but not edit. | Finances (config, store, update), Finance object, Mileage (store, update), Mileage object, Vehicles (new) |
 
 ---
 

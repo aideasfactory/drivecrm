@@ -19,8 +19,11 @@ class StoreMileageLogRequest extends FormRequest
      */
     public function rules(): array
     {
+        $instructorId = $this->user()?->instructor?->id ?? 0;
+
         return [
             'date' => ['required', 'date', 'date_format:Y-m-d'],
+            'vehicle_id' => ['nullable', 'integer', Rule::exists('vehicles', 'id')->where('instructor_id', $instructorId)],
             'start_mileage' => ['required', 'integer', 'min:0'],
             'end_mileage' => ['required', 'integer', 'min:0', 'gte:start_mileage'],
             'type' => ['required', 'string', Rule::in(array_keys(config('finances.mileage_types', [])))],

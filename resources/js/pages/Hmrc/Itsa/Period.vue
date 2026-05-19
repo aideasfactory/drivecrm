@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import axios from 'axios';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +12,16 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from '@/components/ui/sonner';
 import { useHmrcAction } from '@/composables/useHmrcAction';
-import { AlertCircle, ArrowLeft, CalendarClock, Loader2, Save, ShieldCheck } from 'lucide-vue-next';
+import {
+    AlertCircle,
+    ArrowLeft,
+    CalendarClock,
+    Loader2,
+    RotateCcw,
+    Save,
+    ShieldCheck,
+    Sparkles,
+} from 'lucide-vue-next';
 
 interface ExpenseCategory {
     value: string;
@@ -104,6 +114,83 @@ const errors = ref<Record<string, string>>({});
 const action = useHmrcAction();
 
 const isAmend = computed(() => props.existing?.submission_id !== null && props.existing?.submission_id !== undefined);
+
+interface CalculatedTotals {
+    turnover_pence: number;
+    other_income_pence: number;
+    expenses_pence: Record<string, number>;
+    diagnostics: {
+        missing_primary_vehicle: boolean;
+        vehicles: Array<{ vehicle_id: number; display_name: string; method: string; pence: number }>;
+    };
+}
+
+const calculated = ref<CalculatedTotals | null>(null);
+const prefilling = ref(false);
+
+const fetchPrefill = async () => {
+    prefilling.value = true;
+    try {
+        const response = await axios.get<CalculatedTotals>(
+            `/hmrc/itsa/${props.businessId}/period/${encodeURIComponent(props.periodKey)}/prefill`,
+        );
+        calculated.value = response.data;
+
+        // Only populate fields when there is no existing submission — we don't
+        // want to silently overwrite figures that have already been sent to HMRC.
+        if (!props.existing) {
+            form.value.turnover = penceToPounds(response.data.turnover_pence);
+            form.value.other_income = penceToPounds(response.data.other_income_pence);
+            form.value.mode = 'itemised';
+            for (const cat of props.expenseCategories) {
+                const pence = response.data.expenses_pence[cat.value] ?? 0;
+                if (pence > 0) {
+                    form.value.expenses[cat.value] = penceToPounds(pence);
+                }
+            }
+        }
+    } catch {
+        // Silent — the form remains usable with manual entry.
+    } finally {
+        prefilling.value = false;
+    }
+};
+
+onMounted(() => {
+    fetchPrefill();
+});
+
+const calculatedTurnoverPounds = computed(() =>
+    calculated.value ? penceToPounds(calculated.value.turnover_pence) : '',
+);
+const calculatedOtherIncomePounds = computed(() =>
+    calculated.value ? penceToPounds(calculated.value.other_income_pence) : '',
+);
+const calculatedExpensePounds = (value: string): string =>
+    calculated.value ? penceToPounds(calculated.value.expenses_pence[value] ?? 0) : '';
+
+type FieldStatus = 'idle' | 'calculated' | 'overridden';
+
+const fieldStatus = (current: string, calculatedValue: string): FieldStatus => {
+    if (calculated.value === null) return 'idle';
+    if ((current || '0.00') === (calculatedValue || '0.00')) return 'calculated';
+    return 'overridden';
+};
+
+const turnoverStatus = computed(() => fieldStatus(form.value.turnover, calculatedTurnoverPounds.value));
+const otherIncomeStatus = computed(() => fieldStatus(form.value.other_income, calculatedOtherIncomePounds.value));
+const expenseStatus = (value: string): FieldStatus =>
+    fieldStatus(form.value.expenses[value] ?? '', calculatedExpensePounds(value));
+
+const resetTurnover = () => {
+    form.value.turnover = calculatedTurnoverPounds.value;
+};
+const resetOtherIncome = () => {
+    form.value.other_income = calculatedOtherIncomePounds.value;
+};
+const resetExpense = (value: string) => {
+    form.value.expenses[value] = calculatedExpensePounds(value);
+};
 
 const totalExpenses = computed(() => {
     if (form.value.mode === 'consolidated') {
@@ -230,6 +317,16 @@ const breadcrumbs = [
                 <AlertDescription>{{ errors._ }}</AlertDescription>
             </Alert>
 
+            <Alert v-if="calculated && calculated.diagnostics.missing_primary_vehicle" variant="default">
+                <AlertCircle class="h-4 w-4" />
+                <AlertTitle>Vehicle setup incomplete</AlertTitle>
+                <AlertDescription>
+                    You have business mileage with no vehicle attached, or no vehicle on file at all. The
+                    car / van / travel figure will be incomplete until you finish vehicle setup.
+                    <a href="/hmrc/vehicles" class="underline">Open Vehicles →</a>
+                </AlertDescription>
+            </Alert>
+
             <form class="flex flex-col gap-6" @submit.prevent="handleSubmit">
                 <Card>
                     <CardHeader>
@@ -240,11 +337,33 @@ const breadcrumbs = [
                         <div class="space-y-2">
                             <Label for="turnover">Turnover (£) *</Label>
                             <Input id="turnover" v-model="form.turnover" inputmode="decimal" placeholder="0.00" :disabled="submitting" />
+                            <div v-if="turnoverStatus === 'calculated'" class="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Sparkles class="h-3 w-3" />
+                                Calculated from your records
+                            </div>
+                            <div v-else-if="turnoverStatus === 'overridden'" class="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span>Manually overridden</span>
+                                <button type="button" class="inline-flex items-center gap-1 underline" @click="resetTurnover">
+                                    <RotateCcw class="h-3 w-3" />
+                                    Reset to calculated
+                                </button>
+                            </div>
                             <p v-if="errors.turnover_pence" class="text-destructive text-sm">{{ errors.turnover_pence }}</p>
                         </div>
                         <div class="space-y-2">
                             <Label for="other_income">Other income (£) *</Label>
                             <Input id="other_income" v-model="form.other_income" inputmode="decimal" placeholder="0.00" :disabled="submitting" />
+                            <div v-if="otherIncomeStatus === 'calculated'" class="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Sparkles class="h-3 w-3" />
+                                Calculated from your records
+                            </div>
+                            <div v-else-if="otherIncomeStatus === 'overridden'" class="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span>Manually overridden</span>
+                                <button type="button" class="inline-flex items-center gap-1 underline" @click="resetOtherIncome">
+                                    <RotateCcw class="h-3 w-3" />
+                                    Reset to calculated
+                                </button>
+                            </div>
                             <p v-if="errors.other_income_pence" class="text-destructive text-sm">{{ errors.other_income_pence }}</p>
                         </div>
                     </CardContent>
@@ -301,6 +420,27 @@ const breadcrumbs = [
                                     placeholder="0.00"
                                     :disabled="submitting"
                                 />
+                                <div
+                                    v-if="expenseStatus(cat.value) === 'calculated' && (form.expenses[cat.value] || '0.00') !== '0.00'"
+                                    class="flex items-center gap-1 text-xs text-muted-foreground"
+                                >
+                                    <Sparkles class="h-3 w-3" />
+                                    Calculated from your records
+                                </div>
+                                <div
+                                    v-else-if="expenseStatus(cat.value) === 'overridden'"
+                                    class="flex items-center gap-2 text-xs text-muted-foreground"
+                                >
+                                    <span>Manually overridden</span>
+                                    <button
+                                        type="button"
+                                        class="inline-flex items-center gap-1 underline"
+                                        @click="resetExpense(cat.value)"
+                                    >
+                                        <RotateCcw class="h-3 w-3" />
+                                        Reset to calculated
+                                    </button>
+                                </div>
                             </div>
                         </div>
 

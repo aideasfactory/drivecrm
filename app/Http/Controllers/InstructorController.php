@@ -974,7 +974,7 @@ class InstructorController extends Controller
 
         return response()->json([
             'finances' => $finances->map(fn (InstructorFinance $f) => $this->serializeFinance($f)),
-            'config' => $this->financeConfigPayload(),
+            'config' => $this->financeConfigPayload($instructor),
         ]);
     }
 
@@ -986,6 +986,7 @@ class InstructorController extends Controller
         $data = $request->validate([
             'type' => ['required', 'string', 'in:payment,expense'],
             'category' => ['required', 'string', Rule::in($this->categoryKeysFor($request->input('type')))],
+            'vehicle_id' => ['nullable', 'integer', Rule::exists('vehicles', 'id')->where('instructor_id', $instructor->id)],
             'payment_method' => ['nullable', 'string', Rule::in(array_keys(config('finances.payment_methods', [])))],
             'description' => ['required', 'string', 'max:255'],
             'amount_pence' => ['required', 'integer', 'min:1'],
@@ -1016,6 +1017,7 @@ class InstructorController extends Controller
         $data = $request->validate([
             'type' => ['sometimes', 'string', 'in:payment,expense'],
             'category' => ['sometimes', 'string', Rule::in($this->categoryKeysFor($effectiveType))],
+            'vehicle_id' => ['nullable', 'integer', Rule::exists('vehicles', 'id')->where('instructor_id', $instructor->id)],
             'payment_method' => ['nullable', 'string', Rule::in(array_keys(config('finances.payment_methods', [])))],
             'description' => ['sometimes', 'string', 'max:255'],
             'amount_pence' => ['sometimes', 'integer', 'min:1'],
@@ -1104,6 +1106,7 @@ class InstructorController extends Controller
     {
         $data = $request->validate([
             'date' => ['required', 'date', 'date_format:Y-m-d'],
+            'vehicle_id' => ['nullable', 'integer', Rule::exists('vehicles', 'id')->where('instructor_id', $instructor->id)],
             'start_mileage' => ['required', 'integer', 'min:0'],
             'end_mileage' => ['required', 'integer', 'min:0', 'gte:start_mileage'],
             'type' => ['required', 'string', Rule::in(array_keys(config('finances.mileage_types', [])))],
@@ -1128,6 +1131,7 @@ class InstructorController extends Controller
 
         $data = $request->validate([
             'date' => ['sometimes', 'date', 'date_format:Y-m-d'],
+            'vehicle_id' => ['nullable', 'integer', Rule::exists('vehicles', 'id')->where('instructor_id', $instructor->id)],
             'start_mileage' => ['sometimes', 'integer', 'min:0'],
             'end_mileage' => ['sometimes', 'integer', 'min:0'],
             'type' => ['sometimes', 'string', Rule::in(array_keys(config('finances.mileage_types', [])))],
@@ -1185,6 +1189,7 @@ class InstructorController extends Controller
             'type' => $f->type,
             'category' => $f->category,
             'category_label' => $f->category_label,
+            'vehicle_id' => $f->vehicle_id,
             'payment_method' => $f->payment_method,
             'payment_method_label' => $f->payment_method_label,
             'description' => $f->description,
@@ -1212,6 +1217,7 @@ class InstructorController extends Controller
         return [
             'id' => $log->id,
             'date' => $log->date->format('Y-m-d'),
+            'vehicle_id' => $log->vehicle_id,
             'start_mileage' => $log->start_mileage,
             'end_mileage' => $log->end_mileage,
             'miles' => $log->miles,
@@ -1225,10 +1231,40 @@ class InstructorController extends Controller
     /**
      * Enum payload for the finance UI (dropdown options).
      *
-     * @return array<string, array<string, string>>
+     * Phase 7 additions:
+     *  - `category_meta` exposes the join between DRIVE category slugs and HMRC
+     *    bucket / method-dependent / selectable flags so the picker can grey
+     *    Simplified-vehicle running costs and only show a vehicle dropdown for
+     *    method-dependent rows.
+     *  - `vehicles` is the instructor's active vehicle list (id, name, method).
+     *
+     * @return array<string, mixed>
      */
-    private function financeConfigPayload(): array
+    private function financeConfigPayload(Instructor $instructor): array
     {
+        $categoryMeta = DB::table('category_tax_mapping')
+            ->get(['category', 'method_dependent', 'claimable', 'selectable_in_picker', 'itsa_bucket'])
+            ->keyBy('category')
+            ->map(fn ($row) => [
+                'method_dependent' => (bool) $row->method_dependent,
+                'claimable' => (bool) $row->claimable,
+                'selectable_in_picker' => (bool) $row->selectable_in_picker,
+                'itsa_bucket' => $row->itsa_bucket,
+            ])
+            ->all();
+
+        $vehicles = $instructor->vehicles()
+            ->whereNull('disposed_on')
+            ->orderBy('display_name')
+            ->get()
+            ->map(fn ($v) => [
+                'id' => $v->id,
+                'display_name' => $v->display_name,
+                'method' => $v->method->value,
+                'method_label' => $v->method->label(),
+            ])
+            ->all();
+
         return [
             'expense_categories' => config('finances.expense_categories', []),
             'payment_categories' => config('finances.payment_categories', []),
@@ -1238,6 +1274,8 @@ class InstructorController extends Controller
                 'max_size_kb' => (int) config('finances.receipt.max_size_kb', 10240),
                 'allowed_mimes' => config('finances.receipt.allowed_mimes', []),
             ],
+            'category_meta' => $categoryMeta,
+            'vehicles' => $vehicles,
         ];
     }
 

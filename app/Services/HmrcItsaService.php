@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Actions\Hmrc\Itsa\AmendQuarterlyUpdateAction;
+use App\Actions\Hmrc\Itsa\Derive\DeriveItsaQuarterlyTotalsAction;
 use App\Actions\Hmrc\Itsa\ListBusinessesAction;
 use App\Actions\Hmrc\Itsa\ListObligationsAction;
 use App\Actions\Hmrc\Itsa\ResolveEnrolmentStatusAction;
@@ -16,7 +17,9 @@ use App\Enums\ItsaObligationStatus;
 use App\Models\HmrcItsaBusiness;
 use App\Models\HmrcItsaObligation;
 use App\Models\HmrcItsaQuarterlyUpdate;
+use App\Models\Instructor;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 class HmrcItsaService extends BaseService
@@ -29,7 +32,53 @@ class HmrcItsaService extends BaseService
         protected AmendQuarterlyUpdateAction $amendQuarterly,
         protected RetrieveQuarterlyUpdateAction $retrieveQuarterly,
         protected ResolveEnrolmentStatusAction $resolveEnrolmentStatus,
+        protected DeriveItsaQuarterlyTotalsAction $deriveQuarterlyTotals,
     ) {}
+
+    /**
+     * Prefill totals for a quarterly period from DRIVE's records. Returns null
+     * when there is no matching obligation (so the controller can 404 cleanly).
+     *
+     * @return array{
+     *     period_start_date: string,
+     *     period_end_date: string,
+     *     turnover_pence: int,
+     *     other_income_pence: int,
+     *     expenses_pence: array<string, int>,
+     *     diagnostics: array<string, mixed>,
+     * }|null
+     */
+    public function prefillForPeriod(User $user, string $businessId, string $periodKey): ?array
+    {
+        $instructor = $user->instructor;
+        if (! $instructor instanceof Instructor) {
+            return null;
+        }
+
+        $obligation = HmrcItsaObligation::query()
+            ->where('user_id', $user->id)
+            ->where('business_id', $businessId)
+            ->where('period_key', $periodKey)
+            ->first();
+
+        if ($obligation === null) {
+            return null;
+        }
+
+        $periodStart = Carbon::parse($obligation->period_start_date)->startOfDay();
+        $periodEnd = Carbon::parse($obligation->period_end_date)->startOfDay();
+
+        $result = ($this->deriveQuarterlyTotals)($instructor, $periodStart, $periodEnd);
+
+        return [
+            'period_start_date' => $periodStart->toDateString(),
+            'period_end_date' => $periodEnd->toDateString(),
+            'turnover_pence' => $result['turnover_pence'],
+            'other_income_pence' => $result['other_income_pence'],
+            'expenses_pence' => $result['expenses_pence'],
+            'diagnostics' => $result['diagnostics'],
+        ];
+    }
 
     /**
      * @param  array{ip?: ?string, port?: ?string, has_mfa?: bool}  $fraudContext

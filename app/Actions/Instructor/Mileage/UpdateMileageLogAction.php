@@ -26,9 +26,12 @@ class UpdateMileageLogAction
             $payload['miles'] = $end - $start;
         }
 
-        // `notes` can legitimately be set to null — re-add if the key was provided.
+        // `notes` and `vehicle_id` can legitimately be set to null — re-add if the key was provided.
         if (array_key_exists('notes', $data)) {
             $payload['notes'] = $data['notes'];
+        }
+        if (array_key_exists('vehicle_id', $data)) {
+            $payload['vehicle_id'] = $data['vehicle_id'];
         }
 
         $log->update($payload);

@@ -10,16 +10,20 @@ use App\Http\Requests\Api\V1\UpdateInstructorFinanceRequest;
 use App\Http\Requests\Api\V1\UploadFinanceReceiptRequest;
 use App\Http\Resources\V1\InstructorFinanceResource;
 use App\Http\Resources\V1\MileageLogResource;
+use App\Http\Resources\V1\VehicleResource;
 use App\Models\InstructorFinance;
 use App\Services\InstructorService;
+use App\Services\VehicleService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 
 class InstructorFinanceController extends Controller
 {
     public function __construct(
-        protected InstructorService $instructorService
+        protected InstructorService $instructorService,
+        protected VehicleService $vehicleService,
     ) {}
 
     /**
@@ -77,11 +81,26 @@ class InstructorFinanceController extends Controller
     }
 
     /**
-     * Dropdown options (categories, payment methods, mileage types, receipt constraints).
-     * App should cache this client-side.
+     * Dropdown options (categories, payment methods, mileage types, receipt constraints),
+     * plus the per-category HMRC metadata and the instructor's active vehicles. The
+     * app caches this client-side and refreshes after the user manages vehicles on
+     * the web.
      */
-    public function config(): JsonResponse
+    public function config(Request $request): JsonResponse
     {
+        $instructor = $request->user()->instructor;
+
+        $categoryMeta = DB::table('category_tax_mapping')
+            ->get(['category', 'method_dependent', 'claimable', 'selectable_in_picker', 'itsa_bucket'])
+            ->keyBy('category')
+            ->map(fn ($row) => [
+                'method_dependent' => (bool) $row->method_dependent,
+                'claimable' => (bool) $row->claimable,
+                'selectable_in_picker' => (bool) $row->selectable_in_picker,
+                'itsa_bucket' => $row->itsa_bucket,
+            ])
+            ->all();
+
         return response()->json([
             'expense_categories' => config('finances.expense_categories', []),
             'payment_categories' => config('finances.payment_categories', []),
@@ -91,6 +110,8 @@ class InstructorFinanceController extends Controller
                 'max_size_kb' => (int) config('finances.receipt.max_size_kb', 10240),
                 'allowed_mimes' => config('finances.receipt.allowed_mimes', []),
             ],
+            'category_meta' => $categoryMeta,
+            'vehicles' => VehicleResource::collection($this->vehicleService->activeVehiclesFor($instructor))->resolve(),
         ]);
     }
 

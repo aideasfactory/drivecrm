@@ -21,8 +21,11 @@ class UpdateMileageLogRequest extends FormRequest
      */
     public function rules(): array
     {
+        $instructorId = $this->user()?->instructor?->id ?? 0;
+
         return [
             'date' => ['sometimes', 'date', 'date_format:Y-m-d'],
+            'vehicle_id' => ['sometimes', 'nullable', 'integer', Rule::exists('vehicles', 'id')->where('instructor_id', $instructorId)],
             'start_mileage' => ['sometimes', 'integer', 'min:0'],
             'end_mileage' => ['sometimes', 'integer', 'min:0'],
             'type' => ['sometimes', 'string', Rule::in(array_keys(config('finances.mileage_types', [])))],

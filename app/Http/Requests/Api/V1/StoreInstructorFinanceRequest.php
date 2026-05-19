@@ -22,6 +22,7 @@ class StoreInstructorFinanceRequest extends FormRequest
         return [
             'type' => ['required', 'string', 'in:payment,expense'],
             'category' => ['required', 'string', Rule::in($this->categoryKeys())],
+            'vehicle_id' => ['nullable', 'integer', $this->vehicleOwnershipRule()],
             'payment_method' => ['nullable', 'string', Rule::in(array_keys(config('finances.payment_methods', [])))],
             'description' => ['required', 'string', 'max:255'],
             'amount_pence' => ['required', 'integer', 'min:1'],
@@ -42,5 +43,15 @@ class StoreInstructorFinanceRequest extends FormRequest
         $source = $this->input('type') === 'payment' ? 'payment_categories' : 'expense_categories';
 
         return array_keys(config("finances.{$source}", []));
+    }
+
+    /**
+     * Vehicle must belong to the authenticated instructor.
+     */
+    private function vehicleOwnershipRule(): \Illuminate\Validation\Rules\Exists
+    {
+        $instructorId = $this->user()?->instructor?->id ?? 0;
+
+        return Rule::exists('vehicles', 'id')->where('instructor_id', $instructorId);
     }
 }

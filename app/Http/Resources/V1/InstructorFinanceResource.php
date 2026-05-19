@@ -19,6 +19,7 @@ class InstructorFinanceResource extends JsonResource
             'type' => $this->type,
             'category' => $this->category,
             'category_label' => $this->category_label,
+            'vehicle_id' => $this->vehicle_id,
             'payment_method' => $this->payment_method,
             'payment_method_label' => $this->payment_method_label,
             'description' => $this->description,

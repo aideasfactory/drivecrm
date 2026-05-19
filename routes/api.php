@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\InstructorPackageController;
 use App\Http\Controllers\Api\V1\InstructorProfileController;
 use App\Http\Controllers\Api\V1\InstructorStudentController;
 use App\Http\Controllers\Api\V1\InstructorStudentProgressController;
+use App\Http\Controllers\Api\V1\InstructorVehicleController;
 use App\Http\Controllers\Api\V1\LessonResourceController;
 use App\Http\Controllers\Api\V1\LessonSignOffController;
 use App\Http\Controllers\Api\V1\MessageController;
@@ -88,6 +89,8 @@ Route::prefix('v1')->group(function (): void {
             Route::get('mileage/{mileageLog}', [InstructorMileageController::class, 'show']);
             Route::put('mileage/{mileageLog}', [InstructorMileageController::class, 'update']);
             Route::delete('mileage/{mileageLog}', [InstructorMileageController::class, 'destroy']);
+
+            Route::get('vehicles', [InstructorVehicleController::class, 'index']);
 
             Route::get('students/{student}/progress', [InstructorStudentProgressController::class, 'show']);
             Route::post('students/{student}/progress', [InstructorStudentProgressController::class, 'update']);

@@ -14,6 +14,7 @@ class CreateInstructorFinanceAction
         return $instructor->finances()->create([
             'type' => $data['type'],
             'category' => $data['category'] ?? 'none',
+            'vehicle_id' => $data['vehicle_id'] ?? null,
             'payment_method' => $data['payment_method'] ?? null,
             'description' => $data['description'],
             'amount_pence' => $data['amount_pence'],

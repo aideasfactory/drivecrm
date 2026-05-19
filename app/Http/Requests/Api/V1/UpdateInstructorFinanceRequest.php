@@ -23,6 +23,7 @@ class UpdateInstructorFinanceRequest extends FormRequest
         return [
             'type' => ['sometimes', 'string', 'in:payment,expense'],
             'category' => ['sometimes', 'string', Rule::in($this->categoryKeys())],
+            'vehicle_id' => ['sometimes', 'nullable', 'integer', $this->vehicleOwnershipRule()],
             'payment_method' => ['nullable', 'string', Rule::in(array_keys(config('finances.payment_methods', [])))],
             'description' => ['sometimes', 'string', 'max:255'],
             'amount_pence' => ['sometimes', 'integer', 'min:1'],
@@ -46,5 +47,12 @@ class UpdateInstructorFinanceRequest extends FormRequest
         $source = $type === 'payment' ? 'payment_categories' : 'expense_categories';
 
         return array_keys(config("finances.{$source}", []));
+    }
+
+    private function vehicleOwnershipRule(): \Illuminate\Validation\Rules\Exists
+    {
+        $instructorId = $this->user()?->instructor?->id ?? 0;
+
+        return Rule::exists('vehicles', 'id')->where('instructor_id', $instructorId);
     }
 }

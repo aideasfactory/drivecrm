@@ -57,6 +57,7 @@ interface InstructorFinance {
     type: 'payment' | 'expense'
     category: string
     category_label: string | null
+    vehicle_id: number | null
     payment_method: string | null
     payment_method_label: string | null
     description: string
@@ -91,6 +92,18 @@ interface FinanceConfig {
         max_size_kb: number
         allowed_mimes: string[]
     }
+    category_meta?: Record<string, {
+        method_dependent: boolean
+        claimable: boolean
+        selectable_in_picker: boolean
+        itsa_bucket: string | null
+    }>
+    vehicles?: Array<{
+        id: number
+        display_name: string
+        method: 'simplified' | 'actual'
+        method_label: string
+    }>
 }
 
 interface Props {
@@ -119,6 +132,7 @@ const mileageErrors = ref<Record<string, string>>({})
 const form = ref({
     type: 'payment' as 'payment' | 'expense',
     category: 'none',
+    vehicle_id: null as number | null,
     payment_method: '' as string,
     description: '',
     amount: '',
@@ -140,9 +154,36 @@ const mileageForm = ref({
 
 const activeCategories = computed<Record<string, string>>(() => {
     if (!config.value) return {}
-    return form.value.type === 'payment'
+    const source = form.value.type === 'payment'
         ? config.value.payment_categories
         : config.value.expense_categories
+    const meta = config.value.category_meta ?? {}
+    const filtered: Record<string, string> = {}
+    for (const [slug, label] of Object.entries(source)) {
+        if (meta[slug] && meta[slug].selectable_in_picker === false) {
+            continue
+        }
+        filtered[slug] = label
+    }
+    return filtered
+})
+
+const categoryIsMethodDependent = computed<boolean>(() => {
+    const meta = config.value?.category_meta?.[form.value.category]
+    return !!meta?.method_dependent
+})
+
+const activeVehicles = computed(() => config.value?.vehicles ?? [])
+
+const selectedVehicle = computed(() =>
+    activeVehicles.value.find((v) => v.id === form.value.vehicle_id) ?? null,
+)
+
+const simplifiedDoubleClaimWarning = computed<string | null>(() => {
+    if (!categoryIsMethodDependent.value) return null
+    if (!selectedVehicle.value) return null
+    if (selectedVehicle.value.method !== 'simplified') return null
+    return `${selectedVehicle.value.display_name} is on Simplified. Mileage already covers fuel, insurance, MOT, servicing, repairs, road tax and breakdown cover — claiming them separately would double-claim and won't be included on your HMRC payload.`
 })
 
 const filteredFinances = computed(() => {
@@ -190,6 +231,7 @@ const resetForm = () => {
     form.value = {
         type: 'payment',
         category: 'none',
+        vehicle_id: null,
         payment_method: '',
         description: '',
         amount: '',
@@ -235,6 +277,7 @@ const openEditSheet = (finance: InstructorFinance) => {
     form.value = {
         type: finance.type,
         category: finance.category || 'none',
+        vehicle_id: finance.vehicle_id ?? null,
         payment_method: finance.payment_method || '',
         description: finance.description,
         amount: (finance.amount_pence / 100).toFixed(2),
@@ -332,6 +375,7 @@ const handleSubmit = async () => {
     const payload: Record<string, unknown> = {
         type: form.value.type,
         category: form.value.category || 'none',
+        vehicle_id: categoryIsMethodDependent.value ? form.value.vehicle_id : null,
         payment_method: form.value.payment_method || null,
         description: form.value.description,
         amount_pence: amountPence,
@@ -473,6 +517,19 @@ const setFilter = (filter: FilterType) => {
 const onTypeChanged = () => {
     // Category list depends on type — reset to 'none' when switching.
     form.value.category = 'none'
+    form.value.vehicle_id = null
+}
+
+const onCategoryChanged = () => {
+    if (!categoryIsMethodDependent.value) {
+        form.value.vehicle_id = null
+        return
+    }
+    // Auto-select the single active vehicle when there's only one. Two+
+    // active vehicles forces a deliberate choice (workshop §user journey 2).
+    if (activeVehicles.value.length === 1) {
+        form.value.vehicle_id = activeVehicles.value[0].id
+    }
 }
 
 const receiptIconFor = (mime: string | null) => {
@@ -787,12 +844,36 @@ onMounted(() => {
                         <select
                             id="category"
                             v-model="form.category"
+                            @change="onCategoryChanged"
                             :disabled="isSubmitting"
                             class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             <option v-for="(label, slug) in activeCategories" :key="slug" :value="slug">{{ label }}</option>
                         </select>
                         <p v-if="errors.category" class="text-sm text-destructive">{{ errors.category }}</p>
+                    </div>
+
+                    <!-- Vehicle (only for method-dependent categories) -->
+                    <div v-if="categoryIsMethodDependent" class="space-y-2">
+                        <Label for="vehicle_id">Vehicle *</Label>
+                        <select
+                            id="vehicle_id"
+                            v-model="form.vehicle_id"
+                            :disabled="isSubmitting"
+                            class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            <option :value="null" disabled>— Select a vehicle —</option>
+                            <option v-for="v in activeVehicles" :key="v.id" :value="v.id">
+                                {{ v.display_name }} ({{ v.method_label }})
+                            </option>
+                        </select>
+                        <p v-if="errors.vehicle_id" class="text-sm text-destructive">{{ errors.vehicle_id }}</p>
+                        <p v-if="simplifiedDoubleClaimWarning" class="text-xs text-amber-600">
+                            {{ simplifiedDoubleClaimWarning }}
+                        </p>
+                        <p v-if="activeVehicles.length === 0" class="text-xs text-muted-foreground">
+                            No vehicles on file. <a href="/hmrc/vehicles" class="underline">Add one →</a>
+                        </p>
                     </div>
 
                     <!-- Payment Method -->

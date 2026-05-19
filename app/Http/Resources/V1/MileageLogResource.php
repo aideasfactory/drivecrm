@@ -17,6 +17,7 @@ class MileageLogResource extends JsonResource
         return [
             'id' => $this->id,
             'date' => $this->date?->format('Y-m-d'),
+            'vehicle_id' => $this->vehicle_id,
             'start_mileage' => $this->start_mileage,
             'end_mileage' => $this->end_mileage,
             'miles' => $this->miles,
