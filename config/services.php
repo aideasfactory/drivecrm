@@ -64,4 +64,9 @@ return [
         'android_url' => env('MOBILE_APP_ANDROID_URL'),
     ],
 
+    'bird' => [
+        'api_key' => env('BIRD_API_KEY'),
+        'workspace_id' => env('BIRD_WORKSPACE_ID'),
+    ],
+
 ];

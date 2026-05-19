@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Booking;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SyncBookingEnquiryToBirdJob;
 use App\Mail\BookingEnquirySubmittedMail;
 use App\Models\Enquiry;
 use App\Models\Instructor;
@@ -41,6 +42,7 @@ class StepTwoController extends Controller
 
         if ($isFirstVisit) {
             $this->notifyAdmin($enquiry);
+            SyncBookingEnquiryToBirdJob::dispatch($enquiry);
         }
 
         return Inertia::render('Booking/Step2', [

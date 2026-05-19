@@ -37,7 +37,7 @@ class EnquiryObserver
         ];
 
         // TODO: Replace with actual HTTP call to marketing system
-        Log::channel('enquiry_events')->info('Enquiry event', $payload);
+        Log::info('Enquiry event', $payload);
 
         // Future implementation:
         // Http::post(config('services.marketing.endpoint'), $payload);
