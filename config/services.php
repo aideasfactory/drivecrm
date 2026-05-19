@@ -67,6 +67,7 @@ return [
     'bird' => [
         'api_key' => env('BIRD_API_KEY'),
         'workspace_id' => env('BIRD_WORKSPACE_ID'),
+        'booking_list_id' => env('BIRD_BOOKING_LIST_ID'),
     ],
 
 ];

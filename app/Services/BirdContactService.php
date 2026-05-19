@@ -81,10 +81,13 @@ class BirdContactService extends BaseService
             'availability' => $availability,
         ], fn ($value) => $value !== null);
 
+        $listId = $this->stringOrNull(config('services.bird.booking_list_id'));
+
         return array_filter([
             'displayName' => $displayName !== '' ? $displayName : null,
             'identifiers' => $identifiers !== [] ? $identifiers : null,
             'attributes' => $attributes !== [] ? $attributes : null,
+            'listIds' => $listId !== null ? [$listId] : null,
         ], fn ($value) => $value !== null);
     }
 
