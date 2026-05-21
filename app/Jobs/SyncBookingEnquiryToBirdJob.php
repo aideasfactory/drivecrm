@@ -26,7 +26,16 @@ class SyncBookingEnquiryToBirdJob implements ShouldQueue
 
     public function handle(BirdContactService $bird): void
     {
+        Log::info('SyncBookingEnquiryToBirdJob handling', [
+            'enquiry_id' => $this->enquiry->id,
+            'attempt' => $this->attempts(),
+        ]);
+
         $bird->createFromEnquiry($this->enquiry);
+
+        Log::info('SyncBookingEnquiryToBirdJob succeeded', [
+            'enquiry_id' => $this->enquiry->id,
+        ]);
     }
 
     public function failed(Throwable $exception): void

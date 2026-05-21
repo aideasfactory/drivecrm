@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Models\Enquiry;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 /**
@@ -54,12 +55,24 @@ class BirdContactService extends BaseService
             '%s/workspaces/%s/contacts/identifiers/emailaddress/%s',
             self::BASE_URL,
             $workspaceId,
-            rawurlencode($email),
+            strtr(rawurlencode($email), ['%40' => '@']),
         );
+
+        Log::info('Bird upsert request', [
+            'enquiry_id' => $enquiry->id,
+            'url' => $url,
+            'payload' => $payload,
+        ]);
 
         $response = Http::acceptJson()
             ->withHeaders(['Authorization' => 'AccessKey '.$apiKey])
             ->patch($url, $payload);
+
+        Log::info('Bird upsert response', [
+            'enquiry_id' => $enquiry->id,
+            'status' => $response->status(),
+            'body' => $response->json() ?? $response->body(),
+        ]);
 
         $this->assertSuccessful($response, $enquiry->id);
 
