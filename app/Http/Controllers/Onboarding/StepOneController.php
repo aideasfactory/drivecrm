@@ -51,6 +51,9 @@ class StepOneController extends Controller
         // Update enquiry with step 1 data
         $enquiry->setStepData(1, $validated);
         $enquiry->current_step = max($enquiry->current_step, 1);
+        $enquiry->privacy_consent = (bool) ($validated['privacy_consent'] ?? false);
+        $enquiry->marketing_consent = (bool) ($validated['marketing_consent'] ?? false);
+        $enquiry->consented_at = now();
 
         // If instructor_id is prefilled, bypass step 2 and go straight to step 3
         $prefill = $enquiry->data['prefill'] ?? [];

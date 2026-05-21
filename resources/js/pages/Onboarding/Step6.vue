@@ -155,7 +155,12 @@
                           class="h-4 w-4 mt-1 rounded border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
                         />
                         <Label for="terms" class="cursor-pointer">
-                          I agree to the Terms & Conditions and Privacy Policy. I understand the cancellation policy and payment terms.
+                          I agree to the
+                          <a href="/policy/TermsofService.pdf" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Terms of Service</a>,
+                          <a href="/policy/PrivacyPolicy.pdf" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Privacy Policy</a>,
+                          and
+                          <a href="/policy/CookiePolicy.pdf" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Cookie Policy</a>.
+                          I understand the cancellation policy and payment terms.
                         </Label>
                       </div>
                     </CardContent>

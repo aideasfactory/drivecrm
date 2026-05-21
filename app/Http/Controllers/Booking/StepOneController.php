@@ -39,6 +39,9 @@ class StepOneController extends Controller
         $enquiry->setStepData(1, $validated);
         $enquiry->current_step = max($enquiry->current_step, 1);
         $enquiry->max_step_reached = max($enquiry->max_step_reached, 2);
+        $enquiry->privacy_consent = (bool) ($validated['privacy_consent'] ?? false);
+        $enquiry->marketing_consent = (bool) ($validated['marketing_consent'] ?? false);
+        $enquiry->consented_at = now();
         $enquiry->save();
 
         return redirect()->route('booking.step2', ['uuid' => $enquiry->id]);

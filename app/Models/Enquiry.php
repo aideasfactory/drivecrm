@@ -13,13 +13,22 @@ class Enquiry extends Model
         'data',
         'current_step',
         'max_step_reached',
+        'privacy_consent',
+        'marketing_consent',
+        'consented_at',
     ];
 
-    protected $casts = [
-        'data' => 'array',
-        'current_step' => 'integer',
-        'max_step_reached' => 'integer',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'data' => 'array',
+            'current_step' => 'integer',
+            'max_step_reached' => 'integer',
+            'privacy_consent' => 'boolean',
+            'marketing_consent' => 'boolean',
+            'consented_at' => 'datetime',
+        ];
+    }
 
     /**
      * Get step data by step number

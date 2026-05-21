@@ -689,21 +689,27 @@ Laravel's password reset token storage.
 
 ### 12. **enquiries** (New - Phase 1 Onboarding)
 
-Stores all onboarding session data.
+Stores all onboarding and booking session data.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | uuid | PRIMARY KEY | Unique identifier, used in URLs |
-| `data` | json | NULLABLE | Complete onboarding payload |
-| `current_step` | integer | NOT NULL, DEFAULT 1 | Last completed/active step (1-6) |
+| `data` | json | NULLABLE | Complete enquiry payload (step JSON, prefill, discount) |
+| `current_step` | integer | NOT NULL, DEFAULT 1 | Last completed/active step |
 | `max_step_reached` | integer | NOT NULL, DEFAULT 1 | Furthest step user has reached |
+| `privacy_consent` | boolean | NOT NULL, DEFAULT false | User ticked the required Terms / Privacy / Cookie box at step 1 |
+| `marketing_consent` | boolean | NOT NULL, DEFAULT false | User opted in to marketing emails (separate, unticked checkbox per GDPR) |
+| `consented_at` | timestamp | NULLABLE | When the step-1 consent decisions were recorded |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
 **Business Logic:**
-- UUID is generated on creation (Step 1 completion)
+- UUID is generated on creation (`/booking` or `/onboarding` entry point)
 - `data` field stores the JSON structure for all steps
 - `current_step` is denormalised for quick queries
+- `privacy_consent` and `marketing_consent` are promoted out of `data` JSON so subject-access / right-to-be-forgotten requests can be served with a simple `where` clause without parsing JSON
+- For booking enquiries, this is the **permanent legal record** of consent (no Student row is created); for onboarding enquiries, the values are copied into `students.terms_accepted` / `students.allow_communications` when the Student row is created
+- Bird CRM sync (`SyncBookingEnquiryToBirdJob`) always upserts the contact for operational follow-up, but `subscribedEmail` / `subscribedSms` and marketing-list membership reflect `marketing_consent`
 
 ---
 

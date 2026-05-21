@@ -7,6 +7,7 @@ namespace App\Http\Requests\Api\V1;
 use App\Models\InstructorFinance;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Exists;
 
 class UpdateInstructorFinanceRequest extends FormRequest
 {
@@ -49,7 +50,7 @@ class UpdateInstructorFinanceRequest extends FormRequest
         return array_keys(config("finances.{$source}", []));
     }
 
-    private function vehicleOwnershipRule(): \Illuminate\Validation\Rules\Exists
+    private function vehicleOwnershipRule(): Exists
     {
         $instructorId = $this->user()?->instructor?->id ?? 0;
 

@@ -217,13 +217,29 @@
                       class="h-4 w-4 mt-1 rounded border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
                     />
                     <Label for="privacy_consent" class="text-sm leading-relaxed cursor-pointer">
-                      I agree to the Terms &amp; Conditions and Privacy Policy, and consent to my data being used to process my booking.
+                      I have read and agree to the
+                      <a href="/policy/TermsofService.pdf" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Terms of Service</a>,
+                      <a href="/policy/PrivacyPolicy.pdf" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Privacy Policy</a>,
+                      and
+                      <a href="/policy/CookiePolicy.pdf" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Cookie Policy</a>
                     </Label>
                   </div>
                   <p v-if="form.errors.privacy_consent" class="text-sm text-destructive flex items-center ml-7">
                     <AlertCircle class="mr-1 h-4 w-4" />
                     {{ form.errors.privacy_consent }}
                   </p>
+
+                  <div class="flex items-start space-x-3">
+                    <input
+                      type="checkbox"
+                      id="marketing_consent"
+                      v-model="marketingConsent"
+                      class="h-4 w-4 mt-1 rounded border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
+                    />
+                    <Label for="marketing_consent" class="text-sm leading-relaxed cursor-pointer">
+                      I'd like to receive updates and offers from DRIVE Driving School by email.
+                    </Label>
+                  </div>
                 </div>
 
                 <Alert>
@@ -296,12 +312,18 @@ const form = useForm({
   phone: existingData.phone || '',
   postcode: existingData.postcode || '',
   privacy_consent: existingData.privacy_consent || false,
+  marketing_consent: existingData.marketing_consent || false,
 })
 
 const privacyConsent = ref(form.privacy_consent)
+const marketingConsent = ref(form.marketing_consent)
 
 watch(privacyConsent, (newValue) => {
   form.privacy_consent = newValue
+})
+
+watch(marketingConsent, (newValue) => {
+  form.marketing_consent = newValue
 })
 
 const isFormValid = computed(() => {

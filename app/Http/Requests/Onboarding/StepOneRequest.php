@@ -20,6 +20,7 @@ class StepOneRequest extends FormRequest
             'phone' => ['required', 'string', 'regex:/^(\+44\s?7\d{3}|\(?07\d{3}\)?)\s?\d{3}\s?\d{3}$/'],
             'postcode' => ['required', 'string', 'regex:/^[A-Z]{1,2}[0-9]{1,2}[A-Z]?\s?[0-9][A-Z]{2}$/i'],
             'privacy_consent' => ['required', 'accepted'],
+            'marketing_consent' => ['nullable', 'boolean'],
             'booking_for_other' => ['nullable', 'boolean'],
         ];
     }
@@ -35,8 +36,8 @@ class StepOneRequest extends FormRequest
             'phone.regex' => 'Please enter a valid UK mobile number',
             'postcode.required' => 'Please enter your postcode',
             'postcode.regex' => 'Please enter a valid UK postcode',
-            'privacy_consent.required' => 'You must agree to the Terms & Conditions to continue',
-            'privacy_consent.accepted' => 'You must agree to the Terms & Conditions to continue',
+            'privacy_consent.required' => 'You must agree to the Terms of Service and Privacy Policy to continue',
+            'privacy_consent.accepted' => 'You must agree to the Terms of Service and Privacy Policy to continue',
         ];
     }
 }

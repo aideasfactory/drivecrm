@@ -10,15 +10,18 @@
 
           <!-- Links -->
           <div class="flex items-center space-x-6">
-            <span
+            <a
               v-for="(link, index) in links"
               :key="index"
+              :href="hrefFor(link)"
+              target="_blank"
+              rel="noopener noreferrer"
               class="text-sm cursor-pointer hover:underline"
             >
               {{ link }}
-            </span>
+            </a>
           </div>
- 
+
         </div>
       </CardContent>
     </Card>
@@ -27,7 +30,6 @@
 
 <script setup lang="ts">
 import { Card, CardContent } from '@/components/ui/card'
-import { CreditCard } from 'lucide-vue-next'
 
 interface Props {
   copyrightText?: string
@@ -40,4 +42,15 @@ withDefaults(defineProps<Props>(), {
   links: () => ['Terms & Conditions', 'Privacy Policy', 'Cookies'],
   marginClass: 'mt-16'
 })
+
+const policyHrefs: Record<string, string> = {
+  'Terms & Conditions': '/policy/TermsofService.pdf',
+  'Terms of Service': '/policy/TermsofService.pdf',
+  'Privacy Policy': '/policy/PrivacyPolicy.pdf',
+  Cookies: '/policy/CookiePolicy.pdf',
+  'Cookie Policy': '/policy/CookiePolicy.pdf',
+  'Contact Us': 'mailto:hello@just-drive.co.uk',
+}
+
+const hrefFor = (label: string): string => policyHrefs[label] ?? '#'
 </script>

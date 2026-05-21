@@ -30,6 +30,14 @@ class BirdContactService extends BaseService
      */
     public function createFromEnquiry(Enquiry $enquiry): array
     {
+        if (! config('services.bird.enabled')) {
+            Log::info('Bird sync skipped (BIRD_ENABLED=false)', [
+                'enquiry_id' => $enquiry->id,
+            ]);
+
+            return [];
+        }
+
         $apiKey = (string) config('services.bird.api_key', '');
         $workspaceId = (string) config('services.bird.workspace_id', '');
 
@@ -82,10 +90,11 @@ class BirdContactService extends BaseService
     /**
      * Build the Bird upsert payload from an enquiry's step data.
      *
-     * Subscription booleans (subscribedEmail, subscribedSms) are set true so
-     * new booking leads land as Subscribed for both channels. This relies on
-     * the booking form capturing explicit marketing consent in its T&Cs —
-     * Bird honours whatever we send, the legal-consent burden is on us.
+     * The contact is always upserted (operational follow-up is legitimate-
+     * interest processing, not marketing consent). Subscription booleans and
+     * marketing-list membership reflect the separate marketing_consent the
+     * user ticked at step 1 — bundling that with terms acceptance is a GDPR
+     * breach that the ICO actively fines for.
      *
      * @param  array<string, mixed>  $step1
      * @param  array<string, mixed>  $step2
@@ -98,6 +107,7 @@ class BirdContactService extends BaseService
         $phone = $this->normalisePhoneToE164($this->stringOrNull($step1['phone'] ?? null));
         $postalCode = $this->stringOrNull($step1['postcode'] ?? null);
         $availability = $this->resolveAvailability($step2);
+        $marketingConsent = (bool) ($step1['marketing_consent'] ?? false);
 
         $addIdentifiers = [];
 
@@ -110,8 +120,8 @@ class BirdContactService extends BaseService
             'lastName' => $lastName,
             'postalCode' => $postalCode,
             'availability' => $availability,
-            'subscribedEmail' => true,
-            'subscribedSms' => true,
+            'subscribedEmail' => $marketingConsent,
+            'subscribedSms' => $marketingConsent,
         ], fn ($value) => $value !== null);
 
         $listId = $this->stringOrNull(config('services.bird.booking_list_id'));
@@ -119,7 +129,7 @@ class BirdContactService extends BaseService
         return array_filter([
             'attributes' => $attributes !== [] ? $attributes : null,
             'addIdentifiers' => $addIdentifiers !== [] ? $addIdentifiers : null,
-            'addToLists' => $listId !== null ? [$listId] : null,
+            'addToLists' => ($marketingConsent && $listId !== null) ? [$listId] : null,
         ], fn ($value) => $value !== null);
     }
 

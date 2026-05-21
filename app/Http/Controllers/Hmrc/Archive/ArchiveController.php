@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Hmrc\Archive;
 
+use App\Actions\YearEndArchive\SendArchiveReadyEmailAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Hmrc\Archive\StoreYearEndArchiveRequest;
 use App\Models\YearEndArchive;
@@ -129,7 +130,7 @@ class ArchiveController extends Controller
             return redirect()->route('hmrc.archive.index')->with('error', 'Archive is not ready yet.');
         }
 
-        app(\App\Actions\YearEndArchive\SendArchiveReadyEmailAction::class)($archive);
+        app(SendArchiveReadyEmailAction::class)($archive);
 
         return redirect()->route('hmrc.archive.index')->with('success', 'Sent a fresh download link to your email.');
     }

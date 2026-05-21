@@ -192,7 +192,7 @@ class DeriveItsaQuarterlyTotalsAction
     }
 
     /**
-     * @return array<string, string>  hmrcKey => enum value
+     * @return array<string, string> hmrcKey => enum value
      */
     private function hmrcKeyToValueMap(): array
     {

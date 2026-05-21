@@ -6,6 +6,7 @@ namespace App\Http\Requests\Api\V1;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Exists;
 
 class StoreInstructorFinanceRequest extends FormRequest
 {
@@ -48,7 +49,7 @@ class StoreInstructorFinanceRequest extends FormRequest
     /**
      * Vehicle must belong to the authenticated instructor.
      */
-    private function vehicleOwnershipRule(): \Illuminate\Validation\Rules\Exists
+    private function vehicleOwnershipRule(): Exists
     {
         $instructorId = $this->user()?->instructor?->id ?? 0;
 

@@ -86,7 +86,7 @@ class RenderArchiveCoverSheetPdfAction
     }
 
     /**
-     * @return array<string, int>  bucketLabel => pence
+     * @return array<string, int> bucketLabel => pence
      */
     private function bucketTotals(Instructor $instructor, Carbon $start, Carbon $end): array
     {

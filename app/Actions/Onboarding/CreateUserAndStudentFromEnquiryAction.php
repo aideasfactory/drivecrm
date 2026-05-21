@@ -168,7 +168,7 @@ class CreateUserAndStudentFromEnquiryAction
                 'terms_accepted' => $step5['learner_terms'] ?? false,
                 'allow_communications' => $step5['learner_communications'] ?? false,
                 'contact_terms' => $step1['privacy_consent'] ?? false,
-                'contact_communications' => $step1['privacy_consent'] ?? false,
+                'contact_communications' => $step1['marketing_consent'] ?? false,
                 'owns_account' => false, // Contact is booking for learner
             ];
         }
@@ -185,7 +185,7 @@ class CreateUserAndStudentFromEnquiryAction
             'contact_email' => null,
             'contact_phone' => null,
             'terms_accepted' => $step1['privacy_consent'] ?? false,
-            'allow_communications' => $step1['privacy_consent'] ?? false,
+            'allow_communications' => $step1['marketing_consent'] ?? false,
             'contact_terms' => null,
             'contact_communications' => null,
             'owns_account' => true, // Student owns their own account
