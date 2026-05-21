@@ -10,16 +10,20 @@ use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
 /**
- * Creates Contacts in the Bird CRM workspace via the Bird Contacts API.
+ * Upserts a Bird CRM contact from a booking enquiry via the Bird Contacts API.
  *
- * Docs: https://docs.bird.com/api/contacts-api/api-reference/manage-workspace-contacts/create-a-contact
+ * Uses the "Create or Update Contact by Identifier" endpoint (PATCH), so the
+ * same enquiry email submitted twice updates the existing contact rather than
+ * 409-ing.
+ *
+ * Docs: https://docs.bird.com/api/contacts-api/api-reference/manage-workspace-contacts/create-or-update-a-contact-by-identifier
  */
 class BirdContactService extends BaseService
 {
     private const BASE_URL = 'https://api.bird.com';
 
     /**
-     * Create a Bird contact from the step-1 data on a booking enquiry.
+     * Upsert a Bird contact from the data captured during a booking enquiry.
      *
      * @return array<string, mixed> Parsed Bird response body
      */
@@ -35,11 +39,27 @@ class BirdContactService extends BaseService
         $step1 = $enquiry->getStepData(1) ?? [];
         $step2 = $enquiry->getStepData(2) ?? [];
 
+        $email = $this->stringOrNull($step1['email'] ?? null);
+
+        if ($email === null) {
+            throw new RuntimeException(sprintf(
+                'Cannot sync enquiry %s to Bird: email is missing from step 1.',
+                $enquiry->id,
+            ));
+        }
+
         $payload = $this->buildPayload($step1, $step2);
+
+        $url = sprintf(
+            '%s/workspaces/%s/contacts/identifiers/emailaddress/%s',
+            self::BASE_URL,
+            $workspaceId,
+            rawurlencode($email),
+        );
 
         $response = Http::acceptJson()
             ->withHeaders(['Authorization' => 'AccessKey '.$apiKey])
-            ->post(self::BASE_URL.'/workspaces/'.$workspaceId.'/contacts', $payload);
+            ->patch($url, $payload);
 
         $this->assertSuccessful($response, $enquiry->id);
 
@@ -47,7 +67,12 @@ class BirdContactService extends BaseService
     }
 
     /**
-     * Build the Bird Create-Contact payload from an enquiry's step data.
+     * Build the Bird upsert payload from an enquiry's step data.
+     *
+     * Subscription booleans (subscribedEmail, subscribedSms) are set true so
+     * new booking leads land as Subscribed for both channels. This relies on
+     * the booking form capturing explicit marketing consent in its T&Cs —
+     * Bird honours whatever we send, the legal-consent burden is on us.
      *
      * @param  array<string, mixed>  $step1
      * @param  array<string, mixed>  $step2
@@ -57,21 +82,14 @@ class BirdContactService extends BaseService
     {
         $firstName = $this->stringOrNull($step1['first_name'] ?? null);
         $lastName = $this->stringOrNull($step1['last_name'] ?? null);
-        $email = $this->stringOrNull($step1['email'] ?? null);
         $phone = $this->normalisePhoneToE164($this->stringOrNull($step1['phone'] ?? null));
         $postalCode = $this->stringOrNull($step1['postcode'] ?? null);
         $availability = $this->resolveAvailability($step2);
 
-        $displayName = trim(($firstName ?? '').' '.($lastName ?? ''));
-
-        $identifiers = [];
-
-        if ($email !== null) {
-            $identifiers[] = ['key' => 'emailaddress', 'value' => $email];
-        }
+        $addIdentifiers = [];
 
         if ($phone !== null) {
-            $identifiers[] = ['key' => 'phonenumber', 'value' => $phone];
+            $addIdentifiers[] = ['key' => 'phonenumber', 'value' => $phone];
         }
 
         $attributes = array_filter([
@@ -79,15 +97,16 @@ class BirdContactService extends BaseService
             'lastName' => $lastName,
             'postalCode' => $postalCode,
             'availability' => $availability,
+            'subscribedEmail' => true,
+            'subscribedSms' => true,
         ], fn ($value) => $value !== null);
 
         $listId = $this->stringOrNull(config('services.bird.booking_list_id'));
 
         return array_filter([
-            'displayName' => $displayName !== '' ? $displayName : null,
-            'identifiers' => $identifiers !== [] ? $identifiers : null,
             'attributes' => $attributes !== [] ? $attributes : null,
-            'listIds' => $listId !== null ? [$listId] : null,
+            'addIdentifiers' => $addIdentifiers !== [] ? $addIdentifiers : null,
+            'addToLists' => $listId !== null ? [$listId] : null,
         ], fn ($value) => $value !== null);
     }
 
@@ -162,7 +181,7 @@ class BirdContactService extends BaseService
     {
         if ($response->failed()) {
             throw new RuntimeException(sprintf(
-                'Bird create-contact failed for enquiry %s: HTTP %d %s',
+                'Bird upsert-contact failed for enquiry %s: HTTP %d %s',
                 $enquiryId,
                 $response->status(),
                 (string) $response->body(),
