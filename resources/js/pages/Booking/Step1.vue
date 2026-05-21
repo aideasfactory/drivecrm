@@ -269,6 +269,10 @@
           </Card>
         </div>
       </div>
+
+      <div class="mt-8 flex justify-center">
+        <CookiePreferencesLink />
+      </div>
     </main>
 
     <Toaster />
@@ -288,6 +292,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Spinner } from '@/components/ui/spinner'
 import { Toaster } from '@/components/ui/toast'
 import AppLogoIcon from '@/components/AppLogoIcon.vue'
+import CookiePreferencesLink from '@/components/CookiePreferencesLink.vue'
 import {
   MapPin,
   Phone,

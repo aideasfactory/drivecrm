@@ -58,6 +58,10 @@
           </p>
         </CardContent>
       </Card>
+
+      <div class="mt-8 flex justify-center">
+        <CookiePreferencesLink />
+      </div>
     </main>
 
     <Toaster />
@@ -68,6 +72,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Toaster } from '@/components/ui/toast'
 import AppLogoIcon from '@/components/AppLogoIcon.vue'
+import CookiePreferencesLink from '@/components/CookiePreferencesLink.vue'
 import { CircleCheck, CircleX, Phone, Mail } from 'lucide-vue-next'
 
 defineProps<{
