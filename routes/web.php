@@ -200,6 +200,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
 
     Route::get('/pupils', [PupilController::class, 'index'])
         ->name('pupils.index');
+    Route::post('/pupils/{student}/assign-instructor', [PupilController::class, 'assignInstructor'])
+        ->name('pupils.assign-instructor');
     Route::get('/students/{student}', [PupilController::class, 'show'])
         ->name('students.show');
     Route::get('/students/{student}/activity-logs', [PupilController::class, 'activityLogs'])

@@ -15,6 +15,7 @@ use App\Actions\Shared\Message\SendMessageAction;
 use App\Actions\Shared\Note\CreateNoteAction;
 use App\Actions\Shared\Note\DeleteNoteAction;
 use App\Actions\Shared\Note\GetNotesAction;
+use App\Actions\Student\AssignStudentToInstructorAction;
 use App\Actions\Student\Checklist\GetStudentChecklistAction;
 use App\Actions\Student\Checklist\ToggleChecklistItemAction;
 use App\Actions\Student\Contact\AutoCreateEmergencyContactAction;
@@ -27,6 +28,7 @@ use App\Actions\Student\PickupPoint\SetDefaultPickupPointAction;
 use App\Actions\Student\PickupPoint\UpdatePickupPointAction;
 use App\Actions\Student\Status\RemoveStudentFromInstructorAction;
 use App\Actions\Student\Status\UpdateStudentStatusAction;
+use App\Actions\Student\Transfer\GetOnboardedInstructorsAction;
 use App\Enums\PaymentMode;
 use App\Http\Requests\AdminResetPasswordRequest;
 use App\Http\Requests\StoreOrderRequest;
@@ -63,6 +65,7 @@ class PupilController extends Controller
     public function index(): Response
     {
         $students = $this->studentService->getAll();
+        $onboardedInstructors = (new GetOnboardedInstructorsAction)();
 
         return Inertia::render('Pupils/Index', [
             'pupils' => $students->map(fn (Student $student) => [
@@ -73,7 +76,31 @@ class PupilController extends Controller
                 'instructor_id' => $student->instructor_id,
                 'instructor_name' => $student->instructor?->user?->name,
             ]),
+            'onboardedInstructors' => $onboardedInstructors->map(fn (Instructor $instructor) => [
+                'id' => $instructor->id,
+                'name' => $instructor->name ?? "Instructor #{$instructor->id}",
+            ])->values(),
         ]);
+    }
+
+    /**
+     * Assign an unassigned student to an instructor.
+     */
+    public function assignInstructor(Student $student, AssignStudentToInstructorAction $action): JsonResponse
+    {
+        $data = request()->validate([
+            'instructor_id' => 'required|integer|exists:instructors,id',
+        ]);
+
+        $instructor = Instructor::findOrFail($data['instructor_id']);
+
+        try {
+            $action($student, $instructor, request()->user());
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['message' => 'Instructor assigned successfully.']);
     }
 
     /**

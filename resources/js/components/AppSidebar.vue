@@ -64,7 +64,7 @@ const allNavItems: NavItem[] = [
         roles: ['owner'], // Only visible to owners
     },
     {
-        title: 'Pupils',
+        title: 'Students',
         href: pupilsIndex(),
         icon: Users,
     },

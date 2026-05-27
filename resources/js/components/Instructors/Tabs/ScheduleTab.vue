@@ -199,6 +199,14 @@ const editItemIsBooked = computed(() => {
     return item?.status === 'booked'
 })
 
+/** Whether the item being edited is a booked AND paid-for lesson —
+ *  strips the edit form down to just the time fields so the instructor
+ *  can reschedule but not change status / notes / reason. */
+const editItemIsBookedAndPaid = computed(() => {
+    const item = itemsMap.value.get(editForm.value.id)
+    return item?.status === 'booked' && item?.is_paid === true
+})
+
 // ── Mileage state for completed lessons ────────────────
 const mileageInput = ref<number | null>(null)
 const mileageSaving = ref(false)
@@ -1307,8 +1315,8 @@ onMounted(() => {
                         </div>
                     </div>
 
-                    <!-- Travel Time (only shown when available) -->
-                    <div v-if="editForm.is_available" class="space-y-2">
+                    <!-- Travel Time (only shown when available; hidden for booked + paid lessons) -->
+                    <div v-if="editForm.is_available && !editItemIsBookedAndPaid" class="space-y-2">
                         <Label for="edit-travel">
                             <span class="flex items-center gap-1.5">
                                 <Car class="h-4 w-4" />
@@ -1333,8 +1341,8 @@ onMounted(() => {
                         </p>
                     </div>
 
-                    <!-- Status Toggle -->
-                    <div class="space-y-2">
+                    <!-- Status Toggle (hidden for booked + paid lessons — reschedule only) -->
+                    <div v-if="!editItemIsBookedAndPaid" class="space-y-2">
                         <Label>Status</Label>
                         <div class="flex gap-2">
                             <Button
@@ -1358,8 +1366,8 @@ onMounted(() => {
                         </div>
                     </div>
 
-                    <!-- Notes Field -->
-                    <div class="space-y-2">
+                    <!-- Notes Field (hidden for booked + paid lessons) -->
+                    <div v-if="!editItemIsBookedAndPaid" class="space-y-2">
                         <Label for="edit-notes">Notes</Label>
                         <textarea
                             id="edit-notes"
@@ -1373,8 +1381,8 @@ onMounted(() => {
                         </p>
                     </div>
 
-                    <!-- Unavailability Reason Field (shown only when unavailable) -->
-                    <div v-if="!editForm.is_available" class="space-y-2">
+                    <!-- Unavailability Reason Field (shown only when unavailable; hidden for booked + paid lessons) -->
+                    <div v-if="!editForm.is_available && !editItemIsBookedAndPaid" class="space-y-2">
                         <Label for="edit-unavailability-reason">Unavailability Reason</Label>
                         <textarea
                             id="edit-unavailability-reason"
