@@ -698,7 +698,7 @@ Stores all onboarding and booking session data.
 | `current_step` | integer | NOT NULL, DEFAULT 1 | Last completed/active step |
 | `max_step_reached` | integer | NOT NULL, DEFAULT 1 | Furthest step user has reached |
 | `privacy_consent` | boolean | NOT NULL, DEFAULT false | User ticked the required Terms / Privacy / Cookie box at step 1 |
-| `marketing_consent` | boolean | NOT NULL, DEFAULT false | User opted in to marketing emails (separate, unticked checkbox per GDPR) |
+| `marketing_consent` | boolean | NOT NULL, DEFAULT false | Marketing-list flag. Currently always `true` on successful step-1 submission — the client opted for a bundled-consent model with small print under the submit button ("By submitting your details you agree to being contacted about driving lessons") instead of a separate opt-in box. The schema retains the column so the policy can be reverted to a proper unbundled opt-in without a migration. |
 | `consented_at` | timestamp | NULLABLE | When the step-1 consent decisions were recorded |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
@@ -709,7 +709,7 @@ Stores all onboarding and booking session data.
 - `current_step` is denormalised for quick queries
 - `privacy_consent` and `marketing_consent` are promoted out of `data` JSON so subject-access / right-to-be-forgotten requests can be served with a simple `where` clause without parsing JSON
 - For booking enquiries, this is the **permanent legal record** of consent (no Student row is created); for onboarding enquiries, the values are copied into `students.terms_accepted` / `students.allow_communications` when the Student row is created
-- Bird CRM sync (`SyncBookingEnquiryToBirdJob`) always upserts the contact for operational follow-up, but `subscribedEmail` / `subscribedSms` and marketing-list membership reflect `marketing_consent`
+- Bird CRM sync (`SyncBookingEnquiryToBirdJob`) always upserts the contact for operational follow-up; `subscribedEmail` / `subscribedSms` and marketing-list membership reflect `marketing_consent` — which under the current bundled-consent policy is always `true` for submitted enquiries
 
 ---
 

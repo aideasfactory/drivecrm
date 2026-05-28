@@ -36,11 +36,15 @@ class StepOneController extends Controller
         $stripped = strtoupper(preg_replace('/\s+/', '', $validated['postcode']));
         $validated['postcode'] = substr($stripped, 0, -3).' '.substr($stripped, -3);
 
+        // Treat submission as bundled consent to marketing per client instruction.
+        // The small print under the submit button is the consent notice.
+        $validated['marketing_consent'] = true;
+
         $enquiry->setStepData(1, $validated);
         $enquiry->current_step = max($enquiry->current_step, 1);
         $enquiry->max_step_reached = max($enquiry->max_step_reached, 2);
         $enquiry->privacy_consent = (bool) ($validated['privacy_consent'] ?? false);
-        $enquiry->marketing_consent = (bool) ($validated['marketing_consent'] ?? false);
+        $enquiry->marketing_consent = true;
         $enquiry->consented_at = now();
         $enquiry->save();
 

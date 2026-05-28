@@ -220,18 +220,11 @@
                     {{ form.errors.privacy_consent }}
                   </p>
 
-                  <div class="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      id="marketing_consent"
-                      v-model="marketingConsent"
-                      class="h-4 w-4 mt-1 rounded border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
-                    />
-                    <Label for="marketing_consent" class="text-sm leading-relaxed cursor-pointer">
-                      I'd like to receive updates and offers from DRIVE Driving School by email.
-                    </Label>
-                  </div>
                 </div>
+
+                <p class="text-xs text-muted-foreground">
+                  By submitting your details you agree to being contacted about driving lessons.
+                </p>
 
                 <Alert>
                   <Shield class="h-4 w-4" />
@@ -313,21 +306,15 @@ const form = useForm({
   phone: existingData.phone || '',
   postcode: existingData.postcode || '',
   privacy_consent: existingData.privacy_consent || false,
-  marketing_consent: existingData.marketing_consent || false,
   booking_for_other: existingData.booking_for_other || false
 })
 
 // Local ref for checkbox to handle reactivity
 const privacyConsent = ref(form.privacy_consent)
-const marketingConsent = ref(form.marketing_consent)
 
 // Watch and sync the local ref with the form
 watch(privacyConsent, (newValue) => {
   form.privacy_consent = newValue
-})
-
-watch(marketingConsent, (newValue) => {
-  form.marketing_consent = newValue
 })
 
 const isFormValid = computed(() => {
