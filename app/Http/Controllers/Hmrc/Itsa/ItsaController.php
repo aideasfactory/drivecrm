@@ -28,13 +28,25 @@ class ItsaController extends Controller
 
     public function index(Request $request): Response
     {
+        return Inertia::render('Hmrc/Itsa/Index', $this->indexData($request));
+    }
+
+    /**
+     * Build the data array used to render the ITSA index. Extracted so
+     * InstructorController can embed the same payload inside the instructor
+     * layout without duplicating the data-fetch logic.
+     *
+     * @return array<string, mixed>
+     */
+    public function indexData(Request $request): array
+    {
         $user = $request->user();
         $instructor = $user->instructor;
 
         $connected = HmrcToken::query()->where('user_id', $user->id)->exists();
         $status = $instructor?->mtd_itsa_status ?? ItsaEnrolmentStatus::Unknown;
 
-        return Inertia::render('Hmrc/Itsa/Index', [
+        return [
             'connected' => $connected,
             'enrolmentStatus' => [
                 'value' => $status instanceof ItsaEnrolmentStatus ? $status->value : (string) $status,
@@ -72,36 +84,52 @@ class ItsaController extends Controller
                 'total_expenses' => $h->totalExpensesPence() / 100,
                 'is_itemised' => $h->isItemised(),
             ])->all(),
-        ]);
+        ];
     }
 
     public function refreshStatus(Request $request): RedirectResponse
     {
+        $fallback = route('hmrc.itsa.index');
+
         try {
             $this->itsa->refreshEnrolmentStatus($request->user(), $this->fraudContextFor($request));
         } catch (MissingFraudFingerprintException $exception) {
-            return redirect()->route('hmrc.itsa.index')->with('error', $exception->getMessage());
+            return back(fallback: $fallback)->with('error', $exception->getMessage());
         } catch (HmrcApiException $exception) {
-            return redirect()->route('hmrc.itsa.index')->with('error', $exception->userMessage());
+            return back(fallback: $fallback)->with('error', $exception->userMessage());
         }
 
-        return redirect()->route('hmrc.itsa.index')->with('success', 'MTD ITSA enrolment status refreshed.');
+        return back(fallback: $fallback)->with('success', 'MTD ITSA enrolment status refreshed.');
     }
 
     public function syncObligations(Request $request): RedirectResponse
     {
+        $fallback = route('hmrc.itsa.index');
+
         try {
             $this->itsa->syncObligations($request->user(), null, $this->fraudContextFor($request));
         } catch (MissingFraudFingerprintException $exception) {
-            return redirect()->route('hmrc.itsa.index')->with('error', $exception->getMessage());
+            return back(fallback: $fallback)->with('error', $exception->getMessage());
         } catch (HmrcApiException $exception) {
-            return redirect()->route('hmrc.itsa.index')->with('error', $exception->userMessage());
+            return back(fallback: $fallback)->with('error', $exception->userMessage());
         }
 
-        return redirect()->route('hmrc.itsa.index')->with('success', 'Obligations refreshed from HMRC.');
+        return back(fallback: $fallback)->with('success', 'Obligations refreshed from HMRC.');
     }
 
     public function period(Request $request, string $businessId, string $periodKey): Response
+    {
+        return Inertia::render('Hmrc/Itsa/Period', $this->periodData($request, $businessId, $periodKey));
+    }
+
+    /**
+     * Build the data array for the ITSA period detail view. Reused by
+     * InstructorController when embedding the panel inside the instructor
+     * layout via ?service=itsa&business=X&period=Y.
+     *
+     * @return array<string, mixed>
+     */
+    public function periodData(Request $request, string $businessId, string $periodKey): array
     {
         $user = $request->user();
 
@@ -114,7 +142,7 @@ class ItsaController extends Controller
             ->where('period_key', $periodKey)
             ->first();
 
-        return Inertia::render('Hmrc/Itsa/Period', [
+        return [
             'businessId' => $businessId,
             'periodKey' => $periodKey,
             'obligation' => $obligation ? [
@@ -132,7 +160,7 @@ class ItsaController extends Controller
                 ],
                 ItsaExpenseCategory::cases(),
             ),
-        ]);
+        ];
     }
 
     public function prefill(Request $request, string $businessId, string $periodKey): JsonResponse
@@ -162,8 +190,7 @@ class ItsaController extends Controller
             return redirect()->back()->with('error', $exception->userMessage())->withInput();
         }
 
-        return redirect()
-            ->route('hmrc.itsa.index')
+        return redirect($this->successRedirectTarget($request))
             ->with('success', "Quarterly update submitted to HMRC. Reference: {$row->submission_id}.");
     }
 
@@ -186,7 +213,33 @@ class ItsaController extends Controller
             return redirect()->back()->with('error', $exception->userMessage())->withInput();
         }
 
-        return redirect()->route('hmrc.itsa.index')->with('success', 'Quarterly update amended at HMRC.');
+        return redirect($this->successRedirectTarget($request))->with('success', 'Quarterly update amended at HMRC.');
+    }
+
+    /**
+     * Resolve where to send the user after a successful submission. When the
+     * embedded view supplies a `redirect_to` form field pointing at the
+     * instructor profile's HMRC tab, honour it; otherwise default to the
+     * standalone ITSA index. Validated against a strict path-prefix
+     * whitelist to prevent open-redirect abuse.
+     */
+    private function successRedirectTarget(Request $request): string
+    {
+        $candidate = (string) $request->input('redirect_to', '');
+        if ($candidate === '') {
+            return route('hmrc.itsa.index');
+        }
+
+        // Only allow same-origin paths to /hmrc/itsa or
+        // /instructors/{n}?tab=hmrc&service=itsa. Anything else falls back.
+        $allowedPrefixes = ['/hmrc/itsa', '/instructors/'];
+        foreach ($allowedPrefixes as $prefix) {
+            if (str_starts_with($candidate, $prefix)) {
+                return $candidate;
+            }
+        }
+
+        return route('hmrc.itsa.index');
     }
 
     /**

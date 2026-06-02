@@ -34,10 +34,16 @@ interface Applicability {
     vat: { applies: boolean; vrn: string | null };
     itsa: { applies: boolean; status: string; thresholds: ItsaThreshold[] };
     corporation_tax: { applies: false; reason: string };
+    vehicles: { required: boolean; configured: boolean; active_count: number };
     summary: string;
 }
 
 interface BusinessTypeOption {
+    value: string;
+    label: string;
+}
+
+interface MethodOption {
     value: string;
     label: string;
 }
@@ -49,6 +55,7 @@ const props = defineProps<{
     taxProfile: TaxProfile | null;
     applicability: Applicability | null;
     businessTypes: BusinessTypeOption[];
+    methodOptions: MethodOption[];
     showDiagnostics: boolean;
 }>();
 
@@ -67,6 +74,7 @@ const breadcrumbs = [{ title: 'HMRC / Tax' }];
                 :tax-profile="props.taxProfile"
                 :applicability="props.applicability"
                 :business-types="props.businessTypes"
+                :method-options="props.methodOptions"
                 :show-diagnostics="props.showDiagnostics"
             />
         </div>

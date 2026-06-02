@@ -107,6 +107,7 @@ class BirdContactService extends BaseService
         $phone = $this->normalisePhoneToE164($this->stringOrNull($step1['phone'] ?? null));
         $postalCode = $this->stringOrNull($step1['postcode'] ?? null);
         $availability = $this->resolveAvailability($step2);
+        $transmission = $this->resolveTransmission($step1);
         $marketingConsent = (bool) ($step1['marketing_consent'] ?? false);
 
         $addIdentifiers = [];
@@ -120,6 +121,7 @@ class BirdContactService extends BaseService
             'lastName' => $lastName,
             'postalCode' => $postalCode,
             'availability' => $availability,
+            'transmission' => $transmission,
             'subscribedEmail' => $marketingConsent,
             'subscribedSms' => $marketingConsent,
         ], fn ($value) => $value !== null);
@@ -145,6 +147,21 @@ class BirdContactService extends BaseService
         }
 
         return $step2['in_area'] ? 'In area' : 'Out of area';
+    }
+
+    /**
+     * Map the step-1 transmission choice onto a human-readable string.
+     *
+     * @param  array<string, mixed>  $step1
+     */
+    private function resolveTransmission(array $step1): ?string
+    {
+        return match ($step1['transmission'] ?? null) {
+            'manual' => 'Manual',
+            'automatic' => 'Automatic',
+            'both' => 'Either',
+            default => null,
+        };
     }
 
     /**

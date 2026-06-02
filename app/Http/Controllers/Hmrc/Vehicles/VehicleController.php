@@ -28,6 +28,17 @@ class VehicleController extends Controller
 
     public function index(Request $request): Response
     {
+        return Inertia::render('Hmrc/Vehicles/Index', $this->indexData($request));
+    }
+
+    /**
+     * Build the data array for the Vehicles index. Reused by InstructorController
+     * when embedding the panel inside the instructor layout.
+     *
+     * @return array<string, mixed>
+     */
+    public function indexData(Request $request): array
+    {
         $instructor = $request->user()->instructor;
 
         $vehicles = $this->vehicles->vehiclesFor($instructor)->map(fn (Vehicle $v) => [
@@ -45,13 +56,13 @@ class VehicleController extends Controller
             'method_locked' => $v->methodLocked(),
         ])->values()->all();
 
-        return Inertia::render('Hmrc/Vehicles/Index', [
+        return [
             'vehicles' => $vehicles,
             'methodOptions' => [
                 ['value' => VehicleMethod::Simplified->value, 'label' => VehicleMethod::Simplified->label()],
                 ['value' => VehicleMethod::Actual->value, 'label' => VehicleMethod::Actual->label()],
             ],
-        ]);
+        ];
     }
 
     public function store(StoreVehicleRequest $request): RedirectResponse
@@ -60,14 +71,14 @@ class VehicleController extends Controller
 
         $this->vehicles->createForInstructor($instructor, $request->validated());
 
-        return redirect()->route('hmrc.vehicles.index')->with('success', 'Vehicle added.');
+        return back(fallback: route('hmrc.vehicles.index'))->with('success', 'Vehicle added.');
     }
 
     public function update(UpdateVehicleRequest $request, Vehicle $vehicle): RedirectResponse
     {
         $this->vehicles->updateVehicle($vehicle, $request->validated());
 
-        return redirect()->route('hmrc.vehicles.index')->with('success', 'Vehicle updated.');
+        return back(fallback: route('hmrc.vehicles.index'))->with('success', 'Vehicle updated.');
     }
 
     public function dispose(Request $request, Vehicle $vehicle): RedirectResponse
@@ -76,7 +87,7 @@ class VehicleController extends Controller
 
         $this->vehicles->dispose($vehicle);
 
-        return redirect()->route('hmrc.vehicles.index')->with('success', 'Vehicle marked as disposed.');
+        return back(fallback: route('hmrc.vehicles.index'))->with('success', 'Vehicle marked as disposed.');
     }
 
     public function switchMethod(SwitchVehicleMethodRequest $request, Vehicle $vehicle): JsonResponse
@@ -130,7 +141,7 @@ class VehicleController extends Controller
 
         $result = $this->vehicles->backfillPrimaryFor($instructor, $request->validated());
 
-        return redirect()->route('hmrc.vehicles.index')->with(
+        return back(fallback: route('hmrc.vehicles.index'))->with(
             'success',
             "Vehicle saved. {$result['finance_rows_tagged']} expense rows and {$result['mileage_rows_tagged']} mileage entries tagged.",
         );
@@ -143,7 +154,7 @@ class VehicleController extends Controller
 
         $updated = $this->vehicles->applyInsuranceReview($instructor, $decisions);
 
-        return redirect()->route('hmrc.vehicles.index')->with('success', "{$updated} insurance rows re-tagged.");
+        return back(fallback: route('hmrc.vehicles.index'))->with('success', "{$updated} insurance rows re-tagged.");
     }
 
     private function assertOwnsVehicle(Request $request, Vehicle $vehicle): void

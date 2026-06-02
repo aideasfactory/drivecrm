@@ -13,6 +13,11 @@ use App\Actions\Shared\Contact\UpdateContactAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Enums\BusinessType;
 use App\Enums\RecurrencePattern;
+use App\Enums\VehicleMethod;
+use App\Http\Controllers\Hmrc\Archive\ArchiveController;
+use App\Http\Controllers\Hmrc\Itsa\ItsaController;
+use App\Http\Controllers\Hmrc\Vat\VatController;
+use App\Http\Controllers\Hmrc\Vehicles\VehicleController;
 use App\Http\Requests\AdminResetPasswordRequest;
 use App\Http\Requests\ImportInstructorsCsvRequest;
 use App\Http\Requests\StoreCalendarItemRequest;
@@ -132,8 +137,10 @@ class InstructorController extends Controller
         $locations = $this->instructorService->getLocations($instructor);
 
         $tab = (string) request()->query('tab', 'schedule');
+        $service = (string) request()->query('service', '');
 
         $hmrc = null;
+        $hmrcService = null;
         if ($tab === 'hmrc') {
             $hmrc = [
                 'environment' => (string) config('hmrc.environment', 'sandbox'),
@@ -145,16 +152,41 @@ class InstructorController extends Controller
                     fn (BusinessType $type) => ['value' => $type->value, 'label' => $type->label()],
                     BusinessType::cases(),
                 ),
+                'methodOptions' => array_map(
+                    fn (VehicleMethod $method) => ['value' => $method->value, 'label' => $method->label()],
+                    VehicleMethod::cases(),
+                ),
             ];
+
+            // When ?service=X is set, load the same data the standalone HMRC
+            // page would render — so the HMRC tab can embed the panel inline.
+            // For ITSA, ?business=X&period=Y additionally selects the period
+            // detail view instead of the index.
+            if ($service !== '') {
+                $businessId = (string) request()->query('business', '');
+                $periodKey = (string) request()->query('period', '');
+                $isPeriodView = $service === 'itsa' && $businessId !== '' && $periodKey !== '';
+
+                $hmrcService = [
+                    'name' => $service,
+                    'view' => $isPeriodView ? 'period' : 'index',
+                    'data' => $isPeriodView
+                        ? app(ItsaController::class)->periodData(request(), $businessId, $periodKey)
+                        : $this->resolveHmrcServiceData($service, request()),
+                ];
+            }
         }
 
-        // The booking-landing instructor (env: BOOKING_INSTRUCTOR_ID) shows full admin UI
-        // even before Stripe is connected, so the team can manage their schedule. Payouts and
-        // sign-offs still honour the real `onboarding_complete` flag — only the Show-page
-        // tabs gate is relaxed.
-        $bookingInstructorId = config('booking.instructor_id');
+        // Booking-landing instructors (manual / automatic / both, per env vars
+        // BOOKING_INSTRUCTOR_*_ID) show full admin UI even before Stripe is connected so
+        // the team can manage their schedule. Payouts and sign-offs still honour the real
+        // `onboarding_complete` flag — only the Show-page tabs gate is relaxed.
+        $bookingInstructorIds = array_filter(
+            array_map('intval', (array) config('booking.instructor_ids', [])),
+            fn (int $id) => $id > 0,
+        );
         $displayOnboardingComplete = $instructor->onboarding_complete
-            || ($bookingInstructorId !== null && (int) $instructor->id === (int) $bookingInstructorId);
+            || in_array((int) $instructor->id, $bookingInstructorIds, true);
 
         return Inertia::render('Instructors/Show', [
             'instructor' => [
@@ -183,7 +215,29 @@ class InstructorController extends Controller
             'subtab' => request()->query('subtab', 'summary'),
             'student' => request()->query('student') ? (int) request()->query('student') : null,
             'hmrc' => $hmrc,
+            'hmrcService' => $hmrcService,
         ]);
+    }
+
+    /**
+     * Delegate to the appropriate HMRC controller's indexData() method so
+     * the embedded panel inside the instructor layout receives the exact
+     * same payload as the standalone /hmrc/{service} page.
+     *
+     * Unknown service slugs return null (the panel dispatcher renders
+     * nothing — the user falls back to the HMRC overview).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function resolveHmrcServiceData(string $service, Request $request): ?array
+    {
+        return match ($service) {
+            'itsa' => app(ItsaController::class)->indexData($request),
+            'vat' => app(VatController::class)->indexData($request),
+            'vehicles' => app(VehicleController::class)->indexData($request),
+            'archive' => app(ArchiveController::class)->indexData($request),
+            default => null,
+        };
     }
 
     /**

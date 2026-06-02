@@ -35,6 +35,7 @@ interface Enquiry {
     email: string | null
     phone: string | null
     postcode: string | null
+    transmission: 'manual' | 'automatic' | 'both' | null
     created_at: string | null
     updated_at: string | null
     data: Record<string, unknown>
@@ -121,6 +122,15 @@ const selectedSteps = computed(() => {
         .sort((a, b) => a.key.localeCompare(b.key))
 })
 
+const transmissionLabel = (value: Enquiry['transmission']) => {
+    switch (value) {
+        case 'manual': return 'Manual'
+        case 'automatic': return 'Automatic'
+        case 'both': return 'Either'
+        default: return '—'
+    }
+}
+
 const inAreaLabel = (e: Enquiry) => {
     if (e.source !== 'booking') return null
     const data = e.data as { steps?: { step2?: { in_area?: boolean } } }
@@ -169,6 +179,7 @@ const breadcrumbs = [{ title: 'Enquiries' }]
                                 <TableHead>Email</TableHead>
                                 <TableHead>Phone</TableHead>
                                 <TableHead>Postcode</TableHead>
+                                <TableHead>Transmission</TableHead>
                                 <TableHead>Step</TableHead>
                                 <TableHead>Status</TableHead>
                             </TableRow>
@@ -192,6 +203,7 @@ const breadcrumbs = [{ title: 'Enquiries' }]
                                 <TableCell class="text-sm">{{ enquiry.email ?? '—' }}</TableCell>
                                 <TableCell class="text-sm">{{ enquiry.phone ?? '—' }}</TableCell>
                                 <TableCell class="text-sm">{{ enquiry.postcode ?? '—' }}</TableCell>
+                                <TableCell class="text-sm">{{ transmissionLabel(enquiry.transmission) }}</TableCell>
                                 <TableCell class="text-sm whitespace-nowrap">
                                     {{ enquiry.max_step_reached }}/{{ enquiry.total_steps }}
                                 </TableCell>
@@ -208,7 +220,7 @@ const breadcrumbs = [{ title: 'Enquiries' }]
                                 </TableCell>
                             </TableRow>
                             <TableRow v-if="filteredEnquiries.length === 0">
-                                <TableCell colspan="8" class="text-center text-muted-foreground py-8">
+                                <TableCell colspan="9" class="text-center text-muted-foreground py-8">
                                     No enquiries match your search.
                                 </TableCell>
                             </TableRow>

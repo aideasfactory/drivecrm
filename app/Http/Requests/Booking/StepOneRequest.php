@@ -19,6 +19,7 @@ class StepOneRequest extends FormRequest
             'email' => ['required', 'email', 'max:255'],
             'phone' => ['required', 'string', 'regex:/^(\+44\s?7\d{3}|\(?07\d{3}\)?)\s?\d{3}\s?\d{3}$/'],
             'postcode' => ['required', 'string', 'regex:/^[A-Z]{1,2}[0-9]{1,2}[A-Z]?\s?[0-9][A-Z]{2}$/i'],
+            'transmission' => ['required', 'in:manual,automatic,both'],
             'privacy_consent' => ['required', 'accepted'],
             'marketing_consent' => ['nullable', 'boolean'],
         ];
@@ -35,6 +36,8 @@ class StepOneRequest extends FormRequest
             'phone.regex' => 'Please enter a valid UK mobile number',
             'postcode.required' => 'Please enter your postcode',
             'postcode.regex' => 'Please enter a valid UK postcode',
+            'transmission.required' => 'Please choose a transmission preference',
+            'transmission.in' => 'Please choose a transmission preference',
             'privacy_consent.required' => 'You must agree to the Terms of Service and Privacy Policy to continue',
             'privacy_consent.accepted' => 'You must agree to the Terms of Service and Privacy Policy to continue',
         ];

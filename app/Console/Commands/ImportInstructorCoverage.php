@@ -12,18 +12,17 @@ class ImportInstructorCoverage extends Command
 {
     protected $signature = 'booking:import-coverage
         {file=postocdes .csv : Path to the CSV file (relative to project root or absolute)}
-        {--instructor= : Override instructor ID (defaults to config booking.instructor_id)}';
+        {--instructor= : Instructor ID to import coverage for}
+        {--transmission= : Resolve instructor ID via config booking.instructor_ids (manual|automatic|both)}';
 
-    protected $description = 'Import postcode-sector coverage rows from a CSV into the locations table for the booking instructor.';
+    protected $description = 'Import postcode-sector coverage rows from a CSV into the locations table for a booking instructor.';
 
     public function handle(): int
     {
-        $instructorId = $this->option('instructor')
-            ? (int) $this->option('instructor')
-            : (int) config('booking.instructor_id');
+        $instructorId = $this->resolveInstructorId();
 
         if ($instructorId <= 0) {
-            $this->error('No instructor ID resolved. Set BOOKING_INSTRUCTOR_ID in .env or pass --instructor=ID.');
+            $this->error('No instructor ID resolved. Pass --instructor=ID or --transmission=manual|automatic|both (with BOOKING_INSTRUCTOR_*_ID set in .env).');
 
             return self::FAILURE;
         }
@@ -92,6 +91,22 @@ class ImportInstructorCoverage extends Command
         ));
 
         return self::SUCCESS;
+    }
+
+    private function resolveInstructorId(): int
+    {
+        if ($this->option('instructor')) {
+            return (int) $this->option('instructor');
+        }
+
+        $transmission = $this->option('transmission');
+        if ($transmission) {
+            $map = (array) config('booking.instructor_ids', []);
+
+            return (int) ($map[$transmission] ?? 0);
+        }
+
+        return 0;
     }
 
     /**

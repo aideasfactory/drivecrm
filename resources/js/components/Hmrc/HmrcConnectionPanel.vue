@@ -23,18 +23,27 @@ import {
     CalendarClock,
     Car,
     CheckCircle2,
+    ChevronDown,
     Fingerprint,
     Info,
     Landmark,
     Link2,
     Loader2,
+    Lock,
     Plug,
     Power,
     Save,
+    Settings,
     ShieldCheck,
     Wand2,
     Wallet,
 } from 'lucide-vue-next';
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import VehicleSheet from '@/components/Hmrc/Vehicles/Sheet.vue';
 import { useHmrcAction } from '@/composables/useHmrcAction';
 import axios from 'axios';
 
@@ -69,10 +78,16 @@ interface Applicability {
     vat: { applies: boolean; vrn: string | null };
     itsa: { applies: boolean; status: string; thresholds: ItsaThreshold[] };
     corporation_tax: { applies: false; reason: string };
+    vehicles: { required: boolean; configured: boolean; active_count: number };
     summary: string;
 }
 
 interface BusinessTypeOption {
+    value: string;
+    label: string;
+}
+
+interface MethodOption {
     value: string;
     label: string;
 }
@@ -92,9 +107,22 @@ const props = defineProps<{
     taxProfile: TaxProfile | null;
     applicability: Applicability | null;
     businessTypes: BusinessTypeOption[];
+    methodOptions?: MethodOption[];
     showHeader?: boolean;
     showDiagnostics?: boolean;
+    instructorId?: number;
 }>();
+
+// When the panel is mounted inside the instructor profile (HmrcTab.vue),
+// "Open X" buttons route to ?tab=hmrc&service=X so the service panel stays
+// embedded within the instructor layout. Standalone /hmrc usage keeps the
+// flat URLs (/hmrc/itsa etc.).
+const serviceUrl = (service: 'itsa' | 'vat' | 'vehicles' | 'archive'): string => {
+    if (props.instructorId) {
+        return `/instructors/${props.instructorId}?tab=hmrc&service=${service}`;
+    }
+    return `/hmrc/${service}`;
+};
 
 const showHeader = computed(() => props.showHeader !== false);
 const showDiagnostics = computed(() => props.showDiagnostics === true);
@@ -119,6 +147,94 @@ watch(
 
 const testing = ref(false);
 const disconnecting = ref(false);
+
+// Progressive step gating
+const profileComplete = computed<boolean>(() => !!props.taxProfile?.completed_at);
+const connectionActive = computed<boolean>(() => props.connection.connected);
+
+// Vehicle step (Step 3) only applies when ITSA applies — VAT-only setups
+// (e.g. limited companies) don't need a vehicle to file.
+const vehiclesRequired = computed<boolean>(() => props.applicability?.vehicles?.required ?? false);
+const vehiclesConfigured = computed<boolean>(() => props.applicability?.vehicles?.configured ?? false);
+const vehiclesActiveCount = computed<number>(() => props.applicability?.vehicles?.active_count ?? 0);
+
+const totalSteps = computed<number>(() => (vehiclesRequired.value ? 3 : 2));
+
+const setupComplete = computed<boolean>(() => {
+    if (!profileComplete.value) return false;
+    if (!connectionActive.value) return false;
+    if (vehiclesRequired.value && !vehiclesConfigured.value) return false;
+    return true;
+});
+
+type StepState = 'locked' | 'active' | 'completed';
+
+const step1State = computed<StepState>(() => (profileComplete.value ? 'completed' : 'active'));
+const step2State = computed<StepState>(() => {
+    if (connectionActive.value) return 'completed';
+    return profileComplete.value ? 'active' : 'locked';
+});
+const step3State = computed<StepState>(() => {
+    if (vehiclesConfigured.value) return 'completed';
+    if (profileComplete.value && connectionActive.value) return 'active';
+    return 'locked';
+});
+
+const completedStepCount = computed<number>(() => {
+    let n = 0;
+    if (profileComplete.value) n++;
+    if (connectionActive.value) n++;
+    if (vehiclesRequired.value && vehiclesConfigured.value) n++;
+    return n;
+});
+
+const activeStepDescription = computed<string>(() => {
+    if (!profileComplete.value) return `Step 1 of ${totalSteps.value} — tell us about your business.`;
+    if (!connectionActive.value) return `Step 2 of ${totalSteps.value} — connect your HMRC account.`;
+    return `Step 3 of ${totalSteps.value} — add your tuition vehicle.`;
+});
+
+const profileCardOpen = ref<boolean>(true);
+const connectionCardOpen = ref<boolean>(true);
+
+// Setup section is hidden by default once setupComplete; user reveals it
+// via the cog button on the services card.
+const showSetupSection = ref<boolean>(false);
+
+const toggleSetupSection = () => {
+    showSetupSection.value = !showSetupSection.value;
+};
+
+// Vehicle Sheet (opened from Step 3 to avoid an unnecessary page navigation)
+const vehicleSheetOpen = ref<boolean>(false);
+
+const openVehicleSheet = () => {
+    vehicleSheetOpen.value = true;
+};
+
+const handleVehicleSheetClose = (saved: boolean) => {
+    vehicleSheetOpen.value = false;
+    if (saved) {
+        // Reload the current page's Inertia props so the new vehicle flips
+        // Step 3 from active to completed and unlocks the services card.
+        router.reload({ only: ['hmrc', 'applicability'] });
+    }
+};
+
+watch(
+    [setupComplete, profileComplete, connectionActive],
+    ([sc, pc, ca]) => {
+        // Auto-collapse the completed step cards once all setup steps are done
+        if (sc) {
+            profileCardOpen.value = false;
+            connectionCardOpen.value = false;
+        } else {
+            profileCardOpen.value = !pc;
+            connectionCardOpen.value = pc && !ca;
+        }
+    },
+    { immediate: true },
+);
 
 const formatDate = (iso: string | null): string => {
     if (!iso) return '—';
@@ -295,157 +411,55 @@ const handleValidateFraudHeaders = async () => {
             </div>
         </div>
 
-        <!-- Top row: Tax profile + Connection status side by side -->
-        <div class="grid gap-6 lg:grid-cols-2">
-            <!-- Tax profile -->
-            <Card>
-                <CardHeader>
-                    <CardTitle class="flex items-center gap-2">
-                        <Briefcase class="h-5 w-5" />
-                        Your tax profile
-                    </CardTitle>
-                    <CardDescription v-if="taxProfile?.completed_at">
-                        We use this to know which HMRC services apply to you.
-                    </CardDescription>
-                    <CardDescription v-else>
-                        Tell us about your business so we can show the right HMRC services.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div v-if="taxProfile?.completed_at" class="flex flex-col gap-4">
-                        <dl class="grid gap-3 sm:grid-cols-2">
-                            <div>
-                                <dt class="text-sm text-muted-foreground">Business type</dt>
-                                <dd class="font-medium">{{ businessTypeLabel(taxProfile.business_type) }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-sm text-muted-foreground">VAT-registered</dt>
-                                <dd class="font-medium">{{ taxProfile.vat_registered ? 'Yes' : 'No' }}</dd>
-                            </div>
-                            <div v-if="taxProfile.vrn">
-                                <dt class="text-sm text-muted-foreground">VRN</dt>
-                                <dd class="font-medium">{{ taxProfile.vrn }}</dd>
-                            </div>
-                            <div v-if="taxProfile.utr">
-                                <dt class="text-sm text-muted-foreground">UTR</dt>
-                                <dd class="font-medium">{{ maskIdentifier(taxProfile.utr) }}</dd>
-                            </div>
-                            <div v-if="taxProfile.nino">
-                                <dt class="text-sm text-muted-foreground">NINO</dt>
-                                <dd class="font-medium">{{ maskIdentifier(taxProfile.nino) }}</dd>
-                            </div>
-                            <div v-if="taxProfile.companies_house_number">
-                                <dt class="text-sm text-muted-foreground">Companies House no.</dt>
-                                <dd class="font-medium">{{ taxProfile.companies_house_number }}</dd>
-                            </div>
-                        </dl>
-                        <div>
-                            <Button variant="outline" @click="openProfileSheet">
-                                <Save class="mr-2 h-4 w-4" />
-                                Edit tax profile
-                            </Button>
-                        </div>
-                    </div>
-
-                    <div v-else class="flex flex-col gap-4">
-                        <p class="text-sm text-muted-foreground">
-                            You haven't set up your tax profile yet. We need this before we can show which HMRC
-                            services apply.
-                        </p>
-                        <div>
-                            <Button @click="openProfileSheet">
-                                <Briefcase class="mr-2 h-4 w-4" />
-                                Set up tax profile
-                            </Button>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            <!-- Connection status -->
-            <Card>
-                <CardHeader>
-                    <CardTitle class="flex items-center gap-2">
-                        <Link2 class="h-5 w-5" />
-                        Connection status
-                    </CardTitle>
-                    <CardDescription v-if="connection.connected">
-                        Your HMRC connection is active. We'll keep it refreshed in the background.
-                    </CardDescription>
-                    <CardDescription v-else>
-                        Connect your HMRC account to begin filing.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div v-if="connection.connected" class="flex flex-col gap-4">
-                        <dl class="grid gap-3 sm:grid-cols-2">
-                            <div>
-                                <dt class="text-sm text-muted-foreground">Connected since</dt>
-                                <dd class="font-medium">{{ formatDate(connection.connected_at) }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-sm text-muted-foreground">Access token expires</dt>
-                                <dd class="font-medium">{{ formatDate(connection.expires_at) }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-sm text-muted-foreground">Refresh token expires</dt>
-                                <dd class="font-medium flex items-center gap-2">
-                                    {{ formatDate(connection.refresh_expires_at) }}
-                                    <Badge :variant="expiryBadgeVariant">
-                                        <span v-if="connection.days_until_refresh_expiry !== null">
-                                            {{ connection.days_until_refresh_expiry }} days
-                                        </span>
-                                    </Badge>
-                                </dd>
-                            </div>
-                            <div>
-                                <dt class="text-sm text-muted-foreground">Scopes granted</dt>
-                                <dd class="flex flex-wrap gap-1 mt-1">
-                                    <Badge v-for="scope in connection.scopes" :key="scope" variant="secondary">
-                                        {{ scope }}
-                                    </Badge>
-                                    <span v-if="!connection.scopes.length" class="text-sm text-muted-foreground">
-                                        none
-                                    </span>
-                                </dd>
-                            </div>
-                        </dl>
-
-                        <div class="flex flex-wrap gap-2">
-                            <Button variant="destructive" :disabled="disconnecting" @click="handleDisconnect">
-                                <Loader2 v-if="disconnecting" class="mr-2 h-4 w-4 animate-spin" />
-                                <Power v-else class="mr-2 h-4 w-4" />
-                                Disconnect
-                            </Button>
-                        </div>
-                    </div>
-
-                    <div v-else class="flex flex-col gap-4">
-                        <p class="text-sm text-muted-foreground">
-                            You are not currently connected to HMRC. Connecting opens a secure HMRC sign-in page in
-                            your browser.
-                        </p>
-                        <div>
-                            <Button as-child>
-                                <a href="/hmrc/connect">
-                                    <Plug class="mr-2 h-4 w-4" />
-                                    Connect to HMRC ({{ environment }})
-                                </a>
-                            </Button>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+        <!-- Progress banner (hidden once setup is complete — services card at the top conveys "ready" on its own) -->
+        <div
+            v-if="!setupComplete"
+            class="flex flex-col gap-3 rounded-lg border bg-muted/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+        >
+            <div class="flex items-center gap-3">
+                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-primary bg-primary/5 text-primary">
+                    <span class="text-sm font-semibold">{{ completedStepCount + 1 }}</span>
+                </div>
+                <div class="flex flex-col">
+                    <span class="text-sm font-medium">Set up HMRC filing</span>
+                    <span class="text-xs text-muted-foreground">{{ activeStepDescription }}</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="h-2 w-32 overflow-hidden rounded-full bg-muted">
+                    <div
+                        class="h-full bg-primary transition-all duration-300"
+                        :style="{ width: `${(completedStepCount / totalSteps) * 100}%` }"
+                    />
+                </div>
+                <span class="text-xs font-medium text-muted-foreground">{{ completedStepCount }} / {{ totalSteps }}</span>
+            </div>
         </div>
 
-        <!-- Available HMRC services -->
-        <Card v-if="applicability?.profile_complete">
+        <!-- Services group (PROMINENT — shown at top when setup complete) -->
+        <Card v-if="setupComplete && applicability?.profile_complete" class="border-none -m-6 shadow-none">
             <CardHeader>
-                <CardTitle class="flex items-center gap-2">
-                    <Landmark class="h-5 w-5" />
-                    Available HMRC services
-                </CardTitle>
-                <CardDescription>{{ applicability.summary }}</CardDescription>
+                <div class="flex items-start justify-between gap-2">
+                    <div>
+                        <CardTitle class="flex items-center gap-2">
+                            <Landmark class="h-5 w-5" />
+                            HMRC services
+                        </CardTitle>
+                        <CardDescription class="mt-1">{{ applicability.summary }}</CardDescription>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            class="h-8 w-8"
+                            :aria-label="showSetupSection ? 'Hide setup details' : 'Show setup details'"
+                            :aria-expanded="showSetupSection"
+                            @click="toggleSetupSection"
+                        >
+                            <Settings class="h-4 w-4" :class="{ 'text-primary': showSetupSection }" />
+                        </Button>
+                    </div>
+                </div>
             </CardHeader>
             <CardContent>
                 <div class="grid gap-4 sm:grid-cols-2">
@@ -476,29 +490,11 @@ const handleValidateFraudHeaders = async () => {
                             </li>
                         </ul>
                         <Button as-child size="sm" variant="outline" class="w-fit">
-                            <a href="/hmrc/itsa">Open ITSA submissions</a>
+                            <a :href="serviceUrl('itsa')">Open ITSA submissions</a>
                         </Button>
                     </div>
 
-                    <!-- Vehicles (Phase 6) — always shown when ITSA applies; drives car/van/travel calculations -->
-                    <div
-                        v-if="applicability.itsa.applies"
-                        class="rounded-md border bg-muted/30 p-4 flex flex-col gap-2"
-                    >
-                        <div class="flex items-center gap-2 font-medium">
-                            <Car class="h-4 w-4" />
-                            Vehicles
-                        </div>
-                        <p class="text-sm text-muted-foreground">
-                            Manage your tuition vehicles and choose Simplified vs Advanced for each. This drives how DRIVE
-                            calculates the car / van / travel bucket on every ITSA quarterly.
-                        </p>
-                        <Button as-child size="sm" variant="outline" class="w-fit">
-                            <a href="/hmrc/vehicles">Open Vehicles</a>
-                        </Button>
-                    </div>
-
-                    <!-- Year-end archives (Phase 9) — always available when MTD applies -->
+                    <!-- Year-end archives -->
                     <div
                         v-if="applicability.itsa.applies || applicability.vat.applies"
                         class="rounded-md border bg-muted/30 p-4 flex flex-col gap-2"
@@ -512,7 +508,7 @@ const handleValidateFraudHeaders = async () => {
                             and a cover-sheet PDF. For your accountant or as an HMRC enquiry pack. Retained 6 years.
                         </p>
                         <Button as-child size="sm" variant="outline" class="w-fit">
-                            <a href="/hmrc/archive">Open Archives</a>
+                            <a :href="serviceUrl('archive')">Open Archives</a>
                         </Button>
                     </div>
 
@@ -530,7 +526,7 @@ const handleValidateFraudHeaders = async () => {
                             <span class="font-mono">{{ applicability.vat.vrn }}</span>.
                         </p>
                         <Button as-child size="sm" variant="outline" class="w-fit">
-                            <a href="/hmrc/vat">Open VAT submissions</a>
+                            <a :href="serviceUrl('vat')">Open VAT submissions</a>
                         </Button>
                     </div>
 
@@ -546,6 +542,411 @@ const handleValidateFraudHeaders = async () => {
                         <p class="text-sm text-muted-foreground">
                             {{ applicability.corporation_tax.reason }}
                         </p>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+
+  
+        <!-- Step 1 + Step 2 (+ Step 3 if ITSA applies) — hidden once setupComplete unless user toggles cog -->
+        <div
+            v-if="!setupComplete || showSetupSection"
+            class="grid gap-6"
+            :class="vehiclesRequired ? 'lg:grid-cols-3' : 'lg:grid-cols-2'"
+        >
+            <!-- Step 1: Tax profile -->
+            <Collapsible v-model:open="profileCardOpen">
+                <Card
+                    class="transition-all"
+                    :class="{
+                        'border-primary/60 ring-1 ring-primary/20': step1State === 'active',
+                        'opacity-100': step1State === 'completed',
+                    }"
+                >
+                    <CardHeader>
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="flex items-start gap-3 min-w-0">
+                                <div
+                                    class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
+                                    :class="step1State === 'completed'
+                                        ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400'
+                                        : 'bg-primary/10 text-primary'"
+                                >
+                                    <CheckCircle2 v-if="step1State === 'completed'" class="h-4 w-4" />
+                                    <span v-else>1</span>
+                                </div>
+                                <div class="min-w-0">
+                                    <CardTitle class="flex items-center gap-2 text-base">
+                                        <Briefcase class="h-4 w-4" />
+                                        Your tax profile
+                                    </CardTitle>
+                                    <CardDescription class="mt-1">
+                                        <template v-if="step1State === 'completed'">
+                                            {{ businessTypeLabel(taxProfile?.business_type ?? null) }}{{ taxProfile?.vat_registered ? ' · VAT registered' : '' }}
+                                        </template>
+                                        <template v-else>
+                                            Tell us about your business so we can show the right HMRC services.
+                                        </template>
+                                    </CardDescription>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <Badge
+                                    v-if="step1State === 'completed'"
+                                    variant="secondary"
+                                    class="gap-1 bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-950 dark:text-green-400"
+                                >
+                                    <CheckCircle2 class="h-3 w-3" />
+                                    Done
+                                </Badge>
+                                <Badge v-else variant="default" class="gap-1">Next</Badge>
+                                <CollapsibleTrigger v-if="step1State === 'completed'" as-child>
+                                    <Button variant="ghost" size="icon" class="h-7 w-7">
+                                        <ChevronDown class="h-4 w-4 transition-transform" :class="{ 'rotate-180': profileCardOpen }" />
+                                    </Button>
+                                </CollapsibleTrigger>
+                            </div>
+                        </div>
+                    </CardHeader>
+
+                    <!-- Active state body (always visible when step1 active) -->
+                    <CardContent v-if="step1State === 'active'">
+                        <div class="flex flex-col gap-4">
+                            <p class="text-sm text-muted-foreground">
+                                You haven't set up your tax profile yet. We need this before we can show which HMRC
+                                services apply.
+                            </p>
+                            <div>
+                                <Button @click="openProfileSheet">
+                                    <Briefcase class="mr-2 h-4 w-4" />
+                                    Set up tax profile
+                                </Button>
+                            </div>
+                        </div>
+                    </CardContent>
+
+                    <!-- Completed state body (collapsible details) -->
+                    <CollapsibleContent v-if="step1State === 'completed'">
+                        <CardContent>
+                            <div v-if="taxProfile?.completed_at" class="flex flex-col gap-4">
+                                <dl class="grid gap-3 sm:grid-cols-2">
+                                    <div>
+                                        <dt class="text-sm text-muted-foreground">Business type</dt>
+                                        <dd class="font-medium">{{ businessTypeLabel(taxProfile.business_type) }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-sm text-muted-foreground">VAT-registered</dt>
+                                        <dd class="font-medium">{{ taxProfile.vat_registered ? 'Yes' : 'No' }}</dd>
+                                    </div>
+                                    <div v-if="taxProfile.vrn">
+                                        <dt class="text-sm text-muted-foreground">VRN</dt>
+                                        <dd class="font-medium">{{ taxProfile.vrn }}</dd>
+                                    </div>
+                                    <div v-if="taxProfile.utr">
+                                        <dt class="text-sm text-muted-foreground">UTR</dt>
+                                        <dd class="font-medium">{{ maskIdentifier(taxProfile.utr) }}</dd>
+                                    </div>
+                                    <div v-if="taxProfile.nino">
+                                        <dt class="text-sm text-muted-foreground">NINO</dt>
+                                        <dd class="font-medium">{{ maskIdentifier(taxProfile.nino) }}</dd>
+                                    </div>
+                                    <div v-if="taxProfile.companies_house_number">
+                                        <dt class="text-sm text-muted-foreground">Companies House no.</dt>
+                                        <dd class="font-medium">{{ taxProfile.companies_house_number }}</dd>
+                                    </div>
+                                </dl>
+                                <div>
+                                    <Button variant="outline" size="sm" @click="openProfileSheet">
+                                        <Save class="mr-2 h-4 w-4" />
+                                        Edit tax profile
+                                    </Button>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </CollapsibleContent>
+                </Card>
+            </Collapsible>
+
+            <!-- Step 2: Connection -->
+            <Collapsible v-model:open="connectionCardOpen">
+                <Card
+                    class="transition-all"
+                    :class="{
+                        'border-primary/60 ring-1 ring-primary/20': step2State === 'active',
+                        'opacity-60': step2State === 'locked',
+                    }"
+                >
+                    <CardHeader>
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="flex items-start gap-3 min-w-0">
+                                <div
+                                    class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
+                                    :class="step2State === 'completed'
+                                        ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400'
+                                        : step2State === 'active'
+                                            ? 'bg-primary/10 text-primary'
+                                            : 'bg-muted text-muted-foreground'"
+                                >
+                                    <CheckCircle2 v-if="step2State === 'completed'" class="h-4 w-4" />
+                                    <Lock v-else-if="step2State === 'locked'" class="h-4 w-4" />
+                                    <span v-else>2</span>
+                                </div>
+                                <div class="min-w-0">
+                                    <CardTitle class="flex items-center gap-2 text-base">
+                                        <Link2 class="h-4 w-4" />
+                                        Connect to HMRC
+                                    </CardTitle>
+                                    <CardDescription class="mt-1">
+                                        <template v-if="step2State === 'completed'">
+                                            Connected — token refreshes automatically.
+                                        </template>
+                                        <template v-else-if="step2State === 'active'">
+                                            Connect your HMRC account to begin filing.
+                                        </template>
+                                        <template v-else>
+                                            Complete Step 1 first to unlock.
+                                        </template>
+                                    </CardDescription>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <Badge
+                                    v-if="step2State === 'completed'"
+                                    variant="secondary"
+                                    class="gap-1 bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-950 dark:text-green-400"
+                                >
+                                    <CheckCircle2 class="h-3 w-3" />
+                                    Done
+                                </Badge>
+                                <Badge v-else-if="step2State === 'active'" variant="default" class="gap-1">Next</Badge>
+                                <Badge v-else variant="outline" class="gap-1">
+                                    <Lock class="h-3 w-3" />
+                                    Locked
+                                </Badge>
+                                <CollapsibleTrigger v-if="step2State === 'completed'" as-child>
+                                    <Button variant="ghost" size="icon" class="h-7 w-7">
+                                        <ChevronDown class="h-4 w-4 transition-transform" :class="{ 'rotate-180': connectionCardOpen }" />
+                                    </Button>
+                                </CollapsibleTrigger>
+                            </div>
+                        </div>
+                    </CardHeader>
+
+                    <!-- Locked state body -->
+                    <CardContent v-if="step2State === 'locked'">
+                        <p class="text-sm text-muted-foreground flex items-center gap-2">
+                            <Lock class="h-4 w-4" />
+                            Set up your tax profile first.
+                        </p>
+                    </CardContent>
+
+                    <!-- Active state body -->
+                    <CardContent v-else-if="step2State === 'active'">
+                        <div class="flex flex-col gap-4">
+                            <p class="text-sm text-muted-foreground">
+                                Connecting opens a secure HMRC sign-in page in your browser.
+                            </p>
+                            <div>
+                                <Button as-child>
+                                    <a href="/hmrc/connect">
+                                        <Plug class="mr-2 h-4 w-4" />
+                                        Connect to HMRC ({{ environment }})
+                                    </a>
+                                </Button>
+                            </div>
+                        </div>
+                    </CardContent>
+
+                    <!-- Completed state body (collapsible details) -->
+                    <CollapsibleContent v-if="step2State === 'completed'">
+                        <CardContent>
+                            <div class="flex flex-col gap-4">
+                                <dl class="grid gap-3 sm:grid-cols-2">
+                                    <div>
+                                        <dt class="text-sm text-muted-foreground">Connected since</dt>
+                                        <dd class="font-medium">{{ formatDate(connection.connected_at) }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-sm text-muted-foreground">Access token expires</dt>
+                                        <dd class="font-medium">{{ formatDate(connection.expires_at) }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-sm text-muted-foreground">Refresh token expires</dt>
+                                        <dd class="font-medium flex items-center gap-2 flex-wrap">
+                                            {{ formatDate(connection.refresh_expires_at) }}
+                                            <Badge :variant="expiryBadgeVariant">
+                                                <span v-if="connection.days_until_refresh_expiry !== null">
+                                                    {{ connection.days_until_refresh_expiry }} days
+                                                </span>
+                                            </Badge>
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-sm text-muted-foreground">Scopes granted</dt>
+                                        <dd class="flex flex-wrap gap-1 mt-1">
+                                            <Badge v-for="scope in connection.scopes" :key="scope" variant="secondary">
+                                                {{ scope }}
+                                            </Badge>
+                                            <span v-if="!connection.scopes.length" class="text-sm text-muted-foreground">
+                                                none
+                                            </span>
+                                        </dd>
+                                    </div>
+                                </dl>
+
+                                <div class="flex flex-wrap gap-2">
+                                    <Button variant="destructive" size="sm" :disabled="disconnecting" @click="handleDisconnect">
+                                        <Loader2 v-if="disconnecting" class="mr-2 h-4 w-4 animate-spin" />
+                                        <Power v-else class="mr-2 h-4 w-4" />
+                                        Disconnect
+                                    </Button>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </CollapsibleContent>
+                </Card>
+            </Collapsible>
+
+            <!-- Step 3: Vehicle (only when ITSA applies) -->
+            <Card
+                v-if="vehiclesRequired"
+                class="transition-all"
+                :class="{
+                    'border-primary/60 ring-1 ring-primary/20': step3State === 'active',
+                    'opacity-60': step3State === 'locked',
+                }"
+            >
+                <CardHeader>
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="flex items-start gap-3 min-w-0">
+                            <div
+                                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
+                                :class="step3State === 'completed'
+                                    ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400'
+                                    : step3State === 'active'
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'bg-muted text-muted-foreground'"
+                            >
+                                <CheckCircle2 v-if="step3State === 'completed'" class="h-4 w-4" />
+                                <Lock v-else-if="step3State === 'locked'" class="h-4 w-4" />
+                                <span v-else>3</span>
+                            </div>
+                            <div class="min-w-0">
+                                <CardTitle class="flex items-center gap-2 text-base">
+                                    <Car class="h-4 w-4" />
+                                    Add your vehicle
+                                </CardTitle>
+                                <CardDescription class="mt-1">
+                                    <template v-if="step3State === 'completed'">
+                                        {{ vehiclesActiveCount }} active vehicle{{ vehiclesActiveCount === 1 ? '' : 's' }} configured.
+                                    </template>
+                                    <template v-else-if="step3State === 'active'">
+                                        Choose Simplified or Advanced for each tuition vehicle — this drives every ITSA quarterly.
+                                    </template>
+                                    <template v-else>
+                                        Complete Steps 1 and 2 first to unlock.
+                                    </template>
+                                </CardDescription>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <Badge
+                                v-if="step3State === 'completed'"
+                                variant="secondary"
+                                class="gap-1 bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-950 dark:text-green-400"
+                            >
+                                <CheckCircle2 class="h-3 w-3" />
+                                Done
+                            </Badge>
+                            <Badge v-else-if="step3State === 'active'" variant="default" class="gap-1">Next</Badge>
+                            <Badge v-else variant="outline" class="gap-1">
+                                <Lock class="h-3 w-3" />
+                                Locked
+                            </Badge>
+                        </div>
+                    </div>
+                </CardHeader>
+
+                <!-- Locked state body -->
+                <CardContent v-if="step3State === 'locked'">
+                    <p class="text-sm text-muted-foreground flex items-center gap-2">
+                        <Lock class="h-4 w-4" />
+                        Finish your tax profile and HMRC connection first.
+                    </p>
+                </CardContent>
+
+                <!-- Active state body -->
+                <CardContent v-else-if="step3State === 'active'">
+                    <div class="flex flex-col gap-4">
+                        <p class="text-sm text-muted-foreground">
+                            We need at least one tuition vehicle with a Simplified or Advanced method choice
+                            before HMRC filings can be calculated.
+                        </p>
+                        <div>
+                            <Button @click="openVehicleSheet">
+                                <Car class="mr-2 h-4 w-4" />
+                                Add a vehicle
+                            </Button>
+                        </div>
+                    </div>
+                </CardContent>
+
+                <!-- Completed state body -->
+                <CardContent v-else>
+                    <div class="flex flex-col gap-4">
+                        <p class="text-sm text-muted-foreground">
+                            All active vehicles have a method chosen and are ready to drive ITSA calculations.
+                        </p>
+                        <div>
+                            <Button as-child variant="outline" size="sm">
+                                <a :href="serviceUrl('vehicles')">
+                                    <Car class="mr-2 h-4 w-4" />
+                                    Manage vehicles
+                                </a>
+                            </Button>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+
+        <!-- Step 3: Services — locked placeholder when setup not yet complete -->
+        <Card v-if="!setupComplete" class="opacity-60">
+            <CardHeader>
+                <div class="flex items-start justify-between gap-2">
+                    <div class="flex items-start gap-3 min-w-0">
+                        <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-sm font-semibold">
+                            <Lock class="h-4 w-4" />
+                        </div>
+                        <div class="min-w-0">
+                            <CardTitle class="flex items-center gap-2 text-base">
+                                <Landmark class="h-4 w-4" />
+                                HMRC services
+                            </CardTitle>
+                            <CardDescription class="mt-1">
+                                Finish the steps above to unlock ITSA submissions, VAT submissions, vehicle management and year-end archives.
+                            </CardDescription>
+                        </div>
+                    </div>
+                    <Badge variant="outline" class="gap-1 shrink-0">
+                        <Lock class="h-3 w-3" />
+                        Locked
+                    </Badge>
+                </div>
+            </CardHeader>
+            <CardContent>
+                <div class="grid gap-3 sm:grid-cols-3">
+                    <div class="flex items-center gap-2 rounded-md border border-dashed bg-muted/20 p-3 text-sm text-muted-foreground">
+                        <CalendarClock class="h-4 w-4 shrink-0" />
+                        MTD Income Tax (ITSA)
+                    </div>
+                    <div class="flex items-center gap-2 rounded-md border border-dashed bg-muted/20 p-3 text-sm text-muted-foreground">
+                        <Archive class="h-4 w-4 shrink-0" />
+                        Year-end archives
+                    </div>
+                    <div class="flex items-center gap-2 rounded-md border border-dashed bg-muted/20 p-3 text-sm text-muted-foreground">
+                        <Wallet class="h-4 w-4 shrink-0" />
+                        MTD VAT
                     </div>
                 </div>
             </CardContent>
@@ -809,4 +1210,12 @@ const handleValidateFraudHeaders = async () => {
             </form>
         </SheetContent>
     </Sheet>
+
+    <!-- Vehicle Sheet — opened from Step 3 instead of deep-linking to /hmrc/vehicles -->
+    <VehicleSheet
+        :open="vehicleSheetOpen"
+        :vehicle="null"
+        :method-options="methodOptions ?? []"
+        @close="handleVehicleSheetClose"
+    />
 </template>

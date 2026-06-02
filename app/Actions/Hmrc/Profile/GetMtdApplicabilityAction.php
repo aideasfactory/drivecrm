@@ -21,6 +21,7 @@ class GetMtdApplicabilityAction
      *     vat: array{applies: bool, vrn: ?string},
      *     itsa: array{applies: bool, status: string, thresholds: array<int, array{date: string, income: int, label: string}>},
      *     corporation_tax: array{applies: false, reason: string},
+     *     vehicles: array{required: bool, configured: bool, active_count: int},
      *     summary: string,
      * }
      */
@@ -38,6 +39,14 @@ class GetMtdApplicabilityAction
             null => 'unknown',
         };
         $itsaApplies = $businessType !== null && $businessType->itsaCanApply();
+
+        // A vehicle (with a method choice) is required before ITSA filing because
+        // the Simplified/Advanced choice drives the car/van/travel calculation on
+        // every quarterly update. VAT-only setups (limited companies, etc.) don't
+        // need one.
+        $activeVehicles = $instructor->vehicles()->whereNull('disposed_on')->get();
+        $vehiclesConfigured = $activeVehicles->isNotEmpty()
+            && $activeVehicles->every(fn ($v) => $v->method !== null);
 
         return [
             'profile_complete' => $profileComplete,
@@ -58,6 +67,11 @@ class GetMtdApplicabilityAction
             'corporation_tax' => [
                 'applies' => false,
                 'reason' => 'Corporation Tax for limited companies is not part of MTD and is not handled here.',
+            ],
+            'vehicles' => [
+                'required' => $itsaApplies,
+                'configured' => $vehiclesConfigured,
+                'active_count' => $activeVehicles->count(),
             ],
             'summary' => $this->summary($businessType, $vatApplies, $itsaApplies),
         ];

@@ -25,6 +25,17 @@ class ArchiveController extends Controller
 
     public function index(Request $request): Response
     {
+        return Inertia::render('Hmrc/Archive/Index', $this->indexData($request));
+    }
+
+    /**
+     * Build the data array for the Archive index. Reused by InstructorController
+     * when embedding the panel inside the instructor layout.
+     *
+     * @return array<string, mixed>
+     */
+    public function indexData(Request $request): array
+    {
         $instructor = $request->user()->instructor;
 
         $rows = $this->archives->archivesFor($instructor)->map(fn (YearEndArchive $a) => [
@@ -40,12 +51,12 @@ class ArchiveController extends Controller
             'error_message' => $a->error_message,
         ])->values()->all();
 
-        return Inertia::render('Hmrc/Archive/Index', [
+        return [
             'archives' => $rows,
             'taxYears' => $this->archives->availableTaxYearsFor($instructor),
             'retentionYears' => (int) config('hmrc.year_end_archive.retention_years', 6),
             'signedUrlTtlHours' => (int) config('hmrc.year_end_archive.download_url_ttl_hours', 24),
-        ]);
+        ];
     }
 
     public function summary(Request $request): JsonResponse
@@ -66,7 +77,7 @@ class ArchiveController extends Controller
 
         $this->archives->queueBuild($instructor, $year);
 
-        return redirect()->route('hmrc.archive.index')->with(
+        return back(fallback: route('hmrc.archive.index'))->with(
             'success',
             "Building your {$year}/".substr((string) ($year + 1), -2).' archive. You will get an email when it is ready.',
         );
@@ -84,16 +95,16 @@ class ArchiveController extends Controller
             }
         }
 
+        $fallback = route('hmrc.archive.index');
+
         if (! $archive->isReady() || $archive->file_path === null) {
-            return redirect()
-                ->route('hmrc.archive.index')
+            return back(fallback: $fallback)
                 ->with('error', 'This archive is not available — it may still be building or has been purged.');
         }
 
         $disk = (string) config('hmrc.year_end_archive.disk', 'local');
         if (! Storage::disk($disk)->exists($archive->file_path)) {
-            return redirect()
-                ->route('hmrc.archive.index')
+            return back(fallback: $fallback)
                 ->with('error', 'Archive file is missing on disk. Regenerate it from the archives page.');
         }
 
@@ -113,7 +124,7 @@ class ArchiveController extends Controller
 
         $this->archives->queueBuild($instructor, (int) $archive->tax_year_start);
 
-        return redirect()->route('hmrc.archive.index')->with(
+        return back(fallback: route('hmrc.archive.index'))->with(
             'success',
             "Regenerating your {$archive->taxYearLabel()} archive.",
         );
@@ -126,12 +137,14 @@ class ArchiveController extends Controller
             abort(403);
         }
 
+        $fallback = route('hmrc.archive.index');
+
         if (! $archive->isReady()) {
-            return redirect()->route('hmrc.archive.index')->with('error', 'Archive is not ready yet.');
+            return back(fallback: $fallback)->with('error', 'Archive is not ready yet.');
         }
 
         app(SendArchiveReadyEmailAction::class)($archive);
 
-        return redirect()->route('hmrc.archive.index')->with('success', 'Sent a fresh download link to your email.');
+        return back(fallback: $fallback)->with('success', 'Sent a fresh download link to your email.');
     }
 }

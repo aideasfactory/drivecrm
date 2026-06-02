@@ -124,6 +124,10 @@
                     <td>{{ $postcode ?: '—' }}</td>
                 </tr>
                 <tr>
+                    <th>Transmission</th>
+                    <td>{{ $transmission ?: '—' }}</td>
+                </tr>
+                <tr>
                     <th>Instructor ID</th>
                     <td>{{ $instructorId ?: '—' }}</td>
                 </tr>

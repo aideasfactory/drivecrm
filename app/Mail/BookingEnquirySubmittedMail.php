@@ -42,6 +42,7 @@ class BookingEnquirySubmittedMail extends Mailable
                 'email' => $step1['email'] ?? null,
                 'phone' => $step1['phone'] ?? null,
                 'postcode' => $step1['postcode'] ?? null,
+                'transmission' => $this->transmissionLabel($step1['transmission'] ?? null),
                 'inArea' => (bool) ($step2['in_area'] ?? false),
                 'instructorId' => $step2['instructor_id'] ?? null,
                 'enquiryId' => $this->enquiry->id,
@@ -49,5 +50,15 @@ class BookingEnquirySubmittedMail extends Mailable
                 'enquiriesUrl' => url('/enquiries'),
             ],
         );
+    }
+
+    private function transmissionLabel(?string $value): ?string
+    {
+        return match ($value) {
+            'manual' => 'Manual',
+            'automatic' => 'Automatic',
+            'both' => 'Either / no preference',
+            default => null,
+        };
     }
 }

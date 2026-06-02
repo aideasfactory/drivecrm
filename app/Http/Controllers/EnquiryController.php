@@ -35,6 +35,7 @@ class EnquiryController extends Controller
                     'email' => $step1['email'] ?? null,
                     'phone' => $step1['phone'] ?? null,
                     'postcode' => $step1['postcode'] ?? null,
+                    'transmission' => $step1['transmission'] ?? null,
                     'created_at' => $enquiry->created_at?->toIso8601String(),
                     'updated_at' => $enquiry->updated_at?->toIso8601String(),
                     'data' => $data,

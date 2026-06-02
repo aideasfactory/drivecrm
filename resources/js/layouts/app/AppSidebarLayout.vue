@@ -4,6 +4,7 @@ import AppShell from '@/components/AppShell.vue';
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppSidebarHeader from '@/components/AppSidebarHeader.vue';
 import { Toaster } from '@/components/ui/toast';
+import { Sonner } from '@/components/ui/sonner';
 import { useRole } from '@/composables/useRole';
 import type { BreadcrumbItem } from '@/types';
 
@@ -27,6 +28,7 @@ const { isInstructor } = useRole();
             </main>
         </div>
         <Toaster />
+        <Sonner position="top-right" rich-colors />
     </template>
 
     <!-- Standard admin layout with sidebar -->
@@ -39,5 +41,6 @@ const { isInstructor } = useRole();
             </AppContent>
         </AppShell>
         <Toaster />
+        <Sonner position="top-right" rich-colors />
     </template>
 </template>

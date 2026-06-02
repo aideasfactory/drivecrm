@@ -24,6 +24,17 @@ class VatController extends Controller
 
     public function index(Request $request): Response
     {
+        return Inertia::render('Hmrc/Vat/Index', $this->indexData($request));
+    }
+
+    /**
+     * Build the data array for the VAT index. Reused by InstructorController
+     * when embedding the panel inside the instructor layout.
+     *
+     * @return array<string, mixed>
+     */
+    public function indexData(Request $request): array
+    {
         $user = $request->user();
         $instructor = $user->instructor;
         $token = HmrcToken::query()->where('user_id', $user->id)->first();
@@ -36,7 +47,7 @@ class VatController extends Controller
         $scopes = is_array($token?->scopes) ? $token->scopes : [];
         $hasVatScope = in_array('write:vat', $scopes, true) && in_array('read:vat', $scopes, true);
 
-        return Inertia::render('Hmrc/Vat/Index', [
+        return [
             'connected' => $connected,
             'eligible' => $eligible,
             'hasVatScope' => $hasVatScope,
@@ -60,20 +71,22 @@ class VatController extends Controller
                 'total_vat_due' => $r->total_vat_due_pence / 100,
                 'net_vat_due' => $r->net_vat_due_pence / 100,
             ])->all() : [],
-        ]);
+        ];
     }
 
     public function syncObligations(Request $request): RedirectResponse
     {
+        $fallback = route('hmrc.vat.index');
+
         try {
             $this->vat->syncObligations($request->user(), $this->fraudContextFor($request));
         } catch (MissingFraudFingerprintException $exception) {
-            return redirect()->route('hmrc.vat.index')->with('error', $exception->getMessage());
+            return back(fallback: $fallback)->with('error', $exception->getMessage());
         } catch (HmrcApiException $exception) {
-            return redirect()->route('hmrc.vat.index')->with('error', $exception->userMessage());
+            return back(fallback: $fallback)->with('error', $exception->userMessage());
         }
 
-        return redirect()->route('hmrc.vat.index')->with('success', 'VAT obligations refreshed from HMRC.');
+        return back(fallback: $fallback)->with('success', 'VAT obligations refreshed from HMRC.');
     }
 
     public function period(Request $request, string $periodKey): Response

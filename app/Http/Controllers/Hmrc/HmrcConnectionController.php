@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Hmrc;
 
 use App\Enums\BusinessType;
+use App\Enums\VehicleMethod;
 use App\Exceptions\Hmrc\HmrcApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateInstructorTaxProfileRequest;
@@ -36,6 +37,7 @@ class HmrcConnectionController extends Controller
             'taxProfile' => $instructor ? $this->hmrc->getTaxProfile($instructor) : null,
             'applicability' => $instructor ? $this->hmrc->getMtdApplicability($instructor) : null,
             'businessTypes' => $this->businessTypeOptions(),
+            'methodOptions' => $this->methodOptions(),
             // Diagnostic cards are dev/ops only. The role-gate fallback in
             // .claude/tasks/vehicles-and-method-choice.md §5 specifies env-gate
             // when no admin role exists — and the current UserRole enum
@@ -62,6 +64,17 @@ class HmrcConnectionController extends Controller
         return array_map(
             fn (BusinessType $type) => ['value' => $type->value, 'label' => $type->label()],
             BusinessType::cases(),
+        );
+    }
+
+    /**
+     * @return array<int, array{value: string, label: string}>
+     */
+    private function methodOptions(): array
+    {
+        return array_map(
+            fn (VehicleMethod $method) => ['value' => $method->value, 'label' => $method->label()],
+            VehicleMethod::cases(),
         );
     }
 

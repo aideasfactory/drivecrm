@@ -74,6 +74,7 @@ interface InstructorFinance {
 interface MileageLog {
     id: number
     date: string
+    vehicle_id: number | null
     start_mileage: number
     end_mileage: number
     miles: number
@@ -146,6 +147,7 @@ const removeExistingReceipt = ref(false)
 
 const mileageForm = ref({
     date: new Date().toISOString().split('T')[0],
+    vehicle_id: null as number | null,
     start_mileage: '',
     end_mileage: '',
     type: 'business' as 'business' | 'personal',
@@ -249,6 +251,7 @@ const resetForm = () => {
 const resetMileageForm = () => {
     mileageForm.value = {
         date: new Date().toISOString().split('T')[0],
+        vehicle_id: activeVehicles.value.length === 1 ? activeVehicles.value[0].id : null,
         start_mileage: '',
         end_mileage: '',
         type: 'business',
@@ -296,6 +299,7 @@ const openMileageEditSheet = (log: MileageLog) => {
     editingMileage.value = log
     mileageForm.value = {
         date: log.date,
+        vehicle_id: log.vehicle_id ?? null,
         start_mileage: log.start_mileage.toString(),
         end_mileage: log.end_mileage.toString(),
         type: log.type,
@@ -446,6 +450,7 @@ const handleMileageSubmit = async () => {
 
     const payload = {
         date: mileageForm.value.date,
+        vehicle_id: mileageForm.value.vehicle_id,
         start_mileage: parseInt(mileageForm.value.start_mileage || '0', 10),
         end_mileage: parseInt(mileageForm.value.end_mileage || '0', 10),
         type: mileageForm.value.type,
@@ -546,6 +551,19 @@ const fileAccept = computed(() => {
     if (mimes.includes('jpg') || mimes.includes('jpeg')) parts.push('image/jpeg')
     if (mimes.includes('png')) parts.push('image/png')
     return parts.join(',')
+})
+
+const selectedMileageVehicle = computed(() =>
+    activeVehicles.value.find((v) => v.id === mileageForm.value.vehicle_id) ?? null,
+)
+
+const mileageVehicleMethodHint = computed<string | null>(() => {
+    const v = selectedMileageVehicle.value
+    if (!v) return null
+    if (v.method === 'simplified') {
+        return `${v.display_name} is on Simplified — these miles will be claimed at HMRC's flat rate (45p / 25p).`
+    }
+    return `${v.display_name} is on Actual — mileage isn't claimed for this vehicle. Record fuel, insurance and other running costs as expenses instead.`
 })
 
 const milesPreview = computed(() => {
@@ -1030,6 +1048,29 @@ onMounted(() => {
                         <Label for="mileage_date">Date *</Label>
                         <Input id="mileage_date" v-model="mileageForm.date" type="date" :disabled="isSubmitting" />
                         <p v-if="mileageErrors.date" class="text-sm text-destructive">{{ mileageErrors.date }}</p>
+                    </div>
+
+                    <!-- Vehicle -->
+                    <div class="space-y-2">
+                        <Label for="mileage_vehicle_id">Vehicle{{ activeVehicles.length >= 2 ? ' *' : '' }}</Label>
+                        <select
+                            id="mileage_vehicle_id"
+                            v-model="mileageForm.vehicle_id"
+                            :disabled="isSubmitting || activeVehicles.length === 0"
+                            class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            <option :value="null" :disabled="activeVehicles.length >= 2">— Select a vehicle —</option>
+                            <option v-for="v in activeVehicles" :key="v.id" :value="v.id">
+                                {{ v.display_name }} ({{ v.method_label }})
+                            </option>
+                        </select>
+                        <p v-if="mileageErrors.vehicle_id" class="text-sm text-destructive">{{ mileageErrors.vehicle_id }}</p>
+                        <p v-if="mileageVehicleMethodHint" class="text-xs" :class="selectedMileageVehicle?.method === 'actual' ? 'text-amber-600' : 'text-muted-foreground'">
+                            {{ mileageVehicleMethodHint }}
+                        </p>
+                        <p v-if="activeVehicles.length === 0" class="text-xs text-muted-foreground">
+                            No vehicles on file. <a href="/hmrc/vehicles" class="underline">Add one →</a>
+                        </p>
                     </div>
 
                     <!-- Type -->

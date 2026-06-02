@@ -24,7 +24,8 @@ class StepTwoController extends Controller
         $step1Data = $enquiry->getStepData(1);
 
         $postcode = $step1Data['postcode'] ?? null;
-        $instructorId = config('booking.instructor_id');
+        $transmission = $step1Data['transmission'] ?? 'both';
+        $instructorId = $this->resolveInstructorId($transmission);
 
         $inArea = $this->isInArea($postcode, $instructorId);
 
@@ -35,6 +36,7 @@ class StepTwoController extends Controller
         // Persist the coverage outcome on the enquiry so the leads tooling can see it.
         $enquiry->setStepData(2, [
             'instructor_id' => $instructorId,
+            'transmission' => $transmission,
             'in_area' => $inArea,
         ]);
         $enquiry->current_step = max($enquiry->current_step, 2);
@@ -68,6 +70,13 @@ class StepTwoController extends Controller
         }
 
         Mail::to($adminEmail)->send(new BookingEnquirySubmittedMail($enquiry));
+    }
+
+    private function resolveInstructorId(string $transmission): mixed
+    {
+        $map = (array) config('booking.instructor_ids', []);
+
+        return $map[$transmission] ?? null;
     }
 
     private function isInArea(?string $postcode, mixed $instructorId): bool

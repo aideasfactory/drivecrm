@@ -205,6 +205,27 @@
                   </p>
                 </div>
 
+                <div class="space-y-2">
+                  <Label for="transmission">
+                    Transmission preference <span class="text-destructive">*</span>
+                  </Label>
+                  <select
+                    id="transmission"
+                    v-model="form.transmission"
+                    required
+                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    :class="{ 'border-destructive': form.errors.transmission }"
+                  >
+                    <option value="manual">Manual</option>
+                    <option value="automatic">Automatic</option>
+                    <option value="both">Either / no preference</option>
+                  </select>
+                  <p v-if="form.errors.transmission" class="text-sm text-destructive flex items-center">
+                    <AlertCircle class="mr-1 h-4 w-4" />
+                    {{ form.errors.transmission }}
+                  </p>
+                </div>
+
                 <div class="space-y-4 pt-4">
                   <Separator />
 
@@ -309,6 +330,7 @@ const form = useForm({
   email: existingData.email || '',
   phone: existingData.phone || '',
   postcode: existingData.postcode || '',
+  transmission: existingData.transmission || 'both',
   privacy_consent: existingData.privacy_consent || false,
 })
 
@@ -324,6 +346,7 @@ const isFormValid = computed(() => {
                            form.email.trim() &&
                            form.phone.trim() &&
                            form.postcode.trim() &&
+                           form.transmission &&
                            privacyConsent.value
 
   if (!hasRequiredFields) return false

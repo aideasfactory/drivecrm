@@ -5,12 +5,16 @@ declare(strict_types=1);
 /*
  * Public /booking landing flow.
  *
- * `instructor_id` is the single instructor whose coverage area gates the
- * "We have lessons in your area" result on step 2. Read by
- * App\Http\Controllers\Booking\StepTwoController.
+ * `instructor_ids` maps the user's selected transmission to the instructor whose
+ * coverage area gates the "We have lessons in your area" result on step 2.
+ * Read by App\Http\Controllers\Booking\StepTwoController.
  */
 return [
-    'instructor_id' => env('BOOKING_INSTRUCTOR_ID'),
+    'instructor_ids' => [
+        'manual' => env('BOOKING_INSTRUCTOR_MANUAL_ID'),
+        'automatic' => env('BOOKING_INSTRUCTOR_AUTOMATIC_ID'),
+        'both' => env('BOOKING_INSTRUCTOR_BOTH_ID'),
+    ],
 
     /*
      * Recipient for the admin notification emailed when a /booking enquiry

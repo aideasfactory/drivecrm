@@ -62,12 +62,18 @@ interface HmrcData {
     businessTypes: BusinessTypeOption[]
 }
 
+interface HmrcServicePayload {
+    name: string
+    data: Record<string, unknown> | null
+}
+
 interface Props {
     instructor: InstructorDetail
     tab?: string
     subtab?: string
     student?: number
     hmrc?: HmrcData | null
+    hmrcService?: HmrcServicePayload | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -182,6 +188,7 @@ const breadcrumbs = [
                     v-if="activeTab === 'hmrc' && hmrc"
                     :instructor-id="instructor.id"
                     :hmrc="hmrc"
+                    :hmrc-service="hmrcService"
                 />
             </div>
         </div>
