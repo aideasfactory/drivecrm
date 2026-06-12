@@ -121,7 +121,9 @@ class BirdContactService extends BaseService
             'lastName' => $lastName,
             'postalCode' => $postalCode,
             'availability' => $availability,
-            'transmission' => $transmission,
+            // "transmission1" is the select-type Transmission attribute in Bird;
+            // the bare "transmission" key belongs to a duplicate plain-text attribute.
+            'transmission1' => $transmission,
             'subscribedEmail' => $marketingConsent,
             'subscribedSms' => $marketingConsent,
         ], fn ($value) => $value !== null);
@@ -150,16 +152,20 @@ class BirdContactService extends BaseService
     }
 
     /**
-     * Map the step-1 transmission choice onto a human-readable string.
+     * Map the step-1 transmission choice onto a Bird select option ID.
+     *
+     * The "transmission1" attribute is select-type; Bird's API validates the
+     * value against internal option IDs, not display labels. In this workspace:
+     * option-1 = Manual, option-2 = Automatic, option-3 = Either.
      *
      * @param  array<string, mixed>  $step1
      */
     private function resolveTransmission(array $step1): ?string
     {
         return match ($step1['transmission'] ?? null) {
-            'manual' => 'Manual',
-            'automatic' => 'Automatic',
-            'both' => 'Either',
+            'manual' => 'option-1',
+            'automatic' => 'option-2',
+            'both' => 'option-3',
             default => null,
         };
     }
