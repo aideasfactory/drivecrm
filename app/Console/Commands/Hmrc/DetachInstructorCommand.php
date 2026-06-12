@@ -190,6 +190,7 @@ class DetachInstructorCommand extends Command
                 if ($value === true) {
                     return true;
                 }
+
                 continue;
             }
             if ($value !== null && $value !== '') {

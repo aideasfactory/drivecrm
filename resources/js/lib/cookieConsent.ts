@@ -4,11 +4,34 @@ import * as CookieConsent from 'vanilla-cookieconsent';
 
 let initialised = false;
 
+/**
+ * Sync the visitor's choice into Google Consent Mode so GTM tags
+ * (loaded in app.blade.php on booking pages) only fire with consent.
+ */
+function updateGtmConsent(): void {
+    const status = CookieConsent.acceptedCategory('analytics') ? 'granted' : 'denied';
+
+    function gtag(..._args: unknown[]) {
+        // GTM reads `arguments` objects pushed onto the dataLayer.
+        // eslint-disable-next-line prefer-rest-params
+        ((window as any).dataLayer = (window as any).dataLayer || []).push(arguments);
+    }
+
+    gtag('consent', 'update', {
+        ad_storage: status,
+        ad_user_data: status,
+        ad_personalization: status,
+        analytics_storage: status,
+    });
+}
+
 export function initCookieConsent(): void {
     if (initialised) return;
     initialised = true;
 
     CookieConsent.run({
+        onConsent: updateGtmConsent,
+        onChange: updateGtmConsent,
         guiOptions: {
             consentModal: {
                 layout: 'bar inline',
@@ -29,6 +52,10 @@ export function initCookieConsent(): void {
                 readOnly: true,
             },
             functional: {
+                enabled: false,
+                readOnly: false,
+            },
+            analytics: {
                 enabled: false,
                 readOnly: false,
             },
@@ -63,6 +90,12 @@ export function initCookieConsent(): void {
                                 description:
                                     'Used to load Google Maps so you can see instructors near you. With these off the map is hidden and you can still pick an instructor from the list.',
                                 linkedCategory: 'functional',
+                            },
+                            {
+                                title: 'Analytics & marketing',
+                                description:
+                                    'Used by Google Tag Manager to measure how our booking pages are used and whether our advertising works. No tracking happens unless you accept.',
+                                linkedCategory: 'analytics',
                             },
                             {
                                 title: 'More information',

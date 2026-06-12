@@ -90,6 +90,10 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('instructors.locations.store');
     Route::delete('/instructors/{instructor}/locations/{location}', [InstructorController::class, 'destroyLocation'])
         ->name('instructors.locations.destroy');
+    Route::get('/instructors/{instructor}/locations-export', [InstructorController::class, 'exportLocationsCsv'])
+        ->name('instructors.locations.export');
+    Route::post('/instructors/{instructor}/locations-import', [InstructorController::class, 'importLocationsCsv'])
+        ->name('instructors.locations.import');
     Route::get('/instructors/{instructor}/calendar', [InstructorController::class, 'calendar'])
         ->name('instructors.calendar');
     Route::post('/instructors/{instructor}/calendar/items', [InstructorController::class, 'storeCalendarItem'])
@@ -500,7 +504,8 @@ Route::prefix('/booking/{uuid}')
         Route::post('/step/1', [BookingStepOneController::class, 'store'])
             ->name('booking.step1.store');
 
-        Route::get('/step/2', [BookingStepTwoController::class, 'show'])
+        // "Success" path so GTM can fire conversion tags on a distinct URL.
+        Route::get('/success', [BookingStepTwoController::class, 'show'])
             ->name('booking.step2');
     });
 

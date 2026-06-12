@@ -71,4 +71,8 @@ return [
         'booking_list_id' => env('BIRD_BOOKING_LIST_ID'),
     ],
 
+    'gtm' => [
+        'container_id' => env('GTM_CONTAINER_ID'),
+    ],
+
 ];

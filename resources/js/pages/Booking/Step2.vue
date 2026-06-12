@@ -69,13 +69,14 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Toaster } from '@/components/ui/toast'
 import AppLogoIcon from '@/components/AppLogoIcon.vue'
 import CookiePreferencesLink from '@/components/CookiePreferencesLink.vue'
 import { CircleCheck, CircleX, Phone, Mail } from 'lucide-vue-next'
 
-defineProps<{
+const props = defineProps<{
   uuid: string
   currentStep: number
   totalSteps: number
@@ -83,4 +84,13 @@ defineProps<{
   inArea: boolean
   maxStepReached: number
 }>()
+
+// GTM conversion trigger: fires on the /booking/{uuid}/success page.
+// Custom-event triggers are more reliable than URL triggers in an Inertia SPA.
+onMounted(() => {
+  ;(window as any).dataLayer?.push({
+    event: 'booking_enquiry_submitted',
+    in_area: props.inArea,
+  })
+})
 </script>

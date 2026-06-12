@@ -153,16 +153,23 @@
                   <Label for="phone">
                     Phone number <span class="text-destructive">*</span>
                   </Label>
-                  <div class="relative">
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <span class="text-sm">🇬🇧 +44</span>
-                    </div>
+                  <div class="flex gap-2">
+                    <select
+                      id="country-code"
+                      v-model="countryCode"
+                      aria-label="Country code"
+                      class="h-9 w-28 shrink-0 rounded-md border border-input bg-transparent dark:bg-input/30 px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                    >
+                      <option v-for="country in countryCodes" :key="country.code" :value="country.code">
+                        {{ country.flag }} {{ country.code }}
+                      </option>
+                    </select>
                     <Input
                       id="phone"
                       v-model="form.phone"
                       type="tel"
-                      class="pl-20"
-                      placeholder="7123 456789"
+                      class="flex-1"
+                      placeholder="7710 896753"
                       required
                       :class="{ 'border-destructive': form.errors.phone }"
                     />
@@ -177,7 +184,7 @@
                   </p>
                   <p v-if="form.phone && !validatePhone(form.phone)" class="text-sm text-orange-600 flex items-center">
                     <AlertTriangle class="mr-1 h-4 w-4" />
-                    Please enter in format: 07123 456 789
+                    {{ countryCode === '+44' ? 'Enter your mobile number without the leading 0, e.g. 7710 896753' : 'Enter your number without the country code or leading 0' }}
                   </p>
                 </div>
 
@@ -218,7 +225,7 @@
                   >
                     <option value="manual">Manual</option>
                     <option value="automatic">Automatic</option>
-                    <option value="both">Either / no preference</option>
+                    <option value="both">Both</option>
                   </select>
                   <p v-if="form.errors.transmission" class="text-sm text-destructive flex items-center">
                     <AlertCircle class="mr-1 h-4 w-4" />
@@ -324,13 +331,62 @@ const page = usePage()
 
 const existingData = (page.props.enquiry as any)?.data?.steps?.step1 || {}
 
+const countryCodes = [
+  { code: '+44', flag: '🇬🇧', name: 'United Kingdom' },
+  { code: '+353', flag: '🇮🇪', name: 'Ireland' },
+  { code: '+1', flag: '🇺🇸', name: 'United States / Canada' },
+  { code: '+61', flag: '🇦🇺', name: 'Australia' },
+  { code: '+64', flag: '🇳🇿', name: 'New Zealand' },
+  { code: '+33', flag: '🇫🇷', name: 'France' },
+  { code: '+49', flag: '🇩🇪', name: 'Germany' },
+  { code: '+34', flag: '🇪🇸', name: 'Spain' },
+  { code: '+39', flag: '🇮🇹', name: 'Italy' },
+  { code: '+351', flag: '🇵🇹', name: 'Portugal' },
+  { code: '+31', flag: '🇳🇱', name: 'Netherlands' },
+  { code: '+32', flag: '🇧🇪', name: 'Belgium' },
+  { code: '+48', flag: '🇵🇱', name: 'Poland' },
+  { code: '+40', flag: '🇷🇴', name: 'Romania' },
+  { code: '+359', flag: '🇧🇬', name: 'Bulgaria' },
+  { code: '+370', flag: '🇱🇹', name: 'Lithuania' },
+  { code: '+91', flag: '🇮🇳', name: 'India' },
+  { code: '+92', flag: '🇵🇰', name: 'Pakistan' },
+  { code: '+880', flag: '🇧🇩', name: 'Bangladesh' },
+  { code: '+234', flag: '🇳🇬', name: 'Nigeria' },
+  { code: '+27', flag: '🇿🇦', name: 'South Africa' },
+  { code: '+86', flag: '🇨🇳', name: 'China' },
+  { code: '+852', flag: '🇭🇰', name: 'Hong Kong' },
+  { code: '+971', flag: '🇦🇪', name: 'United Arab Emirates' },
+  { code: '+90', flag: '🇹🇷', name: 'Turkey' },
+]
+
+// Saved phones are E.164 (e.g. +447710896753); older drafts may be 07710-style.
+// Split back into a dial code + national number for editing.
+function splitPhone(phone: string): { code: string; national: string } {
+  if (!phone.startsWith('+')) {
+    return { code: '+44', national: phone }
+  }
+
+  const match = countryCodes
+    .map((country) => country.code)
+    .sort((a, b) => b.length - a.length)
+    .find((code) => phone.startsWith(code))
+
+  return match
+    ? { code: match, national: phone.slice(match.length) }
+    : { code: '+44', national: phone.slice(1) }
+}
+
+const existingPhone = splitPhone(existingData.phone || '')
+
+const countryCode = ref(existingPhone.code)
+
 const form = useForm({
   first_name: existingData.first_name || '',
   last_name: existingData.last_name || '',
   email: existingData.email || '',
-  phone: existingData.phone || '',
+  phone: existingPhone.national,
   postcode: existingData.postcode || '',
-  transmission: existingData.transmission || 'both',
+  transmission: existingData.transmission || 'manual',
   privacy_consent: existingData.privacy_consent || false,
 })
 
@@ -361,10 +417,22 @@ function validateEmail(email: string) {
   return re.test(email)
 }
 
+// National number as bare digits, forgiving a typed leading 0 (e.g. "07710 896753" → "7710896753").
+function nationalDigits(phone: string) {
+  const digits = phone.replace(/\D/g, '')
+  return digits.startsWith('0') ? digits.slice(1) : digits
+}
+
 function validatePhone(phone: string) {
-  if (!phone) return false
-  const phoneRegex = /^(\+44\s?7\d{3}|\(?07\d{3}\)?)\s?\d{3}\s?\d{3}$/
-  return phoneRegex.test(phone.trim())
+  const digits = nationalDigits(phone)
+  if (!digits) return false
+
+  if (countryCode.value === '+44') {
+    return /^7\d{9}$/.test(digits)
+  }
+
+  const totalLength = countryCode.value.replace(/\D/g, '').length + digits.length
+  return totalLength >= 8 && totalLength <= 15
 }
 
 function validatePostcode(postcode: string) {
@@ -381,8 +449,13 @@ function submit() {
     return
   }
 
-  form.post(`/booking/${enquiry.id}/step/1`, {
-    preserveScroll: 'errors',
-  })
+  form
+    .transform((data) => ({
+      ...data,
+      phone: countryCode.value + nationalDigits(data.phone),
+    }))
+    .post(`/booking/${enquiry.id}/step/1`, {
+      preserveScroll: 'errors',
+    })
 }
 </script>

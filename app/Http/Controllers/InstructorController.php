@@ -20,6 +20,7 @@ use App\Http\Controllers\Hmrc\Vat\VatController;
 use App\Http\Controllers\Hmrc\Vehicles\VehicleController;
 use App\Http\Requests\AdminResetPasswordRequest;
 use App\Http\Requests\ImportInstructorsCsvRequest;
+use App\Http\Requests\ImportLocationsCsvRequest;
 use App\Http\Requests\StoreCalendarItemRequest;
 use App\Http\Requests\StoreInstructorRequest;
 use App\Http\Requests\StoreLocationRequest;
@@ -405,6 +406,60 @@ class InstructorController extends Controller
 
         return response()->json([
             'message' => 'Location removed successfully.',
+        ]);
+    }
+
+    /**
+     * Download the instructor's coverage areas as a CSV file.
+     */
+    public function exportLocationsCsv(Instructor $instructor): StreamedResponse
+    {
+        $locations = $this->instructorService->getLocations($instructor);
+
+        return response()->streamDownload(function () use ($locations) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['postcode_sector']);
+
+            foreach ($locations as $location) {
+                fputcsv($handle, [$location['postcode_sector']]);
+            }
+
+            fclose($handle);
+        }, "coverage-areas-instructor-{$instructor->id}.csv", [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
+    /**
+     * Replace the instructor's coverage areas from an uploaded CSV file.
+     */
+    public function importLocationsCsv(ImportLocationsCsvRequest $request, Instructor $instructor): JsonResponse
+    {
+        $rows = $this->instructorService->parseCsvFile($request->file('file'));
+
+        if (empty($rows)) {
+            return response()->json([
+                'message' => 'The CSV file is empty or could not be parsed.',
+                'imported' => 0,
+                'skipped' => 0,
+                'errors' => [],
+            ], 422);
+        }
+
+        $result = $this->instructorService->replaceLocationsFromCsvRows($instructor, $rows);
+
+        if ($result['imported'] > 0) {
+            (new LogActivityAction)($instructor, "Coverage areas replaced via CSV import ({$result['imported']} areas)", 'profile', [
+                'imported' => $result['imported'],
+                'skipped' => $result['skipped'],
+            ]);
+        }
+
+        return response()->json([
+            'message' => "{$result['imported']} coverage area(s) imported successfully.",
+            'imported' => $result['imported'],
+            'skipped' => $result['skipped'],
+            'errors' => $result['errors'],
         ]);
     }
 

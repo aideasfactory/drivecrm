@@ -37,6 +37,11 @@ class ValidateBookingStepAccess
             return (int) $matches[1];
         }
 
+        // The booking result page lives at /success (GTM-friendly URL) but is step 2.
+        if (str_ends_with($uri, '/success')) {
+            return 2;
+        }
+
         return null;
     }
 }

@@ -30,6 +30,7 @@ use App\Actions\Instructor\Mileage\CreateMileageLogAction;
 use App\Actions\Instructor\Mileage\DeleteMileageLogAction;
 use App\Actions\Instructor\Mileage\GetMileageLogsAction;
 use App\Actions\Instructor\Mileage\UpdateMileageLogAction;
+use App\Actions\Instructor\ReplaceInstructorLocationsAction;
 use App\Actions\Instructor\UpdateCalendarItemAction;
 use App\Actions\Instructor\UpdateInstructorFinanceAction;
 use App\Actions\Instructor\UpdateInstructorProfileAction;
@@ -70,6 +71,7 @@ class InstructorService extends BaseService
         protected GetInstructorLocationsAction $getInstructorLocations,
         protected CreateInstructorLocationAction $createInstructorLocation,
         protected DeleteInstructorLocationAction $deleteInstructorLocation,
+        protected ReplaceInstructorLocationsAction $replaceInstructorLocations,
         protected GetInstructorCalendarAction $getInstructorCalendar,
         protected CreateCalendarItemAction $createCalendarItem,
         protected DeleteCalendarItemAction $deleteCalendarItem,
@@ -271,6 +273,17 @@ class InstructorService extends BaseService
     public function removeLocation(Location $location): bool
     {
         return ($this->deleteInstructorLocation)($location);
+    }
+
+    /**
+     * Replace all coverage locations for an instructor from parsed CSV rows.
+     *
+     * @param  array<int, array<string, string>>  $rows  Parsed CSV rows keyed by header
+     * @return array{imported: int, skipped: int, errors: array<int, array{row: int, field: string|null, message: string}>}
+     */
+    public function replaceLocationsFromCsvRows(Instructor $instructor, array $rows): array
+    {
+        return ($this->replaceInstructorLocations)($instructor, $rows);
     }
 
     /**

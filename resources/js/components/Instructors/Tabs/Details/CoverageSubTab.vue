@@ -26,8 +26,9 @@ import {
     ItemMedia,
     ItemTitle,
 } from '@/components/ui/item'
-import { MapPin, Plus, Trash2, Loader2 } from 'lucide-vue-next'
+import { MapPin, Plus, Trash2, Loader2, Download, Upload } from 'lucide-vue-next'
 import { toast } from '@/components/ui/toast'
+import CsvImportSheet from '@/components/CsvImportSheet.vue'
 import type { InstructorDetail, Location } from '@/types/instructor'
 
 const props = defineProps<{
@@ -38,6 +39,7 @@ const props = defineProps<{
 const locations = ref<Location[]>([])
 const isLoading = ref(true)
 const isAddSheetOpen = ref(false)
+const isCsvImportOpen = ref(false)
 const isDeleteDialogOpen = ref(false)
 const deleteLocationId = ref<number | null>(null)
 const newPostcodeSector = ref('')
@@ -186,6 +188,11 @@ const openAddSheet = () => {
     formError.value = ''
     isAddSheetOpen.value = true
 }
+
+// Reload locations after a CSV import replaces them
+const handleCsvImported = () => {
+    loadLocations()
+}
 </script>
 
 <template>
@@ -205,6 +212,29 @@ const openAddSheet = () => {
                 >
                     <Plus class="mr-2 h-4 w-4" />
                     Add Area
+                </Button>
+            </div>
+
+            <!-- CSV Export / Import -->
+            <div v-if="!isLoading" class="mb-4 flex gap-2">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    as="a"
+                    :href="`/instructors/${props.instructor.id}/locations-export`"
+                    class="h-8"
+                >
+                    <Download class="mr-2 h-4 w-4" />
+                    Download CSV
+                </Button>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    @click="isCsvImportOpen = true"
+                    class="h-8"
+                >
+                    <Upload class="mr-2 h-4 w-4" />
+                    Upload CSV
                 </Button>
             </div>
 
@@ -346,6 +376,15 @@ const openAddSheet = () => {
             </form>
         </SheetContent>
     </Sheet>
+
+    <!-- CSV Import Sheet -->
+    <CsvImportSheet
+        v-model:open="isCsvImportOpen"
+        title="Import Coverage Areas from CSV"
+        description="Upload a CSV with a postcode_sector column. This will REPLACE all existing coverage areas for this instructor. Download the current CSV first to use as a template."
+        :import-url="`/instructors/${props.instructor.id}/locations-import`"
+        @imported="handleCsvImported"
+    />
 
     <!-- Delete Confirmation Dialog -->
     <Dialog v-model:open="isDeleteDialogOpen">
