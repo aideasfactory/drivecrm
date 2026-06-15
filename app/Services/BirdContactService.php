@@ -106,7 +106,7 @@ class BirdContactService extends BaseService
         $lastName = $this->stringOrNull($step1['last_name'] ?? null);
         $phone = $this->normalisePhoneToE164($this->stringOrNull($step1['phone'] ?? null));
         $postalCode = $this->stringOrNull($step1['postcode'] ?? null);
-        $availability = $this->resolveAvailability($step2);
+        $instructorAvailability = $this->resolveInstructorAvailability($step2);
         $transmission = $this->resolveTransmission($step1);
         $marketingConsent = (bool) ($step1['marketing_consent'] ?? false);
 
@@ -120,7 +120,7 @@ class BirdContactService extends BaseService
             'firstName' => $firstName,
             'lastName' => $lastName,
             'postalCode' => $postalCode,
-            'availability' => $availability,
+            'instructorAvailability' => $instructorAvailability,
             // "transmission1" is the select-type Transmission attribute in Bird;
             // the bare "transmission" key belongs to a duplicate plain-text attribute.
             'transmission1' => $transmission,
@@ -138,17 +138,21 @@ class BirdContactService extends BaseService
     }
 
     /**
-     * Map the step-2 in-area flag onto a human-readable Availability string.
+     * Map the step-2 in-area flag onto the Bird "Instructor Availability" select.
+     *
+     * The "instructorAvailability" attribute is a fixed Yes/No select whose
+     * option values are the labels themselves (case-sensitive), so we send
+     * "Yes" when the postcode is covered and "No" when it is not.
      *
      * @param  array<string, mixed>  $step2
      */
-    private function resolveAvailability(array $step2): ?string
+    private function resolveInstructorAvailability(array $step2): ?string
     {
         if (! array_key_exists('in_area', $step2)) {
             return null;
         }
 
-        return $step2['in_area'] ? 'In area' : 'Out of area';
+        return $step2['in_area'] ? 'Yes' : 'No';
     }
 
     /**
