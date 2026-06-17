@@ -1,145 +1,124 @@
-# Task: Mandrill Transactional Email Transport
+# Task: Restrict coverage changes and CSV actions to admin (Owner) users
 
 ## Overview
 
-Wire up Mandrill (Mailchimp Transactional) as a Laravel mail transport so the
-existing Mailables (e.g. `BookingEnquirySubmittedMail`) deliver through Mandrill
-instead of the `log` driver. Also add a thin Service for sending
-**Mandrill-hosted templates** (e.g. the `magiclink` template reused from the
-smartdriving project) which Laravel's transport layer can't address directly.
+Tighten coverage-area permissions in the Instructor admin area so that only
+admin-role users (mapped to `UserRole::OWNER` in this codebase) can:
 
-Production sending domain: `just-drive.co.uk` (or a subdomain like
-`mail.just-drive.co.uk`). During testing the team will send from
-`noreply@mail.drivedrivingschool.co.uk`, which is already DKIM/SPF-verified in
-the shared Mandrill account from the smartdriving project.
+- Add a new coverage area (postcode sector)
+- Delete an existing coverage area
+- Upload (replace) coverage areas from a CSV
+- Download the coverage CSV
+
+Logged-in instructors viewing their own Instructor → Details → Coverage tab
+should still be able to **see** their coverage areas, but every mutation and
+CSV action must be hidden from the UI and rejected by the backend.
+
+In this codebase `admin === owner` (see `App\Enums\UserRole`). The existing
+`App\Http\Middleware\EnsureOwner` middleware is the canonical gate for
+admin-only routes.
 
 ## Phase 1: Planning ✅
 
-### Why Mandrill and not Bird
-- Existing Mandrill account already in use on smartdriving (api key, verified
-  domain, the `magiclink` template).
-- Avoids spinning up a second Bird Programmable Email channel and a second DNS
-  setup just for transactional sends during the testing phase.
-- Trade-off accepted: two providers in play (Bird for inbox conversations,
-  Mandrill for transactional). Acceptable while volume is low; revisit before
-  go-live if consolidation matters.
+### Backend surface to lock down
 
-### Why a Service for templates but NOT for Mailables
-- Blade-rendered Mailables already use the `Mail` facade — `Mail::extend()`
-  swaps the transport transparently. No wrapper Service needed.
-- Mandrill-hosted templates (authored in the Mandrill dashboard, not in this
-  repo) require a direct API call to `messages/send-template` with merge
-  variables. That's the only thing that needs new code.
+`routes/web.php` (lines 87–96) currently exposes:
+
+| Method | Path | Action | Decision |
+|--------|------|--------|----------|
+| GET    | `/instructors/{instructor}/locations` | list | Stays open — instructors view their own |
+| POST   | `/instructors/{instructor}/locations` | add | **Owner-only** |
+| DELETE | `/instructors/{instructor}/locations/{location}` | delete | **Owner-only** |
+| GET    | `/instructors/{instructor}/locations-export` | CSV download | **Owner-only** |
+| POST   | `/instructors/{instructor}/locations-import` | CSV upload | **Owner-only** |
+
+These four routes will be moved into a nested `Route::middleware([EnsureOwner::class])`
+group inside the existing auth/verified/RestrictInstructor outer group.
+
+### Frontend surface to gate
+
+`resources/js/components/Instructors/Tabs/Details/CoverageSubTab.vue` exposes:
+
+- "Add Area" button (top-right of the column header)
+- "Download CSV" button
+- "Upload CSV" button
+- Per-row trash/delete button
+
+All four will be wrapped in `v-if="isOwner"` using the existing
+`@/composables/useRole` composable (`isOwner` reactive ref).
+
+### Tests
+
+A new `tests/Feature/Instructors/InstructorCoverageAuthorizationTest.php`
+will:
+
+1. Verify an Owner can `POST` / `DELETE` / export / import.
+2. Verify an Instructor accessing their own routes is rejected with 403 for
+   each of the four mutation endpoints.
+3. Verify the read-only listing endpoint still works for the Instructor (so
+   they can see their existing coverage areas in the UI).
 
 ## Phase 2: Implementation ✅
 
-### Files created
-- `app/Services/MandrillTemplateService.php` — sends a Mandrill-hosted template
-  to a single recipient with merge vars. Extends `BaseService`. Reads API key
-  from `config('services.mandrill.key')`. Throws on HTTP failure or
-  Mandrill-side reject/invalid status.
-
 ### Files edited
-- `config/mail.php` — added `mandrill` mailer config block (`transport` =>
-  `mandrill`, `key` => `env('MANDRILL_API_KEY')`).
-- `config/services.php` — added `mandrill.key` entry (the conventional spot for
-  third-party credentials, kept separate from the mailer config).
-- `app/Providers/AppServiceProvider.php` — added `registerMandrillTransport()`
-  which calls `Mail::extend('mandrill', ...)` returning a
-  `Symfony\Component\Mailer\Bridge\Mailchimp\Transport\MandrillApiTransport`.
-- `.env.example` — added `MANDRILL_API_KEY=` placeholder under a Mandrill
-  comment block.
 
-### Composer
-- `composer require symfony/mailchimp-mailer` (v8) — provides
-  `MandrillApiTransport`. The Symfony bridge for Mandrill is named after
-  Mailchimp because Mandrill is the Mailchimp Transactional product.
+- `routes/web.php` — wrapped the four mutation/CSV routes in a nested
+  `EnsureOwner` middleware group; left the read-only `locations` route
+  outside so instructors can still view their own coverage.
+- `resources/js/components/Instructors/Tabs/Details/CoverageSubTab.vue` —
+  imported `useRole`, added `const { isOwner } = useRole()`, and gated
+  "Add Area", "Download CSV", "Upload CSV", and per-row delete buttons,
+  plus the empty-state copy that told users to click "Add Area" so an
+  instructor seeing the empty state isn't told to use a button they can't
+  see.
 
-### Key decisions
-- **No `MandrillMailService` for standard sends.** Laravel's `Mail` facade is
-  already the abstraction. A wrapper would be ceremony with no value.
-- **`Mail::extend` rather than a custom service provider class.** One method on
-  the existing `AppServiceProvider` is enough; no new file just to register a
-  transport.
-- **API key in `services.mandrill.key`, not `mail.mailers.mandrill.key`.**
-  Following the Laravel convention — `config/services.php` is the canonical
-  home for third-party credentials. The mailer config also reads it, but the
-  Service uses the services-namespaced key.
-- **Service throws `RuntimeException` on failure.** Lets callers decide whether
-  to log, queue-retry, or surface to the user. Reject/invalid statuses are
-  treated as failures because Mandrill returns HTTP 200 with `"status":
-  "rejected"` for things like a recipient on the suppression list — silently
-  letting that through would be worse than throwing.
+### Files created
 
-### Verification done
-- `php -l` on all four changed PHP files → no syntax errors.
-- `php artisan config:clear` → cache flushed.
-- `php artisan config:show mail.mailers.mandrill` → shows transport + key.
-- `php artisan config:show services.mandrill` → shows key.
-
-### Out of scope (not built)
-- New Mailables (existing `BookingEnquirySubmittedMail` etc. already cover
-  current flows).
-- Webhook handler for Mandrill bounce/spam events.
-- Suppression-list management UI.
-- Migration to `just-drive.co.uk` sending domain — happens before go-live, not
-  now.
+- `tests/Feature/Instructors/InstructorCoverageAuthorizationTest.php` —
+  Pest feature tests covering owner-allow / instructor-deny for every
+  mutation and CSV endpoint, plus owner+instructor allow for read.
+- `results.md` — client-facing summary of what was developed.
 
 ## Phase 3: Reflection ✅
 
-**Why this shape is right for the brief:**
-- The user wanted to reuse the existing Mandrill setup from smartdriving for
-  testing. The smallest possible footprint to do that: add the transport
-  bridge, register it, set the env var. Total new code: one Service class
-  (~110 lines) for the one thing the transport can't do (template sends).
-- Existing Mailables stay untouched. Existing `Mail::send()` calls anywhere in
-  the codebase now route through Mandrill the moment `MAIL_MAILER=mandrill` is
-  set in `.env`.
+### Why this shape is right for the brief
 
-**Subtle decisions worth flagging:**
-- The Symfony package name (`symfony/mailchimp-mailer`) is non-obvious because
-  Mandrill rebranded to "Mailchimp Transactional Email" in 2020 but most
-  developers still call it Mandrill. The transport class itself is
-  `MandrillApiTransport`, which is why the config key stays as `mandrill`.
-- `Mail::extend()` is called in `boot()`, which runs after all providers are
-  registered. This is the correct lifecycle hook — the `MailManager` resolves
-  transports lazily on first `Mail::mailer('mandrill')` call, so the closure
-  doesn't fire until something actually tries to send.
-- `MandrillTemplateService::send()` returns the first recipient entry from
-  Mandrill's response array. Mandrill always returns an array (one entry per
-  recipient), but the Service is single-recipient by design — multi-recipient
-  blasts are a marketing concern and should use Mandrill's dashboard or a
-  proper campaign tool.
-- The Service uses `Http::acceptJson()->post(...)`. No retries configured —
-  callers that need retries should dispatch via a queued job
-  (`ShouldQueue` Mailable pattern handles this for transport sends already;
-  template-API sends would need their own job class if retry semantics matter).
+- The ticket says "if the logged-in user is an admin". This codebase has no
+  literal `admin` role — the equivalent is `UserRole::OWNER`, the role used
+  on every other gated admin feature (push notifications, support messages,
+  resources, student transfers). Reusing `EnsureOwner` keeps the new gate
+  consistent with the rest of the app rather than inventing a new abstraction.
+- Defence-in-depth: even if a future UI change exposes a coverage mutation
+  button, the route is already locked at the middleware layer, so an
+  instructor cannot escalate privilege by crafting the request manually.
+- The read-only `locations` GET endpoint stays open. Instructors can still
+  load their own coverage tab and see what areas the admin has assigned them
+  — they just can't mutate it. This matches the ticket: "Review the admin
+  area coverage UI ... for logged-in instructors and admins".
 
-**Operational notes for the user:**
-- **`.env` must be set:** `MANDRILL_API_KEY=` needs the actual key from the
-  smartdriving Mandrill account. (User has already done this.)
-- **`MAIL_MAILER=mandrill`** must be flipped from `log` for actual sends to
-  happen. Leave on `log` for local dev to avoid burning API calls.
-- **`MAIL_FROM_ADDRESS`** should be set to
-  `noreply@mail.drivedrivingschool.co.uk` for testing, then changed to the
-  `just-drive.co.uk` (or subdomain) sending address before go-live.
-- **Before go-live on `just-drive.co.uk`:** add the new domain to Mandrill,
-  publish DKIM + SPF + Return-Path DNS records, verify in the Mandrill
-  dashboard, then update `MAIL_FROM_ADDRESS`.
-- **Calling Mandrill templates:** inject `MandrillTemplateService` into a
-  Controller/Service constructor and call
-  `$this->mandrill->send('template-slug', $email, ['VAR' => $value])`.
+### Subtle decisions worth flagging
 
-**Out of scope (carried forward from Phase 1, NOT done):**
-- Webhook ingestion for delivery events / bounces / unsubscribes.
-- Suppression-list sync between Mandrill and the local users table.
-- Decision on consolidating Bird + Mandrill (deferred until pre-launch review).
+- The route group keeps `RestrictInstructor` in the outer group. An
+  instructor hitting `POST /instructors/{theirOwnId}/locations` still passes
+  the outer "this is your own path" check but hits the inner `EnsureOwner`
+  gate, returning a 403. That's the desired behaviour — instructors don't
+  silently redirect, they get a clear authorization error.
+- Frontend uses `v-if`, not `v-show`. Hiding the markup entirely means there's
+  nothing for an instructor to interact with even via dev-tools tampering.
+  The backend gate is the source of truth either way.
+- The "Click Add Area button above" hint in the empty state is also gated —
+  showing it to an instructor who can't see the button would be confusing.
+- No changes to `InstructorController` — controllers stay HTTP-agnostic and
+  authorization belongs in middleware per project standards.
 
-**Technical debt / follow-up not done:**
-- No tests added (project rule: user maintains tests manually).
-- No Pint formatting run (project rule: user handles code style).
+### Out of scope
+
+- No changes to the Booking/Step1 coverage usage — that's a customer-facing
+  postcode lookup, not the admin coverage UI the ticket targets.
+- No changes to API v1 endpoints (none exist for coverage management).
+- No new "admin" role added — owner is the project's admin role.
 
 ---
 
 **Status:** All phases complete.
-**Last Updated:** 2026-05-15.
+**Last Updated:** 2026-06-17.
