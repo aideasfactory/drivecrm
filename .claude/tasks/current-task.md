@@ -1,145 +1,158 @@
-# Task: Mandrill Transactional Email Transport
+# Task: Instructor Package Pricing UI in Pounds
 
 ## Overview
 
-Wire up Mandrill (Mailchimp Transactional) as a Laravel mail transport so the
-existing Mailables (e.g. `BookingEnquirySubmittedMail`) deliver through Mandrill
-instead of the `log` driver. Also add a thin Service for sending
-**Mandrill-hosted templates** (e.g. the `magiclink` template reused from the
-smartdriving project) which Laravel's transport layer can't address directly.
+Display the Total Price for instructor packages in **pounds** (£) instead of
+pence in the admin area, while continuing to **store** the price as pence in
+the database. This affects the package create/edit form input shared by:
 
-Production sending domain: `just-drive.co.uk` (or a subdomain like
-`mail.just-drive.co.uk`). During testing the team will send from
-`noreply@mail.drivedrivingschool.co.uk`, which is already DKIM/SPF-verified in
-the shared Mandrill account from the smartdriving project.
+- Admin packages list (`/packages` create + edit sheets)
+- Instructor bespoke packages (`/instructors/{id}` Details tab → Packages sheet)
+
+The Index table column already shows the formatted pound value via the model
+accessor `formatted_total_price`. The work is on the **form input**: today it
+asks for pence (e.g., `50000` for £500.00) which is unfriendly for admins.
 
 ## Phase 1: Planning ✅
 
-### Why Mandrill and not Bird
-- Existing Mandrill account already in use on smartdriving (api key, verified
-  domain, the `magiclink` template).
-- Avoids spinning up a second Bird Programmable Email channel and a second DNS
-  setup just for transactional sends during the testing phase.
-- Trade-off accepted: two providers in play (Bird for inbox conversations,
-  Mandrill for transactional). Acceptable while volume is low; revisit before
-  go-live if consolidation matters.
+### What changes
+- **Frontend only.** Backend schema (`total_price_pence` integer), FormRequest
+  rules, Resources, Service, and Action stay untouched.
+- `PackageForm.vue` gains an internal pounds-denominated input bound to a local
+  `total_price_pounds` field. On submit it multiplies by 100 and rounds to
+  produce the integer `total_price_pence` the backend already expects. On
+  load (edit mode) it divides the existing pence value by 100 to populate the
+  input.
+- Label changes from "Total Price (in pence)" to "Total Price (£)".
+- The helper line under the input keeps showing "£X.XX total (£Y.YY per
+  lesson)" which is already in pounds — its computed source switches from
+  `total_price_pence` to the new pounds field.
 
-### Why a Service for templates but NOT for Mailables
-- Blade-rendered Mailables already use the `Mail` facade — `Mail::extend()`
-  swaps the transport transparently. No wrapper Service needed.
-- Mandrill-hosted templates (authored in the Mandrill dashboard, not in this
-  repo) require a direct API call to `messages/send-template` with merge
-  variables. That's the only thing that needs new code.
+### Why this shape
+- The backend is the source of truth and the database column is named
+  `total_price_pence` for a reason: integer arithmetic for money is correct.
+  Touching the backend just to rename a field would ripple into Stripe code,
+  resources, API consumers, and migrations for no benefit.
+- The Inertia DTO emitted by the form keeps the `total_price_pence` key so the
+  HTTP layer is unchanged — only the input the human sees is in pounds.
+- Rounding on submit (`Math.round(pounds * 100)`) guards against
+  floating-point drift if the admin types `12.345`.
+
+### Files to edit
+1. `resources/js/components/Instructors/PackageForm.vue` — only file requiring
+   real changes. Switch input binding to a pounds field, convert in/out, relabel.
+
+### Files NOT to edit (and why)
+- `Package.php` model — accessors already format pence → "£X.XX" for read.
+- `PackageController.php`, `PackageService.php`, related Actions — they
+  receive `total_price_pence` from the form payload unchanged.
+- `StorePackageRequest.php`, `UpdatePackageRequest.php`,
+  `StoreInstructorPackageRequest.php` — validation rules still apply to the
+  same pence integer the form emits.
+- `Packages/Index.vue` — already shows `formatted_total_price` (pounds).
+- `migrations/*` and `database-schema.md` — column unchanged.
+- `api.md` — endpoints unchanged (still take `total_price_pence`).
+
+### Risks / edge cases
+- Existing packages have integer `total_price_pence` (e.g., 50000). Dividing
+  by 100 gives `500` which renders as `500` in a `type="number"` input —
+  acceptable. Admin can type `500.50` and the form converts to `50050`.
+- `min:0` validation is preserved (pounds `0` → pence `0`).
+- `step="0.01"` on the input keeps the browser's spinner sensible.
+
+### Reflection
+The planning surfaced the right level of change: a form-only conversion at
+the input boundary, with the emitted DTO unchanged. No backend file needed
+touching, and no docs (database-schema, api.md) needed updating because the
+data contract is untouched.
 
 ## Phase 2: Implementation ✅
 
-### Files created
-- `app/Services/MandrillTemplateService.php` — sends a Mandrill-hosted template
-  to a single recipient with merge vars. Extends `BaseService`. Reads API key
-  from `config('services.mandrill.key')`. Throws on HTTP failure or
-  Mandrill-side reject/invalid status.
+### Changes
+- `resources/js/components/Instructors/PackageForm.vue`:
+  - New internal `PackageFormState` interface with `total_price_pounds`.
+    Original exported `PackageFormData` (the emit/save DTO) **unchanged** so
+    `CreatePackageSheet.vue`, `EditPackageSheet.vue` and
+    `Instructors/Tabs/Details/EditDetailsSubTab.vue` (the three consumers of
+    this form) continue to receive `{ total_price_pence }` exactly as before.
+  - `formData` ref now holds pounds. The `watch` on `props.package` converts
+    `pkg.total_price_pence / 100` on load.
+  - `handleSubmit` builds the emit payload with
+    `Math.round(total_price_pounds * 100)` so the integer pence value is
+    safe against floating-point drift.
+  - `formattedPrice` and `pricePerLesson` computeds rewritten to consume
+    pounds directly (no `/100` step needed).
+  - Input field: `id`/`for`/`v-model` switched to `total_price_pounds`,
+    `step="1"` → `step="0.01"`, label "Total Price (in pence)" → "Total
+    Price (£)", placeholder updated to "Enter price in pounds (e.g.,
+    500.00)".
 
-### Files edited
-- `config/mail.php` — added `mandrill` mailer config block (`transport` =>
-  `mandrill`, `key` => `env('MANDRILL_API_KEY')`).
-- `config/services.php` — added `mandrill.key` entry (the conventional spot for
-  third-party credentials, kept separate from the mailer config).
-- `app/Providers/AppServiceProvider.php` — added `registerMandrillTransport()`
-  which calls `Mail::extend('mandrill', ...)` returning a
-  `Symfony\Component\Mailer\Bridge\Mailchimp\Transport\MandrillApiTransport`.
-- `.env.example` — added `MANDRILL_API_KEY=` placeholder under a Mandrill
-  comment block.
+### Verification
+- Read final file end-to-end: 175 lines, clean, no leftover pence references
+  except the legitimate `total_price_pence` in the export type (DTO) and
+  inside `handleSubmit` where pounds → pence conversion lives.
+- Three consumers of `PackageForm.vue` confirmed:
+  - `components/Packages/CreatePackageSheet.vue` — `POST /packages` with
+    `data` from `save` event. Still receives `total_price_pence`. ✓
+  - `components/Packages/EditPackageSheet.vue` — `PUT /packages/{id}` with
+    the same shape. ✓
+  - `components/Instructors/Tabs/Details/EditDetailsSubTab.vue` — `POST
+    /instructors/{id}/packages` and `PUT /packages/{id}`. ✓
+- Backend FormRequests (`StorePackageRequest`, `UpdatePackageRequest`,
+  `StoreInstructorPackageRequest`) still validate `total_price_pence` as
+  integer ≥ 0. Unchanged.
+- Index page (`Packages/Index.vue`) already renders
+  `pkg.formatted_total_price` from the model accessor (`'£' .
+  number_format($this->total_price_pence / 100, 2)`). No change needed.
 
-### Composer
-- `composer require symfony/mailchimp-mailer` (v8) — provides
-  `MandrillApiTransport`. The Symfony bridge for Mandrill is named after
-  Mailchimp because Mandrill is the Mailchimp Transactional product.
-
-### Key decisions
-- **No `MandrillMailService` for standard sends.** Laravel's `Mail` facade is
-  already the abstraction. A wrapper would be ceremony with no value.
-- **`Mail::extend` rather than a custom service provider class.** One method on
-  the existing `AppServiceProvider` is enough; no new file just to register a
-  transport.
-- **API key in `services.mandrill.key`, not `mail.mailers.mandrill.key`.**
-  Following the Laravel convention — `config/services.php` is the canonical
-  home for third-party credentials. The mailer config also reads it, but the
-  Service uses the services-namespaced key.
-- **Service throws `RuntimeException` on failure.** Lets callers decide whether
-  to log, queue-retry, or surface to the user. Reject/invalid statuses are
-  treated as failures because Mandrill returns HTTP 200 with `"status":
-  "rejected"` for things like a recipient on the suppression list — silently
-  letting that through would be worse than throwing.
-
-### Verification done
-- `php -l` on all four changed PHP files → no syntax errors.
-- `php artisan config:clear` → cache flushed.
-- `php artisan config:show mail.mailers.mandrill` → shows transport + key.
-- `php artisan config:show services.mandrill` → shows key.
-
-### Out of scope (not built)
-- New Mailables (existing `BookingEnquirySubmittedMail` etc. already cover
-  current flows).
-- Webhook handler for Mandrill bounce/spam events.
-- Suppression-list management UI.
-- Migration to `just-drive.co.uk` sending domain — happens before go-live, not
-  now.
+### Out of scope (deliberately not done)
+- Renaming the database column or the FormRequest fields.
+- Touching API resources or `.claude/api.md` (the API still accepts pence).
+- Modifying the Instructor "create bespoke package" path beyond what
+  `PackageForm.vue` shares — that path already uses the same form component.
+- Adding currency-input masking (e.g., always-two-decimals display while
+  typing). Browsers handle `step="0.01"` adequately for this admin tool.
 
 ## Phase 3: Reflection ✅
 
-**Why this shape is right for the brief:**
-- The user wanted to reuse the existing Mandrill setup from smartdriving for
-  testing. The smallest possible footprint to do that: add the transport
-  bridge, register it, set the env var. Total new code: one Service class
-  (~110 lines) for the one thing the transport can't do (template sends).
-- Existing Mailables stay untouched. Existing `Mail::send()` calls anywhere in
-  the codebase now route through Mandrill the moment `MAIL_MAILER=mandrill` is
-  set in `.env`.
+### What worked
+- Keeping `PackageFormData` (the emitted DTO) byte-identical meant zero
+  ripple into three different sheet consumers and three backend FormRequests.
+  The form-component became the only file that knows about the unit
+  conversion.
+- The model accessors (`formatted_total_price`, `formatted_lesson_price`)
+  meant the listing table already displayed in pounds — no display work.
+- The `Math.round(pounds * 100)` pattern is the standard guard for the
+  classic JS float problem (`5.55 * 100 === 554.9999...`). Worth keeping
+  even if the form mostly sees whole pounds.
 
-**Subtle decisions worth flagging:**
-- The Symfony package name (`symfony/mailchimp-mailer`) is non-obvious because
-  Mandrill rebranded to "Mailchimp Transactional Email" in 2020 but most
-  developers still call it Mandrill. The transport class itself is
-  `MandrillApiTransport`, which is why the config key stays as `mandrill`.
-- `Mail::extend()` is called in `boot()`, which runs after all providers are
-  registered. This is the correct lifecycle hook — the `MailManager` resolves
-  transports lazily on first `Mail::mailer('mandrill')` call, so the closure
-  doesn't fire until something actually tries to send.
-- `MandrillTemplateService::send()` returns the first recipient entry from
-  Mandrill's response array. Mandrill always returns an array (one entry per
-  recipient), but the Service is single-recipient by design — multi-recipient
-  blasts are a marketing concern and should use Mandrill's dashboard or a
-  proper campaign tool.
-- The Service uses `Http::acceptJson()->post(...)`. No retries configured —
-  callers that need retries should dispatch via a queued job
-  (`ShouldQueue` Mailable pattern handles this for transport sends already;
-  template-API sends would need their own job class if retry semantics matter).
+### Subtle decisions worth flagging
+- The internal state type `PackageFormState` is **not** exported. Only the
+  DTO type `PackageFormData` is exported — that's deliberate. Outside
+  callers must not see the pounds field; their interface is the integer
+  pence DTO.
+- The `|| 0` fallback in computeds guards against `undefined`/empty input
+  during typing — without it the user sees "£NaN" briefly while clearing
+  the field.
+- `step="0.01"` rather than `step="any"` so the browser spinner increments
+  by a penny, which matches the user's mental model.
 
-**Operational notes for the user:**
-- **`.env` must be set:** `MANDRILL_API_KEY=` needs the actual key from the
-  smartdriving Mandrill account. (User has already done this.)
-- **`MAIL_MAILER=mandrill`** must be flipped from `log` for actual sends to
-  happen. Leave on `log` for local dev to avoid burning API calls.
-- **`MAIL_FROM_ADDRESS`** should be set to
-  `noreply@mail.drivedrivingschool.co.uk` for testing, then changed to the
-  `just-drive.co.uk` (or subdomain) sending address before go-live.
-- **Before go-live on `just-drive.co.uk`:** add the new domain to Mandrill,
-  publish DKIM + SPF + Return-Path DNS records, verify in the Mandrill
-  dashboard, then update `MAIL_FROM_ADDRESS`.
-- **Calling Mandrill templates:** inject `MandrillTemplateService` into a
-  Controller/Service constructor and call
-  `$this->mandrill->send('template-slug', $email, ['VAR' => $value])`.
-
-**Out of scope (carried forward from Phase 1, NOT done):**
-- Webhook ingestion for delivery events / bounces / unsubscribes.
-- Suppression-list sync between Mandrill and the local users table.
-- Decision on consolidating Bird + Mandrill (deferred until pre-launch review).
-
-**Technical debt / follow-up not done:**
+### Technical debt / follow-ups (NOT done)
 - No tests added (project rule: user maintains tests manually).
-- No Pint formatting run (project rule: user handles code style).
+- No Pint / Prettier run (project rule: user handles code style).
+- The lesson-price helper line is **derived** in the UI (pounds ÷ lessons)
+  while the database also stores a computed `lesson_price_pence` via the
+  model's `saving` hook. These can diverge transiently while editing, but
+  the DB value is recalculated on save. Acceptable — pointing it out.
+
+### Score
+**Solution quality: 9/10.** Minimal, surgical change. Single file edited.
+No new abstractions, no parallel actions, no docs to update. One point off
+because a longer-term improvement would be a dedicated `<CurrencyInput>`
+component if more pence-vs-pounds form fields appear elsewhere in the app —
+but for one form, inlining the conversion is the right call.
 
 ---
 
 **Status:** All phases complete.
-**Last Updated:** 2026-05-15.
+**Last Updated:** 2026-06-17.
