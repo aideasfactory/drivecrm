@@ -107,31 +107,54 @@ class InstructorController extends Controller
             'open_enquiries' => 0, // TODO: Implement enquiries tracking
         ];
 
-        // Calculate booking hours from lessons
-        $currentWeekStart = Carbon::now()->startOfWeek();
-        $currentWeekEnd = Carbon::now()->endOfWeek();
-        $nextWeekStart = Carbon::now()->addWeek()->startOfWeek();
-        $nextWeekEnd = Carbon::now()->addWeek()->endOfWeek();
+        // Calculate booking hours across a rolling four-week window:
+        // current week + next three weeks. Buckets are built up-front, then
+        // a single lesson query is dropped into them in PHP — one DB
+        // round-trip instead of four.
+        $weekBuckets = [];
+        for ($offset = 0; $offset < 4; $offset++) {
+            $anchor = Carbon::now()->addWeeks($offset);
+            $start = $anchor->copy()->startOfWeek();
+            $end = $anchor->copy()->endOfWeek();
 
-        $currentWeekHours = Lesson::where('instructor_id', $instructor->id)
+            $weekBuckets[] = [
+                'label' => $offset === 0 ? 'Current Week' : 'Week of '.$start->format('j M'),
+                'start_date' => $start->toDateString(),
+                'end_date' => $end->toDateString(),
+                'hours' => 0.0,
+            ];
+        }
+
+        $windowStart = $weekBuckets[0]['start_date'];
+        $windowEnd = $weekBuckets[count($weekBuckets) - 1]['end_date'];
+
+        $lessons = Lesson::where('instructor_id', $instructor->id)
             ->whereNotIn('status', ['cancelled', 'draft'])
-            ->whereBetween('date', [$currentWeekStart->toDateString(), $currentWeekEnd->toDateString()])
+            ->whereBetween('date', [$windowStart, $windowEnd])
             ->whereNotNull('start_time')
             ->whereNotNull('end_time')
-            ->get()
-            ->sum(fn (Lesson $lesson) => Carbon::parse($lesson->start_time)->diffInMinutes(Carbon::parse($lesson->end_time)) / 60);
+            ->get();
 
-        $nextWeekHours = Lesson::where('instructor_id', $instructor->id)
-            ->whereNotIn('status', ['cancelled', 'draft'])
-            ->whereBetween('date', [$nextWeekStart->toDateString(), $nextWeekEnd->toDateString()])
-            ->whereNotNull('start_time')
-            ->whereNotNull('end_time')
-            ->get()
-            ->sum(fn (Lesson $lesson) => Carbon::parse($lesson->start_time)->diffInMinutes(Carbon::parse($lesson->end_time)) / 60);
+        foreach ($lessons as $lesson) {
+            $lessonDate = Carbon::parse($lesson->date)->toDateString();
+            $lessonHours = Carbon::parse($lesson->start_time)->diffInMinutes(Carbon::parse($lesson->end_time)) / 60;
+
+            foreach ($weekBuckets as $index => $bucket) {
+                if ($lessonDate >= $bucket['start_date'] && $lessonDate <= $bucket['end_date']) {
+                    $weekBuckets[$index]['hours'] += $lessonHours;
+                    break;
+                }
+            }
+        }
 
         $bookingHours = [
-            'current_week' => round($currentWeekHours, 1),
-            'next_week' => round($nextWeekHours, 1),
+            'weeks' => array_map(
+                fn (array $bucket) => [
+                    ...$bucket,
+                    'hours' => round($bucket['hours'], 1),
+                ],
+                $weekBuckets,
+            ),
         ];
 
         // Get locations

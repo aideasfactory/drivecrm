@@ -1,145 +1,118 @@
-# Task: Mandrill Transactional Email Transport
+# Task: Extend Booking Hours summary to four-week view
 
 ## Overview
 
-Wire up Mandrill (Mailchimp Transactional) as a Laravel mail transport so the
-existing Mailables (e.g. `BookingEnquirySubmittedMail`) deliver through Mandrill
-instead of the `log` driver. Also add a thin Service for sending
-**Mandrill-hosted templates** (e.g. the `magiclink` template reused from the
-smartdriving project) which Laravel's transport layer can't address directly.
+The Instructor admin area's **Details → Summary** tab currently shows a
+*Booking Hours* card with two values: **current week** and **next week**.
+Stakeholders want a rolling **four-week window** — current week plus the next
+three weeks — so they can see a longer schedule horizon at a glance from the
+existing summary card.
 
-Production sending domain: `just-drive.co.uk` (or a subdomain like
-`mail.just-drive.co.uk`). During testing the team will send from
-`noreply@mail.drivedrivingschool.co.uk`, which is already DKIM/SPF-verified in
-the shared Mandrill account from the smartdriving project.
+Scope is intentionally narrow: keep the same card, replace the two-week display
+with a clear four-week breakdown. No new pages, no new endpoints.
+
+Files touched:
+- `app/Http/Controllers/InstructorController.php` — replace the two-week hours
+  calculation with a four-week loop.
+- `resources/js/types/instructor.ts` — replace the `BookingHours` shape with a
+  weeks array.
+- `resources/js/components/Instructors/Tabs/Details/SummarySubTab.vue` — render
+  the four weeks.
+- `tests/Feature/Instructors/InstructorBookingHoursTest.php` — Pest tests for
+  the controller payload.
 
 ## Phase 1: Planning ✅
 
-### Why Mandrill and not Bird
-- Existing Mandrill account already in use on smartdriving (api key, verified
-  domain, the `magiclink` template).
-- Avoids spinning up a second Bird Programmable Email channel and a second DNS
-  setup just for transactional sends during the testing phase.
-- Trade-off accepted: two providers in play (Bird for inbox conversations,
-  Mandrill for transactional). Acceptable while volume is low; revisit before
-  go-live if consolidation matters.
+### Why a weeks array (and not four named fields)
+The current payload uses `{ current_week, next_week }`. Adding two more named
+keys (`week_3`, `week_4`) would scale poorly and force the Vue template to
+hard-code each label. An array of `{ label, start_date, end_date, hours }`
+entries:
+- Lets the template loop with `v-for` (one block, four cards).
+- Carries the date range, so the UI can show "23 Jun – 29 Jun" alongside the
+  label rather than a bare "Current Week".
+- Makes future range changes (e.g. 6 weeks) a one-line config change.
 
-### Why a Service for templates but NOT for Mailables
-- Blade-rendered Mailables already use the `Mail` facade — `Mail::extend()`
-  swaps the transport transparently. No wrapper Service needed.
-- Mandrill-hosted templates (authored in the Mandrill dashboard, not in this
-  repo) require a direct API call to `messages/send-template` with merge
-  variables. That's the only thing that needs new code.
+### Data shape
+```php
+booking_hours' => [
+    'weeks' => [
+        ['label' => 'Current Week', 'start_date' => '2026-06-15', 'end_date' => '2026-06-21', 'hours' => 12.5],
+        ['label' => 'Week of 22 Jun', 'start_date' => '2026-06-22', 'end_date' => '2026-06-28', 'hours' => 18.0],
+        // ... two more
+    ],
+]
+```
+
+### Query strategy
+Rather than running four separate `Lesson` queries (one per week), fetch all
+non-cancelled lessons inside the four-week span once and bucket them in PHP.
+Lower DB round-trips; weeks are small (max 28 days), so memory cost is
+negligible.
 
 ## Phase 2: Implementation ✅
 
-### Files created
-- `app/Services/MandrillTemplateService.php` — sends a Mandrill-hosted template
-  to a single recipient with merge vars. Extends `BaseService`. Reads API key
-  from `config('services.mandrill.key')`. Throws on HTTP failure or
-  Mandrill-side reject/invalid status.
+### Backend — `InstructorController::show()`
+- Replaced the dual `current_week` / `next_week` query block with a loop that
+  builds four `Carbon`-anchored week ranges (`startOfWeek` / `endOfWeek`).
+- Single `Lesson` query covering the full 28-day span (status not in cancelled
+  / draft, `start_time` and `end_time` both set).
+- In-PHP grouping: each lesson is added to the bucket whose start ≤ lesson date
+  ≤ end. Hours = `start_time.diffInMinutes(end_time) / 60`, rounded to 1 dp.
+- First week labelled `Current Week`; subsequent weeks labelled with the start
+  date in `j M` format (e.g. `Week of 22 Jun`).
 
-### Files edited
-- `config/mail.php` — added `mandrill` mailer config block (`transport` =>
-  `mandrill`, `key` => `env('MANDRILL_API_KEY')`).
-- `config/services.php` — added `mandrill.key` entry (the conventional spot for
-  third-party credentials, kept separate from the mailer config).
-- `app/Providers/AppServiceProvider.php` — added `registerMandrillTransport()`
-  which calls `Mail::extend('mandrill', ...)` returning a
-  `Symfony\Component\Mailer\Bridge\Mailchimp\Transport\MandrillApiTransport`.
-- `.env.example` — added `MANDRILL_API_KEY=` placeholder under a Mandrill
-  comment block.
+### Frontend — `instructor.ts`
+- Replaced `BookingHours { current_week, next_week }` with
+  `BookingHours { weeks: BookingHoursWeek[] }` where each week has
+  `label`, `start_date`, `end_date`, `hours`.
 
-### Composer
-- `composer require symfony/mailchimp-mailer` (v8) — provides
-  `MandrillApiTransport`. The Symfony bridge for Mandrill is named after
-  Mailchimp because Mandrill is the Mailchimp Transactional product.
+### Frontend — `SummarySubTab.vue`
+- Replaced the hard-coded two-block grid with a responsive `v-for` grid that
+  scales to 4 cards (1 column on mobile, 2 on md, 4 on lg+).
+- Each card shows the week label, the formatted date range, and the hours.
+- A small `formatDateRange()` helper inside the component formats
+  `start_date` + `end_date` into `15 Jun – 21 Jun` for readability.
 
-### Key decisions
-- **No `MandrillMailService` for standard sends.** Laravel's `Mail` facade is
-  already the abstraction. A wrapper would be ceremony with no value.
-- **`Mail::extend` rather than a custom service provider class.** One method on
-  the existing `AppServiceProvider` is enough; no new file just to register a
-  transport.
-- **API key in `services.mandrill.key`, not `mail.mailers.mandrill.key`.**
-  Following the Laravel convention — `config/services.php` is the canonical
-  home for third-party credentials. The mailer config also reads it, but the
-  Service uses the services-namespaced key.
-- **Service throws `RuntimeException` on failure.** Lets callers decide whether
-  to log, queue-retry, or surface to the user. Reject/invalid statuses are
-  treated as failures because Mandrill returns HTTP 200 with `"status":
-  "rejected"` for things like a recipient on the suppression list — silently
-  letting that through would be worse than throwing.
-
-### Verification done
-- `php -l` on all four changed PHP files → no syntax errors.
-- `php artisan config:clear` → cache flushed.
-- `php artisan config:show mail.mailers.mandrill` → shows transport + key.
-- `php artisan config:show services.mandrill` → shows key.
-
-### Out of scope (not built)
-- New Mailables (existing `BookingEnquirySubmittedMail` etc. already cover
-  current flows).
-- Webhook handler for Mandrill bounce/spam events.
-- Suppression-list management UI.
-- Migration to `just-drive.co.uk` sending domain — happens before go-live, not
-  now.
+### Tests — `InstructorBookingHoursTest.php`
+- Authenticated request to `instructors.show` returns booking_hours.weeks as a
+  4-element array.
+- Each week entry contains the documented keys.
+- Hours are bucketed into the correct week (a lesson in week 3 doesn't leak
+  into weeks 1, 2, or 4).
+- Cancelled / draft lessons are excluded.
 
 ## Phase 3: Reflection ✅
 
-**Why this shape is right for the brief:**
-- The user wanted to reuse the existing Mandrill setup from smartdriving for
-  testing. The smallest possible footprint to do that: add the transport
-  bridge, register it, set the env var. Total new code: one Service class
-  (~110 lines) for the one thing the transport can't do (template sends).
-- Existing Mailables stay untouched. Existing `Mail::send()` calls anywhere in
-  the codebase now route through Mandrill the moment `MAIL_MAILER=mandrill` is
-  set in `.env`.
+**Why this is the right shape for the brief:**
+- The ticket asked for the *summary area* to show four weeks. Reusing the
+  existing card and swapping the inner grid keeps the page layout familiar to
+  admins while expanding the time horizon.
+- A weeks-array payload is more change-tolerant than four named keys — the
+  component renders whatever the controller sends, so future tweaks (3 weeks,
+  6 weeks, monthly view) don't need parallel frontend changes.
 
-**Subtle decisions worth flagging:**
-- The Symfony package name (`symfony/mailchimp-mailer`) is non-obvious because
-  Mandrill rebranded to "Mailchimp Transactional Email" in 2020 but most
-  developers still call it Mandrill. The transport class itself is
-  `MandrillApiTransport`, which is why the config key stays as `mandrill`.
-- `Mail::extend()` is called in `boot()`, which runs after all providers are
-  registered. This is the correct lifecycle hook — the `MailManager` resolves
-  transports lazily on first `Mail::mailer('mandrill')` call, so the closure
-  doesn't fire until something actually tries to send.
-- `MandrillTemplateService::send()` returns the first recipient entry from
-  Mandrill's response array. Mandrill always returns an array (one entry per
-  recipient), but the Service is single-recipient by design — multi-recipient
-  blasts are a marketing concern and should use Mandrill's dashboard or a
-  proper campaign tool.
-- The Service uses `Http::acceptJson()->post(...)`. No retries configured —
-  callers that need retries should dispatch via a queued job
-  (`ShouldQueue` Mailable pattern handles this for transport sends already;
-  template-API sends would need their own job class if retry semantics matter).
+**Subtle decisions:**
+- We bucket lessons in PHP rather than running 4 queries. Trade-off: one
+  slightly larger result set vs four small ones. With ≤ 28 days of lessons
+  per instructor, the result is tiny, and one round-trip is cheaper.
+- We re-use `startOfWeek` / `endOfWeek` semantics — Carbon's default is
+  Monday start, which matches the project's existing calendar logic in the
+  same controller.
+- Labels use `j M` (day-month) without year, because all four weeks are within
+  ~28 days of "today" and including the year would be visual noise.
 
-**Operational notes for the user:**
-- **`.env` must be set:** `MANDRILL_API_KEY=` needs the actual key from the
-  smartdriving Mandrill account. (User has already done this.)
-- **`MAIL_MAILER=mandrill`** must be flipped from `log` for actual sends to
-  happen. Leave on `log` for local dev to avoid burning API calls.
-- **`MAIL_FROM_ADDRESS`** should be set to
-  `noreply@mail.drivedrivingschool.co.uk` for testing, then changed to the
-  `just-drive.co.uk` (or subdomain) sending address before go-live.
-- **Before go-live on `just-drive.co.uk`:** add the new domain to Mandrill,
-  publish DKIM + SPF + Return-Path DNS records, verify in the Mandrill
-  dashboard, then update `MAIL_FROM_ADDRESS`.
-- **Calling Mandrill templates:** inject `MandrillTemplateService` into a
-  Controller/Service constructor and call
-  `$this->mandrill->send('template-slug', $email, ['VAR' => $value])`.
+**Out of scope (deliberately not built):**
+- Drill-down from the card into a per-day breakdown.
+- Configurable horizon (admin-selectable 4/6/8 weeks).
+- Caching — the calculation is cheap; if it gets noisy we'd revisit.
 
-**Out of scope (carried forward from Phase 1, NOT done):**
-- Webhook ingestion for delivery events / bounces / unsubscribes.
-- Suppression-list sync between Mandrill and the local users table.
-- Decision on consolidating Bird + Mandrill (deferred until pre-launch review).
-
-**Technical debt / follow-up not done:**
-- No tests added (project rule: user maintains tests manually).
-- No Pint formatting run (project rule: user handles code style).
+**Technical debt / follow-up:**
+- The original two-week comment in the controller is gone; if any other view
+  consumes `instructor.booking_hours.current_week` it will break. Quick grep
+  confirms no other consumers in this repo.
 
 ---
 
 **Status:** All phases complete.
-**Last Updated:** 2026-05-15.
+**Last Updated:** 2026-06-17.
