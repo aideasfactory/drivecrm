@@ -1,145 +1,107 @@
-# Task: Mandrill Transactional Email Transport
+# Task: Remove "Both" from booking transmission dropdown
 
 ## Overview
 
-Wire up Mandrill (Mailchimp Transactional) as a Laravel mail transport so the
-existing Mailables (e.g. `BookingEnquirySubmittedMail`) deliver through Mandrill
-instead of the `log` driver. Also add a thin Service for sending
-**Mandrill-hosted templates** (e.g. the `magiclink` template reused from the
-smartdriving project) which Laravel's transport layer can't address directly.
+The public-facing booking form at `/booking` currently lets a prospect pick
+"Manual", "Automatic" or "Both" as a transmission preference. The "Both" option
+should be removed from the UI and rejected by the form-request validation so a
+prospect cannot submit `transmission=both` through the booking flow.
 
-Production sending domain: `just-drive.co.uk` (or a subdomain like
-`mail.just-drive.co.uk`). During testing the team will send from
-`noreply@mail.drivedrivingschool.co.uk`, which is already DKIM/SPF-verified in
-the shared Mandrill account from the smartdriving project.
+Scope is the public booking form **only**. The internal instructor-management
+UI (admin/AddInstructorSheet) still uses `both` to describe instructors who can
+teach either gearbox — that is a different concept and stays untouched.
+Historical Enquiry rows that already hold `transmission=both` keep their value
+and their existing display labels (`Either / no preference` in admin email,
+`Either` in the Enquiries index).
 
 ## Phase 1: Planning ✅
 
-### Why Mandrill and not Bird
-- Existing Mandrill account already in use on smartdriving (api key, verified
-  domain, the `magiclink` template).
-- Avoids spinning up a second Bird Programmable Email channel and a second DNS
-  setup just for transactional sends during the testing phase.
-- Trade-off accepted: two providers in play (Bird for inbox conversations,
-  Mandrill for transactional). Acceptable while volume is low; revisit before
-  go-live if consolidation matters.
+### Files that need changing
+- `resources/js/pages/Booking/Step1.vue` — remove the `<option value="both">`
+  from the transmission `<select>` so it can never appear in the UI.
+- `app/Http/Requests/Booking/StepOneRequest.php` — drop `both` from the
+  `in:manual,automatic,both` validation rule so a hand-crafted POST also fails
+  server-side.
 
-### Why a Service for templates but NOT for Mailables
-- Blade-rendered Mailables already use the `Mail` facade — `Mail::extend()`
-  swaps the transport transparently. No wrapper Service needed.
-- Mandrill-hosted templates (authored in the Mandrill dashboard, not in this
-  repo) require a direct API call to `messages/send-template` with merge
-  variables. That's the only thing that needs new code.
+### Files deliberately NOT changed (and why)
+- `config/booking.php` — still maps `both => BOOKING_INSTRUCTOR_BOTH_ID`. Kept
+  because instructors are still tagged `both` internally and the admin team may
+  still create historical/manual enquiries via other tooling. No code path
+  reaches it from the public form once both is removed from the validator.
+- `app/Http/Controllers/Booking/StepTwoController.php` — `$step1Data['transmission'] ?? 'both'`
+  fallback stays. It only kicks in for malformed step-1 data and is harmless;
+  changing it is out of scope (defensive code for an internal flow).
+- `app/Mail/BookingEnquirySubmittedMail.php` — `transmissionLabel()` keeps the
+  `'both' => 'Either / no preference'` branch so historical enquiries display
+  correctly in admin emails.
+- `resources/js/pages/Enquiries/Index.vue` — same reason as above: keeps
+  rendering historical `both` rows correctly.
+- `resources/js/components/Instructors/AddInstructorSheet.vue` — internal
+  instructor management, out of scope for the booking-form ticket.
+- TypeScript instructor types — describe instructor capability, not booking
+  preference; unchanged.
+
+### Risks / things to watch
+- Existing Enquiries in the DB with `transmission=both` must still render — the
+  display-side label mappings stay intact, so they will.
+- `StepTwoController::resolveInstructorId('both')` is unreachable from the
+  public form post-change but still works if called directly. No regression.
 
 ## Phase 2: Implementation ✅
 
-### Files created
-- `app/Services/MandrillTemplateService.php` — sends a Mandrill-hosted template
-  to a single recipient with merge vars. Extends `BaseService`. Reads API key
-  from `config('services.mandrill.key')`. Throws on HTTP failure or
-  Mandrill-side reject/invalid status.
+- [x] Removed `<option value="both">Both</option>` from
+      `resources/js/pages/Booking/Step1.vue` (line 228 in the original file).
+- [x] Updated `StepOneRequest::rules()` so `transmission` is
+      `['required', 'in:manual,automatic']`. The existing custom error message
+      `transmission.in => 'Please choose a transmission preference'` stays
+      correct because it doesn't enumerate the allowed values.
 
-### Files edited
-- `config/mail.php` — added `mandrill` mailer config block (`transport` =>
-  `mandrill`, `key` => `env('MANDRILL_API_KEY')`).
-- `config/services.php` — added `mandrill.key` entry (the conventional spot for
-  third-party credentials, kept separate from the mailer config).
-- `app/Providers/AppServiceProvider.php` — added `registerMandrillTransport()`
-  which calls `Mail::extend('mandrill', ...)` returning a
-  `Symfony\Component\Mailer\Bridge\Mailchimp\Transport\MandrillApiTransport`.
-- `.env.example` — added `MANDRILL_API_KEY=` placeholder under a Mandrill
-  comment block.
-
-### Composer
-- `composer require symfony/mailchimp-mailer` (v8) — provides
-  `MandrillApiTransport`. The Symfony bridge for Mandrill is named after
-  Mailchimp because Mandrill is the Mailchimp Transactional product.
-
-### Key decisions
-- **No `MandrillMailService` for standard sends.** Laravel's `Mail` facade is
-  already the abstraction. A wrapper would be ceremony with no value.
-- **`Mail::extend` rather than a custom service provider class.** One method on
-  the existing `AppServiceProvider` is enough; no new file just to register a
-  transport.
-- **API key in `services.mandrill.key`, not `mail.mailers.mandrill.key`.**
-  Following the Laravel convention — `config/services.php` is the canonical
-  home for third-party credentials. The mailer config also reads it, but the
-  Service uses the services-namespaced key.
-- **Service throws `RuntimeException` on failure.** Lets callers decide whether
-  to log, queue-retry, or surface to the user. Reject/invalid statuses are
-  treated as failures because Mandrill returns HTTP 200 with `"status":
-  "rejected"` for things like a recipient on the suppression list — silently
-  letting that through would be worse than throwing.
-
-### Verification done
-- `php -l` on all four changed PHP files → no syntax errors.
-- `php artisan config:clear` → cache flushed.
-- `php artisan config:show mail.mailers.mandrill` → shows transport + key.
-- `php artisan config:show services.mandrill` → shows key.
-
-### Out of scope (not built)
-- New Mailables (existing `BookingEnquirySubmittedMail` etc. already cover
-  current flows).
-- Webhook handler for Mandrill bounce/spam events.
-- Suppression-list management UI.
-- Migration to `just-drive.co.uk` sending domain — happens before go-live, not
-  now.
+### Verification of intent
+- Existing default in Step1.vue (`transmission: existingData.transmission || 'manual'`)
+  is unchanged — a user landing on the form with no prior data now sees Manual
+  pre-selected, which still maps to a valid option.
+- The dropdown is `required`, so an explicit empty selection is already
+  prevented by the browser. With `both` removed, the only submittable values
+  are `manual` and `automatic`.
+- If a prospect had picked `both` in a previous session and the form is
+  rehydrating from `existingData`, the `<select>`'s v-model will hold a value
+  with no matching `<option>`, so the field renders blank and the prospect
+  must choose again — desired behaviour, since `both` is no longer offered.
 
 ## Phase 3: Reflection ✅
 
-**Why this shape is right for the brief:**
-- The user wanted to reuse the existing Mandrill setup from smartdriving for
-  testing. The smallest possible footprint to do that: add the transport
-  bridge, register it, set the env var. Total new code: one Service class
-  (~110 lines) for the one thing the transport can't do (template sends).
-- Existing Mailables stay untouched. Existing `Mail::send()` calls anywhere in
-  the codebase now route through Mandrill the moment `MAIL_MAILER=mandrill` is
-  set in `.env`.
+### What went well
+- Tight, two-file change that matches the brief exactly. No collateral
+  refactor of related concepts (instructor capability tagging,
+  historical-display labels) that share the `both` literal but aren't part of
+  the public booking surface.
 
-**Subtle decisions worth flagging:**
-- The Symfony package name (`symfony/mailchimp-mailer`) is non-obvious because
-  Mandrill rebranded to "Mailchimp Transactional Email" in 2020 but most
-  developers still call it Mandrill. The transport class itself is
-  `MandrillApiTransport`, which is why the config key stays as `mandrill`.
-- `Mail::extend()` is called in `boot()`, which runs after all providers are
-  registered. This is the correct lifecycle hook — the `MailManager` resolves
-  transports lazily on first `Mail::mailer('mandrill')` call, so the closure
-  doesn't fire until something actually tries to send.
-- `MandrillTemplateService::send()` returns the first recipient entry from
-  Mandrill's response array. Mandrill always returns an array (one entry per
-  recipient), but the Service is single-recipient by design — multi-recipient
-  blasts are a marketing concern and should use Mandrill's dashboard or a
-  proper campaign tool.
-- The Service uses `Http::acceptJson()->post(...)`. No retries configured —
-  callers that need retries should dispatch via a queued job
-  (`ShouldQueue` Mailable pattern handles this for transport sends already;
-  template-API sends would need their own job class if retry semantics matter).
+### Subtle decisions worth flagging
+- **Left `config/booking.php`'s `'both' => instructor_id` mapping in place.**
+  The public form can no longer submit `both`, so that branch is unreachable
+  from the booking flow. Removing it would have been a tidy-up beyond the
+  ticket's scope and would risk breaking any internal tooling that still
+  treats `both` as a valid instructor bucket.
+- **Left the `transmissionLabel()` mappings in `BookingEnquirySubmittedMail`
+  and `Enquiries/Index.vue` intact.** Historical enquiries with
+  `transmission=both` keep rendering as "Either / no preference" / "Either".
+- **Did not touch the instructor-management form
+  (`AddInstructorSheet.vue`).** That dropdown describes which gearboxes an
+  instructor can teach — a capability flag, not a booking preference. The
+  ticket scope is explicitly the `/booking` form.
+- **Did not delete the `'both' => 'Either / no preference'` row from the
+  mail label map.** Without it, historical enquiries would render an empty
+  cell in the admin email.
 
-**Operational notes for the user:**
-- **`.env` must be set:** `MANDRILL_API_KEY=` needs the actual key from the
-  smartdriving Mandrill account. (User has already done this.)
-- **`MAIL_MAILER=mandrill`** must be flipped from `log` for actual sends to
-  happen. Leave on `log` for local dev to avoid burning API calls.
-- **`MAIL_FROM_ADDRESS`** should be set to
-  `noreply@mail.drivedrivingschool.co.uk` for testing, then changed to the
-  `just-drive.co.uk` (or subdomain) sending address before go-live.
-- **Before go-live on `just-drive.co.uk`:** add the new domain to Mandrill,
-  publish DKIM + SPF + Return-Path DNS records, verify in the Mandrill
-  dashboard, then update `MAIL_FROM_ADDRESS`.
-- **Calling Mandrill templates:** inject `MandrillTemplateService` into a
-  Controller/Service constructor and call
-  `$this->mandrill->send('template-slug', $email, ['VAR' => $value])`.
-
-**Out of scope (carried forward from Phase 1, NOT done):**
-- Webhook ingestion for delivery events / bounces / unsubscribes.
-- Suppression-list sync between Mandrill and the local users table.
-- Decision on consolidating Bird + Mandrill (deferred until pre-launch review).
-
-**Technical debt / follow-up not done:**
+### Out of scope / follow-up
 - No tests added (project rule: user maintains tests manually).
-- No Pint formatting run (project rule: user handles code style).
+- No Pint / lint run (project rule: user handles style).
+- If the team later decides `both` should never appear anywhere in the
+  product, a follow-up ticket should: drop the `both` config key, prune the
+  display-side label branches, and consider a data migration to remap any
+  remaining `transmission=both` enquiries to a chosen default.
 
 ---
 
 **Status:** All phases complete.
-**Last Updated:** 2026-05-15.
+**Last Updated:** 2026-06-17.
