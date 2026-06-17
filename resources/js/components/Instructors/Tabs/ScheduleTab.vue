@@ -21,6 +21,7 @@ import {
     BookOpen,
     Flag,
     Save,
+    PoundSterling,
 } from 'lucide-vue-next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -233,6 +234,13 @@ const startTimeOptions = computed(() => {
 /** Normalise "HH:MM:SS" or "HH:MM" → "HH:MM" */
 const normaliseTime = (t: string): string => t.substring(0, 5)
 
+const formatCurrency = (pence: number): string => {
+    return new Intl.NumberFormat('en-GB', {
+        style: 'currency',
+        currency: 'GBP',
+    }).format(pence / 100)
+}
+
 const timeToMinutes = (time: string): number => {
     const [h, m] = time.split(':').map(Number)
     return h * 60 + m
@@ -363,6 +371,7 @@ async function loadCalendarRange(startDate: string, endDate: string) {
                     order_id: item.order_id ?? null,
                     future_siblings_count: item.future_siblings_count ?? 0,
                     mileage: item.mileage ?? null,
+                    amount_pence: item.amount_pence ?? null,
                     summary: item.summary ?? null,
                     reflective_log: item.reflective_log ?? null,
                     recurrence_pattern: item.recurrence_pattern ?? 'none',
@@ -1197,6 +1206,14 @@ onMounted(() => {
                         <p class="text-sm text-muted-foreground">
                             <strong>Time:</strong> {{ editForm.start_time }} - {{ editForm.end_time }}
                         </p>
+                    </div>
+
+                    <!-- Lesson Cost -->
+                    <div v-if="itemsMap.get(editForm.id)?.amount_pence != null" class="space-y-1">
+                        <p class="text-sm font-medium flex items-center gap-1.5">
+                            <PoundSterling class="h-4 w-4" /> Lesson Cost
+                        </p>
+                        <p class="text-sm text-muted-foreground">{{ formatCurrency(itemsMap.get(editForm.id)!.amount_pence!) }}</p>
                     </div>
 
                     <!-- Summary (instructor sign-off notes) -->

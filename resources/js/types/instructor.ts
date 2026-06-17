@@ -138,6 +138,7 @@ export interface CalendarItemResponse {
   order_id: number | null
   future_siblings_count: number
   mileage: number | null
+  amount_pence: number | null
   summary: string | null
   reflective_log: ReflectiveLogData | null
   recurrence_pattern: RecurrencePattern

@@ -1,145 +1,121 @@
-# Task: Mandrill Transactional Email Transport
+# Task: Show lesson cost in signed-off lesson summary
 
 ## Overview
 
-Wire up Mandrill (Mailchimp Transactional) as a Laravel mail transport so the
-existing Mailables (e.g. `BookingEnquirySubmittedMail`) deliver through Mandrill
-instead of the `log` driver. Also add a thin Service for sending
-**Mandrill-hosted templates** (e.g. the `magiclink` template reused from the
-smartdriving project) which Laravel's transport layer can't address directly.
+When an instructor signs off a student's lesson, the lesson is marked complete
+and a summary becomes viewable. Currently the summary view shows the lesson
+date, time, and the instructor's written summary — but not the lesson cost.
+This task adds the lesson cost (formatted as GBP) to every place a signed-off
+lesson summary is shown.
 
-Production sending domain: `just-drive.co.uk` (or a subdomain like
-`mail.just-drive.co.uk`). During testing the team will send from
-`noreply@mail.drivedrivingschool.co.uk`, which is already DKIM/SPF-verified in
-the shared Mandrill account from the smartdriving project.
+## Locations identified
+
+1. **Primary — "View Summary" Dialog** (`LessonsSubTab.vue`)
+   - Button: `View Summary` appears for `status === 'completed' && summary` lessons.
+   - Dialog opens via `openViewSummary(lesson)` and shows date, time and summary text.
+   - `lesson.amount_pence` is already in the data model — only the UI needs updating.
+
+2. **Secondary — Schedule "Completed lesson view"** (`ScheduleTab.vue`)
+   - When an instructor opens a completed calendar item, a side sheet shows
+     "Lesson Summary" inline. This is the same signed-off summary in a different
+     surface. The user asked for cost to be visible "wherever View summary is
+     shown" — same intent applies here.
+   - The calendar item payload from `GetInstructorCalendarAction` does NOT
+     currently include `amount_pence`, so the backend action + TS interface
+     also need a one-field addition.
 
 ## Phase 1: Planning ✅
 
-### Why Mandrill and not Bird
-- Existing Mandrill account already in use on smartdriving (api key, verified
-  domain, the `magiclink` template).
-- Avoids spinning up a second Bird Programmable Email channel and a second DNS
-  setup just for transactional sends during the testing phase.
-- Trade-off accepted: two providers in play (Bird for inbox conversations,
-  Mandrill for transactional). Acceptable while volume is low; revisit before
-  go-live if consolidation matters.
+### What needs to change
 
-### Why a Service for templates but NOT for Mailables
-- Blade-rendered Mailables already use the `Mail` facade — `Mail::extend()`
-  swaps the transport transparently. No wrapper Service needed.
-- Mandrill-hosted templates (authored in the Mandrill dashboard, not in this
-  repo) require a direct API call to `messages/send-template` with merge
-  variables. That's the only thing that needs new code.
+**Frontend:**
+- `resources/js/components/Instructors/Tabs/Student/LessonsSubTab.vue`
+  - Render `formatCurrency(viewSummaryTarget.amount_pence)` in the View Summary
+    Dialog as a labelled "Cost" row above the summary body.
+- `resources/js/components/Instructors/Tabs/ScheduleTab.vue`
+  - In the "Completed lesson view" panel, render the lesson cost using the
+    `amount_pence` field that we'll add to `CalendarItemResponse`.
+- `resources/js/types/instructor.ts`
+  - Add `amount_pence?: number | null` to `CalendarItemResponse`.
+
+**Backend:**
+- `app/Actions/Instructor/GetInstructorCalendarAction.php`
+  - In the mapped item array (within the `BOOKED || COMPLETED` lesson branch),
+    expose `amount_pence` from `$lesson->amount_pence`.
+
+### Why this scope
+
+- `LessonsSubTab.vue` is the page the requirement explicitly references
+  ("click View summary"). Cost is already in the payload — UI-only change.
+- `ScheduleTab.vue` shows the same signed-off summary on a different surface,
+  so the requirement carries over. Backend exposes a single field; no new
+  endpoints, no migrations.
+
+### Out of scope
+
+- Multi-currency formatting (formatter is GBP-only — matches the existing
+  `formatCurrency()` helper in `LessonsSubTab.vue`).
+- VAT or tax breakdown (the lesson cost stored on the lesson is the customer
+  price; payout breakdowns live elsewhere).
+- New permissions / RBAC checks (the user reaching this dialog already passed
+  the instructor scoping middleware).
 
 ## Phase 2: Implementation ✅
 
-### Files created
-- `app/Services/MandrillTemplateService.php` — sends a Mandrill-hosted template
-  to a single recipient with merge vars. Extends `BaseService`. Reads API key
-  from `config('services.mandrill.key')`. Throws on HTTP failure or
-  Mandrill-side reject/invalid status.
-
 ### Files edited
-- `config/mail.php` — added `mandrill` mailer config block (`transport` =>
-  `mandrill`, `key` => `env('MANDRILL_API_KEY')`).
-- `config/services.php` — added `mandrill.key` entry (the conventional spot for
-  third-party credentials, kept separate from the mailer config).
-- `app/Providers/AppServiceProvider.php` — added `registerMandrillTransport()`
-  which calls `Mail::extend('mandrill', ...)` returning a
-  `Symfony\Component\Mailer\Bridge\Mailchimp\Transport\MandrillApiTransport`.
-- `.env.example` — added `MANDRILL_API_KEY=` placeholder under a Mandrill
-  comment block.
 
-### Composer
-- `composer require symfony/mailchimp-mailer` (v8) — provides
-  `MandrillApiTransport`. The Symfony bridge for Mandrill is named after
-  Mailchimp because Mandrill is the Mailchimp Transactional product.
+- `resources/js/components/Instructors/Tabs/Student/LessonsSubTab.vue`
+  - Added a "Cost" line inside the `View Summary` Dialog, rendered with the
+    existing `formatCurrency(viewSummaryTarget.amount_pence)` helper.
+- `resources/js/components/Instructors/Tabs/ScheduleTab.vue`
+  - Added a "Cost" line in the "Completed lesson view" panel, rendered with the
+    existing `formatCurrency()` helper, guarded on `amount_pence != null`.
+- `resources/js/types/instructor.ts`
+  - Added `amount_pence: number | null` to `CalendarItemResponse`.
+- `app/Actions/Instructor/GetInstructorCalendarAction.php`
+  - Captured `$lesson->amount_pence` and included it in the mapped item payload
+    so the Schedule view has the value to render.
 
 ### Key decisions
-- **No `MandrillMailService` for standard sends.** Laravel's `Mail` facade is
-  already the abstraction. A wrapper would be ceremony with no value.
-- **`Mail::extend` rather than a custom service provider class.** One method on
-  the existing `AppServiceProvider` is enough; no new file just to register a
-  transport.
-- **API key in `services.mandrill.key`, not `mail.mailers.mandrill.key`.**
-  Following the Laravel convention — `config/services.php` is the canonical
-  home for third-party credentials. The mailer config also reads it, but the
-  Service uses the services-namespaced key.
-- **Service throws `RuntimeException` on failure.** Lets callers decide whether
-  to log, queue-retry, or surface to the user. Reject/invalid statuses are
-  treated as failures because Mandrill returns HTTP 200 with `"status":
-  "rejected"` for things like a recipient on the suppression list — silently
-  letting that through would be worse than throwing.
 
-### Verification done
-- `php -l` on all four changed PHP files → no syntax errors.
-- `php artisan config:clear` → cache flushed.
-- `php artisan config:show mail.mailers.mandrill` → shows transport + key.
-- `php artisan config:show services.mandrill` → shows key.
+- **Reused `formatCurrency`** in both files — these are existing local helpers
+  already used elsewhere in the same component for the lessons table and
+  sign-off sheet. Consistency over adding a new shared util.
+- **Labelled "Cost"** rather than "Price" or "Amount" — matches user wording.
+- **Cost row placed at the top of the dialog body**, before the summary text,
+  so it reads naturally with the date/time already in the DialogDescription.
+- **Backend change is one line in one mapper** — no new resource class, no new
+  endpoint. The existing payload shape is the right place to surface this
+  because `summary` already lives on the same response.
 
-### Out of scope (not built)
-- New Mailables (existing `BookingEnquirySubmittedMail` etc. already cover
-  current flows).
-- Webhook handler for Mandrill bounce/spam events.
-- Suppression-list management UI.
-- Migration to `just-drive.co.uk` sending domain — happens before go-live, not
-  now.
+### Files created
+- `results.md` — client-facing summary of what was delivered with a confidence
+  score.
 
 ## Phase 3: Reflection ✅
 
 **Why this shape is right for the brief:**
-- The user wanted to reuse the existing Mandrill setup from smartdriving for
-  testing. The smallest possible footprint to do that: add the transport
-  bridge, register it, set the env var. Total new code: one Service class
-  (~110 lines) for the one thing the transport can't do (template sends).
-- Existing Mailables stay untouched. Existing `Mail::send()` calls anywhere in
-  the codebase now route through Mandrill the moment `MAIL_MAILER=mandrill` is
-  set in `.env`.
+- The cost is already on `Lesson::amount_pence` and already in the lessons list
+  response. The View Summary dialog was the one surface that omitted it.
+- For the Schedule surface, the smallest change is one field in one mapper +
+  one line in the Vue template. No new model, action, route, or resource.
 
-**Subtle decisions worth flagging:**
-- The Symfony package name (`symfony/mailchimp-mailer`) is non-obvious because
-  Mandrill rebranded to "Mailchimp Transactional Email" in 2020 but most
-  developers still call it Mandrill. The transport class itself is
-  `MandrillApiTransport`, which is why the config key stays as `mandrill`.
-- `Mail::extend()` is called in `boot()`, which runs after all providers are
-  registered. This is the correct lifecycle hook — the `MailManager` resolves
-  transports lazily on first `Mail::mailer('mandrill')` call, so the closure
-  doesn't fire until something actually tries to send.
-- `MandrillTemplateService::send()` returns the first recipient entry from
-  Mandrill's response array. Mandrill always returns an array (one entry per
-  recipient), but the Service is single-recipient by design — multi-recipient
-  blasts are a marketing concern and should use Mandrill's dashboard or a
-  proper campaign tool.
-- The Service uses `Http::acceptJson()->post(...)`. No retries configured —
-  callers that need retries should dispatch via a queued job
-  (`ShouldQueue` Mailable pattern handles this for transport sends already;
-  template-API sends would need their own job class if retry semantics matter).
+**Operational notes:**
+- No DB migration needed. No API contract change beyond a single optional
+  field on the calendar item payload.
+- No regression risk for callers that don't read `amount_pence` — adding a
+  field to an object payload is backward compatible.
 
-**Operational notes for the user:**
-- **`.env` must be set:** `MANDRILL_API_KEY=` needs the actual key from the
-  smartdriving Mandrill account. (User has already done this.)
-- **`MAIL_MAILER=mandrill`** must be flipped from `log` for actual sends to
-  happen. Leave on `log` for local dev to avoid burning API calls.
-- **`MAIL_FROM_ADDRESS`** should be set to
-  `noreply@mail.drivedrivingschool.co.uk` for testing, then changed to the
-  `just-drive.co.uk` (or subdomain) sending address before go-live.
-- **Before go-live on `just-drive.co.uk`:** add the new domain to Mandrill,
-  publish DKIM + SPF + Return-Path DNS records, verify in the Mandrill
-  dashboard, then update `MAIL_FROM_ADDRESS`.
-- **Calling Mandrill templates:** inject `MandrillTemplateService` into a
-  Controller/Service constructor and call
-  `$this->mandrill->send('template-slug', $email, ['VAR' => $value])`.
-
-**Out of scope (carried forward from Phase 1, NOT done):**
-- Webhook ingestion for delivery events / bounces / unsubscribes.
-- Suppression-list sync between Mandrill and the local users table.
-- Decision on consolidating Bird + Mandrill (deferred until pre-launch review).
+**Out of scope, carried forward:**
+- A long-term improvement would be to consolidate the two "completed lesson
+  detail" surfaces (Schedule sheet + Lessons dialog) into a single component
+  that both call sites mount. That's a refactor, not part of this brief.
 
 **Technical debt / follow-up not done:**
 - No tests added (project rule: user maintains tests manually).
-- No Pint formatting run (project rule: user handles code style).
+- No Pint / Prettier run (project rule: user handles code style).
 
 ---
 
 **Status:** All phases complete.
-**Last Updated:** 2026-05-15.
+**Last Updated:** 2026-06-17.
