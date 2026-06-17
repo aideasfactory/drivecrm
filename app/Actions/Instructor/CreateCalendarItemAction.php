@@ -8,6 +8,7 @@ use App\Enums\CalendarItemType;
 use App\Models\Calendar;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
+use App\Models\Student;
 use Carbon\Carbon;
 
 class CreateCalendarItemAction
@@ -36,7 +37,8 @@ class CreateCalendarItemAction
         ?string $notes = null,
         ?string $unavailabilityReason = null,
         ?int $travelTimeMinutes = null,
-        bool $isPracticalTest = false
+        bool $isPracticalTest = false,
+        ?Student $student = null
     ): CalendarItem {
         // For practical tests: calculate the full block from the test appointment time
         // Test time = startTime to endTime (1 hour)
@@ -61,7 +63,8 @@ class CreateCalendarItemAction
                 'is_available' => false,
                 'item_type' => CalendarItemType::PracticalTest,
                 'status' => null,
-                'notes' => $notes,
+                'student_id' => $student?->id,
+                'notes' => $notes ?? ($student ? trim($student->first_name.' '.$student->surname) : null),
                 'unavailability_reason' => $unavailabilityReason ?? 'Practical Test',
             ]);
 

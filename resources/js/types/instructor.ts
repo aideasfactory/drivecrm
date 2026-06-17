@@ -132,6 +132,7 @@ export interface CalendarItemResponse {
   parent_item_id: number | null
   notes: string | null
   unavailability_reason: string | null
+  student_id: number | null
   student_name: string | null
   is_paid: boolean | null
   lesson_id: number | null

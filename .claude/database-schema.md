@@ -773,6 +773,7 @@ Defines time slots within a calendar date.
 | `item_type` | varchar(20) | DEFAULT 'slot', INDEXED | Calendar item type: 'slot' (lesson), 'travel' (travel time), or 'practical_test' (driving test slot) |
 | `travel_time_minutes` | smallint unsigned | NULLABLE | Travel time in minutes (15, 30, or 45) set on the parent slot |
 | `parent_item_id` | bigint unsigned | FOREIGN KEY (calendar_items.id), NULLABLE, ON DELETE SET NULL | Links travel blocks to their parent lesson slot |
+| `student_id` | bigint unsigned | FOREIGN KEY (students.id), NULLABLE, ON DELETE SET NULL, INDEXED | Pupil this slot is for. Only set on `item_type = 'practical_test'` rows — links the diary slot to the pupil whose driving test it is. |
 | `notes` | text | NULLABLE | General notes about this calendar slot |
 | `unavailability_reason` | text | NULLABLE | Reason for marking slot unavailable (only when is_available = false) |
 | `recurrence_pattern` | varchar(20) | DEFAULT 'none' | Recurrence pattern: none, weekly, biweekly, monthly |
@@ -783,6 +784,7 @@ Defines time slots within a calendar date.
 
 **Relationships:**
 - Belongs to one `Calendar`
+- Belongs to one `Student` (nullable — only populated for `practical_test` rows)
 
 **Enums:**
 - Status: `draft` (tentative hold during onboarding), `reserved` (weekly payment pending), `booked` (fully paid), `completed` (lesson finished)
@@ -791,7 +793,7 @@ Defines time slots within a calendar date.
 **Business Logic:**
 - Multiple time slots per calendar date
 - `is_available` allows blocking slots without deletion
-- `item_type = 'practical_test'`: blocks a 2.5hr window (1hr prep + 1hr test + 30min buffer), always `is_available = false`
+- `item_type = 'practical_test'`: blocks a 2.5hr window (1hr prep + 1hr test + 30min buffer), always `is_available = false`. May carry `student_id` so the diary shows whose test it is — set when the test is booked through the pupil's "Book Driving Test" action.
 - `status` tracks the booking lifecycle: `draft` → `reserved`/`booked` → `completed`
 - Draft items are cleaned up by `calendar:cleanup-drafts` command if abandoned
 - Recurring slots: materialized instances pattern — each occurrence is a separate row linked by `recurrence_group_id`
@@ -951,6 +953,7 @@ Tracks progress through standard checklist items for each student (e.g., theory 
 | `is_checked` | boolean | DEFAULT false | Whether the item has been completed |
 | `date` | date | NULLABLE | Associated date (e.g., when theory test is booked for) |
 | `notes` | text | NULLABLE | Optional notes about this item |
+| `calendar_item_id` | bigint unsigned | FOREIGN KEY (calendar_items.id), NULLABLE, ON DELETE SET NULL, INDEXED | Linked diary slot — only populated on the `book_practical_test` row, points at the practical-test calendar item created when the test was booked. Lets the pupil-side checklist and the instructor diary stay in sync. |
 | `sort_order` | integer | DEFAULT 0 | Display ordering |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
@@ -958,9 +961,11 @@ Tracks progress through standard checklist items for each student (e.g., theory 
 **Indexes:**
 - Unique constraint on `(student_id, key)`
 - Index on `student_id`
+- Index on `calendar_item_id`
 
 **Relationships:**
 - Belongs to one `Student`
+- Belongs to one `CalendarItem` (nullable — only set for `book_practical_test`)
 
 **Default Items:**
 - **Theory Test**: Book theory test, Sit theory test
@@ -972,6 +977,7 @@ Tracks progress through standard checklist items for each student (e.g., theory 
 - Checking an item opens a date picker modal; instructor adds a date and optional notes
 - Unchecking an item clears the date and notes
 - Items are grouped by category in the UI (3-column grid)
+- **`book_practical_test` row is special-cased:** checking it creates a `practical_test` calendar item on the pupil's instructor's diary (and stores its id in `calendar_item_id`); unchecking removes that slot. The dedicated "Book Driving Test" dialog (with a test time picker) is the primary entry point — generic tick defaults to 11:00.
 
 ---
 

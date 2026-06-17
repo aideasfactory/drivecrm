@@ -79,6 +79,11 @@ class StoreCalendarItemRequest extends FormRequest
                 'sometimes',
                 'boolean',
             ],
+            'student_id' => [
+                'nullable',
+                'integer',
+                'exists:students,id',
+            ],
         ];
     }
 

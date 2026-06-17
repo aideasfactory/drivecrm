@@ -275,6 +275,15 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
     Route::patch('/students/{student}/checklist/{checklistItem}', [PupilController::class, 'toggleChecklistItem'])
         ->name('students.checklist.toggle');
 
+    // Student Driving Test — creates / removes a practical-test calendar slot on
+    // the instructor's diary, keeping pupil + diary in sync.
+    Route::get('/students/{student}/driving-test', [PupilController::class, 'showDrivingTest'])
+        ->name('students.driving-test.show');
+    Route::post('/students/{student}/driving-test', [PupilController::class, 'bookDrivingTest'])
+        ->name('students.driving-test.store');
+    Route::delete('/students/{student}/driving-test', [PupilController::class, 'cancelDrivingTest'])
+        ->name('students.driving-test.destroy');
+
     // Student Status & Management
     Route::patch('/students/{student}/status', [PupilController::class, 'updateStatus'])
         ->name('students.status.update');

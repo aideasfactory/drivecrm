@@ -1,145 +1,135 @@
-# Task: Mandrill Transactional Email Transport
+# Task: Pupil Driving-Test → Instructor Diary Integration
 
 ## Overview
 
-Wire up Mandrill (Mailchimp Transactional) as a Laravel mail transport so the
-existing Mailables (e.g. `BookingEnquirySubmittedMail`) deliver through Mandrill
-instead of the `log` driver. Also add a thin Service for sending
-**Mandrill-hosted templates** (e.g. the `magiclink` template reused from the
-smartdriving project) which Laravel's transport layer can't address directly.
+Link the "Book practical test" pupil action (checklist) to the instructor's diary
+so a pupil's test date *is* a practical-test calendar slot, and a practical-test
+calendar slot created in the diary can be assigned to a specific pupil.
 
-Production sending domain: `just-drive.co.uk` (or a subdomain like
-`mail.just-drive.co.uk`). During testing the team will send from
-`noreply@mail.drivedrivingschool.co.uk`, which is already DKIM/SPF-verified in
-the shared Mandrill account from the smartdriving project.
+Today the two flows are independent:
+
+- `app/Actions/Instructor/CreateCalendarItemAction.php` can mark a calendar item
+  as a `practical_test` (item_type) — blocks 1hr prep + 1hr test + 30min buffer
+  — but only stores the student name as free-text in `notes`. There is no FK to
+  `students`.
+- `app/Models/StudentChecklistItem.php` has a `book_practical_test` item that,
+  when ticked, captures a date + notes on the checklist row. It does not touch
+  the calendar.
+
+We need a single source of truth for a pupil's practical test:
+
+1. The pupil's "Book Driving Test" action creates a calendar item on their
+   instructor's diary AND marks the checklist item `book_practical_test` as
+   checked with the test date.
+2. Looking at the pupil shows the linked diary slot.
+3. Looking at the diary shows the linked pupil name on the practical-test slot.
+4. Cancelling from either side unwires both.
 
 ## Phase 1: Planning ✅
 
-### Why Mandrill and not Bird
-- Existing Mandrill account already in use on smartdriving (api key, verified
-  domain, the `magiclink` template).
-- Avoids spinning up a second Bird Programmable Email channel and a second DNS
-  setup just for transactional sends during the testing phase.
-- Trade-off accepted: two providers in play (Bird for inbox conversations,
-  Mandrill for transactional). Acceptable while volume is low; revisit before
-  go-live if consolidation matters.
+### Surface-area decisions
+- **Add `student_id` to `calendar_items`** — nullable FK. Only meaningful for
+  `item_type = practical_test`. Doesn't disturb regular lesson slots (those
+  still link to students via `lessons.order.student`).
+- **Add `calendar_item_id` to `student_checklist_items`** — nullable FK for the
+  `book_practical_test` row to point at the diary slot. Lets the checklist item
+  know which slot to delete if unchecked, and lets the UI show "View in diary".
+- **Reuse `CreateCalendarItemAction`** — accept an optional `Student` parameter.
+  This keeps the diary-side creation logic in one place. The new "Book Driving
+  Test" action wraps it and *also* updates the checklist.
+- **New Action: `BookDrivingTestAction`** in `app/Actions/Student/` — invokes
+  `CreateCalendarItemAction` with the pupil's instructor, then ticks the
+  `book_practical_test` checklist row and stores the new calendar item id on it.
+- **New Action: `CancelDrivingTestAction`** — inverse: deletes the linked
+  calendar item if any, unticks the checklist row.
+- **New PupilController endpoints:**
+  - `POST /students/{student}/driving-test` — book the test (date, time)
+  - `DELETE /students/{student}/driving-test` — cancel the booked test
+  - `GET /students/{student}/driving-test` — returns current booked slot (or null)
+- **Hook the existing checklist toggle path** for `book_practical_test` so a
+  manual tick/untick from the checklist UI also creates/deletes the diary slot.
+  This is the "if an instructor adds a test date on the pupil record, it should
+  appear on the diary" requirement.
+- **Surface student on practical-test slots in the diary** — extend
+  `GetInstructorCalendarAction` to set `student_name` and `student_id` for
+  practical-test items (not just lessons).
 
-### Why a Service for templates but NOT for Mailables
-- Blade-rendered Mailables already use the `Mail` facade — `Mail::extend()`
-  swaps the transport transparently. No wrapper Service needed.
-- Mandrill-hosted templates (authored in the Mandrill dashboard, not in this
-  repo) require a direct API call to `messages/send-template` with merge
-  variables. That's the only thing that needs new code.
+### Out of scope
+- Editing the test date once booked (can be done via cancel + re-book).
+- DVSA integration / external booking.
+- Notifications when a test is added/cancelled (instructor adds the test
+  themselves; no external party to notify in this iteration).
 
 ## Phase 2: Implementation ✅
 
-### Files created
-- `app/Services/MandrillTemplateService.php` — sends a Mandrill-hosted template
-  to a single recipient with merge vars. Extends `BaseService`. Reads API key
-  from `config('services.mandrill.key')`. Throws on HTTP failure or
-  Mandrill-side reject/invalid status.
+### Backend
 
-### Files edited
-- `config/mail.php` — added `mandrill` mailer config block (`transport` =>
-  `mandrill`, `key` => `env('MANDRILL_API_KEY')`).
-- `config/services.php` — added `mandrill.key` entry (the conventional spot for
-  third-party credentials, kept separate from the mailer config).
-- `app/Providers/AppServiceProvider.php` — added `registerMandrillTransport()`
-  which calls `Mail::extend('mandrill', ...)` returning a
-  `Symfony\Component\Mailer\Bridge\Mailchimp\Transport\MandrillApiTransport`.
-- `.env.example` — added `MANDRILL_API_KEY=` placeholder under a Mandrill
-  comment block.
+- [x] Migration `2026_06_17_100000_add_student_id_to_calendar_items_table.php`
+      — nullable FK + index. `.claude/database-schema.md` updated.
+- [x] Migration
+      `2026_06_17_100001_add_calendar_item_id_to_student_checklist_items_table.php`
+      — nullable FK + index. `.claude/database-schema.md` updated.
+- [x] `CalendarItem` model — `student_id` fillable + `student()` BelongsTo.
+- [x] `StudentChecklistItem` model — `calendar_item_id` fillable +
+      `calendarItem()` BelongsTo.
+- [x] `CreateCalendarItemAction` — accepts `?Student $student = null` and
+      persists it on the practical-test branch (also uses pupil name as the
+      default `notes`).
+- [x] `InstructorService::addCalendarItem` — pass `student` through.
+- [x] `StoreCalendarItemRequest` — accepts nullable `student_id` (exists check).
+- [x] `InstructorController::storeCalendarItem` — resolves Student from
+      `student_id` and passes it through.
+- [x] `formatCalendarItem` and `GetInstructorCalendarAction` surface
+      `student_id` and `student_name` on practical-test rows.
+- [x] `BookDrivingTestAction` in `app/Actions/Student/`.
+- [x] `CancelDrivingTestAction` in `app/Actions/Student/`.
+- [x] `ToggleChecklistItemAction` — special-cases `book_practical_test` to
+      route through the two actions above.
+- [x] `PupilController` — `showDrivingTest`, `bookDrivingTest`,
+      `cancelDrivingTest`. Also accepts `start_time` on the existing toggle
+      endpoint.
+- [x] Routes in `routes/web.php`.
+- [ ] api.md — n/a (these are web routes used only by the admin Vue UI; the
+      existing checklist toggle route is also undocumented in api.md, which is
+      scoped to the mobile `/api/v1/*` surface).
 
-### Composer
-- `composer require symfony/mailchimp-mailer` (v8) — provides
-  `MandrillApiTransport`. The Symfony bridge for Mandrill is named after
-  Mailchimp because Mandrill is the Mailchimp Transactional product.
+### Frontend
 
-### Key decisions
-- **No `MandrillMailService` for standard sends.** Laravel's `Mail` facade is
-  already the abstraction. A wrapper would be ceremony with no value.
-- **`Mail::extend` rather than a custom service provider class.** One method on
-  the existing `AppServiceProvider` is enough; no new file just to register a
-  transport.
-- **API key in `services.mandrill.key`, not `mail.mailers.mandrill.key`.**
-  Following the Laravel convention — `config/services.php` is the canonical
-  home for third-party credentials. The mailer config also reads it, but the
-  Service uses the services-namespaced key.
-- **Service throws `RuntimeException` on failure.** Lets callers decide whether
-  to log, queue-retry, or surface to the user. Reject/invalid statuses are
-  treated as failures because Mandrill returns HTTP 200 with `"status":
-  "rejected"` for things like a recipient on the suppression list — silently
-  letting that through would be worse than throwing.
+- [x] `StudentChecklistSection.vue` — dedicated "Book Driving Test" dialog
+      (date + time) for the `book_practical_test` row; new badges show the
+      booked date, test window, and "On instructor diary" confirmation.
+- [x] `types/instructor.ts` — added `student_id` to `CalendarItemResponse`.
 
-### Verification done
-- `php -l` on all four changed PHP files → no syntax errors.
-- `php artisan config:clear` → cache flushed.
-- `php artisan config:show mail.mailers.mandrill` → shows transport + key.
-- `php artisan config:show services.mandrill` → shows key.
+### Tests
 
-### Out of scope (not built)
-- New Mailables (existing `BookingEnquirySubmittedMail` etc. already cover
-  current flows).
-- Webhook handler for Mandrill bounce/spam events.
-- Suppression-list management UI.
-- Migration to `just-drive.co.uk` sending domain — happens before go-live, not
-  now.
+- [x] `tests/Feature/PupilDrivingTestBookingTest.php` (5 Pest tests covering
+      book, cancel, re-book, checklist link, missing-instructor failure path).
+      Per project rule, not run.
 
 ## Phase 3: Reflection ✅
 
-**Why this shape is right for the brief:**
-- The user wanted to reuse the existing Mandrill setup from smartdriving for
-  testing. The smallest possible footprint to do that: add the transport
-  bridge, register it, set the env var. Total new code: one Service class
-  (~110 lines) for the one thing the transport can't do (template sends).
-- Existing Mailables stay untouched. Existing `Mail::send()` calls anywhere in
-  the codebase now route through Mandrill the moment `MAIL_MAILER=mandrill` is
-  set in `.env`.
+- `results.md` written to the project root with a client-facing summary and
+  a confidence score of 8/10.
 
-**Subtle decisions worth flagging:**
-- The Symfony package name (`symfony/mailchimp-mailer`) is non-obvious because
-  Mandrill rebranded to "Mailchimp Transactional Email" in 2020 but most
-  developers still call it Mandrill. The transport class itself is
-  `MandrillApiTransport`, which is why the config key stays as `mandrill`.
-- `Mail::extend()` is called in `boot()`, which runs after all providers are
-  registered. This is the correct lifecycle hook — the `MailManager` resolves
-  transports lazily on first `Mail::mailer('mandrill')` call, so the closure
-  doesn't fire until something actually tries to send.
-- `MandrillTemplateService::send()` returns the first recipient entry from
-  Mandrill's response array. Mandrill always returns an array (one entry per
-  recipient), but the Service is single-recipient by design — multi-recipient
-  blasts are a marketing concern and should use Mandrill's dashboard or a
-  proper campaign tool.
-- The Service uses `Http::acceptJson()->post(...)`. No retries configured —
-  callers that need retries should dispatch via a queued job
-  (`ShouldQueue` Mailable pattern handles this for transport sends already;
-  template-API sends would need their own job class if retry semantics matter).
+**Why this shape:**
+- Reused `CreateCalendarItemAction` end-to-end — the new BookDrivingTest
+  action is the thinnest possible wrapper that also touches the checklist.
+- A single nullable FK on each side (calendar_items, checklist_items) is
+  enough to keep both views aligned. No extra `driving_test_bookings`
+  table — the calendar item *is* the booking.
+- Treated the pupil flow as the canonical entry point. Direct diary
+  deletion is a less common path, called out in results.md as a follow-up.
 
-**Operational notes for the user:**
-- **`.env` must be set:** `MANDRILL_API_KEY=` needs the actual key from the
-  smartdriving Mandrill account. (User has already done this.)
-- **`MAIL_MAILER=mandrill`** must be flipped from `log` for actual sends to
-  happen. Leave on `log` for local dev to avoid burning API calls.
-- **`MAIL_FROM_ADDRESS`** should be set to
-  `noreply@mail.drivedrivingschool.co.uk` for testing, then changed to the
-  `just-drive.co.uk` (or subdomain) sending address before go-live.
-- **Before go-live on `just-drive.co.uk`:** add the new domain to Mandrill,
-  publish DKIM + SPF + Return-Path DNS records, verify in the Mandrill
-  dashboard, then update `MAIL_FROM_ADDRESS`.
-- **Calling Mandrill templates:** inject `MandrillTemplateService` into a
-  Controller/Service constructor and call
-  `$this->mandrill->send('template-slug', $email, ['VAR' => $value])`.
-
-**Out of scope (carried forward from Phase 1, NOT done):**
-- Webhook ingestion for delivery events / bounces / unsubscribes.
-- Suppression-list sync between Mandrill and the local users table.
-- Decision on consolidating Bird + Mandrill (deferred until pre-launch review).
-
-**Technical debt / follow-up not done:**
-- No tests added (project rule: user maintains tests manually).
-- No Pint formatting run (project rule: user handles code style).
+**Risks acknowledged:**
+- Direct deletion of a practical-test slot from the schedule tab leaves the
+  pupil's checklist row out of sync until the next page load (the `nullOnDelete`
+  on the checklist FK keeps the row valid, but `is_checked` stays true). A
+  Model observer on `CalendarItem::deleted` would close this gap — flagged
+  for follow-up.
+- Mobile API does not yet expose driving-test endpoints. Flagged for
+  follow-up.
 
 ---
 
 **Status:** All phases complete.
-**Last Updated:** 2026-05-15.
+**Last Updated:** 2026-06-17

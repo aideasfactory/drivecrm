@@ -16,6 +16,8 @@ use App\Actions\Shared\Note\CreateNoteAction;
 use App\Actions\Shared\Note\DeleteNoteAction;
 use App\Actions\Shared\Note\GetNotesAction;
 use App\Actions\Student\AssignStudentToInstructorAction;
+use App\Actions\Student\BookDrivingTestAction;
+use App\Actions\Student\CancelDrivingTestAction;
 use App\Actions\Student\Checklist\GetStudentChecklistAction;
 use App\Actions\Student\Checklist\ToggleChecklistItemAction;
 use App\Actions\Student\Contact\AutoCreateEmergencyContactAction;
@@ -676,12 +678,95 @@ class PupilController extends Controller
             'is_checked' => 'required|boolean',
             'date' => 'nullable|date',
             'notes' => 'nullable|string|max:1000',
+            'start_time' => 'nullable|date_format:H:i',
         ]);
 
         $checklistItem = app(ToggleChecklistItemAction::class)($checklistItem, $data);
 
         return response()->json([
             'checklist_item' => $checklistItem,
+        ]);
+    }
+
+    /**
+     * Show the pupil's currently booked driving test (or null if none).
+     */
+    public function showDrivingTest(Student $student): JsonResponse
+    {
+        $checklistItem = $student->checklistItems()
+            ->where('key', 'book_practical_test')
+            ->with('calendarItem.calendar')
+            ->first();
+
+        $calendarItem = $checklistItem?->calendarItem;
+
+        if (! $calendarItem) {
+            return response()->json(['driving_test' => null]);
+        }
+
+        return response()->json([
+            'driving_test' => [
+                'calendar_item_id' => $calendarItem->id,
+                'date' => $calendarItem->calendar?->date?->format('Y-m-d'),
+                'block_start_time' => Carbon::parse($calendarItem->start_time)->format('H:i'),
+                'block_end_time' => Carbon::parse($calendarItem->end_time)->format('H:i'),
+                // The test itself runs in the middle of the blocked window
+                'test_start_time' => Carbon::parse($calendarItem->start_time)->addMinutes(60)->format('H:i'),
+                'test_end_time' => Carbon::parse($calendarItem->end_time)->subMinutes(30)->format('H:i'),
+                'notes' => $calendarItem->notes,
+            ],
+        ]);
+    }
+
+    /**
+     * Book a driving test for the pupil.
+     *
+     * Creates a practical-test slot on the pupil's instructor's diary and
+     * ticks the `book_practical_test` checklist row with the test date.
+     */
+    public function bookDrivingTest(Student $student, BookDrivingTestAction $bookDrivingTest): JsonResponse
+    {
+        if (! $student->instructor_id) {
+            return response()->json([
+                'message' => 'This pupil must have an assigned instructor before a driving test can be booked.',
+            ], 422);
+        }
+
+        $data = request()->validate([
+            'date' => 'required|date|date_format:Y-m-d|after_or_equal:today',
+            'start_time' => 'required|date_format:H:i',
+        ]);
+
+        try {
+            $calendarItem = $bookDrivingTest($student, $data['date'], $data['start_time']);
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'message' => 'Driving test booked and added to the instructor diary.',
+            'driving_test' => [
+                'calendar_item_id' => $calendarItem->id,
+                'date' => $calendarItem->calendar?->date?->format('Y-m-d'),
+                'block_start_time' => Carbon::parse($calendarItem->start_time)->format('H:i'),
+                'block_end_time' => Carbon::parse($calendarItem->end_time)->format('H:i'),
+                'test_start_time' => $data['start_time'],
+                'test_end_time' => Carbon::parse($data['start_time'])->addMinutes(60)->format('H:i'),
+                'notes' => $calendarItem->notes,
+            ],
+        ], 201);
+    }
+
+    /**
+     * Cancel a pupil's booked driving test (removes the diary slot and unticks
+     * the `book_practical_test` checklist row).
+     */
+    public function cancelDrivingTest(Student $student, CancelDrivingTestAction $cancelDrivingTest): JsonResponse
+    {
+        $cancelDrivingTest($student);
+
+        return response()->json([
+            'message' => 'Driving test cancelled.',
         ]);
     }
 }

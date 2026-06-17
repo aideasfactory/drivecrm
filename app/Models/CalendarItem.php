@@ -23,6 +23,7 @@ class CalendarItem extends Model
         'item_type',
         'travel_time_minutes',
         'parent_item_id',
+        'student_id',
         'notes',
         'unavailability_reason',
         'recurrence_pattern',
@@ -71,6 +72,14 @@ class CalendarItem extends Model
     public function calendar(): BelongsTo
     {
         return $this->belongsTo(Calendar::class, 'calendar_id');
+    }
+
+    /**
+     * Get the student linked to this calendar item (typically a practical-test slot).
+     */
+    public function student(): BelongsTo
+    {
+        return $this->belongsTo(Student::class, 'student_id');
     }
 
     /**

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Instructor;
 
 use App\Enums\CalendarItemStatus;
+use App\Enums\CalendarItemType;
 use App\Enums\LessonStatus;
 use App\Models\Instructor;
 use Carbon\Carbon;
@@ -34,7 +35,7 @@ class GetInstructorCalendarAction
             ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->with(['items' => function ($query) {
                 $query->orderBy('start_time');
-            }, 'items.lessons.order.student', 'items.lessons.order.lessons.payout', 'items.lessons.lessonPayment', 'items.lessons.reflectiveLog'])
+            }, 'items.lessons.order.student', 'items.lessons.order.lessons.payout', 'items.lessons.lessonPayment', 'items.lessons.reflectiveLog', 'items.student'])
             ->orderBy('date')
             ->get();
 
@@ -45,6 +46,7 @@ class GetInstructorCalendarAction
                 'date' => $calendar->date->format('Y-m-d'),
                 'items' => $calendar->items->map(function ($item) use ($calendar) {
                     $studentName = null;
+                    $studentId = null;
                     $isPaid = null;
                     $lesson = null;
 
@@ -53,11 +55,19 @@ class GetInstructorCalendarAction
                         if ($lesson && $lesson->order && $lesson->order->student) {
                             $student = $lesson->order->student;
                             $studentName = trim($student->first_name.' '.$student->surname);
+                            $studentId = $student->id;
                         }
                         if ($lesson) {
                             $isPaid = $lesson->lessonPayment?->isPaid()
                                 ?? ($lesson->order?->isUpfront() ? true : false);
                         }
+                    }
+
+                    // Practical-test slots carry the pupil link directly on the calendar item
+                    // (no Lesson row exists for a test booking).
+                    if ($item->item_type === CalendarItemType::PracticalTest && $item->student) {
+                        $studentName = trim($item->student->first_name.' '.$item->student->surname);
+                        $studentId = $item->student->id;
                     }
 
                     $lessonId = null;
@@ -104,6 +114,7 @@ class GetInstructorCalendarAction
                         'travel_time_minutes' => $item->travel_time_minutes,
                         'parent_item_id' => $item->parent_item_id,
                         'student_name' => $studentName,
+                        'student_id' => $studentId,
                         'is_paid' => $isPaid,
                         'lesson_id' => $lessonId,
                         'order_id' => $orderId,

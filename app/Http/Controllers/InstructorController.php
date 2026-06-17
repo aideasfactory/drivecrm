@@ -520,6 +520,9 @@ class InstructorController extends Controller
         // Handle single slot
         $travelTimeMinutes = $request->integer('travel_time_minutes') ?: null;
         $isPracticalTest = $request->boolean('is_practical_test');
+        $student = $request->filled('student_id')
+            ? \App\Models\Student::find($request->integer('student_id'))
+            : null;
 
         $calendarItem = $this->instructorService->addCalendarItem(
             $instructor,
@@ -530,7 +533,8 @@ class InstructorController extends Controller
             $request->input('notes'),
             $request->input('unavailability_reason'),
             $travelTimeMinutes,
-            $isPracticalTest
+            $isPracticalTest,
+            $student
         );
 
         // If travel time was requested, reload the full calendar range so frontend picks up both items
@@ -635,6 +639,15 @@ class InstructorController extends Controller
      */
     private function formatCalendarItem(CalendarItem $calendarItem): array
     {
+        $studentName = null;
+        if ($calendarItem->student_id) {
+            $calendarItem->loadMissing('student');
+            $student = $calendarItem->student;
+            if ($student) {
+                $studentName = trim($student->first_name.' '.$student->surname);
+            }
+        }
+
         return [
             'id' => $calendarItem->id,
             'calendar_id' => $calendarItem->calendar_id,
@@ -646,6 +659,8 @@ class InstructorController extends Controller
             'item_type' => $calendarItem->item_type?->value ?? 'slot',
             'travel_time_minutes' => $calendarItem->travel_time_minutes,
             'parent_item_id' => $calendarItem->parent_item_id,
+            'student_id' => $calendarItem->student_id,
+            'student_name' => $studentName,
             'notes' => $calendarItem->notes,
             'unavailability_reason' => $calendarItem->unavailability_reason,
             'recurrence_pattern' => $calendarItem->recurrence_pattern?->value ?? 'none',

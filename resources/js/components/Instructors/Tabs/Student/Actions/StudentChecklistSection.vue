@@ -12,7 +12,14 @@ import {
     DialogTitle,
     DialogFooter,
 } from '@/components/ui/dialog'
-import { ListChecks, Loader2, Check, Calendar } from 'lucide-vue-next'
+import {
+    ListChecks,
+    Loader2,
+    Check,
+    Calendar,
+    Clock,
+    ClipboardCheck,
+} from 'lucide-vue-next'
 import { toast } from '@/components/ui/toast'
 
 interface ChecklistItem {
@@ -24,9 +31,20 @@ interface ChecklistItem {
     is_checked: boolean
     date: string | null
     notes: string | null
+    calendar_item_id: number | null
     sort_order: number
     created_at: string
     updated_at: string
+}
+
+interface DrivingTest {
+    calendar_item_id: number
+    date: string
+    block_start_time: string
+    block_end_time: string
+    test_start_time: string
+    test_end_time: string
+    notes: string | null
 }
 
 const props = defineProps<{
@@ -36,13 +54,23 @@ const props = defineProps<{
 const items = ref<ChecklistItem[]>([])
 const isLoading = ref(true)
 const isToggling = ref<number | null>(null)
+const drivingTest = ref<DrivingTest | null>(null)
 
-// Check dialog state
+const PRACTICAL_TEST_KEY = 'book_practical_test'
+
+// ── Generic checklist dialog (date + optional notes) ────────────────
 const checkDialogOpen = ref(false)
 const checkDialogItem = ref<ChecklistItem | null>(null)
 const checkForm = ref({
     date: '',
     notes: '',
+})
+
+// ── Driving-test booking dialog (date + time) ─────────────────────
+const drivingTestDialogOpen = ref(false)
+const drivingTestForm = ref({
+    date: '',
+    start_time: '11:00',
 })
 
 const groupedItems = computed(() => {
@@ -59,10 +87,14 @@ const groupedItems = computed(() => {
 const loadChecklist = async () => {
     isLoading.value = true
     try {
-        const response = await axios.get(
-            `/students/${props.studentId}/checklist`,
-        )
-        items.value = response.data.checklist_items || []
+        const [checklistRes, testRes] = await Promise.all([
+            axios.get(`/students/${props.studentId}/checklist`),
+            axios
+                .get(`/students/${props.studentId}/driving-test`)
+                .catch(() => ({ data: { driving_test: null } })),
+        ])
+        items.value = checklistRes.data.checklist_items || []
+        drivingTest.value = testRes.data.driving_test || null
     } catch {
         toast({
             title: 'Failed to load checklist',
@@ -78,6 +110,19 @@ onMounted(() => {
 })
 
 const handleToggle = (item: ChecklistItem) => {
+    // Special case: book_practical_test gets its own dialog because it also
+    // creates a slot on the instructor diary, so we need a test time too.
+    if (item.key === PRACTICAL_TEST_KEY) {
+        if (item.is_checked) {
+            cancelDrivingTest(item)
+        } else {
+            const today = new Date().toISOString().split('T')[0]
+            drivingTestForm.value = { date: today, start_time: '11:00' }
+            drivingTestDialogOpen.value = true
+        }
+        return
+    }
+
     if (item.is_checked) {
         handleUncheck(item)
     } else {
@@ -153,6 +198,79 @@ const handleUncheck = async (item: ChecklistItem) => {
         const message =
             error.response?.data?.message ||
             'Failed to update checklist item'
+        toast({ title: message, variant: 'destructive' })
+    } finally {
+        isToggling.value = null
+    }
+}
+
+// ── Driving-test specific handlers ────────────────────────────────
+const confirmBookDrivingTest = async () => {
+    if (!drivingTestForm.value.date || !drivingTestForm.value.start_time) {
+        toast({
+            title: 'Please pick a date and time for the test',
+            variant: 'destructive',
+        })
+        return
+    }
+
+    const practicalItem = items.value.find(
+        (i) => i.key === PRACTICAL_TEST_KEY,
+    )
+    if (!practicalItem) return
+
+    isToggling.value = practicalItem.id
+
+    try {
+        const response = await axios.post(
+            `/students/${props.studentId}/driving-test`,
+            {
+                date: drivingTestForm.value.date,
+                start_time: drivingTestForm.value.start_time,
+            },
+        )
+
+        drivingTest.value = response.data.driving_test
+
+        // Reload the checklist so we pick up the now-checked state +
+        // calendar_item_id link.
+        const checklistRes = await axios.get(
+            `/students/${props.studentId}/checklist`,
+        )
+        items.value = checklistRes.data.checklist_items || []
+
+        toast({
+            title: 'Driving test booked',
+            description: 'Added to the instructor diary.',
+        })
+        drivingTestDialogOpen.value = false
+    } catch (error: any) {
+        const message =
+            error.response?.data?.message || 'Failed to book driving test'
+        toast({ title: message, variant: 'destructive' })
+    } finally {
+        isToggling.value = null
+    }
+}
+
+const cancelDrivingTest = async (item: ChecklistItem) => {
+    isToggling.value = item.id
+
+    try {
+        await axios.delete(`/students/${props.studentId}/driving-test`)
+
+        drivingTest.value = null
+
+        const checklistRes = await axios.get(
+            `/students/${props.studentId}/checklist`,
+        )
+        items.value = checklistRes.data.checklist_items || []
+
+        toast({ title: 'Driving test cancelled' })
+    } catch (error: any) {
+        const message =
+            error.response?.data?.message ||
+            'Failed to cancel driving test'
         toast({ title: message, variant: 'destructive' })
     } finally {
         isToggling.value = null
@@ -237,8 +355,48 @@ const formatDate = (date: string) => {
                                 >
                                     {{ item.label }}
                                 </span>
+
+                                <!-- Practical-test specific summary -->
                                 <div
                                     v-if="
+                                        item.key === PRACTICAL_TEST_KEY &&
+                                        item.is_checked &&
+                                        drivingTest
+                                    "
+                                    class="mt-1 flex flex-wrap items-center gap-2"
+                                >
+                                    <Badge
+                                        variant="secondary"
+                                        class="text-xs"
+                                    >
+                                        <Calendar
+                                            class="mr-1 h-3 w-3"
+                                        />
+                                        {{ formatDate(drivingTest.date) }}
+                                    </Badge>
+                                    <Badge
+                                        variant="secondary"
+                                        class="text-xs"
+                                    >
+                                        <Clock
+                                            class="mr-1 h-3 w-3"
+                                        />
+                                        {{ drivingTest.test_start_time }} – {{ drivingTest.test_end_time }}
+                                    </Badge>
+                                    <Badge
+                                        variant="outline"
+                                        class="text-xs"
+                                    >
+                                        <ClipboardCheck
+                                            class="mr-1 h-3 w-3"
+                                        />
+                                        On instructor diary
+                                    </Badge>
+                                </div>
+
+                                <!-- Generic checklist date pill -->
+                                <div
+                                    v-else-if="
                                         item.is_checked && item.date
                                     "
                                     class="mt-1 flex items-center gap-2"
@@ -253,8 +411,10 @@ const formatDate = (date: string) => {
                                         {{ formatDate(item.date) }}
                                     </Badge>
                                 </div>
+
                                 <p
                                     v-if="
+                                        item.key !== PRACTICAL_TEST_KEY &&
                                         item.is_checked && item.notes
                                     "
                                     class="mt-1 text-xs text-muted-foreground"
@@ -268,7 +428,7 @@ const formatDate = (date: string) => {
             </div>
         </div>
 
-        <!-- Check Dialog -->
+        <!-- Generic Check Dialog -->
         <Dialog v-model:open="checkDialogOpen">
             <DialogContent>
                 <DialogHeader>
@@ -324,6 +484,76 @@ const formatDate = (date: string) => {
                             class="mr-2 h-4 w-4"
                         />
                         Confirm
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        <!-- Driving-Test Booking Dialog -->
+        <Dialog v-model:open="drivingTestDialogOpen">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle class="flex items-center gap-2">
+                        <ClipboardCheck class="h-5 w-5 text-teal-600" />
+                        Book Driving Test
+                    </DialogTitle>
+                </DialogHeader>
+                <div class="space-y-4 py-4">
+                    <p class="text-sm text-muted-foreground">
+                        Pick the date and time of the practical test. A 2.5-hour
+                        slot (1 hr prep + 1 hr test + 30 min buffer) will be
+                        added to the instructor's diary and linked to this
+                        pupil.
+                    </p>
+                    <div class="space-y-2">
+                        <Label for="driving_test_date">Test Date *</Label>
+                        <input
+                            id="driving_test_date"
+                            type="date"
+                            v-model="drivingTestForm.date"
+                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        />
+                    </div>
+                    <div class="space-y-2">
+                        <Label for="driving_test_time">Test Time *</Label>
+                        <input
+                            id="driving_test_time"
+                            type="time"
+                            step="900"
+                            v-model="drivingTestForm.start_time"
+                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            The diary will block from
+                            <span class="font-medium">1 hr before</span>
+                            until
+                            <span class="font-medium">30 min after</span>
+                            this time.
+                        </p>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button
+                        variant="outline"
+                        @click="drivingTestDialogOpen = false"
+                        :disabled="isToggling !== null"
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        @click="confirmBookDrivingTest"
+                        :disabled="isToggling !== null"
+                        class="min-w-[140px]"
+                    >
+                        <Loader2
+                            v-if="isToggling !== null"
+                            class="mr-2 h-4 w-4 animate-spin"
+                        />
+                        <ClipboardCheck
+                            v-else
+                            class="mr-2 h-4 w-4"
+                        />
+                        Book Test
                     </Button>
                 </DialogFooter>
             </DialogContent>

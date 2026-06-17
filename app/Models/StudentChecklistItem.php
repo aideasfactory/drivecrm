@@ -22,6 +22,7 @@ class StudentChecklistItem extends Model
         'is_checked',
         'date',
         'notes',
+        'calendar_item_id',
         'sort_order',
     ];
 
@@ -60,5 +61,16 @@ class StudentChecklistItem extends Model
     public function student(): BelongsTo
     {
         return $this->belongsTo(Student::class);
+    }
+
+    /**
+     * Get the calendar item linked to this checklist row, if any.
+     *
+     * Used by the `book_practical_test` key to point at the practical-test slot
+     * on the instructor's diary, so the two stay in sync.
+     */
+    public function calendarItem(): BelongsTo
+    {
+        return $this->belongsTo(CalendarItem::class, 'calendar_item_id');
     }
 }
