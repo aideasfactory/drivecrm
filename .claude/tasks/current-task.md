@@ -1,145 +1,123 @@
-# Task: Mandrill Transactional Email Transport
+# Task: Fix lesson package pricing label on onboarding form
 
-## Overview
-
-Wire up Mandrill (Mailchimp Transactional) as a Laravel mail transport so the
-existing Mailables (e.g. `BookingEnquirySubmittedMail`) deliver through Mandrill
-instead of the `log` driver. Also add a thin Service for sending
-**Mandrill-hosted templates** (e.g. the `magiclink` template reused from the
-smartdriving project) which Laravel's transport layer can't address directly.
-
-Production sending domain: `just-drive.co.uk` (or a subdomain like
-`mail.just-drive.co.uk`). During testing the team will send from
-`noreply@mail.drivedrivingschool.co.uk`, which is already DKIM/SPF-verified in
-the shared Mandrill account from the smartdriving project.
-
-## Phase 1: Planning ✅
-
-### Why Mandrill and not Bird
-- Existing Mandrill account already in use on smartdriving (api key, verified
-  domain, the `magiclink` template).
-- Avoids spinning up a second Bird Programmable Email channel and a second DNS
-  setup just for transactional sends during the testing phase.
-- Trade-off accepted: two providers in play (Bird for inbox conversations,
-  Mandrill for transactional). Acceptable while volume is low; revisit before
-  go-live if consolidation matters.
-
-### Why a Service for templates but NOT for Mailables
-- Blade-rendered Mailables already use the `Mail` facade — `Mail::extend()`
-  swaps the transport transparently. No wrapper Service needed.
-- Mandrill-hosted templates (authored in the Mandrill dashboard, not in this
-  repo) require a direct API call to `messages/send-template` with merge
-  variables. That's the only thing that needs new code.
-
-## Phase 2: Implementation ✅
-
-### Files created
-- `app/Services/MandrillTemplateService.php` — sends a Mandrill-hosted template
-  to a single recipient with merge vars. Extends `BaseService`. Reads API key
-  from `config('services.mandrill.key')`. Throws on HTTP failure or
-  Mandrill-side reject/invalid status.
-
-### Files edited
-- `config/mail.php` — added `mandrill` mailer config block (`transport` =>
-  `mandrill`, `key` => `env('MANDRILL_API_KEY')`).
-- `config/services.php` — added `mandrill.key` entry (the conventional spot for
-  third-party credentials, kept separate from the mailer config).
-- `app/Providers/AppServiceProvider.php` — added `registerMandrillTransport()`
-  which calls `Mail::extend('mandrill', ...)` returning a
-  `Symfony\Component\Mailer\Bridge\Mailchimp\Transport\MandrillApiTransport`.
-- `.env.example` — added `MANDRILL_API_KEY=` placeholder under a Mandrill
-  comment block.
-
-### Composer
-- `composer require symfony/mailchimp-mailer` (v8) — provides
-  `MandrillApiTransport`. The Symfony bridge for Mandrill is named after
-  Mailchimp because Mandrill is the Mailchimp Transactional product.
-
-### Key decisions
-- **No `MandrillMailService` for standard sends.** Laravel's `Mail` facade is
-  already the abstraction. A wrapper would be ceremony with no value.
-- **`Mail::extend` rather than a custom service provider class.** One method on
-  the existing `AppServiceProvider` is enough; no new file just to register a
-  transport.
-- **API key in `services.mandrill.key`, not `mail.mailers.mandrill.key`.**
-  Following the Laravel convention — `config/services.php` is the canonical
-  home for third-party credentials. The mailer config also reads it, but the
-  Service uses the services-namespaced key.
-- **Service throws `RuntimeException` on failure.** Lets callers decide whether
-  to log, queue-retry, or surface to the user. Reject/invalid statuses are
-  treated as failures because Mandrill returns HTTP 200 with `"status":
-  "rejected"` for things like a recipient on the suppression list — silently
-  letting that through would be worse than throwing.
-
-### Verification done
-- `php -l` on all four changed PHP files → no syntax errors.
-- `php artisan config:clear` → cache flushed.
-- `php artisan config:show mail.mailers.mandrill` → shows transport + key.
-- `php artisan config:show services.mandrill` → shows key.
-
-### Out of scope (not built)
-- New Mailables (existing `BookingEnquirySubmittedMail` etc. already cover
-  current flows).
-- Webhook handler for Mandrill bounce/spam events.
-- Suppression-list management UI.
-- Migration to `just-drive.co.uk` sending domain — happens before go-live, not
-  now.
-
-## Phase 3: Reflection ✅
-
-**Why this shape is right for the brief:**
-- The user wanted to reuse the existing Mandrill setup from smartdriving for
-  testing. The smallest possible footprint to do that: add the transport
-  bridge, register it, set the env var. Total new code: one Service class
-  (~110 lines) for the one thing the transport can't do (template sends).
-- Existing Mailables stay untouched. Existing `Mail::send()` calls anywhere in
-  the codebase now route through Mandrill the moment `MAIL_MAILER=mandrill` is
-  set in `.env`.
-
-**Subtle decisions worth flagging:**
-- The Symfony package name (`symfony/mailchimp-mailer`) is non-obvious because
-  Mandrill rebranded to "Mailchimp Transactional Email" in 2020 but most
-  developers still call it Mandrill. The transport class itself is
-  `MandrillApiTransport`, which is why the config key stays as `mandrill`.
-- `Mail::extend()` is called in `boot()`, which runs after all providers are
-  registered. This is the correct lifecycle hook — the `MailManager` resolves
-  transports lazily on first `Mail::mailer('mandrill')` call, so the closure
-  doesn't fire until something actually tries to send.
-- `MandrillTemplateService::send()` returns the first recipient entry from
-  Mandrill's response array. Mandrill always returns an array (one entry per
-  recipient), but the Service is single-recipient by design — multi-recipient
-  blasts are a marketing concern and should use Mandrill's dashboard or a
-  proper campaign tool.
-- The Service uses `Http::acceptJson()->post(...)`. No retries configured —
-  callers that need retries should dispatch via a queued job
-  (`ShouldQueue` Mailable pattern handles this for transport sends already;
-  template-API sends would need their own job class if retry semantics matter).
-
-**Operational notes for the user:**
-- **`.env` must be set:** `MANDRILL_API_KEY=` needs the actual key from the
-  smartdriving Mandrill account. (User has already done this.)
-- **`MAIL_MAILER=mandrill`** must be flipped from `log` for actual sends to
-  happen. Leave on `log` for local dev to avoid burning API calls.
-- **`MAIL_FROM_ADDRESS`** should be set to
-  `noreply@mail.drivedrivingschool.co.uk` for testing, then changed to the
-  `just-drive.co.uk` (or subdomain) sending address before go-live.
-- **Before go-live on `just-drive.co.uk`:** add the new domain to Mandrill,
-  publish DKIM + SPF + Return-Path DNS records, verify in the Mandrill
-  dashboard, then update `MAIL_FROM_ADDRESS`.
-- **Calling Mandrill templates:** inject `MandrillTemplateService` into a
-  Controller/Service constructor and call
-  `$this->mandrill->send('template-slug', $email, ['VAR' => $value])`.
-
-**Out of scope (carried forward from Phase 1, NOT done):**
-- Webhook ingestion for delivery events / bounces / unsubscribes.
-- Suppression-list sync between Mandrill and the local users table.
-- Decision on consolidating Bird + Mandrill (deferred until pre-launch review).
-
-**Technical debt / follow-up not done:**
-- No tests added (project rule: user maintains tests manually).
-- No Pint formatting run (project rule: user handles code style).
+**Created:** 2026-06-17
+**Last Updated:** 2026-06-17
+**Status:** Implementation
 
 ---
 
+## 📋 Overview
+
+### Goal
+Fix the pricing unit label on the onboarding "Pick a package" step (Step 3). The
+per-lesson price is currently labelled "per hour", which mixes up lessons and
+hours. Update to "per lesson" so packages such as "10 lessons for £350" display
+as "£35.00 per lesson" rather than "£35.00 per hour".
+
+### Success Criteria
+- [x] On the onboarding package selection step, the small price under each
+      package shows "per lesson" instead of "per hour"
+- [x] Both the discounted and non-discounted price templates are updated
+- [x] Wording is consistent with the rest of the app (Step 5, BookLessonSection,
+      PackageForm — all already use "per lesson" / "/lesson")
+
+### Context
+- Affected file: `resources/js/pages/Onboarding/Step3.vue`
+- The price value comes from `pkg.formatted_lesson_price`, which is derived in
+  `app/Models/Package.php` as `lesson_price_pence / 100`, where
+  `lesson_price_pence = total_price_pence / lessons_count`. So the value is
+  per-lesson by construction; only the label is wrong.
+- Other onboarding/package surfaces already use "per lesson" wording, so this is
+  a localised inconsistency in Step 3.
+
+---
+
+## 🎯 PHASE 1: PLANNING ✅
+
+**Status:** ✅ Complete
+
+### Tasks
+- [x] Locate the onboarding package selection display
+- [x] Confirm the underlying value is per-lesson (not per-hour)
+- [x] Check sibling surfaces for the agreed wording
+
+### Decisions Made
+- Use "per lesson" (matches Step 5 caption style "£X/lesson" and PackageForm's
+  "£X per lesson"). Step 3's existing pattern is the longer phrase
+  "{{ price }} per hour", so the smallest-diff fix is to swap "hour" for
+  "lesson", which also reads naturally next to the "{{ pkg.lessons_count }}
+  lessons" subtitle directly above the price block.
+
+### Components Identified
+- `resources/js/pages/Onboarding/Step3.vue` — two template branches (`discount`
+  vs no-discount) both contain the label.
+
+### Complexity Assessment
+- [x] Low (< 2 hours)
+
+### Reflection
+**What went well:** Quick grep across `resources/js` showed the wording is
+already "per lesson" everywhere else — confirms this is an isolated copy bug,
+not a wider rename.
+
+**What could be improved:** Nothing — straightforward copy fix.
+
+**Risks identified:** None. No backend, schema, or API changes; pure label
+update on a Vue template.
+
+---
+
+## 🔨 PHASE 2: IMPLEMENTATION ✅
+
+**Status:** ✅ Complete
+
+### Tasks
+- [x] Update "per hour" → "per lesson" in the discounted template branch
+- [x] Update "per hour" → "per lesson" in the non-discounted template branch
+
+### Files modified
+- `resources/js/pages/Onboarding/Step3.vue`
+
+### Reflection
+**What went well:** Two-line change, both occurrences sit side-by-side in the
+same component. No other "per hour" usages anywhere else in
+`resources/js`.
+
+**Technical debt created:** None.
+
+---
+
+## 💭 PHASE 3: FINAL REFLECTION & DOCUMENTATION ✅
+
+**Status:** ✅ Complete
+
+### Documentation Updates
+- `results.md` written at project root with client-facing summary and
+  confidence score.
+
+### Known Issues
+- None.
+
+### Overall Reflection
+
+#### What Worked Well
+1. Codebase grep narrowed the problem to a single file and two template lines.
+2. Cross-checked the Package model so we're confident the per-lesson value is
+   correct — only the label was wrong.
+3. Verified other onboarding/package surfaces already use "per lesson" wording,
+   so the fix puts Step 3 in line with the rest of the app.
+
+#### Lessons Learned
+1. When a label looks wrong, check the source attribute (here
+   `formatted_lesson_price`) before assuming the value itself is wrong — saves a
+   wider investigation.
+
+### Future Recommendations
+- None required for this ticket.
+
+---
+
+## ✅ TASK COMPLETE
+
+**Completed:** 2026-06-17
 **Status:** All phases complete.
-**Last Updated:** 2026-05-15.
