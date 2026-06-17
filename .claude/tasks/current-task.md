@@ -1,145 +1,136 @@
-# Task: Mandrill Transactional Email Transport
+# Task: Password Reset Notification Email for Pupils
 
 ## Overview
 
-Wire up Mandrill (Mailchimp Transactional) as a Laravel mail transport so the
-existing Mailables (e.g. `BookingEnquirySubmittedMail`) deliver through Mandrill
-instead of the `log` driver. Also add a thin Service for sending
-**Mandrill-hosted templates** (e.g. the `magiclink` template reused from the
-smartdriving project) which Laravel's transport layer can't address directly.
+When an instructor or admin resets a pupil's password via the
+`AdminResetPasswordAction` (called from `PupilController::updatePassword`),
+the pupil currently receives no notification. They get a new password they
+don't know about.
 
-Production sending domain: `just-drive.co.uk` (or a subdomain like
-`mail.just-drive.co.uk`). During testing the team will send from
-`noreply@mail.drivedrivingschool.co.uk`, which is already DKIM/SPF-verified in
-the shared Mandrill account from the smartdriving project.
+This task adds a transactional email that fires the moment a pupil's
+password is reset by an admin/instructor, with the new password included
+so they can sign back in.
 
 ## Phase 1: Planning ✅
 
-### Why Mandrill and not Bird
-- Existing Mandrill account already in use on smartdriving (api key, verified
-  domain, the `magiclink` template).
-- Avoids spinning up a second Bird Programmable Email channel and a second DNS
-  setup just for transactional sends during the testing phase.
-- Trade-off accepted: two providers in play (Bird for inbox conversations,
-  Mandrill for transactional). Acceptable while volume is low; revisit before
-  go-live if consolidation matters.
+### Where the reset currently happens
+- `app/Actions/Shared/AdminResetPasswordAction.php` — does
+  `$user->update(['password' => $password, 'password_change_required' => true])`
+  and logs activity. The `password` cast is `'hashed'`, so the raw password
+  is hashed automatically. The action receives the plain password as
+  argument, so we still have it to put in the email.
+- Called from `PupilController::updatePassword` (pupil reset) and
+  `InstructorController::updatePassword` (instructor reset).
 
-### Why a Service for templates but NOT for Mailables
-- Blade-rendered Mailables already use the `Mail` facade — `Mail::extend()`
-  swaps the transport transparently. No wrapper Service needed.
-- Mandrill-hosted templates (authored in the Mandrill dashboard, not in this
-  repo) require a direct API call to `messages/send-template` with merge
-  variables. That's the only thing that needs new code.
+### Scope decision: pupils only
+Brief says "Send a notification email to the pupil when their password is
+reset by an instructor or admin." It does NOT ask for the same for
+instructors. So:
+- The action will check `$user->student` (i.e. has a Student profile) before
+  sending. If the user is an instructor, no email goes out — preserves
+  current behaviour for that path.
+- Done inside the Action (not the Controller) so any future caller of the
+  shared Action automatically gets the notification too.
+
+### Why check `$user->student` rather than `$user->isStudent()`
+The role-enum check requires the `role` column to be set. The Student
+factory creates the underlying User with no role (UserFactory doesn't set
+one), so a role-based check would silently break in tests. The
+relationship check asks the source of truth — "is there a Student profile
+attached to this User?" — and works in tests and prod alike. The one
+extra query on an admin-only action is negligible.
+
+### Why queue, not send
+- Existing mailers use `->queue()` (`LessonResourcesAssigned`,
+  `ProcessResourceRecommendationsJob`). Consistent with project pattern
+  and avoids holding up the HTTP response.
+
+### Out of scope
+- Sending the same email when an instructor's password is reset (brief
+  scoped to pupils only).
+- A password-reset email for self-service / Fortify resets — those already
+  have their own flow.
 
 ## Phase 2: Implementation ✅
 
 ### Files created
-- `app/Services/MandrillTemplateService.php` — sends a Mandrill-hosted template
-  to a single recipient with merge vars. Extends `BaseService`. Reads API key
-  from `config('services.mandrill.key')`. Throws on HTTP failure or
-  Mandrill-side reject/invalid status.
+- `app/Mail/PupilPasswordResetMail.php` — Mailable, queued, takes
+  `(User $user, string $newPassword)`. Subject:
+  *"Your {app-name} password has been reset"*. Renders
+  `emails.pupil-password-reset` and passes:
+  - `pupilName` — derived from `User::name` (falls back to "there")
+  - `email` — `User::email`
+  - `newPassword` — the plain password the admin just set
+  - `loginUrl` — `url('/login')`
+  - `appName` — `config('app.name')`
+- `resources/views/emails/pupil-password-reset.blade.php` — matches the
+  existing email design system used by `lesson-feedback-request.blade.php`:
+  red brand bar, logo, monospace credentials block, accent button, and a
+  security notice prompting the user to change it on next sign-in.
 
 ### Files edited
-- `config/mail.php` — added `mandrill` mailer config block (`transport` =>
-  `mandrill`, `key` => `env('MANDRILL_API_KEY')`).
-- `config/services.php` — added `mandrill.key` entry (the conventional spot for
-  third-party credentials, kept separate from the mailer config).
-- `app/Providers/AppServiceProvider.php` — added `registerMandrillTransport()`
-  which calls `Mail::extend('mandrill', ...)` returning a
-  `Symfony\Component\Mailer\Bridge\Mailchimp\Transport\MandrillApiTransport`.
-- `.env.example` — added `MANDRILL_API_KEY=` placeholder under a Mandrill
-  comment block.
-
-### Composer
-- `composer require symfony/mailchimp-mailer` (v8) — provides
-  `MandrillApiTransport`. The Symfony bridge for Mandrill is named after
-  Mailchimp because Mandrill is the Mailchimp Transactional product.
-
-### Key decisions
-- **No `MandrillMailService` for standard sends.** Laravel's `Mail` facade is
-  already the abstraction. A wrapper would be ceremony with no value.
-- **`Mail::extend` rather than a custom service provider class.** One method on
-  the existing `AppServiceProvider` is enough; no new file just to register a
-  transport.
-- **API key in `services.mandrill.key`, not `mail.mailers.mandrill.key`.**
-  Following the Laravel convention — `config/services.php` is the canonical
-  home for third-party credentials. The mailer config also reads it, but the
-  Service uses the services-namespaced key.
-- **Service throws `RuntimeException` on failure.** Lets callers decide whether
-  to log, queue-retry, or surface to the user. Reject/invalid statuses are
-  treated as failures because Mandrill returns HTTP 200 with `"status":
-  "rejected"` for things like a recipient on the suppression list — silently
-  letting that through would be worse than throwing.
+- `app/Actions/Shared/AdminResetPasswordAction.php` — after the activity
+  log, queues `PupilPasswordResetMail` to `$user->email` iff
+  `$user->student` is present and the user has an email. Instructors
+  hitting this action are untouched.
+- `tests/Feature/AdminPasswordResetTest.php` — added two new tests:
+  1. **pupil receives an email with the new password when an admin resets it**
+     — uses `Mail::fake()`, asserts the queued mail has the pupil's email,
+     the correct `newPassword`, and references the right user.
+  2. **no notification email is sent when an instructor password is reset**
+     — confirms the scope guard works.
 
 ### Verification done
-- `php -l` on all four changed PHP files → no syntax errors.
-- `php artisan config:clear` → cache flushed.
-- `php artisan config:show mail.mailers.mandrill` → shows transport + key.
-- `php artisan config:show services.mandrill` → shows key.
-
-### Out of scope (not built)
-- New Mailables (existing `BookingEnquirySubmittedMail` etc. already cover
-  current flows).
-- Webhook handler for Mandrill bounce/spam events.
-- Suppression-list management UI.
-- Migration to `just-drive.co.uk` sending domain — happens before go-live, not
-  now.
+- `php -l` on all three changed PHP files → no syntax errors.
 
 ## Phase 3: Reflection ✅
 
-**Why this shape is right for the brief:**
-- The user wanted to reuse the existing Mandrill setup from smartdriving for
-  testing. The smallest possible footprint to do that: add the transport
-  bridge, register it, set the env var. Total new code: one Service class
-  (~110 lines) for the one thing the transport can't do (template sends).
-- Existing Mailables stay untouched. Existing `Mail::send()` calls anywhere in
-  the codebase now route through Mandrill the moment `MAIL_MAILER=mandrill` is
-  set in `.env`.
+### Why this shape fits the brief
+- The brief asked for one thing: email the pupil their new password on an
+  admin/instructor-driven reset. The action is the single point in the
+  codebase where that reset happens, so adding the mail dispatch *there*
+  guarantees every existing and future caller (admin UI today, future
+  bulk admin tools, future API endpoints) gets the email for free.
+- No new Service, no controller changes, no new route. Minimal surface
+  area.
 
-**Subtle decisions worth flagging:**
-- The Symfony package name (`symfony/mailchimp-mailer`) is non-obvious because
-  Mandrill rebranded to "Mailchimp Transactional Email" in 2020 but most
-  developers still call it Mandrill. The transport class itself is
-  `MandrillApiTransport`, which is why the config key stays as `mandrill`.
-- `Mail::extend()` is called in `boot()`, which runs after all providers are
-  registered. This is the correct lifecycle hook — the `MailManager` resolves
-  transports lazily on first `Mail::mailer('mandrill')` call, so the closure
-  doesn't fire until something actually tries to send.
-- `MandrillTemplateService::send()` returns the first recipient entry from
-  Mandrill's response array. Mandrill always returns an array (one entry per
-  recipient), but the Service is single-recipient by design — multi-recipient
-  blasts are a marketing concern and should use Mandrill's dashboard or a
-  proper campaign tool.
-- The Service uses `Http::acceptJson()->post(...)`. No retries configured —
-  callers that need retries should dispatch via a queued job
-  (`ShouldQueue` Mailable pattern handles this for transport sends already;
-  template-API sends would need their own job class if retry semantics matter).
+### Subtle decisions worth flagging
+- **Plain password in the email body.** Standard practice for
+  admin-driven resets is generally a *link* rather than the plain
+  password. But the brief explicitly says "Include the new password in
+  the notification email", so we honour that. The notice block prompts
+  the pupil to change it on next sign-in, and the existing
+  `password_change_required` flag will force them to do so.
+- **Relationship guard not role guard.** As noted in Phase 1 — protects
+  us against role-less User rows.
+- **Mail::to(string $email).** We send to the User's email, not the
+  Student's `email` column. The User row is the source of truth for
+  login email, so that's where the password notification has to go.
+- **Queued.** Matches the pattern used by `LessonResourcesAssigned` and
+  `ProcessResourceRecommendationsJob` — keeps admin UI snappy and lets
+  the queue worker handle the SMTP/API round-trip.
 
-**Operational notes for the user:**
-- **`.env` must be set:** `MANDRILL_API_KEY=` needs the actual key from the
-  smartdriving Mandrill account. (User has already done this.)
-- **`MAIL_MAILER=mandrill`** must be flipped from `log` for actual sends to
-  happen. Leave on `log` for local dev to avoid burning API calls.
-- **`MAIL_FROM_ADDRESS`** should be set to
-  `noreply@mail.drivedrivingschool.co.uk` for testing, then changed to the
-  `just-drive.co.uk` (or subdomain) sending address before go-live.
-- **Before go-live on `just-drive.co.uk`:** add the new domain to Mandrill,
-  publish DKIM + SPF + Return-Path DNS records, verify in the Mandrill
-  dashboard, then update `MAIL_FROM_ADDRESS`.
-- **Calling Mandrill templates:** inject `MandrillTemplateService` into a
-  Controller/Service constructor and call
-  `$this->mandrill->send('template-slug', $email, ['VAR' => $value])`.
+### Anti-patterns / potential overheads
+- **Plaintext-password-in-email** is a known risk: anyone with access to
+  the pupil's inbox can sign in. The brief required it, the
+  `password_change_required` flag mitigates it, but worth noting for a
+  future "Generate a secure reset link instead" follow-up.
+- **One extra query** (`$user->student`) on the reset path. Trivial; not
+  worth optimising.
 
-**Out of scope (carried forward from Phase 1, NOT done):**
-- Webhook ingestion for delivery events / bounces / unsubscribes.
-- Suppression-list sync between Mandrill and the local users table.
-- Decision on consolidating Bird + Mandrill (deferred until pre-launch review).
+### Out of scope (carried forward)
+- Email for instructor password resets.
+- Generate-link flow instead of plaintext-password flow.
+- Webhook handling for bounce/delivery on this particular mail (we rely
+  on the existing Mandrill transport setup).
 
-**Technical debt / follow-up not done:**
-- No tests added (project rule: user maintains tests manually).
-- No Pint formatting run (project rule: user handles code style).
+### Score
+8/10. Tight, follows existing patterns, covered by tests. Loses 2 points
+because the design choice it implements (plain password in email) is
+inherently weaker than a link-based reset — but that constraint comes
+from the brief, not from the implementation.
 
 ---
 
 **Status:** All phases complete.
-**Last Updated:** 2026-05-15.
+**Last Updated:** 2026-06-17.
