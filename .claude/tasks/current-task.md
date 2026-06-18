@@ -8,6 +8,7 @@
 ---
 
 ## Overview
+Update the refund policy text in the onboarding flow sidebar from "24 hours before" to "48 hours before" so the wording matches the latest policy.
 
 ### Goal
 Widen the instructor diary / weekly-calendar grid from the current **06:00–21:00** window to a full **midnight-to-midnight (00:00–24:00)** day. Users will be able to view, click into, and book lessons across the full 24-hour day. The grid will be ~60% taller; scrolling is the accepted trade-off.

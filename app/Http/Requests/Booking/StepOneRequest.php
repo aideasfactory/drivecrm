@@ -34,7 +34,7 @@ class StepOneRequest extends FormRequest
             'email' => ['required', 'email', 'max:255'],
             'phone' => ['required', 'string', 'regex:/^\+(?:447\d{9}|(?!44)[1-9]\d{6,14})$/'],
             'postcode' => ['required', 'string', 'regex:/^[A-Z]{1,2}[0-9]{1,2}[A-Z]?\s?[0-9][A-Z]{2}$/i'],
-            'transmission' => ['required', 'in:manual,automatic,both'],
+            'transmission' => ['required', 'in:manual,automatic'],
             'privacy_consent' => ['required', 'accepted'],
             'marketing_consent' => ['nullable', 'boolean'],
         ];
