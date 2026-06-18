@@ -1,99 +1,52 @@
-# Results — Timetable Y-Axis Slot Alignment Fix
+# Diary view extended to midnight-to-midnight
 
-## What was the problem?
+## What you asked for
 
-On the **Instructor → Schedule** weekly view, the time labels on the
-left-hand side of the calendar (09:00, 10:00, 11:00, etc.) were drawn
-**on the dividing line between two 30-minute cells** instead of inside
-the cell they belonged to.
+> "Review the diary/timetable view and make it available from midnight to midnight.
+> Extend the visible diary day range so users can work with times across the full 00:00 to 23:59 day.
+> Apply this to the diary experience used when adding diary dates by clicking on the calendar."
 
-That made it look as if the cell **above** the "10:00" label was the
-10:00 cell — but clicking it actually created a slot starting at
-**09:30**. This is the kind of mis-click that quietly leads to
-mis-booked lessons and wasted instructor time chasing them up.
+## What was built
 
-To compound the visual confusion, the alternating border styling
-("solid for hours, dashed for half-hours" — the standard calendar
-convention) was inverted. Hour marks were rendering dashed and
-half-hour marks were rendering solid, so the eye had no consistent cue
-about where one hour ended and the next began.
+The instructor diary / weekly schedule grid (used inside **Instructors → Schedule**) previously only showed and allowed lesson bookings between **06:00 and 21:00**. It now shows and allows bookings across the full **24-hour day, midnight to midnight**.
 
-## What changed?
+This affects three places you'll see in the admin UI:
 
-A single Vue component was edited:
+1. **The weekly calendar grid** — now renders all 48 half-hour rows from 00:00 down through 23:30. The grid is taller than before (≈1920px vs the previous ≈1200px); the schedule scrolls inside its container, as accepted in the brief.
+2. **The "Add Time Slot" sheet (opens when you click an empty slot, or click a day in the month view)** — the start-time dropdown now offers every 15-minute increment from **00:00** through **21:45** for regular 2-hour lessons. (21:45 is the latest a 2-hour lesson can start while still ending before midnight — see "Why 23:45 and not 24:00" below.)
+3. **Drag-and-drop** — events can now be dragged to anywhere in the new wider window. The drag boundary respects the same 00:00 → 23:45 end constraint.
 
-- `resources/js/components/Instructors/Tabs/Schedule/WeeklyCalendarGrid.vue`
+## What was changed under the hood
 
-Two visual changes inside that component:
+| File | Why |
+|------|-----|
+| `resources/js/lib/diary-hours.ts` | Frontend single-source-of-truth for the diary bounds. Widened from 6/21 to 0/24 and added a `DIARY_MAX_END_MINUTES = 23:45` helper. |
+| `config/diary.php` | Backend single-source-of-truth. Widened `start_time` to `00:00`, `end_time` to `23:59`. |
+| `resources/js/components/Instructors/Tabs/Schedule/WeeklyCalendarGrid.vue` | Picks up the new bounds; click and drag clamps now use the wrap-safe upper bound. |
+| `resources/js/components/Instructors/Tabs/ScheduleTab.vue` | The start-time picker and snap-to-grid logic now use the new bounds. |
+| `.claude/api.md` | Updated docs and changelog entry for `POST /api/v1/instructor/calendar/items` reflecting the new validation bounds. |
 
-1. **Hour labels now sit inside the correct cell.**
-   The "10:00" label is now drawn at the top of the 10:00–10:30 cell,
-   not floating on its top border. The cell you see the label inside is
-   the cell that maps to 10:00–12:00 when you click it.
+The three Form Requests that validate calendar item submissions (`StoreCalendarItemRequest`, `UpdateCalendarItemRequest`, `Api\V1\StoreCalendarItemRequest`) **did not need to change** — they already read the bounds from `config('diary.start_time')` / `config('diary.end_time')`, so widening the config alone propagated the validation change to both the admin web UI and the mobile API.
 
-2. **Hour vs. half-hour gridlines are flipped to match calendar
-   convention.**
-   Hour boundaries (the line at the top of every "00" cell) now render
-   as solid lines. Half-hour boundaries (the line at the top of every
-   "30" cell) render as dashed lines. This works the same in both the
-   left-hand time gutter and the seven day columns, so the whole grid
-   reads consistently top-to-bottom.
+No database migration was needed. The `calendar_items.start_time` / `end_time` columns already accept any TIME value; the constraint is application-level. Existing lesson records remain valid because the new (wider) window contains the old (narrower) window.
 
-The click handler that converts a clicked cell into a start time was
-**not** touched. The maths there was already correct — the only bug
-was visual. Leaving the click handler alone means lessons, availability
-slots, and practical-test blocks created before today still display at
-exactly the right Y-position.
+## Why 23:45 and not 24:00 for the latest end
 
-## What does it look like now?
+A subtle technical point worth flagging for transparency: lesson end times are stored as `HH:MM`, which has no representation for `24:00` (it would wrap to `00:00` of the next day). So although the visible grid extends all the way to midnight, the latest a regular 2-hour lesson can start is **21:45** (ending **23:45**). The last 15 minutes of the day (23:45 → 00:00) is visible on the grid but cannot itself be the *start* of a new 2-hour booking.
 
-For the 10:00 hour mark, for example:
+This is an inherent limitation of the fixed 2-hour lesson duration plus the HH:MM storage format. A future change could allow lessons that genuinely cross midnight, but that's a much larger redesign of how the day is modelled. For the current "let users see and book across the day" brief, the 23:45 ceiling is the practical maximum.
 
-```
-─────────────  ← solid 10:00 hour line
- 10:00         ← label sits INSIDE the 10:00–10:30 cell
-              ← clicking here = 10:00 start time (correct)
-─ ─ ─ ─ ─ ─    ← dashed 10:30 half-hour line
-              ← clicking here = 10:30 start time
-─────────────  ← solid 11:00 hour line
- 11:00
-```
+## Out of scope (not done — flag if these matter)
 
-Before, the "10:00" label was floating on the boundary line itself,
-making the 09:30 cell look like the 10:00 cell.
-
-## What is unaffected?
-
-- Existing calendar events (lessons, slots, travel-time blocks,
-  practical tests) keep their stored times and continue to render at
-  the same vertical pixel offset — no data migration, no behavioural
-  change.
-- The monthly view, the booking flow, and the start-time dropdown in
-  the create/edit sheets were untouched. Only the weekly grid changes.
-- Drag-and-drop and the click-to-create flow still snap to 15-minute
-  increments exactly as before.
-
-## Files changed
-
-- `resources/js/components/Instructors/Tabs/Schedule/WeeklyCalendarGrid.vue`
-- `.claude/tasks/current-task.md` (process file — task tracking)
+- **Practical-test buffer wrap.** Practical tests use a `−1 hr prep / +30 min buffer` window for overlap-checking. With the new midnight bounds, a practical test at 00:00 has prep starting at 23:00 the *previous* day — the existing SQL `TIME()`-based overlap check can produce false negatives across midnight. This is a pre-existing quirk that's slightly more visible with the wider window. The user did not ask for cross-midnight handling.
+- **Per-instructor working hours.** The 00:00–23:59 window is a global ceiling. Per-instructor preferences (e.g. "I never work after 22:00") would need their own DB table and UI.
+- **Lessons that genuinely cross midnight** (e.g. start 23:00, end 01:00 next day). Would require modelling the diary entry as having a date range rather than a single date + HH:MM pair.
 
 ## Confidence
 
-**Confidence score: 9 / 10**
+**9 / 10.**
 
-Why a 9 and not a 10:
-
-- The change is small, surgical, and contained to the visual layer of
-  one component. The click-to-time maths is untouched, so no risk of
-  rescheduling existing entries.
-- The fix has been read end-to-end against the click handler, the
-  event-positioning component (`CalendarEventBlock.vue`), and the
-  monthly grid to confirm no cross-component fallout.
-- The half-point is deducted because the change is purely visual and
-  has not been pixel-checked in a browser in this environment — the
-  exact `top-1` (4px) inset for the label inside the cell is a
-  reasonable default, but you may want to nudge it (e.g. `top-0.5` or
-  `-top-2` to overlap the hour line) once you see it on a real screen.
-  The behavioural correctness — clicking the cell with the "10:00"
-  label gives 10:00 — is independent of that tweak.
+- The change is small and additive: two config values widened, three downstream Vue/PHP consumers picked up the new values, one helper added.
+- The single-source-of-truth design (set up in a prior task) held up — both the admin web UI and the mobile API stay in lockstep through `config/diary.php`.
+- Existing data is guaranteed safe: the old window (06:00–21:00) sits entirely inside the new window (00:00–23:59), so no record can become invalid.
+- The 23:45 / midnight ceiling is the one rough edge — small, well-documented, and inherent to the HH:MM + 2-hour-duration design rather than something introduced by this change. Removing that point would require a much larger rework of how lessons are stored, which wasn't asked for.

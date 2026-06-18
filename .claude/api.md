@@ -1993,8 +1993,8 @@ Creates a new calendar item (time slot) for the authenticated instructor. Suppor
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `date` | string | **Yes** | Date in `Y-m-d` format. Cannot be in the past. |
-| `start_time` | string | **Yes** | Start time in `H:i` format (e.g., `09:00`). Must be at or after `06:00`. |
-| `end_time` | string | **Yes** | End time in `H:i` format. Must be after `start_time` and at or before `21:00`. |
+| `start_time` | string | **Yes** | Start time in `H:i` format (e.g., `09:00`). Must be at or after `00:00`. |
+| `end_time` | string | **Yes** | End time in `H:i` format. Must be after `start_time` and at or before `23:59`. |
 | `is_available` | boolean | No | Whether the slot is available for booking. Default: `true`. |
 | `notes` | string\|null | No | Optional notes (max 1000 characters) |
 | `unavailability_reason` | string\|null | No | Optional reason for unavailability (max 500 chars). May be supplied when `is_available=false`; not required. |
@@ -2097,7 +2097,7 @@ Creates a new calendar item (time slot) for the authenticated instructor. Suppor
 **Validation errors (422):**
 - Overlapping time slots (including travel time and practical test buffers) are rejected.
 - `unavailability_reason` is optional and may be omitted when `is_available=false`.
-- `start_time` before `06:00` or `end_time` after `21:00` is rejected (allowed diary window is `06:00`–`21:00`, governed by `config/diary.php`).
+- `start_time` before `00:00` or `end_time` after `23:59` is rejected (allowed diary window is `00:00`–`23:59`, governed by `config/diary.php`). The visible window in the admin UI extends to 24:00; the bookable upper bound is 23:59 because HH:MM cannot represent 24:00.
 
 ---
 
@@ -5420,6 +5420,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-04-28 | Added `student_lesson_number` field to lesson responses — a per-student running lesson number (starts at 1, increments across all the student's orders, immutable after assignment). Now exposed on `GET /api/v1/students/{student}/lessons`, `GET /api/v1/students/{student}/lessons/{lesson}`, and `GET /api/v1/instructor/lessons/{date}`. The internal `id` is retained for routing/internal references; `student_lesson_number` is the user-facing reference for support queries. Backed by a new `lessons.student_lesson_number` column populated via backfill migration. | Student Lessons (index, show), Instructor Lessons (day) |
 | 2026-04-28 | Added `pin` field to the instructor profile object — surfaces the instructor's attach PIN (the same PIN students enter on `POST /api/v1/students/attach`) so the mobile app can display it after the instructor logs in. Returned on every endpoint that already returns the instructor profile object: login, `/auth/user`, instructor registration, `PUT /instructor/profile`, and the profile-picture upload/delete endpoints. | Auth (login, user, register/instructor), Instructor (profile, profile/picture) |
 | 2026-05-19 | Vehicles exposed to the mobile API (Phase 6/7 — HMRC MTD). Added `vehicle_id` to the finance + mileage object, POST, and PUT (validated to belong to the authenticated instructor). Extended `/finances/config` with `category_meta` (per-slug `method_dependent` / `claimable` / `selectable_in_picker` / `itsa_bucket` flags) and an embedded active `vehicles` list. Added read-only `GET /api/v1/instructor/vehicles` (with optional `?include_disposed=1`) for the expense form's vehicle picker. Vehicle CRUD remains web-only in v1 — the app can read but not edit. | Finances (config, store, update), Finance object, Mileage (store, update), Mileage object, Vehicles (new) |
+| 2026-06-17 | Widened the diary time window from `06:00`–`21:00` to a full midnight-to-midnight day. `start_time` must now be ≥ `00:00` and `end_time` ≤ `23:59` on `POST /api/v1/instructor/calendar/items` (and the matching web Form Requests). The visible admin grid renders all 48 half-hour rows; the bookable upper bound is `23:59` because HH:MM cannot represent `24:00`, so the latest 15-min start for a 2-hour lesson is `21:45` (end `23:45`). Bounds sourced from `config/diary.php`; frontend mirror is `resources/js/lib/diary-hours.ts`. | Instructor Calendar (store) |
 
 ---
 

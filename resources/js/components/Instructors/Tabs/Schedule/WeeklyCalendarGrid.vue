@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import CalendarEventBlock from './CalendarEventBlock.vue'
 import type { CalendarEvent } from './CalendarEventBlock.vue'
 import { formatDate } from '@/composables/useCalendarNavigation'
-import { DIARY_START_HOUR, DIARY_END_HOUR } from '@/lib/diary-hours'
+import { DIARY_START_HOUR, DIARY_END_HOUR, DIARY_MAX_END_MINUTES } from '@/lib/diary-hours'
 
 interface Props {
     weekDays: Date[]
@@ -162,8 +162,9 @@ function handleSlotClick(dayDate: Date, slotIndex: number) {
     const totalMinutes = DAY_START_HOUR * 60 + slotIndex * 30
     // Round down to nearest 15-min increment
     const snappedMinutes = Math.floor(totalMinutes / SNAP_MINUTES) * SNAP_MINUTES
-    // Clamp so the 2-hour slot fits within the day
-    const maxStart = (DAY_END_HOUR - SLOT_DURATION_HOURS) * 60
+    // Clamp so the 2-hour slot fits within the bookable day
+    // (DIARY_MAX_END_MINUTES is 23:45 — the last end_time storable as HH:MM)
+    const maxStart = DIARY_MAX_END_MINUTES - SLOT_DURATION_HOURS * 60
     const clampedMinutes = Math.max(DAY_START_HOUR * 60, Math.min(snappedMinutes, maxStart))
     const time = minutesToTime(clampedMinutes)
     emit('clickSlot', date, time)
@@ -277,8 +278,8 @@ function handlePointerUp(_e: PointerEvent) {
     const newStartMinutes = DAY_START_HOUR * 60 + snapBlocks * SNAP_MINUTES
     const newEndMinutes = newStartMinutes + SLOT_DURATION_HOURS * 60
 
-    // Clamp within day boundaries
-    if (newStartMinutes < DAY_START_HOUR * 60 || newEndMinutes > DAY_END_HOUR * 60) {
+    // Clamp within day boundaries (end must fit inside HH:MM-storable range)
+    if (newStartMinutes < DAY_START_HOUR * 60 || newEndMinutes > DIARY_MAX_END_MINUTES) {
         dragging.value = null
         return
     }
