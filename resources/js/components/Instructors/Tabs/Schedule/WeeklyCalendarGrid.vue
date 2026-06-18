@@ -338,7 +338,7 @@ function handlePointerUp(_e: PointerEvent) {
                     -->
                     <span
                         v-if="i % 2 === 0"
-                        class="absolute right-2 top-1 px-1"
+                        class="absolute right-2 top-1 px-1 pt-1"
                     >
                         {{ label }}
                     </span>
