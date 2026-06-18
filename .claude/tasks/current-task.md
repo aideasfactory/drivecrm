@@ -1,107 +1,76 @@
-# Task: Remove "Both" from booking transmission dropdown
+# Task: Google tracking integration on the booking page
 
 ## Overview
 
-The public-facing booking form at `/booking` currently lets a prospect pick
-"Manual", "Automatic" or "Both" as a transmission preference. The "Both" option
-should be removed from the UI and rejected by the form-request validation so a
-prospect cannot submit `transmission=both` through the booking flow.
-
-Scope is the public booking form **only**. The internal instructor-management
-UI (admin/AddInstructorSheet) still uses `both` to describe instructors who can
-teach either gearbox — that is a different concept and stays untouched.
-Historical Enquiry rows that already hold `transmission=both` keep their value
-and their existing display labels (`Either / no preference` in admin email,
-`Either` in the Enquiries index).
+Add Google Ads conversion tracking (Tag ID `AW-10884289539`) and GA4 measurement
+(Stream ID `G-NBYWT0EZF6`) to the public `/booking` page. The page is rendered
+from a Vue/Inertia component (`Booking/Step1.vue`) served via the
+`booking.start` route, and the root Blade template (`resources/views/app.blade.php`)
+already loads Google Tag Manager + Google Consent Mode on all `booking.*`
+routes. The new gtag.js loader must sit alongside the existing GTM snippet,
+share the same dataLayer, and respect the same Consent Mode defaults so users
+who reject analytics cookies are not tracked.
 
 ## Phase 1: Planning ✅
 
-### Files that need changing
-- `resources/js/pages/Booking/Step1.vue` — remove the `<option value="both">`
-  from the transmission `<select>` so it can never appear in the UI.
-- `app/Http/Requests/Booking/StepOneRequest.php` — drop `both` from the
-  `in:manual,automatic,both` validation rule so a hand-crafted POST also fails
-  server-side.
+### Approach
+- Follow the existing GTM pattern in `resources/views/app.blade.php`:
+  config-driven IDs, only emit on `booking.*` routes, use Google Consent Mode.
+- Add two new config entries under `services.google_tag` — `ads_id` and
+  `ga4_id` — with sensible env-driven defaults pointing at the provided IDs.
+- Inject one gtag.js loader (sourced from the Google Ads ID since one loader
+  can drive multiple destinations) and call `gtag('config', ...)` for each ID.
+- Place the snippet AFTER the existing GTM block so the consent default is
+  already pushed to `dataLayer` before gtag inits.
+- The IDs are public values that ship in HTML, so storing the defaults in code
+  is fine; env override is still wired up for parity with the GTM setup.
 
-### Files deliberately NOT changed (and why)
-- `config/booking.php` — still maps `both => BOOKING_INSTRUCTOR_BOTH_ID`. Kept
-  because instructors are still tagged `both` internally and the admin team may
-  still create historical/manual enquiries via other tooling. No code path
-  reaches it from the public form once both is removed from the validator.
-- `app/Http/Controllers/Booking/StepTwoController.php` — `$step1Data['transmission'] ?? 'both'`
-  fallback stays. It only kicks in for malformed step-1 data and is harmless;
-  changing it is out of scope (defensive code for an internal flow).
-- `app/Mail/BookingEnquirySubmittedMail.php` — `transmissionLabel()` keeps the
-  `'both' => 'Either / no preference'` branch so historical enquiries display
-  correctly in admin emails.
-- `resources/js/pages/Enquiries/Index.vue` — same reason as above: keeps
-  rendering historical `both` rows correctly.
-- `resources/js/components/Instructors/AddInstructorSheet.vue` — internal
-  instructor management, out of scope for the booking-form ticket.
-- TypeScript instructor types — describe instructor capability, not booking
-  preference; unchanged.
+### Files to touch
+- `config/services.php` — add `google_tag.ads_id` and `google_tag.ga4_id`.
+- `resources/views/app.blade.php` — inject gtag.js when on `booking.*`.
+- `.env.example` — document the new env vars.
 
-### Risks / things to watch
-- Existing Enquiries in the DB with `transmission=both` must still render — the
-  display-side label mappings stay intact, so they will.
-- `StepTwoController::resolveInstructorId('both')` is unreachable from the
-  public form post-change but still works if called directly. No regression.
+### Out of scope
+- Conversion event firing (already handled in `Booking/Step2.vue` via GTM).
+- Touching the cookie-consent UI; gtag respects the existing Consent Mode.
 
 ## Phase 2: Implementation ✅
 
-- [x] Removed `<option value="both">Both</option>` from
-      `resources/js/pages/Booking/Step1.vue` (line 228 in the original file).
-- [x] Updated `StepOneRequest::rules()` so `transmission` is
-      `['required', 'in:manual,automatic']`. The existing custom error message
-      `transmission.in => 'Please choose a transmission preference'` stays
-      correct because it doesn't enumerate the allowed values.
+### Tasks
+- [x] Added `google_tag.ads_id` and `google_tag.ga4_id` to `config/services.php`,
+      defaulting to the provided IDs but env-overridable.
+- [x] Split the existing GTM block in `app.blade.php` so the Google Consent
+      Mode `default` push happens once for either GTM or gtag, then injected
+      the gtag.js loader (one async script tag) plus `gtag('config', ...)` for
+      both `AW-10884289539` and `G-NBYWT0EZF6`.
+- [x] Added commented `GOOGLE_ADS_ID` / `GOOGLE_GA4_ID` entries to `.env.example`
+      next to a documentation note pointing at `config/services.php`.
 
-### Verification of intent
-- Existing default in Step1.vue (`transmission: existingData.transmission || 'manual'`)
-  is unchanged — a user landing on the form with no prior data now sees Manual
-  pre-selected, which still maps to a valid option.
-- The dropdown is `required`, so an explicit empty selection is already
-  prevented by the browser. With `both` removed, the only submittable values
-  are `manual` and `automatic`.
-- If a prospect had picked `both` in a previous session and the form is
-  rehydrating from `existingData`, the `<select>`'s v-model will hold a value
-  with no matching `<option>`, so the field renders blank and the prospect
-  must choose again — desired behaviour, since `both` is no longer offered.
+### Notes
+- The new gtag block lives inside `request()->routeIs('booking.*')`, matching
+  the existing GTM gate. The `/booking` entry point is itself a redirect to
+  `/booking/{uuid}/step/1`, so tracking only fires on the pages the user
+  actually interacts with — which is the intended behaviour.
+- Both gtag config calls inherit the same `dataLayer` and Consent Mode defaults
+  set above, so a visitor who rejects analytics cookies is still not tracked.
 
 ## Phase 3: Reflection ✅
 
 ### What went well
-- Tight, two-file change that matches the brief exactly. No collateral
-  refactor of related concepts (instructor capability tagging,
-  historical-display labels) that share the `both` literal but aren't part of
-  the public booking surface.
+- Existing GTM scaffold (route gate, Consent Mode block, env-driven config)
+  made the gtag addition a strict additive change — no behaviour for non-booking
+  routes changed.
+- Sharing the consent-default script between GTM and gtag avoided duplicating
+  the Consent Mode push (which would have been harmless but noisy).
 
-### Subtle decisions worth flagging
-- **Left `config/booking.php`'s `'both' => instructor_id` mapping in place.**
-  The public form can no longer submit `both`, so that branch is unreachable
-  from the booking flow. Removing it would have been a tidy-up beyond the
-  ticket's scope and would risk breaking any internal tooling that still
-  treats `both` as a valid instructor bucket.
-- **Left the `transmissionLabel()` mappings in `BookingEnquirySubmittedMail`
-  and `Enquiries/Index.vue` intact.** Historical enquiries with
-  `transmission=both` keep rendering as "Either / no preference" / "Either".
-- **Did not touch the instructor-management form
-  (`AddInstructorSheet.vue`).** That dropdown describes which gearboxes an
-  instructor can teach — a capability flag, not a booking preference. The
-  ticket scope is explicitly the `/booking` form.
-- **Did not delete the `'both' => 'Either / no preference'` row from the
-  mail label map.** Without it, historical enquiries would render an empty
-  cell in the admin email.
+### Trade-offs / future work
+- The IDs are checked in as defaults. They are public values that ship in every
+  rendered booking page anyway, so this is fine, but if the brand ever spins up
+  a separate Google Ads account per environment the env overrides are ready.
+- We intentionally did NOT route the new IDs through GTM (which is also on the
+  page). That keeps the data path explicit: GTM continues to fire the
+  conversion event from `Booking/Step2.vue`, while gtag.js drives both Google
+  Ads + GA4 direct destinations. Worth revisiting if analytics ops wants
+  everything funneled through GTM later.
 
-### Out of scope / follow-up
-- No tests added (project rule: user maintains tests manually).
-- No Pint / lint run (project rule: user handles style).
-- If the team later decides `both` should never appear anywhere in the
-  product, a follow-up ticket should: drop the `both` config key, prune the
-  display-side label branches, and consider a data migration to remap any
-  remaining `transmission=both` enquiries to a chosen default.
-
----
-
-**Status:** All phases complete.
-**Last Updated:** 2026-06-17.
+Last Updated: 2026-06-17
