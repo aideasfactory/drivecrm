@@ -827,6 +827,36 @@ Stores broadcast and direct messages between users. Supports soft deletes for au
 - Soft deletes enabled for audit trail
 - One record created per recipient in a broadcast
 - **Support inbox:** the admin's "Support Messages" page is simply the logged-in admin's messages inbox — the same `MessageService::getConversations()` path used by every other user. From the mobile app, students/instructors send to the admin's user id (1 in the default seeded data) via the existing `POST /api/v1/messages` endpoint. No sentinel id, no virtual participant, no schema change.
+- **Closing tickets:** an owner can "close" (archive) a support conversation. Archive state lives in `support_ticket_archives` (see below) — a conversation is treated as archived only while `archived_at >= latest message`, so a newer message from the participant auto-reopens the ticket to the Inbox.
+
+---
+
+### 16a. **support_ticket_archives**
+
+Per-owner archive (closed) state for support conversations. A "ticket" is a conversation between an owner and one other user; this table records when that ticket was closed. There is no per-message state — archiving is evaluated against the conversation's latest message so a new reply automatically reopens it.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique archive identifier |
+| `owner_id` | bigint unsigned | FOREIGN KEY (users.id), ON DELETE CASCADE | The owner/admin who archived the conversation |
+| `participant_id` | bigint unsigned | FOREIGN KEY (users.id), ON DELETE CASCADE | The conversation partner (student/instructor) |
+| `archived_at` | timestamp | NOT NULL | When the ticket was closed |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Constraints:**
+- Unique on (`owner_id`, `participant_id`) — one archive row per conversation per owner
+
+**Relationships:**
+- Belongs to one `User` as `owner` (via `owner_id`)
+- Belongs to one `User` as `participant` (via `participant_id`)
+
+**Business Logic:**
+- Keyed per-owner so multi-owner inboxes archive independently (matches the per-`$request->user()` inbox model)
+- A conversation is **archived** (shown in the "Archived" folder, hidden from Inbox) only while `archived_at >= latest message.created_at`
+- Closing a ticket: `updateOrCreate` with `archived_at = now()` (`ArchiveConversationAction`)
+- Reopening a ticket: delete the archive row (`ReopenConversationAction`)
+- A later message from the participant pushes `latest message.created_at` past `archived_at`, so the ticket auto-reopens with no extra write
 
 ---
 
@@ -1243,6 +1273,36 @@ UUID-based discount codes for the onboarding flow. Each code maps to a percentag
 |--------|------|-------------|-------------|
 | `discount_code_id` | uuid | NULLABLE, FK → discount_codes.id (ON DELETE SET NULL) | Discount code used |
 | `discount_percentage` | unsigned tinyint | NULLABLE | Snapshot of discount percentage at time of order |
+
+---
+
+### 30. **lesson_reminders**
+
+Idempotency/control table for scheduled reminder notifications (miles + payment-due). One row per `(lesson_id, type)` records that a given reminder has been dispatched, so the `reminders:send` scheduled command never sends the same reminder twice — even after downtime, the unique key guarantees at-most-once delivery. Audit history is still written separately to `activity_logs`; this table holds delivery *state* only.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique reminder identifier |
+| `lesson_id` | bigint unsigned | FOREIGN KEY (lessons.id), ON DELETE CASCADE | Lesson the reminder relates to |
+| `type` | varchar(255) | NOT NULL | Reminder type (`ReminderType` value): `miles_start`, `miles_end`, `payment_due_48h` |
+| `sent_at` | timestamp | NULLABLE | When the reminder delivery was queued |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Indexes:**
+- Unique constraint on `(lesson_id, type)` — the at-most-once idempotency guarantee
+- Index on `(type, created_at)`
+
+**Relationships:**
+- Belongs to one `Lesson`
+- `Lesson` has many `LessonReminder` (via `lessons.reminders()`)
+
+**Enums:**
+- Type (`App\Enums\ReminderType`): `miles_start`, `miles_end`, `payment_due_48h`
+
+**Business Logic:**
+- Written by the `SendMilesReminderAction` / `SendPaymentReminderAction` after a delivery is queued (`updateOrCreate` keyed on `lesson_id` + `type`).
+- The scheduled command (`reminders:send`, every 5 minutes) matches due candidates via `whereDoesntHave('reminders', type=…)` so existing rows suppress repeats.
 
 ---
 

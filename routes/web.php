@@ -287,6 +287,14 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('teams.index');
     Route::get('/reports', [ReportController::class, 'index'])
         ->name('reports.index');
+    Route::get('/reports/availability', [ReportController::class, 'availability'])
+        ->name('reports.availability');
+    Route::get('/reports/availability/export', [ReportController::class, 'exportAvailability'])
+        ->name('reports.availability.export');
+    Route::get('/reports/invoice-due', [ReportController::class, 'invoiceDue'])
+        ->name('reports.invoice-due');
+    Route::get('/reports/invoice-due/export', [ReportController::class, 'exportInvoiceDue'])
+        ->name('reports.invoice-due.export');
     // Push Notifications (Owner Only)
     Route::middleware([EnsureOwner::class])->group(function () {
         Route::get('/push-notifications', [PushNotificationController::class, 'index'])
@@ -301,6 +309,10 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
             ->name('support-messages.index');
         Route::post('/support-messages/{user}', [SupportMessagesController::class, 'store'])
             ->name('support-messages.store');
+        Route::post('/support-messages/{user}/archive', [SupportMessagesController::class, 'archive'])
+            ->name('support-messages.archive');
+        Route::post('/support-messages/{user}/reopen', [SupportMessagesController::class, 'reopen'])
+            ->name('support-messages.reopen');
     });
 
     // Resources (Owner Only)
