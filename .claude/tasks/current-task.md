@@ -1,136 +1,123 @@
-# Task: Password Reset Notification Email for Pupils
+# Task: Fix lesson package pricing label on onboarding form
 
-## Overview
-
-When an instructor or admin resets a pupil's password via the
-`AdminResetPasswordAction` (called from `PupilController::updatePassword`),
-the pupil currently receives no notification. They get a new password they
-don't know about.
-
-This task adds a transactional email that fires the moment a pupil's
-password is reset by an admin/instructor, with the new password included
-so they can sign back in.
-
-## Phase 1: Planning ✅
-
-### Where the reset currently happens
-- `app/Actions/Shared/AdminResetPasswordAction.php` — does
-  `$user->update(['password' => $password, 'password_change_required' => true])`
-  and logs activity. The `password` cast is `'hashed'`, so the raw password
-  is hashed automatically. The action receives the plain password as
-  argument, so we still have it to put in the email.
-- Called from `PupilController::updatePassword` (pupil reset) and
-  `InstructorController::updatePassword` (instructor reset).
-
-### Scope decision: pupils only
-Brief says "Send a notification email to the pupil when their password is
-reset by an instructor or admin." It does NOT ask for the same for
-instructors. So:
-- The action will check `$user->student` (i.e. has a Student profile) before
-  sending. If the user is an instructor, no email goes out — preserves
-  current behaviour for that path.
-- Done inside the Action (not the Controller) so any future caller of the
-  shared Action automatically gets the notification too.
-
-### Why check `$user->student` rather than `$user->isStudent()`
-The role-enum check requires the `role` column to be set. The Student
-factory creates the underlying User with no role (UserFactory doesn't set
-one), so a role-based check would silently break in tests. The
-relationship check asks the source of truth — "is there a Student profile
-attached to this User?" — and works in tests and prod alike. The one
-extra query on an admin-only action is negligible.
-
-### Why queue, not send
-- Existing mailers use `->queue()` (`LessonResourcesAssigned`,
-  `ProcessResourceRecommendationsJob`). Consistent with project pattern
-  and avoids holding up the HTTP response.
-
-### Out of scope
-- Sending the same email when an instructor's password is reset (brief
-  scoped to pupils only).
-- A password-reset email for self-service / Fortify resets — those already
-  have their own flow.
-
-## Phase 2: Implementation ✅
-
-### Files created
-- `app/Mail/PupilPasswordResetMail.php` — Mailable, queued, takes
-  `(User $user, string $newPassword)`. Subject:
-  *"Your {app-name} password has been reset"*. Renders
-  `emails.pupil-password-reset` and passes:
-  - `pupilName` — derived from `User::name` (falls back to "there")
-  - `email` — `User::email`
-  - `newPassword` — the plain password the admin just set
-  - `loginUrl` — `url('/login')`
-  - `appName` — `config('app.name')`
-- `resources/views/emails/pupil-password-reset.blade.php` — matches the
-  existing email design system used by `lesson-feedback-request.blade.php`:
-  red brand bar, logo, monospace credentials block, accent button, and a
-  security notice prompting the user to change it on next sign-in.
-
-### Files edited
-- `app/Actions/Shared/AdminResetPasswordAction.php` — after the activity
-  log, queues `PupilPasswordResetMail` to `$user->email` iff
-  `$user->student` is present and the user has an email. Instructors
-  hitting this action are untouched.
-- `tests/Feature/AdminPasswordResetTest.php` — added two new tests:
-  1. **pupil receives an email with the new password when an admin resets it**
-     — uses `Mail::fake()`, asserts the queued mail has the pupil's email,
-     the correct `newPassword`, and references the right user.
-  2. **no notification email is sent when an instructor password is reset**
-     — confirms the scope guard works.
-
-### Verification done
-- `php -l` on all three changed PHP files → no syntax errors.
-
-## Phase 3: Reflection ✅
-
-### Why this shape fits the brief
-- The brief asked for one thing: email the pupil their new password on an
-  admin/instructor-driven reset. The action is the single point in the
-  codebase where that reset happens, so adding the mail dispatch *there*
-  guarantees every existing and future caller (admin UI today, future
-  bulk admin tools, future API endpoints) gets the email for free.
-- No new Service, no controller changes, no new route. Minimal surface
-  area.
-
-### Subtle decisions worth flagging
-- **Plain password in the email body.** Standard practice for
-  admin-driven resets is generally a *link* rather than the plain
-  password. But the brief explicitly says "Include the new password in
-  the notification email", so we honour that. The notice block prompts
-  the pupil to change it on next sign-in, and the existing
-  `password_change_required` flag will force them to do so.
-- **Relationship guard not role guard.** As noted in Phase 1 — protects
-  us against role-less User rows.
-- **Mail::to(string $email).** We send to the User's email, not the
-  Student's `email` column. The User row is the source of truth for
-  login email, so that's where the password notification has to go.
-- **Queued.** Matches the pattern used by `LessonResourcesAssigned` and
-  `ProcessResourceRecommendationsJob` — keeps admin UI snappy and lets
-  the queue worker handle the SMTP/API round-trip.
-
-### Anti-patterns / potential overheads
-- **Plaintext-password-in-email** is a known risk: anyone with access to
-  the pupil's inbox can sign in. The brief required it, the
-  `password_change_required` flag mitigates it, but worth noting for a
-  future "Generate a secure reset link instead" follow-up.
-- **One extra query** (`$user->student`) on the reset path. Trivial; not
-  worth optimising.
-
-### Out of scope (carried forward)
-- Email for instructor password resets.
-- Generate-link flow instead of plaintext-password flow.
-- Webhook handling for bounce/delivery on this particular mail (we rely
-  on the existing Mandrill transport setup).
-
-### Score
-8/10. Tight, follows existing patterns, covered by tests. Loses 2 points
-because the design choice it implements (plain password in email) is
-inherently weaker than a link-based reset — but that constraint comes
-from the brief, not from the implementation.
+**Created:** 2026-06-17
+**Last Updated:** 2026-06-17
+**Status:** Implementation
 
 ---
 
+## 📋 Overview
+
+### Goal
+Fix the pricing unit label on the onboarding "Pick a package" step (Step 3). The
+per-lesson price is currently labelled "per hour", which mixes up lessons and
+hours. Update to "per lesson" so packages such as "10 lessons for £350" display
+as "£35.00 per lesson" rather than "£35.00 per hour".
+
+### Success Criteria
+- [x] On the onboarding package selection step, the small price under each
+      package shows "per lesson" instead of "per hour"
+- [x] Both the discounted and non-discounted price templates are updated
+- [x] Wording is consistent with the rest of the app (Step 5, BookLessonSection,
+      PackageForm — all already use "per lesson" / "/lesson")
+
+### Context
+- Affected file: `resources/js/pages/Onboarding/Step3.vue`
+- The price value comes from `pkg.formatted_lesson_price`, which is derived in
+  `app/Models/Package.php` as `lesson_price_pence / 100`, where
+  `lesson_price_pence = total_price_pence / lessons_count`. So the value is
+  per-lesson by construction; only the label is wrong.
+- Other onboarding/package surfaces already use "per lesson" wording, so this is
+  a localised inconsistency in Step 3.
+
+---
+
+## 🎯 PHASE 1: PLANNING ✅
+
+**Status:** ✅ Complete
+
+### Tasks
+- [x] Locate the onboarding package selection display
+- [x] Confirm the underlying value is per-lesson (not per-hour)
+- [x] Check sibling surfaces for the agreed wording
+
+### Decisions Made
+- Use "per lesson" (matches Step 5 caption style "£X/lesson" and PackageForm's
+  "£X per lesson"). Step 3's existing pattern is the longer phrase
+  "{{ price }} per hour", so the smallest-diff fix is to swap "hour" for
+  "lesson", which also reads naturally next to the "{{ pkg.lessons_count }}
+  lessons" subtitle directly above the price block.
+
+### Components Identified
+- `resources/js/pages/Onboarding/Step3.vue` — two template branches (`discount`
+  vs no-discount) both contain the label.
+
+### Complexity Assessment
+- [x] Low (< 2 hours)
+
+### Reflection
+**What went well:** Quick grep across `resources/js` showed the wording is
+already "per lesson" everywhere else — confirms this is an isolated copy bug,
+not a wider rename.
+
+**What could be improved:** Nothing — straightforward copy fix.
+
+**Risks identified:** None. No backend, schema, or API changes; pure label
+update on a Vue template.
+
+---
+
+## 🔨 PHASE 2: IMPLEMENTATION ✅
+
+**Status:** ✅ Complete
+
+### Tasks
+- [x] Update "per hour" → "per lesson" in the discounted template branch
+- [x] Update "per hour" → "per lesson" in the non-discounted template branch
+
+### Files modified
+- `resources/js/pages/Onboarding/Step3.vue`
+
+### Reflection
+**What went well:** Two-line change, both occurrences sit side-by-side in the
+same component. No other "per hour" usages anywhere else in
+`resources/js`.
+
+**Technical debt created:** None.
+
+---
+
+## 💭 PHASE 3: FINAL REFLECTION & DOCUMENTATION ✅
+
+**Status:** ✅ Complete
+
+### Documentation Updates
+- `results.md` written at project root with client-facing summary and
+  confidence score.
+
+### Known Issues
+- None.
+
+### Overall Reflection
+
+#### What Worked Well
+1. Codebase grep narrowed the problem to a single file and two template lines.
+2. Cross-checked the Package model so we're confident the per-lesson value is
+   correct — only the label was wrong.
+3. Verified other onboarding/package surfaces already use "per lesson" wording,
+   so the fix puts Step 3 in line with the rest of the app.
+
+#### Lessons Learned
+1. When a label looks wrong, check the source attribute (here
+   `formatted_lesson_price`) before assuming the value itself is wrong — saves a
+   wider investigation.
+
+### Future Recommendations
+- None required for this ticket.
+
+---
+
+## ✅ TASK COMPLETE
+
+**Completed:** 2026-06-17
 **Status:** All phases complete.
-**Last Updated:** 2026-06-17.
