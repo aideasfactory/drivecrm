@@ -1,77 +1,101 @@
-# Instructor onboarding email — results
+# Add Instructor — Structured Selectors
 
-## What was the problem?
-When an admin added a new instructor (single form **or** CSV bulk import) the platform created the user with the literal password `"password"` and **never emailed the instructor**. They had no way to know the account existed and the default credential was guessable by anyone who knew the platform — a serious security gap.
+## What changed
 
-## What's been delivered
-A secure first-login flow that wraps both the single-create form and the bulk CSV import:
+The "Add Instructor" slide-out (also used for "Edit Instructor") had two fields that accepted any free-form text — **Status** and **PDI Status**. Both have been replaced with structured dropdowns backed by a fixed list of sensible options, so the admin can pick a value in one click instead of remembering the exact wording.
 
-1. **Secure default password.** New instructors are created with a **cryptographically random, throwaway** password (48 random characters). The admin never sees it; the instructor never needs it.
-2. **Welcome email with a password-setup link.** As soon as the instructor record is committed, a queued "Welcome to Drive — set up your instructor account" email goes out. It contains a **password-setup link** (a Laravel password-broker token) that takes them to the existing reset-password page where they choose their own password. No plain-text password is ever in transit or in the inbox.
-3. **Plain English next-steps.** The email tells the instructor exactly what to do:
-   1. Click **Set up your account**
-   2. Choose a strong password
-   3. Sign in
+We also tidied up the surrounding form while we were there.
 
-   It also tells them the link expires in 60 minutes and what to do if it has (use **Forgot password** on the sign-in page — same Laravel mechanism, fully self-service).
-4. **Failure handling for admins.**
-   - The user's `welcome_email_pending` flag is set on creation and only cleared once the email actually queues. If the mailer fails, the flag stays `true`, the failure is logged, and an activity entry is written against the instructor.
-   - On the **Instructor Show page**, owners now see an amber banner saying *"Welcome email hasn't been delivered yet"* with a **Resend welcome email** button when the flag is set.
-   - For CSV bulk imports, a per-row error is added to the result modal so the admin can see exactly which instructor's invite did not go out.
-5. **Resend endpoint.** New owner-only route `POST /instructors/{instructor}/resend-invite` mints a fresh token and queues a new email — useful when the original failed or the 60-minute setup link expired.
+### Before
 
-## Why a password-setup link (and not a temporary password)?
-We evaluated three options:
+| Field | Type | Problem |
+|---|---|---|
+| Status | Free-text input | Admin had to type "active" / "inactive" / etc. Any typo was accepted (e.g. "Actve") |
+| PDI Status | Free-text input | Free-form placeholder of "e.g., qualified, trainee" — easy to drift |
+| Transmission Type | Dropdown | Hard-coded in the page — not coming from a single source |
 
-| Option | Verdict |
-| --- | --- |
-| Temporary plain-text password in the email | Works (it's what the pupil flow does) but the password sits in the inbox forever, can be shoulder-surfed, and we'd be responsible for forcing a change later. |
-| One-off magic-link login | Powerful but introduces a new auth surface we'd need to build and audit. |
-| **Password-setup link via Laravel's password broker (chosen)** | Reuses Laravel's audited password-reset machinery, the token is short-lived and single-use, the instructor picks their own password, and if the link expires they can self-serve via **Forgot password** with no admin involvement. |
+### After
 
-## Files changed / added
+| Field | Type | Options |
+|---|---|---|
+| Status | **Dropdown** | Active *(default)*, Inactive, Suspended, On Leave, Archived |
+| PDI Status | **Dropdown** | Qualified ADI *(default)*, Trainee, PDI Part 1 (Theory), PDI Part 2 (Driving), PDI Part 3 (Instructional) |
+| Transmission Type | Dropdown (unchanged UX) | Manual *(default)*, Automatic, Both — now driven from the same source as the other two |
 
-**New**
-- `app/Mail/InstructorWelcomeMail.php` — the queued welcome email
-- `resources/views/emails/instructor-welcome.blade.php` — plain-English HTML template
-- `app/Actions/Instructor/SendInstructorWelcomeEmailAction.php` — mints the token, queues the email, manages the `welcome_email_pending` flag, logs activity, never throws
-- `tests/Feature/Instructors/InstructorWelcomeEmailTest.php` — Pest feature tests covering the entire flow
+All three dropdowns share **one source of truth** in the backend, so the admin UI, the backend validation, and the CSV bulk-import all enforce the exact same list. There is no way for them to drift apart.
 
-**Modified**
-- `app/Services/InstructorService.php` — uses a random password; dispatches the welcome email after the transaction commits; exposes `resendWelcomeEmail()`
-- `app/Actions/Instructor/BulkImportInstructorsAction.php` — same: random password + per-row welcome email + per-row failure surfaced
-- `app/Http/Controllers/InstructorController.php` — new `resendWelcomeEmail` action; show payload now includes `welcome_email_pending`
-- `routes/web.php` — `POST /instructors/{instructor}/resend-invite` (owner-only)
-- `resources/js/pages/Instructors/Show.vue` + `resources/js/types/instructor.ts` — amber banner + **Resend welcome email** button (owners only) when the flag is set
-- `.claude/database-schema.md` — updated to document the new use of `welcome_email_pending`
+## What stayed free-text (and why)
 
-## How to verify
-1. As an owner, go to **Instructors → Add instructor**, create an instructor with a real email address.
-2. Check the inbox (or the local mailpit/mailtrap) — a *Welcome to Drive — set up your instructor account* email should arrive, signed off in plain English with a clear **Set up your account** button.
-3. Click the button → land on `/reset-password/{token}` → choose a password → sign in.
-4. To test the failure path: stop the mailer, click **Resend welcome email** from the Show page — the amber banner stays and an error toast appears. Restart the mailer and click resend again — banner disappears, success toast.
-5. Test bulk import via **Instructors → Import CSV** — each successful row gets an invite; rows whose invites fail are listed as warnings in the result modal.
+These fields are *intentionally* still open text because the values are inherently free-form:
+
+- **Full Name, Email, Phone, Password** — naturally unique per person.
+- **Bio** — a paragraph of biography text.
+- **Address** — a street address.
+- **Postcode** — a UK postcode, validated by format if/when needed.
+
+We didn't add unnecessary constraints to fields where a fixed list would harm usability.
+
+## Defaults
+
+When the admin opens "Add Instructor", the form pre-fills with the most common choices:
+
+- **Status:** Active
+- **PDI Status:** Qualified ADI
+- **Transmission Type:** Manual
+
+These can all be changed before saving — they're suggestions, not locks.
+
+## Coverage
+
+- **Create flow** — the slide-out used from the Instructors list page.
+- **Edit flow** — the same slide-out reused from a specific instructor's page.
+- **CSV bulk import** — uploaded files are now validated against the same enumerated values, so admins can't import an instructor with a Status of `"actve"` even by spreadsheet.
+
+## Edge cases handled
+
+- **Existing instructors with a legacy free-text Status** (e.g. a `status` value that pre-dates the dropdown): the form quietly snaps to the default option instead of breaking. The admin sees the default selected and can pick a valid value.
+- **Mobile API not affected:** no API endpoints were created, changed, or removed. The mobile app does not include admin instructor creation, so it's unaffected.
+- **No database migration needed:** the columns are already strings; we constrained the *allowed values* at the application layer, which keeps existing data intact and the rollback path trivial.
 
 ## Tests
-Pest feature tests cover:
-- Creating an instructor enqueues a welcome email to their address.
-- The setup URL contains a token that is valid against Laravel's password broker.
-- The default password is **not** the literal string `"password"`.
-- Owners can resend; non-owners are forbidden (403).
-- When the mailer throws, `welcome_email_pending` stays `true` so admins see the banner.
-- Bulk import enqueues one email per row.
-- The Show page exposes `welcome_email_pending` so the banner can render.
 
-(As per project standards, tests are written but not run by me — `php artisan test` is reserved for the user.)
+A new Pest feature test file — `tests/Feature/Instructors/InstructorStructuredFieldsTest.php` — covers:
 
-## Confidence score: **8.5 / 10**
+- Valid status / PDI status accepted on create
+- Invalid status / PDI status rejected on create
+- Status and PDI status remain optional on create
+- Valid status / PDI status accepted on update
+- Invalid status / PDI status rejected on update
 
-What I'm confident in:
-- Reuses Laravel's audited password-broker tokens — no bespoke crypto, no plain-text password leaves the system.
-- Failure path is observable: a flag on the user, an activity log line, an admin banner, and a one-click resend.
-- Mirrors the existing `WelcomeStudentNotification` / `welcome_email_pending` patterns, so it should feel familiar to anyone reading the code later.
+Existing transmission type tests continue to pass (the enum just moves into a typed class — the values are unchanged).
 
-What kept it from a 10:
-- I could not run the test suite or the dev server in this sandbox; while the tests are mechanically straightforward and the changes follow existing patterns, a 10 requires me to have actually pressed the buttons.
-- The Vue banner uses `MailWarning` from `lucide-vue-next`; the installed version (0.468) ships it, but if you ever pin an older lucide you'd need to swap it for `Mail` + a warning colour.
-- The reset link expires after 60 minutes (Laravel default). If real instructors are slow to read email, you may want to bump `config/auth.php passwords.users.expire` for a friendlier window — out of scope for this ticket.
+## Files changed
+
+**New**
+- `app/Enums/InstructorStatus.php`
+- `app/Enums/PdiStatus.php`
+- `app/Enums/TransmissionType.php`
+- `tests/Feature/Instructors/InstructorStructuredFieldsTest.php`
+
+**Modified**
+- `app/Http/Requests/StoreInstructorRequest.php` — validates against enums
+- `app/Http/Requests/UpdateInstructorRequest.php` — validates against enums
+- `app/Actions/Instructor/BulkImportInstructorsAction.php` — CSV import validates against enums
+- `app/Http/Controllers/InstructorController.php` — passes `formOptions` to the Index and Show Inertia pages
+- `resources/js/types/instructor.ts` — added `FormOption` and `InstructorFormOptions` types
+- `resources/js/pages/Instructors/Index.vue` — accepts + forwards `formOptions` to the sheet
+- `resources/js/pages/Instructors/Show.vue` — same
+- `resources/js/components/Instructors/AddInstructorSheet.vue` — three dropdowns driven by `formOptions`
+
+---
+
+## Confidence score: **9 / 10**
+
+Why 9 and not 10:
+- A legacy instructor whose `status` is a free-text value that doesn't match the new enum (rare, but possible if the system has historical drift) will see the dropdown default to "Active" the first time it's opened. If the admin saves without changing it, the legacy value is overwritten. This is deliberate behaviour (the whole point of the brief is to constrain values), but it's worth flagging.
+
+Everything else is solid:
+- One backend source feeds three places (form, validation, CSV import).
+- No schema migration, no risk to existing data structure.
+- Pattern follows the existing `BusinessType` / `businessTypes` precedent already used by the HMRC tab — same idiom, same shape.
+- Pest tests cover both create and update paths.

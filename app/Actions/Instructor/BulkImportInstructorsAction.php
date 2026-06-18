@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Actions\Instructor;
 
 use App\Actions\FetchPostcodeCoordinatesAction;
+use App\Enums\InstructorStatus;
+use App\Enums\PdiStatus;
+use App\Enums\TransmissionType;
 use App\Enums\UserRole;
 use App\Models\Instructor;
 use App\Models\User;
@@ -44,11 +47,11 @@ class BulkImportInstructorsAction
             $validator = Validator::make($row, [
                 'name' => ['required', 'string', 'max:255'],
                 'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-                'transmission_type' => ['required', Rule::in(['manual', 'automatic', 'both'])],
+                'transmission_type' => ['required', Rule::in(TransmissionType::values())],
                 'phone' => ['nullable', 'string', 'max:50'],
                 'bio' => ['nullable', 'string'],
-                'status' => ['nullable', 'string', 'max:50'],
-                'pdi_status' => ['nullable', 'string', 'max:50'],
+                'status' => ['nullable', Rule::in(InstructorStatus::values())],
+                'pdi_status' => ['nullable', Rule::in(PdiStatus::values())],
                 'address' => ['nullable', 'string'],
                 'postcode' => ['nullable', 'string', 'max:10'],
             ], [
@@ -57,7 +60,9 @@ class BulkImportInstructorsAction
                 'email.email' => 'Email must be a valid email address.',
                 'email.unique' => 'This email is already in use.',
                 'transmission_type.required' => 'Transmission type is required.',
-                'transmission_type.in' => 'Transmission type must be "manual", "automatic", or "both".',
+                'transmission_type.in' => 'Transmission type must be one of: '.implode(', ', TransmissionType::values()).'.',
+                'status.in' => 'Status must be one of: '.implode(', ', InstructorStatus::values()).'.',
+                'pdi_status.in' => 'PDI status must be one of: '.implode(', ', PdiStatus::values()).'.',
             ]);
 
             if ($validator->fails()) {

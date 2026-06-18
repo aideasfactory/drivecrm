@@ -56,6 +56,17 @@ export interface CreateInstructorData {
   longitude?: number
 }
 
+export interface FormOption {
+  value: string
+  label: string
+}
+
+export interface InstructorFormOptions {
+  status: FormOption[]
+  pdi_status: FormOption[]
+  transmission_type: FormOption[]
+}
+
 export interface Location {
   id: number
   postcode_sector: string
