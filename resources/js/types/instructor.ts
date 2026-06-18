@@ -25,6 +25,7 @@ export interface InstructorDetail {
   booking_hours: BookingHours
   locations: Location[]
   hmrc_connected?: boolean
+  welcome_email_pending?: boolean
 }
 
 export interface InstructorStats {

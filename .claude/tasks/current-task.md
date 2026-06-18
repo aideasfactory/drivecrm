@@ -73,7 +73,10 @@ Each enum gets a `label(): string` method and an `options(): array` static helpe
 - `AddInstructorSheet.vue` types `formOptions` as `InstructorFormOptions` (new TS type) and renders each select via `v-for`.
 - TS types: add `InstructorFormOptions` and `FormOption` to `resources/js/types/instructor.ts`. Keep `InstructorDetail.status` / `pdi_status` as `string` so legacy rows still display.
 
-### Decisions
+## Why a password setup link (not a temp password)?
+- The existing pupil flow emails a plain-text temporary password. That works but means the password lives in the inbox forever and is shoulder-surf vulnerable.
+- The Laravel password broker is already wired (Fortify + `routes/auth.php`). The broker mints a token, the user receives a link to `password.reset`, and the existing `ResetPassword` Inertia page handles the password creation. No new auth surface area.
+- The instructor never sees a server-generated password, the link expires (60 mins by default, refreshable via forgot-password), and the same flow handles future admin invites.
 
 - **Backward compatibility for legacy values.** Rows with non-enum legacy `status` strings (e.g. `'something_else'`) still render in lists but, when opened in the edit sheet, the select will fall back to the default option. Because the form is the only mutator going through validation, no data corruption can happen — but the admin must pick a valid enum value to save. Acceptable: the user explicitly asked to constrain new entries.
 - **`pdi_status` default.** The legacy column allowed null and the form treated empty as "no PDI status set". We keep nullability in the DB but require a value when posted; "Qualified" is the default since the majority of instructors are full ADIs. The admin can pick any other lifecycle stage.
@@ -82,7 +85,11 @@ Each enum gets a `label(): string` method and an `options(): array` static helpe
 - **No schema migration.** `status` / `pdi_status` are already `string(50)` / `string(50) NULL` in `instructors`. The enum constraint is purely at the application layer (FormRequest + CSV action). No `.claude/database-schema.md` update needed because no column changes.
 - **`api.md` not touched.** This task does not add, modify, or remove any API endpoint — `InstructorController::store`/`update` are web (Inertia) only. The mobile API for instructors does not include this admin create flow.
 
-### Risks
+### New
+- `app/Mail/InstructorWelcomeMail.php` — Mailable for the welcome email
+- `resources/views/emails/instructor-welcome.blade.php` — HTML template
+- `app/Actions/Instructor/SendInstructorWelcomeEmailAction.php` — mints token, dispatches mail, logs activity, manages `welcome_email_pending`
+- `tests/Feature/Instructors/InstructorWelcomeEmailTest.php` — feature tests (single create, bulk import, resend, password setup link)
 
 - **Drift between TS enum values and PHP enum values.** Mitigated by passing the options array from PHP through Inertia — TS never hard-codes the enum values.
 - **Legacy rows.** Discussed above — acceptable.

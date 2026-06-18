@@ -15,12 +15,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class BulkImportInstructorsAction
 {
     public function __construct(
-        protected FetchPostcodeCoordinatesAction $fetchPostcodeCoordinates
+        protected FetchPostcodeCoordinatesAction $fetchPostcodeCoordinates,
+        protected SendInstructorWelcomeEmailAction $sendInstructorWelcomeEmail,
     ) {}
 
     /**
@@ -100,18 +102,21 @@ class BulkImportInstructorsAction
                     }
                 }
 
-                // Create user account
+                // Create user account with a cryptographically-random password.
+                // The instructor sets their real password via the welcome email link.
                 $user = User::create([
                     'name' => $validated['name'],
                     'email' => $validated['email'],
-                    'password' => Hash::make('password'),
+                    'password' => Hash::make(Str::random(48)),
+                    'password_change_required' => true,
+                    'welcome_email_pending' => true,
                     'role' => UserRole::INSTRUCTOR,
                 ]);
 
                 $avatarNumber = rand(1, 5);
 
                 // Create instructor profile
-                Instructor::create([
+                $instructor = Instructor::create([
                     'user_id' => $user->id,
                     'bio' => $validated['bio'] ?? null,
                     'address' => $validated['address'] ?? null,
@@ -134,6 +139,19 @@ class BulkImportInstructorsAction
 
                 DB::commit();
                 $imported++;
+
+                // Dispatch welcome email after commit. On send failure the action
+                // leaves welcome_email_pending = true and we surface a per-row
+                // warning so the admin sees it in the CSV result modal.
+                $sent = ($this->sendInstructorWelcomeEmail)($instructor);
+
+                if (! $sent) {
+                    $errors[] = [
+                        'row' => $rowNumber,
+                        'field' => 'email',
+                        'message' => "Instructor created, but the welcome email to '{$validated['email']}' failed to send. Use the Resend invite action to retry.",
+                    ];
+                }
             } catch (\Exception $e) {
                 DB::rollBack();
 

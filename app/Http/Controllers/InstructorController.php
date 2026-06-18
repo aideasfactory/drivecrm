@@ -230,6 +230,7 @@ class InstructorController extends Controller
                 'booking_hours' => $bookingHours,
                 'locations' => $locations,
                 'hmrc_connected' => $instructor->user->hmrcToken()->exists(),
+                'welcome_email_pending' => (bool) $instructor->user->welcome_email_pending,
             ],
             'tab' => $tab,
             'subtab' => request()->query('subtab', 'summary'),
@@ -325,6 +326,27 @@ class InstructorController extends Controller
 
         return response()->json([
             'message' => 'Password has been reset successfully.',
+        ]);
+    }
+
+    /**
+     * Resend the welcome / password-setup email to an instructor.
+     * Used when the original email failed or the setup link expired.
+     */
+    public function resendWelcomeEmail(Instructor $instructor): JsonResponse
+    {
+        $sent = $this->instructorService->resendWelcomeEmail($instructor);
+
+        if (! $sent) {
+            return response()->json([
+                'message' => 'We could not send the welcome email. Please check the logs and try again.',
+                'welcome_email_pending' => $instructor->user?->fresh()?->welcome_email_pending ?? true,
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'Welcome email has been resent.',
+            'welcome_email_pending' => false,
         ]);
     }
 
