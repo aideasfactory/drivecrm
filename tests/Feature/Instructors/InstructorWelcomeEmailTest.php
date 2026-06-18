@@ -8,9 +8,11 @@ use App\Mail\InstructorWelcomeMail;
 use App\Models\Instructor;
 use App\Models\User;
 use App\Services\InstructorService;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
+use Inertia\Testing\AssertableInertia;
 
 beforeEach(function () {
     // Stub postcodes.io so InstructorService::createInstructor can resolve coords.
@@ -101,7 +103,7 @@ test('the default password is not the literal string "password"', function () {
 
     $user = User::where('email', 'strong.default@example.com')->firstOrFail();
 
-    expect(\Illuminate\Support\Facades\Hash::check('password', $user->password))->toBeFalse();
+    expect(Hash::check('password', $user->password))->toBeFalse();
 });
 
 test('owners can resend the welcome email via the resend-invite endpoint', function () {
@@ -151,7 +153,7 @@ test('send action leaves welcome_email_pending = true when sending fails', funct
     $instructor = Instructor::factory()->create(['user_id' => $user->id]);
 
     // Force the mailer to throw on send.
-    Mail::shouldReceive('to')->andThrow(new \RuntimeException('SMTP down'));
+    Mail::shouldReceive('to')->andThrow(new RuntimeException('SMTP down'));
 
     $action = app(SendInstructorWelcomeEmailAction::class);
     $sent = $action($instructor);
@@ -203,7 +205,7 @@ test('instructor show page exposes welcome_email_pending flag', function () {
 
     $response->assertOk();
     $response->assertInertia(
-        fn (\Inertia\Testing\AssertableInertia $page) => $page
+        fn (AssertableInertia $page) => $page
             ->where('instructor.welcome_email_pending', true)
     );
 });

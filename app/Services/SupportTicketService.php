@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Actions\Support\ArchiveConversationAction;
 use App\Actions\Support\ReopenConversationAction;
+use App\Models\Message;
 use App\Models\SupportTicketArchive;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -25,7 +26,7 @@ class SupportTicketService extends BaseService
      * `archived_at` is at or after the latest message — so a newer message
      * from the participant automatically reopens the ticket.
      *
-     * @return Collection<int, array{user: User, latest_message: \App\Models\Message, is_archived: bool}>
+     * @return Collection<int, array{user: User, latest_message: Message, is_archived: bool}>
      */
     public function getAnnotatedConversations(User $owner): Collection
     {
