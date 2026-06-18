@@ -86,14 +86,19 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('instructors.packages.store');
     Route::get('/instructors/{instructor}/locations', [InstructorController::class, 'locations'])
         ->name('instructors.locations');
-    Route::post('/instructors/{instructor}/locations', [InstructorController::class, 'storeLocation'])
-        ->name('instructors.locations.store');
-    Route::delete('/instructors/{instructor}/locations/{location}', [InstructorController::class, 'destroyLocation'])
-        ->name('instructors.locations.destroy');
-    Route::get('/instructors/{instructor}/locations-export', [InstructorController::class, 'exportLocationsCsv'])
-        ->name('instructors.locations.export');
-    Route::post('/instructors/{instructor}/locations-import', [InstructorController::class, 'importLocationsCsv'])
-        ->name('instructors.locations.import');
+
+    // Coverage area mutations and CSV import/export are admin (owner) only.
+    // Instructors can still view their own coverage via the GET above.
+    Route::middleware([EnsureOwner::class])->group(function () {
+        Route::post('/instructors/{instructor}/locations', [InstructorController::class, 'storeLocation'])
+            ->name('instructors.locations.store');
+        Route::delete('/instructors/{instructor}/locations/{location}', [InstructorController::class, 'destroyLocation'])
+            ->name('instructors.locations.destroy');
+        Route::get('/instructors/{instructor}/locations-export', [InstructorController::class, 'exportLocationsCsv'])
+            ->name('instructors.locations.export');
+        Route::post('/instructors/{instructor}/locations-import', [InstructorController::class, 'importLocationsCsv'])
+            ->name('instructors.locations.import');
+    });
     Route::get('/instructors/{instructor}/calendar', [InstructorController::class, 'calendar'])
         ->name('instructors.calendar');
     Route::post('/instructors/{instructor}/calendar/items', [InstructorController::class, 'storeCalendarItem'])
