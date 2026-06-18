@@ -1,6 +1,7 @@
 # Task: Fix Timetable Y-Axis Slot Alignment
 
 ## Overview
+Update the refund policy text in the onboarding flow sidebar from "24 hours before" to "48 hours before" so the wording matches the latest policy.
 
 Branch: `feature/019ed532-0578-70ac-af88-70cc7ba3bf5f-fix-timetable-y-axis-slot-alignment`
 
@@ -79,7 +80,10 @@ correct — the fix is purely visual alignment.
   it was floating with `-translate-y-1/2`. Now the label sits inside
   the cell with no border behind it, so the mask is unnecessary.
 
-## Phase 3: Reflection ✅
+## Phase 1: Planning ✅
+- [x] Locate every occurrence of the refund policy copy in the onboarding flow
+- [x] Confirm scope: only refund-policy sidebar copy (not unrelated "24 hours" usages, e.g., invoice timing on Step6)
+- [x] Identify exact files and line numbers to change
 
 - [x] Summarise what changed and why (in `results.md`).
 - [x] Note the confidence score (9/10) and the caveat that the exact

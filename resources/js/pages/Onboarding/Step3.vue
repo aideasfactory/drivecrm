@@ -109,13 +109,13 @@
                               <div class="text-sm text-muted-foreground line-through">{{ pkg.formatted_total_price }}</div>
                               <div class="text-3xl font-bold text-green-600 dark:text-green-400">{{ getDiscountedPrice(pkg.formatted_total_price) }}</div>
                               <div class="text-xs text-muted-foreground mt-1">
-                                {{ getDiscountedPrice(pkg.formatted_lesson_price) }} per hour
+                                {{ getDiscountedPrice(pkg.formatted_lesson_price) }} per lesson
                               </div>
                             </template>
                             <template v-else>
                               <div class="text-3xl font-bold">{{ pkg.formatted_total_price }}</div>
                               <div class="text-xs text-muted-foreground mt-1">
-                                {{ pkg.formatted_lesson_price }} per hour
+                                {{ pkg.formatted_lesson_price }} per lesson
                               </div>
                             </template>
                           </div>
