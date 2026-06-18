@@ -12,7 +12,7 @@ import FinancesTab from '@/components/Instructors/Tabs/FinancesTab.vue'
 import StudentTab from '@/components/Instructors/Tabs/StudentTab.vue'
 import HmrcTab from '@/components/Instructors/Tabs/HmrcTab.vue'
 import AddInstructorSheet from '@/components/Instructors/AddInstructorSheet.vue'
-import type { InstructorDetail } from '@/types/instructor'
+import type { InstructorDetail, InstructorFormOptions } from '@/types/instructor'
 
 interface ConnectionStatus {
     connected: boolean
@@ -74,6 +74,7 @@ interface Props {
     student?: number
     hmrc?: HmrcData | null
     hmrcService?: HmrcServicePayload | null
+    formOptions: InstructorFormOptions
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -197,6 +198,7 @@ const breadcrumbs = [
         <AddInstructorSheet
             v-model:open="isEditSheetOpen"
             :instructor="instructor"
+            :form-options="formOptions"
             @instructor-updated="isEditSheetOpen = false"
         />
     </AppLayout>

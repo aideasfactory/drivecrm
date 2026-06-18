@@ -1,52 +1,101 @@
-# Diary view extended to midnight-to-midnight
+# Add Instructor — Structured Selectors
 
-## What you asked for
+## What changed
 
-> "Review the diary/timetable view and make it available from midnight to midnight.
-> Extend the visible diary day range so users can work with times across the full 00:00 to 23:59 day.
-> Apply this to the diary experience used when adding diary dates by clicking on the calendar."
+The "Add Instructor" slide-out (also used for "Edit Instructor") had two fields that accepted any free-form text — **Status** and **PDI Status**. Both have been replaced with structured dropdowns backed by a fixed list of sensible options, so the admin can pick a value in one click instead of remembering the exact wording.
 
-## What was built
+We also tidied up the surrounding form while we were there.
 
-The instructor diary / weekly schedule grid (used inside **Instructors → Schedule**) previously only showed and allowed lesson bookings between **06:00 and 21:00**. It now shows and allows bookings across the full **24-hour day, midnight to midnight**.
+### Before
 
-This affects three places you'll see in the admin UI:
+| Field | Type | Problem |
+|---|---|---|
+| Status | Free-text input | Admin had to type "active" / "inactive" / etc. Any typo was accepted (e.g. "Actve") |
+| PDI Status | Free-text input | Free-form placeholder of "e.g., qualified, trainee" — easy to drift |
+| Transmission Type | Dropdown | Hard-coded in the page — not coming from a single source |
 
-1. **The weekly calendar grid** — now renders all 48 half-hour rows from 00:00 down through 23:30. The grid is taller than before (≈1920px vs the previous ≈1200px); the schedule scrolls inside its container, as accepted in the brief.
-2. **The "Add Time Slot" sheet (opens when you click an empty slot, or click a day in the month view)** — the start-time dropdown now offers every 15-minute increment from **00:00** through **21:45** for regular 2-hour lessons. (21:45 is the latest a 2-hour lesson can start while still ending before midnight — see "Why 23:45 and not 24:00" below.)
-3. **Drag-and-drop** — events can now be dragged to anywhere in the new wider window. The drag boundary respects the same 00:00 → 23:45 end constraint.
+### After
 
-## What was changed under the hood
+| Field | Type | Options |
+|---|---|---|
+| Status | **Dropdown** | Active *(default)*, Inactive, Suspended, On Leave, Archived |
+| PDI Status | **Dropdown** | Qualified ADI *(default)*, Trainee, PDI Part 1 (Theory), PDI Part 2 (Driving), PDI Part 3 (Instructional) |
+| Transmission Type | Dropdown (unchanged UX) | Manual *(default)*, Automatic, Both — now driven from the same source as the other two |
 
-| File | Why |
-|------|-----|
-| `resources/js/lib/diary-hours.ts` | Frontend single-source-of-truth for the diary bounds. Widened from 6/21 to 0/24 and added a `DIARY_MAX_END_MINUTES = 23:45` helper. |
-| `config/diary.php` | Backend single-source-of-truth. Widened `start_time` to `00:00`, `end_time` to `23:59`. |
-| `resources/js/components/Instructors/Tabs/Schedule/WeeklyCalendarGrid.vue` | Picks up the new bounds; click and drag clamps now use the wrap-safe upper bound. |
-| `resources/js/components/Instructors/Tabs/ScheduleTab.vue` | The start-time picker and snap-to-grid logic now use the new bounds. |
-| `.claude/api.md` | Updated docs and changelog entry for `POST /api/v1/instructor/calendar/items` reflecting the new validation bounds. |
+All three dropdowns share **one source of truth** in the backend, so the admin UI, the backend validation, and the CSV bulk-import all enforce the exact same list. There is no way for them to drift apart.
 
-The three Form Requests that validate calendar item submissions (`StoreCalendarItemRequest`, `UpdateCalendarItemRequest`, `Api\V1\StoreCalendarItemRequest`) **did not need to change** — they already read the bounds from `config('diary.start_time')` / `config('diary.end_time')`, so widening the config alone propagated the validation change to both the admin web UI and the mobile API.
+## What stayed free-text (and why)
 
-No database migration was needed. The `calendar_items.start_time` / `end_time` columns already accept any TIME value; the constraint is application-level. Existing lesson records remain valid because the new (wider) window contains the old (narrower) window.
+These fields are *intentionally* still open text because the values are inherently free-form:
 
-## Why 23:45 and not 24:00 for the latest end
+- **Full Name, Email, Phone, Password** — naturally unique per person.
+- **Bio** — a paragraph of biography text.
+- **Address** — a street address.
+- **Postcode** — a UK postcode, validated by format if/when needed.
 
-A subtle technical point worth flagging for transparency: lesson end times are stored as `HH:MM`, which has no representation for `24:00` (it would wrap to `00:00` of the next day). So although the visible grid extends all the way to midnight, the latest a regular 2-hour lesson can start is **21:45** (ending **23:45**). The last 15 minutes of the day (23:45 → 00:00) is visible on the grid but cannot itself be the *start* of a new 2-hour booking.
+We didn't add unnecessary constraints to fields where a fixed list would harm usability.
 
-This is an inherent limitation of the fixed 2-hour lesson duration plus the HH:MM storage format. A future change could allow lessons that genuinely cross midnight, but that's a much larger redesign of how the day is modelled. For the current "let users see and book across the day" brief, the 23:45 ceiling is the practical maximum.
+## Defaults
 
-## Out of scope (not done — flag if these matter)
+When the admin opens "Add Instructor", the form pre-fills with the most common choices:
 
-- **Practical-test buffer wrap.** Practical tests use a `−1 hr prep / +30 min buffer` window for overlap-checking. With the new midnight bounds, a practical test at 00:00 has prep starting at 23:00 the *previous* day — the existing SQL `TIME()`-based overlap check can produce false negatives across midnight. This is a pre-existing quirk that's slightly more visible with the wider window. The user did not ask for cross-midnight handling.
-- **Per-instructor working hours.** The 00:00–23:59 window is a global ceiling. Per-instructor preferences (e.g. "I never work after 22:00") would need their own DB table and UI.
-- **Lessons that genuinely cross midnight** (e.g. start 23:00, end 01:00 next day). Would require modelling the diary entry as having a date range rather than a single date + HH:MM pair.
+- **Status:** Active
+- **PDI Status:** Qualified ADI
+- **Transmission Type:** Manual
 
-## Confidence
+These can all be changed before saving — they're suggestions, not locks.
 
-**9 / 10.**
+## Coverage
 
-- The change is small and additive: two config values widened, three downstream Vue/PHP consumers picked up the new values, one helper added.
-- The single-source-of-truth design (set up in a prior task) held up — both the admin web UI and the mobile API stay in lockstep through `config/diary.php`.
-- Existing data is guaranteed safe: the old window (06:00–21:00) sits entirely inside the new window (00:00–23:59), so no record can become invalid.
-- The 23:45 / midnight ceiling is the one rough edge — small, well-documented, and inherent to the HH:MM + 2-hour-duration design rather than something introduced by this change. Removing that point would require a much larger rework of how lessons are stored, which wasn't asked for.
+- **Create flow** — the slide-out used from the Instructors list page.
+- **Edit flow** — the same slide-out reused from a specific instructor's page.
+- **CSV bulk import** — uploaded files are now validated against the same enumerated values, so admins can't import an instructor with a Status of `"actve"` even by spreadsheet.
+
+## Edge cases handled
+
+- **Existing instructors with a legacy free-text Status** (e.g. a `status` value that pre-dates the dropdown): the form quietly snaps to the default option instead of breaking. The admin sees the default selected and can pick a valid value.
+- **Mobile API not affected:** no API endpoints were created, changed, or removed. The mobile app does not include admin instructor creation, so it's unaffected.
+- **No database migration needed:** the columns are already strings; we constrained the *allowed values* at the application layer, which keeps existing data intact and the rollback path trivial.
+
+## Tests
+
+A new Pest feature test file — `tests/Feature/Instructors/InstructorStructuredFieldsTest.php` — covers:
+
+- Valid status / PDI status accepted on create
+- Invalid status / PDI status rejected on create
+- Status and PDI status remain optional on create
+- Valid status / PDI status accepted on update
+- Invalid status / PDI status rejected on update
+
+Existing transmission type tests continue to pass (the enum just moves into a typed class — the values are unchanged).
+
+## Files changed
+
+**New**
+- `app/Enums/InstructorStatus.php`
+- `app/Enums/PdiStatus.php`
+- `app/Enums/TransmissionType.php`
+- `tests/Feature/Instructors/InstructorStructuredFieldsTest.php`
+
+**Modified**
+- `app/Http/Requests/StoreInstructorRequest.php` — validates against enums
+- `app/Http/Requests/UpdateInstructorRequest.php` — validates against enums
+- `app/Actions/Instructor/BulkImportInstructorsAction.php` — CSV import validates against enums
+- `app/Http/Controllers/InstructorController.php` — passes `formOptions` to the Index and Show Inertia pages
+- `resources/js/types/instructor.ts` — added `FormOption` and `InstructorFormOptions` types
+- `resources/js/pages/Instructors/Index.vue` — accepts + forwards `formOptions` to the sheet
+- `resources/js/pages/Instructors/Show.vue` — same
+- `resources/js/components/Instructors/AddInstructorSheet.vue` — three dropdowns driven by `formOptions`
+
+---
+
+## Confidence score: **9 / 10**
+
+Why 9 and not 10:
+- A legacy instructor whose `status` is a free-text value that doesn't match the new enum (rare, but possible if the system has historical drift) will see the dropdown default to "Active" the first time it's opened. If the admin saves without changing it, the legacy value is overwritten. This is deliberate behaviour (the whole point of the brief is to constrain values), but it's worth flagging.
+
+Everything else is solid:
+- One backend source feeds three places (form, validation, CSV import).
+- No schema migration, no risk to existing data structure.
+- Pattern follows the existing `BusinessType` / `businessTypes` precedent already used by the HMRC tab — same idiom, same shape.
+- Pest tests cover both create and update paths.
