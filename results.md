@@ -1,42 +1,28 @@
-# Results — Lesson Package Pricing Label Fix
+# Onboarding Refund Policy Copy Update — Results
 
-## What was wrong
-On the onboarding "Pick a package" step, each package card showed its lessons
-count (e.g. *10 lessons*) and the total price (e.g. *£350*), and underneath had
-a smaller breakdown of the unit price labelled **"per hour"**. The value itself
-was correct — it was the price per lesson — but the wording mixed up lessons
-and hours and could mislead a student into thinking each lesson was an hour
-shorter or longer than they expected, or worse, that the school was suggesting
-an inflated hourly rate.
+## What changed
+The refund policy line in the onboarding form's left sidebar has been updated so the cancellation window matches the current policy.
 
-## What was changed
-Both the discounted and full-price variants of the price label on Step 3 of the
-onboarding flow now read **"per lesson"** instead of **"per hour"**.
+**Before:** "Full refund policy - cancel up to 24 hours before"
+**After:**  "Full refund policy - cancel up to 48 hours before"
 
-For the example in the brief — a 10-lesson package totalling £350 — the small
-print under the headline price now reads "£35.00 per lesson" (or the
-discounted equivalent if a promotion applies), matching the wording already
-used on the order summary step, the instructor booking dialog, and the
-instructor's package management screen.
+## Where it lives
+The copy appeared in two places in the onboarding journey, and both have been updated so the wording stays consistent throughout the flow:
 
-## Files touched
-- `resources/js/pages/Onboarding/Step3.vue` — two label strings updated.
+1. `resources/js/components/Onboarding/OnboardingLeftSidebar.vue` — the shared sidebar used across the onboarding steps.
+2. `resources/js/pages/Onboarding/Step1.vue` — an inline sidebar copy on Step 1 of the onboarding form.
 
-## Scope check
-- Confirmed the underlying value (`formatted_lesson_price`) is calculated in the
-  `Package` model as total price divided by lesson count, so it has always been
-  a per-lesson figure. Only the label was wrong; no pricing logic, schema, or
-  totals were affected.
-- Verified the rest of the codebase already uses "per lesson" / "/lesson"
-  wording on every other surface that shows a unit price — this change brings
-  Step 3 into line with the existing pattern.
-- No backend, database, or API changes were needed.
+## What was checked
+- Searched the codebase for every occurrence of "Full refund policy" and "24 hours" to make sure nothing referencing the refund window was missed.
+- Confirmed remaining "24 hours" mentions elsewhere (e.g., `Step6.vue`) refer to invoice-email timing — unrelated to the refund policy and intentionally left alone.
+- Verified the post-change copy renders consistently in both updated files.
+
+## Risk & impact
+- Pure copy change — no business logic, validation, or booking behaviour touched.
+- No database, API, or migration impact.
+- No tests required for a static-string copy change.
 
 ## Confidence score
 **9 / 10**
 
-A purely textual change on a single Vue template, in two adjacent lines, with no
-side effects and the rest of the app already using the new wording. The one
-point withheld reflects that the fix wasn't visually confirmed in a running
-browser (per project rules, automated tests and the dev server were not
-invoked); a quick eyeball on staging before release is recommended.
+Why not 10: the wording change is straightforward and verified in both files, but the actual refund-policy enforcement (e.g., how cancellations are processed downstream) is policy/operational and is outside the scope of this UI text change — please make sure the operations/policy side reflects 48 hours too if that wasn't already aligned.
