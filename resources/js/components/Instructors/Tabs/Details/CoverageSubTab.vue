@@ -29,11 +29,15 @@ import {
 import { MapPin, Plus, Trash2, Loader2, Download, Upload } from 'lucide-vue-next'
 import { toast } from '@/components/ui/toast'
 import CsvImportSheet from '@/components/CsvImportSheet.vue'
+import { useRole } from '@/composables/useRole'
 import type { InstructorDetail, Location } from '@/types/instructor'
 
 const props = defineProps<{
     instructor: InstructorDetail
 }>()
+
+// Coverage mutations (add/delete/CSV upload/CSV download) are admin-only.
+const { isOwner } = useRole()
 
 // State
 const locations = ref<Location[]>([])
@@ -205,7 +209,7 @@ const handleCsvImported = () => {
                     Coverage Areas
                 </h1>
                 <Button
-                    v-if="!isLoading"
+                    v-if="!isLoading && isOwner"
                     size="sm"
                     @click="openAddSheet"
                     class="h-8"
@@ -215,8 +219,8 @@ const handleCsvImported = () => {
                 </Button>
             </div>
 
-            <!-- CSV Export / Import -->
-            <div v-if="!isLoading" class="mb-4 flex gap-2">
+            <!-- CSV Export / Import (admin only) -->
+            <div v-if="!isLoading && isOwner" class="mb-4 flex gap-2">
                 <Button
                     variant="outline"
                     size="sm"
@@ -252,7 +256,8 @@ const handleCsvImported = () => {
                 <div v-if="!hasLocations" class="rounded-lg border-2 border-dashed border-gray-300 p-6 text-center">
                     <MapPin class="mx-auto h-8 w-8 text-gray-400" />
                     <p class="mt-2 text-sm text-gray-500">No coverage areas yet</p>
-                    <p class="text-xs text-gray-400">Click "Add Area" button above</p>
+                    <p v-if="isOwner" class="text-xs text-gray-400">Click "Add Area" button above</p>
+                    <p v-else class="text-xs text-gray-400">An administrator can add coverage areas for you.</p>
                 </div>
 
                 <!-- Location Items -->
@@ -267,7 +272,7 @@ const handleCsvImported = () => {
                     <ItemContent>
                         <ItemTitle>{{ location.postcode_sector }}</ItemTitle>
                     </ItemContent>
-                    <ItemActions>
+                    <ItemActions v-if="isOwner">
                         <Button
                             variant="ghost"
                             size="sm"

@@ -18,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withSchedule(function (Schedule $schedule): void {
         $schedule->command('calendar:cleanup-drafts')->dailyAt('00:00');
         $schedule->command('push:send-queued')->everyMinute();
+        $schedule->command('reminders:send')->everyFiveMinutes()->withoutOverlapping();
         $schedule->command('hmrc:monitor-token-expiry')->dailyAt('07:00');
         $schedule->command('hmrc:sync-itsa-obligations')->dailyAt('07:15');
         $schedule->command('hmrc:check-refresh-health')->hourly();
