@@ -1,41 +1,74 @@
-# Task: Update onboarding refund policy copy to 48 hours
+# Task: Add instructor onboarding email with login setup
 
 ## Overview
-Update the refund policy text in the onboarding flow sidebar from "24 hours before" to "48 hours before" so the wording matches the latest policy.
+When an admin adds a new instructor (single form, CSV bulk import) no email is sent. The default password is the literal string `password`, which is a serious security issue and gives the instructor no way to know about the account.
 
-Branch: `feature/019ed53f-d4a4-7228-93bd-25849b09c55e-update-onboarding-refund-policy-copy-to-48-hours`
+This task wires up a secure first-login flow:
 
-## Files Identified
-- `resources/js/components/Onboarding/OnboardingLeftSidebar.vue` (line 40)
-- `resources/js/pages/Onboarding/Step1.vue` (line 47)
+1. Replace the default `'password'` with a randomly-generated, unguessable password (so the account is never accessible without the email link).
+2. Send the instructor a welcome email that contains a **password setup link** (Laravel password broker token) rather than a temporary password. The instructor clicks the link, sets their own password, and signs in.
+3. Surface email send failures: mark the user `welcome_email_pending = true` until the notification is dispatched, log activity, and expose a "Resend welcome email" admin action so admins can recover from failures.
+4. Cover the new code with Pest tests.
 
-Both contain the exact string: `Full refund policy - cancel up to 24 hours before`
+Branch: `feature/019ed9ee-bfc6-719c-a1c0-84af75e9bbb5-add-instructor-onboarding-email-with-login-setup`
+
+## Why a password setup link (not a temp password)?
+- The existing pupil flow emails a plain-text temporary password. That works but means the password lives in the inbox forever and is shoulder-surf vulnerable.
+- The Laravel password broker is already wired (Fortify + `routes/auth.php`). The broker mints a token, the user receives a link to `password.reset`, and the existing `ResetPassword` Inertia page handles the password creation. No new auth surface area.
+- The instructor never sees a server-generated password, the link expires (60 mins by default, refreshable via forgot-password), and the same flow handles future admin invites.
+
+## Files to be touched / created
+
+### New
+- `app/Mail/InstructorWelcomeMail.php` — Mailable for the welcome email
+- `resources/views/emails/instructor-welcome.blade.php` — HTML template
+- `app/Actions/Instructor/SendInstructorWelcomeEmailAction.php` — mints token, dispatches mail, logs activity, manages `welcome_email_pending`
+- `tests/Feature/Instructors/InstructorWelcomeEmailTest.php` — feature tests (single create, bulk import, resend, password setup link)
+
+### Modified
+- `app/Services/InstructorService.php` — call action after creating instructor; new `resendWelcomeEmail()` method
+- `app/Actions/Instructor/BulkImportInstructorsAction.php` — generate random password, dispatch welcome email per row
+- `app/Http/Controllers/InstructorController.php` — `resendWelcomeEmail` endpoint; expose `welcome_email_pending` on Show page
+- `routes/web.php` — `POST /instructors/{instructor}/resend-invite`
+- `resources/js/pages/Instructors/Show.vue` — surface invite-pending banner + resend button (lightweight — owner-only)
 
 ---
 
 ## Phase 1: Planning ✅
-- [x] Locate every occurrence of the refund policy copy in the onboarding flow
-- [x] Confirm scope: only refund-policy sidebar copy (not unrelated "24 hours" usages, e.g., invoice timing on Step6)
-- [x] Identify exact files and line numbers to change
+- [x] Audit current "create instructor" flow (`InstructorController::store`, `InstructorService::createInstructor`, `BulkImportInstructorsAction`)
+- [x] Decide approach: password setup link via Laravel password broker (no plain-text password ever sent)
+- [x] Confirm `welcome_email_pending` column exists on `users` (yes — migration 2026_04_27_193134)
+- [x] Confirm Fortify routes (`password.reset`, `password.request`) are wired (yes, via `routes/auth.php`)
+- [x] Confirm `WelcomeStudentNotification` pattern for analogous failure handling (use `welcome_email_pending`, log activity, allow resend)
 
 ### Reflection
-- The string lives in two Vue components — the shared `OnboardingLeftSidebar` plus an inline copy inside `Step1.vue`. Both need updating to stay consistent.
-- Other "24 hours" mentions (Step6.vue invoice timing) are unrelated to the refund policy and stay untouched.
+- The `users` table already has `welcome_email_pending` and `password_change_required` columns from the pupil flow — we get the same defense-in-depth for instructors with no migration.
+- Reusing the password broker keeps us on the audited Laravel reset path instead of inventing a new "magic link" surface area.
+- The existing pattern in `SendOrderConfirmationEmailAction::sendWelcomeEmailIfPending` shows how to claim the pending flag atomically; we'll mirror it for the instructor variant.
 
 ## Phase 2: Implementation ✅
-- [x] Update `OnboardingLeftSidebar.vue` line 40 — change "24 hours" → "48 hours"
-- [x] Update `Step1.vue` line 47 — change "24 hours" → "48 hours"
-- [x] Verify no other refund-policy strings reference 24 hours
+- [x] Create `InstructorWelcomeMail` Mailable
+- [x] Create Blade view `emails/instructor-welcome.blade.php`
+- [x] Create `SendInstructorWelcomeEmailAction` (mint token, mark pending, dispatch, log activity, on failure leave pending = true and log error)
+- [x] Update `InstructorService::createInstructor` to use a cryptographic random password and dispatch the welcome email
+- [x] Add `InstructorService::resendWelcomeEmail()` method
+- [x] Update `BulkImportInstructorsAction` to use a random password and dispatch the welcome email
+- [x] Add `InstructorController::resendWelcomeEmail` + route
+- [x] Expose `welcome_email_pending` on the Show page payload and add the resend-button UI (owner-only)
 
 ### Reflection
-- Plain copy change with no logic impact. Both files use identical wording, so they stay in sync after the edit.
+- The store flow already runs inside a DB transaction. The email send is dispatched after the transaction commits so we never email someone who didn't get saved.
+- Action returns a `bool` success and **never throws** to its callers — failures are logged and the pending flag is left at `true` so the admin UI can surface the issue.
+- The bulk-import loop tolerates per-row send failures by logging them into the row-level `errors[]` array, so admins viewing the CSV result modal see exactly which instructor's invite did not go out.
 
-## Phase 3: Wrap-up ✅
-- [x] Create `results.md` client-facing summary with confidence score
+## Phase 3: Tests, docs, sentinel ✅
+- [x] Pest feature tests (notification dispatched; token created; pending flag toggles; resend works; failure leaves pending = true)
+- [x] Update `api.md` if a new admin route counts — it's a web route, so api.md left alone; database-schema.md unchanged
+- [x] Write `results.md`
 - [x] Write `.phase_done` sentinel
 
 ### Reflection
-- Low-risk text change. Confidence high because both occurrences match exactly and no business logic is tied to the copy.
+- Branch unaffected by main; sentinel and results.md cover the deliverable for Gumbo.
 
 ---
 

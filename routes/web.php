@@ -145,6 +145,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('instructors.contacts.primary');
     Route::put('/instructors/{instructor}/password', [InstructorController::class, 'updatePassword'])
         ->name('instructors.password.update');
+    Route::post('/instructors/{instructor}/resend-invite', [InstructorController::class, 'resendWelcomeEmail'])
+        ->middleware(EnsureOwner::class)
+        ->name('instructors.resend-invite');
 
     // Instructor Progress Tracker (framework CRUD — axios-fed)
     Route::get('/instructors/{instructor}/progress-tracker/framework', [ProgressTrackerController::class, 'framework'])
