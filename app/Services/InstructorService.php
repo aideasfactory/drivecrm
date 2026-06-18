@@ -59,6 +59,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class InstructorService extends BaseService
 {
@@ -106,36 +107,31 @@ class InstructorService extends BaseService
     /**
      * Create a new instructor with user account and locations.
      *
-     * @return array ['success' => bool, 'instructor' => Instructor|null, 'error' => string|null]
+     * Throws ValidationException for known recoverable failures (e.g. postcode
+     * lookup) so the form-request pipeline surfaces a 422 + field error back to
+     * the Inertia client. Unexpected exceptions bubble up and roll the
+     * transaction back, hitting Laravel's default error handling.
      */
-    public function createInstructor(array $data): array
+    public function createInstructor(array $data): Instructor
     {
-        try {
-            DB::beginTransaction();
+        $coordinates = ($this->fetchPostcodeCoordinates)($data['postcode']);
 
-            // 1. Fetch coordinates from postcode
-            $coordinates = ($this->fetchPostcodeCoordinates)($data['postcode']);
+        if (! $coordinates || ! $coordinates['latitude'] || ! $coordinates['longitude']) {
+            throw ValidationException::withMessages([
+                'postcode' => 'We could not find coordinates for that postcode. Please double-check it and try again.',
+            ]);
+        }
 
-            if (! $coordinates || ! $coordinates['latitude'] || ! $coordinates['longitude']) {
-                return [
-                    'success' => false,
-                    'instructor' => null,
-                    'error' => 'Unable to fetch coordinates for the provided postcode. Please check the postcode and try again.',
-                ];
-            }
-
-            // 2. Create user account
+        return DB::transaction(function () use ($data, $coordinates) {
             $user = User::create([
                 'name' => $data['name'],
                 'email' => $data['email'],
-                'password' => Hash::make('password'), // Default password
+                'password' => Hash::make($data['password'] ?? 'password'),
                 'role' => UserRole::INSTRUCTOR,
             ]);
 
-            // random number between 1 and 5
             $avatarNumber = rand(1, 5);
 
-            // 3. Create instructor profile
             $instructor = Instructor::create([
                 'user_id' => $user->id,
                 'bio' => $data['bio'] ?? null,
@@ -155,10 +151,8 @@ class InstructorService extends BaseService
                 ],
             ]);
 
-            // 4. Create instructor locations (postcode sectors)
             if (! empty($data['locations']) && is_array($data['locations'])) {
                 foreach ($data['locations'] as $postcodeSector) {
-                    // Skip empty entries
                     if (empty(trim($postcodeSector))) {
                         continue;
                     }
@@ -170,26 +164,10 @@ class InstructorService extends BaseService
                 }
             }
 
-            // 5. Seed default progress-tracker framework
             ($this->seedInstructorProgressTracker)($instructor);
 
-            DB::commit();
-
-            return [
-                'success' => true,
-                'instructor' => $instructor->load('user', 'locations'),
-                'error' => null,
-            ];
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            return [
-                'success' => false,
-                'instructor' => null,
-                'error' => 'Failed to create instructor: '.$e->getMessage(),
-            ];
-        }
+            return $instructor->load('user', 'locations');
+        });
     }
 
     /**
