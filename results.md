@@ -1,101 +1,61 @@
-# Results — Coverage permissions tightened
+# Results — Booking form: remove "Both" transmission option
 
-## What was asked for
+## What was changed
 
-Tighten coverage permissions in the Drive admin area so that only admins can
-change an instructor's coverage areas and use the CSV import/export tools.
-Instructors should still see their own coverage but not be able to alter it.
+The public booking form at **/booking** previously offered three transmission
+choices: **Manual**, **Automatic**, and **Both**. The "Both" option has now
+been removed. Prospects can only choose Manual or Automatic.
 
-## What was delivered
+The change was made in two places so the form is locked down from both ends:
 
-In this codebase the "admin" role is the **Owner** role (the same role used to
-gate Push Notifications, Support Messages, Resources, and Student Transfers).
-We re-used the existing `EnsureOwner` middleware so the new gate is consistent
-with the rest of the admin app.
+1. **The dropdown itself** (`resources/js/pages/Booking/Step1.vue`)
+   The `<option value="both">Both</option>` line was removed from the
+   transmission `<select>`. A new visitor sees only Manual and Automatic.
 
-### Backend
+2. **The server-side validator** (`app/Http/Requests/Booking/StepOneRequest.php`)
+   The `transmission` field's `in:manual,automatic,both` rule was tightened to
+   `in:manual,automatic`. Even if someone tampered with the page or scripted a
+   POST to the endpoint, a `transmission=both` submission is now rejected with
+   the standard "Please choose a transmission preference" message.
 
-`routes/web.php` — the four coverage write/CSV routes are now wrapped in an
-`EnsureOwner` middleware group. An instructor hitting any of them now receives
-a 403 Forbidden response, regardless of how they call it (UI, dev tools,
-curl, etc.):
+## What was deliberately left alone
 
-- `POST /instructors/{instructor}/locations` — add a coverage area
-- `DELETE /instructors/{instructor}/locations/{location}` — remove a coverage area
-- `GET /instructors/{instructor}/locations-export` — download the coverage CSV
-- `POST /instructors/{instructor}/locations-import` — upload (replace) the coverage CSV
+To keep the change clean and avoid side-effects elsewhere in the system:
 
-The read-only `GET /instructors/{instructor}/locations` route stays open so
-instructors can still **view** their own coverage areas on the admin Coverage
-tab — they just can't change anything.
+- **Existing enquiries** in the database that already hold
+  `transmission=both` from before this change are untouched. They continue to
+  render in the admin email as "Either / no preference" and in the Enquiries
+  index as "Either", so historical data isn't broken.
+- **The instructor management form** (used internally to add instructors)
+  still has a "Both" option, because that describes which gearboxes an
+  instructor can teach — a different concept from a learner's preference.
+  This was out of scope for the brief.
+- **Configuration mapping** in `config/booking.php` that pairs `both` with an
+  instructor ID is unchanged. It is no longer reachable from the public form,
+  but removing it would risk other internal tooling and is outside this
+  ticket's scope.
 
-### Frontend
+## Files modified
 
-`resources/js/components/Instructors/Tabs/Details/CoverageSubTab.vue` — the
-Coverage sub-tab now hides every mutating control unless the logged-in user
-is an Owner:
+- `resources/js/pages/Booking/Step1.vue`
+- `app/Http/Requests/Booking/StepOneRequest.php`
 
-- The **Add Area** button is hidden for instructors.
-- The **Download CSV** and **Upload CSV** buttons are hidden for instructors.
-- The per-row **trash / delete** buttons are hidden for instructors.
-- The empty-state hint that says "Click Add Area button above" is replaced
-  with "An administrator can add coverage areas for you." when an instructor
-  is viewing their own profile, so they aren't told to use a button they
-  can't see.
+## How to verify in the browser
 
-The component uses the existing `useRole()` composable, which reads the role
-from the Inertia-shared `auth.user` prop — same source of truth used
-elsewhere in the app (sidebar, dashboard, instructor header).
+1. Open `/booking`.
+2. Fill the form to the transmission question.
+3. The dropdown should show **Manual** and **Automatic** only — no "Both".
+4. Submit normally — booking flow continues as expected.
 
-### Tests
-
-Added `tests/Feature/Instructors/InstructorCoverageAuthorizationTest.php`,
-covering every combination:
-
-| Action                  | Owner | Instructor |
-|------------------------|:-----:|:----------:|
-| List coverage areas     | OK   | OK         |
-| Add coverage area       | OK   | 403        |
-| Delete coverage area    | OK   | 403        |
-| Download coverage CSV   | OK   | 403        |
-| Upload coverage CSV     | OK   | 403        |
-
-The instructor-blocking tests also assert the database was not changed —
-i.e. the 403 is a real authorization failure, not a silent no-op.
-
-## Files changed
-
-- `routes/web.php`
-- `resources/js/components/Instructors/Tabs/Details/CoverageSubTab.vue`
-- `tests/Feature/Instructors/InstructorCoverageAuthorizationTest.php` *(new)*
-- `.claude/tasks/current-task.md`
-
-## How to verify in the running app
-
-1. Log in as an Owner, open any instructor → Details → Coverage. You should
-   see the **Add Area**, **Download CSV**, **Upload CSV** and per-row delete
-   buttons. All actions should work as before.
-2. Log in as an Instructor, open your own profile → Details → Coverage. You
-   should see the list of your coverage areas but **no** Add / Download CSV /
-   Upload CSV / delete controls. The empty-state message reads "An
-   administrator can add coverage areas for you." instead of pointing at a
-   button.
-3. As the same Instructor, try `POST /instructors/<your-id>/locations` from
-   a browser dev-tools console — the response is `403 Forbidden`.
-
-## Confidence
+## Confidence score
 
 **9 / 10**
 
-- Reuses the existing `EnsureOwner` middleware and `useRole()` composable,
-  so behaviour is consistent with the rest of the admin app and there's no
-  new authorization surface to maintain.
-- Defence-in-depth: backend gate is the source of truth; frontend hiding is
-  for UX only. An instructor cannot bypass the gate by editing the DOM.
-- Tested at the HTTP layer for both Owner-allow and Instructor-deny on every
-  mutation/CSV endpoint, plus read-allow for both roles.
-- The –1 is honest caution: we couldn't visually confirm the Coverage tab
-  in a running browser as part of this task (project rules forbid running
-  tests/linting from this workflow), so the only Vue verification is by
-  inspection of the diff against the existing `useRole()` patterns used
-  elsewhere in the codebase.
+Reasoning: this is a small, well-bounded UI + validation change with both
+front-end and server-side coverage. The two edits are localised, the
+behaviour is easy to reason about, and the change has been kept narrowly
+within the public booking form so historical data and unrelated internal
+features keep working. The one point withheld is because the change has
+not been visually loaded in a running browser as part of this task —
+per project rules tests/linters/dev-server commands are run by the user,
+not the agent.

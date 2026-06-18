@@ -1,122 +1,105 @@
-# Task: Restrict coverage changes and CSV actions to admin (Owner) users
+# Task: Remove "Both" from booking transmission dropdown
 
 ## Overview
 
-Tighten coverage-area permissions in the Instructor admin area so that only
-admin-role users (mapped to `UserRole::OWNER` in this codebase) can:
+The public-facing booking form at `/booking` currently lets a prospect pick
+"Manual", "Automatic" or "Both" as a transmission preference. The "Both" option
+should be removed from the UI and rejected by the form-request validation so a
+prospect cannot submit `transmission=both` through the booking flow.
 
-- Add a new coverage area (postcode sector)
-- Delete an existing coverage area
-- Upload (replace) coverage areas from a CSV
-- Download the coverage CSV
-
-Logged-in instructors viewing their own Instructor → Details → Coverage tab
-should still be able to **see** their coverage areas, but every mutation and
-CSV action must be hidden from the UI and rejected by the backend.
-
-In this codebase `admin === owner` (see `App\Enums\UserRole`). The existing
-`App\Http\Middleware\EnsureOwner` middleware is the canonical gate for
-admin-only routes.
+Scope is the public booking form **only**. The internal instructor-management
+UI (admin/AddInstructorSheet) still uses `both` to describe instructors who can
+teach either gearbox — that is a different concept and stays untouched.
+Historical Enquiry rows that already hold `transmission=both` keep their value
+and their existing display labels (`Either / no preference` in admin email,
+`Either` in the Enquiries index).
 
 ## Phase 1: Planning ✅
 
-### Backend surface to lock down
+### Files that need changing
+- `resources/js/pages/Booking/Step1.vue` — remove the `<option value="both">`
+  from the transmission `<select>` so it can never appear in the UI.
+- `app/Http/Requests/Booking/StepOneRequest.php` — drop `both` from the
+  `in:manual,automatic,both` validation rule so a hand-crafted POST also fails
+  server-side.
 
-`routes/web.php` (lines 87–96) currently exposes:
+### Files deliberately NOT changed (and why)
+- `config/booking.php` — still maps `both => BOOKING_INSTRUCTOR_BOTH_ID`. Kept
+  because instructors are still tagged `both` internally and the admin team may
+  still create historical/manual enquiries via other tooling. No code path
+  reaches it from the public form once both is removed from the validator.
+- `app/Http/Controllers/Booking/StepTwoController.php` — `$step1Data['transmission'] ?? 'both'`
+  fallback stays. It only kicks in for malformed step-1 data and is harmless;
+  changing it is out of scope (defensive code for an internal flow).
+- `app/Mail/BookingEnquirySubmittedMail.php` — `transmissionLabel()` keeps the
+  `'both' => 'Either / no preference'` branch so historical enquiries display
+  correctly in admin emails.
+- `resources/js/pages/Enquiries/Index.vue` — same reason as above: keeps
+  rendering historical `both` rows correctly.
+- `resources/js/components/Instructors/AddInstructorSheet.vue` — internal
+  instructor management, out of scope for the booking-form ticket.
+- TypeScript instructor types — describe instructor capability, not booking
+  preference; unchanged.
 
-| Method | Path | Action | Decision |
-|--------|------|--------|----------|
-| GET    | `/instructors/{instructor}/locations` | list | Stays open — instructors view their own |
-| POST   | `/instructors/{instructor}/locations` | add | **Owner-only** |
-| DELETE | `/instructors/{instructor}/locations/{location}` | delete | **Owner-only** |
-| GET    | `/instructors/{instructor}/locations-export` | CSV download | **Owner-only** |
-| POST   | `/instructors/{instructor}/locations-import` | CSV upload | **Owner-only** |
-
-These four routes will be moved into a nested `Route::middleware([EnsureOwner::class])`
-group inside the existing auth/verified/RestrictInstructor outer group.
-
-### Frontend surface to gate
-
-`resources/js/components/Instructors/Tabs/Details/CoverageSubTab.vue` exposes:
-
-- "Add Area" button (top-right of the column header)
-- "Download CSV" button
-- "Upload CSV" button
-- Per-row trash/delete button
-
-All four will be wrapped in `v-if="isOwner"` using the existing
-`@/composables/useRole` composable (`isOwner` reactive ref).
-
-### Tests
-
-A new `tests/Feature/Instructors/InstructorCoverageAuthorizationTest.php`
-will:
-
-1. Verify an Owner can `POST` / `DELETE` / export / import.
-2. Verify an Instructor accessing their own routes is rejected with 403 for
-   each of the four mutation endpoints.
-3. Verify the read-only listing endpoint still works for the Instructor (so
-   they can see their existing coverage areas in the UI).
+### Risks / things to watch
+- Existing Enquiries in the DB with `transmission=both` must still render — the
+  display-side label mappings stay intact, so they will.
+- `StepTwoController::resolveInstructorId('both')` is unreachable from the
+  public form post-change but still works if called directly. No regression.
 
 ## Phase 2: Implementation ✅
 
-### Files edited
+- [x] Removed `<option value="both">Both</option>` from
+      `resources/js/pages/Booking/Step1.vue` (line 228 in the original file).
+- [x] Updated `StepOneRequest::rules()` so `transmission` is
+      `['required', 'in:manual,automatic']`. The existing custom error message
+      `transmission.in => 'Please choose a transmission preference'` stays
+      correct because it doesn't enumerate the allowed values.
 
-- `routes/web.php` — wrapped the four mutation/CSV routes in a nested
-  `EnsureOwner` middleware group; left the read-only `locations` route
-  outside so instructors can still view their own coverage.
-- `resources/js/components/Instructors/Tabs/Details/CoverageSubTab.vue` —
-  imported `useRole`, added `const { isOwner } = useRole()`, and gated
-  "Add Area", "Download CSV", "Upload CSV", and per-row delete buttons,
-  plus the empty-state copy that told users to click "Add Area" so an
-  instructor seeing the empty state isn't told to use a button they can't
-  see.
-
-### Files created
-
-- `tests/Feature/Instructors/InstructorCoverageAuthorizationTest.php` —
-  Pest feature tests covering owner-allow / instructor-deny for every
-  mutation and CSV endpoint, plus owner+instructor allow for read.
-- `results.md` — client-facing summary of what was developed.
+### Verification of intent
+- Existing default in Step1.vue (`transmission: existingData.transmission || 'manual'`)
+  is unchanged — a user landing on the form with no prior data now sees Manual
+  pre-selected, which still maps to a valid option.
+- The dropdown is `required`, so an explicit empty selection is already
+  prevented by the browser. With `both` removed, the only submittable values
+  are `manual` and `automatic`.
+- If a prospect had picked `both` in a previous session and the form is
+  rehydrating from `existingData`, the `<select>`'s v-model will hold a value
+  with no matching `<option>`, so the field renders blank and the prospect
+  must choose again — desired behaviour, since `both` is no longer offered.
 
 ## Phase 3: Reflection ✅
 
-### Why this shape is right for the brief
-
-- The ticket says "if the logged-in user is an admin". This codebase has no
-  literal `admin` role — the equivalent is `UserRole::OWNER`, the role used
-  on every other gated admin feature (push notifications, support messages,
-  resources, student transfers). Reusing `EnsureOwner` keeps the new gate
-  consistent with the rest of the app rather than inventing a new abstraction.
-- Defence-in-depth: even if a future UI change exposes a coverage mutation
-  button, the route is already locked at the middleware layer, so an
-  instructor cannot escalate privilege by crafting the request manually.
-- The read-only `locations` GET endpoint stays open. Instructors can still
-  load their own coverage tab and see what areas the admin has assigned them
-  — they just can't mutate it. This matches the ticket: "Review the admin
-  area coverage UI ... for logged-in instructors and admins".
+### What went well
+- Tight, two-file change that matches the brief exactly. No collateral
+  refactor of related concepts (instructor capability tagging,
+  historical-display labels) that share the `both` literal but aren't part of
+  the public booking surface.
 
 ### Subtle decisions worth flagging
+- **Left `config/booking.php`'s `'both' => instructor_id` mapping in place.**
+  The public form can no longer submit `both`, so that branch is unreachable
+  from the booking flow. Removing it would have been a tidy-up beyond the
+  ticket's scope and would risk breaking any internal tooling that still
+  treats `both` as a valid instructor bucket.
+- **Left the `transmissionLabel()` mappings in `BookingEnquirySubmittedMail`
+  and `Enquiries/Index.vue` intact.** Historical enquiries with
+  `transmission=both` keep rendering as "Either / no preference" / "Either".
+- **Did not touch the instructor-management form
+  (`AddInstructorSheet.vue`).** That dropdown describes which gearboxes an
+  instructor can teach — a capability flag, not a booking preference. The
+  ticket scope is explicitly the `/booking` form.
+- **Did not delete the `'both' => 'Either / no preference'` row from the
+  mail label map.** Without it, historical enquiries would render an empty
+  cell in the admin email.
 
-- The route group keeps `RestrictInstructor` in the outer group. An
-  instructor hitting `POST /instructors/{theirOwnId}/locations` still passes
-  the outer "this is your own path" check but hits the inner `EnsureOwner`
-  gate, returning a 403. That's the desired behaviour — instructors don't
-  silently redirect, they get a clear authorization error.
-- Frontend uses `v-if`, not `v-show`. Hiding the markup entirely means there's
-  nothing for an instructor to interact with even via dev-tools tampering.
-  The backend gate is the source of truth either way.
-- The "Click Add Area button above" hint in the empty state is also gated —
-  showing it to an instructor who can't see the button would be confusing.
-- No changes to `InstructorController` — controllers stay HTTP-agnostic and
-  authorization belongs in middleware per project standards.
-
-### Out of scope
-
-- No changes to the Booking/Step1 coverage usage — that's a customer-facing
-  postcode lookup, not the admin coverage UI the ticket targets.
-- No changes to API v1 endpoints (none exist for coverage management).
-- No new "admin" role added — owner is the project's admin role.
+### Out of scope / follow-up
+- No tests added (project rule: user maintains tests manually).
+- No Pint / lint run (project rule: user handles style).
+- If the team later decides `both` should never appear anywhere in the
+  product, a follow-up ticket should: drop the `both` config key, prune the
+  display-side label branches, and consider a data migration to remap any
+  remaining `transmission=both` enquiries to a chosen default.
 
 ---
 
