@@ -86,7 +86,7 @@ Users (1) ──┬── (1) Instructors ──┬── (Many) Packages
    - Has one-to-one relationship with either `instructors` or `students` table
    - Belongs to a `team` via `current_team_id` (nullable foreign key)
    - `password_change_required` (boolean, default false) — set to true when a temporary password is issued (instructor-created pupils, onboarding, admin reset); cleared when user changes password via API
-   - `welcome_email_pending` (boolean, default false) — set to true ONLY when a brand-new user is created during web onboarding (`CreateUserAndStudentFromEnquiryAction`). Cleared atomically by `SendOrderConfirmationEmailAction` once the welcome email (with a freshly generated temporary password) has been dispatched. Guarantees the temp-password welcome email is sent at most once and never to returning pupils.
+   - `welcome_email_pending` (boolean, default false) — set to true when a brand-new user is created and a welcome email is pending dispatch. Two writers today: (a) web onboarding (`CreateUserAndStudentFromEnquiryAction`) — cleared atomically by `SendOrderConfirmationEmailAction`; (b) instructor creation (`InstructorService::createInstructor`, `BulkImportInstructorsAction`) — cleared by `SendInstructorWelcomeEmailAction` after the password-setup email queues successfully. Left at `true` when sending fails so admins can resend from the Instructor Show page.
 
 2. **instructors** - Instructor profiles
    - One-to-one with `users` (via `user_id`)
@@ -224,7 +224,7 @@ Core user table storing all users in the system (owners, instructors, and studen
 | `email_verified_at` | timestamp | NULLABLE | Email verification timestamp |
 | `password` | varchar(255) | NOT NULL | Hashed password |
 | `password_change_required` | boolean | DEFAULT false | Forces password reset on next login (set when a temp password is issued) |
-| `welcome_email_pending` | boolean | DEFAULT false | True only between new-user creation in web onboarding and the welcome email being dispatched by `SendOrderConfirmationEmailAction`. One-shot flag — cleared atomically when the welcome email goes out. |
+| `welcome_email_pending` | boolean | DEFAULT false | True between new-user creation and the welcome email being dispatched. Cleared by `SendOrderConfirmationEmailAction` (web onboarding) or `SendInstructorWelcomeEmailAction` (instructor invite). Stays `true` if sending fails so admins can resend. |
 | `role` | enum('owner', 'instructor', 'student') | DEFAULT 'student' | User role in the system |
 | `stripe_customer_id` | varchar(255) | NULLABLE, INDEXED | Stripe customer ID |
 | `current_team_id` | bigint unsigned | NULLABLE, FK → teams.id (ON DELETE SET NULL) | Current team assignment |

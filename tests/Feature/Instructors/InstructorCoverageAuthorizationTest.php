@@ -13,7 +13,6 @@ use Illuminate\Http\UploadedFile;
  * performed by admin (Owner) users. Instructors may still GET their own
  * coverage list to view it in the admin Coverage tab.
  */
-
 beforeEach(function () {
     $this->owner = User::factory()->create(['role' => UserRole::OWNER]);
 

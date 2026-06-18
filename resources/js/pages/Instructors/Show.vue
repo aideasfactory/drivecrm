@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import axios from 'axios'
 import { Head, router } from '@inertiajs/vue3'
+import { Button } from '@/components/ui/button'
+import { toast } from '@/components/ui/toast'
+import { Loader2, MailWarning } from 'lucide-vue-next'
+import { useRole } from '@/composables/useRole'
 import AppLayout from '@/layouts/AppLayout.vue'
 import InstructorHeader from '@/components/Instructors/InstructorHeader.vue'
 import ScheduleTab from '@/components/Instructors/Tabs/ScheduleTab.vue'
@@ -82,6 +87,28 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const isEditSheetOpen = ref(false)
+const { isOwner } = useRole()
+const isResendingInvite = ref(false)
+const welcomeEmailPending = ref(Boolean(props.instructor.welcome_email_pending))
+
+const resendInvite = async () => {
+    if (isResendingInvite.value) {
+        return
+    }
+
+    isResendingInvite.value = true
+
+    try {
+        const { data } = await axios.post(`/instructors/${props.instructor.id}/resend-invite`)
+        welcomeEmailPending.value = Boolean(data?.welcome_email_pending)
+        toast({ title: data?.message ?? 'Welcome email resent.' })
+    } catch (error: any) {
+        const message = error?.response?.data?.message ?? 'Failed to resend the welcome email.'
+        toast({ title: message, variant: 'destructive' })
+    } finally {
+        isResendingInvite.value = false
+    }
+}
 
 type TabType = 'schedule' | 'details' | 'active-pupils' | 'reports' | 'finances' | 'actions' | 'student' | 'hmrc'
 
@@ -124,6 +151,33 @@ const breadcrumbs = [
                 :instructor="instructor"
                 @edit="isEditSheetOpen = true"
             />
+
+            <!-- Welcome email pending banner — owners only -->
+            <div
+                v-if="isOwner && welcomeEmailPending"
+                class="flex flex-col gap-3 rounded-md border border-amber-200 bg-amber-50 p-4 text-amber-900 sm:flex-row sm:items-center sm:justify-between"
+            >
+                <div class="flex items-start gap-3">
+                    <MailWarning class="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                    <div class="text-sm">
+                        <p class="font-medium">Welcome email hasn't been delivered yet</p>
+                        <p class="text-amber-800">
+                            We couldn't confirm the password-setup email was sent to
+                            <strong>{{ instructor.email }}</strong>. Resend it so they can
+                            access their account.
+                        </p>
+                    </div>
+                </div>
+                <Button
+                    variant="outline"
+                    class="border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                    :disabled="isResendingInvite"
+                    @click="resendInvite"
+                >
+                    <Loader2 v-if="isResendingInvite" class="mr-2 h-4 w-4 animate-spin" />
+                    {{ isResendingInvite ? 'Resending…' : 'Resend welcome email' }}
+                </Button>
+            </div>
 
             <!-- Tab Navigation (hidden when viewing a student or HMRC sub-page) -->
             <div class="flex gap-1 border-b" v-if="instructor.onboarding_complete && activeTab !== 'student' && activeTab !== 'hmrc'">

@@ -1,52 +1,77 @@
-# Diary view extended to midnight-to-midnight
+# Instructor onboarding email — results
 
-## What you asked for
+## What was the problem?
+When an admin added a new instructor (single form **or** CSV bulk import) the platform created the user with the literal password `"password"` and **never emailed the instructor**. They had no way to know the account existed and the default credential was guessable by anyone who knew the platform — a serious security gap.
 
-> "Review the diary/timetable view and make it available from midnight to midnight.
-> Extend the visible diary day range so users can work with times across the full 00:00 to 23:59 day.
-> Apply this to the diary experience used when adding diary dates by clicking on the calendar."
+## What's been delivered
+A secure first-login flow that wraps both the single-create form and the bulk CSV import:
 
-## What was built
+1. **Secure default password.** New instructors are created with a **cryptographically random, throwaway** password (48 random characters). The admin never sees it; the instructor never needs it.
+2. **Welcome email with a password-setup link.** As soon as the instructor record is committed, a queued "Welcome to Drive — set up your instructor account" email goes out. It contains a **password-setup link** (a Laravel password-broker token) that takes them to the existing reset-password page where they choose their own password. No plain-text password is ever in transit or in the inbox.
+3. **Plain English next-steps.** The email tells the instructor exactly what to do:
+   1. Click **Set up your account**
+   2. Choose a strong password
+   3. Sign in
 
-The instructor diary / weekly schedule grid (used inside **Instructors → Schedule**) previously only showed and allowed lesson bookings between **06:00 and 21:00**. It now shows and allows bookings across the full **24-hour day, midnight to midnight**.
+   It also tells them the link expires in 60 minutes and what to do if it has (use **Forgot password** on the sign-in page — same Laravel mechanism, fully self-service).
+4. **Failure handling for admins.**
+   - The user's `welcome_email_pending` flag is set on creation and only cleared once the email actually queues. If the mailer fails, the flag stays `true`, the failure is logged, and an activity entry is written against the instructor.
+   - On the **Instructor Show page**, owners now see an amber banner saying *"Welcome email hasn't been delivered yet"* with a **Resend welcome email** button when the flag is set.
+   - For CSV bulk imports, a per-row error is added to the result modal so the admin can see exactly which instructor's invite did not go out.
+5. **Resend endpoint.** New owner-only route `POST /instructors/{instructor}/resend-invite` mints a fresh token and queues a new email — useful when the original failed or the 60-minute setup link expired.
 
-This affects three places you'll see in the admin UI:
+## Why a password-setup link (and not a temporary password)?
+We evaluated three options:
 
-1. **The weekly calendar grid** — now renders all 48 half-hour rows from 00:00 down through 23:30. The grid is taller than before (≈1920px vs the previous ≈1200px); the schedule scrolls inside its container, as accepted in the brief.
-2. **The "Add Time Slot" sheet (opens when you click an empty slot, or click a day in the month view)** — the start-time dropdown now offers every 15-minute increment from **00:00** through **21:45** for regular 2-hour lessons. (21:45 is the latest a 2-hour lesson can start while still ending before midnight — see "Why 23:45 and not 24:00" below.)
-3. **Drag-and-drop** — events can now be dragged to anywhere in the new wider window. The drag boundary respects the same 00:00 → 23:45 end constraint.
+| Option | Verdict |
+| --- | --- |
+| Temporary plain-text password in the email | Works (it's what the pupil flow does) but the password sits in the inbox forever, can be shoulder-surfed, and we'd be responsible for forcing a change later. |
+| One-off magic-link login | Powerful but introduces a new auth surface we'd need to build and audit. |
+| **Password-setup link via Laravel's password broker (chosen)** | Reuses Laravel's audited password-reset machinery, the token is short-lived and single-use, the instructor picks their own password, and if the link expires they can self-serve via **Forgot password** with no admin involvement. |
 
-## What was changed under the hood
+## Files changed / added
 
-| File | Why |
-|------|-----|
-| `resources/js/lib/diary-hours.ts` | Frontend single-source-of-truth for the diary bounds. Widened from 6/21 to 0/24 and added a `DIARY_MAX_END_MINUTES = 23:45` helper. |
-| `config/diary.php` | Backend single-source-of-truth. Widened `start_time` to `00:00`, `end_time` to `23:59`. |
-| `resources/js/components/Instructors/Tabs/Schedule/WeeklyCalendarGrid.vue` | Picks up the new bounds; click and drag clamps now use the wrap-safe upper bound. |
-| `resources/js/components/Instructors/Tabs/ScheduleTab.vue` | The start-time picker and snap-to-grid logic now use the new bounds. |
-| `.claude/api.md` | Updated docs and changelog entry for `POST /api/v1/instructor/calendar/items` reflecting the new validation bounds. |
+**New**
+- `app/Mail/InstructorWelcomeMail.php` — the queued welcome email
+- `resources/views/emails/instructor-welcome.blade.php` — plain-English HTML template
+- `app/Actions/Instructor/SendInstructorWelcomeEmailAction.php` — mints the token, queues the email, manages the `welcome_email_pending` flag, logs activity, never throws
+- `tests/Feature/Instructors/InstructorWelcomeEmailTest.php` — Pest feature tests covering the entire flow
 
-The three Form Requests that validate calendar item submissions (`StoreCalendarItemRequest`, `UpdateCalendarItemRequest`, `Api\V1\StoreCalendarItemRequest`) **did not need to change** — they already read the bounds from `config('diary.start_time')` / `config('diary.end_time')`, so widening the config alone propagated the validation change to both the admin web UI and the mobile API.
+**Modified**
+- `app/Services/InstructorService.php` — uses a random password; dispatches the welcome email after the transaction commits; exposes `resendWelcomeEmail()`
+- `app/Actions/Instructor/BulkImportInstructorsAction.php` — same: random password + per-row welcome email + per-row failure surfaced
+- `app/Http/Controllers/InstructorController.php` — new `resendWelcomeEmail` action; show payload now includes `welcome_email_pending`
+- `routes/web.php` — `POST /instructors/{instructor}/resend-invite` (owner-only)
+- `resources/js/pages/Instructors/Show.vue` + `resources/js/types/instructor.ts` — amber banner + **Resend welcome email** button (owners only) when the flag is set
+- `.claude/database-schema.md` — updated to document the new use of `welcome_email_pending`
 
-No database migration was needed. The `calendar_items.start_time` / `end_time` columns already accept any TIME value; the constraint is application-level. Existing lesson records remain valid because the new (wider) window contains the old (narrower) window.
+## How to verify
+1. As an owner, go to **Instructors → Add instructor**, create an instructor with a real email address.
+2. Check the inbox (or the local mailpit/mailtrap) — a *Welcome to Drive — set up your instructor account* email should arrive, signed off in plain English with a clear **Set up your account** button.
+3. Click the button → land on `/reset-password/{token}` → choose a password → sign in.
+4. To test the failure path: stop the mailer, click **Resend welcome email** from the Show page — the amber banner stays and an error toast appears. Restart the mailer and click resend again — banner disappears, success toast.
+5. Test bulk import via **Instructors → Import CSV** — each successful row gets an invite; rows whose invites fail are listed as warnings in the result modal.
 
-## Why 23:45 and not 24:00 for the latest end
+## Tests
+Pest feature tests cover:
+- Creating an instructor enqueues a welcome email to their address.
+- The setup URL contains a token that is valid against Laravel's password broker.
+- The default password is **not** the literal string `"password"`.
+- Owners can resend; non-owners are forbidden (403).
+- When the mailer throws, `welcome_email_pending` stays `true` so admins see the banner.
+- Bulk import enqueues one email per row.
+- The Show page exposes `welcome_email_pending` so the banner can render.
 
-A subtle technical point worth flagging for transparency: lesson end times are stored as `HH:MM`, which has no representation for `24:00` (it would wrap to `00:00` of the next day). So although the visible grid extends all the way to midnight, the latest a regular 2-hour lesson can start is **21:45** (ending **23:45**). The last 15 minutes of the day (23:45 → 00:00) is visible on the grid but cannot itself be the *start* of a new 2-hour booking.
+(As per project standards, tests are written but not run by me — `php artisan test` is reserved for the user.)
 
-This is an inherent limitation of the fixed 2-hour lesson duration plus the HH:MM storage format. A future change could allow lessons that genuinely cross midnight, but that's a much larger redesign of how the day is modelled. For the current "let users see and book across the day" brief, the 23:45 ceiling is the practical maximum.
+## Confidence score: **8.5 / 10**
 
-## Out of scope (not done — flag if these matter)
+What I'm confident in:
+- Reuses Laravel's audited password-broker tokens — no bespoke crypto, no plain-text password leaves the system.
+- Failure path is observable: a flag on the user, an activity log line, an admin banner, and a one-click resend.
+- Mirrors the existing `WelcomeStudentNotification` / `welcome_email_pending` patterns, so it should feel familiar to anyone reading the code later.
 
-- **Practical-test buffer wrap.** Practical tests use a `−1 hr prep / +30 min buffer` window for overlap-checking. With the new midnight bounds, a practical test at 00:00 has prep starting at 23:00 the *previous* day — the existing SQL `TIME()`-based overlap check can produce false negatives across midnight. This is a pre-existing quirk that's slightly more visible with the wider window. The user did not ask for cross-midnight handling.
-- **Per-instructor working hours.** The 00:00–23:59 window is a global ceiling. Per-instructor preferences (e.g. "I never work after 22:00") would need their own DB table and UI.
-- **Lessons that genuinely cross midnight** (e.g. start 23:00, end 01:00 next day). Would require modelling the diary entry as having a date range rather than a single date + HH:MM pair.
-
-## Confidence
-
-**9 / 10.**
-
-- The change is small and additive: two config values widened, three downstream Vue/PHP consumers picked up the new values, one helper added.
-- The single-source-of-truth design (set up in a prior task) held up — both the admin web UI and the mobile API stay in lockstep through `config/diary.php`.
-- Existing data is guaranteed safe: the old window (06:00–21:00) sits entirely inside the new window (00:00–23:59), so no record can become invalid.
-- The 23:45 / midnight ceiling is the one rough edge — small, well-documented, and inherent to the HH:MM + 2-hour-duration design rather than something introduced by this change. Removing that point would require a much larger rework of how lessons are stored, which wasn't asked for.
+What kept it from a 10:
+- I could not run the test suite or the dev server in this sandbox; while the tests are mechanically straightforward and the changes follow existing patterns, a 10 requires me to have actually pressed the buttons.
+- The Vue banner uses `MailWarning` from `lucide-vue-next`; the installed version (0.468) ships it, but if you ever pin an older lucide you'd need to swap it for `Mail` + a warning colour.
+- The reset link expires after 60 minutes (Laravel default). If real instructors are slow to read email, you may want to bump `config/auth.php passwords.users.expire` for a friendlier window — out of scope for this ticket.
