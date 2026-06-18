@@ -5,8 +5,13 @@ import AppLayout from '@/layouts/AppLayout.vue'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { toast } from '@/components/ui/sonner'
-import { index as supportMessagesIndex, store as supportMessagesStore } from '@/routes/support-messages'
-import { MessageSquare, Send, Loader2, Inbox } from 'lucide-vue-next'
+import {
+    index as supportMessagesIndex,
+    store as supportMessagesStore,
+    archive as supportMessagesArchive,
+    reopen as supportMessagesReopen,
+} from '@/routes/support-messages'
+import { MessageSquare, Send, Loader2, Inbox, Archive, ArchiveRestore } from 'lucide-vue-next'
 
 interface ConversationUser {
     id: number
@@ -41,13 +46,18 @@ interface SelectedUser {
 interface Props {
     conversations: ConversationEntry[]
     selectedUser: SelectedUser | null
+    selectedIsArchived: boolean
     thread: ThreadMessage[] | null
+    folder: 'inbox' | 'archived'
+    inboxCount: number
+    archivedCount: number
 }
 
 const props = defineProps<Props>()
 
 const replyText = ref('')
 const sending = ref(false)
+const updatingStatus = ref(false)
 const threadScrollRef = ref<HTMLDivElement | null>(null)
 
 const scrollThreadToBottom = () => {
@@ -64,12 +74,55 @@ const selectConversation = (userId: number) => {
     if (props.selectedUser?.id === userId) return
     router.get(
         supportMessagesIndex().url,
-        { user: userId },
+        { user: userId, folder: props.folder },
         {
             preserveState: true,
             preserveScroll: true,
-            only: ['selectedUser', 'thread'],
+            only: ['selectedUser', 'selectedIsArchived', 'thread'],
             replace: true,
+        },
+    )
+}
+
+const switchFolder = (folder: 'inbox' | 'archived') => {
+    if (props.folder === folder) return
+    router.get(
+        supportMessagesIndex().url,
+        { folder },
+        { preserveScroll: true, replace: true },
+    )
+}
+
+const closeTicket = () => {
+    if (!props.selectedUser || updatingStatus.value) return
+    updatingStatus.value = true
+    router.post(
+        supportMessagesArchive(props.selectedUser.id).url,
+        {},
+        {
+            preserveScroll: true,
+            onSuccess: () => toast.success('Ticket closed'),
+            onError: () => toast.error('Failed to close ticket'),
+            onFinish: () => {
+                updatingStatus.value = false
+            },
+        },
+    )
+}
+
+const reopenTicket = () => {
+    if (!props.selectedUser || updatingStatus.value) return
+    updatingStatus.value = true
+    router.post(
+        supportMessagesReopen(props.selectedUser.id).url,
+        {},
+        {
+            preserveScroll: true,
+            onSuccess: () => toast.success('Ticket reopened'),
+            onError: () => toast.error('Failed to reopen ticket'),
+            onFinish: () => {
+                updatingStatus.value = false
+            },
         },
     )
 }
@@ -162,26 +215,50 @@ const breadcrumbs = [{ title: 'Support Messages' }]
                 <aside
                     class="flex min-h-0 flex-col rounded-md border bg-card"
                 >
-                    <div
-                        class="flex items-center justify-between border-b px-4 py-3"
-                    >
-                        <div class="flex items-center gap-2">
+                    <div class="grid grid-cols-2 border-b">
+                        <button
+                            type="button"
+                            class="flex items-center justify-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition-colors"
+                            :class="
+                                props.folder === 'inbox'
+                                    ? 'border-primary text-foreground'
+                                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                            "
+                            @click="switchFolder('inbox')"
+                        >
                             <Inbox class="h-4 w-4" />
-                            <span class="text-sm font-semibold">Inbox</span>
-                        </div>
-                        <Badge variant="secondary">
-                            {{ props.conversations.length }}
-                        </Badge>
+                            Inbox
+                            <Badge variant="secondary">{{ props.inboxCount }}</Badge>
+                        </button>
+                        <button
+                            type="button"
+                            class="flex items-center justify-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition-colors"
+                            :class="
+                                props.folder === 'archived'
+                                    ? 'border-primary text-foreground'
+                                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                            "
+                            @click="switchFolder('archived')"
+                        >
+                            <Archive class="h-4 w-4" />
+                            Archived
+                            <Badge variant="secondary">{{ props.archivedCount }}</Badge>
+                        </button>
                     </div>
                     <div class="flex-1 overflow-y-auto">
                         <div
                             v-if="props.conversations.length === 0"
                             class="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted-foreground"
                         >
-                            <Inbox
+                            <component
+                                :is="props.folder === 'archived' ? Archive : Inbox"
                                 class="h-8 w-8 text-muted-foreground/40"
                             />
-                            No support messages yet.
+                            {{
+                                props.folder === 'archived'
+                                    ? 'No archived tickets.'
+                                    : 'No open tickets.'
+                            }}
                         </div>
                         <ul v-else class="divide-y">
                             <li
@@ -267,6 +344,38 @@ const breadcrumbs = [{ title: 'Support Messages' }]
                             >
                                 {{ props.selectedUser.role }}
                             </Badge>
+                            <Button
+                                v-if="props.selectedIsArchived"
+                                variant="outline"
+                                size="sm"
+                                :class="props.selectedUser.role ? '' : 'ml-auto'"
+                                :disabled="updatingStatus"
+                                class="cursor-pointer"
+                                @click="reopenTicket"
+                            >
+                                <Loader2
+                                    v-if="updatingStatus"
+                                    class="mr-2 h-4 w-4 animate-spin"
+                                />
+                                <ArchiveRestore v-else class="mr-2 h-4 w-4" />
+                                Reopen
+                            </Button>
+                            <Button
+                                v-else
+                                variant="outline"
+                                size="sm"
+                                :class="props.selectedUser.role ? '' : 'ml-auto'"
+                                :disabled="updatingStatus"
+                                class="cursor-pointer"
+                                @click="closeTicket"
+                            >
+                                <Loader2
+                                    v-if="updatingStatus"
+                                    class="mr-2 h-4 w-4 animate-spin"
+                                />
+                                <Archive v-else class="mr-2 h-4 w-4" />
+                                Close ticket
+                            </Button>
                         </header>
 
                         <div

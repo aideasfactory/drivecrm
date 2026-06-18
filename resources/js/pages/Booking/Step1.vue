@@ -225,7 +225,6 @@
                   >
                     <option value="manual">Manual</option>
                     <option value="automatic">Automatic</option>
-                    <option value="both">Both</option>
                   </select>
                   <p v-if="form.errors.transmission" class="text-sm text-destructive flex items-center">
                     <AlertCircle class="mr-1 h-4 w-4" />

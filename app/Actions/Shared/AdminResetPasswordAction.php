@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Actions\Shared;
 
+use App\Mail\PupilPasswordResetMail;
 use App\Models\User;
+use Illuminate\Support\Facades\Mail;
 
 class AdminResetPasswordAction
 {
@@ -24,5 +26,9 @@ class AdminResetPasswordAction
             'Password was reset by an administrator',
             'account'
         );
+
+        if ($user->student && $user->email) {
+            Mail::to($user->email)->queue(new PupilPasswordResetMail($user, $password));
+        }
     }
 }
