@@ -63,9 +63,9 @@ class GetInstructorCalendarAction
                         }
                     }
 
-                    // Practical-test slots carry the pupil link directly on the calendar item
+                    // Test slots carry the pupil link directly on the calendar item
                     // (no Lesson row exists for a test booking).
-                    if ($item->item_type === CalendarItemType::PracticalTest && $item->student) {
+                    if (in_array($item->item_type, [CalendarItemType::PracticalTest, CalendarItemType::TheoryTest], true) && $item->student) {
                         $studentName = trim($item->student->first_name.' '.$item->student->surname);
                         $studentId = $item->student->id;
                     }

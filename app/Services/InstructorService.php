@@ -322,9 +322,10 @@ class InstructorService extends BaseService
         ?string $unavailabilityReason = null,
         ?int $travelTimeMinutes = null,
         bool $isPracticalTest = false,
-        ?Student $student = null
+        ?Student $student = null,
+        bool $isTheoryTest = false
     ): CalendarItem {
-        $item = ($this->createCalendarItem)($instructor, $date, $startTime, $endTime, $isAvailable, $notes, $unavailabilityReason, $travelTimeMinutes, $isPracticalTest, $student);
+        $item = ($this->createCalendarItem)($instructor, $date, $startTime, $endTime, $isAvailable, $notes, $unavailabilityReason, $travelTimeMinutes, $isPracticalTest, $student, $isTheoryTest);
 
         app(InstructorCalendarService::class)->invalidateCalendarCache($instructor->id, $date);
 

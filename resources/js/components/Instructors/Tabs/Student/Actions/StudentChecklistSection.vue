@@ -55,8 +55,23 @@ const items = ref<ChecklistItem[]>([])
 const isLoading = ref(true)
 const isToggling = ref<number | null>(null)
 const drivingTest = ref<DrivingTest | null>(null)
+const theoryTest = ref<DrivingTest | null>(null)
 
 const PRACTICAL_TEST_KEY = 'book_practical_test'
+const THEORY_TEST_KEY = 'book_theory_test'
+
+// Half-hour test start times offered in the booking dialogs.
+const TIME_OPTIONS = (() => {
+    const opts: string[] = []
+    for (let h = 7; h <= 19; h++) {
+        for (const m of [0, 30]) {
+            opts.push(
+                `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
+            )
+        }
+    }
+    return opts
+})()
 
 // ── Generic checklist dialog (date + optional notes) ────────────────
 const checkDialogOpen = ref(false)
@@ -69,6 +84,13 @@ const checkForm = ref({
 // ── Driving-test booking dialog (date + time) ─────────────────────
 const drivingTestDialogOpen = ref(false)
 const drivingTestForm = ref({
+    date: '',
+    start_time: '11:00',
+})
+
+// ── Theory-test booking dialog (date + time) ──────────────────────
+const theoryTestDialogOpen = ref(false)
+const theoryTestForm = ref({
     date: '',
     start_time: '11:00',
 })
@@ -87,14 +109,18 @@ const groupedItems = computed(() => {
 const loadChecklist = async () => {
     isLoading.value = true
     try {
-        const [checklistRes, testRes] = await Promise.all([
+        const [checklistRes, testRes, theoryRes] = await Promise.all([
             axios.get(`/students/${props.studentId}/checklist`),
             axios
                 .get(`/students/${props.studentId}/driving-test`)
                 .catch(() => ({ data: { driving_test: null } })),
+            axios
+                .get(`/students/${props.studentId}/theory-test`)
+                .catch(() => ({ data: { theory_test: null } })),
         ])
         items.value = checklistRes.data.checklist_items || []
         drivingTest.value = testRes.data.driving_test || null
+        theoryTest.value = theoryRes.data.theory_test || null
     } catch {
         toast({
             title: 'Failed to load checklist',
@@ -119,6 +145,19 @@ const handleToggle = (item: ChecklistItem) => {
             const today = new Date().toISOString().split('T')[0]
             drivingTestForm.value = { date: today, start_time: '11:00' }
             drivingTestDialogOpen.value = true
+        }
+        return
+    }
+
+    // book_theory_test also mirrors to the instructor diary, so it gets a
+    // dedicated date + time dialog.
+    if (item.key === THEORY_TEST_KEY) {
+        if (item.is_checked) {
+            cancelTheoryTest(item)
+        } else {
+            const today = new Date().toISOString().split('T')[0]
+            theoryTestForm.value = { date: today, start_time: '11:00' }
+            theoryTestDialogOpen.value = true
         }
         return
     }
@@ -277,6 +316,74 @@ const cancelDrivingTest = async (item: ChecklistItem) => {
     }
 }
 
+// ── Theory-test specific handlers ─────────────────────────────────
+const confirmBookTheoryTest = async () => {
+    if (!theoryTestForm.value.date || !theoryTestForm.value.start_time) {
+        toast({
+            title: 'Please pick a date and time for the test',
+            variant: 'destructive',
+        })
+        return
+    }
+
+    const theoryItem = items.value.find((i) => i.key === THEORY_TEST_KEY)
+    if (!theoryItem) return
+
+    isToggling.value = theoryItem.id
+
+    try {
+        const response = await axios.post(
+            `/students/${props.studentId}/theory-test`,
+            {
+                date: theoryTestForm.value.date,
+                start_time: theoryTestForm.value.start_time,
+            },
+        )
+
+        theoryTest.value = response.data.theory_test
+
+        const checklistRes = await axios.get(
+            `/students/${props.studentId}/checklist`,
+        )
+        items.value = checklistRes.data.checklist_items || []
+
+        toast({
+            title: 'Theory test booked',
+            description: 'Added to the instructor diary.',
+        })
+        theoryTestDialogOpen.value = false
+    } catch (error: any) {
+        const message =
+            error.response?.data?.message || 'Failed to book theory test'
+        toast({ title: message, variant: 'destructive' })
+    } finally {
+        isToggling.value = null
+    }
+}
+
+const cancelTheoryTest = async (item: ChecklistItem) => {
+    isToggling.value = item.id
+
+    try {
+        await axios.delete(`/students/${props.studentId}/theory-test`)
+
+        theoryTest.value = null
+
+        const checklistRes = await axios.get(
+            `/students/${props.studentId}/checklist`,
+        )
+        items.value = checklistRes.data.checklist_items || []
+
+        toast({ title: 'Theory test cancelled' })
+    } catch (error: any) {
+        const message =
+            error.response?.data?.message || 'Failed to cancel theory test'
+        toast({ title: message, variant: 'destructive' })
+    } finally {
+        isToggling.value = null
+    }
+}
+
 const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('en-GB', {
         day: 'numeric',
@@ -394,6 +501,44 @@ const formatDate = (date: string) => {
                                     </Badge>
                                 </div>
 
+                                <!-- Theory-test specific summary -->
+                                <div
+                                    v-else-if="
+                                        item.key === THEORY_TEST_KEY &&
+                                        item.is_checked &&
+                                        theoryTest
+                                    "
+                                    class="mt-1 flex flex-wrap items-center gap-2"
+                                >
+                                    <Badge
+                                        variant="secondary"
+                                        class="text-xs"
+                                    >
+                                        <Calendar
+                                            class="mr-1 h-3 w-3"
+                                        />
+                                        {{ formatDate(theoryTest.date) }}
+                                    </Badge>
+                                    <Badge
+                                        variant="secondary"
+                                        class="text-xs"
+                                    >
+                                        <Clock
+                                            class="mr-1 h-3 w-3"
+                                        />
+                                        {{ theoryTest.test_start_time }} – {{ theoryTest.test_end_time }}
+                                    </Badge>
+                                    <Badge
+                                        variant="outline"
+                                        class="text-xs"
+                                    >
+                                        <ClipboardCheck
+                                            class="mr-1 h-3 w-3"
+                                        />
+                                        On instructor diary
+                                    </Badge>
+                                </div>
+
                                 <!-- Generic checklist date pill -->
                                 <div
                                     v-else-if="
@@ -415,6 +560,7 @@ const formatDate = (date: string) => {
                                 <p
                                     v-if="
                                         item.key !== PRACTICAL_TEST_KEY &&
+                                        item.key !== THEORY_TEST_KEY &&
                                         item.is_checked && item.notes
                                     "
                                     class="mt-1 text-xs text-muted-foreground"
@@ -516,13 +662,19 @@ const formatDate = (date: string) => {
                     </div>
                     <div class="space-y-2">
                         <Label for="driving_test_time">Test Time *</Label>
-                        <input
+                        <select
                             id="driving_test_time"
-                            type="time"
-                            step="900"
                             v-model="drivingTestForm.start_time"
                             class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        />
+                        >
+                            <option
+                                v-for="time in TIME_OPTIONS"
+                                :key="time"
+                                :value="time"
+                            >
+                                {{ time }}
+                            </option>
+                        </select>
                         <p class="text-xs text-muted-foreground">
                             The diary will block from
                             <span class="font-medium">1 hr before</span>
@@ -542,6 +694,82 @@ const formatDate = (date: string) => {
                     </Button>
                     <Button
                         @click="confirmBookDrivingTest"
+                        :disabled="isToggling !== null"
+                        class="min-w-[140px]"
+                    >
+                        <Loader2
+                            v-if="isToggling !== null"
+                            class="mr-2 h-4 w-4 animate-spin"
+                        />
+                        <ClipboardCheck
+                            v-else
+                            class="mr-2 h-4 w-4"
+                        />
+                        Book Test
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        <!-- Theory-Test Booking Dialog -->
+        <Dialog v-model:open="theoryTestDialogOpen">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle class="flex items-center gap-2">
+                        <ClipboardCheck class="h-5 w-5 text-indigo-600" />
+                        Book Theory Test
+                    </DialogTitle>
+                </DialogHeader>
+                <div class="space-y-4 py-4">
+                    <p class="text-sm text-muted-foreground">
+                        Pick the date and time of the theory test. A 2.5-hour
+                        slot (1 hr prep + 1 hr test + 30 min buffer) will be
+                        added to the instructor's diary and linked to this
+                        pupil.
+                    </p>
+                    <div class="space-y-2">
+                        <Label for="theory_test_date">Test Date *</Label>
+                        <input
+                            id="theory_test_date"
+                            type="date"
+                            v-model="theoryTestForm.date"
+                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        />
+                    </div>
+                    <div class="space-y-2">
+                        <Label for="theory_test_time">Test Time *</Label>
+                        <select
+                            id="theory_test_time"
+                            v-model="theoryTestForm.start_time"
+                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                            <option
+                                v-for="time in TIME_OPTIONS"
+                                :key="time"
+                                :value="time"
+                            >
+                                {{ time }}
+                            </option>
+                        </select>
+                        <p class="text-xs text-muted-foreground">
+                            The diary will block from
+                            <span class="font-medium">1 hr before</span>
+                            until
+                            <span class="font-medium">30 min after</span>
+                            this time.
+                        </p>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button
+                        variant="outline"
+                        @click="theoryTestDialogOpen = false"
+                        :disabled="isToggling !== null"
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        @click="confirmBookTheoryTest"
                         :disabled="isToggling !== null"
                         class="min-w-[140px]"
                     >

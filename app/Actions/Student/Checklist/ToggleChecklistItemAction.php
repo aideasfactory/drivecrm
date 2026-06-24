@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Actions\Student\Checklist;
 
 use App\Actions\Student\BookDrivingTestAction;
+use App\Actions\Student\BookTheoryTestAction;
 use App\Actions\Student\CancelDrivingTestAction;
+use App\Actions\Student\CancelTheoryTestAction;
 use App\Models\StudentChecklistItem;
 
 class ToggleChecklistItemAction
@@ -13,6 +15,8 @@ class ToggleChecklistItemAction
     public function __construct(
         protected BookDrivingTestAction $bookDrivingTest,
         protected CancelDrivingTestAction $cancelDrivingTest,
+        protected BookTheoryTestAction $bookTheoryTest,
+        protected CancelTheoryTestAction $cancelTheoryTest,
     ) {}
 
     /**
@@ -21,10 +25,10 @@ class ToggleChecklistItemAction
      * When checking: requires a date, optionally accepts notes.
      * When unchecking: clears the date and notes.
      *
-     * Special case: the `book_practical_test` item is mirrored to the
-     * instructor's diary as a practical-test calendar slot. Ticking creates the
-     * slot, unticking removes it. The default test time is 11:00 unless the
-     * caller passes one through (the dedicated Book Driving Test dialog does).
+     * Special case: the `book_practical_test` and `book_theory_test` items are
+     * mirrored to the instructor's diary as a test calendar slot. Ticking
+     * creates the slot, unticking removes it. The default test time is 11:00
+     * unless the caller passes one through (the dedicated Book Test dialogs do).
      *
      * @param  array{is_checked: bool, date?: string|null, notes?: string|null, start_time?: string|null}  $data
      */
@@ -32,10 +36,21 @@ class ToggleChecklistItemAction
     {
         $isChecked = (bool) $data['is_checked'];
         $isPracticalTestRow = $item->key === 'book_practical_test';
+        $isTheoryTestRow = $item->key === 'book_theory_test';
 
         if ($isChecked) {
             if ($isPracticalTestRow && ! empty($data['date']) && $item->student) {
                 ($this->bookDrivingTest)(
+                    $item->student,
+                    (string) $data['date'],
+                    (string) ($data['start_time'] ?? '11:00'),
+                );
+
+                return $item->fresh();
+            }
+
+            if ($isTheoryTestRow && ! empty($data['date']) && $item->student) {
+                ($this->bookTheoryTest)(
                     $item->student,
                     (string) $data['date'],
                     (string) ($data['start_time'] ?? '11:00'),
@@ -52,6 +67,12 @@ class ToggleChecklistItemAction
         } else {
             if ($isPracticalTestRow && $item->student) {
                 ($this->cancelDrivingTest)($item->student);
+
+                return $item->fresh();
+            }
+
+            if ($isTheoryTestRow && $item->student) {
+                ($this->cancelTheoryTest)($item->student);
 
                 return $item->fresh();
             }

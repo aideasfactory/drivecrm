@@ -17,7 +17,9 @@ use App\Actions\Shared\Note\DeleteNoteAction;
 use App\Actions\Shared\Note\GetNotesAction;
 use App\Actions\Student\AssignStudentToInstructorAction;
 use App\Actions\Student\BookDrivingTestAction;
+use App\Actions\Student\BookTheoryTestAction;
 use App\Actions\Student\CancelDrivingTestAction;
+use App\Actions\Student\CancelTheoryTestAction;
 use App\Actions\Student\Checklist\GetStudentChecklistAction;
 use App\Actions\Student\Checklist\ToggleChecklistItemAction;
 use App\Actions\Student\Contact\AutoCreateEmergencyContactAction;
@@ -767,6 +769,88 @@ class PupilController extends Controller
 
         return response()->json([
             'message' => 'Driving test cancelled.',
+        ]);
+    }
+
+    /**
+     * Show the pupil's currently booked theory test (or null if none).
+     */
+    public function showTheoryTest(Student $student): JsonResponse
+    {
+        $checklistItem = $student->checklistItems()
+            ->where('key', 'book_theory_test')
+            ->with('calendarItem.calendar')
+            ->first();
+
+        $calendarItem = $checklistItem?->calendarItem;
+
+        if (! $calendarItem) {
+            return response()->json(['theory_test' => null]);
+        }
+
+        return response()->json([
+            'theory_test' => [
+                'calendar_item_id' => $calendarItem->id,
+                'date' => $calendarItem->calendar?->date?->format('Y-m-d'),
+                'block_start_time' => Carbon::parse($calendarItem->start_time)->format('H:i'),
+                'block_end_time' => Carbon::parse($calendarItem->end_time)->format('H:i'),
+                // The test itself runs in the middle of the blocked window.
+                'test_start_time' => Carbon::parse($calendarItem->start_time)->addMinutes(60)->format('H:i'),
+                'test_end_time' => Carbon::parse($calendarItem->end_time)->subMinutes(30)->format('H:i'),
+                'notes' => $calendarItem->notes,
+            ],
+        ]);
+    }
+
+    /**
+     * Book a theory test for the pupil.
+     *
+     * Creates a theory-test slot on the pupil's instructor's diary and ticks
+     * the `book_theory_test` checklist row with the test date.
+     */
+    public function bookTheoryTest(Student $student, BookTheoryTestAction $bookTheoryTest): JsonResponse
+    {
+        if (! $student->instructor_id) {
+            return response()->json([
+                'message' => 'This pupil must have an assigned instructor before a theory test can be booked.',
+            ], 422);
+        }
+
+        $data = request()->validate([
+            'date' => 'required|date|date_format:Y-m-d|after_or_equal:today',
+            'start_time' => 'required|date_format:H:i',
+        ]);
+
+        try {
+            $calendarItem = $bookTheoryTest($student, $data['date'], $data['start_time']);
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'message' => 'Theory test booked and added to the instructor diary.',
+            'theory_test' => [
+                'calendar_item_id' => $calendarItem->id,
+                'date' => $calendarItem->calendar?->date?->format('Y-m-d'),
+                'block_start_time' => Carbon::parse($calendarItem->start_time)->format('H:i'),
+                'block_end_time' => Carbon::parse($calendarItem->end_time)->format('H:i'),
+                'test_start_time' => $data['start_time'],
+                'test_end_time' => Carbon::parse($data['start_time'])->addMinutes(60)->format('H:i'),
+                'notes' => $calendarItem->notes,
+            ],
+        ], 201);
+    }
+
+    /**
+     * Cancel a pupil's booked theory test (removes the diary slot and unticks
+     * the `book_theory_test` checklist row).
+     */
+    public function cancelTheoryTest(Student $student, CancelTheoryTestAction $cancelTheoryTest): JsonResponse
+    {
+        $cancelTheoryTest($student);
+
+        return response()->json([
+            'message' => 'Theory test cancelled.',
         ]);
     }
 }

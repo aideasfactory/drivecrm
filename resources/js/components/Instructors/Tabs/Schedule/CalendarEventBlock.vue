@@ -65,6 +65,9 @@ const isTravel = computed(() => props.event.itemType === 'travel')
 /** Whether this event is a practical test slot */
 const isPracticalTest = computed(() => props.event.itemType === 'practical_test')
 
+/** Whether this event is a theory test slot */
+const isTheoryTest = computed(() => props.event.itemType === 'theory_test')
+
 /** Calculate top offset in px based on start time */
 const topPx = computed(() => {
     const startMinutes = timeToMinutes(props.event.startTime)
@@ -108,6 +111,11 @@ const colorClasses = computed(() => {
         return 'border-teal-300 bg-teal-100 text-teal-800 dark:border-teal-700 dark:bg-teal-900/30 dark:text-teal-300'
     }
 
+    // Theory test slots — indigo
+    if (isTheoryTest.value) {
+        return 'border-indigo-300 bg-indigo-100 text-indigo-800 dark:border-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
+    }
+
     const status = props.event.status
 
     // Completed — green
@@ -148,6 +156,7 @@ const colorClasses = computed(() => {
 const statusLabel = computed(() => {
     if (isTravel.value) return 'Travel'
     if (isPracticalTest.value) return 'Practical Test'
+    if (isTheoryTest.value) return 'Theory Test'
 
     const status = props.event.status
 
@@ -162,7 +171,7 @@ const statusLabel = computed(() => {
 
 /** Whether to show the status flag icon */
 const showFlag = computed(() => {
-    if (isTravel.value || isPracticalTest.value) return false
+    if (isTravel.value || isPracticalTest.value || isTheoryTest.value) return false
     const status = props.event.status
     return status === 'booked' || status === 'completed' || !props.event.isAvailable
 })
@@ -178,8 +187,8 @@ function handleClick(e: MouseEvent) {
 }
 
 function handlePointerDown(e: PointerEvent) {
-    // Prevent dragging travel-time and practical test blocks
-    if (isTravel.value || isPracticalTest.value) return
+    // Prevent dragging travel-time and test blocks
+    if (isTravel.value || isPracticalTest.value || isTheoryTest.value) return
     e.stopPropagation()
     emit('dragstart', props.event, e)
 }
@@ -192,8 +201,8 @@ function handlePointerDown(e: PointerEvent) {
             hasClash ? 'ring-2 ring-orange-400 ring-offset-1 dark:ring-orange-500' : '',
             colorClasses,
             isTravel ? 'cursor-default border-dashed opacity-80' : '',
-            isPracticalTest ? 'cursor-pointer border-solid' : '',
-            !isTravel && !isPracticalTest ? 'cursor-pointer hover:shadow-md' : '',
+            isPracticalTest || isTheoryTest ? 'cursor-pointer border-solid' : '',
+            !isTravel && !isPracticalTest && !isTheoryTest ? 'cursor-pointer hover:shadow-md' : '',
         ]"
         :style="{
             top: `${topPx}px`,
@@ -212,8 +221,8 @@ function handlePointerDown(e: PointerEvent) {
             <svg v-if="isTravel" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
             </svg>
-            <!-- Practical test icon -->
-            <svg v-if="isPracticalTest" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <!-- Test icon (practical + theory) -->
+            <svg v-if="isPracticalTest || isTheoryTest" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <!-- Status flag icons -->

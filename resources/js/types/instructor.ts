@@ -97,7 +97,7 @@ export interface CalendarItem {
 }
 
 export type RecurrencePattern = 'none' | 'weekly' | 'biweekly' | 'monthly'
-export type CalendarItemTypeValue = 'slot' | 'travel' | 'practical_test'
+export type CalendarItemTypeValue = 'slot' | 'travel' | 'practical_test' | 'theory_test'
 
 export interface CalendarItemFormData {
   date: string

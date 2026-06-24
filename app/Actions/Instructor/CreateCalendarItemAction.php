@@ -26,6 +26,7 @@ class CreateCalendarItemAction
      * @param  string|null  $unavailabilityReason  Reason for unavailability (when is_available = false)
      * @param  int|null  $travelTimeMinutes  Travel time in minutes (15, 30, or 45) to create after the slot
      * @param  bool  $isPracticalTest  Whether this is a practical test slot
+     * @param  bool  $isTheoryTest  Whether this is a theory test slot
      * @return CalendarItem The created calendar item
      */
     public function __invoke(
@@ -38,8 +39,40 @@ class CreateCalendarItemAction
         ?string $unavailabilityReason = null,
         ?int $travelTimeMinutes = null,
         bool $isPracticalTest = false,
-        ?Student $student = null
+        ?Student $student = null,
+        bool $isTheoryTest = false
     ): CalendarItem {
+        // Theory tests block the same 2.5hr window as a practical test
+        // (1hr prep + 1hr test + 30min buffer) from the test appointment time.
+        if ($isTheoryTest) {
+            $testStart = Carbon::parse($startTime);
+            $prepStart = $testStart->copy()->subMinutes(60);
+            $bufferEnd = Carbon::parse($endTime)->addMinutes(30);
+
+            $calendar = Calendar::firstOrCreate(
+                [
+                    'instructor_id' => $instructor->id,
+                    'date' => Carbon::parse($date)->format('Y-m-d'),
+                ]
+            );
+
+            $calendarItem = CalendarItem::create([
+                'calendar_id' => $calendar->id,
+                'start_time' => $prepStart->format('H:i'),
+                'end_time' => $bufferEnd->format('H:i'),
+                'is_available' => false,
+                'item_type' => CalendarItemType::TheoryTest,
+                'status' => null,
+                'student_id' => $student?->id,
+                'notes' => $notes ?? ($student ? trim($student->first_name.' '.$student->surname) : null),
+                'unavailability_reason' => $unavailabilityReason ?? 'Theory Test',
+            ]);
+
+            $calendarItem->load('calendar');
+
+            return $calendarItem;
+        }
+
         // For practical tests: calculate the full block from the test appointment time
         // Test time = startTime to endTime (1 hour)
         // Full block = 1hr before (prep) + 1hr test + 30min after (buffer)

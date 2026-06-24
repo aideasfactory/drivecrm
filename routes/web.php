@@ -284,6 +284,15 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
     Route::delete('/students/{student}/driving-test', [PupilController::class, 'cancelDrivingTest'])
         ->name('students.driving-test.destroy');
 
+    // Student Theory Test — creates / removes a theory-test calendar slot on
+    // the instructor's diary, keeping pupil + diary in sync.
+    Route::get('/students/{student}/theory-test', [PupilController::class, 'showTheoryTest'])
+        ->name('students.theory-test.show');
+    Route::post('/students/{student}/theory-test', [PupilController::class, 'bookTheoryTest'])
+        ->name('students.theory-test.store');
+    Route::delete('/students/{student}/theory-test', [PupilController::class, 'cancelTheoryTest'])
+        ->name('students.theory-test.destroy');
+
     // Student Status & Management
     Route::patch('/students/{student}/status', [PupilController::class, 'updateStatus'])
         ->name('students.status.update');

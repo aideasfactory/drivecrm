@@ -7,6 +7,7 @@ enum CalendarItemType: string
     case Slot = 'slot';
     case Travel = 'travel';
     case PracticalTest = 'practical_test';
+    case TheoryTest = 'theory_test';
 
     /**
      * Get the human-readable label for this type.
@@ -17,6 +18,7 @@ enum CalendarItemType: string
             self::Slot => 'Time Slot',
             self::Travel => 'Travel Time',
             self::PracticalTest => 'Practical Test',
+            self::TheoryTest => 'Theory Test',
         };
     }
 }

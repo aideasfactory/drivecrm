@@ -69,6 +69,14 @@ class CalendarItem extends Model
         return $this->item_type === CalendarItemType::PracticalTest;
     }
 
+    /**
+     * Check if this item is a theory test slot.
+     */
+    public function isTheoryTest(): bool
+    {
+        return $this->item_type === CalendarItemType::TheoryTest;
+    }
+
     public function calendar(): BelongsTo
     {
         return $this->belongsTo(Calendar::class, 'calendar_id');

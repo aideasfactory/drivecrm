@@ -187,6 +187,11 @@ const editItemIsPracticalTest = computed(() => {
     return editForm.value.item_type === 'practical_test'
 })
 
+/** Whether the item being edited is a theory test slot */
+const editItemIsTheoryTest = computed(() => {
+    return editForm.value.item_type === 'theory_test'
+})
+
 /** Whether the item being edited is a completed lesson */
 const editItemIsCompleted = computed(() => {
     const item = itemsMap.value.get(editForm.value.id)
@@ -530,7 +535,7 @@ function handleEventClick(event: CalendarEvent) {
     const item = itemsMap.value.get(event.id)
     if (!item) return
 
-    const isSpecialType = item.item_type === 'travel' || item.item_type === 'practical_test'
+    const isSpecialType = item.item_type === 'travel' || item.item_type === 'practical_test' || item.item_type === 'theory_test'
     const startTime = isSpecialType
         ? normaliseTime(item.start_time)
         : snapToStartOption(normaliseTime(item.start_time))
@@ -604,8 +609,8 @@ async function handleEventMove(eventId: number, newDate: string, newStartTime: s
     const item = itemsMap.value.get(eventId)
     if (!item) return
 
-    // Don't allow dragging travel or practical test items
-    if (item.item_type === 'travel' || item.item_type === 'practical_test') return
+    // Don't allow dragging travel or test items
+    if (item.item_type === 'travel' || item.item_type === 'practical_test' || item.item_type === 'theory_test') return
 
     // Optimistically update
     const oldItem = { ...item }
@@ -1095,9 +1100,10 @@ onMounted(() => {
                     <SheetTitle class="flex items-center gap-2">
                         <Car v-if="editItemIsTravel" class="h-5 w-5" />
                         <ClipboardCheck v-else-if="editItemIsPracticalTest" class="h-5 w-5 text-teal-600" />
+                        <ClipboardCheck v-else-if="editItemIsTheoryTest" class="h-5 w-5 text-indigo-600" />
                         <Flag v-else-if="editItemIsCompleted" class="h-5 w-5 text-green-600" />
                         <Clock v-else class="h-5 w-5" />
-                        {{ editItemIsTravel ? 'Travel Time' : editItemIsPracticalTest ? 'Practical Test' : editItemIsCompleted ? 'Completed Lesson' : 'Edit Time Slot' }}
+                        {{ editItemIsTravel ? 'Travel Time' : editItemIsPracticalTest ? 'Practical Test' : editItemIsTheoryTest ? 'Theory Test' : editItemIsCompleted ? 'Completed Lesson' : 'Edit Time Slot' }}
                         <span v-if="editItemIsRecurring" class="ml-auto flex items-center gap-1 text-xs font-normal text-muted-foreground">
                             <Repeat class="h-3.5 w-3.5" />
                             Recurring
@@ -1140,6 +1146,47 @@ onMounted(() => {
                         </p>
                         <p class="mt-1 text-xs text-teal-600 dark:text-teal-400">
                             Practical test slots are unavailable for normal bookings.
+                        </p>
+                    </div>
+                    <div class="space-y-2">
+                        <p v-if="editForm.notes" class="text-sm">
+                            <strong class="flex items-center gap-1.5"><User class="h-4 w-4" /> Student:</strong>
+                            <span class="ml-1">{{ editForm.notes }}</span>
+                        </p>
+                        <p class="text-sm text-muted-foreground">
+                            <strong>Date:</strong> {{ editForm.date }}
+                        </p>
+                        <p class="text-sm text-muted-foreground">
+                            <strong>Full Block:</strong> {{ editForm.start_time }} - {{ editForm.end_time }}
+                        </p>
+                    </div>
+                    <div class="flex gap-2">
+                        <Button
+                            variant="outline"
+                            class="flex-1"
+                            @click="isEditSheetOpen = false"
+                        >
+                            Close
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            class="min-w-[100px]"
+                            @click="openDeleteDialog"
+                        >
+                            <Trash2 class="mr-2 h-4 w-4" />
+                            Delete
+                        </Button>
+                    </div>
+                </div>
+
+                <!-- Theory test item view (read-only info with delete) -->
+                <div v-else-if="editItemIsTheoryTest" class="mt-6 space-y-4 px-6 py-4">
+                    <div class="rounded-md border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-800 dark:bg-indigo-900/20">
+                        <p class="text-sm font-medium text-indigo-800 dark:text-indigo-300">
+                            This is a theory test slot (1hr prep + 1hr test + 30min buffer).
+                        </p>
+                        <p class="mt-1 text-xs text-indigo-600 dark:text-indigo-400">
+                            Theory test slots are unavailable for normal bookings.
                         </p>
                     </div>
                     <div class="space-y-2">

@@ -45,7 +45,7 @@ class GetInstructorCalendarItemsAction
             $query->where('is_available', true)
                 ->where(function ($q): void {
                     $q->whereNull('item_type')
-                        ->orWhereNotIn('item_type', ['travel', 'practical_test']);
+                        ->orWhereNotIn('item_type', ['travel', 'practical_test', 'theory_test']);
                 })
                 ->whereDoesntHave('lessons');
 
