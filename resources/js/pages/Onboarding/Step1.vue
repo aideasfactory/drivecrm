@@ -44,7 +44,7 @@
                 <ul class="space-y-2 text-sm">
                   <li class="flex items-start">
                     <CircleCheck class="mr-2 mt-0.5 h-4 w-4 flex-shrink-0" />
-                    <span>Full refund policy - cancel up to 24 hours before</span>
+                    <span>Full refund policy - cancel up to 48 hours before</span>
                   </li>
                   <li class="flex items-start">
                     <CircleCheck class="mr-2 mt-0.5 h-4 w-4 flex-shrink-0" />

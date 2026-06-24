@@ -25,6 +25,7 @@ export interface InstructorDetail {
   booking_hours: BookingHours
   locations: Location[]
   hmrc_connected?: boolean
+  welcome_email_pending?: boolean
 }
 
 export interface InstructorStats {
@@ -53,6 +54,17 @@ export interface CreateInstructorData {
   postcode?: string
   latitude?: number
   longitude?: number
+}
+
+export interface FormOption {
+  value: string
+  label: string
+}
+
+export interface InstructorFormOptions {
+  status: FormOption[]
+  pdi_status: FormOption[]
+  transmission_type: FormOption[]
 }
 
 export interface Location {

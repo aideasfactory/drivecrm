@@ -5,9 +5,13 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
         @php($gtmId = config('services.gtm.container_id'))
-        @php($loadGtm = $gtmId && request()->routeIs('booking.*'))
+        @php($googleAdsId = config('services.google_tag.ads_id'))
+        @php($googleGa4Id = config('services.google_tag.ga4_id'))
+        @php($isBookingRoute = request()->routeIs('booking.*'))
+        @php($loadGtm = $gtmId && $isBookingRoute)
+        @php($loadGtag = ($googleAdsId || $googleGa4Id) && $isBookingRoute)
 
-        @if ($loadGtm)
+        @if ($loadGtm || $loadGtag)
             {{-- Google Consent Mode: everything denied until the visitor accepts analytics cookies (see cookieConsent.ts) --}}
             <script>
                 window.dataLayer = window.dataLayer || [];
@@ -19,6 +23,9 @@
                     analytics_storage: 'denied',
                 });
             </script>
+        @endif
+
+        @if ($loadGtm)
             <!-- Google Tag Manager -->
             <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
             new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -26,6 +33,22 @@
             'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
             })(window,document,'script','dataLayer','{{ $gtmId }}');</script>
             <!-- End Google Tag Manager -->
+        @endif
+
+        @if ($loadGtag)
+            {{-- Google tag (gtag.js) — Google Ads + GA4 on the booking page --}}
+            <script async src="https://www.googletagmanager.com/gtag/js?id={{ $googleAdsId ?: $googleGa4Id }}"></script>
+            <script>
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                @if ($googleAdsId)
+                    gtag('config', @json($googleAdsId));
+                @endif
+                @if ($googleGa4Id)
+                    gtag('config', @json($googleGa4Id));
+                @endif
+            </script>
         @endif
 
         {{-- Inline script to detect system dark mode preference and apply it immediately --}}

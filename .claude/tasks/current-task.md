@@ -1,6 +1,7 @@
 # Task: Instructor Package Pricing UI in Pounds
 
 ## Overview
+Sam reported that when he tries to add himself as an instructor during sign-up, pressing "OK" (the Create Instructor button) does nothing — the instructor is not added and there is no error message. This task fixes the silent failure and adds clear UI feedback.
 
 Display the Total Price for instructor packages in **pounds** (£) instead of
 pence in the admin area, while continuing to **store** the price as pence in
