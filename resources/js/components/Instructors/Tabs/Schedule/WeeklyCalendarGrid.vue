@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import CalendarEventBlock from './CalendarEventBlock.vue'
 import type { CalendarEvent } from './CalendarEventBlock.vue'
 import { formatDate } from '@/composables/useCalendarNavigation'
-import { DIARY_START_HOUR, DIARY_END_HOUR } from '@/lib/diary-hours'
+import { DIARY_START_HOUR, DIARY_END_HOUR, DIARY_MAX_END_MINUTES } from '@/lib/diary-hours'
 
 interface Props {
     weekDays: Date[]
@@ -162,8 +162,9 @@ function handleSlotClick(dayDate: Date, slotIndex: number) {
     const totalMinutes = DAY_START_HOUR * 60 + slotIndex * 30
     // Round down to nearest 15-min increment
     const snappedMinutes = Math.floor(totalMinutes / SNAP_MINUTES) * SNAP_MINUTES
-    // Clamp so the 2-hour slot fits within the day
-    const maxStart = (DAY_END_HOUR - SLOT_DURATION_HOURS) * 60
+    // Clamp so the 2-hour slot fits within the bookable day
+    // (DIARY_MAX_END_MINUTES is 23:45 — the last end_time storable as HH:MM)
+    const maxStart = DIARY_MAX_END_MINUTES - SLOT_DURATION_HOURS * 60
     const clampedMinutes = Math.max(DAY_START_HOUR * 60, Math.min(snappedMinutes, maxStart))
     const time = minutesToTime(clampedMinutes)
     emit('clickSlot', date, time)
@@ -277,8 +278,8 @@ function handlePointerUp(_e: PointerEvent) {
     const newStartMinutes = DAY_START_HOUR * 60 + snapBlocks * SNAP_MINUTES
     const newEndMinutes = newStartMinutes + SLOT_DURATION_HOURS * 60
 
-    // Clamp within day boundaries
-    if (newStartMinutes < DAY_START_HOUR * 60 || newEndMinutes > DAY_END_HOUR * 60) {
+    // Clamp within day boundaries (end must fit inside HH:MM-storable range)
+    if (newStartMinutes < DAY_START_HOUR * 60 || newEndMinutes > DIARY_MAX_END_MINUTES) {
         dragging.value = null
         return
     }
@@ -327,11 +328,18 @@ function handlePointerUp(_e: PointerEvent) {
                     v-for="(label, i) in timeLabels"
                     :key="i"
                     class="relative border-b border-border pr-2 text-xs text-muted-foreground"
+                    :class="i % 2 === 0 ? '' : 'border-dashed'"
                     :style="{ height: `${ROW_HEIGHT}px` }"
                 >
+                    <!--
+                      Show hour labels (i = 0, 2, 4, …) inside the cell that
+                      *starts* at that time, so the label sits visibly within
+                      the 10:00–10:30 cell rather than floating on the border
+                      between the 9:30–10:00 and 10:00–10:30 cells.
+                    -->
                     <span
                         v-if="i % 2 === 0"
-                        class="absolute right-2 top-0 -translate-y-1/2 bg-background px-1"
+                        class="absolute right-2 top-1 px-1 pt-1"
                     >
                         {{ label }}
                     </span>
@@ -345,12 +353,23 @@ function handlePointerUp(_e: PointerEvent) {
                 class="relative border-r border-border last:border-r-0"
                 :class="isToday(day) ? 'bg-primary/5 dark:bg-primary/10' : ''"
             >
-                <!-- Grid lines (30-min slots) -->
+                <!--
+                  Grid lines (30-min slots)
+
+                  Each cell renders its border-b at the BOTTOM of the cell.
+                  - slotIdx = 1 covers 09:00–09:30 → its bottom edge is the
+                    09:30 half-hour mark → dashed.
+                  - slotIdx = 2 covers 09:30–10:00 → its bottom edge is the
+                    10:00 hour mark → solid.
+                  The label for "10:00" is rendered at the top of slotIdx = 3
+                  (the 10:00–10:30 cell), so a solid hour line directly
+                  above that cell visually anchors the label to it.
+                -->
                 <div
                     v-for="slotIdx in SLOT_COUNT"
                     :key="slotIdx"
                     class="cursor-pointer border-b border-border transition-colors hover:bg-muted/50"
-                    :class="(slotIdx - 1) % 2 === 0 ? '' : 'border-dashed'"
+                    :class="(slotIdx - 1) % 2 === 0 ? 'border-dashed' : ''"
                     :style="{ height: `${ROW_HEIGHT}px` }"
                     @click="handleSlotClick(day, slotIdx - 1)"
                 ></div>

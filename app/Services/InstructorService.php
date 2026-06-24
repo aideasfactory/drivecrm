@@ -31,6 +31,7 @@ use App\Actions\Instructor\Mileage\DeleteMileageLogAction;
 use App\Actions\Instructor\Mileage\GetMileageLogsAction;
 use App\Actions\Instructor\Mileage\UpdateMileageLogAction;
 use App\Actions\Instructor\ReplaceInstructorLocationsAction;
+use App\Actions\Instructor\SendInstructorWelcomeEmailAction;
 use App\Actions\Instructor\UpdateCalendarItemAction;
 use App\Actions\Instructor\UpdateInstructorFinanceAction;
 use App\Actions\Instructor\UpdateInstructorProfileAction;
@@ -60,6 +61,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Str;
 
 class InstructorService extends BaseService
 {
@@ -101,7 +103,8 @@ class InstructorService extends BaseService
         protected CreateMileageLogAction $createMileageLog,
         protected UpdateMileageLogAction $updateMileageLog,
         protected DeleteMileageLogAction $deleteMileageLog,
-        protected SeedInstructorProgressTrackerAction $seedInstructorProgressTracker
+        protected SeedInstructorProgressTrackerAction $seedInstructorProgressTracker,
+        protected SendInstructorWelcomeEmailAction $sendInstructorWelcomeEmail,
     ) {}
 
     /**
@@ -122,11 +125,18 @@ class InstructorService extends BaseService
             ]);
         }
 
-        return DB::transaction(function () use ($data, $coordinates) {
+            // 2. Create user account.
+            // The account is created with a cryptographically-random password the admin
+            // never sees — the instructor sets their real password via the welcome email
+            // setup link. `welcome_email_pending` is set so we can show admins if the
+            // email never goes out, and `password_change_required` is a belt-and-braces
+            // gate in case anyone bypasses the setup link.
             $user = User::create([
                 'name' => $data['name'],
                 'email' => $data['email'],
-                'password' => Hash::make($data['password'] ?? 'password'),
+                'password' => Hash::make(Str::random(48)),
+                'password_change_required' => true,
+                'welcome_email_pending' => true,
                 'role' => UserRole::INSTRUCTOR,
             ]);
 
@@ -166,8 +176,38 @@ class InstructorService extends BaseService
 
             ($this->seedInstructorProgressTracker)($instructor);
 
-            return $instructor->load('user', 'locations');
-        });
+            DB::commit();
+
+            // Dispatch welcome email after the transaction commits — never inside, so
+            // we don't email an instructor whose record was rolled back. The action
+            // logs activity and toggles `welcome_email_pending` on success/failure.
+            ($this->sendInstructorWelcomeEmail)($instructor);
+
+            return [
+                'success' => true,
+                'instructor' => $instructor->load('user', 'locations'),
+                'error' => null,
+            ];
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return [
+                'success' => false,
+                'instructor' => null,
+                'error' => 'Failed to create instructor: '.$e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Resend the welcome / password-setup email to an existing instructor.
+     * Mirrors the action triggered on initial creation — useful when the original
+     * email failed to send or the link expired before the instructor used it.
+     */
+    public function resendWelcomeEmail(Instructor $instructor): bool
+    {
+        return ($this->sendInstructorWelcomeEmail)($instructor);
     }
 
     /**

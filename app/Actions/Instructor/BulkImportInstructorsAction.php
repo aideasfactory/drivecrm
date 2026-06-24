@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Actions\Instructor;
 
 use App\Actions\FetchPostcodeCoordinatesAction;
+use App\Enums\InstructorStatus;
+use App\Enums\PdiStatus;
+use App\Enums\TransmissionType;
 use App\Enums\UserRole;
 use App\Models\Instructor;
 use App\Models\User;
@@ -12,12 +15,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class BulkImportInstructorsAction
 {
     public function __construct(
-        protected FetchPostcodeCoordinatesAction $fetchPostcodeCoordinates
+        protected FetchPostcodeCoordinatesAction $fetchPostcodeCoordinates,
+        protected SendInstructorWelcomeEmailAction $sendInstructorWelcomeEmail,
     ) {}
 
     /**
@@ -42,11 +47,11 @@ class BulkImportInstructorsAction
             $validator = Validator::make($row, [
                 'name' => ['required', 'string', 'max:255'],
                 'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-                'transmission_type' => ['required', Rule::in(['manual', 'automatic', 'both'])],
+                'transmission_type' => ['required', Rule::in(TransmissionType::values())],
                 'phone' => ['nullable', 'string', 'max:50'],
                 'bio' => ['nullable', 'string'],
-                'status' => ['nullable', 'string', 'max:50'],
-                'pdi_status' => ['nullable', 'string', 'max:50'],
+                'status' => ['nullable', Rule::in(InstructorStatus::values())],
+                'pdi_status' => ['nullable', Rule::in(PdiStatus::values())],
                 'address' => ['nullable', 'string'],
                 'postcode' => ['nullable', 'string', 'max:10'],
             ], [
@@ -55,7 +60,9 @@ class BulkImportInstructorsAction
                 'email.email' => 'Email must be a valid email address.',
                 'email.unique' => 'This email is already in use.',
                 'transmission_type.required' => 'Transmission type is required.',
-                'transmission_type.in' => 'Transmission type must be "manual", "automatic", or "both".',
+                'transmission_type.in' => 'Transmission type must be one of: '.implode(', ', TransmissionType::values()).'.',
+                'status.in' => 'Status must be one of: '.implode(', ', InstructorStatus::values()).'.',
+                'pdi_status.in' => 'PDI status must be one of: '.implode(', ', PdiStatus::values()).'.',
             ]);
 
             if ($validator->fails()) {
@@ -95,18 +102,21 @@ class BulkImportInstructorsAction
                     }
                 }
 
-                // Create user account
+                // Create user account with a cryptographically-random password.
+                // The instructor sets their real password via the welcome email link.
                 $user = User::create([
                     'name' => $validated['name'],
                     'email' => $validated['email'],
-                    'password' => Hash::make('password'),
+                    'password' => Hash::make(Str::random(48)),
+                    'password_change_required' => true,
+                    'welcome_email_pending' => true,
                     'role' => UserRole::INSTRUCTOR,
                 ]);
 
                 $avatarNumber = rand(1, 5);
 
                 // Create instructor profile
-                Instructor::create([
+                $instructor = Instructor::create([
                     'user_id' => $user->id,
                     'bio' => $validated['bio'] ?? null,
                     'address' => $validated['address'] ?? null,
@@ -129,6 +139,19 @@ class BulkImportInstructorsAction
 
                 DB::commit();
                 $imported++;
+
+                // Dispatch welcome email after commit. On send failure the action
+                // leaves welcome_email_pending = true and we surface a per-row
+                // warning so the admin sees it in the CSV result modal.
+                $sent = ($this->sendInstructorWelcomeEmail)($instructor);
+
+                if (! $sent) {
+                    $errors[] = [
+                        'row' => $rowNumber,
+                        'field' => 'email',
+                        'message' => "Instructor created, but the welcome email to '{$validated['email']}' failed to send. Use the Resend invite action to retry.",
+                    ];
+                }
             } catch (\Exception $e) {
                 DB::rollBack();
 

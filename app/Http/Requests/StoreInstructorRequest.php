@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Enums\InstructorStatus;
+use App\Enums\PdiStatus;
+use App\Enums\TransmissionType;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -33,9 +36,9 @@ class StoreInstructorRequest extends FormRequest
             'password' => ['nullable', 'string', Password::default()],
             'phone' => ['nullable', 'string', 'max:50'],
             'bio' => ['nullable', 'string'],
-            'transmission_type' => ['required', Rule::in(['manual', 'automatic', 'both'])],
-            'status' => ['nullable', 'string', 'max:50'],
-            'pdi_status' => ['nullable', 'string', 'max:50'],
+            'transmission_type' => ['required', Rule::in(TransmissionType::values())],
+            'status' => ['nullable', Rule::in(InstructorStatus::values())],
+            'pdi_status' => ['nullable', Rule::in(PdiStatus::values())],
             'address' => ['nullable', 'string'],
             'postcode' => ['required', 'string', 'max:10'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
@@ -56,7 +59,9 @@ class StoreInstructorRequest extends FormRequest
             'email.unique' => 'This email address is already in use.',
             'postcode.required' => 'A postcode is required so we can locate the instructor on the map.',
             'transmission_type.required' => 'Please select a transmission type.',
-            'transmission_type.in' => 'Transmission type must be manual, automatic, or both.',
+            'transmission_type.in' => 'Please select a valid transmission type.',
+            'status.in' => 'Please select a valid status.',
+            'pdi_status.in' => 'Please select a valid PDI status.',
         ];
     }
 }
