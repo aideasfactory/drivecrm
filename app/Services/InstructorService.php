@@ -31,6 +31,7 @@ use App\Actions\Instructor\Mileage\DeleteMileageLogAction;
 use App\Actions\Instructor\Mileage\GetMileageLogsAction;
 use App\Actions\Instructor\Mileage\UpdateMileageLogAction;
 use App\Actions\Instructor\ReplaceInstructorLocationsAction;
+use App\Actions\Instructor\SendInstructorWelcomeEmailAction;
 use App\Actions\Instructor\UpdateCalendarItemAction;
 use App\Actions\Instructor\UpdateInstructorFinanceAction;
 use App\Actions\Instructor\UpdateInstructorProfileAction;
@@ -59,6 +60,8 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Str;
 
 class InstructorService extends BaseService
 {
@@ -100,42 +103,45 @@ class InstructorService extends BaseService
         protected CreateMileageLogAction $createMileageLog,
         protected UpdateMileageLogAction $updateMileageLog,
         protected DeleteMileageLogAction $deleteMileageLog,
-        protected SeedInstructorProgressTrackerAction $seedInstructorProgressTracker
+        protected SeedInstructorProgressTrackerAction $seedInstructorProgressTracker,
+        protected SendInstructorWelcomeEmailAction $sendInstructorWelcomeEmail,
     ) {}
 
     /**
      * Create a new instructor with user account and locations.
      *
-     * @return array ['success' => bool, 'instructor' => Instructor|null, 'error' => string|null]
+     * Throws ValidationException for known recoverable failures (e.g. postcode
+     * lookup) so the form-request pipeline surfaces a 422 + field error back to
+     * the Inertia client. Unexpected exceptions bubble up and roll the
+     * transaction back, hitting Laravel's default error handling.
      */
-    public function createInstructor(array $data): array
+    public function createInstructor(array $data): Instructor
     {
-        try {
-            DB::beginTransaction();
+        $coordinates = ($this->fetchPostcodeCoordinates)($data['postcode']);
 
-            // 1. Fetch coordinates from postcode
-            $coordinates = ($this->fetchPostcodeCoordinates)($data['postcode']);
+        if (! $coordinates || ! $coordinates['latitude'] || ! $coordinates['longitude']) {
+            throw ValidationException::withMessages([
+                'postcode' => 'We could not find coordinates for that postcode. Please double-check it and try again.',
+            ]);
+        }
 
-            if (! $coordinates || ! $coordinates['latitude'] || ! $coordinates['longitude']) {
-                return [
-                    'success' => false,
-                    'instructor' => null,
-                    'error' => 'Unable to fetch coordinates for the provided postcode. Please check the postcode and try again.',
-                ];
-            }
-
-            // 2. Create user account
+            // 2. Create user account.
+            // The account is created with a cryptographically-random password the admin
+            // never sees — the instructor sets their real password via the welcome email
+            // setup link. `welcome_email_pending` is set so we can show admins if the
+            // email never goes out, and `password_change_required` is a belt-and-braces
+            // gate in case anyone bypasses the setup link.
             $user = User::create([
                 'name' => $data['name'],
                 'email' => $data['email'],
-                'password' => Hash::make('password'), // Default password
+                'password' => Hash::make(Str::random(48)),
+                'password_change_required' => true,
+                'welcome_email_pending' => true,
                 'role' => UserRole::INSTRUCTOR,
             ]);
 
-            // random number between 1 and 5
             $avatarNumber = rand(1, 5);
 
-            // 3. Create instructor profile
             $instructor = Instructor::create([
                 'user_id' => $user->id,
                 'bio' => $data['bio'] ?? null,
@@ -155,10 +161,8 @@ class InstructorService extends BaseService
                 ],
             ]);
 
-            // 4. Create instructor locations (postcode sectors)
             if (! empty($data['locations']) && is_array($data['locations'])) {
                 foreach ($data['locations'] as $postcodeSector) {
-                    // Skip empty entries
                     if (empty(trim($postcodeSector))) {
                         continue;
                     }
@@ -170,10 +174,14 @@ class InstructorService extends BaseService
                 }
             }
 
-            // 5. Seed default progress-tracker framework
             ($this->seedInstructorProgressTracker)($instructor);
 
             DB::commit();
+
+            // Dispatch welcome email after the transaction commits — never inside, so
+            // we don't email an instructor whose record was rolled back. The action
+            // logs activity and toggles `welcome_email_pending` on success/failure.
+            ($this->sendInstructorWelcomeEmail)($instructor);
 
             return [
                 'success' => true,
@@ -190,6 +198,16 @@ class InstructorService extends BaseService
                 'error' => 'Failed to create instructor: '.$e->getMessage(),
             ];
         }
+    }
+
+    /**
+     * Resend the welcome / password-setup email to an existing instructor.
+     * Mirrors the action triggered on initial creation — useful when the original
+     * email failed to send or the link expired before the instructor used it.
+     */
+    public function resendWelcomeEmail(Instructor $instructor): bool
+    {
+        return ($this->sendInstructorWelcomeEmail)($instructor);
     }
 
     /**

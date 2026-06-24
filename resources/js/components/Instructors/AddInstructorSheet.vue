@@ -23,11 +23,16 @@ import { Label } from '@/components/ui/label'
 import { Loader2, UserPlus, UserPen, Save, Trash2, AlertTriangle, Camera, X } from 'lucide-vue-next'
 import { toast } from '@/components/ui/toast'
 import PasswordResetSection from '@/components/Shared/PasswordResetSection.vue'
-import type { CreateInstructorData, InstructorDetail } from '@/types/instructor'
+import type {
+    CreateInstructorData,
+    InstructorDetail,
+    InstructorFormOptions,
+} from '@/types/instructor'
 
 interface Props {
     open: boolean
     instructor?: InstructorDetail | null
+    formOptions: InstructorFormOptions
 }
 
 interface Emits {
@@ -46,18 +51,33 @@ const isEditMode = computed(() => props.instructor !== null)
 const isSubmitting = ref(false)
 const isRequestingDeletion = ref(false)
 const showDeleteDialog = ref(false)
+
+const defaultStatus = () =>
+    props.formOptions.status[0]?.value ?? 'active'
+const defaultPdiStatus = () =>
+    props.formOptions.pdi_status[0]?.value ?? 'qualified'
+const defaultTransmission = () =>
+    (props.formOptions.transmission_type[0]?.value as
+        | 'manual'
+        | 'automatic'
+        | 'both'
+        | undefined) ?? 'manual'
+
 const form = ref<CreateInstructorData>({
     name: '',
     email: '',
     password: '',
     phone: '',
     bio: '',
-    transmission_type: 'manual',
-    status: 'active',
-    pdi_status: '',
+    transmission_type: defaultTransmission(),
+    status: defaultStatus(),
+    pdi_status: defaultPdiStatus(),
     address: '',
     postcode: '',
 })
+
+const selectClass =
+    'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50'
 
 const errors = ref<Record<string, string>>({})
 const isUploadingPicture = ref(false)
@@ -128,6 +148,17 @@ const handleAvatarDelete = () => {
     })
 }
 
+// Snap an incoming value to a valid option (or the default) so legacy
+// rows with non-enum values can still be opened without crashing the select.
+const snapToOption = (
+    value: string | null | undefined,
+    options: { value: string }[],
+    fallback: string,
+): string => {
+    if (value && options.some((o) => o.value === value)) return value
+    return fallback
+}
+
 // Watch for instructor prop changes and populate form
 watch(
     () => props.instructor,
@@ -139,9 +170,21 @@ watch(
                 password: '',
                 phone: instructor.phone || '',
                 bio: instructor.bio || '',
-                transmission_type: instructor.transmission_type,
-                status: instructor.status,
-                pdi_status: instructor.pdi_status || '',
+                transmission_type: snapToOption(
+                    instructor.transmission_type,
+                    props.formOptions.transmission_type,
+                    defaultTransmission(),
+                ) as 'manual' | 'automatic' | 'both',
+                status: snapToOption(
+                    instructor.status,
+                    props.formOptions.status,
+                    defaultStatus(),
+                ),
+                pdi_status: snapToOption(
+                    instructor.pdi_status,
+                    props.formOptions.pdi_status,
+                    defaultPdiStatus(),
+                ),
                 address: instructor.address || '',
                 postcode: instructor.postcode || '',
             }
@@ -153,9 +196,9 @@ watch(
                 password: '',
                 phone: '',
                 bio: '',
-                transmission_type: 'manual',
-                status: 'active',
-                pdi_status: '',
+                transmission_type: defaultTransmission(),
+                status: defaultStatus(),
+                pdi_status: defaultPdiStatus(),
                 address: '',
                 postcode: '',
             }
@@ -163,6 +206,21 @@ watch(
     },
     { immediate: true }
 )
+
+const showValidationToast = (formErrors: Record<string, string>) => {
+    const messages = Object.values(formErrors).filter(Boolean)
+    const description = messages.length > 0
+        ? messages[0]
+        : 'Please check the form and try again.'
+
+    toast({
+        title: isEditMode.value
+            ? 'Could not update instructor'
+            : 'Could not create instructor',
+        description,
+        variant: 'destructive',
+    })
+}
 
 const handleSubmit = () => {
     isSubmitting.value = true
@@ -173,11 +231,13 @@ const handleSubmit = () => {
         router.put(`/instructors/${props.instructor.id}`, form.value, {
             preserveScroll: true,
             onSuccess: () => {
+                toast({ title: 'Instructor updated.' })
                 emit('instructor-updated')
                 emit('update:open', false)
             },
             onError: (formErrors) => {
                 errors.value = formErrors as Record<string, string>
+                showValidationToast(errors.value)
             },
             onFinish: () => {
                 isSubmitting.value = false
@@ -195,17 +255,19 @@ const handleSubmit = () => {
                     password: '',
                     phone: '',
                     bio: '',
-                    transmission_type: 'manual',
-                    status: 'active',
-                    pdi_status: '',
+                    transmission_type: defaultTransmission(),
+                    status: defaultStatus(),
+                    pdi_status: defaultPdiStatus(),
                     address: '',
                     postcode: '',
                 }
+                toast({ title: 'Instructor created.' })
                 emit('instructor-created')
                 emit('update:open', false)
             },
             onError: (formErrors) => {
                 errors.value = formErrors as Record<string, string>
+                showValidationToast(errors.value)
             },
             onFinish: () => {
                 isSubmitting.value = false
@@ -375,11 +437,15 @@ const handleRequestDeletion = () => {
                             id="transmission_type"
                             v-model="form.transmission_type"
                             :disabled="isSubmitting"
-                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            :class="selectClass"
                         >
-                            <option value="manual">Manual</option>
-                            <option value="automatic">Automatic</option>
-                            <option value="both">Both</option>
+                            <option
+                                v-for="option in formOptions.transmission_type"
+                                :key="option.value"
+                                :value="option.value"
+                            >
+                                {{ option.label }}
+                            </option>
                         </select>
                         <p
                             v-if="errors.transmission_type"
@@ -424,7 +490,7 @@ const handleRequestDeletion = () => {
                     </div>
 
                     <div class="space-y-2">
-                        <Label for="postcode">Postcode</Label>
+                        <Label for="postcode">Postcode *</Label>
                         <Input
                             id="postcode"
                             v-model="form.postcode"
@@ -444,13 +510,20 @@ const handleRequestDeletion = () => {
 
                     <div class="space-y-2">
                         <Label for="status">Status</Label>
-                        <Input
+                        <select
                             id="status"
                             v-model="form.status"
-                            type="text"
-                            placeholder="active"
                             :disabled="isSubmitting"
-                        />
+                            :class="selectClass"
+                        >
+                            <option
+                                v-for="option in formOptions.status"
+                                :key="option.value"
+                                :value="option.value"
+                            >
+                                {{ option.label }}
+                            </option>
+                        </select>
                         <p v-if="errors.status" class="text-sm text-destructive">
                             {{ errors.status }}
                         </p>
@@ -458,13 +531,20 @@ const handleRequestDeletion = () => {
 
                     <div class="space-y-2">
                         <Label for="pdi_status">PDI Status</Label>
-                        <Input
+                        <select
                             id="pdi_status"
                             v-model="form.pdi_status"
-                            type="text"
-                            placeholder="e.g., qualified, trainee"
                             :disabled="isSubmitting"
-                        />
+                            :class="selectClass"
+                        >
+                            <option
+                                v-for="option in formOptions.pdi_status"
+                                :key="option.value"
+                                :value="option.value"
+                            >
+                                {{ option.label }}
+                            </option>
+                        </select>
                         <p v-if="errors.pdi_status" class="text-sm text-destructive">
                             {{ errors.pdi_status }}
                         </p>

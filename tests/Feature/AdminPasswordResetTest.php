@@ -1,9 +1,11 @@
 <?php
 
+use App\Mail\PupilPasswordResetMail;
 use App\Models\Instructor;
 use App\Models\Student;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 
 test('admin can reset an instructor password', function () {
     $admin = User::factory()->create();
@@ -121,4 +123,43 @@ test('guests cannot reset student password', function () {
         ]);
 
     $response->assertUnauthorized();
+});
+
+test('pupil receives an email with the new password when an admin resets it', function () {
+    Mail::fake();
+
+    $admin = User::factory()->create();
+    $student = Student::factory()->create();
+    $student->user->update(['email' => 'pupil@example.test']);
+
+    $this
+        ->actingAs($admin)
+        ->putJson(route('students.password.update', $student), [
+            'password' => 'new-secure-password',
+            'password_confirmation' => 'new-secure-password',
+        ])
+        ->assertOk();
+
+    Mail::assertQueued(PupilPasswordResetMail::class, function (PupilPasswordResetMail $mail) use ($student) {
+        return $mail->hasTo('pupil@example.test')
+            && $mail->newPassword === 'new-secure-password'
+            && $mail->user->is($student->user);
+    });
+});
+
+test('no notification email is sent when an instructor password is reset', function () {
+    Mail::fake();
+
+    $admin = User::factory()->create();
+    $instructor = Instructor::factory()->create();
+
+    $this
+        ->actingAs($admin)
+        ->putJson(route('instructors.password.update', $instructor), [
+            'password' => 'new-secure-password',
+            'password_confirmation' => 'new-secure-password',
+        ])
+        ->assertOk();
+
+    Mail::assertNothingQueued();
 });

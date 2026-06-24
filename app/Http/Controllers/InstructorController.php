@@ -12,7 +12,10 @@ use App\Actions\Shared\Contact\SetPrimaryContactAction;
 use App\Actions\Shared\Contact\UpdateContactAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Enums\BusinessType;
+use App\Enums\InstructorStatus;
+use App\Enums\PdiStatus;
 use App\Enums\RecurrencePattern;
+use App\Enums\TransmissionType;
 use App\Enums\VehicleMethod;
 use App\Http\Controllers\Hmrc\Archive\ArchiveController;
 use App\Http\Controllers\Hmrc\Itsa\ItsaController;
@@ -88,7 +91,23 @@ class InstructorController extends Controller
 
         return Inertia::render('Instructors/Index', [
             'instructors' => $instructors,
+            'formOptions' => $this->instructorFormOptions(),
         ]);
+    }
+
+    /**
+     * Structured-select options used by the AddInstructorSheet. Kept in a
+     * single helper so `index` and `show` stay in sync.
+     *
+     * @return array<string, array<int, array{value: string, label: string}>>
+     */
+    private function instructorFormOptions(): array
+    {
+        return [
+            'status' => InstructorStatus::options(),
+            'pdi_status' => PdiStatus::options(),
+            'transmission_type' => TransmissionType::options(),
+        ];
     }
 
     /**
@@ -107,31 +126,54 @@ class InstructorController extends Controller
             'open_enquiries' => 0, // TODO: Implement enquiries tracking
         ];
 
-        // Calculate booking hours from lessons
-        $currentWeekStart = Carbon::now()->startOfWeek();
-        $currentWeekEnd = Carbon::now()->endOfWeek();
-        $nextWeekStart = Carbon::now()->addWeek()->startOfWeek();
-        $nextWeekEnd = Carbon::now()->addWeek()->endOfWeek();
+        // Calculate booking hours across a rolling four-week window:
+        // current week + next three weeks. Buckets are built up-front, then
+        // a single lesson query is dropped into them in PHP — one DB
+        // round-trip instead of four.
+        $weekBuckets = [];
+        for ($offset = 0; $offset < 4; $offset++) {
+            $anchor = Carbon::now()->addWeeks($offset);
+            $start = $anchor->copy()->startOfWeek();
+            $end = $anchor->copy()->endOfWeek();
 
-        $currentWeekHours = Lesson::where('instructor_id', $instructor->id)
+            $weekBuckets[] = [
+                'label' => $offset === 0 ? 'Current Week' : 'Week of '.$start->format('j M'),
+                'start_date' => $start->toDateString(),
+                'end_date' => $end->toDateString(),
+                'hours' => 0.0,
+            ];
+        }
+
+        $windowStart = $weekBuckets[0]['start_date'];
+        $windowEnd = $weekBuckets[count($weekBuckets) - 1]['end_date'];
+
+        $lessons = Lesson::where('instructor_id', $instructor->id)
             ->whereNotIn('status', ['cancelled', 'draft'])
-            ->whereBetween('date', [$currentWeekStart->toDateString(), $currentWeekEnd->toDateString()])
+            ->whereBetween('date', [$windowStart, $windowEnd])
             ->whereNotNull('start_time')
             ->whereNotNull('end_time')
-            ->get()
-            ->sum(fn (Lesson $lesson) => Carbon::parse($lesson->start_time)->diffInMinutes(Carbon::parse($lesson->end_time)) / 60);
+            ->get();
 
-        $nextWeekHours = Lesson::where('instructor_id', $instructor->id)
-            ->whereNotIn('status', ['cancelled', 'draft'])
-            ->whereBetween('date', [$nextWeekStart->toDateString(), $nextWeekEnd->toDateString()])
-            ->whereNotNull('start_time')
-            ->whereNotNull('end_time')
-            ->get()
-            ->sum(fn (Lesson $lesson) => Carbon::parse($lesson->start_time)->diffInMinutes(Carbon::parse($lesson->end_time)) / 60);
+        foreach ($lessons as $lesson) {
+            $lessonDate = Carbon::parse($lesson->date)->toDateString();
+            $lessonHours = Carbon::parse($lesson->start_time)->diffInMinutes(Carbon::parse($lesson->end_time)) / 60;
+
+            foreach ($weekBuckets as $index => $bucket) {
+                if ($lessonDate >= $bucket['start_date'] && $lessonDate <= $bucket['end_date']) {
+                    $weekBuckets[$index]['hours'] += $lessonHours;
+                    break;
+                }
+            }
+        }
 
         $bookingHours = [
-            'current_week' => round($currentWeekHours, 1),
-            'next_week' => round($nextWeekHours, 1),
+            'weeks' => array_map(
+                fn (array $bucket) => [
+                    ...$bucket,
+                    'hours' => round($bucket['hours'], 1),
+                ],
+                $weekBuckets,
+            ),
         ];
 
         // Get locations
@@ -211,12 +253,14 @@ class InstructorController extends Controller
                 'booking_hours' => $bookingHours,
                 'locations' => $locations,
                 'hmrc_connected' => $instructor->user->hmrcToken()->exists(),
+                'welcome_email_pending' => (bool) $instructor->user->welcome_email_pending,
             ],
             'tab' => $tab,
             'subtab' => request()->query('subtab', 'summary'),
             'student' => request()->query('student') ? (int) request()->query('student') : null,
             'hmrc' => $hmrc,
             'hmrcService' => $hmrcService,
+            'formOptions' => $this->instructorFormOptions(),
         ]);
     }
 
@@ -243,15 +287,17 @@ class InstructorController extends Controller
 
     /**
      * Store a new instructor.
+     *
+     * The service throws ValidationException for recoverable failures
+     * (e.g. an unresolvable postcode) which Laravel converts to a 422 with
+     * field errors — Inertia's onError surfaces them to the AddInstructor sheet.
      */
     public function store(StoreInstructorRequest $request): RedirectResponse
     {
-        DB::transaction(function () use ($request) {
-            // Create user with instructor role
-            $instructor = $this->instructorService->createInstructor($request->validated());
-        });
+        $this->instructorService->createInstructor($request->validated());
 
-        return redirect()->route('instructors.index');
+        return redirect()->route('instructors.index')
+            ->with('success', 'Instructor created successfully.');
     }
 
     /**
@@ -305,6 +351,27 @@ class InstructorController extends Controller
 
         return response()->json([
             'message' => 'Password has been reset successfully.',
+        ]);
+    }
+
+    /**
+     * Resend the welcome / password-setup email to an instructor.
+     * Used when the original email failed or the setup link expired.
+     */
+    public function resendWelcomeEmail(Instructor $instructor): JsonResponse
+    {
+        $sent = $this->instructorService->resendWelcomeEmail($instructor);
+
+        if (! $sent) {
+            return response()->json([
+                'message' => 'We could not send the welcome email. Please check the logs and try again.',
+                'welcome_email_pending' => $instructor->user?->fresh()?->welcome_email_pending ?? true,
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'Welcome email has been resent.',
+            'welcome_email_pending' => false,
         ]);
     }
 

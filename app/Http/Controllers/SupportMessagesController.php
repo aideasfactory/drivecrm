@@ -8,6 +8,7 @@ use App\Http\Requests\SendSupportReplyRequest;
 use App\Models\Message;
 use App\Models\User;
 use App\Services\MessageService;
+use App\Services\SupportTicketService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -16,15 +17,23 @@ use Inertia\Response;
 class SupportMessagesController extends Controller
 {
     public function __construct(
-        protected MessageService $messageService
+        protected MessageService $messageService,
+        protected SupportTicketService $supportTicketService
     ) {}
 
     public function index(Request $request): Response
     {
         $admin = $request->user();
 
-        $conversations = $this->messageService->getConversations($admin)
-            ->map(fn (array $c) => [
+        $annotated = $this->supportTicketService->getAnnotatedConversations($admin);
+
+        $folder = $request->string('folder')->toString() === 'archived' ? 'archived' : 'inbox';
+
+        $partitioned = $annotated->partition(fn (array $c): bool => $c['is_archived'] === false);
+        [$inbox, $archived] = [$partitioned[0]->values(), $partitioned[1]->values()];
+
+        $conversations = ($folder === 'archived' ? $archived : $inbox)
+            ->map(fn (array $c): array => [
                 'user' => [
                     'id' => $c['user']->id,
                     'name' => $c['user']->name,
@@ -44,7 +53,11 @@ class SupportMessagesController extends Controller
             : null;
 
         $thread = null;
+        $selectedIsArchived = false;
         if ($selectedUser) {
+            $selectedIsArchived = $annotated
+                ->firstWhere(fn (array $c): bool => $c['user']->id === $selectedUser->id)['is_archived'] ?? false;
+
             $thread = $this->messageService
                 ->getConversationMessages($admin, $selectedUser, 100)
                 ->getCollection()
@@ -62,7 +75,11 @@ class SupportMessagesController extends Controller
         return Inertia::render('SupportMessages/Index', [
             'conversations' => $conversations,
             'selectedUser' => $selectedUser,
+            'selectedIsArchived' => $selectedIsArchived,
             'thread' => $thread,
+            'folder' => $folder,
+            'inboxCount' => $inbox->count(),
+            'archivedCount' => $archived->count(),
         ]);
     }
 
@@ -75,5 +92,23 @@ class SupportMessagesController extends Controller
         );
 
         return back()->with('success', 'Reply sent.');
+    }
+
+    public function archive(Request $request, User $user): RedirectResponse
+    {
+        $this->supportTicketService->archive($request->user(), $user);
+
+        return redirect()
+            ->route('support-messages.index')
+            ->with('success', 'Ticket closed.');
+    }
+
+    public function reopen(Request $request, User $user): RedirectResponse
+    {
+        $this->supportTicketService->reopen($request->user(), $user);
+
+        return redirect()
+            ->route('support-messages.index')
+            ->with('success', 'Ticket reopened.');
     }
 }
