@@ -27,6 +27,7 @@ class Order extends Model
         'payment_mode',
         'status',
         'stripe_payment_intent_id',
+        'stripe_charge_id',
         'stripe_subscription_id',
         'discount_code_id',
         'discount_percentage',
@@ -133,6 +134,34 @@ class Order extends Model
     public function getFormattedPackageTotalPriceAttribute(): string
     {
         return '£'.number_format(($this->package_total_price_pence ?? 0) / 100, 2);
+    }
+
+    /**
+     * Get the actual amount charged for the order, including booking and digital
+     * fees (e.g., "£612.50"). Mirrors the amount Stripe charges at checkout,
+     * falling back to the package total for legacy orders without a stored total.
+     */
+    public function getFormattedAmountPaidAttribute(): string
+    {
+        $amountPence = $this->total_price_pence ?? $this->package_total_price_pence ?? 0;
+
+        return '£'.number_format($amountPence / 100, 2);
+    }
+
+    /**
+     * Get the formatted booking fee (e.g., "£9.99").
+     */
+    public function getFormattedBookingFeeAttribute(): string
+    {
+        return '£'.number_format(($this->booking_fee_pence ?? 0) / 100, 2);
+    }
+
+    /**
+     * Get the formatted one-off digital fee (e.g., "£39.90").
+     */
+    public function getFormattedDigitalFeeAttribute(): string
+    {
+        return '£'.number_format(($this->digital_fee_pence ?? 0) / 100, 2);
     }
 
     /**

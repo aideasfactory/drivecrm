@@ -20,7 +20,7 @@ class StoreDiscountCodeRequest extends FormRequest
     {
         return [
             'label' => ['required', 'string', 'max:255'],
-            'percentage' => ['required', 'integer', 'in:5,10,15,20'],
+            'percentage' => ['required', 'integer', 'min:1', 'max:100'],
         ];
     }
 
@@ -32,7 +32,9 @@ class StoreDiscountCodeRequest extends FormRequest
         return [
             'label.required' => 'A label is required for the discount code.',
             'percentage.required' => 'A discount percentage is required.',
-            'percentage.in' => 'The discount percentage must be 5, 10, 15, or 20.',
+            'percentage.integer' => 'The discount percentage must be a whole number.',
+            'percentage.min' => 'The discount percentage must be at least 1.',
+            'percentage.max' => 'The discount percentage cannot exceed 100.',
         ];
     }
 }

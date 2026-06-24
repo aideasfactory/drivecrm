@@ -81,7 +81,7 @@ class GetInstructorPupilsAction
                 'next_lesson_date' => $nextLesson?->date?->format('Y-m-d'),
                 'next_lesson_time' => $nextLesson?->start_time?->format('H:i'),
                 'revenue_pence' => $student->total_revenue_pence,
-                'has_app' => $student->user_id !== null,
+                'has_app' => $student->app_last_active_at !== null,
                 'status' => $student->status ?? 'active',
             ];
         });

@@ -324,6 +324,7 @@ Extended profile for users with student role.
 | `owns_account` | boolean | DEFAULT true | Learner owns this account |
 | `status` | varchar(50) | DEFAULT 'active' | Student status (active, inactive, on_hold, passed, failed, completed) |
 | `inactive_reason` | text | NULLABLE | Reason for status change (e.g., why student was made inactive) |
+| `app_last_active_at` | timestamp | NULLABLE | Last time the student made an authenticated mobile-app API request. NULL means they have never used the app. Drives the "App" / has_app indicator on the instructor pupils view. Stamped (throttled to every 15 min) by the `ResolveApiProfile` middleware. |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 

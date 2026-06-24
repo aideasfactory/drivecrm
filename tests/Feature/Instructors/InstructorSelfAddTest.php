@@ -14,7 +14,6 @@ use Illuminate\Support\Facades\Http;
  * appeared to do nothing. These tests pin the new behaviour: every failure
  * mode surfaces a 422 with a specific message that the form can display.
  */
-
 beforeEach(function () {
     $this->owner = User::factory()->create();
     $this->actingAs($this->owner);

@@ -375,6 +375,57 @@ class StripeService
     }
 
     /**
+     * Resolve the funding charge id for a PaymentIntent (upfront orders).
+     *
+     * Returns the PaymentIntent's `latest_charge` or null if it cannot be resolved.
+     */
+    public function getChargeIdForPaymentIntent(string $paymentIntentId): ?string
+    {
+        try {
+            $paymentIntent = $this->stripe->paymentIntents->retrieve($paymentIntentId);
+
+            return $paymentIntent->latest_charge ?: null;
+        } catch (ApiErrorException $e) {
+            Log::error('Stripe: Failed to resolve charge id for payment intent', [
+                'payment_intent_id' => $paymentIntentId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
+     * Resolve the funding charge id for an Invoice (weekly orders).
+     *
+     * Prefers the invoice's `charge`, falling back to the invoice's payment
+     * intent `latest_charge`. Returns null if it cannot be resolved.
+     */
+    public function getChargeIdForInvoice(string $invoiceId): ?string
+    {
+        try {
+            $invoice = $this->stripe->invoices->retrieve($invoiceId);
+
+            if ($invoice->charge) {
+                return $invoice->charge;
+            }
+
+            if ($invoice->payment_intent) {
+                return $this->getChargeIdForPaymentIntent($invoice->payment_intent);
+            }
+
+            return null;
+        } catch (ApiErrorException $e) {
+            Log::error('Stripe: Failed to resolve charge id for invoice', [
+                'invoice_id' => $invoiceId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
      * Verify Stripe webhook signature.
      */
     public function verifyWebhookSignature(string $payload, string $signature): array

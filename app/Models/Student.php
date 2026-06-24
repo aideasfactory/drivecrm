@@ -49,6 +49,7 @@ class Student extends Model
         'contact_terms' => 'boolean',
         'contact_communications' => 'boolean',
         'owns_account' => 'boolean',
+        'app_last_active_at' => 'datetime',
     ];
 
     /**

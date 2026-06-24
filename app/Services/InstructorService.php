@@ -60,8 +60,8 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class InstructorService extends BaseService
 {
@@ -125,6 +125,9 @@ class InstructorService extends BaseService
             ]);
         }
 
+        DB::beginTransaction();
+
+        try {
             // 2. Create user account.
             // The account is created with a cryptographically-random password the admin
             // never sees — the instructor sets their real password via the welcome email
@@ -183,20 +186,11 @@ class InstructorService extends BaseService
             // logs activity and toggles `welcome_email_pending` on success/failure.
             ($this->sendInstructorWelcomeEmail)($instructor);
 
-            return [
-                'success' => true,
-                'instructor' => $instructor->load('user', 'locations'),
-                'error' => null,
-            ];
-
-        } catch (\Exception $e) {
+            return $instructor->load('user', 'locations');
+        } catch (\Throwable $e) {
             DB::rollBack();
 
-            return [
-                'success' => false,
-                'instructor' => null,
-                'error' => 'Failed to create instructor: '.$e->getMessage(),
-            ];
+            throw $e;
         }
     }
 

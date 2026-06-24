@@ -18,6 +18,7 @@ class LessonPayment extends Model
         'due_date',
         'paid_at',
         'stripe_invoice_id',
+        'stripe_charge_id',
     ];
 
     protected function casts(): array

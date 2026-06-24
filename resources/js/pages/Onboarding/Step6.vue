@@ -147,21 +147,18 @@
                   <!-- Terms -->
                   <Card>
                     <CardContent class="pt-0">
-                      <div class="flex items-start space-x-3">
-                        <input
-                          type="checkbox"
-                          v-model="termsAccepted"
+                      <div class="flex items-start gap-3">
+                        <Checkbox
                           id="terms"
-                          class="h-4 w-4 mt-1 rounded border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
+                          v-model="termsAccepted"
+                          class="mt-0.5 cursor-pointer"
                         />
-                        <Label for="terms" class="cursor-pointer">
+                        <label for="terms" class="cursor-pointer text-sm leading-relaxed text-muted-foreground">
                           I agree to the
-                          <a href="/policy/TermsofService.pdf" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Terms of Service</a>,
-                          <a href="/policy/PrivacyPolicy.pdf" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Privacy Policy</a>,
-                          and
-                          <a href="/policy/CookiePolicy.pdf" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Cookie Policy</a>.
-                          I understand the cancellation policy and payment terms.
-                        </Label>
+                          <a href="/policy/TermsofService.pdf" target="_blank" rel="noopener noreferrer" class="font-medium text-foreground underline underline-offset-4 hover:text-primary">Terms of Service</a>,
+                          <a href="/policy/PrivacyPolicy.pdf" target="_blank" rel="noopener noreferrer" class="font-medium text-foreground underline underline-offset-4 hover:text-primary">Privacy Policy</a>, and
+                          <a href="/policy/CookiePolicy.pdf" target="_blank" rel="noopener noreferrer" class="font-medium text-foreground underline underline-offset-4 hover:text-primary">Cookie Policy</a>. I understand the cancellation policy and payment terms.
+                        </label>
                       </div>
                     </CardContent>
                   </Card>
@@ -200,7 +197,6 @@ import { Link, useForm, usePage } from '@inertiajs/vue3'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'

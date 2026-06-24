@@ -33,13 +33,6 @@ const form = reactive({
 })
 const errors = reactive<Record<string, string>>({})
 
-const percentageOptions = [
-    { value: '5', label: '5%' },
-    { value: '10', label: '10%' },
-    { value: '15', label: '15%' },
-    { value: '20', label: '20%' },
-]
-
 const resetForm = () => {
     form.label = ''
     form.percentage = ''
@@ -120,20 +113,24 @@ const handleOpenChange = (value: boolean) => {
 
                 <div class="space-y-2">
                     <Label for="percentage">Discount Percentage</Label>
-                    <select
-                        id="percentage"
-                        v-model="form.percentage"
-                        class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    >
-                        <option value="" disabled>Select discount %</option>
-                        <option
-                            v-for="opt in percentageOptions"
-                            :key="opt.value"
-                            :value="opt.value"
+                    <div class="relative">
+                        <Input
+                            id="percentage"
+                            v-model="form.percentage"
+                            type="number"
+                            min="1"
+                            max="100"
+                            step="1"
+                            inputmode="numeric"
+                            placeholder="e.g. 12"
+                            class="pr-8"
+                        />
+                        <span
+                            class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
                         >
-                            {{ opt.label }}
-                        </option>
-                    </select>
+                            %
+                        </span>
+                    </div>
                     <p
                         v-if="errors.percentage"
                         class="text-sm text-destructive"

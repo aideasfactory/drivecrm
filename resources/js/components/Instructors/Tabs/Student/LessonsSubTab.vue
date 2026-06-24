@@ -324,10 +324,6 @@ onMounted(() => {
                     :href="purchaseLessonsUrl"
                     target="_blank"
                 >
-                    <Button size="sm" class="gap-2">
-                        <ShoppingCart class="h-4 w-4" />
-                        Purchase More Lessons
-                    </Button>
                 </a>
             </CardHeader>
             <CardContent>
