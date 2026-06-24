@@ -15,12 +15,13 @@ import {
 } from '@/components/ui/table'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Search, Plus, Download, FileUp } from 'lucide-vue-next'
-import type { Instructor } from '@/types/instructor'
+import type { Instructor, InstructorFormOptions } from '@/types/instructor'
 import AddInstructorSheet from '@/components/Instructors/AddInstructorSheet.vue'
 import CsvImportSheet from '@/components/CsvImportSheet.vue'
 
 interface Props {
     instructors: Instructor[]
+    formOptions: InstructorFormOptions
 }
 
 const props = defineProps<Props>()
@@ -204,6 +205,7 @@ const breadcrumbs = [{ title: 'Instructors' }]
         <!-- Add Instructor Sheet -->
         <AddInstructorSheet
             v-model:open="isAddSheetOpen"
+            :form-options="props.formOptions"
             @instructor-created="isAddSheetOpen = false"
         />
 

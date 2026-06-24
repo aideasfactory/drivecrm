@@ -28,11 +28,18 @@ export interface PackageFormData {
     lessons_count: number
 }
 
-// Form state
-const formData = ref<PackageFormData>({
+interface PackageFormState {
+    name: string
+    description: string
+    total_price_pounds: number
+    lessons_count: number
+}
+
+// Form state — price is held in pounds for the input; converted to pence on submit.
+const formData = ref<PackageFormState>({
     name: '',
     description: '',
-    total_price_pence: 0,
+    total_price_pounds: 0,
     lessons_count: 1,
 })
 
@@ -44,7 +51,7 @@ watch(
             formData.value = {
                 name: pkg.name,
                 description: pkg.description || '',
-                total_price_pence: pkg.total_price_pence,
+                total_price_pounds: pkg.total_price_pence / 100,
                 lessons_count: pkg.lessons_count,
             }
         } else {
@@ -52,7 +59,7 @@ watch(
             formData.value = {
                 name: '',
                 description: '',
-                total_price_pence: 0,
+                total_price_pounds: 0,
                 lessons_count: 1,
             }
         }
@@ -60,22 +67,30 @@ watch(
     { immediate: true }
 )
 
-// Computed: formatted price from pence
+// Computed: formatted price in pounds
 const formattedPrice = computed(() => {
-    return '£' + (formData.value.total_price_pence / 100).toFixed(2)
+    return '£' + (formData.value.total_price_pounds || 0).toFixed(2)
 })
 
 // Computed: price per lesson
 const pricePerLesson = computed(() => {
     if (formData.value.lessons_count === 0) return '£0.00'
     const perLesson =
-        formData.value.total_price_pence / formData.value.lessons_count
-    return '£' + (perLesson / 100).toFixed(2)
+        (formData.value.total_price_pounds || 0) / formData.value.lessons_count
+    return '£' + perLesson.toFixed(2)
 })
 
-// Handle form submission
+// Handle form submission — convert pounds back to pence for the backend.
 const handleSubmit = () => {
-    emit('save', formData.value)
+    const payload: PackageFormData = {
+        name: formData.value.name,
+        description: formData.value.description,
+        total_price_pence: Math.round(
+            (formData.value.total_price_pounds || 0) * 100
+        ),
+        lessons_count: formData.value.lessons_count,
+    }
+    emit('save', payload)
 }
 
 // Handle cancel
@@ -122,16 +137,16 @@ const handleCancel = () => {
             />
         </div>
 
-        <!-- Total Price in Pence Field -->
+        <!-- Total Price in Pounds Field -->
         <div class="space-y-2">
-            <Label for="total_price_pence">Total Price (in pence)</Label>
+            <Label for="total_price_pounds">Total Price (£)</Label>
             <Input
-                id="total_price_pence"
-                v-model.number="formData.total_price_pence"
+                id="total_price_pounds"
+                v-model.number="formData.total_price_pounds"
                 type="number"
                 min="0"
-                step="1"
-                placeholder="Enter price in pence (e.g., 50000 = £500.00)"
+                step="0.01"
+                placeholder="Enter price in pounds (e.g., 500.00)"
                 required
             />
             <p class="text-sm text-muted-foreground">

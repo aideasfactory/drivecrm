@@ -1,6 +1,7 @@
 # Task: Extend Booking Hours summary to four-week view
 
 ## Overview
+Sam reported that when he tries to add himself as an instructor during sign-up, pressing "OK" (the Create Instructor button) does nothing — the instructor is not added and there is no error message. This task fixes the silent failure and adds clear UI feedback.
 
 The Instructor admin area's **Details → Summary** tab currently shows a
 *Booking Hours* card with two values: **current week** and **next week**.

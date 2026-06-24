@@ -86,14 +86,19 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('instructors.packages.store');
     Route::get('/instructors/{instructor}/locations', [InstructorController::class, 'locations'])
         ->name('instructors.locations');
-    Route::post('/instructors/{instructor}/locations', [InstructorController::class, 'storeLocation'])
-        ->name('instructors.locations.store');
-    Route::delete('/instructors/{instructor}/locations/{location}', [InstructorController::class, 'destroyLocation'])
-        ->name('instructors.locations.destroy');
-    Route::get('/instructors/{instructor}/locations-export', [InstructorController::class, 'exportLocationsCsv'])
-        ->name('instructors.locations.export');
-    Route::post('/instructors/{instructor}/locations-import', [InstructorController::class, 'importLocationsCsv'])
-        ->name('instructors.locations.import');
+
+    // Coverage area mutations and CSV import/export are admin (owner) only.
+    // Instructors can still view their own coverage via the GET above.
+    Route::middleware([EnsureOwner::class])->group(function () {
+        Route::post('/instructors/{instructor}/locations', [InstructorController::class, 'storeLocation'])
+            ->name('instructors.locations.store');
+        Route::delete('/instructors/{instructor}/locations/{location}', [InstructorController::class, 'destroyLocation'])
+            ->name('instructors.locations.destroy');
+        Route::get('/instructors/{instructor}/locations-export', [InstructorController::class, 'exportLocationsCsv'])
+            ->name('instructors.locations.export');
+        Route::post('/instructors/{instructor}/locations-import', [InstructorController::class, 'importLocationsCsv'])
+            ->name('instructors.locations.import');
+    });
     Route::get('/instructors/{instructor}/calendar', [InstructorController::class, 'calendar'])
         ->name('instructors.calendar');
     Route::post('/instructors/{instructor}/calendar/items', [InstructorController::class, 'storeCalendarItem'])
@@ -140,6 +145,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('instructors.contacts.primary');
     Route::put('/instructors/{instructor}/password', [InstructorController::class, 'updatePassword'])
         ->name('instructors.password.update');
+    Route::post('/instructors/{instructor}/resend-invite', [InstructorController::class, 'resendWelcomeEmail'])
+        ->middleware(EnsureOwner::class)
+        ->name('instructors.resend-invite');
 
     // Instructor Progress Tracker (framework CRUD — axios-fed)
     Route::get('/instructors/{instructor}/progress-tracker/framework', [ProgressTrackerController::class, 'framework'])
@@ -287,6 +295,14 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('teams.index');
     Route::get('/reports', [ReportController::class, 'index'])
         ->name('reports.index');
+    Route::get('/reports/availability', [ReportController::class, 'availability'])
+        ->name('reports.availability');
+    Route::get('/reports/availability/export', [ReportController::class, 'exportAvailability'])
+        ->name('reports.availability.export');
+    Route::get('/reports/invoice-due', [ReportController::class, 'invoiceDue'])
+        ->name('reports.invoice-due');
+    Route::get('/reports/invoice-due/export', [ReportController::class, 'exportInvoiceDue'])
+        ->name('reports.invoice-due.export');
     // Push Notifications (Owner Only)
     Route::middleware([EnsureOwner::class])->group(function () {
         Route::get('/push-notifications', [PushNotificationController::class, 'index'])
@@ -301,6 +317,10 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
             ->name('support-messages.index');
         Route::post('/support-messages/{user}', [SupportMessagesController::class, 'store'])
             ->name('support-messages.store');
+        Route::post('/support-messages/{user}/archive', [SupportMessagesController::class, 'archive'])
+            ->name('support-messages.archive');
+        Route::post('/support-messages/{user}/reopen', [SupportMessagesController::class, 'reopen'])
+            ->name('support-messages.reopen');
     });
 
     // Resources (Owner Only)

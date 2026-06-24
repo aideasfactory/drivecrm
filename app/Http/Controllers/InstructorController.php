@@ -12,7 +12,10 @@ use App\Actions\Shared\Contact\SetPrimaryContactAction;
 use App\Actions\Shared\Contact\UpdateContactAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Enums\BusinessType;
+use App\Enums\InstructorStatus;
+use App\Enums\PdiStatus;
 use App\Enums\RecurrencePattern;
+use App\Enums\TransmissionType;
 use App\Enums\VehicleMethod;
 use App\Http\Controllers\Hmrc\Archive\ArchiveController;
 use App\Http\Controllers\Hmrc\Itsa\ItsaController;
@@ -88,7 +91,23 @@ class InstructorController extends Controller
 
         return Inertia::render('Instructors/Index', [
             'instructors' => $instructors,
+            'formOptions' => $this->instructorFormOptions(),
         ]);
+    }
+
+    /**
+     * Structured-select options used by the AddInstructorSheet. Kept in a
+     * single helper so `index` and `show` stay in sync.
+     *
+     * @return array<string, array<int, array{value: string, label: string}>>
+     */
+    private function instructorFormOptions(): array
+    {
+        return [
+            'status' => InstructorStatus::options(),
+            'pdi_status' => PdiStatus::options(),
+            'transmission_type' => TransmissionType::options(),
+        ];
     }
 
     /**
@@ -234,12 +253,14 @@ class InstructorController extends Controller
                 'booking_hours' => $bookingHours,
                 'locations' => $locations,
                 'hmrc_connected' => $instructor->user->hmrcToken()->exists(),
+                'welcome_email_pending' => (bool) $instructor->user->welcome_email_pending,
             ],
             'tab' => $tab,
             'subtab' => request()->query('subtab', 'summary'),
             'student' => request()->query('student') ? (int) request()->query('student') : null,
             'hmrc' => $hmrc,
             'hmrcService' => $hmrcService,
+            'formOptions' => $this->instructorFormOptions(),
         ]);
     }
 
@@ -266,15 +287,17 @@ class InstructorController extends Controller
 
     /**
      * Store a new instructor.
+     *
+     * The service throws ValidationException for recoverable failures
+     * (e.g. an unresolvable postcode) which Laravel converts to a 422 with
+     * field errors — Inertia's onError surfaces them to the AddInstructor sheet.
      */
     public function store(StoreInstructorRequest $request): RedirectResponse
     {
-        DB::transaction(function () use ($request) {
-            // Create user with instructor role
-            $instructor = $this->instructorService->createInstructor($request->validated());
-        });
+        $this->instructorService->createInstructor($request->validated());
 
-        return redirect()->route('instructors.index');
+        return redirect()->route('instructors.index')
+            ->with('success', 'Instructor created successfully.');
     }
 
     /**
@@ -328,6 +351,27 @@ class InstructorController extends Controller
 
         return response()->json([
             'message' => 'Password has been reset successfully.',
+        ]);
+    }
+
+    /**
+     * Resend the welcome / password-setup email to an instructor.
+     * Used when the original email failed or the setup link expired.
+     */
+    public function resendWelcomeEmail(Instructor $instructor): JsonResponse
+    {
+        $sent = $this->instructorService->resendWelcomeEmail($instructor);
+
+        if (! $sent) {
+            return response()->json([
+                'message' => 'We could not send the welcome email. Please check the logs and try again.',
+                'welcome_email_pending' => $instructor->user?->fresh()?->welcome_email_pending ?? true,
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'Welcome email has been resent.',
+            'welcome_email_pending' => false,
         ]);
     }
 
