@@ -1,119 +1,159 @@
-# Task: Fix instructor self-add sign-up flow
+# Task: Instructor Package Pricing UI in Pounds
 
 ## Overview
 Sam reported that when he tries to add himself as an instructor during sign-up, pressing "OK" (the Create Instructor button) does nothing — the instructor is not added and there is no error message. This task fixes the silent failure and adds clear UI feedback.
 
-Branch: `feature/019ed9ed-4b56-726e-b611-8d5837366a60-fix-instructor-self-add-sign-up-flow`
+Display the Total Price for instructor packages in **pounds** (£) instead of
+pence in the admin area, while continuing to **store** the price as pence in
+the database. This affects the package create/edit form input shared by:
 
----
+- Admin packages list (`/packages` create + edit sheets)
+- Instructor bespoke packages (`/instructors/{id}` Details tab → Packages sheet)
 
-## Investigation summary
-
-Two distinct failure paths reproduce "nothing happens":
-
-1. **Validation error displayed inline, no toast** — `StoreInstructorRequest` includes `email.unique:users,email`. If Sam types his own email (which already exists in `users`) he gets a 422 with `errors.email = "This email address is already in use."`. The sheet displays the error inline beneath the email input but shows **no toast**, so a user looking at the submit button thinks nothing happened.
-
-2. **Silent backend failure on postcode lookup** — `'postcode'` is `nullable` in `StoreInstructorRequest`. If postcode is missing or fails the `postcodes.io` lookup, `InstructorService::createInstructor()` swallows the failure and returns `['success' => false, 'error' => '...']`. **`InstructorController::store()` discards that return value** and unconditionally `redirect()->route('instructors.index')`. From Inertia's perspective this is a successful POST — `onSuccess` fires, the sheet closes, and the user is left wondering why nothing happened.
-
-There is **no max-instructor limit**. There is no business rule limiting the number of instructors. The only effective limits are:
-- `users.email` unique constraint
-- `instructors.user_id` unique constraint
-
----
+The Index table column already shows the formatted pound value via the model
+accessor `formatted_total_price`. The work is on the **form input**: today it
+asks for pence (e.g., `50000` for £500.00) which is unfriendly for admins.
 
 ## Phase 1: Planning ✅
 
-- [x] Trace the "Add Instructor" sheet → `/instructors` POST → `InstructorController::store` → `InstructorService::createInstructor`
-- [x] Confirm there is no max-instructor cap anywhere in the codebase
-- [x] Identify the silent-failure root cause: controller ignores service's `success/false` array
-- [x] Identify the secondary issue: postcode is nullable in validation but required by the service
+### What changes
+- **Frontend only.** Backend schema (`total_price_pence` integer), FormRequest
+  rules, Resources, Service, and Action stay untouched.
+- `PackageForm.vue` gains an internal pounds-denominated input bound to a local
+  `total_price_pounds` field. On submit it multiplies by 100 and rounds to
+  produce the integer `total_price_pence` the backend already expects. On
+  load (edit mode) it divides the existing pence value by 100 to populate the
+  input.
+- Label changes from "Total Price (in pence)" to "Total Price (£)".
+- The helper line under the input keeps showing "£X.XX total (£Y.YY per
+  lesson)" which is already in pounds — its computed source switches from
+  `total_price_pence` to the new pounds field.
+
+### Why this shape
+- The backend is the source of truth and the database column is named
+  `total_price_pence` for a reason: integer arithmetic for money is correct.
+  Touching the backend just to rename a field would ripple into Stripe code,
+  resources, API consumers, and migrations for no benefit.
+- The Inertia DTO emitted by the form keeps the `total_price_pence` key so the
+  HTTP layer is unchanged — only the input the human sees is in pounds.
+- Rounding on submit (`Math.round(pounds * 100)`) guards against
+  floating-point drift if the admin types `12.345`.
+
+### Files to edit
+1. `resources/js/components/Instructors/PackageForm.vue` — only file requiring
+   real changes. Switch input binding to a pounds field, convert in/out, relabel.
+
+### Files NOT to edit (and why)
+- `Package.php` model — accessors already format pence → "£X.XX" for read.
+- `PackageController.php`, `PackageService.php`, related Actions — they
+  receive `total_price_pence` from the form payload unchanged.
+- `StorePackageRequest.php`, `UpdatePackageRequest.php`,
+  `StoreInstructorPackageRequest.php` — validation rules still apply to the
+  same pence integer the form emits.
+- `Packages/Index.vue` — already shows `formatted_total_price` (pounds).
+- `migrations/*` and `database-schema.md` — column unchanged.
+- `api.md` — endpoints unchanged (still take `total_price_pence`).
+
+### Risks / edge cases
+- Existing packages have integer `total_price_pence` (e.g., 50000). Dividing
+  by 100 gives `500` which renders as `500` in a `type="number"` input —
+  acceptable. Admin can type `500.50` and the form converts to `50050`.
+- `min:0` validation is preserved (pounds `0` → pence `0`).
+- `step="0.01"` on the input keeps the browser's spinner sensible.
 
 ### Reflection
-- The legacy "return an array with `success` boolean" pattern in `createInstructor` is the structural cause. The controller never checks it, so any internal failure is invisible.
-- The cleanest fix is to refactor `createInstructor` to throw `ValidationException` for known recoverable issues (postcode) and let the controller's validation pipeline surface the error to the form.
+The planning surfaced the right level of change: a form-only conversion at
+the input boundary, with the emitted DTO unchanged. No backend file needed
+touching, and no docs (database-schema, api.md) needed updating because the
+data contract is untouched.
 
 ## Phase 2: Implementation ✅
 
-- [x] Make `postcode` required in `StoreInstructorRequest` (the service needs it)
-- [x] Refactor `InstructorService::createInstructor()` to throw `ValidationException` on postcode lookup failure and return an `Instructor` directly
-- [x] Update `InstructorController::store()` to use the new return type and let validation exceptions surface to Inertia
-- [x] Update `AddInstructorSheet.vue` to show success and error toasts (no more silent UI)
-- [x] Show a general error toast when the server returns errors without specific field messages
-- [x] Add a Pest feature test that proves the failure modes now surface as 422 errors with messages
+### Changes
+- `resources/js/components/Instructors/PackageForm.vue`:
+  - New internal `PackageFormState` interface with `total_price_pounds`.
+    Original exported `PackageFormData` (the emit/save DTO) **unchanged** so
+    `CreatePackageSheet.vue`, `EditPackageSheet.vue` and
+    `Instructors/Tabs/Details/EditDetailsSubTab.vue` (the three consumers of
+    this form) continue to receive `{ total_price_pence }` exactly as before.
+  - `formData` ref now holds pounds. The `watch` on `props.package` converts
+    `pkg.total_price_pence / 100` on load.
+  - `handleSubmit` builds the emit payload with
+    `Math.round(total_price_pounds * 100)` so the integer pence value is
+    safe against floating-point drift.
+  - `formattedPrice` and `pricePerLesson` computeds rewritten to consume
+    pounds directly (no `/100` step needed).
+  - Input field: `id`/`for`/`v-model` switched to `total_price_pounds`,
+    `step="1"` → `step="0.01"`, label "Total Price (in pence)" → "Total
+    Price (£)", placeholder updated to "Enter price in pounds (e.g.,
+    500.00)".
 
-### Reflection
-- The fix is small (controller + service + form request + frontend toast) and targets the exact source of "nothing happens" rather than papering over symptoms.
-- We deliberately did NOT add a max-instructor limit because none exists in the product; if one is needed later it would belong as a Policy/action gate, not a silent guard.
+### Verification
+- Read final file end-to-end: 175 lines, clean, no leftover pence references
+  except the legitimate `total_price_pence` in the export type (DTO) and
+  inside `handleSubmit` where pounds → pence conversion lives.
+- Three consumers of `PackageForm.vue` confirmed:
+  - `components/Packages/CreatePackageSheet.vue` — `POST /packages` with
+    `data` from `save` event. Still receives `total_price_pence`. ✓
+  - `components/Packages/EditPackageSheet.vue` — `PUT /packages/{id}` with
+    the same shape. ✓
+  - `components/Instructors/Tabs/Details/EditDetailsSubTab.vue` — `POST
+    /instructors/{id}/packages` and `PUT /packages/{id}`. ✓
+- Backend FormRequests (`StorePackageRequest`, `UpdatePackageRequest`,
+  `StoreInstructorPackageRequest`) still validate `total_price_pence` as
+  integer ≥ 0. Unchanged.
+- Index page (`Packages/Index.vue`) already renders
+  `pkg.formatted_total_price` from the model accessor (`'£' .
+  number_format($this->total_price_pence / 100, 2)`). No change needed.
 
-### Inertia wiring
+### Out of scope (deliberately not done)
+- Renaming the database column or the FormRequest fields.
+- Touching API resources or `.claude/api.md` (the API still accepts pence).
+- Modifying the Instructor "create bespoke package" path beyond what
+  `PackageForm.vue` shares — that path already uses the same form component.
+- Adding currency-input masking (e.g., always-two-decimals display while
+  typing). Browsers handle `step="0.01"` adequately for this admin tool.
 
-### Reflection
-- Confidence is high: the controller now relies on Laravel's exception → 422 pipeline that the Inertia frontend already understands, and we added an explicit toast so generic errors can't go unnoticed.
+## Phase 3: Reflection ✅
 
----
+### What worked
+- Keeping `PackageFormData` (the emitted DTO) byte-identical meant zero
+  ripple into three different sheet consumers and three backend FormRequests.
+  The form-component became the only file that knows about the unit
+  conversion.
+- The model accessors (`formatted_total_price`, `formatted_lesson_price`)
+  meant the listing table already displayed in pounds — no display work.
+- The `Math.round(pounds * 100)` pattern is the standard guard for the
+  classic JS float problem (`5.55 * 100 === 554.9999...`). Worth keeping
+  even if the form mostly sees whole pounds.
 
-## PHASE 2: IMPLEMENTATION ✅
+### Subtle decisions worth flagging
+- The internal state type `PackageFormState` is **not** exported. Only the
+  DTO type `PackageFormData` is exported — that's deliberate. Outside
+  callers must not see the pounds field; their interface is the integer
+  pence DTO.
+- The `|| 0` fallback in computeds guards against `undefined`/empty input
+  during typing — without it the user sees "£NaN" briefly while clearing
+  the field.
+- `step="0.01"` rather than `step="any"` so the browser spinner increments
+  by a penny, which matches the user's mental model.
 
-### Steps
-- [x] Create `app/Enums/InstructorStatus.php`
-- [x] Create `app/Enums/PdiStatus.php`
-- [x] Create `app/Enums/TransmissionType.php`
-- [x] Update `StoreInstructorRequest::rules()` to validate `status` + `pdi_status` + `transmission_type` against enums
-- [x] Update `UpdateInstructorRequest::rules()` likewise
-- [x] Update `BulkImportInstructorsAction::__invoke()` row validator likewise
-- [x] Update `InstructorController::index()` and `::show()` to attach `formOptions` Inertia prop (via a shared `private function instructorFormOptions(): array`)
-- [x] Add `InstructorFormOptions` + `FormOption` types in `resources/js/types/instructor.ts`
-- [x] Update `resources/js/pages/Instructors/Index.vue` to accept + forward `formOptions`
-- [x] Update `resources/js/pages/Instructors/Show.vue` to accept + forward `formOptions`
-- [x] Update `resources/js/components/Instructors/AddInstructorSheet.vue`:
-  - Accept `formOptions` prop
-  - Replace `status` `<Input>` with styled `<select>` driven by `formOptions.status`
-  - Replace `pdi_status` `<Input>` with styled `<select>` driven by `formOptions.pdi_status`
-  - Drive `transmission_type` options from `formOptions.transmission_type`
-  - Add `snapToOption()` helper so legacy values are mapped to the default rather than silently selecting an out-of-list option
-- [x] Write Pest feature test `tests/Feature/Instructors/InstructorStructuredFieldsTest.php` covering accept + reject for `status` and `pdi_status` on both store and update
-
-### Files to change
-
-| File | Change |
-|------|--------|
-| `app/Enums/InstructorStatus.php` | NEW |
-| `app/Enums/PdiStatus.php` | NEW |
-| `app/Enums/TransmissionType.php` | NEW |
-| `app/Http/Requests/StoreInstructorRequest.php` | Use enum rules |
-| `app/Http/Requests/UpdateInstructorRequest.php` | Use enum rules |
-| `app/Actions/Instructor/BulkImportInstructorsAction.php` | Use enum rules in CSV row validator |
-| `app/Http/Controllers/InstructorController.php` | Attach `formOptions` to `index` + `show` Inertia payloads |
-| `resources/js/types/instructor.ts` | Add `FormOption` + `InstructorFormOptions` types |
-| `resources/js/pages/Instructors/Index.vue` | Accept + forward `formOptions` |
-| `resources/js/pages/Instructors/Show.vue` | Accept + forward `formOptions` |
-| `resources/js/components/Instructors/AddInstructorSheet.vue` | Three structured selects |
-| `tests/Feature/Instructors/AddInstructorValidationTest.php` | NEW Pest tests |
-
----
-
-## PHASE 3: REFLECTION ✅
-
-### What went well
-
-- **Single source of truth (PHP enums → Inertia → Vue).** All three fields' option lists live in `App\Enums\*::options()`, are exposed by `InstructorController::instructorFormOptions()` to both Inertia pages, and the Vue sheet only renders what the backend gives it. There is no TS-side hard-coded list of values to drift.
-- **Mirrored the existing `BusinessType` pattern.** The HMRC tab already shipped `businessTypes`/`methodOptions` to the frontend in the exact `[{value, label}]` shape, so the new `formOptions` payload is idiomatic and the frontend already knows how to consume that shape.
-- **`transmission_type` came along for free.** It was already a select, but its options were hard-coded in the Vue template. Driving them from the same `formOptions` payload removed the last divergence point between the backend enum and the UI.
-- **Backwards-compatible for legacy data.** `snapToOption()` in the sheet maps any pre-existing free-text value that isn't in the enum to the default option, so opening an old instructor with `status = 'something_else'` doesn't crash the select — the admin sees the default and can pick something valid.
-- **CSV import stays consistent.** `BulkImportInstructorsAction` shares the same enum rules, so the constraint we introduced through the form can't be bypassed by uploading a CSV.
-
-### Anti-pattern check
-
-- No `pint`, no `php artisan test`, no lint runs (project rules).
-- No migration / schema change → no `.claude/database-schema.md` update needed. Columns stay `varchar(50)`; the constraint is purely at the FormRequest layer where Laravel already enforces validation.
-- No `api.md` update — no API endpoint added, modified or removed. Both `instructors.store` and `instructors.update` are web (Inertia) routes; the mobile API does not include admin instructor creation.
-
-### Technical debt / future considerations
-
-- **Legacy rows.** Any existing instructor whose `status` doesn't match the new enum still displays in lists but, on edit, the select falls back to the default ("Active"). The admin can keep saving without breaking, but the legacy value is lost on the first save. Acceptable given the brief, but worth a one-off backfill if there's drift in the DB.
-- **No ShadCN `Select` component yet.** I followed the existing `transmission_type` pattern (native `<select>` with the same Tailwind classes as `Input`). When the project eventually adds a `components/ui/select` (reka-ui), the three selects can be migrated together — they all share the `selectClass` constant.
-- **TypeScript still types `status`/`pdi_status` as `string` on `InstructorDetail`** rather than the enum literal union. That's deliberate so legacy values render without TS errors. If the DB is backfilled, tightening these types is a one-line change.
+### Technical debt / follow-ups (NOT done)
+- No tests added (project rule: user maintains tests manually).
+- No Pint / Prettier run (project rule: user handles code style).
+- The lesson-price helper line is **derived** in the UI (pounds ÷ lessons)
+  while the database also stores a computed `lesson_price_pence` via the
+  model's `saving` hook. These can diverge transiently while editing, but
+  the DB value is recalculated on save. Acceptable — pointing it out.
 
 ### Score
+**Solution quality: 9/10.** Minimal, surgical change. Single file edited.
+No new abstractions, no parallel actions, no docs to update. One point off
+because a longer-term improvement would be a dedicated `<CurrencyInput>`
+component if more pence-vs-pounds form fields appear elsewhere in the app —
+but for one form, inlining the conversion is the right call.
 
-**9 / 10.** Loses one point for the legacy-row edge case (an old non-enum status is silently rewritten to "Active" on first edit) — a deliberate trade-off, not a bug, but worth flagging. Everything else is in lockstep: PHP enum is the single source, three consumers (web Store, web Update, CSV import) validate against the same list, the frontend renders only what the backend offers, and the existing `BusinessType`/`businessTypes` pattern is followed exactly.
+---
+
+**Status:** All phases complete.
+**Last Updated:** 2026-06-17.
