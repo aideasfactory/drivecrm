@@ -64,6 +64,7 @@ class GetInstructorCalendarAction
                     $orderId = null;
                     $futureSiblingsCount = 0;
                     $mileage = null;
+                    $amountPence = null;
                     $summary = null;
                     $reflectiveLog = null;
 
@@ -71,6 +72,7 @@ class GetInstructorCalendarAction
                         $lessonId = $lesson->id;
                         $orderId = $lesson->order_id;
                         $mileage = $lesson->mileage;
+                        $amountPence = $lesson->amount_pence;
                         $summary = $lesson->summary;
 
                         if ($lesson->order) {
@@ -109,6 +111,7 @@ class GetInstructorCalendarAction
                         'order_id' => $orderId,
                         'future_siblings_count' => $futureSiblingsCount,
                         'mileage' => $mileage,
+                        'amount_pence' => $amountPence,
                         'summary' => $summary,
                         'reflective_log' => $reflectiveLog,
                         'notes' => $item->notes,

@@ -1,117 +1,119 @@
-# Task: Extend Booking Hours summary to four-week view
+# Task: Show lesson cost in signed-off lesson summary
 
 ## Overview
-Sam reported that when he tries to add himself as an instructor during sign-up, pressing "OK" (the Create Instructor button) does nothing — the instructor is not added and there is no error message. This task fixes the silent failure and adds clear UI feedback.
 
-The Instructor admin area's **Details → Summary** tab currently shows a
-*Booking Hours* card with two values: **current week** and **next week**.
-Stakeholders want a rolling **four-week window** — current week plus the next
-three weeks — so they can see a longer schedule horizon at a glance from the
-existing summary card.
+When an instructor signs off a student's lesson, the lesson is marked complete
+and a summary becomes viewable. Currently the summary view shows the lesson
+date, time, and the instructor's written summary — but not the lesson cost.
+This task adds the lesson cost (formatted as GBP) to every place a signed-off
+lesson summary is shown.
 
-Scope is intentionally narrow: keep the same card, replace the two-week display
-with a clear four-week breakdown. No new pages, no new endpoints.
+## Locations identified
 
-Files touched:
-- `app/Http/Controllers/InstructorController.php` — replace the two-week hours
-  calculation with a four-week loop.
-- `resources/js/types/instructor.ts` — replace the `BookingHours` shape with a
-  weeks array.
-- `resources/js/components/Instructors/Tabs/Details/SummarySubTab.vue` — render
-  the four weeks.
-- `tests/Feature/Instructors/InstructorBookingHoursTest.php` — Pest tests for
-  the controller payload.
+1. **Primary — "View Summary" Dialog** (`LessonsSubTab.vue`)
+   - Button: `View Summary` appears for `status === 'completed' && summary` lessons.
+   - Dialog opens via `openViewSummary(lesson)` and shows date, time and summary text.
+   - `lesson.amount_pence` is already in the data model — only the UI needs updating.
+
+2. **Secondary — Schedule "Completed lesson view"** (`ScheduleTab.vue`)
+   - When an instructor opens a completed calendar item, a side sheet shows
+     "Lesson Summary" inline. This is the same signed-off summary in a different
+     surface. The user asked for cost to be visible "wherever View summary is
+     shown" — same intent applies here.
+   - The calendar item payload from `GetInstructorCalendarAction` does NOT
+     currently include `amount_pence`, so the backend action + TS interface
+     also need a one-field addition.
 
 ## Phase 1: Planning ✅
 
-### Why a weeks array (and not four named fields)
-The current payload uses `{ current_week, next_week }`. Adding two more named
-keys (`week_3`, `week_4`) would scale poorly and force the Vue template to
-hard-code each label. An array of `{ label, start_date, end_date, hours }`
-entries:
-- Lets the template loop with `v-for` (one block, four cards).
-- Carries the date range, so the UI can show "23 Jun – 29 Jun" alongside the
-  label rather than a bare "Current Week".
-- Makes future range changes (e.g. 6 weeks) a one-line config change.
+### What needs to change
 
-### Data shape
-```php
-booking_hours' => [
-    'weeks' => [
-        ['label' => 'Current Week', 'start_date' => '2026-06-15', 'end_date' => '2026-06-21', 'hours' => 12.5],
-        ['label' => 'Week of 22 Jun', 'start_date' => '2026-06-22', 'end_date' => '2026-06-28', 'hours' => 18.0],
-        // ... two more
-    ],
-]
-```
+**Frontend:**
+- `resources/js/components/Instructors/Tabs/Student/LessonsSubTab.vue`
+  - Render `formatCurrency(viewSummaryTarget.amount_pence)` in the View Summary
+    Dialog as a labelled "Cost" row above the summary body.
+- `resources/js/components/Instructors/Tabs/ScheduleTab.vue`
+  - In the "Completed lesson view" panel, render the lesson cost using the
+    `amount_pence` field that we'll add to `CalendarItemResponse`.
+- `resources/js/types/instructor.ts`
+  - Add `amount_pence?: number | null` to `CalendarItemResponse`.
 
-### Query strategy
-Rather than running four separate `Lesson` queries (one per week), fetch all
-non-cancelled lessons inside the four-week span once and bucket them in PHP.
-Lower DB round-trips; weeks are small (max 28 days), so memory cost is
-negligible.
+**Backend:**
+- `app/Actions/Instructor/GetInstructorCalendarAction.php`
+  - In the mapped item array (within the `BOOKED || COMPLETED` lesson branch),
+    expose `amount_pence` from `$lesson->amount_pence`.
+
+### Why this scope
+
+- `LessonsSubTab.vue` is the page the requirement explicitly references
+  ("click View summary"). Cost is already in the payload — UI-only change.
+- `ScheduleTab.vue` shows the same signed-off summary on a different surface,
+  so the requirement carries over. Backend exposes a single field; no new
+  endpoints, no migrations.
+
+### Out of scope
+
+- Multi-currency formatting (formatter is GBP-only — matches the existing
+  `formatCurrency()` helper in `LessonsSubTab.vue`).
+- VAT or tax breakdown (the lesson cost stored on the lesson is the customer
+  price; payout breakdowns live elsewhere).
+- New permissions / RBAC checks (the user reaching this dialog already passed
+  the instructor scoping middleware).
 
 ## Phase 2: Implementation ✅
 
-### Backend — `InstructorController::show()`
-- Replaced the dual `current_week` / `next_week` query block with a loop that
-  builds four `Carbon`-anchored week ranges (`startOfWeek` / `endOfWeek`).
-- Single `Lesson` query covering the full 28-day span (status not in cancelled
-  / draft, `start_time` and `end_time` both set).
-- In-PHP grouping: each lesson is added to the bucket whose start ≤ lesson date
-  ≤ end. Hours = `start_time.diffInMinutes(end_time) / 60`, rounded to 1 dp.
-- First week labelled `Current Week`; subsequent weeks labelled with the start
-  date in `j M` format (e.g. `Week of 22 Jun`).
+### Files edited
 
-### Frontend — `instructor.ts`
-- Replaced `BookingHours { current_week, next_week }` with
-  `BookingHours { weeks: BookingHoursWeek[] }` where each week has
-  `label`, `start_date`, `end_date`, `hours`.
+- `resources/js/components/Instructors/Tabs/Student/LessonsSubTab.vue`
+  - Added a "Cost" line inside the `View Summary` Dialog, rendered with the
+    existing `formatCurrency(viewSummaryTarget.amount_pence)` helper.
+- `resources/js/components/Instructors/Tabs/ScheduleTab.vue`
+  - Added a "Cost" line in the "Completed lesson view" panel, rendered with the
+    existing `formatCurrency()` helper, guarded on `amount_pence != null`.
+- `resources/js/types/instructor.ts`
+  - Added `amount_pence: number | null` to `CalendarItemResponse`.
+- `app/Actions/Instructor/GetInstructorCalendarAction.php`
+  - Captured `$lesson->amount_pence` and included it in the mapped item payload
+    so the Schedule view has the value to render.
 
-### Frontend — `SummarySubTab.vue`
-- Replaced the hard-coded two-block grid with a responsive `v-for` grid that
-  scales to 4 cards (1 column on mobile, 2 on md, 4 on lg+).
-- Each card shows the week label, the formatted date range, and the hours.
-- A small `formatDateRange()` helper inside the component formats
-  `start_date` + `end_date` into `15 Jun – 21 Jun` for readability.
+### Key decisions
 
-### Tests — `InstructorBookingHoursTest.php`
-- Authenticated request to `instructors.show` returns booking_hours.weeks as a
-  4-element array.
-- Each week entry contains the documented keys.
-- Hours are bucketed into the correct week (a lesson in week 3 doesn't leak
-  into weeks 1, 2, or 4).
-- Cancelled / draft lessons are excluded.
+- **Reused `formatCurrency`** in both files — these are existing local helpers
+  already used elsewhere in the same component for the lessons table and
+  sign-off sheet. Consistency over adding a new shared util.
+- **Labelled "Cost"** rather than "Price" or "Amount" — matches user wording.
+- **Cost row placed at the top of the dialog body**, before the summary text,
+  so it reads naturally with the date/time already in the DialogDescription.
+- **Backend change is one line in one mapper** — no new resource class, no new
+  endpoint. The existing payload shape is the right place to surface this
+  because `summary` already lives on the same response.
+
+### Files created
+- `results.md` — client-facing summary of what was delivered with a confidence
+  score.
 
 ## Phase 3: Reflection ✅
 
-**Why this is the right shape for the brief:**
-- The ticket asked for the *summary area* to show four weeks. Reusing the
-  existing card and swapping the inner grid keeps the page layout familiar to
-  admins while expanding the time horizon.
-- A weeks-array payload is more change-tolerant than four named keys — the
-  component renders whatever the controller sends, so future tweaks (3 weeks,
-  6 weeks, monthly view) don't need parallel frontend changes.
+**Why this shape is right for the brief:**
+- The cost is already on `Lesson::amount_pence` and already in the lessons list
+  response. The View Summary dialog was the one surface that omitted it.
+- For the Schedule surface, the smallest change is one field in one mapper +
+  one line in the Vue template. No new model, action, route, or resource.
 
-**Subtle decisions:**
-- We bucket lessons in PHP rather than running 4 queries. Trade-off: one
-  slightly larger result set vs four small ones. With ≤ 28 days of lessons
-  per instructor, the result is tiny, and one round-trip is cheaper.
-- We re-use `startOfWeek` / `endOfWeek` semantics — Carbon's default is
-  Monday start, which matches the project's existing calendar logic in the
-  same controller.
-- Labels use `j M` (day-month) without year, because all four weeks are within
-  ~28 days of "today" and including the year would be visual noise.
+**Operational notes:**
+- No DB migration needed. No API contract change beyond a single optional
+  field on the calendar item payload.
+- No regression risk for callers that don't read `amount_pence` — adding a
+  field to an object payload is backward compatible.
 
-**Out of scope (deliberately not built):**
-- Drill-down from the card into a per-day breakdown.
-- Configurable horizon (admin-selectable 4/6/8 weeks).
-- Caching — the calculation is cheap; if it gets noisy we'd revisit.
+**Out of scope, carried forward:**
+- A long-term improvement would be to consolidate the two "completed lesson
+  detail" surfaces (Schedule sheet + Lessons dialog) into a single component
+  that both call sites mount. That's a refactor, not part of this brief.
 
-**Technical debt / follow-up:**
-- The original two-week comment in the controller is gone; if any other view
-  consumes `instructor.booking_hours.current_week` it will break. Quick grep
-  confirms no other consumers in this repo.
+**Technical debt / follow-up not done:**
+- No tests added (project rule: user maintains tests manually).
+- No Pint / Prettier run (project rule: user handles code style).
 
 ---
 

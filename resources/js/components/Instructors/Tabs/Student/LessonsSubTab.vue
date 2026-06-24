@@ -565,8 +565,17 @@ onMounted(() => {
                         {{ viewSummaryTarget ? formatTime(viewSummaryTarget.start_time, viewSummaryTarget.end_time) : '' }}
                     </DialogDescription>
                 </DialogHeader>
-                <div v-if="viewSummaryTarget" class="text-sm whitespace-pre-wrap">
-                    {{ viewSummaryTarget.summary }}
+                <div v-if="viewSummaryTarget" class="space-y-3">
+                    <div class="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                        <span class="flex items-center gap-1.5 text-muted-foreground">
+                            <PoundSterling class="h-4 w-4" />
+                            Lesson cost
+                        </span>
+                        <span class="font-medium">{{ formatCurrency(viewSummaryTarget.amount_pence) }}</span>
+                    </div>
+                    <div class="text-sm whitespace-pre-wrap">
+                        {{ viewSummaryTarget.summary }}
+                    </div>
                 </div>
             </DialogContent>
         </Dialog>
