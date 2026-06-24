@@ -40,6 +40,17 @@ const statsCards = [
         icon: Clock,
     }
 ]
+
+const dateRangeFormatter = new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+})
+
+function formatDateRange(start: string, end: string): string {
+    const startDate = new Date(start)
+    const endDate = new Date(end)
+    return `${dateRangeFormatter.format(startDate)} – ${dateRangeFormatter.format(endDate)}`
+}
 </script>
 
 <template>
@@ -72,20 +83,22 @@ const statsCards = [
                 <CardTitle>Booking Hours</CardTitle>
             </CardHeader>
             <CardContent>
-                <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-                    <div class="flex flex-col gap-2">
-                        <p class="text-sm font-medium">Current Week</p>
+                <div
+                    class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4"
+                >
+                    <div
+                        v-for="week in instructor.booking_hours.weeks"
+                        :key="week.start_date"
+                        class="flex flex-col gap-2"
+                    >
+                        <div class="flex flex-col gap-0.5">
+                            <p class="text-sm font-medium">{{ week.label }}</p>
+                            <p class="text-xs text-muted-foreground">
+                                {{ formatDateRange(week.start_date, week.end_date) }}
+                            </p>
+                        </div>
                         <p class="text-3xl font-bold">
-                            {{ instructor.booking_hours.current_week }}
-                            <span class="text-base font-normal text-muted-foreground"
-                                >hours</span
-                            >
-                        </p>
-                    </div>
-                    <div class="flex flex-col gap-2">
-                        <p class="text-sm font-medium">Next Week</p>
-                        <p class="text-3xl font-bold">
-                            {{ instructor.booking_hours.next_week }}
+                            {{ week.hours }}
                             <span class="text-base font-normal text-muted-foreground"
                                 >hours</span
                             >

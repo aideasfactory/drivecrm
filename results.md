@@ -1,56 +1,81 @@
-# Fix — Instructor self-add sign-up flow
+# Booking Hours summary — four-week view
 
-## What was wrong
+## What changed
 
-When Sam tried to add himself (or any new person) as an instructor and pressed the **Create Instructor** button on the "Add New Instructor" sheet, nothing visible happened. The sheet closed, no instructor was created, and there was no error message anywhere on the page. The cause was **not** a maximum instructor limit — there is no such limit in the product.
+The **Booking Hours** card on the instructor admin
+*Details → Summary* tab now shows a rolling four-week view instead of just
+two weeks. From any day, the card displays the instructor's booked hours
+for:
 
-Two issues combined to produce the silent failure:
+1. **Current Week** — the week you're in right now (Monday → Sunday)
+2. **Week of [date]** — the following week
+3. **Week of [date]** — two weeks out
+4. **Week of [date]** — three weeks out
 
-1. **The backend was swallowing failures.** `InstructorController::store()` called `InstructorService::createInstructor()` and ignored its return value. The service used a legacy "return `success: false`" pattern, so whenever something went wrong inside (most commonly the postcode-to-coordinates lookup returning nothing), the controller never noticed and still redirected to the Instructors index page as though the create had succeeded. From the user's point of view, the form closed and the new instructor was simply missing from the list.
-2. **The form's postcode was optional in validation but required by the service.** Because the request validator didn't require a postcode, a user could submit without one. The service would then fail the lookup and the controller would still redirect — the classic silent failure.
+Each block shows the week's label, the date range (e.g. *15 Jun – 21 Jun*),
+and the total booked hours rounded to one decimal place.
 
-A secondary contributor: even when the backend *did* return a validation error (for example, the email already existed because Sam was trying to add himself with his own account email), the **Add Instructor** sheet only displayed the error inline beneath the email field. It showed no toast or banner, so a user focused on the submit button could easily miss it.
+## Where to find it
 
-## What was changed
+`Admin → Instructors → [select instructor] → Details tab → Summary sub-tab`
 
-**Backend**
-- `app/Http/Requests/StoreInstructorRequest.php` — `postcode` is now `required`, with a clear, user-facing validation message.
-- `app/Services/InstructorService.php` — `createInstructor()` was refactored from "return an array with a `success` flag" to "return the `Instructor` model or throw a `ValidationException`". When the postcode lookup cannot find coordinates, it now throws a `ValidationException` keyed to the `postcode` field, so Laravel's existing pipeline turns that into a 422 response that Inertia surfaces straight back to the form.
-- `app/Http/Controllers/InstructorController.php` — `store()` now relies on the service to throw on failure, and adds a `success` flash message on the happy path.
+The Booking Hours card is the same card that used to show *Current Week* and
+*Next Week*.
 
-**Frontend**
-- `resources/js/components/Instructors/AddInstructorSheet.vue` — both create and update paths now fire a toast on success and a destructive toast on error, with the first field-level message used as the toast body. The postcode field is marked with the `*` to match the new validation rule.
+## How hours are counted
 
-**Tests**
-- `tests/Feature/Instructors/InstructorSelfAddTest.php` — new Pest tests that pin down every failure mode for the self-add flow: existing-email rejection, missing postcode, unresolvable postcode, and the happy path.
-- `tests/Feature/Instructors/InstructorTransmissionTypeTest.php` — updated existing tests to include a postcode (now required) and to stub the postcodes.io HTTP call with `Http::fake()`, so they continue to verify transmission-type behaviour rather than fall over on the new validation rule.
+A lesson contributes its full duration (start time → end time) to whichever
+week it falls in. Lessons that are **cancelled** or still in **draft** state
+are excluded — the figure reflects bookings that should actually run.
 
-## What the user will now see
+The card is calculated server-side each time the page is loaded, so it is
+always live.
 
-- Submit the form with a missing or unresolvable postcode → a red toast appears explaining the issue, and the postcode field shows the inline error. No more silent close.
-- Submit with an email that already exists (e.g. Sam's own login email) → a red toast appears with "This email address is already in use." and the email field highlights inline.
-- Submit with a valid set of details → a confirmation toast appears, the sheet closes, and the new instructor shows in the list.
+## Display behaviour
 
-There is no maximum-instructor limit and we intentionally did **not** introduce one — that would be a product decision, not a bug fix.
+- **Wide screens (lg+):** all four weeks shown side-by-side in a single row.
+- **Tablets (md):** two columns, two rows.
+- **Phones:** stacked vertically.
+
+This matches the responsive layout used elsewhere in the instructor admin.
+
+## What was *not* changed
+
+- The rest of the Summary tab (current pupils, passed pupils, archived,
+  waiting list cards) is untouched.
+- No new admin actions, no new API endpoints, no schema changes.
+- The week boundary remains Monday → Sunday, the project's existing standard.
 
 ## Files touched
 
-- `app/Http/Controllers/InstructorController.php`
-- `app/Http/Requests/StoreInstructorRequest.php`
-- `app/Services/InstructorService.php`
-- `resources/js/components/Instructors/AddInstructorSheet.vue`
-- `tests/Feature/Instructors/InstructorSelfAddTest.php` (new)
-- `tests/Feature/Instructors/InstructorTransmissionTypeTest.php`
-- `.claude/tasks/current-task.md`
+- `app/Http/Controllers/InstructorController.php` — replaced the two-week
+  hours calculation with a four-week loop using a single lessons query.
+- `resources/js/types/instructor.ts` — new `BookingHoursWeek` shape.
+- `resources/js/components/Instructors/Tabs/Details/SummarySubTab.vue` —
+  responsive four-card layout with date-range labels.
+- `tests/Feature/Instructors/InstructorBookingHoursTest.php` — Pest coverage
+  for the new payload (four-week shape, hour bucketing, exclusions).
 
-## Confidence: 9 / 10
+## Confidence score
 
-Why high confidence:
+**9 / 10**
 
-- The root cause was a single, well-localised pattern (service returns `success: false`, controller ignores it). Replacing it with Laravel's native `ValidationException → 422 → Inertia onError` pipeline removes the silent-failure path entirely; it is the same path the rest of the codebase already uses successfully.
-- Every failure mode is now backed by a new Pest test, including the exact "Sam adds himself" scenario (existing email + own login).
-- The frontend change is additive — toasts plus the existing inline errors — so no existing happy-path behaviour is disturbed.
+Why not 10:
+- The Pest tests were written following the existing project patterns and
+  inertia-laravel's `assertInertia` helpers, but per the project's standing
+  rule the developer agent does not run tests locally — the test suite has
+  not been executed in this environment.
+- Production has no automated visual regression tests, so the responsive
+  layout (1/2/4 columns) is verified by inspection of the Tailwind classes
+  against the rest of the codebase, not by a live render.
 
-Why not a 10:
-
-- Tests were not executed in this environment per project rules, so the assertion about the `errors.postcode` toast text is verified by reading the code rather than seeing it render. Manual smoke-testing on `npm run dev` is recommended before deploy to confirm the toast renders inside the Add Instructor sheet's mounted Toaster context.
+Why 9:
+- The change is localised to a single card on a single tab.
+- The data path was previously already in this controller (two-week
+  variant), so there are no new dependencies or surface area.
+- The original two-week field shape was searched for across the codebase
+  before being replaced — no other consumer uses `current_week` /
+  `next_week`.
+- The new payload is a generic weeks array, so future range adjustments
+  (e.g. extending to 6 weeks) are a one-line backend change with no
+  frontend follow-up.

@@ -1,157 +1,117 @@
-# Task: Instructor Package Pricing UI in Pounds
+# Task: Extend Booking Hours summary to four-week view
 
 ## Overview
 Sam reported that when he tries to add himself as an instructor during sign-up, pressing "OK" (the Create Instructor button) does nothing — the instructor is not added and there is no error message. This task fixes the silent failure and adds clear UI feedback.
 
-Display the Total Price for instructor packages in **pounds** (£) instead of
-pence in the admin area, while continuing to **store** the price as pence in
-the database. This affects the package create/edit form input shared by:
+The Instructor admin area's **Details → Summary** tab currently shows a
+*Booking Hours* card with two values: **current week** and **next week**.
+Stakeholders want a rolling **four-week window** — current week plus the next
+three weeks — so they can see a longer schedule horizon at a glance from the
+existing summary card.
 
-- Admin packages list (`/packages` create + edit sheets)
-- Instructor bespoke packages (`/instructors/{id}` Details tab → Packages sheet)
+Scope is intentionally narrow: keep the same card, replace the two-week display
+with a clear four-week breakdown. No new pages, no new endpoints.
 
-The Index table column already shows the formatted pound value via the model
-accessor `formatted_total_price`. The work is on the **form input**: today it
-asks for pence (e.g., `50000` for £500.00) which is unfriendly for admins.
+Files touched:
+- `app/Http/Controllers/InstructorController.php` — replace the two-week hours
+  calculation with a four-week loop.
+- `resources/js/types/instructor.ts` — replace the `BookingHours` shape with a
+  weeks array.
+- `resources/js/components/Instructors/Tabs/Details/SummarySubTab.vue` — render
+  the four weeks.
+- `tests/Feature/Instructors/InstructorBookingHoursTest.php` — Pest tests for
+  the controller payload.
 
 ## Phase 1: Planning ✅
 
-### What changes
-- **Frontend only.** Backend schema (`total_price_pence` integer), FormRequest
-  rules, Resources, Service, and Action stay untouched.
-- `PackageForm.vue` gains an internal pounds-denominated input bound to a local
-  `total_price_pounds` field. On submit it multiplies by 100 and rounds to
-  produce the integer `total_price_pence` the backend already expects. On
-  load (edit mode) it divides the existing pence value by 100 to populate the
-  input.
-- Label changes from "Total Price (in pence)" to "Total Price (£)".
-- The helper line under the input keeps showing "£X.XX total (£Y.YY per
-  lesson)" which is already in pounds — its computed source switches from
-  `total_price_pence` to the new pounds field.
+### Why a weeks array (and not four named fields)
+The current payload uses `{ current_week, next_week }`. Adding two more named
+keys (`week_3`, `week_4`) would scale poorly and force the Vue template to
+hard-code each label. An array of `{ label, start_date, end_date, hours }`
+entries:
+- Lets the template loop with `v-for` (one block, four cards).
+- Carries the date range, so the UI can show "23 Jun – 29 Jun" alongside the
+  label rather than a bare "Current Week".
+- Makes future range changes (e.g. 6 weeks) a one-line config change.
 
-### Why this shape
-- The backend is the source of truth and the database column is named
-  `total_price_pence` for a reason: integer arithmetic for money is correct.
-  Touching the backend just to rename a field would ripple into Stripe code,
-  resources, API consumers, and migrations for no benefit.
-- The Inertia DTO emitted by the form keeps the `total_price_pence` key so the
-  HTTP layer is unchanged — only the input the human sees is in pounds.
-- Rounding on submit (`Math.round(pounds * 100)`) guards against
-  floating-point drift if the admin types `12.345`.
+### Data shape
+```php
+booking_hours' => [
+    'weeks' => [
+        ['label' => 'Current Week', 'start_date' => '2026-06-15', 'end_date' => '2026-06-21', 'hours' => 12.5],
+        ['label' => 'Week of 22 Jun', 'start_date' => '2026-06-22', 'end_date' => '2026-06-28', 'hours' => 18.0],
+        // ... two more
+    ],
+]
+```
 
-### Files to edit
-1. `resources/js/components/Instructors/PackageForm.vue` — only file requiring
-   real changes. Switch input binding to a pounds field, convert in/out, relabel.
-
-### Files NOT to edit (and why)
-- `Package.php` model — accessors already format pence → "£X.XX" for read.
-- `PackageController.php`, `PackageService.php`, related Actions — they
-  receive `total_price_pence` from the form payload unchanged.
-- `StorePackageRequest.php`, `UpdatePackageRequest.php`,
-  `StoreInstructorPackageRequest.php` — validation rules still apply to the
-  same pence integer the form emits.
-- `Packages/Index.vue` — already shows `formatted_total_price` (pounds).
-- `migrations/*` and `database-schema.md` — column unchanged.
-- `api.md` — endpoints unchanged (still take `total_price_pence`).
-
-### Risks / edge cases
-- Existing packages have integer `total_price_pence` (e.g., 50000). Dividing
-  by 100 gives `500` which renders as `500` in a `type="number"` input —
-  acceptable. Admin can type `500.50` and the form converts to `50050`.
-- `min:0` validation is preserved (pounds `0` → pence `0`).
-- `step="0.01"` on the input keeps the browser's spinner sensible.
-
-### Reflection
-The planning surfaced the right level of change: a form-only conversion at
-the input boundary, with the emitted DTO unchanged. No backend file needed
-touching, and no docs (database-schema, api.md) needed updating because the
-data contract is untouched.
+### Query strategy
+Rather than running four separate `Lesson` queries (one per week), fetch all
+non-cancelled lessons inside the four-week span once and bucket them in PHP.
+Lower DB round-trips; weeks are small (max 28 days), so memory cost is
+negligible.
 
 ## Phase 2: Implementation ✅
 
-### Changes
-- `resources/js/components/Instructors/PackageForm.vue`:
-  - New internal `PackageFormState` interface with `total_price_pounds`.
-    Original exported `PackageFormData` (the emit/save DTO) **unchanged** so
-    `CreatePackageSheet.vue`, `EditPackageSheet.vue` and
-    `Instructors/Tabs/Details/EditDetailsSubTab.vue` (the three consumers of
-    this form) continue to receive `{ total_price_pence }` exactly as before.
-  - `formData` ref now holds pounds. The `watch` on `props.package` converts
-    `pkg.total_price_pence / 100` on load.
-  - `handleSubmit` builds the emit payload with
-    `Math.round(total_price_pounds * 100)` so the integer pence value is
-    safe against floating-point drift.
-  - `formattedPrice` and `pricePerLesson` computeds rewritten to consume
-    pounds directly (no `/100` step needed).
-  - Input field: `id`/`for`/`v-model` switched to `total_price_pounds`,
-    `step="1"` → `step="0.01"`, label "Total Price (in pence)" → "Total
-    Price (£)", placeholder updated to "Enter price in pounds (e.g.,
-    500.00)".
+### Backend — `InstructorController::show()`
+- Replaced the dual `current_week` / `next_week` query block with a loop that
+  builds four `Carbon`-anchored week ranges (`startOfWeek` / `endOfWeek`).
+- Single `Lesson` query covering the full 28-day span (status not in cancelled
+  / draft, `start_time` and `end_time` both set).
+- In-PHP grouping: each lesson is added to the bucket whose start ≤ lesson date
+  ≤ end. Hours = `start_time.diffInMinutes(end_time) / 60`, rounded to 1 dp.
+- First week labelled `Current Week`; subsequent weeks labelled with the start
+  date in `j M` format (e.g. `Week of 22 Jun`).
 
-### Verification
-- Read final file end-to-end: 175 lines, clean, no leftover pence references
-  except the legitimate `total_price_pence` in the export type (DTO) and
-  inside `handleSubmit` where pounds → pence conversion lives.
-- Three consumers of `PackageForm.vue` confirmed:
-  - `components/Packages/CreatePackageSheet.vue` — `POST /packages` with
-    `data` from `save` event. Still receives `total_price_pence`. ✓
-  - `components/Packages/EditPackageSheet.vue` — `PUT /packages/{id}` with
-    the same shape. ✓
-  - `components/Instructors/Tabs/Details/EditDetailsSubTab.vue` — `POST
-    /instructors/{id}/packages` and `PUT /packages/{id}`. ✓
-- Backend FormRequests (`StorePackageRequest`, `UpdatePackageRequest`,
-  `StoreInstructorPackageRequest`) still validate `total_price_pence` as
-  integer ≥ 0. Unchanged.
-- Index page (`Packages/Index.vue`) already renders
-  `pkg.formatted_total_price` from the model accessor (`'£' .
-  number_format($this->total_price_pence / 100, 2)`). No change needed.
+### Frontend — `instructor.ts`
+- Replaced `BookingHours { current_week, next_week }` with
+  `BookingHours { weeks: BookingHoursWeek[] }` where each week has
+  `label`, `start_date`, `end_date`, `hours`.
 
-### Out of scope (deliberately not done)
-- Renaming the database column or the FormRequest fields.
-- Touching API resources or `.claude/api.md` (the API still accepts pence).
-- Modifying the Instructor "create bespoke package" path beyond what
-  `PackageForm.vue` shares — that path already uses the same form component.
-- Adding currency-input masking (e.g., always-two-decimals display while
-  typing). Browsers handle `step="0.01"` adequately for this admin tool.
+### Frontend — `SummarySubTab.vue`
+- Replaced the hard-coded two-block grid with a responsive `v-for` grid that
+  scales to 4 cards (1 column on mobile, 2 on md, 4 on lg+).
+- Each card shows the week label, the formatted date range, and the hours.
+- A small `formatDateRange()` helper inside the component formats
+  `start_date` + `end_date` into `15 Jun – 21 Jun` for readability.
+
+### Tests — `InstructorBookingHoursTest.php`
+- Authenticated request to `instructors.show` returns booking_hours.weeks as a
+  4-element array.
+- Each week entry contains the documented keys.
+- Hours are bucketed into the correct week (a lesson in week 3 doesn't leak
+  into weeks 1, 2, or 4).
+- Cancelled / draft lessons are excluded.
 
 ## Phase 3: Reflection ✅
 
-### What worked
-- Keeping `PackageFormData` (the emitted DTO) byte-identical meant zero
-  ripple into three different sheet consumers and three backend FormRequests.
-  The form-component became the only file that knows about the unit
-  conversion.
-- The model accessors (`formatted_total_price`, `formatted_lesson_price`)
-  meant the listing table already displayed in pounds — no display work.
-- The `Math.round(pounds * 100)` pattern is the standard guard for the
-  classic JS float problem (`5.55 * 100 === 554.9999...`). Worth keeping
-  even if the form mostly sees whole pounds.
+**Why this is the right shape for the brief:**
+- The ticket asked for the *summary area* to show four weeks. Reusing the
+  existing card and swapping the inner grid keeps the page layout familiar to
+  admins while expanding the time horizon.
+- A weeks-array payload is more change-tolerant than four named keys — the
+  component renders whatever the controller sends, so future tweaks (3 weeks,
+  6 weeks, monthly view) don't need parallel frontend changes.
 
-### Subtle decisions worth flagging
-- The internal state type `PackageFormState` is **not** exported. Only the
-  DTO type `PackageFormData` is exported — that's deliberate. Outside
-  callers must not see the pounds field; their interface is the integer
-  pence DTO.
-- The `|| 0` fallback in computeds guards against `undefined`/empty input
-  during typing — without it the user sees "£NaN" briefly while clearing
-  the field.
-- `step="0.01"` rather than `step="any"` so the browser spinner increments
-  by a penny, which matches the user's mental model.
+**Subtle decisions:**
+- We bucket lessons in PHP rather than running 4 queries. Trade-off: one
+  slightly larger result set vs four small ones. With ≤ 28 days of lessons
+  per instructor, the result is tiny, and one round-trip is cheaper.
+- We re-use `startOfWeek` / `endOfWeek` semantics — Carbon's default is
+  Monday start, which matches the project's existing calendar logic in the
+  same controller.
+- Labels use `j M` (day-month) without year, because all four weeks are within
+  ~28 days of "today" and including the year would be visual noise.
 
-### Technical debt / follow-ups (NOT done)
-- No tests added (project rule: user maintains tests manually).
-- No Pint / Prettier run (project rule: user handles code style).
-- The lesson-price helper line is **derived** in the UI (pounds ÷ lessons)
-  while the database also stores a computed `lesson_price_pence` via the
-  model's `saving` hook. These can diverge transiently while editing, but
-  the DB value is recalculated on save. Acceptable — pointing it out.
+**Out of scope (deliberately not built):**
+- Drill-down from the card into a per-day breakdown.
+- Configurable horizon (admin-selectable 4/6/8 weeks).
+- Caching — the calculation is cheap; if it gets noisy we'd revisit.
 
-### Score
-**Solution quality: 9/10.** Minimal, surgical change. Single file edited.
-No new abstractions, no parallel actions, no docs to update. One point off
-because a longer-term improvement would be a dedicated `<CurrencyInput>`
-component if more pence-vs-pounds form fields appear elsewhere in the app —
-but for one form, inlining the conversion is the right call.
+**Technical debt / follow-up:**
+- The original two-week comment in the controller is gone; if any other view
+  consumes `instructor.booking_hours.current_week` it will break. Quick grep
+  confirms no other consumers in this repo.
 
 ---
 

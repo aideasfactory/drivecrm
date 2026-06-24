@@ -36,9 +36,15 @@ export interface InstructorStats {
   open_enquiries: number
 }
 
+export interface BookingHoursWeek {
+  label: string
+  start_date: string
+  end_date: string
+  hours: number
+}
+
 export interface BookingHours {
-  current_week: number
-  next_week: number
+  weeks: BookingHoursWeek[]
 }
 
 export interface CreateInstructorData {
