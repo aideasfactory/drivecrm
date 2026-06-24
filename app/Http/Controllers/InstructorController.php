@@ -264,15 +264,17 @@ class InstructorController extends Controller
 
     /**
      * Store a new instructor.
+     *
+     * The service throws ValidationException for recoverable failures
+     * (e.g. an unresolvable postcode) which Laravel converts to a 422 with
+     * field errors — Inertia's onError surfaces them to the AddInstructor sheet.
      */
     public function store(StoreInstructorRequest $request): RedirectResponse
     {
-        DB::transaction(function () use ($request) {
-            // Create user with instructor role
-            $instructor = $this->instructorService->createInstructor($request->validated());
-        });
+        $this->instructorService->createInstructor($request->validated());
 
-        return redirect()->route('instructors.index');
+        return redirect()->route('instructors.index')
+            ->with('success', 'Instructor created successfully.');
     }
 
     /**

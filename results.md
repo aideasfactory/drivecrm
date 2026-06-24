@@ -1,101 +1,56 @@
-# Add Instructor — Structured Selectors
+# Fix — Instructor self-add sign-up flow
 
-## What changed
+## What was wrong
 
-The "Add Instructor" slide-out (also used for "Edit Instructor") had two fields that accepted any free-form text — **Status** and **PDI Status**. Both have been replaced with structured dropdowns backed by a fixed list of sensible options, so the admin can pick a value in one click instead of remembering the exact wording.
+When Sam tried to add himself (or any new person) as an instructor and pressed the **Create Instructor** button on the "Add New Instructor" sheet, nothing visible happened. The sheet closed, no instructor was created, and there was no error message anywhere on the page. The cause was **not** a maximum instructor limit — there is no such limit in the product.
 
-We also tidied up the surrounding form while we were there.
+Two issues combined to produce the silent failure:
 
-### Before
+1. **The backend was swallowing failures.** `InstructorController::store()` called `InstructorService::createInstructor()` and ignored its return value. The service used a legacy "return `success: false`" pattern, so whenever something went wrong inside (most commonly the postcode-to-coordinates lookup returning nothing), the controller never noticed and still redirected to the Instructors index page as though the create had succeeded. From the user's point of view, the form closed and the new instructor was simply missing from the list.
+2. **The form's postcode was optional in validation but required by the service.** Because the request validator didn't require a postcode, a user could submit without one. The service would then fail the lookup and the controller would still redirect — the classic silent failure.
 
-| Field | Type | Problem |
-|---|---|---|
-| Status | Free-text input | Admin had to type "active" / "inactive" / etc. Any typo was accepted (e.g. "Actve") |
-| PDI Status | Free-text input | Free-form placeholder of "e.g., qualified, trainee" — easy to drift |
-| Transmission Type | Dropdown | Hard-coded in the page — not coming from a single source |
+A secondary contributor: even when the backend *did* return a validation error (for example, the email already existed because Sam was trying to add himself with his own account email), the **Add Instructor** sheet only displayed the error inline beneath the email field. It showed no toast or banner, so a user focused on the submit button could easily miss it.
 
-### After
+## What was changed
 
-| Field | Type | Options |
-|---|---|---|
-| Status | **Dropdown** | Active *(default)*, Inactive, Suspended, On Leave, Archived |
-| PDI Status | **Dropdown** | Qualified ADI *(default)*, Trainee, PDI Part 1 (Theory), PDI Part 2 (Driving), PDI Part 3 (Instructional) |
-| Transmission Type | Dropdown (unchanged UX) | Manual *(default)*, Automatic, Both — now driven from the same source as the other two |
+**Backend**
+- `app/Http/Requests/StoreInstructorRequest.php` — `postcode` is now `required`, with a clear, user-facing validation message.
+- `app/Services/InstructorService.php` — `createInstructor()` was refactored from "return an array with a `success` flag" to "return the `Instructor` model or throw a `ValidationException`". When the postcode lookup cannot find coordinates, it now throws a `ValidationException` keyed to the `postcode` field, so Laravel's existing pipeline turns that into a 422 response that Inertia surfaces straight back to the form.
+- `app/Http/Controllers/InstructorController.php` — `store()` now relies on the service to throw on failure, and adds a `success` flash message on the happy path.
 
-All three dropdowns share **one source of truth** in the backend, so the admin UI, the backend validation, and the CSV bulk-import all enforce the exact same list. There is no way for them to drift apart.
+**Frontend**
+- `resources/js/components/Instructors/AddInstructorSheet.vue` — both create and update paths now fire a toast on success and a destructive toast on error, with the first field-level message used as the toast body. The postcode field is marked with the `*` to match the new validation rule.
 
-## What stayed free-text (and why)
+**Tests**
+- `tests/Feature/Instructors/InstructorSelfAddTest.php` — new Pest tests that pin down every failure mode for the self-add flow: existing-email rejection, missing postcode, unresolvable postcode, and the happy path.
+- `tests/Feature/Instructors/InstructorTransmissionTypeTest.php` — updated existing tests to include a postcode (now required) and to stub the postcodes.io HTTP call with `Http::fake()`, so they continue to verify transmission-type behaviour rather than fall over on the new validation rule.
 
-These fields are *intentionally* still open text because the values are inherently free-form:
+## What the user will now see
 
-- **Full Name, Email, Phone, Password** — naturally unique per person.
-- **Bio** — a paragraph of biography text.
-- **Address** — a street address.
-- **Postcode** — a UK postcode, validated by format if/when needed.
+- Submit the form with a missing or unresolvable postcode → a red toast appears explaining the issue, and the postcode field shows the inline error. No more silent close.
+- Submit with an email that already exists (e.g. Sam's own login email) → a red toast appears with "This email address is already in use." and the email field highlights inline.
+- Submit with a valid set of details → a confirmation toast appears, the sheet closes, and the new instructor shows in the list.
 
-We didn't add unnecessary constraints to fields where a fixed list would harm usability.
+There is no maximum-instructor limit and we intentionally did **not** introduce one — that would be a product decision, not a bug fix.
 
-## Defaults
+## Files touched
 
-When the admin opens "Add Instructor", the form pre-fills with the most common choices:
+- `app/Http/Controllers/InstructorController.php`
+- `app/Http/Requests/StoreInstructorRequest.php`
+- `app/Services/InstructorService.php`
+- `resources/js/components/Instructors/AddInstructorSheet.vue`
+- `tests/Feature/Instructors/InstructorSelfAddTest.php` (new)
+- `tests/Feature/Instructors/InstructorTransmissionTypeTest.php`
+- `.claude/tasks/current-task.md`
 
-- **Status:** Active
-- **PDI Status:** Qualified ADI
-- **Transmission Type:** Manual
+## Confidence: 9 / 10
 
-These can all be changed before saving — they're suggestions, not locks.
+Why high confidence:
 
-## Coverage
+- The root cause was a single, well-localised pattern (service returns `success: false`, controller ignores it). Replacing it with Laravel's native `ValidationException → 422 → Inertia onError` pipeline removes the silent-failure path entirely; it is the same path the rest of the codebase already uses successfully.
+- Every failure mode is now backed by a new Pest test, including the exact "Sam adds himself" scenario (existing email + own login).
+- The frontend change is additive — toasts plus the existing inline errors — so no existing happy-path behaviour is disturbed.
 
-- **Create flow** — the slide-out used from the Instructors list page.
-- **Edit flow** — the same slide-out reused from a specific instructor's page.
-- **CSV bulk import** — uploaded files are now validated against the same enumerated values, so admins can't import an instructor with a Status of `"actve"` even by spreadsheet.
+Why not a 10:
 
-## Edge cases handled
-
-- **Existing instructors with a legacy free-text Status** (e.g. a `status` value that pre-dates the dropdown): the form quietly snaps to the default option instead of breaking. The admin sees the default selected and can pick a valid value.
-- **Mobile API not affected:** no API endpoints were created, changed, or removed. The mobile app does not include admin instructor creation, so it's unaffected.
-- **No database migration needed:** the columns are already strings; we constrained the *allowed values* at the application layer, which keeps existing data intact and the rollback path trivial.
-
-## Tests
-
-A new Pest feature test file — `tests/Feature/Instructors/InstructorStructuredFieldsTest.php` — covers:
-
-- Valid status / PDI status accepted on create
-- Invalid status / PDI status rejected on create
-- Status and PDI status remain optional on create
-- Valid status / PDI status accepted on update
-- Invalid status / PDI status rejected on update
-
-Existing transmission type tests continue to pass (the enum just moves into a typed class — the values are unchanged).
-
-## Files changed
-
-**New**
-- `app/Enums/InstructorStatus.php`
-- `app/Enums/PdiStatus.php`
-- `app/Enums/TransmissionType.php`
-- `tests/Feature/Instructors/InstructorStructuredFieldsTest.php`
-
-**Modified**
-- `app/Http/Requests/StoreInstructorRequest.php` — validates against enums
-- `app/Http/Requests/UpdateInstructorRequest.php` — validates against enums
-- `app/Actions/Instructor/BulkImportInstructorsAction.php` — CSV import validates against enums
-- `app/Http/Controllers/InstructorController.php` — passes `formOptions` to the Index and Show Inertia pages
-- `resources/js/types/instructor.ts` — added `FormOption` and `InstructorFormOptions` types
-- `resources/js/pages/Instructors/Index.vue` — accepts + forwards `formOptions` to the sheet
-- `resources/js/pages/Instructors/Show.vue` — same
-- `resources/js/components/Instructors/AddInstructorSheet.vue` — three dropdowns driven by `formOptions`
-
----
-
-## Confidence score: **9 / 10**
-
-Why 9 and not 10:
-- A legacy instructor whose `status` is a free-text value that doesn't match the new enum (rare, but possible if the system has historical drift) will see the dropdown default to "Active" the first time it's opened. If the admin saves without changing it, the legacy value is overwritten. This is deliberate behaviour (the whole point of the brief is to constrain values), but it's worth flagging.
-
-Everything else is solid:
-- One backend source feeds three places (form, validation, CSV import).
-- No schema migration, no risk to existing data structure.
-- Pattern follows the existing `BusinessType` / `businessTypes` precedent already used by the HMRC tab — same idiom, same shape.
-- Pest tests cover both create and update paths.
+- Tests were not executed in this environment per project rules, so the assertion about the `errors.postcode` toast text is verified by reading the code rather than seeing it render. Manual smoke-testing on `npm run dev` is recommended before deploy to confirm the toast renders inside the Add Instructor sheet's mounted Toaster context.

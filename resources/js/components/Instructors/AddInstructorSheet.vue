@@ -207,6 +207,21 @@ watch(
     { immediate: true }
 )
 
+const showValidationToast = (formErrors: Record<string, string>) => {
+    const messages = Object.values(formErrors).filter(Boolean)
+    const description = messages.length > 0
+        ? messages[0]
+        : 'Please check the form and try again.'
+
+    toast({
+        title: isEditMode.value
+            ? 'Could not update instructor'
+            : 'Could not create instructor',
+        description,
+        variant: 'destructive',
+    })
+}
+
 const handleSubmit = () => {
     isSubmitting.value = true
     errors.value = {}
@@ -216,11 +231,13 @@ const handleSubmit = () => {
         router.put(`/instructors/${props.instructor.id}`, form.value, {
             preserveScroll: true,
             onSuccess: () => {
+                toast({ title: 'Instructor updated.' })
                 emit('instructor-updated')
                 emit('update:open', false)
             },
             onError: (formErrors) => {
                 errors.value = formErrors as Record<string, string>
+                showValidationToast(errors.value)
             },
             onFinish: () => {
                 isSubmitting.value = false
@@ -244,11 +261,13 @@ const handleSubmit = () => {
                     address: '',
                     postcode: '',
                 }
+                toast({ title: 'Instructor created.' })
                 emit('instructor-created')
                 emit('update:open', false)
             },
             onError: (formErrors) => {
                 errors.value = formErrors as Record<string, string>
+                showValidationToast(errors.value)
             },
             onFinish: () => {
                 isSubmitting.value = false
@@ -471,7 +490,7 @@ const handleRequestDeletion = () => {
                     </div>
 
                     <div class="space-y-2">
-                        <Label for="postcode">Postcode</Label>
+                        <Label for="postcode">Postcode *</Label>
                         <Input
                             id="postcode"
                             v-model="form.postcode"

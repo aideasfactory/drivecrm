@@ -1,98 +1,54 @@
-# Task: Replace add-instructor free-text fields with structured selectors
-
-**Created:** 2026-06-18
-**Last Updated:** 2026-06-18
-**Status:** Complete
-**Branch:** feature/019ed9f2-2bb4-7275-8fa6-5caf99930510-replace-add-instructor-free-text-field-with-structured-selec
-
----
+# Task: Fix instructor self-add sign-up flow
 
 ## Overview
+Sam reported that when he tries to add himself as an instructor during sign-up, pressing "OK" (the Create Instructor button) does nothing — the instructor is not added and there is no error message. This task fixes the silent failure and adds clear UI feedback.
 
-### Goal
-The Add Instructor slide-out (`AddInstructorSheet.vue`) renders the same form for both **create** and **edit** flows. Two fields (`status`, `pdi_status`) are open text inputs that accept any string up to 50 chars — making the form slower to fill, error-prone, and inconsistent. Replace them with structured selects backed by PHP enums so the admin picks from a fixed, sensible set of options. Keep `transmission_type` as a select (already structured) but drive its options from the same backend source.
-
-### Success criteria
-- [ ] `status` is a dropdown with sensible defaults (active, inactive, suspended, on_leave, archived).
-- [ ] `pdi_status` is a dropdown with the UK PDI lifecycle (qualified, trainee, pdi_part_1, pdi_part_2, pdi_part_3) plus a "None" / empty option.
-- [ ] `transmission_type` keeps its current select but reads its options from the backend formOptions payload (single source of truth).
-- [ ] Backend `StoreInstructorRequest`, `UpdateInstructorRequest` and `BulkImportInstructorsAction` validate the value against the enum (not just `string|max:50`).
-- [ ] Defaults: `status = active`, `pdi_status = qualified`, `transmission_type = manual`. Admin can change any of them on the form.
-- [ ] No existing rows become invalid (DB stays varchar; the new constraint only applies to submissions through these requests).
-- [ ] CSV import enforces the same enum values.
-- [ ] Pest validation tests cover store + update reject/accept paths.
-
-### Out of scope
-- Bio, address, postcode, phone, email, password remain free-text (these are inherently free-form).
-- Changing the underlying DB column type from varchar to a generated ENUM (varchar + app-level constraint is fine here; preserves rollback safety).
-- Backfilling legacy rows whose `status` doesn't match the enum (older free-text values still display but to re-save through the form the admin will need to pick a valid one).
-- Adding a ShadCN `Select` component package — there isn't one in `components/ui` today; the existing pattern for `transmission_type` uses a styled native `<select>`, which we mirror for consistency.
+Branch: `feature/019ed9ed-4b56-726e-b611-8d5837366a60-fix-instructor-self-add-sign-up-flow`
 
 ---
 
-## PHASE 1: PLANNING ✅
+## Investigation summary
 
-### Where the free-text inputs live (inventory)
+Two distinct failure paths reproduce "nothing happens":
 
-| File | Line | Field | Today | After |
-|------|------|-------|-------|-------|
-| `resources/js/components/Instructors/AddInstructorSheet.vue` | 447 | `status` | `<Input type="text">` | styled `<select>` |
-| `resources/js/components/Instructors/AddInstructorSheet.vue` | 461 | `pdi_status` | `<Input type="text">` | styled `<select>` |
-| `resources/js/components/Instructors/AddInstructorSheet.vue` | 374 | `transmission_type` | styled `<select>` (hardcoded options) | same UI, options come from props |
-| `app/Http/Requests/StoreInstructorRequest.php` | 37–38 | `status`, `pdi_status` | `nullable|string|max:50` | `nullable|in:{enum cases}` |
-| `app/Http/Requests/UpdateInstructorRequest.php` | 43–44 | same | same | same |
-| `app/Actions/Instructor/BulkImportInstructorsAction.php` | 48–49 | same (CSV) | same | same |
+1. **Validation error displayed inline, no toast** — `StoreInstructorRequest` includes `email.unique:users,email`. If Sam types his own email (which already exists in `users`) he gets a 422 with `errors.email = "This email address is already in use."`. The sheet displays the error inline beneath the email input but shows **no toast**, so a user looking at the submit button thinks nothing happened.
 
-### Backend enum design
+2. **Silent backend failure on postcode lookup** — `'postcode'` is `nullable` in `StoreInstructorRequest`. If postcode is missing or fails the `postcodes.io` lookup, `InstructorService::createInstructor()` swallows the failure and returns `['success' => false, 'error' => '...']`. **`InstructorController::store()` discards that return value** and unconditionally `redirect()->route('instructors.index')`. From Inertia's perspective this is a successful POST — `onSuccess` fires, the sheet closes, and the user is left wondering why nothing happened.
 
-`App\Enums\InstructorStatus` (string-backed):
-- `Active = 'active'` (default)
-- `Inactive = 'inactive'`
-- `Suspended = 'suspended'`
-- `OnLeave = 'on_leave'`
-- `Archived = 'archived'`
+There is **no max-instructor limit**. There is no business rule limiting the number of instructors. The only effective limits are:
+- `users.email` unique constraint
+- `instructors.user_id` unique constraint
 
-`App\Enums\PdiStatus` (string-backed):
-- `Qualified = 'qualified'` (default — most instructors in the system are fully-qualified ADIs)
-- `Trainee = 'trainee'`
-- `PdiPart1 = 'pdi_part_1'`
-- `PdiPart2 = 'pdi_part_2'`
-- `PdiPart3 = 'pdi_part_3'`
+---
 
-`App\Enums\TransmissionType` (string-backed):
-- `Manual = 'manual'` (default)
-- `Automatic = 'automatic'`
-- `Both = 'both'`
+## Phase 1: Planning ✅
 
-Each enum gets a `label(): string` method and an `options(): array` static helper that returns `[['value' => ..., 'label' => ...], ...]` so controllers can pass them to Inertia in one call (mirrors the existing `BusinessType::cases()` pattern in `InstructorController::show()`).
+- [x] Trace the "Add Instructor" sheet → `/instructors` POST → `InstructorController::store` → `InstructorService::createInstructor`
+- [x] Confirm there is no max-instructor cap anywhere in the codebase
+- [x] Identify the silent-failure root cause: controller ignores service's `success/false` array
+- [x] Identify the secondary issue: postcode is nullable in validation but required by the service
+
+### Reflection
+- The legacy "return an array with `success` boolean" pattern in `createInstructor` is the structural cause. The controller never checks it, so any internal failure is invisible.
+- The cleanest fix is to refactor `createInstructor` to throw `ValidationException` for known recoverable issues (postcode) and let the controller's validation pipeline surface the error to the form.
+
+## Phase 2: Implementation ✅
+
+- [x] Make `postcode` required in `StoreInstructorRequest` (the service needs it)
+- [x] Refactor `InstructorService::createInstructor()` to throw `ValidationException` on postcode lookup failure and return an `Instructor` directly
+- [x] Update `InstructorController::store()` to use the new return type and let validation exceptions surface to Inertia
+- [x] Update `AddInstructorSheet.vue` to show success and error toasts (no more silent UI)
+- [x] Show a general error toast when the server returns errors without specific field messages
+- [x] Add a Pest feature test that proves the failure modes now surface as 422 errors with messages
+
+### Reflection
+- The fix is small (controller + service + form request + frontend toast) and targets the exact source of "nothing happens" rather than papering over symptoms.
+- We deliberately did NOT add a max-instructor limit because none exists in the product; if one is needed later it would belong as a Policy/action gate, not a silent guard.
 
 ### Inertia wiring
 
-- `InstructorController::index()` and `InstructorController::show()` both pass a `formOptions` prop with `status`, `pdi_status`, `transmission_type` arrays.
-- `Instructors/Index.vue` and `Instructors/Show.vue` accept the new prop and forward it to `<AddInstructorSheet :form-options="formOptions" />`.
-- `AddInstructorSheet.vue` types `formOptions` as `InstructorFormOptions` (new TS type) and renders each select via `v-for`.
-- TS types: add `InstructorFormOptions` and `FormOption` to `resources/js/types/instructor.ts`. Keep `InstructorDetail.status` / `pdi_status` as `string` so legacy rows still display.
-
-## Why a password setup link (not a temp password)?
-- The existing pupil flow emails a plain-text temporary password. That works but means the password lives in the inbox forever and is shoulder-surf vulnerable.
-- The Laravel password broker is already wired (Fortify + `routes/auth.php`). The broker mints a token, the user receives a link to `password.reset`, and the existing `ResetPassword` Inertia page handles the password creation. No new auth surface area.
-- The instructor never sees a server-generated password, the link expires (60 mins by default, refreshable via forgot-password), and the same flow handles future admin invites.
-
-- **Backward compatibility for legacy values.** Rows with non-enum legacy `status` strings (e.g. `'something_else'`) still render in lists but, when opened in the edit sheet, the select will fall back to the default option. Because the form is the only mutator going through validation, no data corruption can happen — but the admin must pick a valid enum value to save. Acceptable: the user explicitly asked to constrain new entries.
-- **`pdi_status` default.** The legacy column allowed null and the form treated empty as "no PDI status set". We keep nullability in the DB but require a value when posted; "Qualified" is the default since the majority of instructors are full ADIs. The admin can pick any other lifecycle stage.
-- **`transmission_type` already a select.** We don't change behaviour, just drive its options from the backend so the three free-text/select fields stay in sync from one source.
-- **No new ShadCN package.** The current `transmission_type` select uses a native `<select>` styled with the same Tailwind classes as the ShadCN `Input`. We mirror that for the two new selects to avoid introducing a Select dependency.
-- **No schema migration.** `status` / `pdi_status` are already `string(50)` / `string(50) NULL` in `instructors`. The enum constraint is purely at the application layer (FormRequest + CSV action). No `.claude/database-schema.md` update needed because no column changes.
-- **`api.md` not touched.** This task does not add, modify, or remove any API endpoint — `InstructorController::store`/`update` are web (Inertia) only. The mobile API for instructors does not include this admin create flow.
-
-### New
-- `app/Mail/InstructorWelcomeMail.php` — Mailable for the welcome email
-- `resources/views/emails/instructor-welcome.blade.php` — HTML template
-- `app/Actions/Instructor/SendInstructorWelcomeEmailAction.php` — mints token, dispatches mail, logs activity, manages `welcome_email_pending`
-- `tests/Feature/Instructors/InstructorWelcomeEmailTest.php` — feature tests (single create, bulk import, resend, password setup link)
-
-- **Drift between TS enum values and PHP enum values.** Mitigated by passing the options array from PHP through Inertia — TS never hard-codes the enum values.
-- **Legacy rows.** Discussed above — acceptable.
+### Reflection
+- Confidence is high: the controller now relies on Laravel's exception → 422 pipeline that the Inertia frontend already understands, and we added an explicit toast so generic errors can't go unnoticed.
 
 ---
 
