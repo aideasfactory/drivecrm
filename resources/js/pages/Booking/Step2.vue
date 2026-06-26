@@ -53,7 +53,7 @@
       </Card>
 
       <!-- Video placeholder (real asset to follow) -->
-      <Card class="overflow-hidden">
+      <!-- <Card class="overflow-hidden">
         <div class="relative flex aspect-video w-full flex-col items-center justify-center gap-3 bg-muted text-center">
           <div class="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
             <Play class="h-7 w-7" />
@@ -63,7 +63,7 @@
             <p class="text-sm text-muted-foreground">2 min · Watch while you wait for our call</p>
           </div>
         </div>
-      </Card>
+      </Card> -->
 
       <!-- Progress steps -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -147,7 +147,7 @@
       </Card>
 
       <!-- Video placeholder (real asset to follow) -->
-      <Card class="overflow-hidden">
+      <!-- <Card class="overflow-hidden">
         <div class="relative flex aspect-video w-full flex-col items-center justify-center gap-3 bg-muted text-center">
           <div class="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
             <Play class="h-7 w-7" />
@@ -157,7 +157,7 @@
             <p class="text-sm text-muted-foreground">2 min · Watch while you learn more about DRIVE</p>
           </div>
         </div>
-      </Card>
+      </Card> -->
 
       <div>
         <p class="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">Your options</p>

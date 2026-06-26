@@ -146,21 +146,7 @@ class LessonSignOffService extends BaseService
 
         // Send to student/parent
         if ($recipientEmail) {
-            $studentRecipient = new class($recipientEmail, $recipientName)
-            {
-                public function __construct(
-                    public string $email,
-                    public string $name
-                ) {}
-
-                public function routeNotificationForMail(): string
-                {
-                    return $this->email;
-                }
-            };
-
-            Notification::send(
-                $studentRecipient,
+            Notification::route('mail', [$recipientEmail => $recipientName])->notify(
                 new LessonSignedOffNotification($lesson, $student, $instructor, false)
             );
 

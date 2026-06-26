@@ -402,6 +402,7 @@ Student enrollments/purchases of lesson packages.
 | `payment_mode` | enum('upfront', 'weekly') | DEFAULT 'upfront' | Payment method chosen |
 | `status` | enum('pending', 'active', 'completed', 'cancelled') | DEFAULT 'pending' | Order status |
 | `stripe_payment_intent_id` | varchar(255) | NULLABLE | Stripe Payment Intent ID (for upfront payments) |
+| `stripe_charge_id` | varchar(255) | NULLABLE | Stripe Charge ID that funded this upfront order (the PaymentIntent's `latest_charge`). Persisted at payment time (`checkout.session.completed` / `payment_intent.succeeded` webhooks) so per-lesson payout Transfers can cite it as `source_transaction`, letting Stripe draw against that specific charge instead of the general available balance. Nullable for legacy orders created before this column existed. |
 | `stripe_subscription_id` | varchar(255) | NULLABLE | Stripe Subscription ID (for weekly payments) |
 | `stripe_checkout_session_id` | varchar(255) | NULLABLE | Stripe Checkout Session ID |
 | `created_at` | timestamp | - | Record creation timestamp |
@@ -496,6 +497,7 @@ Tracks payment status for individual lessons (used in weekly payment mode).
 | `due_date` | date | NULLABLE | When payment is due |
 | `paid_at` | datetime | NULLABLE | When payment was received |
 | `stripe_invoice_id` | varchar(255) | NULLABLE | Stripe Invoice ID |
+| `stripe_charge_id` | varchar(255) | NULLABLE | Stripe Charge ID that funded this weekly lesson payment (the Invoice's `charge`, falling back to its payment intent's `latest_charge`). Persisted at payment time (`invoice.paid` webhook) so the lesson's payout Transfer can cite it as `source_transaction`, letting Stripe draw against that specific charge instead of the general available balance. 1:1 — one invoice charge funds one lesson payout. Nullable for legacy payments created before this column existed. |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 

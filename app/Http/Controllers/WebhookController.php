@@ -143,11 +143,19 @@ class WebhookController extends Controller
         if ($order->isUpfront()) {
             // UPFRONT PAYMENT MODE: Process payment completion
             if ($session->payment_status === 'paid') {
+                // Resolve the funding charge id from the payment intent before opening the
+                // transaction (keeps the external Stripe call out of the DB transaction).
+                // Stored so payouts can later cite it as the transfer's source_transaction.
+                $chargeId = $session->payment_intent
+                    ? app(StripeService::class)->getChargeIdForPaymentIntent($session->payment_intent)
+                    : null;
+
                 try {
                     DB::beginTransaction();
 
-                    // Update order status and payment intent ID
+                    // Update order status, payment intent ID and funding charge ID
                     $order->stripe_payment_intent_id = $session->payment_intent;
+                    $order->stripe_charge_id = $chargeId;
                     $order->status = OrderStatus::ACTIVE;
                     $order->save();
 
@@ -212,12 +220,16 @@ class WebhookController extends Controller
             return;
         }
 
+        // The payment_intent.succeeded payload carries the funding charge directly.
+        $chargeId = $paymentIntent->latest_charge ?? null;
+
         // Update order status if not already active
         if ($order->status === OrderStatus::PENDING) {
             try {
                 DB::beginTransaction();
 
                 $order->status = OrderStatus::ACTIVE;
+                $order->stripe_charge_id = $chargeId;
                 $order->save();
 
                 // Create lessons if not already created
@@ -241,6 +253,10 @@ class WebhookController extends Controller
                     'error' => $e->getMessage(),
                 ]);
             }
+        } elseif ($chargeId && ! $order->stripe_charge_id) {
+            // Backstop: order already active but funding charge not yet stored.
+            $order->stripe_charge_id = $chargeId;
+            $order->save();
         }
     }
 
@@ -347,10 +363,17 @@ class WebhookController extends Controller
             'amount_pence' => $lessonPayment->amount_pence,
         ]);
 
+        // Resolve the funding charge id for this invoice so the lesson payout can later
+        // cite it as the transfer's source_transaction. The invoice payload usually
+        // carries `charge` directly; fall back to the payment intent's latest charge.
+        $chargeId = $invoice->charge
+            ?? app(StripeService::class)->getChargeIdForInvoice($invoice->id);
+
         // Mark lesson payment as paid
         $lessonPayment->update([
             'status' => PaymentStatus::PAID,
             'stripe_invoice_id' => $invoice->id,
+            'stripe_charge_id' => $chargeId,
             'paid_at' => now(),
         ]);
 

@@ -339,11 +339,15 @@ class StripeService
 
     /**
      * Create a Transfer to an instructor's connected account.
+     *
+     * When $sourceTransaction (a Stripe charge id) is provided, the transfer is tied to
+     * that specific charge so Stripe draws against it rather than the general available
+     * balance — this permits the transfer even when the platform balance is still pending.
      */
-    public function createTransfer(Lesson $lesson, Instructor $instructor, int $amountPence): array
+    public function createTransfer(Lesson $lesson, Instructor $instructor, int $amountPence, ?string $sourceTransaction = null): array
     {
         try {
-            $transfer = $this->stripe->transfers->create([
+            $payload = [
                 'amount' => $amountPence,
                 'currency' => 'gbp',
                 'destination' => $instructor->stripe_account_id,
@@ -352,7 +356,13 @@ class StripeService
                     'order_id' => $lesson->order_id,
                     'instructor_id' => $instructor->id,
                 ],
-            ]);
+            ];
+
+            if ($sourceTransaction !== null) {
+                $payload['source_transaction'] = $sourceTransaction;
+            }
+
+            $transfer = $this->stripe->transfers->create($payload);
 
             return [
                 'success' => true,
