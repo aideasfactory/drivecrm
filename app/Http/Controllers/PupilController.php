@@ -652,6 +652,26 @@ class PupilController extends Controller
     }
 
     /**
+     * Resend the app login invite to a student.
+     */
+    public function resendInvite(Student $student): JsonResponse
+    {
+        if (! $student->user_id) {
+            return response()->json(['message' => 'Student does not have a user account.'], 422);
+        }
+
+        if (! $student->instructor_id) {
+            return response()->json(['message' => 'Student is not assigned to an instructor.'], 422);
+        }
+
+        $this->studentService->resendInvite($student);
+
+        return response()->json([
+            'message' => 'Invite has been resent.',
+        ]);
+    }
+
+    /**
      * Get checklist items for a student (lazy-seeds defaults on first access).
      */
     public function checklist(Student $student): JsonResponse

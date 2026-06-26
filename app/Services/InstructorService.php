@@ -322,6 +322,7 @@ class InstructorService extends BaseService
      * @param  bool  $isAvailable  Whether the slot is available
      * @param  string|null  $notes  Optional notes about the slot
      * @param  string|null  $unavailabilityReason  Reason for unavailability
+     * @param  int|null  $studentId  Student assigned to a practical test (carries the date to their checklist)
      * @return CalendarItem The created calendar item
      */
     public function addCalendarItem(
@@ -333,9 +334,10 @@ class InstructorService extends BaseService
         ?string $notes = null,
         ?string $unavailabilityReason = null,
         ?int $travelTimeMinutes = null,
-        bool $isPracticalTest = false
+        bool $isPracticalTest = false,
+        ?int $studentId = null
     ): CalendarItem {
-        $item = ($this->createCalendarItem)($instructor, $date, $startTime, $endTime, $isAvailable, $notes, $unavailabilityReason, $travelTimeMinutes, $isPracticalTest);
+        $item = ($this->createCalendarItem)($instructor, $date, $startTime, $endTime, $isAvailable, $notes, $unavailabilityReason, $travelTimeMinutes, $isPracticalTest, $studentId);
 
         app(InstructorCalendarService::class)->invalidateCalendarCache($instructor->id, $date);
 

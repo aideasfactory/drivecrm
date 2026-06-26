@@ -4,14 +4,20 @@ declare(strict_types=1);
 
 namespace App\Actions\Instructor;
 
+use App\Actions\Student\Checklist\SyncPracticalTestDateToChecklistAction;
 use App\Enums\CalendarItemType;
 use App\Models\Calendar;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
+use App\Models\Student;
 use Carbon\Carbon;
 
 class CreateCalendarItemAction
 {
+    public function __construct(
+        protected SyncPracticalTestDateToChecklistAction $syncPracticalTestDateToChecklist
+    ) {}
+
     /**
      * Create a new calendar item (time slot) for an instructor,
      * optionally with an associated travel-time block.
@@ -25,6 +31,7 @@ class CreateCalendarItemAction
      * @param  string|null  $unavailabilityReason  Reason for unavailability (when is_available = false)
      * @param  int|null  $travelTimeMinutes  Travel time in minutes (15, 30, or 45) to create after the slot
      * @param  bool  $isPracticalTest  Whether this is a practical test slot
+     * @param  int|null  $studentId  Student assigned to a practical test (carries the date to their checklist)
      * @return CalendarItem The created calendar item
      */
     public function __invoke(
@@ -36,7 +43,8 @@ class CreateCalendarItemAction
         ?string $notes = null,
         ?string $unavailabilityReason = null,
         ?int $travelTimeMinutes = null,
-        bool $isPracticalTest = false
+        bool $isPracticalTest = false,
+        ?int $studentId = null
     ): CalendarItem {
         // For practical tests: calculate the full block from the test appointment time
         // Test time = startTime to endTime (1 hour)
@@ -61,11 +69,21 @@ class CreateCalendarItemAction
                 'is_available' => false,
                 'item_type' => CalendarItemType::PracticalTest,
                 'status' => null,
+                'student_id' => $studentId,
                 'notes' => $notes,
                 'unavailability_reason' => $unavailabilityReason ?? 'Practical Test',
             ]);
 
             $calendarItem->load('calendar');
+
+            // Carry the booked test date over to the student's practical-test checklist item.
+            if ($studentId !== null) {
+                $student = Student::find($studentId);
+
+                if ($student) {
+                    ($this->syncPracticalTestDateToChecklist)($student, Carbon::parse($date)->format('Y-m-d'));
+                }
+            }
 
             return $calendarItem;
         }

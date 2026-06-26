@@ -24,6 +24,7 @@ class StudentResource extends JsonResource
             'phone' => $this->phone,
             'status' => $this->status,
             'has_app' => $this->user_id !== null,
+            'app_last_active_at' => $this->app_last_active_at?->toIso8601String(),
             'profile_picture_url' => $this->profile_picture_url,
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

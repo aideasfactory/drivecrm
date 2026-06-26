@@ -7,9 +7,9 @@
         @php($gtmId = config('services.gtm.container_id'))
         @php($googleAdsId = config('services.google_tag.ads_id'))
         @php($googleGa4Id = config('services.google_tag.ga4_id'))
-        @php($isBookingRoute = request()->routeIs('booking.*'))
-        @php($loadGtm = $gtmId && $isBookingRoute)
-        @php($loadGtag = ($googleAdsId || $googleGa4Id) && $isBookingRoute)
+        @php($isTrackingRoute = request()->routeIs('booking.*', 'onboarding.*'))
+        @php($loadGtm = $gtmId && $isTrackingRoute)
+        @php($loadGtag = ($googleAdsId || $googleGa4Id) && $isTrackingRoute)
 
         @if ($loadGtm || $loadGtag)
             {{-- Google Consent Mode: everything denied until the visitor accepts analytics cookies (see cookieConsent.ts) --}}

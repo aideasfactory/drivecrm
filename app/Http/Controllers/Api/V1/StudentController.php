@@ -121,6 +121,31 @@ class StudentController extends Controller
     }
 
     /**
+     * Resend the app login invite to a student.
+     *
+     * Issues a fresh temporary password and re-sends the welcome email.
+     * Authorised for the student's assigned instructor.
+     */
+    public function resendInvite(Request $request, int $id): JsonResponse
+    {
+        $student = $this->studentService->getById($id);
+
+        Gate::authorize('update', $student);
+
+        if (! $student->user_id) {
+            return response()->json(['message' => 'Student does not have a user account.'], 422);
+        }
+
+        if (! $student->instructor_id) {
+            return response()->json(['message' => 'Student is not assigned to an instructor.'], 422);
+        }
+
+        $this->studentService->resendInvite($student);
+
+        return response()->json(['message' => 'Invite has been resent.']);
+    }
+
+    /**
      * Remove a student from the instructor (soft remove, not hard delete).
      *
      * Authorised for the student themselves or their assigned instructor.

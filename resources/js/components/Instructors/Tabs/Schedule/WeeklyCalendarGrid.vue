@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import CalendarEventBlock from './CalendarEventBlock.vue'
 import type { CalendarEvent } from './CalendarEventBlock.vue'
 import { formatDate } from '@/composables/useCalendarNavigation'
@@ -295,12 +295,61 @@ function handlePointerUp(_e: PointerEvent) {
 
     dragging.value = null
 }
+
+// ── Auto-scroll to current time + "now" indicator ────────
+const scrollRef = ref<HTMLElement | null>(null)
+const bodyRef = ref<HTMLElement | null>(null)
+const now = ref(new Date())
+let nowTimer: ReturnType<typeof setInterval> | null = null
+
+/** Whether the displayed week includes today (controls the red "now" line). */
+const showCurrentTime = computed(() => props.weekDays.some(isToday))
+
+/** Vertical offset (px) of the current time within the time-grid body. */
+const currentTimeTop = computed(() => {
+    const minutes = now.value.getHours() * 60 + now.value.getMinutes() - DAY_START_HOUR * 60
+    return (minutes / 30) * ROW_HEIGHT
+})
+
+/** Scroll the grid so the current time sits ~a third from the top (Google-Calendar style). */
+function scrollToCurrentTime() {
+    const container = scrollRef.value
+    const body = bodyRef.value
+    if (!container || !body) return
+
+    const bodyOffset = body.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop
+    const target = bodyOffset + currentTimeTop.value - container.clientHeight / 3
+    container.scrollTop = Math.max(0, target)
+}
+
+onMounted(() => {
+    nextTick(scrollToCurrentTime)
+    // Keep the "now" line ticking; re-reading the clock each minute is plenty.
+    nowTimer = setInterval(() => {
+        now.value = new Date()
+    }, 60_000)
+})
+
+onBeforeUnmount(() => {
+    if (nowTimer) {
+        clearInterval(nowTimer)
+    }
+})
+
+// Re-centre on the current time whenever navigation lands on a week that
+// contains today (e.g. pressing "Today"); other weeks keep their scroll position.
+watch(() => props.weekDays, () => {
+    if (showCurrentTime.value) {
+        nextTick(scrollToCurrentTime)
+    }
+})
 </script>
 
 <template>
+    <div ref="scrollRef" class="relative max-h-[70vh] overflow-y-auto">
     <div ref="gridRef" class="relative select-none">
-        <!-- Header Row: Time gutter + 7 day columns -->
-        <div class="grid grid-cols-[4rem_repeat(7,1fr)] border-b border-border">
+        <!-- Header Row: Time gutter + 7 day columns (pinned while the body scrolls) -->
+        <div class="sticky top-0 z-20 grid grid-cols-[4rem_repeat(7,1fr)] border-b border-border bg-card">
             <div class="border-r border-border p-2"></div>
             <div
                 v-for="(day, i) in weekDays"
@@ -321,7 +370,7 @@ function handlePointerUp(_e: PointerEvent) {
         </div>
 
         <!-- Time Grid: rows of 30-min slots -->
-        <div class="grid grid-cols-[4rem_repeat(7,1fr)]">
+        <div ref="bodyRef" class="relative grid grid-cols-[4rem_repeat(7,1fr)]">
             <!-- Time gutter -->
             <div class="border-r border-border">
                 <div
@@ -389,6 +438,17 @@ function handlePointerUp(_e: PointerEvent) {
                     @dragstart="handleEventDragStart"
                 />
             </div>
+
+            <!-- Current-time indicator: red line across the day columns (today only) -->
+            <div
+                v-if="showCurrentTime"
+                class="pointer-events-none absolute left-16 right-0 z-10"
+                :style="{ top: `${currentTimeTop}px` }"
+            >
+                <div class="relative h-px bg-red-500">
+                    <div class="absolute -left-1 -top-[3px] h-2 w-2 rounded-full bg-red-500"></div>
+                </div>
+            </div>
         </div>
 
         <!-- Drag ghost -->
@@ -409,5 +469,6 @@ function handlePointerUp(_e: PointerEvent) {
         >
             <div class="font-medium">Moving...</div>
         </div>
+    </div>
     </div>
 </template>

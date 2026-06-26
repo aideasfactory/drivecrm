@@ -45,6 +45,7 @@
   - [Students](#students)
     - [Attach to Instructor](#post-apiv1studentsattach)
     - [CRUD](#post-apiv1students)
+    - [Resend Invite](#post-apiv1studentsstudentresend-invite)
     - [Lessons](#get-apiv1studentsstudentlessons)
     - [Lesson Detail](#get-apiv1studentsstudentlessonslesson)
     - [Lesson Sign-Off](#post-apiv1studentsstudentlessonslessonsign-off)
@@ -319,6 +320,7 @@ Login and receive a Bearer token for subsequent API calls.
       "bio": null,
       "transmission_type": "manual",
       "status": "active",
+      "phone": "07700900001",
       "address": "1 High Street",
       "postcode": "TS7 0AB",
       "pin": "4827",
@@ -457,6 +459,7 @@ Returns the authenticated user's profile with role-specific data.
       "bio": null,
       "transmission_type": "manual",
       "status": "active",
+      "phone": "07700900001",
       "address": "1 High Street",
       "postcode": "TS7 0AB",
       "pin": "4827",
@@ -585,6 +588,7 @@ Register a new instructor account. Creates a base user record with the `instruct
       "bio": null,
       "transmission_type": "manual",
       "status": null,
+      "phone": "07700900001",
       "address": "1 High Street",
       "postcode": "TS7 0AB",
       "pin": "4827",
@@ -626,6 +630,7 @@ Update the authenticated instructor's own profile. The instructor is derived fro
 {
   "bio": "Experienced driving instructor with 10 years of teaching.",
   "transmission_type": "both",
+  "phone": "07700900001",
   "address": "10 High Street",
   "postcode": "TS7 0AB"
 }
@@ -635,6 +640,7 @@ Update the authenticated instructor's own profile. The instructor is derived fro
 |-------|------|----------|-------|
 | `bio` | string\|null | No | Instructor biography (max 1000 chars) |
 | `transmission_type` | string\|null | No | One of: `manual`, `automatic`, `both` |
+| `phone` | string\|null | No | Instructor's contact / mobile phone number (max 20 chars) |
 | `address` | string\|null | No | Business address (max 255 chars) |
 | `postcode` | string\|null | No | Business postcode (max 10 chars) |
 
@@ -648,6 +654,7 @@ Update the authenticated instructor's own profile. The instructor is derived fro
     "bio": "Experienced driving instructor with 10 years of teaching.",
     "transmission_type": "both",
     "status": "active",
+    "phone": "07700900001",
     "address": "10 High Street",
     "postcode": "TS7 0AB",
     "pin": "4827",
@@ -710,6 +717,7 @@ curl -X POST https://drivecrm.test/api/v1/instructor/profile/picture \
     "bio": "Experienced driving instructor.",
     "transmission_type": "manual",
     "status": "active",
+    "phone": "07700900001",
     "address": "10 High Street",
     "postcode": "TS7 0AB",
     "pin": "4827",
@@ -753,6 +761,7 @@ Delete the instructor's profile picture.
     "bio": "Experienced driving instructor.",
     "transmission_type": "manual",
     "status": "active",
+    "phone": "07700900001",
     "address": "10 High Street",
     "postcode": "TS7 0AB",
     "pin": "4827",
@@ -794,6 +803,7 @@ Returns the authenticated instructor's students grouped by status, plus a recent
         "phone": "07700900000",
         "status": "active",
         "has_app": true,
+        "app_last_active_at": "2026-03-17T09:55:00+00:00",
         "updated_at": "2026-03-17T10:30:00+00:00"
       }
     ],
@@ -806,6 +816,7 @@ Returns the authenticated instructor's students grouped by status, plus a recent
         "phone": "07700900001",
         "status": "passed",
         "has_app": true,
+        "app_last_active_at": null,
         "updated_at": "2026-03-16T14:00:00+00:00"
       }
     ],
@@ -819,6 +830,7 @@ Returns the authenticated instructor's students grouped by status, plus a recent
         "phone": "07700900000",
         "status": "active",
         "has_app": true,
+        "app_last_active_at": "2026-03-17T09:55:00+00:00",
         "updated_at": "2026-03-17T10:30:00+00:00"
       }
     ]
@@ -843,10 +855,13 @@ Returns the authenticated instructor's students grouped by status, plus a recent
 | `email` | string\|null | Student's email (falls back to user email) |
 | `phone` | string\|null | Student's phone number |
 | `status` | string\|null | Student status (e.g., `active`, `passed`, `inactive`) |
-| `has_app` | boolean | Whether the student has a linked user account |
+| `has_app` | boolean | Whether the student has a linked user **account**. This is `true` as soon as the account exists — it does **not** mean the student has ever opened the app. |
+| `app_last_active_at` | string\|null | ISO 8601 timestamp of the student's last authenticated app activity, or `null` if they have **never used the app**. Updated server-side on authenticated API requests (throttled to ~once / 15 min). Use this — not `has_app` — to decide whether a pupil has actually started using the app. |
 | `updated_at` | string\|null | ISO 8601 timestamp of last update |
 
 > **Note:** Students are automatically scoped to the authenticated instructor. No instructor ID is accepted in the request — it is derived from the Bearer token.
+
+> **`has_app` vs `app_last_active_at` (important for "resend invite" UIs):** `has_app` only tells you an account exists; an invited pupil who never opened the app still has `has_app: true`. To gate a "Resend Invite" affordance on *"hasn't started using the app yet"*, check `app_last_active_at === null`. (The web admin's pupils list happens to expose a `has_app` flag derived from `app_last_active_at`, which is why its naming differs — on the mobile API the two are distinct fields.)
 
 ---
 
@@ -1980,6 +1995,18 @@ Returns the authenticated instructor's calendar items for a specific date. By de
 
 > **Note:** When `available_only=true` (default), travel and practical test items are excluded and only `is_available=true` items are returned. Use `available_only=false` to see the full day schedule.
 
+**Booking-context fields:** every item also includes the following keys, populated for `booked`/`completed` items so the app can drive the status-dependent edit UI (they are `null`/`0` for plain availability slots):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `lesson_id` | integer\|null | The lesson backing a booked/completed slot |
+| `order_id` | integer\|null | The order the lesson belongs to |
+| `student_name` | string\|null | Full name of the booked student |
+| `is_paid` | boolean\|null | `true` when the lesson is paid (lesson payment settled or upfront order). Use this to lock the edit form to **reschedule-only** for paid lessons. |
+| `amount_pence` | integer\|null | Lesson cost in pence |
+| `mileage` | integer\|null | Recorded mileage (completed lessons) |
+| `future_siblings_count` | integer | Number of future un-signed-off lessons in the same order. When `> 0`, the app should prompt "move just this one / the whole booking" before a move (see `apply_to_future_in_order` on PUT). |
+
 ---
 
 #### `POST /api/v1/instructor/calendar/items`
@@ -2002,6 +2029,7 @@ Creates a new calendar item (time slot) for the authenticated instructor. Suppor
 | `recurrence_end_date` | string\|null | No | End date for recurring series in `Y-m-d` format. Must be after `date`. If omitted, defaults to 6 months from `date`. |
 | `travel_time_minutes` | integer\|null | No | Travel time block after the slot: `15`, `30`, or `45` minutes. Creates a separate travel item. |
 | `is_practical_test` | boolean | No | If `true`, creates a practical test slot. Blocks 1 hour before `start_time` and 30 minutes after `end_time`. Automatically marked unavailable. |
+| `student_id` | integer\|null | No | Student assigned to a practical test. Must exist in `students`. When supplied with `is_practical_test=true`, the test `date` is carried over to that student's `book_practical_test` checklist item (its `date` is set and the item is marked checked). Ignored for non-practical slots. |
 
 **Example — Single slot with travel time:**
 ```json
@@ -2079,7 +2107,8 @@ Creates a new calendar item (time slot) for the authenticated instructor. Suppor
   "date": "2026-04-10",
   "start_time": "11:00",
   "end_time": "12:00",
-  "is_practical_test": true
+  "is_practical_test": true,
+  "student_id": 1
 }
 ```
 
@@ -2098,6 +2127,135 @@ Creates a new calendar item (time slot) for the authenticated instructor. Suppor
 - Overlapping time slots (including travel time and practical test buffers) are rejected.
 - `unavailability_reason` is optional and may be omitted when `is_available=false`.
 - `start_time` before `00:00` or `end_time` after `23:59` is rejected (allowed diary window is `00:00`–`23:59`, governed by `config/diary.php`). The visible window in the admin UI extends to 24:00; the bookable upper bound is 23:59 because HH:MM cannot represent 24:00.
+
+---
+
+#### `PUT /api/v1/instructor/calendar/items/{calendarItem}`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Updates a calendar item belonging to the authenticated instructor — used to **move**, **edit**, or **reschedule** a slot. This mirrors the admin schedule edit flow exactly and reuses the same Service/Action layer, so reschedule notifications to the student (and, for bulk moves, the instructor) fire identically.
+
+**Two modes:**
+- **Single** (default): moves/edits one slot. If the slot has a booked lesson, the lesson's date/time is synced and the student is notified (`LessonRescheduledNotification`). For available slots it also edits availability, notes, reason, and travel time.
+- **Bulk** (`apply_to_future_in_order=true`): reschedules the lesson on this slot **plus every future un-signed-off lesson in the same order**, snapping them to the same day-of-week and time at weekly intervals from the new date. Sends `LessonsBulkRescheduled{Student,Instructor}Notification`.
+
+**Path Parameters:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `calendarItem` | integer | Calendar item ID (must belong to the authenticated instructor) |
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `date` | string | **Yes** | New date in `Y-m-d` format. Cannot be in the past. |
+| `start_time` | string | **Yes** | New start time in `H:i` format. Must be at or after `00:00`. |
+| `end_time` | string | **Yes** | New end time in `H:i` format. Must be after `start_time` and at or before `23:59`. |
+| `is_available` | boolean | No | New availability. Omit to leave unchanged. |
+| `notes` | string\|null | No | Notes (max 1000 chars). Omit to leave unchanged. |
+| `unavailability_reason` | string\|null | No | Reason (max 500 chars). Omit to leave unchanged. |
+| `travel_time_minutes` | integer\|null | No | Travel block: `0` (remove), `15`, `30`, or `45`. Omit to leave unchanged. |
+| `apply_to_future_in_order` | boolean | No | `true` = bulk-reschedule the whole booking (see Bulk mode). Default `false`. |
+
+> **Reschedule-only items:** booked **and paid** lessons should only send `date`/`start_time`/`end_time` (the app hides the rest). Completed lessons cannot be moved. A slot with booked lessons cannot be deleted — only moved.
+
+**Example — Single move/edit:**
+```json
+{
+  "date": "2026-07-01",
+  "start_time": "10:00",
+  "end_time": "12:00",
+  "is_available": true,
+  "notes": null,
+  "unavailability_reason": null,
+  "travel_time_minutes": 0
+}
+```
+
+**Response — Single (200):**
+```json
+{
+  "data": {
+    "id": 42,
+    "date": "2026-07-01",
+    "start_time": "10:00",
+    "end_time": "12:00",
+    "is_available": true,
+    "status": "booked",
+    "item_type": "slot",
+    "travel_time_minutes": null,
+    "parent_item_id": null,
+    "notes": null,
+    "unavailability_reason": null,
+    "recurrence_pattern": "none",
+    "recurrence_end_date": null,
+    "recurrence_group_id": null,
+    "lesson_id": 88,
+    "order_id": 17,
+    "student_name": "Jamie Doe",
+    "is_paid": true,
+    "amount_pence": 6000,
+    "mileage": null,
+    "future_siblings_count": 0
+  },
+  "mode": "single"
+}
+```
+
+**Example — Bulk reschedule of the whole booking:**
+```json
+{
+  "date": "2026-07-01",
+  "start_time": "10:00",
+  "end_time": "12:00",
+  "is_available": false,
+  "apply_to_future_in_order": true
+}
+```
+
+**Response — Bulk (200):**
+```json
+{
+  "data": {
+    "id": 42,
+    "date": "2026-07-01",
+    "start_time": "10:00",
+    "end_time": "12:00",
+    "is_available": false,
+    "status": "booked",
+    "item_type": "slot",
+    "travel_time_minutes": null,
+    "parent_item_id": null,
+    "notes": null,
+    "unavailability_reason": null,
+    "recurrence_pattern": "none",
+    "recurrence_end_date": null,
+    "recurrence_group_id": null,
+    "lesson_id": 88,
+    "order_id": 17,
+    "student_name": "Jamie Doe",
+    "is_paid": true,
+    "amount_pence": 6000,
+    "mileage": null,
+    "future_siblings_count": 0
+  },
+  "mode": "bulk",
+  "moved_count": 4
+}
+```
+
+**Validation errors (422):**
+- Overlapping time slots are rejected (the slot's own row is excluded from the check).
+- `start_time` before `00:00` or `end_time` after `23:59` is rejected; `end_time` must be after `start_time`; `date` cannot be in the past.
+
+**Error — Not found / not owned (404):**
+```json
+{
+  "message": "Calendar item not found."
+}
+```
 
 ---
 
@@ -2774,6 +2932,7 @@ Creates a new student with a user account and assigns them to the authenticated 
     "phone": "07700900000",
     "status": "active",
     "has_app": true,
+    "app_last_active_at": null,
     "updated_at": "2026-03-23T10:00:00+00:00"
   }
 }
@@ -2843,6 +3002,7 @@ Returns a single student record. Access is controlled by a policy:
     "phone": "07700900000",
     "status": "active",
     "has_app": true,
+    "app_last_active_at": "2026-03-17T09:55:00+00:00",
     "updated_at": "2026-03-17T10:30:00+00:00"
   }
 }
@@ -2912,6 +3072,7 @@ Updates an existing student record. Access is controlled by the same policy as t
     "phone": "07700900099",
     "status": "active",
     "has_app": true,
+    "app_last_active_at": "2026-03-17T09:55:00+00:00",
     "updated_at": "2026-03-19T10:05:00+00:00"
   }
 }
@@ -2947,6 +3108,7 @@ Removes a student from their assigned instructor. This is a **soft remove** — 
     "phone": "07700900000",
     "status": "active",
     "has_app": true,
+    "app_last_active_at": null,
     "updated_at": "2026-03-23T11:00:00+00:00"
   }
 }
@@ -2956,6 +3118,54 @@ Removes a student from their assigned instructor. This is a **soft remove** — 
 **Error Response (not found):** `404 Not Found`
 
 > **Note:** This does NOT permanently delete the student. It removes the student from the instructor's list by setting `instructor_id` to null. The student's user account, lessons, orders, and other data are preserved. An activity log entry is created recording the removal.
+
+---
+
+#### `POST /api/v1/students/{student}/resend-invite`
+
+**Auth required:** Yes (Bearer token — the student's assigned instructor)
+
+Resends the app login invite (welcome email) to a student. Because the original temporary password is never stored, this issues a **fresh temporary password**, flags the user to change it on next sign-in (`password_change_required`), and re-sends the welcome notification with the new credentials. Use this when the original invite was lost or never actioned.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID. Must be assigned to the authenticated instructor. |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "message": "Invite has been resent."
+}
+```
+
+**Error Response (no user account):** `422 Unprocessable Entity`
+```json
+{
+  "message": "Student does not have a user account."
+}
+```
+
+**Error Response (no instructor assigned):** `422 Unprocessable Entity`
+```json
+{
+  "message": "Student is not assigned to an instructor."
+}
+```
+
+**Error Response (not authorised):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+> **Security:** Authorised via the student `update` policy — only the student's assigned instructor may resend the invite. The student ID identifies the target pupil being managed (not the caller); the instructor is always derived from the Bearer token.
+>
+> **Side effect:** This resets the student's password to a new temporary one. If the student has already set up their account, they will be forced to change their password on next sign-in. An activity log entry is recorded against both the student and the instructor.
 
 ---
 
@@ -4664,6 +4874,7 @@ The `profile` key in user responses contains role-specific data. The shape depen
 | `bio` | string\|null | Instructor biography |
 | `transmission_type` | string\|null | `manual`, `automatic`, or `both` |
 | `status` | string\|null | Instructor status |
+| `phone` | string\|null | Instructor's contact / mobile phone number |
 | `address` | string\|null | Business address |
 | `postcode` | string\|null | Business postcode |
 | `pin` | string\|null | Instructor's attach PIN — students enter this on the mobile app to link themselves to the instructor (`POST /api/v1/students/attach`) |
@@ -4720,6 +4931,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | PUT | `/api/v1/instructor/packages/{package}` | Yes | Instructor | Update package |
 | GET | `/api/v1/instructor/calendar/items` | Yes | Instructor | List calendar items for a date |
 | POST | `/api/v1/instructor/calendar/items` | Yes | Instructor | Create calendar item |
+| PUT | `/api/v1/instructor/calendar/items/{calendarItem}` | Yes | Instructor | Update / move / reschedule calendar item (single or bulk) |
 | DELETE | `/api/v1/instructor/calendar/items/{calendarItem}` | Yes | Instructor | Delete calendar item |
 | GET | `/api/v1/instructor/finances` | Yes | Instructor | List finance records |
 | POST | `/api/v1/instructor/finances` | Yes | Instructor | Create finance record |
@@ -5421,6 +5633,13 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-04-28 | Added `pin` field to the instructor profile object — surfaces the instructor's attach PIN (the same PIN students enter on `POST /api/v1/students/attach`) so the mobile app can display it after the instructor logs in. Returned on every endpoint that already returns the instructor profile object: login, `/auth/user`, instructor registration, `PUT /instructor/profile`, and the profile-picture upload/delete endpoints. | Auth (login, user, register/instructor), Instructor (profile, profile/picture) |
 | 2026-05-19 | Vehicles exposed to the mobile API (Phase 6/7 — HMRC MTD). Added `vehicle_id` to the finance + mileage object, POST, and PUT (validated to belong to the authenticated instructor). Extended `/finances/config` with `category_meta` (per-slug `method_dependent` / `claimable` / `selectable_in_picker` / `itsa_bucket` flags) and an embedded active `vehicles` list. Added read-only `GET /api/v1/instructor/vehicles` (with optional `?include_disposed=1`) for the expense form's vehicle picker. Vehicle CRUD remains web-only in v1 — the app can read but not edit. | Finances (config, store, update), Finance object, Mileage (store, update), Mileage object, Vehicles (new) |
 | 2026-06-17 | Widened the diary time window from `06:00`–`21:00` to a full midnight-to-midnight day. `start_time` must now be ≥ `00:00` and `end_time` ≤ `23:59` on `POST /api/v1/instructor/calendar/items` (and the matching web Form Requests). The visible admin grid renders all 48 half-hour rows; the bookable upper bound is `23:59` because HH:MM cannot represent `24:00`, so the latest 15-min start for a 2-hour lesson is `21:45` (end `23:45`). Bounds sourced from `config/diary.php`; frontend mirror is `resources/js/lib/diary-hours.ts`. | Instructor Calendar (store) |
+| 2026-06-26 | Added `POST /api/v1/students/{student}/resend-invite` — re-sends the app login invite (welcome email) to a student. Issues a fresh temporary password, sets `password_change_required`, and re-sends `WelcomeStudentNotification`. Authorised via the student `update` policy (assigned instructor only). Reuses the shared `StudentService::resendInvite()` → `ResendStudentInviteAction`, which also powers the web `POST /students/{student}/resend-invite` route surfaced as a per-pupil "Resend Invite" button on the instructor Active Pupils tab. | Students (resend-invite) |
+| 2026-06-26 | `PUT /api/v1/instructor/profile` now accepts `phone` (nullable string, max 20) — instructors can update their mobile/contact number. `phone` is also now returned in the instructor profile object on every endpoint that serializes it (login, `/auth/user`, register/instructor, `PUT /instructor/profile`, profile-picture upload/delete) via the shared `InstructorProfileResource`. | Instructor (profile), Instructor profile object (all) |
+| 2026-06-26 | Added `app_last_active_at` (ISO 8601 or `null`) to `StudentResource` — surfaces the student's last authenticated app activity on every endpoint that returns a student object (`GET /instructor/students`, `GET/POST/PUT/DELETE /students/{student}`, profile-picture endpoints). `null` means the pupil has never opened the app; use this (not `has_app`, which only means "account exists") to gate "resend invite" UIs. | Student object (all student-returning endpoints) |
+| 2026-06-26 | `POST /api/v1/instructor/calendar/items` (and the matching web `POST /instructors/{instructor}/calendar/items`) now accepts an optional `student_id` (nullable integer, `exists:students,id`). When supplied with `is_practical_test=true`, the booked test `date` is carried over to that student's `book_practical_test` checklist item — its `date` is set and the item is marked checked. Ignored for non-practical slots. | Instructor Calendar (store) |
+| 2026-06-26 | `student_id` is now **persisted** on `calendar_items` (new nullable FK → `students`, `ON DELETE SET NULL`) for practical-test slots, replacing the earlier transient handling. As a result, deleting a practical-test slot — `DELETE /api/v1/instructor/calendar/items/{calendarItem}` and the web `DELETE /instructors/{instructor}/calendar/items/{calendarItem}` — now also clears the assigned student's `book_practical_test` checklist item (`date` nulled, item unchecked), the inverse of the create-time sync. | Instructor Calendar (store, destroy) |
+| 2026-06-26 | Added `PUT /api/v1/instructor/calendar/items/{calendarItem}` — move / edit / reschedule a calendar item, mirroring the admin schedule edit flow. Single mode moves or edits one slot (syncs a booked lesson's date/time and sends `LessonRescheduledNotification`); `apply_to_future_in_order=true` bulk-reschedules the whole booking (the lesson plus every future un-signed-off lesson in the same order) and sends `LessonsBulkRescheduled{Student,Instructor}Notification`. Reuses the same `InstructorService::updateCalendarItem` + `MoveLessonAndFutureSiblingsAction` as the web UI — no parallel logic. Response is a `CalendarItemResource` with `mode` (`single`/`bulk`) and, for bulk, `moved_count`. `travel_time_minutes` accepts `0` (remove) in addition to `15/30/45`. Items with booked lessons can be moved but not deleted. | Instructor Calendar (update) |
+| 2026-06-26 | `GET /api/v1/instructor/calendar/items` now returns booking-context fields on every item — `lesson_id`, `order_id`, `student_name`, `is_paid`, `amount_pence`, `mileage`, `future_siblings_count` — so the app can drive the status-dependent edit UI (paid lessons → reschedule-only; `future_siblings_count > 0` → "move this one / the whole booking" prompt). Populated for `booked`/`completed` items; `null`/`0` for availability slots. The endpoint now eager-loads the lesson/order/payment relations the resource needs. | Instructor Calendar (index) |
 
 ---
 

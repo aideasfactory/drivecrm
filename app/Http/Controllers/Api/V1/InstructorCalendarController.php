@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\Calendar\MoveLessonAndFutureSiblingsAction;
 use App\Enums\RecurrencePattern;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\GetCalendarItemsRequest;
 use App\Http\Requests\Api\V1\StoreCalendarItemRequest;
+use App\Http\Requests\Api\V1\UpdateCalendarItemRequest;
 use App\Http\Resources\V1\CalendarItemResource;
 use App\Models\CalendarItem;
 use App\Services\InstructorCalendarService;
@@ -20,7 +22,8 @@ class InstructorCalendarController extends Controller
 {
     public function __construct(
         protected InstructorCalendarService $calendarService,
-        protected InstructorService $instructorService
+        protected InstructorService $instructorService,
+        protected MoveLessonAndFutureSiblingsAction $moveLessonAndFutureSiblings,
     ) {}
 
     /**
@@ -41,6 +44,16 @@ class InstructorCalendarController extends Controller
             $availableOnly,
             $excludeDrafts
         );
+
+        // Eager-load the booking context the resource exposes (student name, paid
+        // status, future-sibling count) so the app can drive the status-dependent
+        // edit UI. Cheap for available-only requests (those slots have no lessons).
+        $items->loadMissing([
+            'calendar',
+            'lessons.order.student',
+            'lessons.order.lessons.payout',
+            'lessons.lessonPayment',
+        ]);
 
         return CalendarItemResource::collection($items);
     }
@@ -80,6 +93,7 @@ class InstructorCalendarController extends Controller
 
         $travelTimeMinutes = $request->integer('travel_time_minutes') ?: null;
         $isPracticalTest = $request->boolean('is_practical_test');
+        $studentId = $request->integer('student_id') ?: null;
 
         $calendarItem = $this->instructorService->addCalendarItem(
             $instructor,
@@ -90,7 +104,8 @@ class InstructorCalendarController extends Controller
             $request->input('notes'),
             $request->input('unavailability_reason'),
             $travelTimeMinutes,
-            $isPracticalTest
+            $isPracticalTest,
+            $studentId
         );
 
         $calendarItem->load('calendar');
@@ -104,6 +119,61 @@ class InstructorCalendarController extends Controller
         }
 
         return response()->json($response, 201);
+    }
+
+    /**
+     * Update a calendar item for the authenticated instructor — move, edit, or reschedule.
+     *
+     * Mirrors the admin schedule edit flow. With apply_to_future_in_order=true the whole
+     * booking is bulk-rescheduled (the lesson plus every future un-signed-off lesson in the
+     * same order), otherwise a single slot/lesson is moved or edited. Both paths reuse the
+     * same Service/Action layer as the web UI, so reschedule notifications fire identically.
+     */
+    public function update(UpdateCalendarItemRequest $request, CalendarItem $calendarItem): JsonResponse
+    {
+        $instructor = $request->user()->instructor;
+
+        if ($calendarItem->calendar->instructor_id !== $instructor->id) {
+            return response()->json([
+                'message' => 'Calendar item not found.',
+            ], 404);
+        }
+
+        // Bulk-mode: move this lesson AND every future un-signed-off lesson in the same order
+        // to the same day-of-week + time, weekly cadence anchored on the new date.
+        if ($request->boolean('apply_to_future_in_order')) {
+            $result = ($this->moveLessonAndFutureSiblings)(
+                $instructor,
+                $calendarItem,
+                $request->input('date'),
+                $request->input('start_time'),
+                $request->input('end_time'),
+                $request->user(),
+            );
+
+            return (new CalendarItemResource($result['anchor_item']))
+                ->additional([
+                    'mode' => 'bulk',
+                    'moved_count' => $result['moved_count'],
+                ])
+                ->response();
+        }
+
+        $calendarItem = $this->instructorService->updateCalendarItem(
+            $instructor,
+            $calendarItem,
+            $request->input('date'),
+            $request->input('start_time'),
+            $request->input('end_time'),
+            $request->has('is_available') ? $request->boolean('is_available') : null,
+            $request->has('notes') ? $request->input('notes') : null,
+            $request->has('unavailability_reason') ? $request->input('unavailability_reason') : null,
+            $request->has('travel_time_minutes') ? $request->integer('travel_time_minutes') : null,
+        );
+
+        return (new CalendarItemResource($calendarItem))
+            ->additional(['mode' => 'single'])
+            ->response();
     }
 
     /**

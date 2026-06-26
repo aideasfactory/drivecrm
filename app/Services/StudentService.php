@@ -16,6 +16,7 @@ use App\Actions\Student\PickupPoint\DeletePickupPointAction;
 use App\Actions\Student\PickupPoint\GetStudentPickupPointsAction;
 use App\Actions\Student\PickupPoint\SetDefaultPickupPointAction;
 use App\Actions\Student\PickupPoint\UpdatePickupPointAction;
+use App\Actions\Student\ResendStudentInviteAction;
 use App\Actions\Student\Status\RemoveStudentFromInstructorAction;
 use App\Actions\Student\UpdateStudentAction;
 use App\Actions\Student\UploadStudentProfilePictureAction;
@@ -31,6 +32,7 @@ class StudentService extends BaseService
         protected GetAllStudentsAction $getAllStudents,
         protected GetStudentByIdAction $getStudentById,
         protected CreatePupilAction $createPupil,
+        protected ResendStudentInviteAction $resendStudentInvite,
         protected UpdateStudentAction $updateStudent,
         protected RemoveStudentFromInstructorAction $removeStudent,
         protected GetStudentPickupPointsAction $getStudentPickupPoints,
@@ -73,6 +75,17 @@ class StudentService extends BaseService
         $this->invalidateInstructorStudentCache($instructor);
 
         return $student;
+    }
+
+    /**
+     * Resend the app login invite to an existing student.
+     *
+     * Issues a fresh temporary password and re-sends the welcome notification.
+     * Returns false when the student has no linked user account or instructor.
+     */
+    public function resendInvite(Student $student): bool
+    {
+        return ($this->resendStudentInvite)($student);
     }
 
     /**

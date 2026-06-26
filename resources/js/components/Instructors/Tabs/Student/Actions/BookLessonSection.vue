@@ -292,7 +292,7 @@ const handleSubmit = async () => {
 
                     <!-- First Lesson Date -->
                     <div class="space-y-2">
-                        <Label for="bl_date">First Lesson Date *</Label>
+                        <Label for="bl_date">Lesson Start Date *</Label>
                         <Input
                             id="bl_date"
                             type="date"

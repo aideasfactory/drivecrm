@@ -290,6 +290,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('students.remove');
     Route::put('/students/{student}/password', [PupilController::class, 'updatePassword'])
         ->name('students.password.update');
+    Route::post('/students/{student}/resend-invite', [PupilController::class, 'resendInvite'])
+        ->name('students.resend-invite');
 
     Route::get('/teams', [TeamController::class, 'index'])
         ->name('teams.index');

@@ -73,6 +73,7 @@ Route::prefix('v1')->group(function (): void {
             Route::put('packages/{package}', [InstructorPackageController::class, 'update']);
             Route::get('calendar/items', [InstructorCalendarController::class, 'index']);
             Route::post('calendar/items', [InstructorCalendarController::class, 'store']);
+            Route::put('calendar/items/{calendarItem}', [InstructorCalendarController::class, 'update']);
             Route::delete('calendar/items/{calendarItem}', [InstructorCalendarController::class, 'destroy']);
             Route::get('finances/config', [InstructorFinanceController::class, 'config']);
             Route::get('finances/summary', [InstructorFinanceController::class, 'summary']);
@@ -129,6 +130,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('students/{student}', [StudentController::class, 'show']);
         Route::put('students/{student}', [StudentController::class, 'update']);
         Route::delete('students/{student}', [StudentController::class, 'destroy']);
+        Route::post('students/{student}/resend-invite', [StudentController::class, 'resendInvite']);
         Route::post('students/{student}/profile-picture', [StudentProfilePictureController::class, 'store']);
         Route::delete('students/{student}/profile-picture', [StudentProfilePictureController::class, 'destroy']);
         Route::get('students/{student}/lessons', [StudentLessonController::class, 'index']);

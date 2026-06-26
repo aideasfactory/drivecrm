@@ -26,6 +26,7 @@ class UpdateInstructorProfileRequest extends FormRequest
         return [
             'bio' => ['nullable', 'string', 'max:1000'],
             'transmission_type' => ['nullable', 'string', 'in:manual,automatic,both'],
+            'phone' => ['nullable', 'string', 'max:20'],
             'address' => ['nullable', 'string', 'max:255'],
             'postcode' => ['nullable', 'string', 'max:10'],
         ];

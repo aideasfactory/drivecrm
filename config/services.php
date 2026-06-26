@@ -72,7 +72,7 @@ return [
     ],
 
     'gtm' => [
-        'container_id' => env('GTM_CONTAINER_ID'),
+        'container_id' => env('GTM_CONTAINER_ID', 'GTM-56KMNJR'),
     ],
 
     'google_tag' => [

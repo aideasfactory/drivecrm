@@ -37,6 +37,7 @@ import {
     Send,
     UserPlus,
     Save,
+    Mail,
 } from 'lucide-vue-next'
 import type { InstructorDetail } from '@/types/instructor'
 import type { Pupil } from '@/types/pupil'
@@ -188,6 +189,24 @@ const viewPupil = (pupilId: number) => {
         preserveState: true,
         preserveScroll: true,
     })
+}
+
+const resendingInviteId = ref<number | null>(null)
+
+const handleResendInvite = async (pupil: Pupil) => {
+    resendingInviteId.value = pupil.id
+    try {
+        const response = await axios.post(
+            `/students/${pupil.id}/resend-invite`,
+        )
+        toast.success(response.data.message || 'Invite has been resent')
+    } catch (error: any) {
+        const message =
+            error.response?.data?.message || 'Failed to resend invite'
+        toast.error(message)
+    } finally {
+        resendingInviteId.value = null
+    }
 }
 
 const handleSendBroadcast = async () => {
@@ -351,6 +370,7 @@ const handleCreatePupil = async () => {
                             <TableHead>Revenue</TableHead>
                             <TableHead>App</TableHead>
                             <TableHead>Status</TableHead>
+                            <TableHead class="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -446,11 +466,29 @@ const handleCreatePupil = async () => {
                                     {{ getStatusLabel(pupil.status) }}
                                 </Badge>
                             </TableCell>
+                            <TableCell class="text-right" @click.stop>
+                                <Button
+                                    v-if="!pupil.has_app"
+                                    variant="outline"
+                                    size="sm"
+                                    class="cursor-pointer"
+                                    :disabled="resendingInviteId === pupil.id"
+                                    @click.stop="handleResendInvite(pupil)"
+                                >
+                                    <Loader2
+                                        v-if="resendingInviteId === pupil.id"
+                                        class="mr-2 h-4 w-4 animate-spin"
+                                    />
+                                    <Mail v-else class="mr-2 h-4 w-4" />
+                                    Resend Invite
+                                </Button>
+                                <span v-else class="text-muted-foreground">—</span>
+                            </TableCell>
                         </TableRow>
 
                         <!-- Empty State -->
                         <TableRow v-if="filteredPupils.length === 0">
-                            <TableCell colspan="6" class="text-center">
+                            <TableCell colspan="7" class="text-center">
                                 <div
                                     class="flex flex-col items-center gap-3 py-12 text-muted-foreground"
                                 >

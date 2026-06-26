@@ -21,6 +21,7 @@ class InstructorProfileResource extends JsonResource
             'bio' => $this->bio,
             'transmission_type' => $this->transmission_type,
             'status' => $this->status,
+            'phone' => $this->phone,
             'address' => $this->address,
             'postcode' => $this->postcode,
             'pin' => $this->pin,

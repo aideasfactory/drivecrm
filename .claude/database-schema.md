@@ -776,6 +776,7 @@ Defines time slots within a calendar date.
 | `item_type` | varchar(20) | DEFAULT 'slot', INDEXED | Calendar item type: 'slot' (lesson), 'travel' (travel time), or 'practical_test' (driving test slot) |
 | `travel_time_minutes` | smallint unsigned | NULLABLE | Travel time in minutes (15, 30, or 45) set on the parent slot |
 | `parent_item_id` | bigint unsigned | FOREIGN KEY (calendar_items.id), NULLABLE, ON DELETE SET NULL | Links travel blocks to their parent lesson slot |
+| `student_id` | bigint unsigned | FOREIGN KEY (students.id), NULLABLE, INDEXED, ON DELETE SET NULL | Student assigned to a practical-test slot; links the slot to the student's `book_practical_test` checklist item |
 | `notes` | text | NULLABLE | General notes about this calendar slot |
 | `unavailability_reason` | text | NULLABLE | Reason for marking slot unavailable (only when is_available = false) |
 | `recurrence_pattern` | varchar(20) | DEFAULT 'none' | Recurrence pattern: none, weekly, biweekly, monthly |
@@ -786,6 +787,7 @@ Defines time slots within a calendar date.
 
 **Relationships:**
 - Belongs to one `Calendar`
+- Optionally belongs to one `Student` (practical-test slots, via `student_id`)
 
 **Enums:**
 - Status: `draft` (tentative hold during onboarding), `reserved` (weekly payment pending), `booked` (fully paid), `completed` (lesson finished)
@@ -795,6 +797,7 @@ Defines time slots within a calendar date.
 - Multiple time slots per calendar date
 - `is_available` allows blocking slots without deletion
 - `item_type = 'practical_test'`: blocks a 2.5hr window (1hr prep + 1hr test + 30min buffer), always `is_available = false`
+- Practical-test slots store the assigned `student_id`. Creating one carries the test date onto that student's `book_practical_test` checklist item (date set, item checked); deleting one clears that checklist date (date nulled, item unchecked)
 - `status` tracks the booking lifecycle: `draft` → `reserved`/`booked` → `completed`
 - Draft items are cleaned up by `calendar:cleanup-drafts` command if abandoned
 - Recurring slots: materialized instances pattern — each occurrence is a separate row linked by `recurrence_group_id`

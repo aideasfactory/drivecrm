@@ -498,6 +498,7 @@ async function handleCreateSubmit() {
                 recurrence_end_date: createForm.value.recurrence_end_date || null,
                 travel_time_minutes: travelMinutes > 0 ? travelMinutes : null,
                 is_practical_test: isPracticalTest,
+                student_id: isPracticalTest ? selectedStudentId.value : null,
             },
         )
 

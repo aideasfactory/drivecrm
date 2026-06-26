@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace App\Actions\Instructor;
 
+use App\Actions\Student\Checklist\ClearPracticalTestDateFromChecklistAction;
 use App\Models\CalendarItem;
 
 class DeleteCalendarItemAction
 {
+    public function __construct(
+        protected ClearPracticalTestDateFromChecklistAction $clearPracticalTestDateFromChecklist
+    ) {}
+
     /**
      * Delete a calendar item (time slot).
      *
@@ -24,6 +29,12 @@ class DeleteCalendarItemAction
             throw new \Exception('Cannot delete calendar item with booked lessons');
         }
 
+        // Capture the assigned student before deletion so we can clear their
+        // practical-test checklist date once the slot is gone.
+        $practicalTestStudent = ($calendarItem->isPracticalTest() && $calendarItem->student_id !== null)
+            ? $calendarItem->student
+            : null;
+
         // Delete any associated travel-time block
         if ($calendarItem->travelItem) {
             $calendarItem->travelItem->delete();
@@ -31,6 +42,11 @@ class DeleteCalendarItemAction
 
         // Delete the calendar item
         $deleted = $calendarItem->delete();
+
+        // Carry the removal over to the student's practical-test checklist item.
+        if ($deleted && $practicalTestStudent) {
+            ($this->clearPracticalTestDateFromChecklist)($practicalTestStudent);
+        }
 
         // Optionally: Clean up calendar if it has no more items
         $calendar = $calendarItem->calendar;
