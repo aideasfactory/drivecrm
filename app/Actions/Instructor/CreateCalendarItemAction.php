@@ -62,6 +62,13 @@ class CreateCalendarItemAction
                 ]
             );
 
+            // Record the student's name in the notes so the test is identifiable at a glance.
+            $student = $studentId !== null ? Student::find($studentId) : null;
+            $studentName = $student ? trim($student->first_name.' '.$student->surname) : null;
+            $practicalTestNotes = $studentName
+                ? trim($studentName.($notes ? ' - '.$notes : ''))
+                : $notes;
+
             $calendarItem = CalendarItem::create([
                 'calendar_id' => $calendar->id,
                 'start_time' => $prepStart->format('H:i'),
@@ -70,19 +77,15 @@ class CreateCalendarItemAction
                 'item_type' => CalendarItemType::PracticalTest,
                 'status' => null,
                 'student_id' => $studentId,
-                'notes' => $notes,
+                'notes' => $practicalTestNotes,
                 'unavailability_reason' => $unavailabilityReason ?? 'Practical Test',
             ]);
 
             $calendarItem->load('calendar');
 
             // Carry the booked test date over to the student's practical-test checklist item.
-            if ($studentId !== null) {
-                $student = Student::find($studentId);
-
-                if ($student) {
-                    ($this->syncPracticalTestDateToChecklist)($student, Carbon::parse($date)->format('Y-m-d'));
-                }
+            if ($student) {
+                ($this->syncPracticalTestDateToChecklist)($student, Carbon::parse($date)->format('Y-m-d'));
             }
 
             return $calendarItem;

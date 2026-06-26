@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Actions\Instructor\GetInstructorCalendarItemsAction;
+use App\Models\CalendarItem;
 use App\Models\Instructor;
-use Illuminate\Support\Collection;
+use Illuminate\Database\Eloquent\Collection;
 
 class InstructorCalendarService extends BaseService
 {
@@ -19,6 +20,7 @@ class InstructorCalendarService extends BaseService
      *
      * @param  bool  $availableOnly  When true, returns only available slots. When false, returns all items for the day.
      * @param  bool  $excludeDrafts  When true, excludes items with draft status.
+     * @return Collection<int, CalendarItem>
      */
     public function getCalendarItems(Instructor $instructor, string $date, bool $availableOnly = true, bool $excludeDrafts = true): Collection
     {

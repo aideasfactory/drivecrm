@@ -3221,14 +3221,17 @@ Returns lessons for a given student across all their orders. Supports optional f
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `status` | string | — | Filter by lesson status: `pending`, `completed`, or `cancelled` |
+| `status` | string | — | Filter by lesson status: `pending` or `completed` (also `draft` when `include_drafts=true`). Cancelled lessons are never returned, so `cancelled` yields an empty list. |
 | `from_date` | string | — | Only return lessons on or after this date (YYYY-MM-DD) |
 | `sort` | string | `desc` | Sort direction by date/time: `asc` or `desc` |
 | `limit` | integer | — | Maximum number of results to return |
+| `include_drafts` | boolean | `false` | When `true`, include **draft** (upfront booking awaiting payment) lessons in the response. Off by default so student-facing views are unaffected — the instructor's pupil view passes this. Draft lessons are returned with `card_status: "draft"` and `status: "draft"`. |
 
 **Request Body:** None
 
 **Example:** `GET /api/v1/students/5/lessons?status=pending&from_date=2026-04-10&sort=asc&limit=3`
+
+**Example (instructor pupil view, includes drafts):** `GET /api/v1/students/5/lessons?include_drafts=true&sort=asc`
 
 **Success Response:** `200 OK`
 ```json
@@ -3285,7 +3288,7 @@ Returns lessons for a given student across all their orders. Supports optional f
 | `date` | string\|null | Lesson date (YYYY-MM-DD) |
 | `start_time` | string\|null | Start time (HH:MM) |
 | `end_time` | string\|null | End time (HH:MM) |
-| `status` | string | Lesson status: `pending`, `completed`, or `cancelled` |
+| `status` | string | Lesson status: `pending`, `completed`, or `draft` (drafts only returned when `include_drafts=true`). **Cancelled lessons are never returned by this endpoint.** |
 | `completed_at` | string\|null | ISO 8601 timestamp when lesson was completed |
 | `card_status` | string | Computed UI card status (see Card Status Logic below) |
 | `has_reflective_log` | boolean | Whether a reflective log exists for this lesson |
@@ -3300,6 +3303,7 @@ Returns lessons for a given student across all their orders. Supports optional f
 | `needs_sign_off` | Red | Past lesson NOT signed off (reflective log missing) |
 | `current` | Orange | The next lesson (today or future) — the one to sign off next |
 | `upcoming` | Blue | Future lessons beyond the next one |
+| `draft` | Grey | Upfront booking awaiting payment. Only returned when `include_drafts=true`. Draft lessons never consume the `current` slot — the "next lesson to sign off" is still the next non-draft lesson. |
 
 ---
 
@@ -5680,6 +5684,8 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-06-26 | `GET /api/v1/instructor/lessons/{date}` now **excludes `cancelled` lessons** (it already excluded `draft`). A cancelled lesson's calendar slot is freed, so it must not show in the instructor's day view — this brings the app in line with the admin diary, which never displays cancelled lessons. Returned `status` will be `pending` or `completed`. | Instructor (lessons by date) |
 | 2026-06-26 | `GET /api/v1/instructor/calendar/items` booking-context fields (`lesson_id`, `order_id`, `is_paid`, `amount_pence`, `mileage`, `future_siblings_count`) are now populated for `draft` and `reserved` slots too — previously `booked`/`completed` only. This gives the app full parity so the unified move / cancel "this one / and all future" prompt works across the whole booking family. `is_paid` correctly returns `false` for `draft` (upfront awaiting payment). Same change applied to the admin web diary (`GetInstructorCalendarAction`) so both UIs behave identically. | Instructor Calendar (index) |
 | 2026-06-26 | `DELETE /api/v1/instructor/calendar/items/{calendarItem}` now **cancels bookings** instead of blocking them. When the target slot has a lesson attached (draft/reserved/booked), the request must include a `reason` and `scope` (`single` = this lesson, `future` = this + all future un-signed-off lessons in the booking). Cancelled lessons are kept for history (`status = cancelled`), their diary slots/travel blocks are freed, future weekly invoices stop, and the student is emailed. Paid lessons trigger a Head Office refund-required email (no automatic Stripe refund). Response adds `cancelled_count` + `refund_required_count`. Availability-slot deletes are unchanged. Mirrored on the web `DELETE /instructors/{instructor}/calendar/items/{calendarItem}`. Reuses `InstructorService::cancelBooking` + `CancelBookingAction`. | Instructor Calendar (destroy) |
+| 2026-06-26 | `GET /api/v1/students/{student}/lessons` now accepts `include_drafts` (boolean, default `false`). When `true`, **draft** (upfront booking awaiting payment) lessons are included — returned with `status: "draft"` and a new `card_status` value `draft`. Off by default so student-facing views are unaffected; the instructor's pupil Lessons tab passes it so pending bookings are visible. Draft lessons never consume the `current` card slot. Same draft concept as the calendar endpoints (`status: "draft"`, `is_paid: false`). | Student Lessons (index) |
+| 2026-06-26 | **Cancelled lessons are now excluded from the student lessons endpoints** — `GET /api/v1/students/{student}/lessons` (index) never lists `cancelled` lessons, and `GET /api/v1/students/{student}/lessons/{lesson}` (show) returns `404` for a cancelled lesson. A cancelled lesson has had its diary slot freed, so it must never surface in any lesson view (mirrors the admin diary and the instructor day view). The `status` filter value `cancelled` therefore returns an empty list. | Student Lessons (index, show) |
 
 ---
 

@@ -19,14 +19,23 @@ class GetStudentLessonsAction
      * lesson payment, payout, reflective log, and resource data.
      * Each lesson includes a computed card_status.
      *
-     * @param  array{status?: string, from_date?: string, sort?: string, limit?: int}  $filters
+     * Draft (awaiting-payment) lessons are excluded by default and only
+     * included when the `include_drafts` flag is set (instructor pupil view).
+     *
+     * @param  array{status?: string, from_date?: string, sort?: string, limit?: int, include_drafts?: bool}  $filters
      */
     public function __invoke(Student $student, array $filters = []): Collection
     {
+        $includeDrafts = $filters['include_drafts'] ?? false;
+
         $lessons = $student->orders()
             ->with([
                 'lessons' => fn ($query) => $query
-                    ->where('status', '!=', LessonStatus::DRAFT)
+                    ->where('status', '!=', LessonStatus::CANCELLED)
+                    ->when(
+                        ! $includeDrafts,
+                        fn ($q) => $q->where('status', '!=', LessonStatus::DRAFT)
+                    )
                     ->when(
                         isset($filters['status']),
                         fn ($q) => $q->where('status', $filters['status'])
@@ -95,7 +104,9 @@ class GetStudentLessonsAction
             $isPast = $lessonDate && $lessonDate->lt($today);
             $isToday = $lessonDate && $lessonDate->isToday();
 
-            if ($isCompleted) {
+            if ($lesson['status'] === LessonStatus::DRAFT->value) {
+                $cardStatus = LessonCardStatus::Draft->value;
+            } elseif ($isCompleted) {
                 $cardStatus = LessonCardStatus::SignedOff->value;
             } elseif ($isPast) {
                 $cardStatus = LessonCardStatus::NeedsSignOff->value;

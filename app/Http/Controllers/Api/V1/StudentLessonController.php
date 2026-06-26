@@ -34,6 +34,7 @@ class StudentLessonController extends Controller
             'from_date' => $request->query('from_date'),
             'sort' => $request->query('sort'),
             'limit' => $request->query('limit') ? (int) $request->query('limit') : null,
+            'include_drafts' => $request->boolean('include_drafts') ?: null,
         ], fn ($value) => $value !== null);
 
         $lessons = $this->lessonSignOffService->getStudentLessons($student, $filters);

@@ -10,4 +10,5 @@ enum LessonCardStatus: string
     case NeedsSignOff = 'needs_sign_off';
     case Current = 'current';
     case Upcoming = 'upcoming';
+    case Draft = 'draft';
 }

@@ -7,7 +7,7 @@ namespace App\Actions\Instructor;
 use App\Models\Calendar;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
-use Illuminate\Support\Collection;
+use Illuminate\Database\Eloquent\Collection;
 
 class GetInstructorCalendarItemsAction
 {
@@ -19,6 +19,7 @@ class GetInstructorCalendarItemsAction
      *                               overlaps with a booked/reserved/completed item on the same calendar.
      *                               When false, returns all items.
      * @param  bool  $excludeDrafts  When true, excludes items with draft status.
+     * @return Collection<int, CalendarItem>
      */
     public function __invoke(Instructor $instructor, string $date, bool $availableOnly = true, bool $excludeDrafts = true): Collection
     {
@@ -28,7 +29,7 @@ class GetInstructorCalendarItemsAction
             ->first();
 
         if (! $calendar) {
-            return collect();
+            return new Collection;
         }
 
         $query = CalendarItem::query()
