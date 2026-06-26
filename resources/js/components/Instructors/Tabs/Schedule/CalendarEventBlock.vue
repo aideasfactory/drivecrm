@@ -154,8 +154,8 @@ const statusLabel = computed(() => {
     if (status === 'completed') return 'Completed'
     if (status === 'booked' && isPaid.value) return 'Booked & Paid'
     if (status === 'booked') return 'Booked (Unpaid)'
-    if (status === 'draft') return 'Draft'
-    if (status === 'reserved') return 'Reserved'
+    if (status === 'draft') return 'Draft — Awaiting Payment'
+    if (status === 'reserved') return 'Booked — Paying Weekly'
 
     return props.event.isAvailable ? 'Available' : 'Unavailable'
 })

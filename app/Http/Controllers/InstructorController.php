@@ -673,9 +673,35 @@ class InstructorController extends Controller
             ], 404);
         }
 
-        $deleteScope = request()->query('scope', 'single');
+        $deleteScope = request()->input('scope', request()->query('scope', 'single'));
 
         try {
+            // Booking slot (draft/reserved/booked lesson attached): cancelling
+            // requires a reason and offers a "this / this + future in booking" scope.
+            if ($calendarItem->lessons()->exists()) {
+                $reason = trim((string) request()->input('reason', ''));
+
+                if ($reason === '') {
+                    return response()->json([
+                        'message' => 'A reason is required to cancel this booking.',
+                        'errors' => ['reason' => ['A reason is required to cancel this booking.']],
+                    ], 422);
+                }
+
+                $result = $this->instructorService->cancelBooking(
+                    $calendarItem,
+                    $reason,
+                    $deleteScope === 'future',
+                    request()->user(),
+                );
+
+                return response()->json([
+                    'message' => "{$result['cancelled_count']} lesson(s) cancelled. The student has been notified.",
+                    'cancelled_count' => $result['cancelled_count'],
+                    'refund_required_count' => $result['refund_required_count'],
+                ]);
+            }
+
             if ($deleteScope === 'future' && $calendarItem->isRecurring()) {
                 $deletedCount = $this->instructorService->removeRecurringCalendarItems($calendarItem);
 

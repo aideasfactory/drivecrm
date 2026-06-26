@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Actions\Calendar\CancelBookingAction;
 use App\Actions\Calendar\DetectCalendarClashesAction;
 use App\Actions\FetchPostcodeCoordinatesAction;
 use App\Actions\FindInstructorsByPostcodeSectorAction;
@@ -105,6 +106,7 @@ class InstructorService extends BaseService
         protected DeleteMileageLogAction $deleteMileageLog,
         protected SeedInstructorProgressTrackerAction $seedInstructorProgressTracker,
         protected SendInstructorWelcomeEmailAction $sendInstructorWelcomeEmail,
+        protected CancelBookingAction $cancelBooking,
     ) {}
 
     /**
@@ -425,6 +427,21 @@ class InstructorService extends BaseService
         }
 
         return $result;
+    }
+
+    /**
+     * Cancel the booking on a calendar item — the student has left / no longer
+     * wants lessons. Marks the lesson(s) cancelled (kept for history), frees the
+     * diary slot(s), stops future weekly invoices and notifies the student (plus
+     * Head Office when a paid lesson needs a manual refund). Cache invalidation
+     * is handled inside the action.
+     *
+     * @param  bool  $applyToFutureInOrder  Also cancel future un-signed-off lessons in the same order.
+     * @return array{cancelled_count: int, refund_required_count: int}
+     */
+    public function cancelBooking(CalendarItem $calendarItem, string $reason, bool $applyToFutureInOrder, User $actor): array
+    {
+        return ($this->cancelBooking)($calendarItem, $reason, $applyToFutureInOrder, $actor);
     }
 
     /**

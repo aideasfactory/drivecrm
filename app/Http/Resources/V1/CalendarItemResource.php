@@ -43,7 +43,7 @@ class CalendarItemResource extends JsonResource
             // lesson down to reschedule-only.
             'lesson_id' => $lesson?->id,
             'order_id' => $lesson?->order_id,
-            'student_name' => $this->studentName($lesson),
+            'student_name' => $this->studentName(),
             'is_paid' => $this->isPaid($lesson),
             'amount_pence' => $lesson?->amount_pence,
             'mileage' => $lesson?->mileage,
@@ -52,8 +52,11 @@ class CalendarItemResource extends JsonResource
     }
 
     /**
-     * The lesson backing a booked/completed slot, or null. Only resolved when the
-     * `lessons` relation has been eager-loaded (e.g. the calendar index endpoint).
+     * The lesson backing an active-booking or completed slot, or null. Resolved
+     * for the whole booking family — booked, completed, draft (upfront, awaiting
+     * payment) and reserved (weekly) — so the app can drive the unified move /
+     * cancel UI (incl. the "this one / and future" prompt) identically across all
+     * three active-booking statuses. Only resolved when `lessons` is eager-loaded.
      */
     protected function bookingLesson(): ?Lesson
     {
@@ -61,16 +64,44 @@ class CalendarItemResource extends JsonResource
             return null;
         }
 
-        if ($this->status !== CalendarItemStatus::BOOKED && $this->status !== CalendarItemStatus::COMPLETED) {
+        $bookingStatuses = [
+            CalendarItemStatus::BOOKED,
+            CalendarItemStatus::COMPLETED,
+            CalendarItemStatus::DRAFT,
+            CalendarItemStatus::RESERVED,
+        ];
+
+        if (! in_array($this->status, $bookingStatuses, true)) {
             return null;
         }
 
         return $this->lessons->first();
     }
 
-    protected function studentName(?Lesson $lesson): ?string
+    /**
+     * The student's name for any slot backed by an order — booked, completed, draft
+     * (upfront, awaiting payment) or reserved (weekly). Unlike the booking-context
+     * fields, the name is surfaced for draft/reserved too so the app can label a
+     * pending slot with who it's held for. Only resolved when `lessons` is loaded.
+     */
+    protected function studentName(): ?string
     {
-        $student = $lesson?->order?->student;
+        if (! $this->resource->relationLoaded('lessons')) {
+            return null;
+        }
+
+        $namedStatuses = [
+            CalendarItemStatus::BOOKED,
+            CalendarItemStatus::COMPLETED,
+            CalendarItemStatus::DRAFT,
+            CalendarItemStatus::RESERVED,
+        ];
+
+        if (! in_array($this->status, $namedStatuses, true)) {
+            return null;
+        }
+
+        $student = $this->lessons->first()?->order?->student;
 
         if (! $student) {
             return null;
@@ -85,8 +116,10 @@ class CalendarItemResource extends JsonResource
             return null;
         }
 
+        // Weekly: per-lesson payment status. Upfront: paid once the order is
+        // confirmed — a draft is upfront-but-awaiting-payment, so never paid.
         return $lesson->lessonPayment?->isPaid()
-            ?? ($lesson->order?->isUpfront() ? true : false);
+            ?? ($lesson->order?->isUpfront() === true && ! $lesson->isDraft());
     }
 
     /**

@@ -448,6 +448,8 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 | `calendar_item_id` | bigint unsigned | FOREIGN KEY (calendar_items.id), NULLABLE, ON DELETE SET NULL | Associated calendar slot |
 | `completed_at` | datetime | NULLABLE | When lesson was completed |
 | `summary` | text | NULLABLE | Instructor's summary of the lesson (written at sign-off, used for AI resource matching) |
+| `cancellation_reason` | text | NULLABLE | Instructor's reason for cancelling the booking (required when an active booking is deleted from the schedule). Retained for history |
+| `cancelled_at` | timestamp | NULLABLE | When the lesson was cancelled |
 | `mileage` | unsigned integer | NULLABLE | Miles driven during this lesson |
 | `student_lesson_number` | unsigned integer | NOT NULL, INDEX | Per-student running lesson number — starts at 1 for each student and increments across all their orders. Used as the user-facing lesson reference for support queries. Stable for life (cancelled / cleaned drafts keep their number; gaps are allowed). |
 | `status` | enum('draft', 'pending', 'completed', 'cancelled') | DEFAULT 'pending' | Lesson status |
@@ -478,6 +480,7 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 - Scheduling information (date, start_time, end_time) can be set when booking lesson
 - Links to calendar_item for slot availability tracking
 - Instructor gets paid after lesson is completed
+- A booking (draft/reserved/booked lesson) can be cancelled from the instructor schedule: `status` → `cancelled`, `cancellation_reason` + `cancelled_at` set, and `calendar_item_id` nulled so the lesson is retained for history while its calendar slot is freed. Cancellation never touches `completed` lessons or lessons with a `Payout`
 - `summary` is written by the instructor at sign-off time; used by AI (AWS Bedrock Nova) to match against resource tags and recommend relevant videos/PDFs to the student
 - `mileage` is recorded by the instructor after the lesson is completed, via the schedule view
 - `student_lesson_number` is assigned at lesson creation time inside the order's transaction. Computed as `MAX(student_lesson_number) + 1` over the student's existing lessons (across all orders), with `lockForUpdate()` on the existing rows to serialise concurrent same-student order creations. Numbers are immutable after assignment — a cancelled or cleaned-up draft lesson keeps its number, so gaps in the sequence are expected and intentional

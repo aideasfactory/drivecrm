@@ -122,4 +122,17 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Head Office Address
+    |--------------------------------------------------------------------------
+    |
+    | Internal mailbox that receives operational notifications which Head Office
+    | must action manually — e.g. refunds required when a paid booking is
+    | cancelled from the instructor schedule.
+    |
+    */
+
+    'head_office_address' => env('HEAD_OFFICE_EMAIL'),
+
 ];

@@ -48,15 +48,29 @@ class GetInstructorCalendarAction
                     $isPaid = null;
                     $lesson = null;
 
-                    if ($item->status === CalendarItemStatus::BOOKED || $item->status === CalendarItemStatus::COMPLETED) {
+                    // Booked, completed, draft (upfront, awaiting payment) and reserved (weekly) all
+                    // carry a linked lesson/order from creation. They form one "active booking" family:
+                    // each surfaces the student name AND the booking-context fields (lesson id, order id,
+                    // future-sibling count, payment) so the schedule's move / cancel "this one or all
+                    // forward?" prompt behaves identically across every booking status.
+                    $bookingStatuses = [
+                        CalendarItemStatus::BOOKED,
+                        CalendarItemStatus::COMPLETED,
+                        CalendarItemStatus::DRAFT,
+                        CalendarItemStatus::RESERVED,
+                    ];
+
+                    if (in_array($item->status, $bookingStatuses, true)) {
                         $lesson = $item->lessons->first();
                         if ($lesson && $lesson->order && $lesson->order->student) {
                             $student = $lesson->order->student;
                             $studentName = trim($student->first_name.' '.$student->surname);
                         }
                         if ($lesson) {
+                            // Weekly: per-lesson payment status. Upfront: paid once confirmed —
+                            // a draft is upfront-but-awaiting-payment, so never paid.
                             $isPaid = $lesson->lessonPayment?->isPaid()
-                                ?? ($lesson->order?->isUpfront() ? true : false);
+                                ?? ($lesson->order?->isUpfront() === true && ! $lesson->isDraft());
                         }
                     }
 

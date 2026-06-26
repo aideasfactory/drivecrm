@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Actions\Calendar\MoveLessonAndFutureSiblingsAction;
 use App\Enums\RecurrencePattern;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\DeleteCalendarItemRequest;
 use App\Http\Requests\Api\V1\GetCalendarItemsRequest;
 use App\Http\Requests\Api\V1\StoreCalendarItemRequest;
 use App\Http\Requests\Api\V1\UpdateCalendarItemRequest;
@@ -15,7 +16,6 @@ use App\Models\CalendarItem;
 use App\Services\InstructorCalendarService;
 use App\Services\InstructorService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class InstructorCalendarController extends Controller
@@ -179,9 +179,12 @@ class InstructorCalendarController extends Controller
     /**
      * Delete a calendar item for the authenticated instructor.
      *
-     * Supports ?scope=single (default) or ?scope=future for recurring items.
+     * Availability slots: ?scope=single (default) or ?scope=future for recurring
+     * items. Booking slots (a lesson is attached): the request must include a
+     * `reason`, and `scope=single` cancels just this lesson while `scope=future`
+     * cancels this and all future un-signed-off lessons in the same booking.
      */
-    public function destroy(Request $request, CalendarItem $calendarItem): JsonResponse
+    public function destroy(DeleteCalendarItemRequest $request, CalendarItem $calendarItem): JsonResponse
     {
         $instructor = $request->user()->instructor;
 
@@ -191,9 +194,25 @@ class InstructorCalendarController extends Controller
             ], 404);
         }
 
-        $deleteScope = $request->query('scope', 'single');
+        $deleteScope = $request->input('scope', 'single');
 
         try {
+            // Booking slot: cancel the lesson(s) rather than delete an availability slot.
+            if ($calendarItem->lessons()->exists()) {
+                $result = $this->instructorService->cancelBooking(
+                    $calendarItem,
+                    (string) $request->input('reason'),
+                    $deleteScope === 'future',
+                    $request->user(),
+                );
+
+                return response()->json([
+                    'message' => "{$result['cancelled_count']} lesson(s) cancelled. The student has been notified.",
+                    'cancelled_count' => $result['cancelled_count'],
+                    'refund_required_count' => $result['refund_required_count'],
+                ]);
+            }
+
             if ($deleteScope === 'future' && $calendarItem->isRecurring()) {
                 $deletedCount = $this->instructorService->removeRecurringCalendarItems($calendarItem);
 

@@ -87,6 +87,8 @@ const isDeleteDialogOpen = ref(false)
 const formLoading = ref(false)
 const events = ref<CalendarEvent[]>([])
 const deleteScope = ref<'single' | 'future'>('single')
+/** Reason entered when cancelling a booking (required for booking slots). */
+const cancelReason = ref('')
 
 // Map of backend items by ID for quick lookup
 const itemsMap = ref<Map<number, CalendarItemResponse>>(new Map())
@@ -198,13 +200,23 @@ const editItemIsBooked = computed(() => {
     return item?.status === 'booked'
 })
 
-/** Whether the item being edited is a booked AND paid-for lesson —
- *  strips the edit form down to just the time fields so the instructor
- *  can reschedule but not change status / notes / reason. */
-const editItemIsBookedAndPaid = computed(() => {
+/** The three "active booking" statuses, all treated uniformly: the instructor
+ *  can move them (date/time only) or delete them (which cancels the booking). */
+const BOOKING_STATUSES = ['booked', 'reserved', 'draft']
+
+/** Whether the item being edited is an active booking (booked / reserved /
+ *  draft) — drives both the reschedule-only edit form and the cancel-with-reason
+ *  delete flow. */
+const editItemIsBooking = computed(() => {
     const item = itemsMap.value.get(editForm.value.id)
-    return item?.status === 'booked' && item?.is_paid === true
+    return item ? BOOKING_STATUSES.includes(item.status as string) : false
 })
+
+/** Whether the edit form should be stripped down to reschedule-only (date/time
+ *  only, no status / notes / reason). Applies to all active bookings the
+ *  instructor can move but not re-purpose: booked (paid or weekly-already-paid),
+ *  reserved (paying weekly) and draft (held, awaiting upfront payment). */
+const editItemIsRescheduleOnly = computed(() => editItemIsBooking.value)
 
 // ── Mileage state for completed lessons ────────────────
 const mileageInput = ref<number | null>(null)
@@ -565,6 +577,32 @@ function handleEventClick(event: CalendarEvent) {
 
 // ── Edit time slot ───────────────────────────────────────
 async function handleEditSubmit() {
+    // Bookings (booked / reserved / draft) are reschedule-only: editing them is a
+    // move, not a generic update. Route through the same flow the drag uses so the
+    // admin gets the "move just this one / and the future lessons" prompt and the
+    // linked lesson, future siblings and travel block all follow correctly.
+    if (editItemIsBooking.value) {
+        const item = itemsMap.value.get(editForm.value.id)
+        const dateTimeChanged = !!item && (
+            item.date !== editForm.value.date
+            || normaliseTime(item.start_time) !== editForm.value.start_time
+            || normaliseTime(item.end_time) !== editForm.value.end_time
+        )
+
+        isEditSheetOpen.value = false
+
+        if (dateTimeChanged) {
+            await handleEventMove(
+                editForm.value.id,
+                editForm.value.date,
+                editForm.value.start_time,
+                editForm.value.end_time,
+            )
+        }
+
+        return
+    }
+
     formLoading.value = true
     try {
         const travelMinutes = editForm.value.is_available ? (editForm.value.travel_time_minutes || 0) : 0
@@ -708,21 +746,39 @@ function cancelBulkMove() {
 function openDeleteDialog() {
     isEditSheetOpen.value = false
     deleteScope.value = 'single'
+    cancelReason.value = ''
     isDeleteDialogOpen.value = true
 }
 
 async function handleDelete() {
+    const isBooking = editItemIsBooking.value
+
+    // A booking cancellation must explain why.
+    if (isBooking && cancelReason.value.trim() === '') {
+        toast({ title: 'Please enter a reason for cancelling this booking.', variant: 'destructive' })
+        return
+    }
+
     formLoading.value = true
     try {
-        const scopeParam = deleteScope.value === 'future' && editItemIsRecurring.value ? 'future' : 'single'
+        // For bookings "future" means this + all future lessons in the booking;
+        // for availability slots it keeps its recurrence meaning.
+        const scopeParam = deleteScope.value === 'future' && (isBooking || editItemIsRecurring.value) ? 'future' : 'single'
 
         await axios.delete(
             `/instructors/${props.instructorId}/calendar/items/${editForm.value.id}`,
-            { params: { scope: scopeParam } },
+            {
+                params: { scope: scopeParam },
+                data: isBooking ? { scope: scopeParam, reason: cancelReason.value.trim() } : undefined,
+            },
         )
 
         // Always reload to pick up travel item deletions
-        toast({ title: scopeParam === 'future' ? 'Recurring time slots removed successfully!' : 'Time slot removed successfully!' })
+        if (isBooking) {
+            toast({ title: 'Booking cancelled. The student has been notified.' })
+        } else {
+            toast({ title: scopeParam === 'future' ? 'Recurring time slots removed successfully!' : 'Time slot removed successfully!' })
+        }
         await loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
 
         isDeleteDialogOpen.value = false
@@ -1330,7 +1386,7 @@ onMounted(() => {
                     </div>
 
                     <!-- Travel Time (only shown when available; hidden for booked + paid lessons) -->
-                    <div v-if="editForm.is_available && !editItemIsBookedAndPaid" class="space-y-2">
+                    <div v-if="editForm.is_available && !editItemIsRescheduleOnly" class="space-y-2">
                         <Label for="edit-travel">
                             <span class="flex items-center gap-1.5">
                                 <Car class="h-4 w-4" />
@@ -1356,7 +1412,7 @@ onMounted(() => {
                     </div>
 
                     <!-- Status Toggle (hidden for booked + paid lessons — reschedule only) -->
-                    <div v-if="!editItemIsBookedAndPaid" class="space-y-2">
+                    <div v-if="!editItemIsRescheduleOnly" class="space-y-2">
                         <Label>Status</Label>
                         <div class="flex gap-2">
                             <Button
@@ -1381,7 +1437,7 @@ onMounted(() => {
                     </div>
 
                     <!-- Notes Field (hidden for booked + paid lessons) -->
-                    <div v-if="!editItemIsBookedAndPaid" class="space-y-2">
+                    <div v-if="!editItemIsRescheduleOnly" class="space-y-2">
                         <Label for="edit-notes">Notes</Label>
                         <textarea
                             id="edit-notes"
@@ -1396,7 +1452,7 @@ onMounted(() => {
                     </div>
 
                     <!-- Unavailability Reason Field (shown only when unavailable; hidden for booked + paid lessons) -->
-                    <div v-if="!editForm.is_available && !editItemIsBookedAndPaid" class="space-y-2">
+                    <div v-if="!editForm.is_available && !editItemIsRescheduleOnly" class="space-y-2">
                         <Label for="edit-unavailability-reason">Unavailability Reason</Label>
                         <textarea
                             id="edit-unavailability-reason"
@@ -1445,9 +1501,15 @@ onMounted(() => {
         <Dialog v-model:open="isDeleteDialogOpen">
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Remove Time Slot</DialogTitle>
+                    <DialogTitle>{{ editItemIsBooking ? 'Cancel Booking' : 'Remove Time Slot' }}</DialogTitle>
                     <DialogDescription>
-                        Are you sure you want to remove this time slot? This action cannot be undone.
+                        <template v-if="editItemIsBooking">
+                            This cancels the lesson and removes it from the diary. The student will be
+                            emailed to let them know. This action cannot be undone.
+                        </template>
+                        <template v-else>
+                            Are you sure you want to remove this time slot? This action cannot be undone.
+                        </template>
                     </DialogDescription>
                 </DialogHeader>
 
@@ -1458,19 +1520,54 @@ onMounted(() => {
                     <p class="text-sm text-muted-foreground">
                         <strong>Time:</strong> {{ editForm.start_time }} - {{ editForm.end_time }}
                     </p>
-                    <p class="text-sm text-muted-foreground">
+                    <p v-if="!editItemIsBooking" class="text-sm text-muted-foreground">
                         <strong>Status:</strong> {{ editForm.is_available ? 'Available' : 'Unavailable' }}
                     </p>
-                    <p v-if="editForm.notes" class="text-sm text-muted-foreground">
+                    <p v-if="!editItemIsBooking && editForm.notes" class="text-sm text-muted-foreground">
                         <strong>Notes:</strong> {{ editForm.notes }}
                     </p>
-                    <p v-if="!editForm.is_available && editForm.unavailability_reason" class="text-sm text-muted-foreground">
+                    <p v-if="!editItemIsBooking && !editForm.is_available && editForm.unavailability_reason" class="text-sm text-muted-foreground">
                         <strong>Reason:</strong> {{ editForm.unavailability_reason }}
                     </p>
                 </div>
 
-                <!-- Recurring delete scope selector -->
-                <div v-if="editItemIsRecurring" class="space-y-3 border-t border-border pt-4">
+                <!-- Booking cancellation: required reason + scope -->
+                <div v-if="editItemIsBooking" class="space-y-4 border-t border-border pt-4">
+                    <div class="space-y-2">
+                        <Label for="cancel-reason">Reason for cancelling <span class="text-destructive">*</span></Label>
+                        <textarea
+                            id="cancel-reason"
+                            v-model="cancelReason"
+                            placeholder="Why is this booking being cancelled? (the student will see this)"
+                            class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            maxlength="1000"
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            {{ cancelReason.length }}/1000 characters
+                        </p>
+                    </div>
+
+                    <div class="space-y-2">
+                        <Label class="text-sm font-medium">Cancellation scope</Label>
+                        <label class="flex cursor-pointer items-center gap-3 rounded-md border border-input px-3 py-2.5 transition-colors hover:bg-muted/50" :class="{ 'border-primary bg-primary/5': deleteScope === 'single' }">
+                            <input type="radio" v-model="deleteScope" value="single" class="accent-primary" />
+                            <div>
+                                <div class="text-sm font-medium">This booking only</div>
+                                <div class="text-xs text-muted-foreground">Cancel just this lesson</div>
+                            </div>
+                        </label>
+                        <label class="flex cursor-pointer items-center gap-3 rounded-md border border-input px-3 py-2.5 transition-colors hover:bg-muted/50" :class="{ 'border-primary bg-primary/5': deleteScope === 'future' }">
+                            <input type="radio" v-model="deleteScope" value="future" class="accent-primary" />
+                            <div>
+                                <div class="text-sm font-medium">This and all future lessons in this booking</div>
+                                <div class="text-xs text-muted-foreground">Cancel this lesson and every upcoming lesson in the same booking</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Recurring delete scope selector (availability slots only) -->
+                <div v-else-if="editItemIsRecurring" class="space-y-3 border-t border-border pt-4">
                     <Label class="text-sm font-medium">Delete scope</Label>
                     <div class="space-y-2">
                         <label class="flex cursor-pointer items-center gap-3 rounded-md border border-input px-3 py-2.5 transition-colors hover:bg-muted/50" :class="{ 'border-primary bg-primary/5': deleteScope === 'single' }">
@@ -1497,17 +1594,17 @@ onMounted(() => {
                         :disabled="formLoading"
                         class="min-w-[80px]"
                     >
-                        Cancel
+                        Keep
                     </Button>
                     <Button
                         variant="destructive"
                         @click="handleDelete"
-                        :disabled="formLoading"
+                        :disabled="formLoading || (editItemIsBooking && cancelReason.trim() === '')"
                         class="min-w-[100px]"
                     >
                         <Loader2 v-if="formLoading" class="mr-2 h-4 w-4 animate-spin" />
                         <Trash2 v-else class="mr-2 h-4 w-4" />
-                        {{ formLoading ? 'Removing...' : 'Remove' }}
+                        {{ formLoading ? (editItemIsBooking ? 'Cancelling...' : 'Removing...') : (editItemIsBooking ? 'Cancel Booking' : 'Remove') }}
                     </Button>
                 </DialogFooter>
             </DialogContent>

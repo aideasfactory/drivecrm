@@ -25,6 +25,8 @@ class Lesson extends Model
         'completed_at',
         'status',
         'summary',
+        'cancellation_reason',
+        'cancelled_at',
         'mileage',
         'student_lesson_number',
     ];
@@ -36,6 +38,7 @@ class Lesson extends Model
             'start_time' => 'datetime:H:i',
             'end_time' => 'datetime:H:i',
             'completed_at' => 'datetime',
+            'cancelled_at' => 'datetime',
             'status' => LessonStatus::class,
         ];
     }
@@ -126,6 +129,14 @@ class Lesson extends Model
     public function isCompleted(): bool
     {
         return $this->status === LessonStatus::COMPLETED;
+    }
+
+    /**
+     * Check if lesson has been cancelled.
+     */
+    public function isCancelled(): bool
+    {
+        return $this->status === LessonStatus::CANCELLED;
     }
 
     /**

@@ -982,6 +982,8 @@ Returns the authenticated instructor's lessons for a specific date, ordered by s
 
 > **Note:** Lessons are automatically scoped to the authenticated instructor. Lessons are sorted by start time ascending for chronological day-view display.
 
+> **Note:** `draft` (awaiting payment) and `cancelled` lessons are **excluded** from this endpoint — a cancelled lesson has had its calendar slot freed, so it must not appear in the instructor's day view (this mirrors the admin diary, which never shows cancelled lessons). In practice the `status` returned here will be `pending` or `completed`.
+
 ---
 
 #### `POST /api/v1/instructor/lessons/{lesson}/notify-on-way`
@@ -1995,17 +1997,19 @@ Returns the authenticated instructor's calendar items for a specific date. By de
 
 > **Note:** When `available_only=true` (default), travel and practical test items are excluded and only `is_available=true` items are returned. Use `available_only=false` to see the full day schedule.
 
-**Booking-context fields:** every item also includes the following keys, populated for `booked`/`completed` items so the app can drive the status-dependent edit UI (they are `null`/`0` for plain availability slots):
+**Booking-context fields:** every item also includes the following keys. They are populated for the whole **active-booking family** — `booked`, `completed`, `draft` (upfront, awaiting payment) and `reserved` (weekly) — so the app can drive the unified move / cancel UI identically across all booking statuses. They are `null`/`0` for plain availability slots:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `lesson_id` | integer\|null | The lesson backing a booked/completed slot |
+| `lesson_id` | integer\|null | The lesson backing the slot (booked / completed / draft / reserved) |
 | `order_id` | integer\|null | The order the lesson belongs to |
-| `student_name` | string\|null | Full name of the booked student |
-| `is_paid` | boolean\|null | `true` when the lesson is paid (lesson payment settled or upfront order). Use this to lock the edit form to **reschedule-only** for paid lessons. |
+| `student_name` | string\|null | Full name of the student the slot is for |
+| `is_paid` | boolean\|null | `true` when the lesson is paid (weekly per-lesson payment settled, or a confirmed upfront order). **A `draft` is upfront-but-awaiting-payment, so it returns `false`.** Use this to show a paid/refund hint on cancel. |
 | `amount_pence` | integer\|null | Lesson cost in pence |
 | `mileage` | integer\|null | Recorded mileage (completed lessons) |
-| `future_siblings_count` | integer | Number of future un-signed-off lessons in the same order. When `> 0`, the app should prompt "move just this one / the whole booking" before a move (see `apply_to_future_in_order` on PUT). |
+| `future_siblings_count` | integer | Number of future un-signed-off lessons in the same booking. When `> 0`, prompt "just this one / this and all future lessons" before a move (`apply_to_future_in_order` on PUT) or a cancel (`scope=future` on DELETE). |
+
+> **Note:** `draft` items are only returned when you pass `available_only=false&exclude_drafts=false`.
 
 ---
 
@@ -2263,7 +2267,10 @@ Updates a calendar item belonging to the authenticated instructor — used to **
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Deletes a calendar item belonging to the authenticated instructor. For recurring items, supports deleting a single occurrence or all future occurrences.
+Deletes a calendar item belonging to the authenticated instructor. Behaviour depends on whether the item is a plain availability slot or an active booking:
+
+- **Availability slot (no lesson attached):** removed from the diary. For recurring items, `scope` controls single-occurrence vs all-future deletion.
+- **Booking slot (a draft / reserved / booked lesson is attached):** the booking is **cancelled** (the student has left / no longer wants lessons). A `reason` is **required**. `scope=single` cancels just this lesson; `scope=future` cancels this lesson and every future un-signed-off lesson in the same booking. The lesson rows are kept for history with `status = cancelled`, but their calendar slots (and travel blocks) are freed from the diary. Future weekly invoices stop automatically. **No Stripe refund is issued** — when a cancelled lesson had already been paid, Head Office is emailed to action a manual refund. The student is always emailed a cancellation confirmation.
 
 **Path Parameters:**
 
@@ -2271,15 +2278,27 @@ Deletes a calendar item belonging to the authenticated instructor. For recurring
 |-------|------|-------------|
 | `calendarItem` | integer | Calendar item ID |
 
-**Query Parameters:**
+**Body / Query Parameters:**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `scope` | string | No | `single` (default) = delete this item only; `future` = delete this item and all future items in the recurrence group |
+| `scope` | string | No | `single` (default) or `future`. For availability slots, `future` = this + all future items in the recurrence group. For bookings, `future` = this + all future lessons in the same booking. |
+| `reason` | string | **Yes for bookings** | Why the booking is being cancelled (max 1000 chars). Shown to the student in their cancellation email. Ignored for availability slots. |
 
-**Example:** `DELETE /api/v1/instructor/calendar/items/42?scope=future`
+> Send `scope` and `reason` in the JSON request body for booking cancellations (or `scope` as a query param for availability deletes). `reason` is only validated/required when the target item has a lesson attached.
 
-**Response — Single delete (200):**
+**Example (availability slot):** `DELETE /api/v1/instructor/calendar/items/42?scope=future`
+
+**Example (cancel a booking):**
+```json
+DELETE /api/v1/instructor/calendar/items/42
+{
+  "scope": "future",
+  "reason": "Student has moved away and no longer needs lessons."
+}
+```
+
+**Response — Single availability delete (200):**
 ```json
 {
   "message": "Calendar item removed successfully."
@@ -2294,10 +2313,27 @@ Deletes a calendar item belonging to the authenticated instructor. For recurring
 }
 ```
 
-**Error — Item has booked lessons (400):**
+**Response — Booking cancelled (200):**
 ```json
 {
-  "message": "Cannot delete a calendar item that has booked lessons."
+  "message": "3 lesson(s) cancelled. The student has been notified.",
+  "cancelled_count": 3,
+  "refund_required_count": 1
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `cancelled_count` | integer | Number of lessons cancelled (1 for `scope=single`, more for `scope=future`). |
+| `refund_required_count` | integer | How many of the cancelled lessons had been paid and so need a manual Head Office refund. `0` when nothing was paid (e.g. reserved/draft only). |
+
+**Error — Booking cancellation missing reason (422):**
+```json
+{
+  "message": "A reason is required to cancel this booking.",
+  "errors": {
+    "reason": ["A reason is required to cancel this booking."]
+  }
 }
 ```
 
@@ -2308,7 +2344,7 @@ Deletes a calendar item belonging to the authenticated instructor. For recurring
 }
 ```
 
-> **Note:** Items with booked lessons cannot be deleted. When using `scope=future`, only items without booked lessons are removed — items with bookings are preserved.
+> **Note:** Completed lessons and lessons that already have a payout (signed off) are never cancelled — they are excluded from the `scope=future` cascade. If every non-completed lesson in the order ends up cancelled, the order itself is marked cancelled.
 
 ---
 
@@ -5640,6 +5676,10 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-06-26 | `student_id` is now **persisted** on `calendar_items` (new nullable FK → `students`, `ON DELETE SET NULL`) for practical-test slots, replacing the earlier transient handling. As a result, deleting a practical-test slot — `DELETE /api/v1/instructor/calendar/items/{calendarItem}` and the web `DELETE /instructors/{instructor}/calendar/items/{calendarItem}` — now also clears the assigned student's `book_practical_test` checklist item (`date` nulled, item unchecked), the inverse of the create-time sync. | Instructor Calendar (store, destroy) |
 | 2026-06-26 | Added `PUT /api/v1/instructor/calendar/items/{calendarItem}` — move / edit / reschedule a calendar item, mirroring the admin schedule edit flow. Single mode moves or edits one slot (syncs a booked lesson's date/time and sends `LessonRescheduledNotification`); `apply_to_future_in_order=true` bulk-reschedules the whole booking (the lesson plus every future un-signed-off lesson in the same order) and sends `LessonsBulkRescheduled{Student,Instructor}Notification`. Reuses the same `InstructorService::updateCalendarItem` + `MoveLessonAndFutureSiblingsAction` as the web UI — no parallel logic. Response is a `CalendarItemResource` with `mode` (`single`/`bulk`) and, for bulk, `moved_count`. `travel_time_minutes` accepts `0` (remove) in addition to `15/30/45`. Items with booked lessons can be moved but not deleted. | Instructor Calendar (update) |
 | 2026-06-26 | `GET /api/v1/instructor/calendar/items` now returns booking-context fields on every item — `lesson_id`, `order_id`, `student_name`, `is_paid`, `amount_pence`, `mileage`, `future_siblings_count` — so the app can drive the status-dependent edit UI (paid lessons → reschedule-only; `future_siblings_count > 0` → "move this one / the whole booking" prompt). Populated for `booked`/`completed` items; `null`/`0` for availability slots. The endpoint now eager-loads the lesson/order/payment relations the resource needs. | Instructor Calendar (index) |
+| 2026-06-26 | `GET /api/v1/instructor/calendar/items` `student_name` is now also populated for `draft` (upfront, awaiting payment) and `reserved` (weekly) slots, so the app can label a pending hold with who it's reserved for. The other booking-context fields stay `null`/`0` for draft/reserved. (Draft items require `available_only=false&exclude_drafts=false`.) | Instructor Calendar (index) |
+| 2026-06-26 | `GET /api/v1/instructor/lessons/{date}` now **excludes `cancelled` lessons** (it already excluded `draft`). A cancelled lesson's calendar slot is freed, so it must not show in the instructor's day view — this brings the app in line with the admin diary, which never displays cancelled lessons. Returned `status` will be `pending` or `completed`. | Instructor (lessons by date) |
+| 2026-06-26 | `GET /api/v1/instructor/calendar/items` booking-context fields (`lesson_id`, `order_id`, `is_paid`, `amount_pence`, `mileage`, `future_siblings_count`) are now populated for `draft` and `reserved` slots too — previously `booked`/`completed` only. This gives the app full parity so the unified move / cancel "this one / and all future" prompt works across the whole booking family. `is_paid` correctly returns `false` for `draft` (upfront awaiting payment). Same change applied to the admin web diary (`GetInstructorCalendarAction`) so both UIs behave identically. | Instructor Calendar (index) |
+| 2026-06-26 | `DELETE /api/v1/instructor/calendar/items/{calendarItem}` now **cancels bookings** instead of blocking them. When the target slot has a lesson attached (draft/reserved/booked), the request must include a `reason` and `scope` (`single` = this lesson, `future` = this + all future un-signed-off lessons in the booking). Cancelled lessons are kept for history (`status = cancelled`), their diary slots/travel blocks are freed, future weekly invoices stop, and the student is emailed. Paid lessons trigger a Head Office refund-required email (no automatic Stripe refund). Response adds `cancelled_count` + `refund_required_count`. Availability-slot deletes are unchanged. Mirrored on the web `DELETE /instructors/{instructor}/calendar/items/{calendarItem}`. Reuses `InstructorService::cancelBooking` + `CancelBookingAction`. | Instructor Calendar (destroy) |
 
 ---
 

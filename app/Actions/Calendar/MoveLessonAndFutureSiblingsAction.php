@@ -12,6 +12,7 @@ use App\Models\Lesson;
 use App\Models\User;
 use App\Notifications\LessonRescheduling\LessonsBulkRescheduledInstructorNotification;
 use App\Notifications\LessonRescheduling\LessonsBulkRescheduledStudentNotification;
+use App\Services\InstructorCalendarService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -76,7 +77,11 @@ class MoveLessonAndFutureSiblingsAction
 
         $newAnchorDate = Carbon::parse($newDate);
 
-        DB::transaction(function () use ($instructor, $anchorItem, $newDate, $newStartTime, $newEndTime, $futureSiblings, $newAnchorDate): void {
+        // Track every calendar date touched (old + new, anchor + siblings) so the
+        // cached calendar feed can be busted for all of them after the move.
+        $affectedDates = [$oldDateString, $newDate];
+
+        DB::transaction(function () use ($instructor, $anchorItem, $newDate, $newStartTime, $newEndTime, $futureSiblings, $newAnchorDate, &$affectedDates): void {
             ($this->updateCalendarItem)($instructor, $anchorItem, $newDate, $newStartTime, $newEndTime);
 
             foreach ($futureSiblings as $index => $sibling) {
@@ -84,7 +89,11 @@ class MoveLessonAndFutureSiblingsAction
                     continue;
                 }
 
+                // Capture the sibling's current date before it is moved.
+                $affectedDates[] = $sibling->calendarItem->calendar?->date?->format('Y-m-d');
+
                 $siblingNewDate = $newAnchorDate->copy()->addWeeks($index + 1)->format('Y-m-d');
+                $affectedDates[] = $siblingNewDate;
 
                 ($this->updateCalendarItem)(
                     $instructor,
@@ -95,6 +104,14 @@ class MoveLessonAndFutureSiblingsAction
                 );
             }
         });
+
+        // Bulk moves bypass InstructorService::updateCalendarItem, so invalidate the
+        // cached calendar feed here for every affected date — otherwise the app keeps
+        // serving the pre-move slots until the cache TTL expires.
+        $calendarService = app(InstructorCalendarService::class);
+        foreach (array_unique(array_filter($affectedDates)) as $affectedDate) {
+            $calendarService->invalidateCalendarCache($instructor->id, $affectedDate);
+        }
 
         $anchorItem->refresh()->load('calendar');
         $anchorLesson->refresh();

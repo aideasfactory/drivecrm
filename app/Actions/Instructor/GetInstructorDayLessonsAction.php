@@ -21,7 +21,10 @@ class GetInstructorDayLessonsAction
     {
         return $instructor->lessons()
             ->whereDate('date', $date)
-            ->where('status', '!=', LessonStatus::DRAFT)
+            // Exclude drafts (awaiting payment) and cancelled lessons — a cancelled
+            // lesson has had its calendar slot freed, so it must not appear in the
+            // instructor's day view (mirrors the admin diary, which never shows it).
+            ->whereNotIn('status', [LessonStatus::DRAFT, LessonStatus::CANCELLED])
             ->with([
                 'order' => fn ($query) => $query->select([
                     'id', 'student_id', 'instructor_id', 'package_id',
