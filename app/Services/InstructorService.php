@@ -40,6 +40,7 @@ use App\Actions\Instructor\UploadFinanceReceiptAction;
 use App\Actions\Instructor\UploadInstructorProfilePictureAction;
 use App\Actions\Lesson\UpdateLessonMileageAction;
 use App\Actions\ProgressTracker\SeedInstructorProgressTrackerAction;
+use App\Actions\PushNotification\QueuePushNotificationAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Shared\Message\SendBroadcastMessageAction;
 use App\Enums\RecurrencePattern;
@@ -54,6 +55,8 @@ use App\Models\Package;
 use App\Models\Student;
 use App\Models\User;
 use App\Notifications\CalendarClashDetectedNotification;
+use App\Notifications\InstructorArrivedNotification;
+use App\Notifications\InstructorOnWayNotification;
 use App\Notifications\LessonRescheduledNotification;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\CursorPaginator;
@@ -61,6 +64,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -107,6 +111,7 @@ class InstructorService extends BaseService
         protected SeedInstructorProgressTrackerAction $seedInstructorProgressTracker,
         protected SendInstructorWelcomeEmailAction $sendInstructorWelcomeEmail,
         protected CancelBookingAction $cancelBooking,
+        protected QueuePushNotificationAction $queuePushNotification,
     ) {}
 
     /**
@@ -724,13 +729,29 @@ class InstructorService extends BaseService
     }
 
     /**
-     * Log that the instructor is on their way to a lesson.
-     *
-     * TODO: Replace with actual push notification to student when push is implemented.
+     * Notify the student that the instructor is on their way: emails the
+     * student, queues a push notification (only when they have a token), and
+     * records the activity for the instructor's timeline.
      */
     public function notifyStudentOnWay(Instructor $instructor, Lesson $lesson): void
     {
         $student = $lesson->order?->student;
+
+        if ($student) {
+            $recipientEmail = $student->email ?: $student->contact_email;
+
+            if ($recipientEmail) {
+                Notification::route('mail', $recipientEmail)
+                    ->notify(new InstructorOnWayNotification($lesson, $instructor, $student));
+            }
+
+            $this->queueStudentPush(
+                $student,
+                'Your instructor is on the way',
+                $instructor->name.' is on their way to your driving lesson.',
+                ['lesson_id' => $lesson->id, 'notification_type' => 'on_way'],
+            );
+        }
 
         ($this->logActivity)(
             $instructor,
@@ -745,13 +766,29 @@ class InstructorService extends BaseService
     }
 
     /**
-     * Log that the instructor has arrived at a lesson.
-     *
-     * TODO: Replace with actual push notification to student when push is implemented.
+     * Notify the student that the instructor has arrived: emails the student,
+     * queues a push notification (only when they have a token), and records the
+     * activity for the instructor's timeline.
      */
     public function notifyStudentArrived(Instructor $instructor, Lesson $lesson): void
     {
         $student = $lesson->order?->student;
+
+        if ($student) {
+            $recipientEmail = $student->email ?: $student->contact_email;
+
+            if ($recipientEmail) {
+                Notification::route('mail', $recipientEmail)
+                    ->notify(new InstructorArrivedNotification($lesson, $instructor, $student));
+            }
+
+            $this->queueStudentPush(
+                $student,
+                'Your instructor has arrived',
+                $instructor->name.' has arrived for your driving lesson and is waiting for you.',
+                ['lesson_id' => $lesson->id, 'notification_type' => 'arrived'],
+            );
+        }
 
         ($this->logActivity)(
             $instructor,
@@ -763,6 +800,23 @@ class InstructorService extends BaseService
                 'notification_type' => 'arrived',
             ]
         );
+    }
+
+    /**
+     * Queue a push notification for a student's user account, but only when that
+     * user exists and has a registered Expo push token. Picked up and delivered
+     * by the `push:send-queued` scheduled command. Push is an additive layer, so
+     * a missing token is a silent no-op rather than an error.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function queueStudentPush(Student $student, string $title, string $body, array $data): void
+    {
+        $user = $student->user;
+
+        if ($user && $user->expo_push_token) {
+            ($this->queuePushNotification)($user, $title, $body, $data);
+        }
     }
 
     /**

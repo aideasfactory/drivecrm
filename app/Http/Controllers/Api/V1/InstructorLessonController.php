@@ -48,7 +48,7 @@ class InstructorLessonController extends Controller
         $this->instructorService->notifyStudentOnWay($instructor, $lesson);
 
         return response()->json([
-            'message' => 'On-way notification logged successfully.',
+            'message' => 'On-way notification sent successfully.',
         ]);
     }
 
@@ -64,7 +64,7 @@ class InstructorLessonController extends Controller
         $this->instructorService->notifyStudentArrived($instructor, $lesson);
 
         return response()->json([
-            'message' => 'Arrived notification logged successfully.',
+            'message' => 'Arrived notification sent successfully.',
         ]);
     }
 

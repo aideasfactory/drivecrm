@@ -990,7 +990,10 @@ Returns the authenticated instructor's lessons for a specific date, ordered by s
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Logs that the instructor is on their way to the lesson. Currently writes an activity log entry for the instructor. Push notification to the student will be added in a future release.
+Notifies the student that the instructor is on their way to the lesson. This:
+- Emails the student (`InstructorOnWayNotification`), routed to the learner's email, falling back to the contact email.
+- Queues a push notification — **only** when the student's user account has a registered Expo push token (delivered by the `push:send-queued` scheduler).
+- Writes an activity log entry for the instructor's timeline.
 
 **URL Parameters:**
 
@@ -1003,7 +1006,7 @@ Logs that the instructor is on their way to the lesson. Currently writes an acti
 **Success Response:** `200 OK`
 ```json
 {
-  "message": "On-way notification logged successfully."
+  "message": "On-way notification sent successfully."
 }
 ```
 
@@ -1014,7 +1017,7 @@ Logs that the instructor is on their way to the lesson. Currently writes an acti
 }
 ```
 
-> **Note:** This is a stub endpoint. The activity is logged but no push notification is sent yet. The mobile app should call this endpoint so the integration is ready when push notifications are implemented.
+> **Note:** Push delivery is best-effort — a student with no push token simply receives the email only. Email goes to the learner address (or contact email if the learner has none); if neither exists, only the activity log is written.
 
 ---
 
@@ -1022,7 +1025,10 @@ Logs that the instructor is on their way to the lesson. Currently writes an acti
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Logs that the instructor has arrived at the lesson pickup point. Currently writes an activity log entry for the instructor. Push notification to the student will be added in a future release.
+Notifies the student that the instructor has arrived at the lesson pickup point. This:
+- Emails the student (`InstructorArrivedNotification`), routed to the learner's email, falling back to the contact email.
+- Queues a push notification — **only** when the student's user account has a registered Expo push token (delivered by the `push:send-queued` scheduler).
+- Writes an activity log entry for the instructor's timeline.
 
 **URL Parameters:**
 
@@ -1035,7 +1041,7 @@ Logs that the instructor has arrived at the lesson pickup point. Currently write
 **Success Response:** `200 OK`
 ```json
 {
-  "message": "Arrived notification logged successfully."
+  "message": "Arrived notification sent successfully."
 }
 ```
 
@@ -1046,7 +1052,7 @@ Logs that the instructor has arrived at the lesson pickup point. Currently write
 }
 ```
 
-> **Note:** This is a stub endpoint. The activity is logged but no push notification is sent yet. The mobile app should call this endpoint so the integration is ready when push notifications are implemented.
+> **Note:** Push delivery is best-effort — a student with no push token simply receives the email only. Email goes to the learner address (or contact email if the learner has none); if neither exists, only the activity log is written.
 
 ---
 
@@ -5686,6 +5692,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-06-26 | `DELETE /api/v1/instructor/calendar/items/{calendarItem}` now **cancels bookings** instead of blocking them. When the target slot has a lesson attached (draft/reserved/booked), the request must include a `reason` and `scope` (`single` = this lesson, `future` = this + all future un-signed-off lessons in the booking). Cancelled lessons are kept for history (`status = cancelled`), their diary slots/travel blocks are freed, future weekly invoices stop, and the student is emailed. Paid lessons trigger a Head Office refund-required email (no automatic Stripe refund). Response adds `cancelled_count` + `refund_required_count`. Availability-slot deletes are unchanged. Mirrored on the web `DELETE /instructors/{instructor}/calendar/items/{calendarItem}`. Reuses `InstructorService::cancelBooking` + `CancelBookingAction`. | Instructor Calendar (destroy) |
 | 2026-06-26 | `GET /api/v1/students/{student}/lessons` now accepts `include_drafts` (boolean, default `false`). When `true`, **draft** (upfront booking awaiting payment) lessons are included — returned with `status: "draft"` and a new `card_status` value `draft`. Off by default so student-facing views are unaffected; the instructor's pupil Lessons tab passes it so pending bookings are visible. Draft lessons never consume the `current` card slot. Same draft concept as the calendar endpoints (`status: "draft"`, `is_paid: false`). | Student Lessons (index) |
 | 2026-06-26 | **Cancelled lessons are now excluded from the student lessons endpoints** — `GET /api/v1/students/{student}/lessons` (index) never lists `cancelled` lessons, and `GET /api/v1/students/{student}/lessons/{lesson}` (show) returns `404` for a cancelled lesson. A cancelled lesson has had its diary slot freed, so it must never surface in any lesson view (mirrors the admin diary and the instructor day view). The `status` filter value `cancelled` therefore returns an empty list. | Student Lessons (index, show) |
+| 2026-06-27 | **On-way / arrived notifications now actually notify the student** (previously activity-log stubs). Both endpoints email the student (`InstructorOnWayNotification` / `InstructorArrivedNotification`, routed to learner email, falling back to contact email) and queue a push notification — only when the student's user account has a registered Expo push token, delivered by the `push:send-queued` scheduler. The instructor activity log is still written. Success messages changed from "...logged successfully." to "...sent successfully." | Instructor (notify-on-way, notify-arrived) |
 
 ---
 
