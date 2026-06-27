@@ -107,7 +107,11 @@ class CreateOrderFromApiAction
                 if ($paymentMode === PaymentMode::WEEKLY) {
                     LessonPayment::create([
                         'lesson_id' => $lesson->id,
-                        'amount_pence' => $lesson->amount_pence,
+                        // Each weekly payment carries its share of the booking +
+                        // digital fees (the order total spread evenly), matching
+                        // the weekly figure shown at checkout — not just the base
+                        // lesson price.
+                        'amount_pence' => LessonPayment::weeklyAmountForIndex($order->total_price_pence, $package->lessons_count, $i),
                         'status' => PaymentStatus::DUE,
                         'due_date' => $scheduledDate->copy()->subHours(24),
                     ]);

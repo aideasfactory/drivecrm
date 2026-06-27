@@ -70,4 +70,25 @@ class LessonPayment extends Model
     {
         return '£'.number_format($this->amount_pence / 100, 2);
     }
+
+    /**
+     * Calculate a single weekly payment amount (in pence) for the lesson at the
+     * given index, spreading the order total — base lesson cost plus booking and
+     * digital fees — evenly across every lesson. Any rounding remainder lands on
+     * the final payment so the sum of all payments equals the order total exactly.
+     */
+    public static function weeklyAmountForIndex(int $orderTotalPence, int $lessonsCount, int $index): int
+    {
+        if ($lessonsCount < 1) {
+            return 0;
+        }
+
+        $perPaymentPence = (int) round($orderTotalPence / $lessonsCount);
+
+        if ($index >= $lessonsCount - 1) {
+            return $orderTotalPence - ($perPaymentPence * ($lessonsCount - 1));
+        }
+
+        return $perPaymentPence;
+    }
 }

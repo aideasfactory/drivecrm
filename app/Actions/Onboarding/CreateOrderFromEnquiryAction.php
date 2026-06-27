@@ -321,13 +321,18 @@ class CreateOrderFromEnquiryAction
     protected function createLessonPayments(Order $order): void
     {
         $lessons = $order->lessons()->orderBy('date')->get();
+        $lessonsCount = $lessons->count();
 
-        foreach ($lessons as $lesson) {
+        foreach ($lessons->values() as $index => $lesson) {
             $lessonDate = Carbon::parse($lesson->date);
 
             LessonPayment::create([
                 'lesson_id' => $lesson->id,
-                'amount_pence' => $lesson->amount_pence,
+                // Each weekly payment includes its share of the booking + digital
+                // fees (the order total spread evenly), matching the per-week
+                // figure the student agreed to at checkout — not just the base
+                // lesson price.
+                'amount_pence' => LessonPayment::weeklyAmountForIndex($order->total_price_pence, $lessonsCount, $index),
                 'status' => PaymentStatus::DUE,
                 'due_date' => $lessonDate->copy()->subHours(24), // Due 24h before lesson
             ]);
