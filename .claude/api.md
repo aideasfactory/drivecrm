@@ -59,6 +59,7 @@
     - [Pickup Points (Set Default)](#patch-apiv1studentsstudentpickup-pointspickuppointdefault)
     - [Orders](#post-apiv1studentsstudentorders)
   - [Resources](#get-apiv1resources)
+    - [Instructor Resource Tree](#get-apiv1instructorresources)
     - [Resource Detail](#get-apiv1resourcesresource)
   - [Messages](#messages)
     - [Conversations List](#get-apiv1messagesconversations)
@@ -4494,6 +4495,88 @@ Returns published learning resources, optionally filtered by audience. Resources
 
 ---
 
+#### `GET /api/v1/instructor/resources`
+
+**Auth required:** Yes (Bearer token — instructor)
+
+Returns the resource library as a nested folder tree (folders → child folders → resources), mirroring `GET /api/v1/student/resources` **but not scoped to `audience = 'student'`**. By default both student and instructor resources are returned so the instructor app's audience pills keep working client-side, alongside the folder/sub-folder category filter. Pass the optional `audience` param to narrow server-side.
+
+Differences from `/student/resources`:
+- **Not audience-filtered by default** — returns both audiences.
+- Every resource keeps its `audience` field (a shared folder can mix student/instructor resources and the app can still filter correctly).
+- **No `my_resources` array** and **no `is_watched` / `is_suggested` flags** (those are student-scoped concepts).
+- Each resource carries the full field set (`video_url`, `file_path`, `file_name`, `file_size`, `mime_type`, etc.) — same shape as `GET /api/v1/resources`.
+
+**Query Parameters:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `audience` | string | No | `student` → only student resources. `instructor` → only instructor resources. Omit to return both. |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "folders": [
+      {
+        "id": 1,
+        "name": "Learn to Drive",
+        "slug": "learn-to-drive",
+        "children": [
+          {
+            "id": 3,
+            "name": "Moving Off & Stopping",
+            "slug": "moving-off-stopping",
+            "resources": [
+              {
+                "id": 2,
+                "title": "Moving Off & Stopping - Introduction",
+                "description": "In this video, we introduce the topic.",
+                "tags": ["moving off", "stopping"],
+                "audience": "student",
+                "resource_type": "video_link",
+                "video_url": "https://www.youtube.com/watch?v=example",
+                "file_path": null,
+                "file_name": null,
+                "file_size": null,
+                "mime_type": null,
+                "thumbnail_url": null
+              }
+            ],
+            "children": []
+          }
+        ],
+        "resources": []
+      }
+    ]
+  }
+}
+```
+
+**Folder Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Folder ID |
+| `name` | string | Folder name |
+| `slug` | string | URL-friendly slug |
+| `children` | array | Nested child folders (same shape). `[]` when none. |
+| `resources` | array | Published resources directly in this folder. `[]` when none. |
+
+**Resource Object Fields (within folders):** same as `GET /api/v1/resources` — `id`, `title`, `description`, `tags`, `audience`, `resource_type`, `video_url`, `file_path`, `file_name`, `file_size`, `mime_type`, `thumbnail_url`.
+
+**Validation Errors:** `422 Unprocessable Entity`
+- `audience` must be `student` or `instructor` if provided.
+
+> **Notes:**
+> - Only published resources are returned.
+> - **Empty folders are pruned**: child folders with no resources (after the optional audience filter) are dropped, and top-level folders left with neither their own resources nor any non-empty children are omitted — so the app never renders empty category pills.
+> - `video_url` / `file_path` are included here, but use `GET /api/v1/resources/{resource}` to get a freshly signed S3 URL when opening a file resource.
+
+---
+
 #### `GET /api/v1/resources/{resource}`
 
 **Auth required:** Yes (Bearer token — any authenticated user)
@@ -5693,6 +5776,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-06-26 | `GET /api/v1/students/{student}/lessons` now accepts `include_drafts` (boolean, default `false`). When `true`, **draft** (upfront booking awaiting payment) lessons are included — returned with `status: "draft"` and a new `card_status` value `draft`. Off by default so student-facing views are unaffected; the instructor's pupil Lessons tab passes it so pending bookings are visible. Draft lessons never consume the `current` card slot. Same draft concept as the calendar endpoints (`status: "draft"`, `is_paid: false`). | Student Lessons (index) |
 | 2026-06-26 | **Cancelled lessons are now excluded from the student lessons endpoints** — `GET /api/v1/students/{student}/lessons` (index) never lists `cancelled` lessons, and `GET /api/v1/students/{student}/lessons/{lesson}` (show) returns `404` for a cancelled lesson. A cancelled lesson has had its diary slot freed, so it must never surface in any lesson view (mirrors the admin diary and the instructor day view). The `status` filter value `cancelled` therefore returns an empty list. | Student Lessons (index, show) |
 | 2026-06-27 | **On-way / arrived notifications now actually notify the student** (previously activity-log stubs). Both endpoints email the student (`InstructorOnWayNotification` / `InstructorArrivedNotification`, routed to learner email, falling back to contact email) and queue a push notification — only when the student's user account has a registered Expo push token, delivered by the `push:send-queued` scheduler. The instructor activity log is still written. Success messages changed from "...logged successfully." to "...sent successfully." | Instructor (notify-on-way, notify-arrived) |
+| 2026-06-30 | Added `GET /api/v1/instructor/resources` — instructor-accessible nested folder tree (folders → child folders → resources), mirroring `/student/resources` but **not** scoped to `audience = 'student'`. Returns both audiences by default (optional `?audience=student\|instructor` to narrow); each resource keeps its `audience` plus the full `ResourceResource` field set. No `my_resources`, no `is_watched` / `is_suggested` flags. Empty folders are pruned. Reuses a new `GetInstructorResourceFolderTreeAction` + `InstructorResourceFolderTreeResource`; cached per-audience and invalidated alongside the student tree. | Instructor Resource Tree (tree) |
 
 ---
 

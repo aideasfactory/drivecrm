@@ -93,6 +93,8 @@ Route::prefix('v1')->group(function (): void {
 
             Route::get('vehicles', [InstructorVehicleController::class, 'index']);
 
+            Route::get('resources', [ResourceController::class, 'tree']);
+
             Route::get('students/{student}/progress', [InstructorStudentProgressController::class, 'show']);
             Route::post('students/{student}/progress', [InstructorStudentProgressController::class, 'update']);
         });

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Actions\Resource\GetInstructorResourceFolderTreeAction;
 use App\Actions\Resource\GetPublishedResourcesAction;
 use App\Actions\Resource\GetResourceFolderTreeAction;
 use App\Actions\Resource\GetResourceSummaryAction;
@@ -28,6 +29,7 @@ class ResourceApiService extends BaseService
         protected GetPublishedResourcesAction $getPublishedResources,
         protected AssignResourcesToLessonAction $assignResources,
         protected GetResourceFolderTreeAction $getResourceFolderTree,
+        protected GetInstructorResourceFolderTreeAction $getInstructorResourceFolderTree,
         protected GetResourceSummaryAction $getResourceSummary,
         protected GetStudentSuggestedResourceIdsAction $getSuggestedResourceIds,
         protected GetUserWatchedResourceIdsAction $getWatchedResourceIds,
@@ -54,6 +56,23 @@ class ResourceApiService extends BaseService
     public function getResourceFolderTree(): EloquentCollection
     {
         return $this->remember('resources:folder_tree', fn () => ($this->getResourceFolderTree)());
+    }
+
+    /**
+     * Get the instructor folder tree with published resources, optionally filtered by audience.
+     *
+     * Not hard-filtered to students: returns both audiences by default so the instructor
+     * app can filter client-side, with an optional audience to narrow server-side.
+     *
+     * @return EloquentCollection<int, ResourceFolder>
+     */
+    public function getInstructorResourceFolderTree(?ResourceAudience $audience = null): EloquentCollection
+    {
+        $key = $audience !== null
+            ? 'resources:instructor_folder_tree:'.$audience->value
+            : 'resources:instructor_folder_tree';
+
+        return $this->remember($key, fn () => ($this->getInstructorResourceFolderTree)($audience));
     }
 
     /**
@@ -200,6 +219,9 @@ class ResourceApiService extends BaseService
             'resources:folder_tree',
             'resources:folder_tree:'.ResourceAudience::STUDENT->value,
             'resources:folder_tree:'.ResourceAudience::INSTRUCTOR->value,
+            'resources:instructor_folder_tree',
+            'resources:instructor_folder_tree:'.ResourceAudience::STUDENT->value,
+            'resources:instructor_folder_tree:'.ResourceAudience::INSTRUCTOR->value,
             $this->cacheKey('student', $student->id, 'suggested_resource_ids'),
             $this->cacheKey('student', $student->id, 'my_resources'),
         ]);

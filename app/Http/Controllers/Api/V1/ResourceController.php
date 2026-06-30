@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\ResourceAudience;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\V1\InstructorResourceFolderTreeResource;
 use App\Http\Resources\V1\ResourceDetailResource;
 use App\Http\Resources\V1\ResourceResource;
 use App\Services\ResourceApiService;
@@ -40,6 +41,37 @@ class ResourceController extends Controller
         $resources = $this->resourceService->getPublishedResources($audience);
 
         return ResourceResource::collection($resources);
+    }
+
+    /**
+     * Return the folder tree with published resources nested inside, for the instructor app.
+     *
+     * Same folders → children → resources structure as the student tree, but not scoped to
+     * `audience = 'student'`: both audiences are returned by default (each resource keeps its
+     * `audience`), with an optional audience to narrow server-side. Empty folders are pruned.
+     *
+     * Query params:
+     * - audience=student    → only student resources
+     * - audience=instructor → only instructor resources
+     * - (omitted)           → both
+     */
+    public function tree(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'audience' => ['nullable', 'string', 'in:student,instructor'],
+        ]);
+
+        $audience = isset($validated['audience'])
+            ? ResourceAudience::from($validated['audience'])
+            : null;
+
+        $folders = $this->resourceService->getInstructorResourceFolderTree($audience);
+
+        return response()->json([
+            'data' => [
+                'folders' => InstructorResourceFolderTreeResource::collection($folders),
+            ],
+        ]);
     }
 
     /**
