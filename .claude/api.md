@@ -45,6 +45,8 @@
   - [Students](#students)
     - [Attach to Instructor](#post-apiv1studentsattach)
     - [CRUD](#post-apiv1students)
+    - [Profile Picture (Upload)](#post-apiv1studentsstudentprofile-picture)
+    - [Profile Picture (Delete)](#delete-apiv1studentsstudentprofile-picture)
     - [Resend Invite](#post-apiv1studentsstudentresend-invite)
     - [Lessons](#get-apiv1studentsstudentlessons)
     - [Lesson Detail](#get-apiv1studentsstudentlessonslesson)
@@ -3164,6 +3166,104 @@ Removes a student from their assigned instructor. This is a **soft remove** — 
 
 ---
 
+#### `POST /api/v1/students/{student}/profile-picture`
+
+**Auth required:** Yes (Bearer token — the student themselves, or their assigned instructor)
+
+Upload or replace a student's profile picture. Uses `multipart/form-data` encoding. Access is controlled by the student `update` policy: the request is allowed when the authenticated user **is** that student, or is the instructor the student is assigned to. In the student mobile app, pass the student's own record ID (the `id` on the `profile` object returned at login / `GET /api/v1/auth/user`).
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+
+**Request Body (multipart/form-data):**
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `profile_picture` | file | Yes | Image file. Accepted formats: `jpg`, `jpeg`, `png`, `webp`. Max size: 5 MB. |
+
+**Example (cURL):**
+```bash
+curl -X POST https://drivecrm.test/api/v1/students/1/profile-picture \
+  -H "Accept: application/json" \
+  -H "Authorization: Bearer 1|abc123..." \
+  -F "profile_picture=@/path/to/photo.jpg"
+```
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 1,
+    "first_name": "Jane",
+    "surname": "Doe",
+    "email": "jane@example.com",
+    "phone": "07700900000",
+    "status": "active",
+    "has_app": true,
+    "app_last_active_at": "2026-06-30T09:55:00+00:00",
+    "profile_picture_url": "https://drivecrm.test/storage/students/1/profile/abc123.png",
+    "updated_at": "2026-07-01T10:00:00+00:00"
+  }
+}
+```
+
+**Error Response (validation):** `422 Unprocessable Entity`
+```json
+{
+  "message": "The profile picture field must be an image.",
+  "errors": {
+    "profile_picture": [
+      "The profile picture field must be an image."
+    ]
+  }
+}
+```
+
+**Error Response (not authorised):** `403 Forbidden`
+
+> **Note:** These are **public** images. If a profile picture already exists, it is replaced and the old file is deleted from storage. Read the current avatar from the `profile_picture_url` field on the student profile object (returned at login, `GET /api/v1/auth/user`, and every student-returning endpoint); `null` means no picture is set.
+
+---
+
+#### `DELETE /api/v1/students/{student}/profile-picture`
+
+**Auth required:** Yes (Bearer token — the student themselves, or their assigned instructor)
+
+Delete a student's profile picture. Same authorisation rules as the upload endpoint.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 1,
+    "first_name": "Jane",
+    "surname": "Doe",
+    "email": "jane@example.com",
+    "phone": "07700900000",
+    "status": "active",
+    "has_app": true,
+    "app_last_active_at": "2026-06-30T09:55:00+00:00",
+    "profile_picture_url": null,
+    "updated_at": "2026-07-01T10:00:00+00:00"
+  }
+}
+```
+
+**Error Response (not authorised):** `403 Forbidden`
+
+---
+
 #### `POST /api/v1/students/{student}/resend-invite`
 
 **Auth required:** Yes (Bearer token — the student's assigned instructor)
@@ -5777,6 +5877,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-06-26 | **Cancelled lessons are now excluded from the student lessons endpoints** — `GET /api/v1/students/{student}/lessons` (index) never lists `cancelled` lessons, and `GET /api/v1/students/{student}/lessons/{lesson}` (show) returns `404` for a cancelled lesson. A cancelled lesson has had its diary slot freed, so it must never surface in any lesson view (mirrors the admin diary and the instructor day view). The `status` filter value `cancelled` therefore returns an empty list. | Student Lessons (index, show) |
 | 2026-06-27 | **On-way / arrived notifications now actually notify the student** (previously activity-log stubs). Both endpoints email the student (`InstructorOnWayNotification` / `InstructorArrivedNotification`, routed to learner email, falling back to contact email) and queue a push notification — only when the student's user account has a registered Expo push token, delivered by the `push:send-queued` scheduler. The instructor activity log is still written. Success messages changed from "...logged successfully." to "...sent successfully." | Instructor (notify-on-way, notify-arrived) |
 | 2026-06-30 | Added `GET /api/v1/instructor/resources` — instructor-accessible nested folder tree (folders → child folders → resources), mirroring `/student/resources` but **not** scoped to `audience = 'student'`. Returns both audiences by default (optional `?audience=student\|instructor` to narrow); each resource keeps its `audience` plus the full `ResourceResource` field set. No `my_resources`, no `is_watched` / `is_suggested` flags. Empty folders are pruned. Reuses a new `GetInstructorResourceFolderTreeAction` + `InstructorResourceFolderTreeResource`; cached per-audience and invalidated alongside the student tree. | Instructor Resource Tree (tree) |
+| 2026-07-01 | Documented the existing `POST` / `DELETE /api/v1/students/{student}/profile-picture` endpoints (upload/replace and remove a student avatar). `multipart/form-data`, field `profile_picture` (image; `jpg,jpeg,png,webp`; max 5 MB); public images stored on S3 with the old file deleted on replace. Authorised via the student `update` policy — allowed when the authenticated user **is** that student or is their assigned instructor, so students can self-serve their own avatar in the student app. Both return the full `StudentResource` (`profile_picture_url` reflects the change). Mirrors the instructor `POST`/`DELETE /instructor/profile/picture` pattern. | Students (profile-picture) |
 
 ---
 
