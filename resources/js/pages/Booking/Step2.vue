@@ -237,6 +237,7 @@ import { Button } from '@/components/ui/button'
 import { Toaster, toast } from '@/components/ui/toast'
 import AppLogoIcon from '@/components/AppLogoIcon.vue'
 import CookiePreferencesLink from '@/components/CookiePreferencesLink.vue'
+import { pushDataLayerEvent } from '@/lib/gtm'
 import { step1 } from '@/routes/booking'
 import {
   Phone,
@@ -322,9 +323,6 @@ const copyLink = async () => {
 // GTM conversion trigger: fires on the /booking/{uuid}/success page.
 // Custom-event triggers are more reliable than URL triggers in an Inertia SPA.
 onMounted(() => {
-  ;(window as any).dataLayer?.push({
-    event: 'booking_enquiry_submitted',
-    in_area: props.inArea,
-  })
+  pushDataLayerEvent('booking_enquiry_submitted', { in_area: props.inArea })
 })
 </script>
