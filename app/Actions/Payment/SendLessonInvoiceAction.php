@@ -44,8 +44,13 @@ class SendLessonInvoiceAction
             return ['success' => false, 'error' => 'Student has no Stripe customer ID'];
         }
 
-        // Create Stripe invoice using LessonPayment amount (cast to int)
-        $result = $this->stripeService->createInvoice($lesson, $user, (int) $lessonPayment->amount_pence, $lessonPayment->id);
+        $amountPence = (int) $lessonPayment->amount_pence;
+        $breakdown = LessonPayment::weeklyBreakdown($order, $amountPence);
+
+        // Create Stripe invoice using LessonPayment amount and the breakdown
+        // so the hosted invoice itemises lesson cost, booking fee and digital
+        // fee separately.
+        $result = $this->stripeService->createInvoice($lesson, $user, $amountPence, $lessonPayment->id, $breakdown);
 
         if (! $result['success']) {
             Log::error('Failed to create Stripe invoice for lesson', [
@@ -63,7 +68,7 @@ class SendLessonInvoiceAction
         ]);
 
         // Send payment reminder notification
-        $this->sendReminderNotification($lessonPayment, $student, $result['hosted_invoice_url']);
+        $this->sendReminderNotification($lessonPayment, $student, $result['hosted_invoice_url'], $breakdown);
 
         Log::info('Lesson invoice sent successfully', [
             'lesson_payment_id' => $lessonPayment->id,
@@ -77,8 +82,10 @@ class SendLessonInvoiceAction
 
     /**
      * Send the payment reminder notification email.
+     *
+     * @param  array{lesson: int, booking_fee: int, digital_fee: int}|null  $breakdown
      */
-    protected function sendReminderNotification(LessonPayment $lessonPayment, Student $student, string $hostedInvoiceUrl): void
+    protected function sendReminderNotification(LessonPayment $lessonPayment, Student $student, string $hostedInvoiceUrl, ?array $breakdown = null): void
     {
         try {
             $isBookedByContact = ! $student->owns_account;
@@ -101,7 +108,7 @@ class SendLessonInvoiceAction
             }
 
             Notification::route('mail', $recipientEmail)
-                ->notify(new LessonPaymentReminderNotification($lessonPayment, $student, $hostedInvoiceUrl, $isBookedByContact));
+                ->notify(new LessonPaymentReminderNotification($lessonPayment, $student, $hostedInvoiceUrl, $isBookedByContact, $breakdown));
 
             $lessonDate = $lessonPayment->lesson?->date?->format('d M Y') ?? 'N/A';
 
