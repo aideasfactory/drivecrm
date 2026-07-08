@@ -8,26 +8,20 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/sonner'
 import {
     Activity,
-    Search,
-    Loader2,
-    StickyNote,
-    Mail,
-    Bell,
-    MessageSquare,
-    CalendarCheck,
-    CreditCard,
-    UserCog,
-    Filter,
     ExternalLink,
+    Filter,
+    Loader2,
+    Search,
 } from 'lucide-vue-next'
-
-interface ActivityLog {
-    id: number
-    category: string
-    message: string
-    metadata: Record<string, unknown> | null
-    created_at: string
-}
+import {
+    iconForCategory,
+    labelForCategory,
+    relativeTime,
+    toFriendlyNotification,
+    toneBadgeVariant,
+    toneContainerClasses,
+    type ActivityLogItem,
+} from '@/lib/notifications'
 
 interface PaginationMeta {
     current_page: number
@@ -42,7 +36,7 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const logs = ref<ActivityLog[]>([])
+const logs = ref<ActivityLogItem[]>([])
 const meta = ref<PaginationMeta | null>(null)
 const loading = ref(true)
 const isLoadingMore = ref(false)
@@ -50,55 +44,28 @@ const searchQuery = ref('')
 const activeCategory = ref('all')
 let searchTimeout: ReturnType<typeof setTimeout> | null = null
 
-const categories: { key: string; label: string }[] = [
-    { key: 'all', label: 'All' },
-    { key: 'profile', label: 'Profile' },
-    { key: 'note', label: 'Notes' },
-    { key: 'notification', label: 'Notifications' },
-    { key: 'message', label: 'Messages' },
-    { key: 'booking', label: 'Bookings' },
-    { key: 'payment', label: 'Payments' },
-]
+const categories = [
+    'all',
+    'notification',
+    'lesson',
+    'booking',
+    'payment',
+    'message',
+    'note',
+    'profile',
+] as const
+
+const decoratedLogs = computed(() =>
+    logs.value.map((item) => ({
+        item,
+        friendly: toFriendlyNotification(item),
+    })),
+)
 
 const hasMorePages = computed(() => {
     if (!meta.value) return false
     return meta.value.current_page < meta.value.last_page
 })
-
-const categoryIcon = (category: string) => {
-    switch (category) {
-        case 'note': return StickyNote
-        case 'notification': return Bell
-        case 'message': return MessageSquare
-        case 'booking': return CalendarCheck
-        case 'payment': return CreditCard
-        case 'profile': return UserCog
-        default: return Activity
-    }
-}
-
-const categoryVariant = (category: string): 'default' | 'secondary' | 'outline' | 'destructive' => {
-    switch (category) {
-        case 'notification': return 'default'
-        case 'payment': return 'destructive'
-        default: return 'secondary'
-    }
-}
-
-const formatDate = (dateString: string): string => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-    const time = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-
-    if (diffDays === 0) return `Today at ${time}`
-    if (diffDays === 1) return `Yesterday at ${time}`
-    if (diffDays < 7) return `${date.toLocaleDateString('en-GB', { weekday: 'long' })} at ${time}`
-
-    return `${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} at ${time}`
-}
 
 const loadLogs = async (page = 1, append = false) => {
     if (page === 1) {
@@ -161,26 +128,24 @@ onMounted(() => {
     <div class="flex flex-col gap-6">
         <!-- Filters Row -->
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <!-- Category Filters -->
             <div class="flex flex-wrap gap-1">
                 <Button
                     v-for="cat in categories"
-                    :key="cat.key"
-                    :variant="activeCategory === cat.key ? 'default' : 'outline'"
+                    :key="cat"
+                    :variant="activeCategory === cat ? 'default' : 'outline'"
                     size="sm"
-                    @click="setCategory(cat.key)"
+                    @click="setCategory(cat)"
                 >
-                    <Filter v-if="cat.key === 'all'" class="mr-1.5 h-3.5 w-3.5" />
+                    <Filter v-if="cat === 'all'" class="mr-1.5 h-3.5 w-3.5" />
                     <component
                         v-else
-                        :is="categoryIcon(cat.key)"
+                        :is="iconForCategory(cat)"
                         class="mr-1.5 h-3.5 w-3.5"
                     />
-                    {{ cat.label }}
+                    {{ cat === 'all' ? 'All' : labelForCategory(cat) }}
                 </Button>
             </div>
 
-            <!-- Search -->
             <div class="relative w-full sm:w-64">
                 <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -221,33 +186,43 @@ onMounted(() => {
 
         <!-- Activity Timeline -->
         <div v-else class="relative space-y-0">
-            <!-- Timeline line -->
             <div class="absolute left-5 top-0 bottom-0 w-px bg-border" />
 
             <div
-                v-for="log in logs"
-                :key="log.id"
+                v-for="entry in decoratedLogs"
+                :key="entry.item.id"
                 class="relative flex gap-4 py-3"
             >
-                <!-- Timeline dot with icon -->
-                <div class="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-background">
-                    <component
-                        :is="categoryIcon(log.category)"
-                        class="h-4 w-4 text-muted-foreground"
-                    />
+                <!-- Tone-coloured icon -->
+                <div
+                    :class="[
+                        'relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full ring-4 ring-background',
+                        toneContainerClasses(entry.friendly.tone),
+                    ]"
+                >
+                    <component :is="entry.friendly.icon" class="h-4 w-4" />
                 </div>
 
                 <!-- Content -->
                 <div class="flex flex-1 flex-col gap-1 pt-1">
                     <div class="flex flex-wrap items-center gap-2">
-                        <p class="text-sm">{{ log.message }}</p>
-                        <Badge :variant="categoryVariant(log.category)" class="text-xs">
-                            {{ log.category }}
+                        <p class="text-sm font-medium">{{ entry.friendly.title }}</p>
+                        <Badge
+                            :variant="toneBadgeVariant(entry.friendly.tone)"
+                            class="text-xs"
+                        >
+                            {{ labelForCategory(entry.item.category) }}
                         </Badge>
                     </div>
+                    <p
+                        v-if="entry.friendly.summary"
+                        class="text-sm text-muted-foreground"
+                    >
+                        {{ entry.friendly.summary }}
+                    </p>
                     <a
-                        v-if="log.metadata?.invoice_url"
-                        :href="log.metadata.invoice_url as string"
+                        v-if="entry.item.metadata?.invoice_url"
+                        :href="String(entry.item.metadata.invoice_url)"
                         target="_blank"
                         rel="noopener noreferrer"
                         class="inline-flex items-center gap-1 text-xs text-primary hover:underline"
@@ -256,7 +231,7 @@ onMounted(() => {
                         View Invoice
                     </a>
                     <p class="text-xs text-muted-foreground">
-                        {{ formatDate(log.created_at) }}
+                        {{ relativeTime(entry.item.created_at) }}
                     </p>
                 </div>
             </div>

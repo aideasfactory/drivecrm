@@ -11,6 +11,7 @@ import type { InstructorDetail } from '@/types/instructor'
 import { stripeStatus, startStripeOnboarding, refreshStripeOnboarding } from '@/actions/App/Http/Controllers/InstructorController'
 import { logout } from '@/routes'
 import { useRole } from '@/composables/useRole'
+import NotificationBell from '@/components/NotificationBell.vue'
 
 interface Props {
     instructor: InstructorDetail
@@ -185,6 +186,9 @@ onMounted(() => {
 
             <!-- Action Buttons -->
             <div class="flex items-center gap-2">
+                <!-- Notification bell (top corner) -->
+                <NotificationBell />
+
                 <!-- Stripe Connection Status & Button -->
                 <div v-if="!checkingStatus" class="flex items-center gap-2">
                     <!-- Fully Connected — visual label only -->
