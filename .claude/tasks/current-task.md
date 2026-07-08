@@ -1,121 +1,170 @@
-# Task: Show lesson cost in signed-off lesson summary
+# Task: Drive onboarding & booking form — remove cookie banner + capture Google Ads gclid
 
 ## Overview
 
-When an instructor signs off a student's lesson, the lesson is marked complete
-and a summary becomes viewable. Currently the summary view shows the lesson
-date, time, and the instructor's written summary — but not the lesson cost.
-This task adds the lesson cost (formatted as GBP) to every place a signed-off
-lesson summary is shown.
+Two small marketing-flow changes to the public `/onboarding` and `/booking`
+flows:
+
+1. **Remove the cookie banner completely.** The vanilla-cookieconsent bar,
+   the "Cookie preferences" links in the page footers, and every piece of
+   consent-gating in the code (Google Maps, GTM Consent Mode default-deny)
+   go away.
+2. **Capture `gclid` from Google Ads landing URLs** and forward the value to
+   third parties as a `source` parameter labelled `Google ads`.
+
+The client has decided to run without a consent banner (their legal team's
+call). GTM, GA4, and Google Ads tags will simply fire when the booking /
+onboarding pages load, so we can drop the Consent Mode default-deny block
+too.
 
 ## Locations identified
 
-1. **Primary — "View Summary" Dialog** (`LessonsSubTab.vue`)
-   - Button: `View Summary` appears for `status === 'completed' && summary` lessons.
-   - Dialog opens via `openViewSummary(lesson)` and shows date, time and summary text.
-   - `lesson.amount_pence` is already in the data model — only the UI needs updating.
+**Cookie banner:**
+- `resources/js/app.ts` — `initCookieConsent()` call on app boot.
+- `resources/js/lib/cookieConsent.ts` — the whole init + preferences module.
+- `resources/js/lib/cookieConsent.css` — companion stylesheet.
+- `resources/js/components/CookiePreferencesLink.vue` — the reusable link.
+- `resources/js/pages/Booking/Step1.vue` — mounts `<CookiePreferencesLink />`.
+- `resources/js/pages/Booking/Step2.vue` — mounts it in both branches.
+- `resources/js/components/Onboarding/OnboardingFooter.vue` — mounts it in the footer.
+- `resources/js/components/Onboarding/InstructorMap.vue` — gates map init behind functional consent.
+- `resources/views/app.blade.php` — Google Consent Mode default-deny block.
+- `package.json` — `vanilla-cookieconsent` dep.
 
-2. **Secondary — Schedule "Completed lesson view"** (`ScheduleTab.vue`)
-   - When an instructor opens a completed calendar item, a side sheet shows
-     "Lesson Summary" inline. This is the same signed-off summary in a different
-     surface. The user asked for cost to be visible "wherever View summary is
-     shown" — same intent applies here.
-   - The calendar item payload from `GetInstructorCalendarAction` does NOT
-     currently include `amount_pence`, so the backend action + TS interface
-     also need a one-field addition.
+**gclid capture & forward:**
+- `app/Http/Controllers/Booking/BookingController.php` — `/booking` entry point.
+- `app/Http/Controllers/Onboarding/OnboardingController.php` — `/onboarding` entry point.
+- `app/Services/BirdContactService.php` — payload to Bird CRM (third-party sink).
+- `app/Mail/BookingEnquirySubmittedMail.php` + `resources/views/emails/booking-enquiry-submitted.blade.php` — internal notification.
+- `resources/js/pages/Booking/Step2.vue` — GTM `booking_enquiry_submitted` dataLayer push.
 
 ## Phase 1: Planning ✅
 
-### What needs to change
+### Cookie banner removal
 
-**Frontend:**
-- `resources/js/components/Instructors/Tabs/Student/LessonsSubTab.vue`
-  - Render `formatCurrency(viewSummaryTarget.amount_pence)` in the View Summary
-    Dialog as a labelled "Cost" row above the summary body.
-- `resources/js/components/Instructors/Tabs/ScheduleTab.vue`
-  - In the "Completed lesson view" panel, render the lesson cost using the
-    `amount_pence` field that we'll add to `CalendarItemResponse`.
-- `resources/js/types/instructor.ts`
-  - Add `amount_pence?: number | null` to `CalendarItemResponse`.
+- Delete the vanilla-cookieconsent init and its two supporting files
+  (`cookieConsent.ts`, `cookieConsent.css`, `CookiePreferencesLink.vue`).
+- Strip `<CookiePreferencesLink />` from `Booking/Step1.vue`, `Booking/Step2.vue`,
+  and `OnboardingFooter.vue`.
+- Simplify `Onboarding/InstructorMap.vue`: drop the "awaiting consent" state,
+  the `hasFunctionalConsent`/`openCookiePreferences` imports, and the
+  `cc:onConsent`/`cc:onChange` listeners. The map now initialises unconditionally.
+- Remove the Consent Mode default-deny block from `resources/views/app.blade.php`.
+  GTM/GA/Ads tags will fire straight away once the visitor loads a
+  booking/onboarding route.
+- Drop `vanilla-cookieconsent` from `package.json`.
 
-**Backend:**
-- `app/Actions/Instructor/GetInstructorCalendarAction.php`
-  - In the mapped item array (within the `BOOKED || COMPLETED` lesson branch),
-    expose `amount_pence` from `$lesson->amount_pence`.
+### gclid capture
 
-### Why this scope
-
-- `LessonsSubTab.vue` is the page the requirement explicitly references
-  ("click View summary"). Cost is already in the payload — UI-only change.
-- `ScheduleTab.vue` shows the same signed-off summary on a different surface,
-  so the requirement carries over. Backend exposes a single field; no new
-  endpoints, no migrations.
+- On `/booking` and `/onboarding` entry, read `?gclid=` from the query. If
+  present, store `data.tracking = { gclid, source: 'Google ads' }` on the
+  new enquiry.
+- In `BirdContactService::buildPayload()`, read the enquiry's tracking data
+  and, when present, add a `source` attribute (`Google ads`) plus a `gclid`
+  attribute so the ads-source is available in Bird CRM.
+- In the admin email view, add a "Source" row so operators see where the
+  enquiry came from.
+- On `Booking/Step2.vue`, enrich the `booking_enquiry_submitted` dataLayer
+  event with `source` and `gclid` so GTM can forward them to Google Ads
+  conversion / GA4.
 
 ### Out of scope
 
-- Multi-currency formatting (formatter is GBP-only — matches the existing
-  `formatCurrency()` helper in `LessonsSubTab.vue`).
-- VAT or tax breakdown (the lesson cost stored on the lesson is the customer
-  price; payout breakdowns live elsewhere).
-- New permissions / RBAC checks (the user reaching this dialog already passed
-  the instructor scoping middleware).
+- Multi-source attribution (UTM, fbclid, etc.). Ticket is explicit: gclid only.
+- New DB column for the gclid: the enquiry already stores an arbitrary `data`
+  JSON blob; adding a nested `tracking` key is enough and keeps the schema
+  unchanged.
+- Bird CRM cookie policy / consent reconciliation. The client's decision to
+  drop the banner is documented in the client-facing summary; policy sits
+  outside this ticket.
 
 ## Phase 2: Implementation ✅
 
-### Files edited
+### Cookie banner removal
 
-- `resources/js/components/Instructors/Tabs/Student/LessonsSubTab.vue`
-  - Added a "Cost" line inside the `View Summary` Dialog, rendered with the
-    existing `formatCurrency(viewSummaryTarget.amount_pence)` helper.
-- `resources/js/components/Instructors/Tabs/ScheduleTab.vue`
-  - Added a "Cost" line in the "Completed lesson view" panel, rendered with the
-    existing `formatCurrency()` helper, guarded on `amount_pence != null`.
-- `resources/js/types/instructor.ts`
-  - Added `amount_pence: number | null` to `CalendarItemResponse`.
-- `app/Actions/Instructor/GetInstructorCalendarAction.php`
-  - Captured `$lesson->amount_pence` and included it in the mapped item payload
-    so the Schedule view has the value to render.
+- `resources/js/app.ts` — removed the `initCookieConsent` import and boot call.
+- `resources/js/pages/Booking/Step1.vue` — removed `<CookiePreferencesLink />`
+  and its import.
+- `resources/js/pages/Booking/Step2.vue` — removed both mounts and the import.
+- `resources/js/components/Onboarding/OnboardingFooter.vue` — removed the
+  link mount and its import.
+- `resources/js/components/Onboarding/InstructorMap.vue` — removed the
+  "awaiting consent" branch, the `hasFunctionalConsent`/`openCookiePreferences`
+  imports, and the `cc:onConsent`/`cc:onChange` listeners. `onMounted` now
+  calls `initializeMap()` directly.
+- `resources/js/lib/cookieConsent.ts`, `resources/js/lib/cookieConsent.css`,
+  and `resources/js/components/CookiePreferencesLink.vue` — deleted.
+- `resources/views/app.blade.php` — removed the Google Consent Mode
+  default-deny block. GTM / gtag now fire on load for booking/onboarding
+  routes without any consent gate.
+- `package.json` — dropped the `vanilla-cookieconsent` dependency.
+
+### gclid capture + forwarding
+
+- `app/Http/Controllers/Booking/BookingController.php` — on `/booking`, read
+  `?gclid=`, and when present, store
+  `data.tracking = { gclid, source: 'Google ads' }` on the new enquiry.
+- `app/Http/Controllers/Onboarding/OnboardingController.php` — same handling.
+- `app/Models/Enquiry.php` — added a `getTracking()` helper that returns the
+  tracking blob if present.
+- `app/Services/BirdContactService.php` — payload now includes `source`
+  (`Google ads`) and `gclid` attributes when the enquiry has captured
+  tracking data. Falls back to nothing when absent — no behavioural change
+  for organic traffic.
+- `app/Mail/BookingEnquirySubmittedMail.php` + `resources/views/emails/booking-enquiry-submitted.blade.php`
+  — added a "Source" row (with the gclid alongside when it exists) so
+  operators can see the origin at a glance.
+- `resources/js/pages/Booking/Step2.vue` — the `booking_enquiry_submitted`
+  dataLayer event now carries `source` and `gclid` (nullable) so GTM can
+  route the conversion to Google Ads.
 
 ### Key decisions
 
-- **Reused `formatCurrency`** in both files — these are existing local helpers
-  already used elsewhere in the same component for the lessons table and
-  sign-off sheet. Consistency over adding a new shared util.
-- **Labelled "Cost"** rather than "Price" or "Amount" — matches user wording.
-- **Cost row placed at the top of the dialog body**, before the summary text,
-  so it reads naturally with the date/time already in the DialogDescription.
-- **Backend change is one line in one mapper** — no new resource class, no new
-  endpoint. The existing payload shape is the right place to surface this
-  because `summary` already lives on the same response.
-
-### Files created
-- `results.md` — client-facing summary of what was delivered with a confidence
-  score.
+- **Server-side gclid capture, not client-side.** The Google Ads landing URL
+  hits `/booking` or `/onboarding`, both of which already create the enquiry
+  server-side. Reading `?gclid=` there is a two-line change and survives the
+  Inertia redirect. Client-side capture would require reading `window.location`
+  after redirect (the query string is lost by then) and adding a hidden form
+  field for round-tripping. Not worth it.
+- **`data.tracking` JSON, not a new column.** `Enquiry.data` is already JSON
+  and stores step data. Adding `data.tracking` is zero-schema and works with
+  the existing setter helpers.
+- **`source: 'Google ads'` matches the ticket wording** (not "google_ads",
+  not "Google Ads Click"). Human-readable and matches how Bird's UI displays
+  the value.
+- **The GTM Consent Mode default-deny is gone**, not left as a courtesy — the
+  client wants tags firing without a banner. Leaving it in would silently
+  suppress Ads/GA4 tags and make attribution look broken.
 
 ## Phase 3: Reflection ✅
 
 **Why this shape is right for the brief:**
-- The cost is already on `Lesson::amount_pence` and already in the lessons list
-  response. The View Summary dialog was the one surface that omitted it.
-- For the Schedule surface, the smallest change is one field in one mapper +
-  one line in the Vue template. No new model, action, route, or resource.
+- The cookie banner touches ~8 files, all deletions. Zero new abstractions.
+- The gclid capture also uses the existing `data` JSON blob and the existing
+  Bird sync pipeline. No new tables, no new jobs, no new endpoints.
 
 **Operational notes:**
-- No DB migration needed. No API contract change beyond a single optional
-  field on the calendar item payload.
-- No regression risk for callers that don't read `amount_pence` — adding a
-  field to an object payload is backward compatible.
+- No DB migration.
+- No new environment variables.
+- No new Composer / npm packages — we dropped `vanilla-cookieconsent`, added
+  nothing.
+- Existing enquiries without `data.tracking` continue working; Bird payload
+  simply omits `source` for them, matching current behaviour.
 
-**Out of scope, carried forward:**
-- A long-term improvement would be to consolidate the two "completed lesson
-  detail" surfaces (Schedule sheet + Lessons dialog) into a single component
-  that both call sites mount. That's a refactor, not part of this brief.
+**Client-facing impact:**
+- Booking/onboarding pages no longer show a cookie bar or "Cookie preferences"
+  link. GTM / GA4 / Google Ads scripts fire on load.
+- Bird CRM contacts synced from Google-Ads-sourced enquiries will now show
+  `source = "Google ads"` and carry the gclid attribute for downstream
+  audience-building.
+- Admin new-enquiry emails now display the origin source and gclid.
 
-**Technical debt / follow-up not done:**
-- No tests added (project rule: user maintains tests manually).
-- No Pint / Prettier run (project rule: user handles code style).
+**Follow-ups intentionally not done:**
+- No tests added (project rule: user maintains tests).
+- No `npm install` run to prune `vanilla-cookieconsent` from the lockfile —
+  the user will run install as part of their build step.
 
 ---
 
 **Status:** All phases complete.
-**Last Updated:** 2026-06-17.
+**Last Updated:** 2026-07-08.

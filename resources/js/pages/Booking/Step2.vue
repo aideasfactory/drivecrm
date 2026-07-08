@@ -120,9 +120,6 @@
         </CardContent>
       </Card>
 
-      <div class="flex justify-center pt-2">
-        <CookiePreferencesLink />
-      </div>
     </main>
 
     <!-- OUT-OF-AREA: no availability yet -->
@@ -219,9 +216,6 @@
         </CardContent>
       </Card>
 
-      <div class="flex justify-center pt-2">
-        <CookiePreferencesLink />
-      </div>
     </main>
 
     <Toaster />
@@ -236,7 +230,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Toaster, toast } from '@/components/ui/toast'
 import AppLogoIcon from '@/components/AppLogoIcon.vue'
-import CookiePreferencesLink from '@/components/CookiePreferencesLink.vue'
 import { pushDataLayerEvent } from '@/lib/gtm'
 import { step1 } from '@/routes/booking'
 import {
@@ -263,6 +256,8 @@ const props = defineProps<{
   postcode: string | null
   inArea: boolean
   maxStepReached: number
+  source: string | null
+  gclid: string | null
 }>()
 
 const journeySteps = [
@@ -323,6 +318,10 @@ const copyLink = async () => {
 // GTM conversion trigger: fires on the /booking/{uuid}/success page.
 // Custom-event triggers are more reliable than URL triggers in an Inertia SPA.
 onMounted(() => {
-  pushDataLayerEvent('booking_enquiry_submitted', { in_area: props.inArea })
+  pushDataLayerEvent('booking_enquiry_submitted', {
+    in_area: props.inArea,
+    source: props.source,
+    gclid: props.gclid,
+  })
 })
 </script>
