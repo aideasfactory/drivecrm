@@ -1,115 +1,115 @@
-# Task: Show lesson cost in signed-off lesson summary
+# Task: Environment variable to override the MTD digital button on the instructor layout
 
 ## Overview
 
-When an instructor signs off a student's lesson, the lesson is marked complete
-and a summary becomes viewable. Currently the summary view shows the lesson
-date, time, and the instructor's written summary — but not the lesson cost.
-This task adds the lesson cost (formatted as GBP) to every place a signed-off
-lesson summary is shown.
+The instructor layout (`InstructorHeader.vue`) currently exposes two HMRC-related
+buttons — "HMRC Connected" (when linked) and "HMRC / Tax" (when unlinked) — that
+give instructors access to Making Tax Digital (MTD) features (ITSA + VAT).
+
+Requirement: hide these MTD digital buttons by default and add an environment
+variable to override that so a site owner can bring them back without a code
+change.
 
 ## Locations identified
 
-1. **Primary — "View Summary" Dialog** (`LessonsSubTab.vue`)
-   - Button: `View Summary` appears for `status === 'completed' && summary` lessons.
-   - Dialog opens via `openViewSummary(lesson)` and shows date, time and summary text.
-   - `lesson.amount_pence` is already in the data model — only the UI needs updating.
+1. **`resources/js/components/Instructors/InstructorHeader.vue`**
+   - Renders two "MTD digital" buttons: HMRC Connected (line ~217) and
+     HMRC / Tax (line ~227) — both are the surface the user calls the
+     "MTD digital button".
 
-2. **Secondary — Schedule "Completed lesson view"** (`ScheduleTab.vue`)
-   - When an instructor opens a completed calendar item, a side sheet shows
-     "Lesson Summary" inline. This is the same signed-off summary in a different
-     surface. The user asked for cost to be visible "wherever View summary is
-     shown" — same intent applies here.
-   - The calendar item payload from `GetInstructorCalendarAction` does NOT
-     currently include `amount_pence`, so the backend action + TS interface
-     also need a one-field addition.
+2. **`config/hmrc.php`**
+   - Right place for a new `show_mtd_button` config value backed by an env var.
+
+3. **`app/Http/Middleware/HandleInertiaRequests.php`**
+   - Shares props globally with Inertia. Best surface to expose the flag to Vue
+     without wiring it through every controller.
 
 ## Phase 1: Planning ✅
 
 ### What needs to change
 
-**Frontend:**
-- `resources/js/components/Instructors/Tabs/Student/LessonsSubTab.vue`
-  - Render `formatCurrency(viewSummaryTarget.amount_pence)` in the View Summary
-    Dialog as a labelled "Cost" row above the summary body.
-- `resources/js/components/Instructors/Tabs/ScheduleTab.vue`
-  - In the "Completed lesson view" panel, render the lesson cost using the
-    `amount_pence` field that we'll add to `CalendarItemResponse`.
-- `resources/js/types/instructor.ts`
-  - Add `amount_pence?: number | null` to `CalendarItemResponse`.
-
 **Backend:**
-- `app/Actions/Instructor/GetInstructorCalendarAction.php`
-  - In the mapped item array (within the `BOOKED || COMPLETED` lesson branch),
-    expose `amount_pence` from `$lesson->amount_pence`.
+- `config/hmrc.php`
+  - Add `'show_mtd_button' => (bool) env('SHOW_MTD_BUTTON', false)` — defaults
+    to `false` so the button is hidden unless the site operator opts in.
+- `app/Http/Middleware/HandleInertiaRequests.php`
+  - Share the flag as `hmrc.show_mtd_button` so every Inertia page can read it.
+- `.env.example`
+  - Document the new `SHOW_MTD_BUTTON` variable.
+
+**Frontend:**
+- `resources/js/types/globals.d.ts` (or the shared `PageProps` type)
+  - Extend the shared Inertia page props type with `hmrc.show_mtd_button`.
+- `resources/js/components/Instructors/InstructorHeader.vue`
+  - Read `hmrc.show_mtd_button` from `usePage().props`.
+  - Wrap both HMRC buttons in a `v-if` so they only render when the flag is
+    truthy AND the user is an instructor (existing role check).
 
 ### Why this scope
 
-- `LessonsSubTab.vue` is the page the requirement explicitly references
-  ("click View summary"). Cost is already in the payload — UI-only change.
-- `ScheduleTab.vue` shows the same signed-off summary on a different surface,
-  so the requirement carries over. Backend exposes a single field; no new
-  endpoints, no migrations.
+- The requirement is UI-only ("hide the button"). No routes need blocking — the
+  HMRC tab remains reachable by direct URL for admins/owners. This is a display
+  toggle, not a feature disable.
+- Using a config-backed env var (not a raw `env()` call in code) is the Laravel
+  convention and keeps behavior predictable when config is cached.
+- Sharing via `HandleInertiaRequests` keeps the flag globally available without
+  having to touch each controller that renders an instructor page.
 
 ### Out of scope
 
-- Multi-currency formatting (formatter is GBP-only — matches the existing
-  `formatCurrency()` helper in `LessonsSubTab.vue`).
-- VAT or tax breakdown (the lesson cost stored on the lesson is the customer
-  price; payout breakdowns live elsewhere).
-- New permissions / RBAC checks (the user reaching this dialog already passed
-  the instructor scoping middleware).
+- Blocking access to `/hmrc/*` routes (this is a UI hide, not a permission).
+- Changing HMRC connection logic, tokens, or middleware.
+- Hiding the "HMRC" tab pill inside the instructor page — the visible button
+  in the header is the specific surface called out by the requirement.
 
 ## Phase 2: Implementation ✅
 
 ### Files edited
 
-- `resources/js/components/Instructors/Tabs/Student/LessonsSubTab.vue`
-  - Added a "Cost" line inside the `View Summary` Dialog, rendered with the
-    existing `formatCurrency(viewSummaryTarget.amount_pence)` helper.
-- `resources/js/components/Instructors/Tabs/ScheduleTab.vue`
-  - Added a "Cost" line in the "Completed lesson view" panel, rendered with the
-    existing `formatCurrency()` helper, guarded on `amount_pence != null`.
-- `resources/js/types/instructor.ts`
-  - Added `amount_pence: number | null` to `CalendarItemResponse`.
-- `app/Actions/Instructor/GetInstructorCalendarAction.php`
-  - Captured `$lesson->amount_pence` and included it in the mapped item payload
-    so the Schedule view has the value to render.
+- `config/hmrc.php`
+  - Added `show_mtd_button` config key backed by `SHOW_MTD_BUTTON` env var,
+    defaulting to `false`.
+- `app/Http/Middleware/HandleInertiaRequests.php`
+  - Shared `hmrc.show_mtd_button` as a global Inertia prop.
+- `resources/js/components/Instructors/InstructorHeader.vue`
+  - Read the flag from `usePage().props.hmrc?.show_mtd_button` and wrapped both
+    the "HMRC Connected" and "HMRC / Tax" buttons behind it.
+- `resources/js/types/index.d.ts`
+  - Extended `SharedData` with `hmrc: { show_mtd_button: boolean }`.
+- `.env.example`
+  - Added `SHOW_MTD_BUTTON=false` with a short comment.
 
 ### Key decisions
 
-- **Reused `formatCurrency`** in both files — these are existing local helpers
-  already used elsewhere in the same component for the lessons table and
-  sign-off sheet. Consistency over adding a new shared util.
-- **Labelled "Cost"** rather than "Price" or "Amount" — matches user wording.
-- **Cost row placed at the top of the dialog body**, before the summary text,
-  so it reads naturally with the date/time already in the DialogDescription.
-- **Backend change is one line in one mapper** — no new resource class, no new
-  endpoint. The existing payload shape is the right place to surface this
-  because `summary` already lives on the same response.
-
-### Files created
-- `results.md` — client-facing summary of what was delivered with a confidence
-  score.
+- **Default hidden.** The user asked to "hide the MTD digital button" first,
+  then have an env var override — so the safe default is `false`.
+- **Boolean cast in config.** `env()` returns strings for values like "true"
+  in some setups; a `(bool)` cast normalises the flag so the frontend can
+  trust `v-if` semantics.
+- **Shared prop, not per-page.** Sharing through the Inertia middleware means
+  any future instructor page that wants to consult the flag has it for free.
+- **Guarded on both existing conditions.** The buttons still require the
+  `isInstructor` role check that was there before — the new flag is an
+  *additional* gate, not a replacement.
 
 ## Phase 3: Reflection ✅
 
 **Why this shape is right for the brief:**
-- The cost is already on `Lesson::amount_pence` and already in the lessons list
-  response. The View Summary dialog was the one surface that omitted it.
-- For the Schedule surface, the smallest change is one field in one mapper +
-  one line in the Vue template. No new model, action, route, or resource.
+- Single env var toggles the UI. No behavior change beyond visibility.
+- Config-first pattern keeps it cache-safe and testable.
+- No changes to route registration or authorisation.
 
 **Operational notes:**
-- No DB migration needed. No API contract change beyond a single optional
-  field on the calendar item payload.
-- No regression risk for callers that don't read `amount_pence` — adding a
-  field to an object payload is backward compatible.
+- To show the button in an environment, set `SHOW_MTD_BUTTON=true` in `.env`
+  and run `php artisan config:clear` (or `config:cache`) so the new value takes
+  effect.
+- The HMRC tab is still directly linkable by URL — this is a header display
+  toggle only.
 
 **Out of scope, carried forward:**
-- A long-term improvement would be to consolidate the two "completed lesson
-  detail" surfaces (Schedule sheet + Lessons dialog) into a single component
-  that both call sites mount. That's a refactor, not part of this brief.
+- If the product later wants a full "hide all MTD features" mode, the same env
+  var could gate route registration in `routes/web.php`. That's a bigger blast
+  radius and not part of this brief.
 
 **Technical debt / follow-up not done:**
 - No tests added (project rule: user maintains tests manually).
@@ -118,4 +118,4 @@ lesson summary is shown.
 ---
 
 **Status:** All phases complete.
-**Last Updated:** 2026-06-17.
+**Last Updated:** 2026-07-08.

@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Mail, Phone, MapPin, Edit, CreditCard, Loader2, CheckCircle, LogOut, ShieldCheck, Copy } from 'lucide-vue-next'
-import { router } from '@inertiajs/vue3'
+import { router, usePage } from '@inertiajs/vue3'
 import { toast } from '@/components/ui/toast'
 import type { InstructorDetail } from '@/types/instructor'
 import { stripeStatus, startStripeOnboarding, refreshStripeOnboarding } from '@/actions/App/Http/Controllers/InstructorController'
@@ -31,6 +31,11 @@ interface StripeStatus {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 const { isOwner, isInstructor } = useRole()
+
+const page = usePage()
+const showMtdButton = computed<boolean>(
+    () => Boolean((page.props as { hmrc?: { show_mtd_button?: boolean } }).hmrc?.show_mtd_button),
+)
 
 const loading = ref(false)
 const checkingStatus = ref(true)
@@ -214,7 +219,7 @@ onMounted(() => {
 
                 <!-- HMRC Connected Button (instructor only, when token exists) -->
                 <Button
-                    v-if="isInstructor && instructor.hmrc_connected"
+                    v-if="showMtdButton && isInstructor && instructor.hmrc_connected"
                     variant="outline"
                     class="min-w-[180px] border-green-600 text-green-600 py-2.5 hover:bg-green-50 hover:text-green-600 cursor-pointer"
                     @click="router.visit(`/instructors/${instructor.id}`, { data: { tab: 'hmrc' }, preserveScroll: true })"
@@ -225,7 +230,7 @@ onMounted(() => {
 
                 <!-- HMRC / Tax Button (instructor only, when not connected) -->
                 <Button
-                    v-if="isInstructor && !instructor.hmrc_connected"
+                    v-if="showMtdButton && isInstructor && !instructor.hmrc_connected"
                     variant="outline"
                     class="min-w-[180px] py-2.5 cursor-pointer"
                     @click="router.visit(`/instructors/${instructor.id}`, { data: { tab: 'hmrc' }, preserveScroll: true })"

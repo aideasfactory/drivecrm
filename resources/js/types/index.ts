@@ -11,5 +11,8 @@ export type AppPageProps<
     name: string;
     auth: Auth;
     sidebarOpen: boolean;
+    hmrc: {
+        show_mtd_button: boolean;
+    };
     [key: string]: unknown;
 };

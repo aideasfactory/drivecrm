@@ -20,6 +20,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | MTD digital button visibility
+    |--------------------------------------------------------------------------
+    |
+    | Controls the "HMRC / Tax" (and "HMRC Connected") button in the instructor
+    | layout header. Hidden by default; set SHOW_MTD_BUTTON=true in .env to
+    | expose it. Also shared to the frontend via HandleInertiaRequests as
+    | props.hmrc.show_mtd_button.
+    */
+
+    'show_mtd_button' => (bool) env('SHOW_MTD_BUTTON', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | OAuth client credentials
     |--------------------------------------------------------------------------
     */
