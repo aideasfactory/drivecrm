@@ -55,7 +55,9 @@ change.
 - Sharing via `HandleInertiaRequests` keeps the flag globally available without
   having to touch each controller that renders an instructor page.
 
-### Out of scope
+**Created:** 2026-07-08
+**Last Updated:** 2026-07-08
+**Status:** In Progress
 
 - Blocking access to `/hmrc/*` routes (this is a UI hide, not a permission).
 - Changing HMRC connection logic, tokens, or middleware.
@@ -79,7 +81,7 @@ change.
 - `.env.example`
   - Added `SHOW_MTD_BUTTON=false` with a short comment.
 
-### Key decisions
+## 📋 Overview
 
 - **Default hidden.** The user asked to "hide the MTD digital button" first,
   then have an env var override — so the safe default is `false`.
@@ -92,7 +94,32 @@ change.
   `isInstructor` role check that was there before — the new flag is an
   *additional* gate, not a replacement.
 
-## Phase 3: Reflection ✅
+## 🎯 PHASE 1: PLANNING ✅
+
+### Decisions Made
+- **New config file `config/fees.php`** — fees are their own concern; mixing
+  them into `services.php` would drown them among third-party credentials.
+- **Master override flag: `FEES_OVERRIDE_TO_ZERO`** — a single boolean that
+  zeroes both fees at read time. Individual base amounts stay configured so
+  the "later use" requirement is preserved.
+- **Config helper method `App\Support\Fees`** — a small class with
+  `bookingFee()`, `digitalFeePerLesson()`, `bookingFeePence()`,
+  `digitalFeePerLessonPence()` so callers don't have to repeatedly apply the
+  override boolean. Keeps the override rule in one place.
+- **Where the flag is honoured** — everywhere fees are computed for display
+  or persistence: `CalculatePackagePricingAction`, `CreateOrderFromEnquiryAction`,
+  `StepFiveController`, `Package` accessors. Historical orders keep their
+  already-stored pence values (we do not rewrite `orders.booking_fee_pence`).
+- **No migration** — fees are configuration, not schema.
+
+### Components / files touched
+- `config/fees.php` (new)
+- `app/Support/Fees.php` (new — thin helper)
+- `.env.example` (append new keys)
+- `app/Actions/Package/CalculatePackagePricingAction.php`
+- `app/Actions/Onboarding/CreateOrderFromEnquiryAction.php`
+- `app/Http/Controllers/Onboarding/StepFiveController.php`
+- `app/Models/Package.php`
 
 **Why this shape is right for the brief:**
 - Single env var toggles the UI. No behavior change beyond visibility.
@@ -111,11 +138,71 @@ change.
   var could gate route registration in `routes/web.php`. That's a bigger blast
   radius and not part of this brief.
 
-**Technical debt / follow-up not done:**
-- No tests added (project rule: user maintains tests manually).
-- No Pint / Prettier run (project rule: user handles code style).
+### Files created
+- `config/fees.php` — declares `booking_fee`, `digital_fee_per_lesson`,
+  `override_to_zero`.
+- `app/Support/Fees.php` — helper with `bookingFee()` / `bookingFeePence()`
+  / `digitalFeePerLesson()` / `digitalFeePerLessonPence()`
+  / `digitalFeeTotalPence(int $lessons)`.
+
+### Files modified
+- `.env.example` — added `BOOKING_FEE`, `DIGITAL_FEE_PER_LESSON`,
+  `FEES_OVERRIDE_TO_ZERO` under a "Fees" section.
+- `app/Actions/Package/CalculatePackagePricingAction.php` — reads
+  `Fees::bookingFee()` and `Fees::digitalFeePerLesson()` instead of class
+  constants. Constants kept as deprecated defaults (removed in favour of
+  config lookup).
+- `app/Actions/Onboarding/CreateOrderFromEnquiryAction.php` — replaces the
+  `999` / `399` literals with `Fees::bookingFeePence()` /
+  `Fees::digitalFeePerLessonPence() * $lessons_count`.
+- `app/Http/Controllers/Onboarding/StepFiveController.php` — reads
+  `Fees::bookingFee()` instead of the `19.99` literal.
+- `app/Models/Package.php` — `getBookingFeeAttribute`, `getDigitalFeeAttribute`,
+  `getTotalPriceAttribute`, `getWeeklyPaymentAttribute` all read from
+  `Fees::` helpers.
+
+### Key decisions
+- **Helper class over calling `config()` directly**: this puts the
+  "override to zero" rule in ONE place. If we call `config('fees.booking_fee')`
+  everywhere, every caller has to also check `config('fees.override_to_zero')`.
+  A tiny `Fees::bookingFee()` avoids that duplication.
+- **Pence-based helpers alongside pounds**: pricing logic mixes both units
+  (`total_price_pence` is stored in pence; display values are pounds). The
+  helper exposes both to avoid rounding drift at call sites.
+- **No changes to `OrderResource` / `PackageResource`** — they read fields
+  already produced by the touchpoints above.
 
 ---
+
+## 💭 PHASE 3: REFLECTION ✅
+
+### Why this shape is right for the brief
+- The brief asks for a single flag that overrides both fees. Centralising
+  the fees behind `App\Support\Fees` means one place decides the value —
+  every touchpoint honours the flag automatically.
+- The brief also asks that fees remain configurable for later use.
+  `config/fees.php` reads three env variables; changing pricing is a `.env`
+  edit + config clear, no code change.
+
+### Operational notes
+- Enabling `FEES_OVERRIDE_TO_ZERO=true` zeros both fees for **new**
+  bookings/orders. Historical orders keep the pence values they were
+  stored with.
+- The default (`FEES_OVERRIDE_TO_ZERO=false`) preserves current behaviour.
+- The default booking fee falls back to `19.99`, matching
+  `CalculatePackagePricingAction::BOOKING_FEE` (the historical primary
+  source of truth used at checkout).
+- Because the previous inline literal in `CreateOrderFromEnquiryAction` was
+  `£9.99`, moving that action onto the shared `Fees::bookingFeePence()` will
+  raise its booking fee to `£19.99` unless the user overrides via env. This
+  brings the onboarding flow into sync with `StepFiveController` and
+  `CalculatePackagePricingAction`. If £9.99 was the correct value, set
+  `BOOKING_FEE=9.99` in `.env`.
+
+### Follow-ups not done (out of scope)
+- No tests added (project rule: user maintains tests).
+- No `Pint` run (project rule: user handles code style).
+- No migration / retro backfill of `orders` fees.
 
 **Status:** All phases complete.
 **Last Updated:** 2026-07-08.
