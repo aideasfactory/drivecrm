@@ -36,6 +36,7 @@ class GetStudentDetailAction
             'user_id' => $student->user_id,
             'instructor_id' => $student->instructor_id,
             'name' => $name,
+            'avatar' => $student->avatar,
             'first_name' => $student->first_name,
             'surname' => $student->surname,
             'email' => $student->email ?? $student->user?->email,
