@@ -15,11 +15,15 @@ class LessonPaymentReminderNotification extends Notification implements ShouldQu
 {
     use Queueable;
 
+    /**
+     * @param  array{lesson: int, booking_fee: int, digital_fee: int}|null  $breakdown
+     */
     public function __construct(
         public LessonPayment $lessonPayment,
         public Student $student,
         public string $hostedInvoiceUrl,
-        public bool $isBookedByContact
+        public bool $isBookedByContact,
+        public ?array $breakdown = null
     ) {}
 
     /**
@@ -45,8 +49,13 @@ class LessonPaymentReminderNotification extends Notification implements ShouldQu
             ->line('**Lesson Details:**')
             ->line("Package: {$order->package_name}")
             ->line("Date: {$lessonDate}")
-            ->line("Time: {$lessonTime}")
-            ->line("Amount due: {$amount}")
+            ->line("Time: {$lessonTime}");
+
+        foreach ($this->breakdownLines() as $breakdownLine) {
+            $message->line($breakdownLine);
+        }
+
+        $message->line("**Amount due: {$amount}**")
             ->line('')
             ->line('Please complete your payment using the link below to secure your lesson.')
             ->action('Pay Now', $this->hostedInvoiceUrl)
@@ -55,6 +64,52 @@ class LessonPaymentReminderNotification extends Notification implements ShouldQu
 The Driving School Team');
 
         return $message;
+    }
+
+    /**
+     * Format the per-lesson cost breakdown as human-readable lines. Returns
+     * an empty array when the breakdown is missing, incoherent, or when the
+     * order has no fees (so the invoice degrades to a single "Amount due"
+     * line as before).
+     *
+     * @return array<int, string>
+     */
+    protected function breakdownLines(): array
+    {
+        if (! is_array($this->breakdown)) {
+            return [];
+        }
+
+        $lesson = (int) ($this->breakdown['lesson'] ?? 0);
+        $bookingFee = (int) ($this->breakdown['booking_fee'] ?? 0);
+        $digitalFee = (int) ($this->breakdown['digital_fee'] ?? 0);
+
+        if ($bookingFee <= 0 && $digitalFee <= 0) {
+            return [];
+        }
+
+        $lines = ['', '**Cost breakdown:**'];
+
+        if ($lesson > 0) {
+            $lines[] = 'Lesson cost: '.$this->formatPence($lesson);
+        }
+
+        if ($bookingFee > 0) {
+            $lines[] = 'Booking fee (weekly instalment): '.$this->formatPence($bookingFee);
+        }
+
+        if ($digitalFee > 0) {
+            $lines[] = 'Digital services fee (weekly instalment): '.$this->formatPence($digitalFee);
+        }
+
+        $lines[] = '';
+
+        return $lines;
+    }
+
+    protected function formatPence(int $pence): string
+    {
+        return '£'.number_format($pence / 100, 2);
     }
 
     protected function getGreeting(): string

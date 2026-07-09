@@ -490,8 +490,16 @@ class StripeService
 
     /**
      * Create a Stripe Invoice for a lesson payment.
+     *
+     * When $breakdown is provided (an array with 'lesson', 'booking_fee' and
+     * 'digital_fee' pence integers that sum to $amountPence), separate
+     * invoice items are created for each non-zero component so the student
+     * sees a proper cost breakdown on the hosted invoice. Otherwise a single
+     * line item is used.
+     *
+     * @param  array{lesson: int, booking_fee: int, digital_fee: int}|null  $breakdown
      */
-    public function createInvoice(Lesson $lesson, User $student, int $amountPence, int $lessonPaymentId): array
+    public function createInvoice(Lesson $lesson, User $student, int $amountPence, int $lessonPaymentId, ?array $breakdown = null): array
     {
         try {
             if ($amountPence <= 0) {
@@ -504,8 +512,10 @@ class StripeService
             }
 
             $package = $lesson->order->package;
+            $packageName = $lesson->order->package_name ?? ($package->name ?? 'Driving lessons');
+            $lessonDateLabel = $lesson->date->format('d M Y').' '.$lesson->start_time->format('H:i');
 
-            // Create draft invoice first, then attach the line item to it
+            // Create draft invoice first, then attach the line item(s) to it
             $invoice = $this->stripe->invoices->create([
                 'customer' => $student->stripe_customer_id,
                 'auto_advance' => true,
@@ -519,20 +529,32 @@ class StripeService
                 ],
             ]);
 
-            // Create invoice item attached directly to the invoice
-            $invoiceItem = $this->stripe->invoiceItems->create([
-                'customer' => $student->stripe_customer_id,
-                'invoice' => $invoice->id,
-                'amount' => $amountPence,
-                'currency' => 'gbp',
-                'description' => "Lesson payment for {$package->name} - ".$lesson->date->format('d M Y').' '.$lesson->start_time->format('H:i'),
-                'metadata' => [
-                    'lesson_id' => $lesson->id,
-                    'lesson_payment_id' => $lessonPaymentId,
-                    'order_id' => $lesson->order_id,
-                    'package_id' => $package->id,
-                ],
-            ]);
+            $lineItems = $this->buildInvoiceLineItems(
+                $amountPence,
+                $breakdown,
+                $packageName,
+                $lessonDateLabel
+            );
+
+            $sharedMetadata = [
+                'lesson_id' => $lesson->id,
+                'lesson_payment_id' => $lessonPaymentId,
+                'order_id' => $lesson->order_id,
+                'package_id' => $package?->id,
+            ];
+
+            foreach ($lineItems as $lineItem) {
+                $this->stripe->invoiceItems->create([
+                    'customer' => $student->stripe_customer_id,
+                    'invoice' => $invoice->id,
+                    'amount' => $lineItem['amount'],
+                    'currency' => 'gbp',
+                    'description' => $lineItem['description'],
+                    'metadata' => array_merge($sharedMetadata, [
+                        'component' => $lineItem['component'],
+                    ]),
+                ]);
+            }
 
             // Finalize the invoice to send it
             $invoice = $this->stripe->invoices->finalizeInvoice($invoice->id);
@@ -555,6 +577,63 @@ class StripeService
                 'error' => $e->getMessage(),
             ];
         }
+    }
+
+    /**
+     * Build the invoice line items for a lesson payment. If a breakdown is
+     * provided with non-zero fee components, each becomes its own itemised
+     * line so the student sees the cost breakdown on the hosted invoice.
+     * If the breakdown is missing or has no fee components, a single
+     * "lesson payment" line item is returned.
+     *
+     * @param  array{lesson: int, booking_fee: int, digital_fee: int}|null  $breakdown
+     * @return list<array{amount: int, description: string, component: string}>
+     */
+    protected function buildInvoiceLineItems(int $amountPence, ?array $breakdown, string $packageName, string $lessonDateLabel): array
+    {
+        $lessonComponent = (int) ($breakdown['lesson'] ?? 0);
+        $bookingComponent = (int) ($breakdown['booking_fee'] ?? 0);
+        $digitalComponent = (int) ($breakdown['digital_fee'] ?? 0);
+
+        $hasBreakdown = $breakdown !== null
+            && ($bookingComponent > 0 || $digitalComponent > 0)
+            && ($lessonComponent + $bookingComponent + $digitalComponent) === $amountPence;
+
+        if (! $hasBreakdown) {
+            return [[
+                'amount' => $amountPence,
+                'description' => "Lesson payment for {$packageName} - {$lessonDateLabel}",
+                'component' => 'lesson_payment',
+            ]];
+        }
+
+        $items = [];
+
+        if ($lessonComponent > 0) {
+            $items[] = [
+                'amount' => $lessonComponent,
+                'description' => "Lesson cost — {$packageName} on {$lessonDateLabel}",
+                'component' => 'lesson',
+            ];
+        }
+
+        if ($bookingComponent > 0) {
+            $items[] = [
+                'amount' => $bookingComponent,
+                'description' => 'Booking fee (weekly instalment)',
+                'component' => 'booking_fee',
+            ];
+        }
+
+        if ($digitalComponent > 0) {
+            $items[] = [
+                'amount' => $digitalComponent,
+                'description' => 'Digital services fee (weekly instalment)',
+                'component' => 'digital_fee',
+            ];
+        }
+
+        return $items;
     }
 
     /**

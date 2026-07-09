@@ -91,4 +91,43 @@ class LessonPayment extends Model
 
         return $perPaymentPence;
     }
+
+    /**
+     * Decompose a single weekly payment amount into its constituent cost
+     * components — the lesson portion, the booking fee portion, and the
+     * digital fee portion — based on the ratios stored on the order.
+     *
+     * The split is proportional to the order's own totals. The digital fee
+     * component absorbs any rounding remainder so the three parts always
+     * sum to $amountPence exactly. If the order has no meaningful totals
+     * (legacy / zero-value), the entire amount is treated as the lesson
+     * component.
+     *
+     * @return array{lesson: int, booking_fee: int, digital_fee: int}
+     */
+    public static function weeklyBreakdown(Order $order, int $amountPence): array
+    {
+        $packagePence = (int) ($order->package_total_price_pence ?? 0);
+        $bookingPence = (int) ($order->booking_fee_pence ?? 0);
+        $digitalPence = (int) ($order->digital_fee_pence ?? 0);
+        $orderTotal = (int) ($order->total_price_pence ?? ($packagePence + $bookingPence + $digitalPence));
+
+        if ($orderTotal <= 0 || $amountPence <= 0) {
+            return [
+                'lesson' => $amountPence,
+                'booking_fee' => 0,
+                'digital_fee' => 0,
+            ];
+        }
+
+        $lessonComponent = (int) round($amountPence * ($packagePence / $orderTotal));
+        $bookingComponent = (int) round($amountPence * ($bookingPence / $orderTotal));
+        $digitalComponent = $amountPence - $lessonComponent - $bookingComponent;
+
+        return [
+            'lesson' => $lessonComponent,
+            'booking_fee' => $bookingComponent,
+            'digital_fee' => $digitalComponent,
+        ];
+    }
 }
