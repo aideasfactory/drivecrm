@@ -231,6 +231,7 @@ class CancelBookingAction
                     'order_cancelled' => $orderCancelled,
                     'cancelled_by_user_id' => $actor->id,
                 ],
+                "Cancelled {$cancelSet->count()} lesson(s): {$reason}",
             );
         }
 

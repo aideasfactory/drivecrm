@@ -102,21 +102,11 @@ class MessageController extends Controller
 
         Gate::authorize('send', [Message::class, $recipient]);
 
-        // Resolve student and instructor entities for activity logging
-        if ($sender->isInstructor()) {
-            $instructor = $sender->instructor;
-            $student = $recipient->student;
-        } else {
-            $student = $sender->student;
-            $instructor = $recipient->instructor;
-        }
-
+        // Activity logging, email, and push are fired by MessageObserver.
         $message = $this->messageService->sendMessage(
             $sender,
             $recipient,
-            $request->validated('message'),
-            $student,
-            $instructor
+            $request->validated('message')
         );
 
         $message->load('sender:id,name');
@@ -124,6 +114,75 @@ class MessageController extends Controller
         return (new MessageResource($message))
             ->response()
             ->setStatusCode(201);
+    }
+
+    /**
+     * Mark all messages in a conversation as read.
+     *
+     * Marks every unread message sent by the other participant to the
+     * authenticated user. Same ID convention as `show`: instructors pass a
+     * student ID, students pass a user ID, owners are matched by user ID.
+     * Idempotent — repeat calls return marked_read: 0.
+     */
+    public function markConversationRead(Request $request, int $conversationUserId): JsonResponse
+    {
+        $user = $this->resolveConversationUser($request->user(), $conversationUserId);
+
+        Gate::authorize('viewConversation', [Message::class, $user]);
+
+        $markedRead = $this->messageService->markConversationAsRead($request->user(), $user);
+
+        return response()->json(['marked_read' => $markedRead]);
+    }
+
+    /**
+     * Mark the authenticated student's conversation with their instructor as read.
+     *
+     * Convenience endpoint mirroring `showInstructorConversation` — resolves
+     * the instructor automatically from the student's assigned instructor_id.
+     */
+    public function markInstructorConversationRead(Request $request): JsonResponse
+    {
+        $instructorUser = $this->resolveStudentInstructor($request->user());
+
+        Gate::authorize('viewConversation', [Message::class, $instructorUser]);
+
+        $markedRead = $this->messageService->markConversationAsRead($request->user(), $instructorUser);
+
+        return response()->json(['marked_read' => $markedRead]);
+    }
+
+    /**
+     * Mark a single message as read.
+     *
+     * Only the message's recipient may mark it read. Idempotent — an
+     * already-read message keeps its original read_at timestamp.
+     */
+    public function markMessageRead(Request $request, Message $message): JsonResponse
+    {
+        Gate::authorize('markAsRead', $message);
+
+        $this->messageService->markMessageAsRead($message);
+
+        $message->load('sender:id,name');
+
+        return (new MessageResource($message))->response();
+    }
+
+    /**
+     * Get unread message counts for the authenticated user.
+     *
+     * Returns the total unread count plus a per-conversation breakdown
+     * keyed by the sender's user ID. Designed for badge counts and
+     * conversation-list polling.
+     */
+    public function unreadCount(Request $request): JsonResponse
+    {
+        Gate::authorize('viewAny', Message::class);
+
+        $counts = $this->messageService->getUnreadCounts($request->user());
+
+        return response()->json($counts);
     }
 
     /**

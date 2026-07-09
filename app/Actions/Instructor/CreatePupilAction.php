@@ -59,7 +59,8 @@ class CreatePupilAction
                 'type' => 'welcome_student',
                 'recipient_email' => $user->email,
                 'instructor_id' => $instructor->id,
-            ]
+            ],
+            'Welcome email sent'
         );
 
         // Log notification activity for instructor
@@ -71,7 +72,8 @@ class CreatePupilAction
                 'type' => 'welcome_student',
                 'recipient_email' => $user->email,
                 'student_id' => $student->id,
-            ]
+            ],
+            "Welcome email sent to new student {$data['first_name']} {$data['surname']}"
         );
 
         return $student;

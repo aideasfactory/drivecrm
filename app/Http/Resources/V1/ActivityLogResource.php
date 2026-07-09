@@ -18,6 +18,7 @@ class ActivityLogResource extends JsonResource
             'id' => $this->id,
             'category' => $this->category,
             'message' => $this->message,
+            'display_message' => $this->display_message ?? $this->message,
             'metadata' => $this->metadata,
             'created_at' => $this->created_at?->toIso8601String(),
         ];

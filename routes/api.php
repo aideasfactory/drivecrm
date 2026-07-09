@@ -151,8 +151,12 @@ Route::prefix('v1')->group(function (): void {
         // Messaging routes
         Route::prefix('messages')->group(function (): void {
             Route::get('conversations', [MessageController::class, 'conversations']);
+            Route::get('unread-count', [MessageController::class, 'unreadCount']);
             Route::get('conversations/instructor', [MessageController::class, 'showInstructorConversation']);
+            Route::post('conversations/instructor/read', [MessageController::class, 'markInstructorConversationRead']);
             Route::get('conversations/{conversationUserId}', [MessageController::class, 'show']);
+            Route::post('conversations/{conversationUserId}/read', [MessageController::class, 'markConversationRead']);
+            Route::post('{message}/read', [MessageController::class, 'markMessageRead']);
             Route::post('/', [MessageController::class, 'store']);
         });
 

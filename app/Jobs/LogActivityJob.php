@@ -32,7 +32,8 @@ class LogActivityJob implements ShouldQueue
         public Model $loggable,
         public string $message,
         public string $category,
-        public ?array $metadata = null
+        public ?array $metadata = null,
+        public ?string $displayMessage = null
     ) {}
 
     /**
@@ -46,6 +47,7 @@ class LogActivityJob implements ShouldQueue
                 'loggable_id' => $this->loggable->id,
                 'category' => $this->category,
                 'message' => $this->message,
+                'display_message' => $this->displayMessage,
                 'metadata' => $this->metadata,
             ]);
 

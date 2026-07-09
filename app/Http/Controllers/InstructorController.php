@@ -1096,7 +1096,10 @@ class InstructorController extends Controller
 
         // Search by message
         if (request()->has('search') && request('search')) {
-            $query->where('message', 'like', '%'.request('search').'%');
+            $query->where(function ($q) {
+                $q->where('message', 'like', '%'.request('search').'%')
+                    ->orWhere('display_message', 'like', '%'.request('search').'%');
+            });
         }
 
         // Paginate

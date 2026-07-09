@@ -563,7 +563,8 @@ Polymorphic activity logging for instructors and students. Tracks all significan
 | `loggable_type` | varchar(255) | NOT NULL, INDEXED | Model type (App\Models\Instructor or App\Models\Student) |
 | `loggable_id` | bigint unsigned | NOT NULL, INDEXED | Model ID |
 | `category` | varchar(50) | NOT NULL, INDEXED | Activity category |
-| `message` | text | NOT NULL | Human-readable activity message |
+| `message` | text | NOT NULL | Full audit message — self-contained (who, what, to whom) |
+| `display_message` | varchar(255) | NULLABLE | Short user-friendly message for UI timelines. Falls back to `message` when null (all rows created before 2026-07-09 are null) |
 | `metadata` | json | NULLABLE | Additional context data in JSON format |
 | `deleted_at` | timestamp | NULLABLE | Soft delete timestamp |
 | `created_at` | timestamp | - | Record creation timestamp |
@@ -819,6 +820,9 @@ Stores broadcast and direct messages between users. Supports soft deletes for au
 | `from` | bigint unsigned | FOREIGN KEY (users.id), ON DELETE CASCADE, INDEXED | Sender user ID |
 | `to` | bigint unsigned | FOREIGN KEY (users.id), ON DELETE CASCADE, INDEXED | Recipient user ID |
 | `message` | text | NOT NULL | Message content |
+| `type` | varchar(40) | DEFAULT 'direct' | Message kind: `direct`, `broadcast`, `lesson_on_way`, `lesson_arrived` (`App\Enums\MessageType`) — drives which notifications `MessageObserver` fires |
+| `meta` | json | NULLABLE | Type-specific context (e.g. `{"lesson_id": 123}` for lesson status messages) |
+| `read_at` | timestamp | NULLABLE | When the recipient read the message (`NULL` = unread) |
 | `deleted_at` | timestamp | NULLABLE | Soft delete timestamp |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
@@ -826,6 +830,7 @@ Stores broadcast and direct messages between users. Supports soft deletes for au
 **Indexes:**
 - Index on `from`
 - Index on `to`
+- Composite index on `(to, read_at)` — unread lookups/counts per recipient
 
 **Relationships:**
 - Belongs to one `User` as sender (via `from`)
@@ -835,6 +840,8 @@ Stores broadcast and direct messages between users. Supports soft deletes for au
 - Used for broadcast messages from instructors to their students
 - Soft deletes enabled for audit trail
 - One record created per recipient in a broadcast
+- **Notification pipeline (`MessageObserver`):** every created row fires the appropriate email + push notification + activity log from a single observer on `Message::created` — call sites only create the row and must NOT dispatch their own comms (they would duplicate). `direct`/`broadcast` send the generic new-message email/push (broadcast skips per-row activity logs in favour of the caller's summary entry); `lesson_on_way`/`lesson_arrived` send the lesson-specific email (routed to learner email ?: contact email) + push + instructor activity log, using `meta.lesson_id`. Students **without** a user account can't have a message row (`to` is a users FK) — the on-way/arrived flow falls back to a direct email + inline activity log for them.
+- **Read receipts:** each row is one sender → one recipient, so `read_at` is exact per-message/per-recipient read tracking (broadcasts included — one row each). `NULL` = unread; marking read is an idempotent bulk `UPDATE` that never overwrites an existing `read_at`. Viewing a conversation does NOT auto-mark it read — the mobile app calls the explicit mark-read endpoints.
 - **Support inbox:** the admin's "Support Messages" page is simply the logged-in admin's messages inbox — the same `MessageService::getConversations()` path used by every other user. From the mobile app, students/instructors send to the admin's user id (1 in the default seeded data) via the existing `POST /api/v1/messages` endpoint. No sentinel id, no virtual participant, no schema change.
 - **Closing tickets:** an owner can "close" (archive) a support conversation. Archive state lives in `support_ticket_archives` (see below) — a conversation is treated as archived only while `archived_at >= latest message`, so a newer message from the participant auto-reopens the ticket to the Inbox.
 

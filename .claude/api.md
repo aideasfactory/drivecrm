@@ -68,6 +68,10 @@
     - [Conversation with Instructor (Student)](#get-apiv1messagesconversationsinstructor)
     - [Conversation by User ID](#get-apiv1messagesconversationsuser)
     - [Send Message](#post-apiv1messages)
+    - [Unread Count](#get-apiv1messagesunread-count)
+    - [Mark Conversation Read](#post-apiv1messagesconversationsuserread)
+    - [Mark Instructor Conversation Read (Student)](#post-apiv1messagesconversationsinstructorread)
+    - [Mark Single Message Read](#post-apiv1messagesmessageread)
   - [Push Notifications](#push-notifications)
     - [Store Push Token](#post-apiv1push-token)
   - [Mock Tests](#mock-tests)
@@ -993,10 +997,15 @@ Returns the authenticated instructor's lessons for a specific date, ordered by s
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Notifies the student that the instructor is on their way to the lesson. This:
+Notifies the student that the instructor is on their way to the lesson.
+
+When the student has a user account, this creates a message row (`type: "lesson_on_way"`, `meta: {"lesson_id": ...}`) and `MessageObserver` fires the full pipeline from it:
 - Emails the student (`InstructorOnWayNotification`), routed to the learner's email, falling back to the contact email.
 - Queues a push notification — **only** when the student's user account has a registered Expo push token (delivered by the `push:send-queued` scheduler).
 - Writes an activity log entry for the instructor's timeline.
+- The message appears in the student's conversation thread and unread counts.
+
+When the student has **no** user account (a message row is impossible — `to` is a users FK), the endpoint falls back to sending the email directly and writing the activity log inline; no push or message row is possible.
 
 **URL Parameters:**
 
@@ -1028,10 +1037,15 @@ Notifies the student that the instructor is on their way to the lesson. This:
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Notifies the student that the instructor has arrived at the lesson pickup point. This:
+Notifies the student that the instructor has arrived at the lesson pickup point.
+
+When the student has a user account, this creates a message row (`type: "lesson_arrived"`, `meta: {"lesson_id": ...}`) and `MessageObserver` fires the full pipeline from it:
 - Emails the student (`InstructorArrivedNotification`), routed to the learner's email, falling back to the contact email.
 - Queues a push notification — **only** when the student's user account has a registered Expo push token (delivered by the `push:send-queued` scheduler).
 - Writes an activity log entry for the instructor's timeline.
+- The message appears in the student's conversation thread and unread counts.
+
+When the student has **no** user account (a message row is impossible — `to` is a users FK), the endpoint falls back to sending the email directly and writing the activity log inline; no push or message row is possible.
 
 **URL Parameters:**
 
@@ -4763,7 +4777,7 @@ Unlike `GET /api/v1/student/resources/{resource}`, this endpoint is **not studen
 
 **Auth required:** Yes (Bearer token — instructor or student)
 
-Returns all conversations for the authenticated user, grouped by the other participant. Each conversation includes the latest message preview. Ordered by most recent message first.
+Returns all conversations for the authenticated user, grouped by the other participant. Each conversation includes the latest message preview and the number of unread messages the authenticated user has in that conversation. Ordered by most recent message first.
 
 **Request Body:** None
 
@@ -4776,24 +4790,30 @@ Returns all conversations for the authenticated user, grouped by the other parti
         "id": 5,
         "name": "Jane Doe"
       },
+      "student_id": 3,
       "latest_message": {
         "id": 42,
         "message": "See you at 9am tomorrow!",
         "is_own": true,
+        "is_read": false,
         "created_at": "2026-03-22T18:30:00+00:00"
-      }
+      },
+      "unread_count": 0
     },
     {
       "user": {
         "id": 8,
         "name": "Tom Brown"
       },
+      "student_id": 5,
       "latest_message": {
         "id": 38,
         "message": "Thanks for the feedback on today's lesson.",
         "is_own": false,
+        "is_read": false,
         "created_at": "2026-03-21T15:00:00+00:00"
-      }
+      },
+      "unread_count": 3
     }
   ]
 }
@@ -4803,12 +4823,15 @@ Returns all conversations for the authenticated user, grouped by the other parti
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `user.id` | integer | The other participant's user ID |
+| `user.id` | integer | The other participant's **user ID** (users table — not a student ID) |
 | `user.name` | string | The other participant's name |
+| `student_id` | integer\|null | When the authenticated user is an **instructor** and this participant is one of **their** students: that student's ID (students table — matches `GET /api/v1/instructor/students`). `null` otherwise (admin/owner participants, students of other instructors, or when the authenticated user is a student). |
 | `latest_message.id` | integer | Message ID |
 | `latest_message.message` | string | Message content |
 | `latest_message.is_own` | boolean | Whether the authenticated user sent this message |
+| `latest_message.is_read` | boolean | Whether the recipient has read this message. When `is_own` is `true` this is your read receipt; when `false` it reflects whether *you* have read it. |
 | `latest_message.created_at` | string | ISO 8601 timestamp |
+| `unread_count` | integer | Number of messages from this participant the authenticated user has **not** read yet |
 
 > **Note:** Conversations are automatically scoped to the authenticated user.
 
@@ -4835,6 +4858,8 @@ Messages are ordered newest first for pagination (30 per page).
       "recipient_id": 5,
       "message": "See you at 9am tomorrow!",
       "is_own": false,
+      "is_read": false,
+      "read_at": null,
       "created_at": "2026-03-22T18:30:00+00:00"
     },
     {
@@ -4844,6 +4869,8 @@ Messages are ordered newest first for pagination (30 per page).
       "recipient_id": 1,
       "message": "What time is my lesson tomorrow?",
       "is_own": true,
+      "is_read": true,
+      "read_at": "2026-03-22T18:28:00+00:00",
       "created_at": "2026-03-22T18:25:00+00:00"
     }
   ]
@@ -4859,7 +4886,11 @@ Messages are ordered newest first for pagination (30 per page).
 | `sender_name` | string\|null | Sender's name |
 | `recipient_id` | integer | Recipient's user ID |
 | `message` | string | Message content |
+| `type` | string | Message kind: `direct` (normal DM), `broadcast`, `lesson_on_way`, `lesson_arrived` (lesson status updates sent by the "On my way" / "I've arrived" buttons). Render status types as system-style bubbles if desired. |
+| `meta` | object\|null | Type-specific context — lesson status messages carry `{"lesson_id": 123}` for deep-linking; `null` for normal DMs |
 | `is_own` | boolean | Whether the authenticated user sent this message |
+| `is_read` | boolean | Whether the **recipient** has read the message. On your own messages (`is_own: true`) this is your read receipt. |
+| `read_at` | string\|null | ISO 8601 timestamp of when the recipient read the message, or `null` if unread |
 | `created_at` | string | ISO 8601 timestamp |
 
 > **Note:** Messages are returned newest first. The mobile app should reverse the order for chronological display in the chat UI.
@@ -4907,6 +4938,8 @@ Returns paginated messages between the authenticated user and the specified user
       "recipient_id": 5,
       "message": "See you at 9am tomorrow!",
       "is_own": true,
+      "is_read": false,
+      "read_at": null,
       "created_at": "2026-03-22T18:30:00+00:00"
     },
     {
@@ -4916,6 +4949,8 @@ Returns paginated messages between the authenticated user and the specified user
       "recipient_id": 1,
       "message": "What time is my lesson tomorrow?",
       "is_own": false,
+      "is_read": true,
+      "read_at": "2026-03-22T18:28:00+00:00",
       "created_at": "2026-03-22T18:25:00+00:00"
     }
   ]
@@ -4931,7 +4966,11 @@ Returns paginated messages between the authenticated user and the specified user
 | `sender_name` | string\|null | Sender's name |
 | `recipient_id` | integer | Recipient's user ID |
 | `message` | string | Message content |
+| `type` | string | Message kind: `direct` (normal DM), `broadcast`, `lesson_on_way`, `lesson_arrived` (lesson status updates sent by the "On my way" / "I've arrived" buttons). Render status types as system-style bubbles if desired. |
+| `meta` | object\|null | Type-specific context — lesson status messages carry `{"lesson_id": 123}` for deep-linking; `null` for normal DMs |
 | `is_own` | boolean | Whether the authenticated user sent this message |
+| `is_read` | boolean | Whether the **recipient** has read the message. On your own messages (`is_own: true`) this is your read receipt. |
+| `read_at` | string\|null | ISO 8601 timestamp of when the recipient read the message, or `null` if unread |
 | `created_at` | string | ISO 8601 timestamp |
 
 > **Note:** Messages are returned newest first. The mobile app should reverse the order for chronological display in the chat UI.
@@ -4983,11 +5022,17 @@ Send a new message to another user. Authorization ensures only instructor-studen
     "sender_name": "John Smith",
     "recipient_id": 5,
     "message": "Great lesson today! Keep up the good work.",
+    "type": "direct",
+    "meta": null,
     "is_own": true,
+    "is_read": false,
+    "read_at": null,
     "created_at": "2026-03-22T19:00:00+00:00"
   }
 }
 ```
+
+> **Note:** Every message row created in the system fires a single notification pipeline (`MessageObserver`): recipient email, push notification (when they have a registered Expo push token), and activity logging. Message objects everywhere include `type` (`direct`, `broadcast`, `lesson_on_way`, `lesson_arrived`) and `meta` (e.g. `{"lesson_id": 123}` on lesson status messages) — conversation threads therefore now also contain the "On my way" / "I've arrived" status messages.
 
 **Error Response (no instructor assigned — student without recipient_id):** `404 Not Found`
 ```json
@@ -5019,6 +5064,158 @@ Send a new message to another user. Authorization ensures only instructor-studen
 - `recipient_id.exists`: "The selected recipient does not exist."
 - `message.required`: "A message is required."
 - `message.max`: "The message must not exceed 5000 characters."
+
+---
+
+#### `GET /api/v1/messages/unread-count`
+
+**Auth required:** Yes (Bearer token — instructor or student)
+
+Returns the authenticated user's total unread message count plus a per-conversation breakdown. Designed for app badge counts and conversation-list polling — cheap enough to call frequently (single indexed grouped query, never cached).
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "total": 5,
+  "conversations": [
+    {
+      "user_id": 8,
+      "student_id": 5,
+      "unread_count": 3
+    },
+    {
+      "user_id": 5,
+      "student_id": 3,
+      "unread_count": 2
+    }
+  ]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `total` | integer | Total unread messages across all conversations |
+| `conversations` | array | Per-conversation breakdown, highest unread count first |
+| `conversations[].user_id` | integer | The **sender's user ID** (the other participant) |
+| `conversations[].student_id` | integer\|null | When the authenticated user is an **instructor** and the sender is one of **their** students: that student's ID (students table — matches `GET /api/v1/instructor/students`). `null` otherwise (admin/owner senders, students of other instructors, or when the authenticated user is a student). |
+| `conversations[].unread_count` | integer | Unread messages from that sender |
+
+> **Note:** `user_id` here is always a **user** ID (matching `sender_id` on message objects and `user.id` on conversation objects) — not a student ID. Use `student_id` to map a conversation onto the instructor app's student list.
+
+---
+
+#### `POST /api/v1/messages/conversations/{user}/read`
+
+**Auth required:** Yes (Bearer token — instructor or student)
+
+Marks **every unread message sent by the other participant to the authenticated user** in this conversation as read. Call it when the user opens (or is viewing) the conversation — fetching a conversation does **not** mark it read automatically.
+
+Idempotent: messages already read keep their original `read_at`; repeat calls return `"marked_read": 0`.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `user` | integer | Same convention as `GET /api/v1/messages/conversations/{user}`: for **instructors** this is the **student ID** (from the students table); for **students** it is the other participant's **user ID**. Admin/owner is always matched by user ID. |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "marked_read": 3
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `marked_read` | integer | Number of messages newly marked as read by this call |
+
+**Error Response (not authorised):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+---
+
+#### `POST /api/v1/messages/conversations/instructor/read`
+
+**Auth required:** Yes (Bearer token — **student only**)
+
+Convenience endpoint for students, mirroring `GET /api/v1/messages/conversations/instructor`. Marks every unread message **from the student's assigned instructor** as read — the instructor is resolved automatically from the student's `instructor_id`.
+
+Idempotent — repeat calls return `"marked_read": 0`.
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "marked_read": 2
+}
+```
+
+**Error Response (no instructor assigned):** `404 Not Found`
+```json
+{
+  "message": "No instructor assigned."
+}
+```
+
+---
+
+#### `POST /api/v1/messages/{message}/read`
+
+**Auth required:** Yes (Bearer token — instructor or student, **recipient of the message only**)
+
+Marks a single message as read. Only the message's **recipient** can mark it read — a sender can never set a read receipt on their own message (returns `403`). Useful when handling a push-notification tap for one specific message.
+
+Idempotent — an already-read message keeps its original `read_at` timestamp.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `message` | integer | The message ID |
+
+**Request Body:** None
+
+**Success Response:** `200 OK` — the updated message object
+```json
+{
+  "data": {
+    "id": 42,
+    "sender_id": 1,
+    "sender_name": "John Smith",
+    "recipient_id": 5,
+    "message": "See you at 9am tomorrow!",
+    "is_own": false,
+    "is_read": true,
+    "read_at": "2026-07-08T15:45:00+00:00",
+    "created_at": "2026-03-22T18:30:00+00:00"
+  }
+}
+```
+
+**Error Response (not the recipient):** `403 Forbidden`
+```json
+{
+  "message": "This action is unauthorized."
+}
+```
+
+**Error Response (message not found):** `404 Not Found`
+```json
+{
+  "message": "No query results for model [App\\Models\\Message]."
+}
+```
+
+> **Tip:** For normal chat UX, prefer the conversation-level endpoint — one call marks the whole thread read. Read receipts then appear to the sender as `is_read: true` / `read_at` on their own messages next time they fetch the conversation.
 
 ---
 
@@ -5203,6 +5400,10 @@ The `role` field is always returned in user responses. Use it to determine which
 | GET | `/api/v1/messages/conversations/instructor` | Yes | Student | View conversation with assigned instructor |
 | GET | `/api/v1/messages/conversations/{user}` | Yes | Both | View conversation by user ID |
 | POST | `/api/v1/messages` | Yes | Both | Send message (students: recipient_id optional) |
+| GET | `/api/v1/messages/unread-count` | Yes | Both | Total + per-conversation unread counts |
+| POST | `/api/v1/messages/conversations/{user}/read` | Yes | Both | Mark conversation read (instructors pass student ID) |
+| POST | `/api/v1/messages/conversations/instructor/read` | Yes | Student | Mark conversation with assigned instructor read |
+| POST | `/api/v1/messages/{message}/read` | Yes | Both | Mark single message read (recipient only) |
 | GET | `/api/v1/student/mock-tests/summary` | Yes | Student | Mock test dashboard summary |
 | POST | `/api/v1/student/mock-tests/start` | Yes | Student | Start a new mock test (generates 50 random questions) |
 | POST | `/api/v1/student/mock-tests/{mockTest}/submit` | Yes | Student | Submit answers for a mock test |
@@ -5651,7 +5852,7 @@ Entries are written automatically by the backend (lesson events, bookings, payme
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `category` | string | No | Filter by category. Common values: `lesson`, `booking`, `payment`, `note`, `message`, `notification`, `profile`. Pass `all` or omit for no filter. |
-| `search` | string | No | Case-insensitive substring match on the `message` field. |
+| `search` | string | No | Case-insensitive substring match on the `message` or `display_message` fields. |
 | `page` | integer | No | Page number (default `1`). Laravel standard pagination. |
 | `per_page` | integer | No | Items per page (default `20`). |
 
@@ -5665,6 +5866,7 @@ Entries are written automatically by the backend (lesson events, bookings, payme
       "id": 482,
       "category": "payment",
       "message": "Paid £199.99 for 5-hour lesson package",
+      "display_message": "Paid £199.99 for 5-hour lesson package",
       "metadata": {
         "invoice_url": "https://invoice.stripe.com/i/acct_xxx/test_xxx",
         "amount_pence": 19999,
@@ -5676,6 +5878,7 @@ Entries are written automatically by the backend (lesson events, bookings, payme
       "id": 481,
       "category": "lesson",
       "message": "Lesson completed with John Smith",
+      "display_message": "Lesson completed with John Smith",
       "metadata": {
         "lesson_id": 204,
         "duration_minutes": 60
@@ -5684,8 +5887,9 @@ Entries are written automatically by the backend (lesson events, bookings, payme
     },
     {
       "id": 480,
-      "category": "note",
-      "message": "Instructor added a note",
+      "category": "message",
+      "message": "Message sent to Sam: I am on my way",
+      "display_message": "I am on my way",
       "metadata": null,
       "created_at": "2026-04-19T16:30:12+00:00"
     }
@@ -5714,7 +5918,8 @@ Entries are written automatically by the backend (lesson events, bookings, payme
 |-------|------|-------------|
 | `id` | integer | Activity log record ID |
 | `category` | string | Category bucket (e.g. `lesson`, `booking`, `payment`, `note`, `message`, `notification`, `profile`). Use for grouping / filtering in the UI. |
-| `message` | string | Human-readable description of the event. |
+| `message` | string | Full audit description of the event — self-contained (who, what, to whom). |
+| `display_message` | string | Short user-friendly description for UI timelines. Server falls back to `message` when no dedicated display text exists, so this field is always populated — **prefer this field when rendering**. |
 | `metadata` | object\|null | Extra context keyed per category (e.g. `invoice_url`, `lesson_id`, `amount_pence`). Shape is not fixed — treat as opaque and check for keys you need. |
 | `created_at` | string | ISO 8601 timestamp of when the event was logged. |
 
@@ -5878,6 +6083,10 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-06-27 | **On-way / arrived notifications now actually notify the student** (previously activity-log stubs). Both endpoints email the student (`InstructorOnWayNotification` / `InstructorArrivedNotification`, routed to learner email, falling back to contact email) and queue a push notification — only when the student's user account has a registered Expo push token, delivered by the `push:send-queued` scheduler. The instructor activity log is still written. Success messages changed from "...logged successfully." to "...sent successfully." | Instructor (notify-on-way, notify-arrived) |
 | 2026-06-30 | Added `GET /api/v1/instructor/resources` — instructor-accessible nested folder tree (folders → child folders → resources), mirroring `/student/resources` but **not** scoped to `audience = 'student'`. Returns both audiences by default (optional `?audience=student\|instructor` to narrow); each resource keeps its `audience` plus the full `ResourceResource` field set. No `my_resources`, no `is_watched` / `is_suggested` flags. Empty folders are pruned. Reuses a new `GetInstructorResourceFolderTreeAction` + `InstructorResourceFolderTreeResource`; cached per-audience and invalidated alongside the student tree. | Instructor Resource Tree (tree) |
 | 2026-07-01 | Documented the existing `POST` / `DELETE /api/v1/students/{student}/profile-picture` endpoints (upload/replace and remove a student avatar). `multipart/form-data`, field `profile_picture` (image; `jpg,jpeg,png,webp`; max 5 MB); public images stored on S3 with the old file deleted on replace. Authorised via the student `update` policy — allowed when the authenticated user **is** that student or is their assigned instructor, so students can self-serve their own avatar in the student app. Both return the full `StudentResource` (`profile_picture_url` reflects the change). Mirrors the instructor `POST`/`DELETE /instructor/profile/picture` pattern. | Students (profile-picture) |
+| 2026-07-08 | **Read receipts for messaging.** New nullable `read_at` on `messages` (`null` = unread; exact per-message/per-recipient since every row is one sender → one recipient). Message objects now include `is_read` + `read_at` (a sender's read receipt on `is_own` messages); conversation objects include `unread_count` and `latest_message.is_read`. New endpoints: `GET /messages/unread-count` (total + per-sender breakdown for badges/polling), `POST /messages/conversations/{user}/read` (bulk-mark thread read — same ID convention as the GET; idempotent, returns `marked_read`), `POST /messages/conversations/instructor/read` (student convenience variant), `POST /messages/{message}/read` (single message, recipient-only via new `MessagePolicy::markAsRead`; returns updated message). Fetching a conversation does **not** auto-mark it read — the app must call a mark-read endpoint. | Messages (all) |
+| 2026-07-09 | **Unified message notification pipeline (`MessageObserver`) + lesson status messages in threads.** Every `messages` row now fires one pipeline from a `Message::created` observer — email, push (token-holders only), activity log — so creating the row IS sending the message; call sites no longer dispatch their own comms. New columns: `type` (`direct`/`broadcast`/`lesson_on_way`/`lesson_arrived`) + `meta` (json); message objects everywhere now include both (additive). On-way / arrived endpoints now create a typed message row (instructor → student, `meta.lesson_id`) so the status update appears in the student's conversation thread and unread counts, with the same lesson-specific email/push/activity as before fired by the observer; students **without** user accounts keep the direct-email + inline-activity fallback (no row possible). **Broadcast messages now email + push each recipient** (previously rows only, no notifications); per-row activity logs suppressed in favour of the caller's single summary entry. Request/response shapes otherwise unchanged. | Messages (all), Instructor (notify-on-way, notify-arrived, broadcast) |
+| 2026-07-09 | **Added `student_id` to conversation objects** (additive — no existing fields changed). `GET /messages/unread-count`: each `conversations[]` item now includes `student_id`; `GET /messages/conversations`: each conversation object includes `student_id` next to `user`. Resolution: when the authenticated user is an **instructor** and the other participant is one of **their** students, it's that student's ID (students table — matches `GET /instructor/students`); otherwise `null` (admin/owner participants, students of other instructors, or student-authenticated users). Lets the instructor app map conversations onto its student-keyed Messages screen for per-pupil unread badges, sorting, and last-message previews. `user_id` / `user.id` remain **user** IDs. | Messages (conversations, unread-count) |
+| 2026-07-09 | **Added `display_message` to activity log objects** (additive). New nullable `display_message` column on `activity_logs`: `message` stays the full self-contained audit sentence ("Message sent to Sam: hello"); `display_message` is the short user-friendly version for UI timelines ("hello"). The resource falls back to `message` when the column is null (all pre-existing rows), so the field is always a populated string — **prefer it when rendering**. `search` now matches either field. Populated so far for message-sent, welcome/booking-confirmation/payment-reminder emails, payment-reminder pushes, and lesson-cancellation entries; other categories fall back. | Student Activity Log (index) |
 
 ---
 
