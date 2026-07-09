@@ -42,6 +42,7 @@ use App\Actions\Lesson\UpdateLessonMileageAction;
 use App\Actions\ProgressTracker\SeedInstructorProgressTrackerAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Shared\Message\SendBroadcastMessageAction;
+use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
 use App\Enums\MessageType;
 use App\Enums\RecurrencePattern;
 use App\Enums\UserRole;
@@ -112,6 +113,7 @@ class InstructorService extends BaseService
         protected SeedInstructorProgressTrackerAction $seedInstructorProgressTracker,
         protected SendInstructorWelcomeEmailAction $sendInstructorWelcomeEmail,
         protected CancelBookingAction $cancelBooking,
+        protected RecalculateStudentLessonNumbersAction $recalculateStudentLessonNumbers,
     ) {}
 
     /**
@@ -401,6 +403,14 @@ class InstructorService extends BaseService
 
         // Notify students if the time/date has changed and there are booked lessons
         if ($hasTimeChanged && $affectedLessons->isNotEmpty()) {
+            // A moved lesson may now sit before/after the student's other lessons —
+            // keep student_lesson_number chronological.
+            $affectedLessons
+                ->pluck('order.student_id')
+                ->filter()
+                ->unique()
+                ->each(fn ($studentId) => ($this->recalculateStudentLessonNumbers)((int) $studentId));
+
             $itemNotes = $item->notes ?? $notes;
             $this->notifyStudentsOfReschedule(
                 $instructor,

@@ -293,17 +293,17 @@
             Select a date
           </SheetTitle>
           <div class="flex items-center justify-between mt-4">
-            <Button @click="previousMonth" variant="ghost" size="icon">
+            <Button @click="previousMonth" :disabled="!canGoToPreviousMonth" variant="ghost" size="icon">
               <ChevronLeft class="h-4 w-4" />
             </Button>
             <h4 class="text-lg font-semibold">{{ currentMonthYear }}</h4>
-            <Button @click="nextMonth" variant="ghost" size="icon">
+            <Button @click="nextMonth" :disabled="!canGoToNextMonth" variant="ghost" size="icon">
               <ChevronRight class="h-4 w-4" />
             </Button>
           </div>
         </SheetHeader>
 
-        <div class="mt-6">
+        <div class="mt-6 pb-8">
           <div class="grid grid-cols-7 gap-2 mb-2">
             <div v-for="day in ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']" :key="day"
                  class="text-center text-xs font-medium text-muted-foreground py-2">
@@ -365,7 +365,7 @@ const page = usePage()
 const showInstructorDropdown = ref(false)
 const showCalendarSheet = ref(false)
 const weekOffset = ref(0)
-const currentViewMonth = ref(new Date())
+const currentViewMonth = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
 const loadingCalendar = ref(false)
 
 const form = useForm({
@@ -387,8 +387,6 @@ function getInitials(name) {
     .toUpperCase()
     .slice(0, 2)
 }
-
-console.log(selectedInstructor.value)
 
 // Use instructors from database
 const availableInstructors = ref(props.availableInstructors || [])
@@ -493,6 +491,26 @@ const firstDayOfMonth = computed(() => {
 const daysInMonth = computed(() => {
   const date = new Date(currentViewMonth.value.getFullYear(), currentViewMonth.value.getMonth() + 1, 0)
   return date.getDate()
+})
+
+// Last month covered by the availability data — month nav is clamped to this
+const lastAvailableMonth = computed(() => {
+  const dates = props.availability?.dates
+  if (!dates?.length) return null
+  const [year, month] = dates[dates.length - 1].date.split('-').map(Number)
+  return new Date(year, month - 1, 1)
+})
+
+const canGoToPreviousMonth = computed(() => {
+  const today = new Date()
+  const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+  return currentViewMonth.value > currentMonth
+})
+
+const canGoToNextMonth = computed(() => {
+  if (!lastAvailableMonth.value) return false
+  const nextMonthStart = new Date(currentViewMonth.value.getFullYear(), currentViewMonth.value.getMonth() + 1, 1)
+  return nextMonthStart <= lastAvailableMonth.value
 })
 
 // Watch for changes and show toast
@@ -657,10 +675,12 @@ function nextWeek() {
 }
 
 function previousMonth() {
+  if (!canGoToPreviousMonth.value) return
   currentViewMonth.value = new Date(currentViewMonth.value.getFullYear(), currentViewMonth.value.getMonth() - 1, 1)
 }
 
 function nextMonth() {
+  if (!canGoToNextMonth.value) return
   currentViewMonth.value = new Date(currentViewMonth.value.getFullYear(), currentViewMonth.value.getMonth() + 1, 1)
 }
 

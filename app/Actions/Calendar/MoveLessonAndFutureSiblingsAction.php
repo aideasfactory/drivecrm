@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Calendar;
 
 use App\Actions\Instructor\UpdateCalendarItemAction;
+use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
 use App\Enums\LessonStatus;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
@@ -22,6 +23,7 @@ class MoveLessonAndFutureSiblingsAction
 {
     public function __construct(
         protected UpdateCalendarItemAction $updateCalendarItem,
+        protected RecalculateStudentLessonNumbersAction $recalculateStudentLessonNumbers,
     ) {}
 
     /**
@@ -104,6 +106,12 @@ class MoveLessonAndFutureSiblingsAction
                 );
             }
         });
+
+        // Moving lessons can reorder them against the student's other bookings —
+        // keep student_lesson_number chronological.
+        if ($anchorLesson->order?->student_id) {
+            ($this->recalculateStudentLessonNumbers)($anchorLesson->order->student_id);
+        }
 
         // Bulk moves bypass InstructorService::updateCalendarItem, so invalidate the
         // cached calendar feed here for every affected date — otherwise the app keeps

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Onboarding;
 
+use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
 use App\Enums\CalendarItemStatus;
 use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
@@ -151,6 +152,10 @@ class CreateOrderFromEnquiryAction
                 $endTime,
                 $calendarItemIds
             );
+
+            // A booking dated before the student's existing lessons must take an
+            // earlier number — renumber so student_lesson_number stays chronological.
+            app(RecalculateStudentLessonNumbersAction::class)($student->id);
 
             // For weekly payment mode, create lesson payment records
             if ($paymentMode === PaymentMode::WEEKLY) {

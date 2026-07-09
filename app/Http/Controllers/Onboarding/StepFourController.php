@@ -47,7 +47,7 @@ class StepFourController extends Controller
         $availability = $instructorId ? $this->calendarService->getAvailability(
             instructorId: $instructorId,
             fromDate: now()->addDays(2), // 48 hours minimum
-            toDate: now()->addDays(10),  // 10 days maximum
+            toDate: now()->addDays(56),  // 8 weeks — must cover the month-view calendar
         ) : ['dates' => [], 'default_selected_index' => null];
 
         return Inertia::render('Onboarding/Step4', [
@@ -104,7 +104,7 @@ class StepFourController extends Controller
         $availability = $this->calendarService->getAvailability(
             instructorId: $instructor,
             fromDate: now()->addDays(2),
-            toDate: now()->addDays(10),
+            toDate: now()->addDays(56),
         );
 
         // Return as Inertia partial or JSON
