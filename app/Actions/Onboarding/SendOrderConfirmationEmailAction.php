@@ -75,7 +75,8 @@ class SendOrderConfirmationEmailAction
                     'order_id' => $order->id,
                     'recipient_email' => $recipientEmail,
                     'is_booked_by_contact' => $isBookedByContact,
-                ]
+                ],
+                'Booking confirmation email sent'
             );
 
             // Log notification activity for the instructor
@@ -89,7 +90,8 @@ class SendOrderConfirmationEmailAction
                         'order_id' => $order->id,
                         'student_id' => $student->id,
                         'recipient_email' => $recipientEmail,
-                    ]
+                    ],
+                    "Booking confirmation email sent to {$recipientName}"
                 );
             }
 
@@ -163,7 +165,8 @@ class SendOrderConfirmationEmailAction
                     'recipient_email' => $user->email,
                     'order_id' => $order->id,
                     'instructor_id' => $instructor->id,
-                ]
+                ],
+                'Welcome email sent'
             );
 
             ($this->logActivity)(
@@ -175,7 +178,8 @@ class SendOrderConfirmationEmailAction
                     'recipient_email' => $user->email,
                     'order_id' => $order->id,
                     'student_id' => $student->id,
-                ]
+                ],
+                "Welcome email sent to new student {$student->first_name} {$student->surname}"
             );
         } catch (\Exception $e) {
             Log::error('Failed to send pupil welcome email', [

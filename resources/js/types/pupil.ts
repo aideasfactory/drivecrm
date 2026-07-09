@@ -2,6 +2,7 @@ export interface Pupil {
     id: number
     user_id: number | null
     name: string
+    avatar: string | null
     email: string | null
     phone: string | null
     lessons_completed: number

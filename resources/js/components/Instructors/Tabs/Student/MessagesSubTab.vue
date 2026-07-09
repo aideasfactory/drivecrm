@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { MessageSquare, Send, Loader2 } from 'lucide-vue-next'
+import { MessageSquare, Send, Loader2, CheckCheck } from 'lucide-vue-next'
 import { toast } from '@/components/ui/sonner'
 
 interface MessageSender {
@@ -18,6 +18,7 @@ interface ChatMessage {
     from: number
     to: number
     message: string
+    read_at: string | null
     created_at: string
     sender: MessageSender
 }
@@ -72,6 +73,10 @@ const getInitials = (name: string): string => {
         .join('')
         .toUpperCase()
         .slice(0, 2)
+}
+
+const readReceiptTitle = (msg: ChatMessage): string => {
+    return msg.read_at ? `Read ${formatMessageTime(msg.read_at)}` : 'Sent — not read yet'
 }
 
 const formatMessageTime = (dateString: string): string => {
@@ -286,6 +291,12 @@ onMounted(() => {
                     <div v-if="isStudentMessage(msg)" class="flex items-start justify-end gap-3">
                         <div class="flex flex-1 flex-col items-end">
                             <div class="mb-1 flex items-center gap-2">
+                                <span :title="readReceiptTitle(msg)" class="inline-flex shrink-0">
+                                    <CheckCheck
+                                        class="h-4 w-4"
+                                        :class="msg.read_at ? 'text-blue-500' : 'text-muted-foreground'"
+                                    />
+                                </span>
                                 <span class="text-xs text-muted-foreground">
                                     {{ formatMessageTime(msg.created_at) }}
                                 </span>
@@ -318,6 +329,12 @@ onMounted(() => {
                                 </span>
                                 <span class="text-xs text-muted-foreground">
                                     {{ formatMessageTime(msg.created_at) }}
+                                </span>
+                                <span :title="readReceiptTitle(msg)" class="inline-flex shrink-0">
+                                    <CheckCheck
+                                        class="h-4 w-4"
+                                        :class="msg.read_at ? 'text-blue-500' : 'text-muted-foreground'"
+                                    />
                                 </span>
                             </div>
                             <div class="max-w-lg rounded-2xl rounded-tl-none bg-muted p-4">

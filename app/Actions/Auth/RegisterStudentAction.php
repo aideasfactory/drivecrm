@@ -64,7 +64,8 @@ class RegisterStudentAction
             [
                 'type' => 'student_registered',
                 'recipient_email' => $result['user']->email,
-            ]
+            ],
+            'Welcome email sent'
         );
 
         return $result;

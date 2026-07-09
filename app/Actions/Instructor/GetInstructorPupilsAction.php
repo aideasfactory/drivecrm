@@ -74,6 +74,7 @@ class GetInstructorPupilsAction
                 'id' => $student->id,
                 'user_id' => $student->user_id,
                 'name' => $name,
+                'avatar' => $student->avatar,
                 'email' => $student->email ?? $student->user?->email,
                 'phone' => $student->phone,
                 'lessons_completed' => $lessonsCompleted,

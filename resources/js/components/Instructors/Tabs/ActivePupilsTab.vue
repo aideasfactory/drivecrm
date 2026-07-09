@@ -14,7 +14,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
     Sheet,
@@ -383,6 +383,11 @@ const handleCreatePupil = async () => {
                             <TableCell>
                                 <div class="flex items-center gap-3">
                                     <Avatar>
+                                        <AvatarImage
+                                            v-if="pupil.avatar"
+                                            :src="pupil.avatar"
+                                            :alt="pupil.name"
+                                        />
                                         <AvatarFallback>
                                             {{ getInitials(pupil.name) }}
                                         </AvatarFallback>

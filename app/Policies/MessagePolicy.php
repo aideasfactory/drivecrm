@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use App\Models\Message;
 use App\Models\User;
 
 class MessagePolicy
@@ -39,6 +40,17 @@ class MessagePolicy
     public function send(User $user, User $otherUser): bool
     {
         return $this->hasMessagingRelationship($user, $otherUser);
+    }
+
+    /**
+     * Determine whether the user can mark a message as read.
+     *
+     * Only the message's recipient can mark it read — a sender can never
+     * set a read receipt on their own message.
+     */
+    public function markAsRead(User $user, Message $message): bool
+    {
+        return $message->to === $user->id;
     }
 
     /**

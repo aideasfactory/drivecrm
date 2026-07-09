@@ -330,12 +330,11 @@ class PupilController extends Controller
 
         $instructor = $student->instructor;
 
+        // Email, push, and activity logging are fired by MessageObserver.
         $message = app(SendMessageAction::class)(
             $instructor->user,
             $student->user,
-            $data['message'],
-            $student,
-            $instructor
+            $data['message']
         );
 
         return response()->json([
@@ -516,7 +515,10 @@ class PupilController extends Controller
 
         // Search by message
         if (request()->has('search') && request('search')) {
-            $query->where('message', 'like', '%'.request('search').'%');
+            $query->where(function ($q) {
+                $q->where('message', 'like', '%'.request('search').'%')
+                    ->orWhere('display_message', 'like', '%'.request('search').'%');
+            });
         }
 
         // Paginate

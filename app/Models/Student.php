@@ -234,8 +234,8 @@ class Student extends Model
     /**
      * Helper method to log activity.
      */
-    public function logActivity(string $message, string $category, ?array $metadata = null): void
+    public function logActivity(string $message, string $category, ?array $metadata = null, ?string $displayMessage = null): void
     {
-        app(LogActivityAction::class)($this, $message, $category, $metadata);
+        app(LogActivityAction::class)($this, $message, $category, $metadata, $displayMessage);
     }
 }

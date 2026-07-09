@@ -45,6 +45,9 @@ class HandleInertiaRequests extends Middleware
                 'instructor_id' => $user?->isInstructor() ? $user->instructor?->id : null,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            'hmrc' => [
+                'show_mtd_button' => (bool) config('hmrc.show_mtd_button'),
+            ],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),

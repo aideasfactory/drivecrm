@@ -47,6 +47,8 @@ class StepTwoController extends Controller
             SyncBookingEnquiryToBirdJob::dispatch($enquiry);
         }
 
+        $tracking = $enquiry->getTracking() ?? [];
+
         return Inertia::render('Booking/Step2', [
             'uuid' => $enquiry->id,
             'currentStep' => 2,
@@ -54,6 +56,8 @@ class StepTwoController extends Controller
             'postcode' => $postcode,
             'inArea' => $inArea,
             'maxStepReached' => $enquiry->max_step_reached,
+            'source' => $tracking['source'] ?? null,
+            'gclid' => $tracking['gclid'] ?? null,
         ]);
     }
 

@@ -37,7 +37,10 @@ class GetActivityLogsAction
 
         $search = $filters['search'] ?? null;
         if ($search !== null && $search !== '') {
-            $query->where('message', 'like', '%'.$search.'%');
+            $query->where(function ($q) use ($search) {
+                $q->where('message', 'like', '%'.$search.'%')
+                    ->orWhere('display_message', 'like', '%'.$search.'%');
+            });
         }
 
         $perPage = $filters['per_page'] ?? 20;

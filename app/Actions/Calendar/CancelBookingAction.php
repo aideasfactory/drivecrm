@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Calendar;
 
 use App\Actions\Instructor\DeleteCalendarItemAction;
+use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
 use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
 use App\Models\CalendarItem;
@@ -23,6 +24,7 @@ class CancelBookingAction
 {
     public function __construct(
         protected DeleteCalendarItemAction $deleteCalendarItem,
+        protected RecalculateStudentLessonNumbersAction $recalculateStudentLessonNumbers,
     ) {}
 
     /**
@@ -87,6 +89,12 @@ class CancelBookingAction
         });
 
         $orderCancelled = $this->cancelOrderIfFullyCancelled($order);
+
+        // Cancelled lessons leave a gap in the student's sequence — renumber the
+        // remaining open lessons so numbers stay contiguous and chronological.
+        if ($order?->student_id) {
+            ($this->recalculateStudentLessonNumbers)($order->student_id);
+        }
 
         $this->invalidateCalendarCache($instructor?->id, $affectedDates);
 
@@ -231,6 +239,7 @@ class CancelBookingAction
                     'order_cancelled' => $orderCancelled,
                     'cancelled_by_user_id' => $actor->id,
                 ],
+                "Cancelled {$cancelSet->count()} lesson(s): {$reason}",
             );
         }
 

@@ -26,6 +26,7 @@ interface ActivityLog {
     id: number
     category: string
     message: string
+    display_message: string | null
     metadata: Record<string, unknown> | null
     created_at: string
 }
@@ -274,7 +275,7 @@ onMounted(() => {
                                 {{ timeAgo(log.created_at) }}
                             </span>
                         </div>
-                        <p class="text-sm">{{ log.message }}</p>
+                        <p class="text-sm">{{ log.display_message || log.message }}</p>
                         <div
                             v-if="log.metadata"
                             class="mt-2 text-xs text-muted-foreground"

@@ -40,9 +40,10 @@ use App\Actions\Instructor\UploadFinanceReceiptAction;
 use App\Actions\Instructor\UploadInstructorProfilePictureAction;
 use App\Actions\Lesson\UpdateLessonMileageAction;
 use App\Actions\ProgressTracker\SeedInstructorProgressTrackerAction;
-use App\Actions\PushNotification\QueuePushNotificationAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Shared\Message\SendBroadcastMessageAction;
+use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
+use App\Enums\MessageType;
 use App\Enums\RecurrencePattern;
 use App\Enums\UserRole;
 use App\Models\CalendarItem;
@@ -50,6 +51,7 @@ use App\Models\Instructor;
 use App\Models\InstructorFinance;
 use App\Models\Lesson;
 use App\Models\Location;
+use App\Models\Message;
 use App\Models\MileageLog;
 use App\Models\Package;
 use App\Models\Student;
@@ -111,7 +113,7 @@ class InstructorService extends BaseService
         protected SeedInstructorProgressTrackerAction $seedInstructorProgressTracker,
         protected SendInstructorWelcomeEmailAction $sendInstructorWelcomeEmail,
         protected CancelBookingAction $cancelBooking,
-        protected QueuePushNotificationAction $queuePushNotification,
+        protected RecalculateStudentLessonNumbersAction $recalculateStudentLessonNumbers,
     ) {}
 
     /**
@@ -401,6 +403,14 @@ class InstructorService extends BaseService
 
         // Notify students if the time/date has changed and there are booked lessons
         if ($hasTimeChanged && $affectedLessons->isNotEmpty()) {
+            // A moved lesson may now sit before/after the student's other lessons —
+            // keep student_lesson_number chronological.
+            $affectedLessons
+                ->pluck('order.student_id')
+                ->filter()
+                ->unique()
+                ->each(fn ($studentId) => ($this->recalculateStudentLessonNumbers)((int) $studentId));
+
             $itemNotes = $item->notes ?? $notes;
             $this->notifyStudentsOfReschedule(
                 $instructor,
@@ -729,13 +739,27 @@ class InstructorService extends BaseService
     }
 
     /**
-     * Notify the student that the instructor is on their way: emails the
-     * student, queues a push notification (only when they have a token), and
-     * records the activity for the instructor's timeline.
+     * Notify the student that the instructor is on their way. When the student
+     * has a user account this is just a typed message row — MessageObserver
+     * fires the email, push, and activity log. Students without an account
+     * can't have a message row (`to` is a user FK), so they fall back to a
+     * direct email plus an inline activity log entry.
      */
     public function notifyStudentOnWay(Instructor $instructor, Lesson $lesson): void
     {
         $student = $lesson->order?->student;
+
+        if ($student?->user_id) {
+            Message::create([
+                'from' => $instructor->user_id,
+                'to' => $student->user_id,
+                'message' => $instructor->name.' is on their way to your driving lesson.',
+                'type' => MessageType::LESSON_ON_WAY,
+                'meta' => ['lesson_id' => $lesson->id],
+            ]);
+
+            return;
+        }
 
         if ($student) {
             $recipientEmail = $student->email ?: $student->contact_email;
@@ -744,13 +768,6 @@ class InstructorService extends BaseService
                 Notification::route('mail', $recipientEmail)
                     ->notify(new InstructorOnWayNotification($lesson, $instructor, $student));
             }
-
-            $this->queueStudentPush(
-                $student,
-                'Your instructor is on the way',
-                $instructor->name.' is on their way to your driving lesson.',
-                ['lesson_id' => $lesson->id, 'notification_type' => 'on_way'],
-            );
         }
 
         ($this->logActivity)(
@@ -766,13 +783,27 @@ class InstructorService extends BaseService
     }
 
     /**
-     * Notify the student that the instructor has arrived: emails the student,
-     * queues a push notification (only when they have a token), and records the
-     * activity for the instructor's timeline.
+     * Notify the student that the instructor has arrived. When the student has
+     * a user account this is just a typed message row — MessageObserver fires
+     * the email, push, and activity log. Students without an account can't
+     * have a message row (`to` is a user FK), so they fall back to a direct
+     * email plus an inline activity log entry.
      */
     public function notifyStudentArrived(Instructor $instructor, Lesson $lesson): void
     {
         $student = $lesson->order?->student;
+
+        if ($student?->user_id) {
+            Message::create([
+                'from' => $instructor->user_id,
+                'to' => $student->user_id,
+                'message' => $instructor->name.' has arrived for your driving lesson and is waiting for you.',
+                'type' => MessageType::LESSON_ARRIVED,
+                'meta' => ['lesson_id' => $lesson->id],
+            ]);
+
+            return;
+        }
 
         if ($student) {
             $recipientEmail = $student->email ?: $student->contact_email;
@@ -781,13 +812,6 @@ class InstructorService extends BaseService
                 Notification::route('mail', $recipientEmail)
                     ->notify(new InstructorArrivedNotification($lesson, $instructor, $student));
             }
-
-            $this->queueStudentPush(
-                $student,
-                'Your instructor has arrived',
-                $instructor->name.' has arrived for your driving lesson and is waiting for you.',
-                ['lesson_id' => $lesson->id, 'notification_type' => 'arrived'],
-            );
         }
 
         ($this->logActivity)(
@@ -800,23 +824,6 @@ class InstructorService extends BaseService
                 'notification_type' => 'arrived',
             ]
         );
-    }
-
-    /**
-     * Queue a push notification for a student's user account, but only when that
-     * user exists and has a registered Expo push token. Picked up and delivered
-     * by the `push:send-queued` scheduled command. Push is an additive layer, so
-     * a missing token is a silent no-op rather than an error.
-     *
-     * @param  array<string, mixed>  $data
-     */
-    protected function queueStudentPush(Student $student, string $title, string $body, array $data): void
-    {
-        $user = $student->user;
-
-        if ($user && $user->expo_push_token) {
-            ($this->queuePushNotification)($user, $title, $body, $data);
-        }
     }
 
     /**

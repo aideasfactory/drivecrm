@@ -4,7 +4,7 @@ import axios from 'axios'
 import { router } from '@inertiajs/vue3'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/sonner'
@@ -25,6 +25,7 @@ interface StudentDetail {
     user_id: number | null
     instructor_id: number | null
     name: string
+    avatar: string | null
     first_name: string | null
     surname: string | null
     email: string | null
@@ -143,6 +144,11 @@ onMounted(() => {
                     <div class="flex items-center gap-4">
                         <!-- Large Avatar -->
                         <Avatar class="h-20 w-20">
+                            <AvatarImage
+                                v-if="student.avatar"
+                                :src="student.avatar"
+                                :alt="student.name"
+                            />
                             <AvatarFallback class="text-2xl">
                                 {{ getInitials(student.name) }}
                             </AvatarFallback>

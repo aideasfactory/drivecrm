@@ -70,7 +70,8 @@ class SendInstructorWelcomeEmailAction
                 [
                     'type' => 'instructor_welcome',
                     'recipient_email' => $user->email,
-                ]
+                ],
+                'Welcome email sent'
             );
 
             Log::info('Instructor welcome email queued', [

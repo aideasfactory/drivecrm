@@ -141,5 +141,35 @@ literally.
 
 ---
 
+## 💭 PHASE 3: REFLECTION ✅
+
+### Why this shape is right for the brief
+- The brief asks for a single flag that overrides both fees. Centralising
+  the fees behind `App\Support\Fees` means one place decides the value —
+  every touchpoint honours the flag automatically.
+- The brief also asks that fees remain configurable for later use.
+  `config/fees.php` reads three env variables; changing pricing is a `.env`
+  edit + config clear, no code change.
+
+### Operational notes
+- Enabling `FEES_OVERRIDE_TO_ZERO=true` zeros both fees for **new**
+  bookings/orders. Historical orders keep the pence values they were
+  stored with.
+- The default (`FEES_OVERRIDE_TO_ZERO=false`) preserves current behaviour.
+- The default booking fee falls back to `19.99`, matching
+  `CalculatePackagePricingAction::BOOKING_FEE` (the historical primary
+  source of truth used at checkout).
+- Because the previous inline literal in `CreateOrderFromEnquiryAction` was
+  `£9.99`, moving that action onto the shared `Fees::bookingFeePence()` will
+  raise its booking fee to `£19.99` unless the user overrides via env. This
+  brings the onboarding flow into sync with `StepFiveController` and
+  `CalculatePackagePricingAction`. If £9.99 was the correct value, set
+  `BOOKING_FEE=9.99` in `.env`.
+
+### Follow-ups not done (out of scope)
+- No tests added (project rule: user maintains tests).
+- No `Pint` run (project rule: user handles code style).
+- No migration / retro backfill of `orders` fees.
+
 **Status:** All phases complete.
 **Last Updated:** 2026-07-08.

@@ -132,6 +132,15 @@
                     <td>{{ $instructorId ?: '—' }}</td>
                 </tr>
                 <tr>
+                    <th>Source</th>
+                    <td>
+                        {{ $source ?: '—' }}
+                        @if ($gclid)
+                            <br><span style="font-size:12px;color:#6B7280;">gclid: {{ $gclid }}</span>
+                        @endif
+                    </td>
+                </tr>
+                <tr>
                     <th>Submitted</th>
                     <td>{{ $submittedAt ?: '—' }}</td>
                 </tr>

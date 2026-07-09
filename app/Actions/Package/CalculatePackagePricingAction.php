@@ -5,16 +5,10 @@ declare(strict_types=1);
 namespace App\Actions\Package;
 
 use App\Models\Package;
+use App\Support\Fees;
 
 class CalculatePackagePricingAction
 {
-    /**
-     * Fee constants — single source of truth for all fee values.
-     */
-    public const BOOKING_FEE = 19.99;
-
-    public const DIGITAL_FEE_PER_LESSON = 3.99;
-
     /**
      * Calculate the full pricing breakdown for a package.
      *
@@ -37,8 +31,9 @@ class CalculatePackagePricingAction
     public function __invoke(Package $package, ?array $promoDiscount = null): array
     {
         $packagePrice = $package->total_price_pence / 100;
-        $bookingFee = self::BOOKING_FEE;
-        $digitalFeeTotal = self::DIGITAL_FEE_PER_LESSON * $package->lessons_count;
+        $bookingFee = Fees::bookingFee();
+        $digitalFeePerLesson = Fees::digitalFeePerLesson();
+        $digitalFeeTotal = $digitalFeePerLesson * $package->lessons_count;
 
         $subtotal = $packagePrice + $bookingFee + $digitalFeeTotal;
 
@@ -59,7 +54,7 @@ class CalculatePackagePricingAction
             'package_price_pence' => $package->total_price_pence,
             'package_price' => round($packagePrice, 2),
             'booking_fee' => $bookingFee,
-            'digital_fee_per_lesson' => self::DIGITAL_FEE_PER_LESSON,
+            'digital_fee_per_lesson' => $digitalFeePerLesson,
             'digital_fee_total' => round($digitalFeeTotal, 2),
             'lessons_count' => $package->lessons_count,
             'promo_code' => $promoCode,

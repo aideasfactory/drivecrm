@@ -25,6 +25,7 @@ interface ActivityLog {
     id: number
     category: string
     message: string
+    display_message: string | null
     metadata: Record<string, unknown> | null
     created_at: string
 }
@@ -240,7 +241,7 @@ onMounted(() => {
                 <!-- Content -->
                 <div class="flex flex-1 flex-col gap-1 pt-1">
                     <div class="flex flex-wrap items-center gap-2">
-                        <p class="text-sm">{{ log.message }}</p>
+                        <p class="text-sm">{{ log.display_message || log.message }}</p>
                         <Badge :variant="categoryVariant(log.category)" class="text-xs">
                             {{ log.category }}
                         </Badge>

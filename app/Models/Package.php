@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Fees;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -95,22 +96,32 @@ class Package extends Model
 
     public function getBookingFeeAttribute(): string
     {
-        return '£'.number_format(9.99, 2);
+        return '£'.number_format(Fees::bookingFee(), 2);
     }
 
     public function getDigitalFeeAttribute(): string
     {
-        return '£'.number_format(3.99 * $this->lessons_count, 2);
+        return '£'.number_format(Fees::digitalFeePerLesson() * $this->lessons_count, 2);
     }
 
     public function getTotalPriceAttribute(): string
     {
-        return '£'.number_format((($this->total_price_pence / 100) + 9.99 + (3.99 * $this->lessons_count)), 2);
+        $packagePrice = $this->total_price_pence / 100;
+        $total = $packagePrice + Fees::bookingFee() + (Fees::digitalFeePerLesson() * $this->lessons_count);
+
+        return '£'.number_format($total, 2);
     }
 
     public function getWeeklyPaymentAttribute(): string
     {
-        return '£'.number_format((($this->total_price_pence / 100) + 9.99 + (3.99 * $this->lessons_count)) / $this->lessons_count, 2);
+        if (! $this->lessons_count) {
+            return '£'.number_format(0, 2);
+        }
+
+        $packagePrice = $this->total_price_pence / 100;
+        $total = $packagePrice + Fees::bookingFee() + (Fees::digitalFeePerLesson() * $this->lessons_count);
+
+        return '£'.number_format($total / $this->lessons_count, 2);
     }
 
     /**

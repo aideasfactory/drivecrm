@@ -22,7 +22,11 @@ class MessageResource extends JsonResource
             'sender_name' => $this->sender?->name,
             'recipient_id' => $this->to,
             'message' => $this->message,
+            'type' => $this->type?->value ?? 'direct',
+            'meta' => $this->meta,
             'is_own' => $this->from === $request->user()->id,
+            'is_read' => $this->isRead(),
+            'read_at' => $this->read_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

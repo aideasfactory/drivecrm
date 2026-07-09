@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Student\Order;
 
 use App\Actions\Package\CalculatePackagePricingAction;
+use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
 use App\Enums\CalendarItemStatus;
 use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
@@ -117,6 +118,10 @@ class CreateOrderFromApiAction
                     ]);
                 }
             }
+
+            // A one-off/block booked after an existing block may be dated before
+            // it — renumber so student_lesson_number stays chronological.
+            app(RecalculateStudentLessonNumbersAction::class)($student->id);
 
             if ($paymentMode === PaymentMode::WEEKLY) {
                 $order->status = OrderStatus::ACTIVE;

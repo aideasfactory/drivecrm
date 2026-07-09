@@ -259,11 +259,11 @@
                       </div>
                       <div class="flex items-center justify-between">
                         <span>Booking fee</span>
-                        <span class="font-medium">£{{ pricing?.booking_fee || '19.99' }}</span>
+                        <span class="font-medium">£{{ pricing?.booking_fee ?? '0.00' }}</span>
                       </div>
                       <div class="flex items-center justify-between">
                         <span>Digital Fee</span>
-                        <span class="font-medium">{{ package?.digital_fee || '3.99' }}</span>
+                        <span class="font-medium">{{ package?.digital_fee ?? '£0.00' }}</span>
                       </div>
                       <div v-if="promoDiscount" class="flex items-center justify-between text-green-600">
                         <span>Promo discount</span>

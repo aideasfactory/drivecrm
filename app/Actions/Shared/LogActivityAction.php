@@ -14,9 +14,10 @@ class LogActivityAction
      * Log an activity for an instructor or student.
      *
      * @param  Instructor|Student  $loggable  The entity to log activity for
-     * @param  string  $message  Human-readable activity message
+     * @param  string  $message  Full audit message (self-contained: who, what, to whom)
      * @param  string  $category  Activity category (lesson, booking, message, payment, profile, etc.)
      * @param  array|null  $metadata  Additional context data
+     * @param  string|null  $displayMessage  Short user-facing message for the UI; falls back to $message when null
      *
      * @throws InvalidArgumentException If loggable is not Instructor or Student
      */
@@ -24,7 +25,8 @@ class LogActivityAction
         Model $loggable,
         string $message,
         string $category,
-        ?array $metadata = null
+        ?array $metadata = null,
+        ?string $displayMessage = null
     ): void {
         // Validate that loggable is either Instructor or Student
         if (! $loggable instanceof Instructor && ! $loggable instanceof Student) {
@@ -34,6 +36,6 @@ class LogActivityAction
         }
 
         // Dispatch job to queue
-        LogActivityJob::dispatch($loggable, $message, $category, $metadata);
+        LogActivityJob::dispatch($loggable, $message, $category, $metadata, $displayMessage);
     }
 }

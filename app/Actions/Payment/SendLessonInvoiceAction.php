@@ -122,7 +122,8 @@ class SendLessonInvoiceAction
                     'recipient_email' => $recipientEmail,
                     'is_booked_by_contact' => $isBookedByContact,
                     'invoice_url' => $hostedInvoiceUrl,
-                ]
+                ],
+                "Payment reminder email sent for the lesson on {$lessonDate}"
             );
 
             // Additive push notification — only fires when the student owns the
@@ -173,7 +174,8 @@ class SendLessonInvoiceAction
                     'type' => 'lesson_payment_reminder_push',
                     'lesson_payment_id' => $lessonPayment->id,
                     'push_notification_id' => $pushNotification->id,
-                ]
+                ],
+                'Payment reminder push notification sent'
             );
         }
     }

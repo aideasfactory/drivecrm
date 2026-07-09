@@ -15,6 +15,7 @@ class ActivityLog extends Model
         'loggable_id',
         'category',
         'message',
+        'display_message',
         'metadata',
     ];
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Onboarding;
 
+use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
 use App\Enums\CalendarItemStatus;
 use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
@@ -20,6 +21,7 @@ use App\Models\Package;
 use App\Models\Student;
 use App\Services\InstructorCalendarService;
 use App\Services\InstructorService;
+use App\Support\Fees;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -49,9 +51,10 @@ class CreateOrderFromEnquiryAction
             // Get instructor ID from step 2 or use package instructor
             $instructorId = $step2['instructor_id'] ?? $package->instructor_id;
 
-            // Calculate fees
-            $bookingFeePence = 999; // £9.99
-            $digitalFeePence = 399 * $package->lessons_count; // £3.99 per lesson
+            // Fees are sourced from config/fees.php via App\Support\Fees so
+            // FEES_OVERRIDE_TO_ZERO zeroes both amounts across the pipeline.
+            $bookingFeePence = Fees::bookingFeePence();
+            $digitalFeePence = Fees::digitalFeeTotalPence($package->lessons_count);
 
             // Apply discount to base package price if present
             $packagePricePence = $package->total_price_pence;
@@ -149,6 +152,10 @@ class CreateOrderFromEnquiryAction
                 $endTime,
                 $calendarItemIds
             );
+
+            // A booking dated before the student's existing lessons must take an
+            // earlier number — renumber so student_lesson_number stays chronological.
+            app(RecalculateStudentLessonNumbersAction::class)($student->id);
 
             // For weekly payment mode, create lesson payment records
             if ($paymentMode === PaymentMode::WEEKLY) {

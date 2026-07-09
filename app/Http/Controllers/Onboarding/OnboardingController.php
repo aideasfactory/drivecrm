@@ -64,6 +64,17 @@ class OnboardingController extends Controller
             $data['prefill'] = $prefill;
         }
 
+        // Google Ads landing URLs carry ?gclid=…; capture it here so it
+        // survives the redirect into the step flow and can be forwarded to
+        // downstream tools (Bird CRM, admin email, GTM) as source "Google ads".
+        $gclid = trim((string) $request->query('gclid', ''));
+        if ($gclid !== '') {
+            $data['tracking'] = [
+                'gclid' => $gclid,
+                'source' => 'Google ads',
+            ];
+        }
+
         $maxStep = 1;
 
         // If instructor_id is prefilled, auto-populate step 2 data and advance
