@@ -10,6 +10,7 @@ use App\Models\CalendarItem;
 use App\Models\Instructor;
 use App\Models\Location;
 use App\Models\Package;
+use App\Support\Fees;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -52,9 +53,10 @@ class StepFiveController extends Controller
             $pickupLocation = Location::find($step3['pickup_location_id']);
         }
 
-        // Calculate pricing
+        // Calculate pricing (booking fee comes from config/fees.php so
+        // FEES_OVERRIDE_TO_ZERO takes effect wherever it's read).
         $packagePrice = $package ? (float) $package->price : 0;
-        $bookingFee = 19.99;
+        $bookingFee = Fees::bookingFee();
         $promoDiscount = 0;
 
         // Apply promo code if exists
