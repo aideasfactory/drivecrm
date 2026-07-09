@@ -45,7 +45,9 @@ class ResendLessonInvoiceAction
                 return ['success' => false, 'error' => 'Invoice does not have a payment URL'];
             }
 
-            $this->sendReminderNotification($lessonPayment, $student, $hostedInvoiceUrl);
+            $breakdown = LessonPayment::weeklyBreakdown($order, (int) $lessonPayment->amount_pence);
+
+            $this->sendReminderNotification($lessonPayment, $student, $hostedInvoiceUrl, $breakdown);
 
             Log::info('Lesson invoice resent successfully', [
                 'lesson_payment_id' => $lessonPayment->id,
@@ -66,7 +68,10 @@ class ResendLessonInvoiceAction
         }
     }
 
-    protected function sendReminderNotification(LessonPayment $lessonPayment, Student $student, string $hostedInvoiceUrl): void
+    /**
+     * @param  array{lesson: int, booking_fee: int, digital_fee: int}|null  $breakdown
+     */
+    protected function sendReminderNotification(LessonPayment $lessonPayment, Student $student, string $hostedInvoiceUrl, ?array $breakdown = null): void
     {
         $isBookedByContact = ! $student->owns_account;
 
@@ -86,7 +91,7 @@ class ResendLessonInvoiceAction
         }
 
         Notification::route('mail', $recipientEmail)
-            ->notify(new LessonPaymentReminderNotification($lessonPayment, $student, $hostedInvoiceUrl, $isBookedByContact));
+            ->notify(new LessonPaymentReminderNotification($lessonPayment, $student, $hostedInvoiceUrl, $isBookedByContact, $breakdown));
 
         $lessonDate = $lessonPayment->lesson?->date?->format('d M Y') ?? 'N/A';
 
