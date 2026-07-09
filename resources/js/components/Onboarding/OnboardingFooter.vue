@@ -20,7 +20,6 @@
             >
               {{ link }}
             </a>
-            <CookiePreferencesLink />
           </div>
 
         </div>
@@ -31,7 +30,6 @@
 
 <script setup lang="ts">
 import { Card, CardContent } from '@/components/ui/card'
-import CookiePreferencesLink from '@/components/CookiePreferencesLink.vue'
 
 interface Props {
   copyrightText?: string

@@ -11,20 +11,6 @@
         @php($loadGtm = $gtmId && $isTrackingRoute)
         @php($loadGtag = ($googleAdsId || $googleGa4Id) && $isTrackingRoute)
 
-        @if ($loadGtm || $loadGtag)
-            {{-- Google Consent Mode: everything denied until the visitor accepts analytics cookies (see cookieConsent.ts) --}}
-            <script>
-                window.dataLayer = window.dataLayer || [];
-                function gtag(){dataLayer.push(arguments);}
-                gtag('consent', 'default', {
-                    ad_storage: 'denied',
-                    ad_user_data: 'denied',
-                    ad_personalization: 'denied',
-                    analytics_storage: 'denied',
-                });
-            </script>
-        @endif
-
         @if ($loadGtm)
             <!-- Google Tag Manager -->
             <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':

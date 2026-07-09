@@ -1,176 +1,170 @@
-# Task: Environment variable to override the MTD digital button on the instructor layout
+# Task: Drive onboarding & booking form — remove cookie banner + capture Google Ads gclid
 
 ## Overview
 
-The instructor layout (`InstructorHeader.vue`) currently exposes two HMRC-related
-buttons — "HMRC Connected" (when linked) and "HMRC / Tax" (when unlinked) — that
-give instructors access to Making Tax Digital (MTD) features (ITSA + VAT).
+Two small marketing-flow changes to the public `/onboarding` and `/booking`
+flows:
 
-Requirement: hide these MTD digital buttons by default and add an environment
-variable to override that so a site owner can bring them back without a code
-change.
+1. **Remove the cookie banner completely.** The vanilla-cookieconsent bar,
+   the "Cookie preferences" links in the page footers, and every piece of
+   consent-gating in the code (Google Maps, GTM Consent Mode default-deny)
+   go away.
+2. **Capture `gclid` from Google Ads landing URLs** and forward the value to
+   third parties as a `source` parameter labelled `Google ads`.
+
+The client has decided to run without a consent banner (their legal team's
+call). GTM, GA4, and Google Ads tags will simply fire when the booking /
+onboarding pages load, so we can drop the Consent Mode default-deny block
+too.
 
 ## Locations identified
 
-1. **`resources/js/components/Instructors/InstructorHeader.vue`**
-   - Renders two "MTD digital" buttons: HMRC Connected (line ~217) and
-     HMRC / Tax (line ~227) — both are the surface the user calls the
-     "MTD digital button".
+**Cookie banner:**
+- `resources/js/app.ts` — `initCookieConsent()` call on app boot.
+- `resources/js/lib/cookieConsent.ts` — the whole init + preferences module.
+- `resources/js/lib/cookieConsent.css` — companion stylesheet.
+- `resources/js/components/CookiePreferencesLink.vue` — the reusable link.
+- `resources/js/pages/Booking/Step1.vue` — mounts `<CookiePreferencesLink />`.
+- `resources/js/pages/Booking/Step2.vue` — mounts it in both branches.
+- `resources/js/components/Onboarding/OnboardingFooter.vue` — mounts it in the footer.
+- `resources/js/components/Onboarding/InstructorMap.vue` — gates map init behind functional consent.
+- `resources/views/app.blade.php` — Google Consent Mode default-deny block.
+- `package.json` — `vanilla-cookieconsent` dep.
 
-2. **`config/hmrc.php`**
-   - Right place for a new `show_mtd_button` config value backed by an env var.
-
-3. **`app/Http/Middleware/HandleInertiaRequests.php`**
-   - Shares props globally with Inertia. Best surface to expose the flag to Vue
-     without wiring it through every controller.
+**gclid capture & forward:**
+- `app/Http/Controllers/Booking/BookingController.php` — `/booking` entry point.
+- `app/Http/Controllers/Onboarding/OnboardingController.php` — `/onboarding` entry point.
+- `app/Services/BirdContactService.php` — payload to Bird CRM (third-party sink).
+- `app/Mail/BookingEnquirySubmittedMail.php` + `resources/views/emails/booking-enquiry-submitted.blade.php` — internal notification.
+- `resources/js/pages/Booking/Step2.vue` — GTM `booking_enquiry_submitted` dataLayer push.
 
 ## Phase 1: Planning ✅
 
-### What needs to change
+### Cookie banner removal
 
-**Backend:**
-- `config/hmrc.php`
-  - Add `'show_mtd_button' => (bool) env('SHOW_MTD_BUTTON', false)` — defaults
-    to `false` so the button is hidden unless the site operator opts in.
-- `app/Http/Middleware/HandleInertiaRequests.php`
-  - Share the flag as `hmrc.show_mtd_button` so every Inertia page can read it.
-- `.env.example`
-  - Document the new `SHOW_MTD_BUTTON` variable.
+- Delete the vanilla-cookieconsent init and its two supporting files
+  (`cookieConsent.ts`, `cookieConsent.css`, `CookiePreferencesLink.vue`).
+- Strip `<CookiePreferencesLink />` from `Booking/Step1.vue`, `Booking/Step2.vue`,
+  and `OnboardingFooter.vue`.
+- Simplify `Onboarding/InstructorMap.vue`: drop the "awaiting consent" state,
+  the `hasFunctionalConsent`/`openCookiePreferences` imports, and the
+  `cc:onConsent`/`cc:onChange` listeners. The map now initialises unconditionally.
+- Remove the Consent Mode default-deny block from `resources/views/app.blade.php`.
+  GTM/GA/Ads tags will fire straight away once the visitor loads a
+  booking/onboarding route.
+- Drop `vanilla-cookieconsent` from `package.json`.
 
-**Frontend:**
-- `resources/js/types/globals.d.ts` (or the shared `PageProps` type)
-  - Extend the shared Inertia page props type with `hmrc.show_mtd_button`.
-- `resources/js/components/Instructors/InstructorHeader.vue`
-  - Read `hmrc.show_mtd_button` from `usePage().props`.
-  - Wrap both HMRC buttons in a `v-if` so they only render when the flag is
-    truthy AND the user is an instructor (existing role check).
+### gclid capture
 
-### Why this scope
-
-- The requirement is UI-only ("hide the button"). No routes need blocking — the
-  HMRC tab remains reachable by direct URL for admins/owners. This is a display
-  toggle, not a feature disable.
-- Using a config-backed env var (not a raw `env()` call in code) is the Laravel
-  convention and keeps behavior predictable when config is cached.
-- Sharing via `HandleInertiaRequests` keeps the flag globally available without
-  having to touch each controller that renders an instructor page.
+- On `/booking` and `/onboarding` entry, read `?gclid=` from the query. If
+  present, store `data.tracking = { gclid, source: 'Google ads' }` on the
+  new enquiry.
+- In `BirdContactService::buildPayload()`, read the enquiry's tracking data
+  and, when present, add a `source` attribute (`Google ads`) plus a `gclid`
+  attribute so the ads-source is available in Bird CRM.
+- In the admin email view, add a "Source" row so operators see where the
+  enquiry came from.
+- On `Booking/Step2.vue`, enrich the `booking_enquiry_submitted` dataLayer
+  event with `source` and `gclid` so GTM can forward them to Google Ads
+  conversion / GA4.
 
 **Created:** 2026-07-08
 **Last Updated:** 2026-07-08
 **Status:** In Progress
 
-- Blocking access to `/hmrc/*` routes (this is a UI hide, not a permission).
-- Changing HMRC connection logic, tokens, or middleware.
-- Hiding the "HMRC" tab pill inside the instructor page — the visible button
-  in the header is the specific surface called out by the requirement.
+- Multi-source attribution (UTM, fbclid, etc.). Ticket is explicit: gclid only.
+- New DB column for the gclid: the enquiry already stores an arbitrary `data`
+  JSON blob; adding a nested `tracking` key is enough and keeps the schema
+  unchanged.
+- Bird CRM cookie policy / consent reconciliation. The client's decision to
+  drop the banner is documented in the client-facing summary; policy sits
+  outside this ticket.
 
 ## Phase 2: Implementation ✅
 
-### Files edited
+### Cookie banner removal
 
-- `config/hmrc.php`
-  - Added `show_mtd_button` config key backed by `SHOW_MTD_BUTTON` env var,
-    defaulting to `false`.
-- `app/Http/Middleware/HandleInertiaRequests.php`
-  - Shared `hmrc.show_mtd_button` as a global Inertia prop.
-- `resources/js/components/Instructors/InstructorHeader.vue`
-  - Read the flag from `usePage().props.hmrc?.show_mtd_button` and wrapped both
-    the "HMRC Connected" and "HMRC / Tax" buttons behind it.
-- `resources/js/types/index.d.ts`
-  - Extended `SharedData` with `hmrc: { show_mtd_button: boolean }`.
-- `.env.example`
-  - Added `SHOW_MTD_BUTTON=false` with a short comment.
+- `resources/js/app.ts` — removed the `initCookieConsent` import and boot call.
+- `resources/js/pages/Booking/Step1.vue` — removed `<CookiePreferencesLink />`
+  and its import.
+- `resources/js/pages/Booking/Step2.vue` — removed both mounts and the import.
+- `resources/js/components/Onboarding/OnboardingFooter.vue` — removed the
+  link mount and its import.
+- `resources/js/components/Onboarding/InstructorMap.vue` — removed the
+  "awaiting consent" branch, the `hasFunctionalConsent`/`openCookiePreferences`
+  imports, and the `cc:onConsent`/`cc:onChange` listeners. `onMounted` now
+  calls `initializeMap()` directly.
+- `resources/js/lib/cookieConsent.ts`, `resources/js/lib/cookieConsent.css`,
+  and `resources/js/components/CookiePreferencesLink.vue` — deleted.
+- `resources/views/app.blade.php` — removed the Google Consent Mode
+  default-deny block. GTM / gtag now fire on load for booking/onboarding
+  routes without any consent gate.
+- `package.json` — dropped the `vanilla-cookieconsent` dependency.
 
-## 📋 Overview
+### gclid capture + forwarding
 
-- **Default hidden.** The user asked to "hide the MTD digital button" first,
-  then have an env var override — so the safe default is `false`.
-- **Boolean cast in config.** `env()` returns strings for values like "true"
-  in some setups; a `(bool)` cast normalises the flag so the frontend can
-  trust `v-if` semantics.
-- **Shared prop, not per-page.** Sharing through the Inertia middleware means
-  any future instructor page that wants to consult the flag has it for free.
-- **Guarded on both existing conditions.** The buttons still require the
-  `isInstructor` role check that was there before — the new flag is an
-  *additional* gate, not a replacement.
-
-## 🎯 PHASE 1: PLANNING ✅
-
-### Decisions Made
-- **New config file `config/fees.php`** — fees are their own concern; mixing
-  them into `services.php` would drown them among third-party credentials.
-- **Master override flag: `FEES_OVERRIDE_TO_ZERO`** — a single boolean that
-  zeroes both fees at read time. Individual base amounts stay configured so
-  the "later use" requirement is preserved.
-- **Config helper method `App\Support\Fees`** — a small class with
-  `bookingFee()`, `digitalFeePerLesson()`, `bookingFeePence()`,
-  `digitalFeePerLessonPence()` so callers don't have to repeatedly apply the
-  override boolean. Keeps the override rule in one place.
-- **Where the flag is honoured** — everywhere fees are computed for display
-  or persistence: `CalculatePackagePricingAction`, `CreateOrderFromEnquiryAction`,
-  `StepFiveController`, `Package` accessors. Historical orders keep their
-  already-stored pence values (we do not rewrite `orders.booking_fee_pence`).
-- **No migration** — fees are configuration, not schema.
-
-### Components / files touched
-- `config/fees.php` (new)
-- `app/Support/Fees.php` (new — thin helper)
-- `.env.example` (append new keys)
-- `app/Actions/Package/CalculatePackagePricingAction.php`
-- `app/Actions/Onboarding/CreateOrderFromEnquiryAction.php`
-- `app/Http/Controllers/Onboarding/StepFiveController.php`
-- `app/Models/Package.php`
-
-**Why this shape is right for the brief:**
-- Single env var toggles the UI. No behavior change beyond visibility.
-- Config-first pattern keeps it cache-safe and testable.
-- No changes to route registration or authorisation.
-
-**Operational notes:**
-- To show the button in an environment, set `SHOW_MTD_BUTTON=true` in `.env`
-  and run `php artisan config:clear` (or `config:cache`) so the new value takes
-  effect.
-- The HMRC tab is still directly linkable by URL — this is a header display
-  toggle only.
-
-**Out of scope, carried forward:**
-- If the product later wants a full "hide all MTD features" mode, the same env
-  var could gate route registration in `routes/web.php`. That's a bigger blast
-  radius and not part of this brief.
-
-### Files created
-- `config/fees.php` — declares `booking_fee`, `digital_fee_per_lesson`,
-  `override_to_zero`.
-- `app/Support/Fees.php` — helper with `bookingFee()` / `bookingFeePence()`
-  / `digitalFeePerLesson()` / `digitalFeePerLessonPence()`
-  / `digitalFeeTotalPence(int $lessons)`.
-
-### Files modified
-- `.env.example` — added `BOOKING_FEE`, `DIGITAL_FEE_PER_LESSON`,
-  `FEES_OVERRIDE_TO_ZERO` under a "Fees" section.
-- `app/Actions/Package/CalculatePackagePricingAction.php` — reads
-  `Fees::bookingFee()` and `Fees::digitalFeePerLesson()` instead of class
-  constants. Constants kept as deprecated defaults (removed in favour of
-  config lookup).
-- `app/Actions/Onboarding/CreateOrderFromEnquiryAction.php` — replaces the
-  `999` / `399` literals with `Fees::bookingFeePence()` /
-  `Fees::digitalFeePerLessonPence() * $lessons_count`.
-- `app/Http/Controllers/Onboarding/StepFiveController.php` — reads
-  `Fees::bookingFee()` instead of the `19.99` literal.
-- `app/Models/Package.php` — `getBookingFeeAttribute`, `getDigitalFeeAttribute`,
-  `getTotalPriceAttribute`, `getWeeklyPaymentAttribute` all read from
-  `Fees::` helpers.
+- `app/Http/Controllers/Booking/BookingController.php` — on `/booking`, read
+  `?gclid=`, and when present, store
+  `data.tracking = { gclid, source: 'Google ads' }` on the new enquiry.
+- `app/Http/Controllers/Onboarding/OnboardingController.php` — same handling.
+- `app/Models/Enquiry.php` — added a `getTracking()` helper that returns the
+  tracking blob if present.
+- `app/Services/BirdContactService.php` — payload now includes `source`
+  (`Google ads`) and `gclid` attributes when the enquiry has captured
+  tracking data. Falls back to nothing when absent — no behavioural change
+  for organic traffic.
+- `app/Mail/BookingEnquirySubmittedMail.php` + `resources/views/emails/booking-enquiry-submitted.blade.php`
+  — added a "Source" row (with the gclid alongside when it exists) so
+  operators can see the origin at a glance.
+- `resources/js/pages/Booking/Step2.vue` — the `booking_enquiry_submitted`
+  dataLayer event now carries `source` and `gclid` (nullable) so GTM can
+  route the conversion to Google Ads.
 
 ### Key decisions
-- **Helper class over calling `config()` directly**: this puts the
-  "override to zero" rule in ONE place. If we call `config('fees.booking_fee')`
-  everywhere, every caller has to also check `config('fees.override_to_zero')`.
-  A tiny `Fees::bookingFee()` avoids that duplication.
-- **Pence-based helpers alongside pounds**: pricing logic mixes both units
-  (`total_price_pence` is stored in pence; display values are pounds). The
-  helper exposes both to avoid rounding drift at call sites.
-- **No changes to `OrderResource` / `PackageResource`** — they read fields
-  already produced by the touchpoints above.
+
+- **Server-side gclid capture, not client-side.** The Google Ads landing URL
+  hits `/booking` or `/onboarding`, both of which already create the enquiry
+  server-side. Reading `?gclid=` there is a two-line change and survives the
+  Inertia redirect. Client-side capture would require reading `window.location`
+  after redirect (the query string is lost by then) and adding a hidden form
+  field for round-tripping. Not worth it.
+- **`data.tracking` JSON, not a new column.** `Enquiry.data` is already JSON
+  and stores step data. Adding `data.tracking` is zero-schema and works with
+  the existing setter helpers.
+- **`source: 'Google ads'` matches the ticket wording** (not "google_ads",
+  not "Google Ads Click"). Human-readable and matches how Bird's UI displays
+  the value.
+- **The GTM Consent Mode default-deny is gone**, not left as a courtesy — the
+  client wants tags firing without a banner. Leaving it in would silently
+  suppress Ads/GA4 tags and make attribution look broken.
+
+## Phase 3: Reflection ✅
+
+**Why this shape is right for the brief:**
+- The cookie banner touches ~8 files, all deletions. Zero new abstractions.
+- The gclid capture also uses the existing `data` JSON blob and the existing
+  Bird sync pipeline. No new tables, no new jobs, no new endpoints.
+
+**Operational notes:**
+- No DB migration.
+- No new environment variables.
+- No new Composer / npm packages — we dropped `vanilla-cookieconsent`, added
+  nothing.
+- Existing enquiries without `data.tracking` continue working; Bird payload
+  simply omits `source` for them, matching current behaviour.
+
+**Client-facing impact:**
+- Booking/onboarding pages no longer show a cookie bar or "Cookie preferences"
+  link. GTM / GA4 / Google Ads scripts fire on load.
+- Bird CRM contacts synced from Google-Ads-sourced enquiries will now show
+  `source = "Google ads"` and carry the gclid attribute for downstream
+  audience-building.
+- Admin new-enquiry emails now display the origin source and gclid.
+
+**Follow-ups intentionally not done:**
+- No tests added (project rule: user maintains tests).
+- No `npm install` run to prune `vanilla-cookieconsent` from the lockfile —
+  the user will run install as part of their build step.
 
 ---
 

@@ -33,6 +33,7 @@ class BookingEnquirySubmittedMail extends Mailable
     {
         $step1 = $this->enquiry->getStepData(1) ?? [];
         $step2 = $this->enquiry->getStepData(2) ?? [];
+        $tracking = $this->enquiry->getTracking() ?? [];
 
         return new Content(
             view: 'emails.booking-enquiry-submitted',
@@ -45,6 +46,8 @@ class BookingEnquirySubmittedMail extends Mailable
                 'transmission' => $this->transmissionLabel($step1['transmission'] ?? null),
                 'inArea' => (bool) ($step2['in_area'] ?? false),
                 'instructorId' => $step2['instructor_id'] ?? null,
+                'source' => $tracking['source'] ?? null,
+                'gclid' => $tracking['gclid'] ?? null,
                 'enquiryId' => $this->enquiry->id,
                 'submittedAt' => $this->enquiry->updated_at?->format('j M Y, H:i'),
                 'enquiriesUrl' => url('/enquiries'),

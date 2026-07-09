@@ -58,4 +58,15 @@ class Enquiry extends Model
     {
         return $this->data['discount'] ?? null;
     }
+
+    /**
+     * Get marketing tracking data captured at entry (currently only the
+     * Google Ads gclid + source label).
+     *
+     * @return array{gclid?: string, source?: string}|null
+     */
+    public function getTracking(): ?array
+    {
+        return $this->data['tracking'] ?? null;
+    }
 }

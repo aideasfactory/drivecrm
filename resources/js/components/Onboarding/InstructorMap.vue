@@ -19,25 +19,11 @@
       </div>
     </div>
 
-    <!-- Awaiting Cookie Consent State -->
-    <div v-if="awaitingConsent" class="absolute inset-0 bg-gray-100 rounded-lg flex items-center justify-center">
-      <div class="text-center px-6 max-w-sm">
-        <i class="fa-solid fa-map text-5xl text-gray-400 mb-3"></i>
-        <p class="text-gray-700 font-medium mb-1">Map preview is off</p>
-        <p class="text-sm text-gray-500 mb-3">
-          The map uses Google Maps, which only loads if you accept functional cookies.
-        </p>
-        <button type="button" @click="enableMap" class="text-sm underline cursor-pointer">
-          Cookie preferences
-        </button>
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { hasFunctionalConsent, openCookiePreferences } from '@/lib/cookieConsent'
+import { ref, onMounted, watch, nextTick } from 'vue'
 
 const props = defineProps({
   apiKey: {
@@ -68,28 +54,8 @@ const geocoder = ref(null)
 const infoWindow = ref(null)
 const loading = ref(true)
 const error = ref(null)
-const awaitingConsent = ref(false)
 
 let googleMapsLoaded = false
-
-const enableMap = () => openCookiePreferences()
-
-const tryInitialize = () => {
-  if (!hasFunctionalConsent()) {
-    awaitingConsent.value = true
-    loading.value = false
-    return
-  }
-  awaitingConsent.value = false
-  loading.value = true
-  initializeMap()
-}
-
-const onConsentChange = () => {
-  if (hasFunctionalConsent() && awaitingConsent.value) {
-    tryInitialize()
-  }
-}
 
 // Load Google Maps Script
 const loadGoogleMapsScript = () => {
@@ -406,15 +372,8 @@ watch(() => props.instructors, async () => {
 
 // Initialize map when component is mounted
 onMounted(() => {
-  window.addEventListener('cc:onConsent', onConsentChange)
-  window.addEventListener('cc:onChange', onConsentChange)
   nextTick(() => {
-    tryInitialize()
+    initializeMap()
   })
-})
-
-onUnmounted(() => {
-  window.removeEventListener('cc:onConsent', onConsentChange)
-  window.removeEventListener('cc:onChange', onConsentChange)
 })
 </script>

@@ -57,7 +57,7 @@ class BirdContactService extends BaseService
             ));
         }
 
-        $payload = $this->buildPayload($step1, $step2);
+        $payload = $this->buildPayload($step1, $step2, $enquiry->getTracking() ?? []);
 
         $url = sprintf(
             '%s/workspaces/%s/contacts/identifiers/emailaddress/%s',
@@ -98,9 +98,10 @@ class BirdContactService extends BaseService
      *
      * @param  array<string, mixed>  $step1
      * @param  array<string, mixed>  $step2
+     * @param  array<string, mixed>  $tracking
      * @return array<string, mixed>
      */
-    private function buildPayload(array $step1, array $step2): array
+    private function buildPayload(array $step1, array $step2, array $tracking = []): array
     {
         $firstName = $this->stringOrNull($step1['first_name'] ?? null);
         $lastName = $this->stringOrNull($step1['last_name'] ?? null);
@@ -109,6 +110,8 @@ class BirdContactService extends BaseService
         $instructorAvailability = $this->resolveInstructorAvailability($step2);
         $transmission = $this->resolveTransmission($step1);
         $marketingConsent = (bool) ($step1['marketing_consent'] ?? false);
+        $source = $this->stringOrNull($tracking['source'] ?? null);
+        $gclid = $this->stringOrNull($tracking['gclid'] ?? null);
 
         $addIdentifiers = [];
 
@@ -126,6 +129,8 @@ class BirdContactService extends BaseService
             'transmission1' => $transmission,
             'subscribedEmail' => $marketingConsent,
             'subscribedSms' => $marketingConsent,
+            'source' => $source,
+            'gclid' => $gclid,
         ], fn ($value) => $value !== null);
 
         $listId = $this->stringOrNull(config('services.bird.booking_list_id'));
