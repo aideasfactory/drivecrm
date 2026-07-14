@@ -17,8 +17,9 @@ This document provides a comprehensive overview of the database structure for th
 - `MockTestQuestion` → Theory test question bank (~2,923 questions across 4 categories)
 - `MockTest` → Student test session (score, pass/fail, timestamps)
 - `MockTestAnswer` → Individual answers per test (right/wrong, for category performance tracking)
-- `HazardPerceptionVideo` → Hazard perception video clips with hazard timing windows and categorisation
-- `HazardPerceptionAttempt` → Student attempt scores per video (response times, per-hazard scores)
+- `HazardPerceptionVideo` → Hazard perception video clips with hazard timing windows, categorisation, and optional recap video
+- `HazardPerceptionAttempt` → Student attempt scores per video (response times, per-hazard scores); practice (no test FK) or part of a test session
+- `HazardPerceptionTest` → Test-mode session: random video selection (default 14, optional topic filter) with persisted playback order, rolled-up score on completion
 
 **Key Relationships:**
 ```
@@ -1511,16 +1512,17 @@ One row per test attempt by a student. Stores the final score and pass/fail resu
 | id | bigint PK | No | Auto-increment |
 | student_id | bigint FK | No | References students.id. Cascade on delete. |
 | category | varchar(50) | No | Which question bank was used. Indexed. |
+| mode | varchar(20) | No | `mock` or `practice` (default `mock`). Indexed. Practice runs are excluded from summary stats, dashboard stats, and badges, and are never pass/fail. Added 2026-07-14 (`add_mode_to_mock_tests_table`). |
 | topic | varchar(100) | Yes | If filtered to a specific topic (null = mixed). Indexed. |
 | total_questions | smallint unsigned | No | Number of questions (default 50) |
 | correct_answers | smallint unsigned | No | Final correct count (default 0) |
-| passed | boolean | No | Whether score >= pass mark (default false) |
+| passed | boolean | No | Mock mode: score >= ceil(86% of total_questions) — 43/50 on a full test. Always false for practice mode (API serialises it as null). |
 | started_at | timestamp | No | When the test was started |
 | completed_at | timestamp | Yes | When submitted (null = in progress) |
 | created_at | timestamp | Yes | |
 | updated_at | timestamp | Yes | |
 
-**Indexes:** (student_id, completed_at) composite index for summary queries.
+**Indexes:** (student_id, completed_at) composite index for summary queries; mode index.
 **Relationships:** BelongsTo → Student, HasMany → MockTestAnswer
 
 ### mock_test_answers
@@ -1561,15 +1563,18 @@ Hazard perception video clips. Each clip has 1 or 2 developing hazards with scor
 | hazard_2_end | decimal(6,2) | Yes | Seconds when hazard 2 scoring window closes (double hazard only) |
 | is_double_hazard | boolean | No | Whether this clip has two hazards (default false) |
 | thumbnail_url | varchar(255) | Yes | Optional thumbnail image URL |
+| recap_video_url | varchar(255) | Yes | Explainer video offered after the clip is completed (null = no recap available) |
 | created_at | timestamp | Yes | |
 | updated_at | timestamp | Yes | |
 
 **Indexes:** category, topic, is_double_hazard
-**Relationships:** HasMany → HazardPerceptionAttempt
+**Relationships:** HasMany → HazardPerceptionAttempt, BelongsToMany → HazardPerceptionTest (via hazard_perception_test_videos)
 
 ### hazard_perception_attempts
 
 Records each student attempt at a hazard perception video. Stores response times and calculated scores per hazard.
+
+An attempt is either a **practice** attempt (`hazard_perception_test_id` null) or part of a **test session** (`hazard_perception_test_id` set). Score stats (summary average/best, resource-dashboard hazard stats, `perfect_hazard` badge) count TEST attempts only — practice runs never set a personal best.
 
 Scoring: Each hazard's timing window is divided into 5 equal bands. Responding in band 1 (earliest) = 5 points, band 5 (latest) = 1 point, outside window = 0 points. Single hazard clips max 5 points, double hazard clips max 10 points.
 
@@ -1578,6 +1583,7 @@ Scoring: Each hazard's timing window is divided into 5 equal bands. Responding i
 | id | bigint PK | No | Auto-increment |
 | student_id | bigint FK | No | References students.id. Cascade on delete. |
 | hazard_perception_video_id | bigint FK | No | References hazard_perception_videos.id. Cascade on delete. |
+| hazard_perception_test_id | bigint FK | Yes | References hazard_perception_tests.id. Cascade on delete. Null = practice attempt. |
 | hazard_1_response_time | decimal(6,2) | Yes | Seconds into video when student flagged hazard 1 (null = missed) |
 | hazard_1_score | tinyint unsigned | No | Score 0-5 for hazard 1 (default 0) |
 | hazard_2_response_time | decimal(6,2) | Yes | Seconds into video when student flagged hazard 2 (null = missed or single hazard) |
@@ -1587,8 +1593,42 @@ Scoring: Each hazard's timing window is divided into 5 equal bands. Responding i
 | created_at | timestamp | Yes | |
 | updated_at | timestamp | Yes | |
 
-**Indexes:** (student_id, hazard_perception_video_id) composite index
-**Relationships:** BelongsTo → Student, BelongsTo → HazardPerceptionVideo
+**Indexes:** (student_id, hazard_perception_video_id) composite index, hazard_perception_test_id (`hp_attempts_test_id_foreign`)
+**Relationships:** BelongsTo → Student, BelongsTo → HazardPerceptionVideo, BelongsTo → HazardPerceptionTest
+
+### hazard_perception_tests
+
+A test-mode session: the server randomly selects N videos (default 14, `config('hazard_perception.videos_per_test')`, optionally filtered by topic) and the student completes them one after another. The selection and playback order are persisted in `hazard_perception_test_videos` so the test can be resumed and cannot be re-rolled. Submitting the final video sets `completed_at` and rolls `total_score` up from the attempts.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| student_id | bigint FK | No | References students.id. Cascade on delete. |
+| topic | varchar(100) | Yes | Topic filter used when the test was generated (null = whole bank) |
+| total_videos | tinyint unsigned | No | Number of clips selected at start (≤ configured count if the bank is smaller) |
+| total_score | smallint unsigned | No | Sum of attempt scores, rolled up on completion (default 0) |
+| max_score | smallint unsigned | No | Fixed at start: 5 per single-hazard clip + 10 per double (default 0) |
+| started_at | timestamp | No | When the test was started |
+| completed_at | timestamp | Yes | Set when the final video is submitted |
+| created_at | timestamp | Yes | |
+| updated_at | timestamp | Yes | |
+
+**Indexes:** topic, (student_id, completed_at) composite index
+**Relationships:** BelongsTo → Student, BelongsToMany → HazardPerceptionVideo (via hazard_perception_test_videos, withPivot position), HasMany → HazardPerceptionAttempt
+
+### hazard_perception_test_videos
+
+Pivot: the videos selected for a test session, in playback order.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| hazard_perception_test_id | bigint FK | No | References hazard_perception_tests.id. Cascade on delete. |
+| hazard_perception_video_id | bigint FK | No | References hazard_perception_videos.id. Cascade on delete. |
+| position | tinyint unsigned | No | 1-based playback order within the test |
+| created_at / updated_at | timestamp | Yes | |
+
+**Unique constraints:** (test_id, video_id) `hp_test_videos_test_video_unique`, (test_id, position) `hp_test_videos_test_position_unique`. FK/index names are shortened (`hp_test_videos_*`) — the auto-generated names exceed MySQL's 64-char identifier limit.
 
 ## Progress Tracker Tables
 

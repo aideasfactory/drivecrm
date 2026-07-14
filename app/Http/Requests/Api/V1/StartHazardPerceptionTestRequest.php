@@ -6,7 +6,7 @@ namespace App\Http\Requests\Api\V1;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class StartMockTestRequest extends FormRequest
+class StartHazardPerceptionTestRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -19,10 +19,7 @@ class StartMockTestRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'category' => ['nullable', 'string', 'in:Car,ADI,Motorcycle,LGV-PCV'],
             'topic' => ['nullable', 'string', 'max:100'],
-            'mode' => ['nullable', 'string', 'in:mock,practice'],
-            'question_count' => ['nullable', 'integer', 'min:5', 'max:50'],
         ];
     }
 }

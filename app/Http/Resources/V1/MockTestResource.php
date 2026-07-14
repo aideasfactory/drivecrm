@@ -17,10 +17,11 @@ class MockTestResource extends JsonResource
         return [
             'id' => $this->id,
             'category' => $this->category,
+            'mode' => $this->mode,
             'topic' => $this->topic,
             'total_questions' => $this->total_questions,
             'correct_answers' => $this->correct_answers,
-            'passed' => $this->passed,
+            'passed' => $this->mode === 'practice' ? null : $this->passed,
             'started_at' => $this->started_at?->toIso8601String(),
             'completed_at' => $this->completed_at?->toIso8601String(),
         ];

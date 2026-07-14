@@ -24,6 +24,7 @@ class HazardPerceptionVideoResource extends JsonResource
             'duration_seconds' => $this->duration_seconds,
             'is_double_hazard' => $this->is_double_hazard,
             'thumbnail_url' => $this->thumbnail_url,
+            'has_recap' => $this->recap_video_url !== null,
         ];
     }
 }

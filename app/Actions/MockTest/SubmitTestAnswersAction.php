@@ -11,7 +11,11 @@ use Illuminate\Support\Facades\DB;
 
 class SubmitTestAnswersAction
 {
-    private const PASS_MARK = 43;
+    /**
+     * DVSA pass mark is 43/50 (86%). Applied proportionally so tests shorter
+     * than 50 questions (small topics, custom question_count) remain passable.
+     */
+    private const PASS_RATIO = 0.86;
 
     public function __invoke(MockTest $mockTest, array $answers): MockTest
     {
@@ -46,11 +50,24 @@ class SubmitTestAnswersAction
 
             $mockTest->update([
                 'correct_answers' => $correctCount,
-                'passed' => $correctCount >= self::PASS_MARK,
+                'passed' => $this->hasPassed($mockTest, $correctCount),
                 'completed_at' => now(),
             ]);
 
             return $mockTest->fresh(['answers.question']);
         });
+    }
+
+    /**
+     * Practice runs are never pass/fail; mock tests pass at >= 86% of the
+     * test's own length (43 correct on a full 50-question test).
+     */
+    private function hasPassed(MockTest $mockTest, int $correctCount): bool
+    {
+        if ($mockTest->mode === 'practice' || $mockTest->total_questions === 0) {
+            return false;
+        }
+
+        return $correctCount >= (int) ceil($mockTest->total_questions * self::PASS_RATIO);
     }
 }

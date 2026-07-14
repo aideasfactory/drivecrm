@@ -5,11 +5,17 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Actions\HazardPerception\GetHazardPerceptionSummaryAction;
+use App\Actions\HazardPerception\GetHazardPerceptionTestAction;
+use App\Actions\HazardPerception\GetHazardPerceptionTestHistoryAction;
 use App\Actions\HazardPerception\GetHazardPerceptionVideosAction;
 use App\Actions\HazardPerception\RecordHazardPerceptionAttemptAction;
+use App\Actions\HazardPerception\StartHazardPerceptionTestAction;
+use App\Actions\HazardPerception\SubmitHazardPerceptionTestVideoAction;
 use App\Models\HazardPerceptionAttempt;
+use App\Models\HazardPerceptionTest;
 use App\Models\HazardPerceptionVideo;
 use App\Models\Student;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
 class HazardPerceptionService extends BaseService
@@ -18,6 +24,10 @@ class HazardPerceptionService extends BaseService
         protected GetHazardPerceptionVideosAction $getVideos,
         protected RecordHazardPerceptionAttemptAction $recordAttempt,
         protected GetHazardPerceptionSummaryAction $getSummary,
+        protected StartHazardPerceptionTestAction $startTest,
+        protected SubmitHazardPerceptionTestVideoAction $submitTestVideo,
+        protected GetHazardPerceptionTestAction $getTest,
+        protected GetHazardPerceptionTestHistoryAction $getTestHistory,
     ) {}
 
     public function getVideos(?string $category = null): Collection
@@ -28,6 +38,8 @@ class HazardPerceptionService extends BaseService
     }
 
     /**
+     * Record a practice attempt (not part of a test session).
+     *
      * @param  array<int, float>  $taps  All tap timestamps (seconds into video)
      */
     public function recordAttempt(
@@ -36,6 +48,7 @@ class HazardPerceptionService extends BaseService
         array $taps,
     ): HazardPerceptionAttempt {
         $result = ($this->recordAttempt)($student, $video, $taps);
+        $result->setRelation('video', $video);
 
         $this->invalidateSummaryCache($student->id);
 
@@ -47,6 +60,38 @@ class HazardPerceptionService extends BaseService
         $key = $this->cacheKey('student', $student->id, 'hazard_perception_summary'.($category ? ":{$category}" : ''));
 
         return $this->remember($key, fn () => ($this->getSummary)($student, $category));
+    }
+
+    public function startTest(Student $student, ?string $topic = null): HazardPerceptionTest
+    {
+        return ($this->startTest)($student, $topic);
+    }
+
+    /**
+     * @param  array<int, float>  $taps  All tap timestamps (seconds into video)
+     * @return array{attempt: HazardPerceptionAttempt, test: HazardPerceptionTest}
+     */
+    public function submitTestVideo(
+        Student $student,
+        HazardPerceptionTest $test,
+        HazardPerceptionVideo $video,
+        array $taps,
+    ): array {
+        $result = ($this->submitTestVideo)($student, $test, $video, $taps);
+
+        $this->invalidateSummaryCache($student->id);
+
+        return $result;
+    }
+
+    public function getTest(HazardPerceptionTest $test): HazardPerceptionTest
+    {
+        return ($this->getTest)($test);
+    }
+
+    public function getTestHistory(Student $student, ?string $topic = null, int $perPage = 20): LengthAwarePaginator
+    {
+        return ($this->getTestHistory)($student, $topic, $perPage);
     }
 
     public function invalidateSummaryCache(int $studentId): void

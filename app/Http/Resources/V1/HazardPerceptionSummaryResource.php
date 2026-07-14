@@ -26,6 +26,9 @@ class HazardPerceptionSummaryResource extends JsonResource
             'attempts_taken' => $this->summaryData['attempts_taken'],
             'average_score' => $this->summaryData['average_score'],
             'best_score' => $this->summaryData['best_score'],
+            'tests_taken' => $this->summaryData['tests_taken'],
+            'best_test_score' => $this->summaryData['best_test_score'],
+            'best_test_max_score' => $this->summaryData['best_test_max_score'],
             'recent_attempts' => HazardPerceptionAttemptResource::collection($this->summaryData['recent_attempts']),
             'topic_performance' => $this->summaryData['topic_performance'],
         ];

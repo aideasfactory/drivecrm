@@ -14,6 +14,7 @@ class MockTest extends Model
     protected $fillable = [
         'student_id',
         'category',
+        'mode',
         'topic',
         'total_questions',
         'correct_answers',

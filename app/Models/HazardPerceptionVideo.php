@@ -27,6 +27,7 @@ class HazardPerceptionVideo extends Model
         'hazard_2_end',
         'is_double_hazard',
         'thumbnail_url',
+        'recap_video_url',
     ];
 
     protected function casts(): array

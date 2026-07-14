@@ -130,6 +130,7 @@ class GetResourceSummaryAction
     {
         $row = MockTest::query()
             ->where('student_id', $student->id)
+            ->where('mode', 'mock')
             ->whereNotNull('completed_at')
             ->selectRaw('
                 COUNT(*) as tests_taken,
@@ -163,6 +164,9 @@ class GetResourceSummaryAction
     /**
      * Aggregate hazard perception attempts for the student.
      *
+     * Only TEST attempts count — practice runs never inflate the dashboard
+     * stats (mirrors mock tests filtering to mode = 'mock').
+     *
      * Scores are normalised to a /5 scale: double-hazard attempts (max 10) are
      * halved so the denominator is stable across all clips.
      *
@@ -173,6 +177,7 @@ class GetResourceSummaryAction
         $row = HazardPerceptionAttempt::query()
             ->join('hazard_perception_videos', 'hazard_perception_videos.id', '=', 'hazard_perception_attempts.hazard_perception_video_id')
             ->where('hazard_perception_attempts.student_id', $student->id)
+            ->whereNotNull('hazard_perception_attempts.hazard_perception_test_id')
             ->selectRaw('
                 COUNT(*) as attempts_taken,
                 AVG(CASE WHEN hazard_perception_videos.is_double_hazard THEN hazard_perception_attempts.total_score / 2.0 ELSE hazard_perception_attempts.total_score END) as avg_normalised

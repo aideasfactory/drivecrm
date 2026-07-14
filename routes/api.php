@@ -112,7 +112,11 @@ Route::prefix('v1')->group(function (): void {
             Route::post('resources/{resource}/watched', [StudentResourceController::class, 'markWatched']);
 
             // Mock test routes
+            Route::get('mock-tests', [MockTestController::class, 'index']);
             Route::get('mock-tests/summary', [MockTestController::class, 'summary']);
+            Route::get('mock-tests/categories', [MockTestController::class, 'categories']);
+            Route::get('mock-tests/questions', [MockTestController::class, 'questions']);
+            Route::get('mock-tests/questions/{mockTestQuestion}', [MockTestController::class, 'question']);
             Route::post('mock-tests/start', [MockTestController::class, 'start']);
             Route::post('mock-tests/{mockTest}/submit', [MockTestController::class, 'submit']);
             Route::get('mock-tests/{mockTest}/review', [MockTestController::class, 'review']);
@@ -121,6 +125,10 @@ Route::prefix('v1')->group(function (): void {
             Route::get('hazard-perception/videos', [HazardPerceptionController::class, 'index']);
             Route::post('hazard-perception/videos/{hazardPerceptionVideo}/submit', [HazardPerceptionController::class, 'submit']);
             Route::get('hazard-perception/summary', [HazardPerceptionController::class, 'summary']);
+            Route::get('hazard-perception/tests', [HazardPerceptionController::class, 'testHistory']);
+            Route::post('hazard-perception/tests/start', [HazardPerceptionController::class, 'startTest']);
+            Route::get('hazard-perception/tests/{hazardPerceptionTest}', [HazardPerceptionController::class, 'showTest']);
+            Route::post('hazard-perception/tests/{hazardPerceptionTest}/videos/{hazardPerceptionVideo}/submit', [HazardPerceptionController::class, 'submitTestVideo']);
 
             // Activity log
             Route::get('activity-logs', [StudentActivityLogController::class, 'index']);

@@ -75,14 +75,22 @@
   - [Push Notifications](#push-notifications)
     - [Store Push Token](#post-apiv1push-token)
   - [Mock Tests](#mock-tests)
+    - [Test History (List)](#get-apiv1studentmock-tests)
     - [Summary](#get-apiv1studentmock-testssummary)
+    - [Categories Index](#get-apiv1studentmock-testscategories)
+    - [Revision Questions (List)](#get-apiv1studentmock-testsquestions)
+    - [Single Question](#get-apiv1studentmock-testsquestionsmocktestquestion)
     - [Start Test](#post-apiv1studentmock-testsstart)
     - [Submit Test](#post-apiv1studentmock-testsmocktestsubmit)
     - [Review Test](#get-apiv1studentmock-testsmocktestreview)
   - [Hazard Perception](#hazard-perception)
     - [Videos (List)](#get-apiv1studenthazard-perceptionvideos)
-    - [Submit Attempt](#post-apiv1studenthazard-perceptionvideoshazardperceptionvideosubmit)
+    - [Submit Practice Attempt](#post-apiv1studenthazard-perceptionvideoshazardperceptionvideosubmit)
     - [Summary](#get-apiv1studenthazard-perceptionsummary)
+    - [Test History](#get-apiv1studenthazard-perceptiontests)
+    - [Start Test](#post-apiv1studenthazard-perceptiontestsstart)
+    - [Test Detail / Results](#get-apiv1studenthazard-perceptionteststhazardperceptiontest)
+    - [Submit Test Video](#post-apiv1studenthazard-perceptionteststhazardperceptiontestvideoshazardperceptionvideosubmit)
   - [Student Activity Log](#get-apiv1studentactivity-logs)
 - [Profile Object by Role](#profile-object-by-role)
 - [Appendix: User Roles](#appendix-user-roles)
@@ -2665,15 +2673,15 @@ Returns an aggregated summary of the authenticated student's resource activity f
 | `stats.mock_tests_taken` | Number of mock tests the student has completed (`completed_at IS NOT NULL`). |
 | `stats.mock_test_average` | Average correct/total across completed mock tests, formatted as `"{correct}/{total}"`. Returns `"0/50"` if none taken. |
 | `stats.mock_test_percentage` | Average score percentage across completed mock tests. `0` if none taken. |
-| `stats.hazard_attempts_taken` | Number of hazard perception attempts the student has made. |
-| `stats.hazard_perception_average` | Average score normalised to a /5 scale — double-hazard attempts (max 10) are halved before averaging, so the denominator is always `/5`. Format `"{avg}/5"` to 1 decimal. Returns `"0/5"` if none. |
-| `stats.hazard_perception_percentage` | Normalised hazard average as a percentage of the max (`/5`). `0` if none taken. |
+| `stats.hazard_attempts_taken` | Number of hazard perception TEST attempts the student has made (practice attempts excluded — mirrors mock stats counting `mode = 'mock'` only). |
+| `stats.hazard_perception_average` | Average score across TEST attempts, normalised to a /5 scale — double-hazard attempts (max 10) are halved before averaging, so the denominator is always `/5`. Format `"{avg}/5"` to 1 decimal. Returns `"0/5"` if none. |
+| `stats.hazard_perception_percentage` | Normalised hazard average as a percentage of the max (`/5`). `0` if no test attempts taken. |
 | `study_progress` | Per top-level folder: total resources (including children), watched count, percentage. Only folders with ≥1 resource. |
 | `recommended` | Resources suggested via lesson sign-offs (`lesson_resource` pivot). Unwatched first, then watched. Limit 5. |
 | `badges.first_test` | Earned when the student has ≥1 completed mock test. `earned_at` = `completed_at` of the earliest completed test. |
 | `badges.top_score` | Earned when the student has any completed mock test where `correct_answers = total_questions`. `earned_at` = earliest such test's `completed_at`. |
 | `badges.seven_day_streak` | Earned when the student has taken ≥1 completed mock test on each of 7 consecutive calendar days (hazard perception attempts do **not** count). `earned_at` = the 7th day of the first qualifying run. `current_streak_days` counts the ongoing run ending today or yesterday; any missed day resets it to `0`. Once earned, stays earned — a broken streak does not revoke the badge. |
-| `badges.expert` | Earned when **all three** `criteria` are true: `perfect_mock` (any 50/50 mock test), `perfect_hazard` (any hazard attempt where `total_score` = max for that clip — 5 single, 10 double), `all_resources_watched` (a `resource_watches` row exists for every published resource). `earned_at` = latest of the three timestamps. |
+| `badges.expert` | Earned when **all three** `criteria` are true: `perfect_mock` (any 50/50 mock test), `perfect_hazard` (any hazard TEST attempt where `total_score` = max for that clip — 5 single, 10 double; practice attempts don't count), `all_resources_watched` (a `resource_watches` row exists for every published resource). `earned_at` = latest of the three timestamps. |
 | `study_tip` | Random driving study tip from a pool of 20. |
 
 **Error Responses:**
@@ -5404,10 +5412,21 @@ The `role` field is always returned in user responses. Use it to determine which
 | POST | `/api/v1/messages/conversations/{user}/read` | Yes | Both | Mark conversation read (instructors pass student ID) |
 | POST | `/api/v1/messages/conversations/instructor/read` | Yes | Student | Mark conversation with assigned instructor read |
 | POST | `/api/v1/messages/{message}/read` | Yes | Both | Mark single message read (recipient only) |
-| GET | `/api/v1/student/mock-tests/summary` | Yes | Student | Mock test dashboard summary |
-| POST | `/api/v1/student/mock-tests/start` | Yes | Student | Start a new mock test (generates 50 random questions) |
+| GET | `/api/v1/student/mock-tests` | Yes | Student | Paginated test history (filters: category, mode) |
+| GET | `/api/v1/student/mock-tests/summary` | Yes | Student | Mock test dashboard summary (mock-mode tests only) |
+| GET | `/api/v1/student/mock-tests/categories` | Yes | Student | Question-bank index — category names + topics with question counts |
+| GET | `/api/v1/student/mock-tests/questions` | Yes | Student | Paginated revision questions for a category (includes correct answers) |
+| GET | `/api/v1/student/mock-tests/questions/{mockTestQuestion}` | Yes | Student | Single question with full detail (includes correct answer) |
+| POST | `/api/v1/student/mock-tests/start` | Yes | Student | Start a new test (random questions; `mode` mock/practice, `question_count` 5–50, default 50) |
 | POST | `/api/v1/student/mock-tests/{mockTest}/submit` | Yes | Student | Submit answers for a mock test |
 | GET | `/api/v1/student/mock-tests/{mockTest}/review` | Yes | Student | Review a completed mock test |
+| GET | `/api/v1/student/hazard-perception/videos` | Yes | Student | List HPT videos grouped by category → topic |
+| POST | `/api/v1/student/hazard-perception/videos/{hazardPerceptionVideo}/submit` | Yes | Student | Submit a practice attempt (taps → server-side scoring) |
+| GET | `/api/v1/student/hazard-perception/summary` | Yes | Student | HPT performance summary (score stats = test attempts only) |
+| GET | `/api/v1/student/hazard-perception/tests` | Yes | Student | Paginated completed HPT test history (filters: topic, per_page) |
+| POST | `/api/v1/student/hazard-perception/tests/start` | Yes | Student | Start an HPT test — random 14 videos (optional `topic` filter) |
+| GET | `/api/v1/student/hazard-perception/tests/{hazardPerceptionTest}` | Yes | Student | Test results/resume view (per-video scores + recaps) |
+| POST | `/api/v1/student/hazard-perception/tests/{hazardPerceptionTest}/videos/{hazardPerceptionVideo}/submit` | Yes | Student | Score one video within a test |
 
 ---
 
@@ -5415,9 +5434,74 @@ The `role` field is always returned in user responses. Use it to determine which
 
 Mock theory test system. Students take randomised 50-question tests from a bank of ~2,923 questions across 4 categories (Car, ADI, Motorcycle, LGV-PCV). Records every answer for per-category performance tracking.
 
+Two modes with different answer-visibility rules:
+- **Test mode** (`start` → `submit` → `review`): questions are served WITHOUT correct answers; scoring is server-side; answers are revealed only in the post-submission review.
+- **Revision mode** (`categories` → `questions` → `questions/{id}`): read-only browsing of the question bank WITH correct answers and explanations. No attempt is recorded and summary stats are unaffected.
+
+Tests taken through `start`/`submit` carry a **`mode`** (`mock` | `practice`, default `mock`):
+- **`mock`** — a real mock test. Counts toward summary stats, dashboard stats, and badges. `passed` = correct ≥ ceil(86% of the test's question count) — i.e. 43/50 on a full-length test; shorter tests (small topics, custom `question_count`) pass proportionally.
+- **`practice`** — a practise run. Recorded (visible in test history and reviewable) but **excluded from all stats and badges**, and never pass/fail (`passed` is `null` in every response).
+- **Exception:** the per-topic `category_performance` breakdown on the summary counts answers from BOTH modes — it is the "weak areas" learning signal, so practising a topic updates it. Flag if product wants this mock-only.
+
+### `GET /api/v1/student/mock-tests`
+
+Paginated history of the student's completed tests, newest first. Includes both mock and practice runs by default — filter with `mode` if you only want one.
+
+**Auth:** Bearer token (student role)
+
+**Query Parameters:**
+
+| Param | Type | Required | Validation | Description |
+|-------|------|----------|------------|-------------|
+| category | string | No | `in:Car,ADI,Motorcycle,LGV-PCV,Mixed` | Filter by test category (`Mixed` = tests started without a category) |
+| mode | string | No | `in:mock,practice` | Filter by test mode |
+| per_page | integer | No | min:1, max:100 | Page size (default 20) |
+| page | integer | No | — | Page number |
+
+**Response (200):**
+
+```json
+{
+  "data": [
+    {
+      "id": 46,
+      "category": "Car",
+      "mode": "mock",
+      "topic": null,
+      "total_questions": 50,
+      "correct_answers": 43,
+      "passed": true,
+      "started_at": "2026-07-14T11:00:00+00:00",
+      "completed_at": "2026-07-14T11:25:00+00:00"
+    },
+    {
+      "id": 45,
+      "category": "Car",
+      "mode": "practice",
+      "topic": "Alertness",
+      "total_questions": 10,
+      "correct_answers": 7,
+      "passed": null,
+      "started_at": "2026-07-14T09:00:00+00:00",
+      "completed_at": "2026-07-14T09:06:00+00:00"
+    }
+  ],
+  "links": { "first": "…", "last": "…", "prev": null, "next": null },
+  "meta": { "current_page": 1, "last_page": 1, "per_page": 20, "total": 2 }
+}
+```
+
+**Notes:**
+- Only completed tests are returned — in-progress (unsubmitted) attempts never appear.
+- `passed` is `null` for practice runs (practice is never pass/fail).
+
+---
+
 ### `GET /api/v1/student/mock-tests/summary`
 
 Returns aggregated mock test statistics for the authenticated student. Includes tests taken, average score, pass count, last 5 scores, a random test-taking tip, and per-category performance breakdown.
+
+**Mode filtering:** tests_taken / average_score / tests_passed / recent_scores count **mock-mode tests only** — practice runs never inflate them. `category_performance` (per-topic correct %) counts answers from BOTH modes, since it measures topic ability and practising should update it.
 
 **Auth:** Bearer token (student role)
 
@@ -5468,9 +5552,152 @@ Returns aggregated mock test statistics for the authenticated student. Includes 
 
 ---
 
+### `GET /api/v1/student/mock-tests/categories`
+
+Returns the question-bank index: every category with its total question count and its topics, each with a per-topic question count. Drives the practise/revision navigation UI — the app should read category names from here rather than hard-coding them, then pass the chosen `category` string to the `questions` or `start` endpoints. Cached server-side (10 min) — the bank only changes via seeding.
+
+**Auth:** Bearer token (student role)
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "categories": [
+      {
+        "category": "Car",
+        "total_questions": 732,
+        "topics": [
+          { "topic": "Alertness", "total_questions": 32 },
+          { "topic": "Attitude", "total_questions": 41 },
+          { "topic": "Road and traffic signs", "total_questions": 118 }
+        ]
+      },
+      {
+        "category": "Motorcycle",
+        "total_questions": 690,
+        "topics": [
+          { "topic": "Alertness", "total_questions": 28 }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Notes:**
+- If the app only needs the category names (e.g. the practise section picker), use `data.categories[*].category` and ignore the counts.
+- Categories are the 4 bank licence types (`Car`, `ADI`, `Motorcycle`, `LGV-PCV`) — `Mixed` is not a bank category (it's only a label stored on tests started without a category filter).
+
+---
+
+### `GET /api/v1/student/mock-tests/questions`
+
+Returns ALL questions for a category (optionally narrowed to a topic), paginated, **including** `correct_answer` and `explanation` — revision mode. Ordered by topic then id, so pages are stable.
+
+**Auth:** Bearer token (student role)
+
+**Query Parameters:**
+
+| Param | Type | Required | Validation | Description |
+|-------|------|----------|------------|-------------|
+| category | string | Yes | `in:Car,ADI,Motorcycle,LGV-PCV` | Category to revise |
+| topic | string | No | max:100 | Narrow to one topic (e.g. "Alertness") |
+| per_page | integer | No | min:1, max:100 | Page size (default 20) |
+| page | integer | No | — | Page number (standard Laravel pagination) |
+
+**Response (200):**
+
+```json
+{
+  "data": [
+    {
+      "id": 123,
+      "stem": "What should you do before making a U-turn?",
+      "stem_image": null,
+      "option_a": "Give an arm signal as well as using your indicators",
+      "option_a_image": null,
+      "option_b": "Check road markings to see that U-turns are permitted",
+      "option_b_image": null,
+      "option_c": "Look over your shoulder for a final check",
+      "option_c_image": null,
+      "option_d": "Select a higher gear than normal",
+      "option_d_image": null,
+      "topic": "Alertness",
+      "explanation": "If you have to make a U-turn, slow down and make sure that the road is clear...",
+      "correct_answer": "C"
+    }
+  ],
+  "links": {
+    "first": "https://drivecrm.test/api/v1/student/mock-tests/questions?category=Car&page=1",
+    "last": "https://drivecrm.test/api/v1/student/mock-tests/questions?category=Car&page=37",
+    "prev": null,
+    "next": "https://drivecrm.test/api/v1/student/mock-tests/questions?category=Car&page=2"
+  },
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "last_page": 37,
+    "path": "https://drivecrm.test/api/v1/student/mock-tests/questions",
+    "per_page": 20,
+    "to": 20,
+    "total": 732
+  }
+}
+```
+
+**Notes:**
+- Unlike the `start` endpoint, this response INCLUDES `correct_answer` — revision is a study surface, not an assessment. Never use this endpoint to serve an active test.
+- No attempt records are created — browsing here does not affect summary stats or badges.
+- `422` if `category` is missing or not one of the 4 bank categories.
+
+---
+
+### `GET /api/v1/student/mock-tests/questions/{mockTestQuestion}`
+
+Returns a single question with full detail (same shape as one item of the revision list, including `correct_answer` and `explanation`). Use when the app deep-links into one question — e.g. the student taps a question they got right/wrong on a performance screen and the app only holds the question ID.
+
+**Auth:** Bearer token (student role)
+
+**URL Parameters:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| mockTestQuestion | integer | The question ID |
+
+**Response (200):**
+
+```json
+{
+  "data": {
+    "id": 123,
+    "stem": "What should you do before making a U-turn?",
+    "stem_image": null,
+    "option_a": "Give an arm signal as well as using your indicators",
+    "option_a_image": null,
+    "option_b": "Check road markings to see that U-turns are permitted",
+    "option_b_image": null,
+    "option_c": "Look over your shoulder for a final check",
+    "option_c_image": null,
+    "option_d": "Select a higher gear than normal",
+    "option_d_image": null,
+    "topic": "Alertness",
+    "explanation": "If you have to make a U-turn, slow down and make sure that the road is clear...",
+    "correct_answer": "C"
+  }
+}
+```
+
+**Error Responses:**
+- `404` — question ID does not exist
+
+**Note:** the test review endpoint (`GET /mock-tests/{mockTest}/review`) already embeds the full question (stem, options, images, correct answer, explanation) inside each answer — when rendering a completed test's review screen the app does NOT need this endpoint. It exists for flows where only a question ID is held (per-topic performance drill-ins, notifications, deep links).
+
+---
+
 ### `POST /api/v1/student/mock-tests/start`
 
-Starts a new mock test. Generates 50 random questions. If no category is provided, questions are drawn from all categories (stored as `"Mixed"`). Optionally filter by topic within a category. Returns the test ID and all questions (without correct answers).
+Starts a new test. Generates random questions (default 50, configurable per request via `question_count`). If no category is provided, questions are drawn from all categories (stored as `"Mixed"`). Optionally filter by topic within a category. Returns the test ID and all questions (without correct answers).
 
 **Auth:** Bearer token (student role)
 
@@ -5480,6 +5707,8 @@ Starts a new mock test. Generates 50 random questions. If no category is provide
 |-------|------|----------|------------|-------------|
 | category | string | No | `in:Car,ADI,Motorcycle,LGV-PCV` | Question bank to draw from. Omit for a mixed test across all categories. |
 | topic | string | No | max:100 | Filter to a specific topic (e.g. "Alertness", "Road and traffic signs") |
+| mode | string | No | `in:mock,practice` | `mock` (default) counts toward stats/badges and is pass/fail; `practice` is excluded from stats/badges and never pass/fail. |
+| question_count | integer | No | min:5, max:50 | Number of questions to generate (default: server config, normally 50). Use smaller values for short practise runs. |
 
 **Response (201):**
 
@@ -5489,6 +5718,7 @@ Starts a new mock test. Generates 50 random questions. If no category is provide
     "mock_test": {
       "id": 46,
       "category": "Car",
+      "mode": "mock",
       "topic": null,
       "total_questions": 50,
       "correct_answers": 0,
@@ -5536,6 +5766,8 @@ Starts a new mock test. Generates 50 random questions. If no category is provide
 - Questions are returned WITHOUT the correct answer — the mobile app should not know the answer until submission
 - If `option_a` is null but `option_a_image` is not, the answer is image-based — render the image instead of text
 - Image URLs are relative to the API base URL (or absolute when using S3)
+- `total_questions` may be lower than requested when the category/topic has fewer questions in the bank — always read it from the response rather than assuming 50
+- Pass mark scales with test length: `passed = correct >= ceil(total_questions × 0.86)` (43/50 on a full test). Practice runs are never pass/fail (`passed: null` once completed).
 
 ---
 
@@ -5577,6 +5809,7 @@ Submits all answers for a mock test. Scores the test, records each answer, and r
   "data": {
     "id": 46,
     "category": "Car",
+    "mode": "mock",
     "topic": null,
     "total_questions": 50,
     "correct_answers": 43,
@@ -5607,6 +5840,9 @@ Submits all answers for a mock test. Scores the test, records each answer, and r
 }
 ```
 
+**Notes:**
+- `passed` reflects the proportional pass mark (≥ 86% of the test's own length; 43/50 full-length). For `mode: "practice"` tests, `passed` is always `null`.
+
 **Error Responses:**
 - `403` — Mock test does not belong to the authenticated student
 - `422` — Test has already been submitted (`completed_at` is not null)
@@ -5635,6 +5871,14 @@ Returns the full review of a completed mock test, including all questions, the s
 ## Hazard Perception
 
 Hazard perception video system for the student mobile app. Students watch video clips and identify developing hazards by tapping at the right moment. Each clip has 1 or 2 hazards with scored timing windows. Videos are categorised by category and topic.
+
+**Two modes:**
+- **Practice** — the student browses the full video list, picks a clip, and submits taps via `POST videos/{id}/submit`. Each attempt is standalone.
+- **Test** — `POST tests/start` creates a server-side session with 14 randomly selected videos (optional `topic` filter — all HPT videos are Car category, so topic is the only filter axis). The student completes them one after another via `POST tests/{test}/videos/{video}/submit`; submitting the final video completes the test. `GET tests/{test}` serves both the resume state (in-progress) and the results view (per-video scores + recaps).
+
+**Score counting rule:** summary `average_score` / `best_score`, the resource-dashboard hazard stats, and the `perfect_hazard` badge count **test attempts only** — a personal best in practice never counts. Activity fields (`attempts_taken`, `recent_attempts`) and `topic_performance` count both modes.
+
+**Recap videos:** a clip may have a recap (explainer) video. Its URL is only revealed after the student completes the clip — the video list exposes just a `has_recap` boolean. The practice submit response, test results, and test-video submit response all include `recap_video_url` for completed clips.
 
 **Scoring:** Each hazard's timing window is divided into 5 equal bands. Responding in the earliest band scores 5 points, the latest band scores 1 point. Responding outside the window scores 0. Single hazard clips have a max score of 5, double hazard clips have a max score of 10.
 
@@ -5667,7 +5911,8 @@ Returns all hazard perception videos grouped by category and topic. Optionally f
           "video_url": "hazard-perception/abc123.mp4",
           "duration_seconds": 60,
           "is_double_hazard": false,
-          "thumbnail_url": null
+          "thumbnail_url": null,
+          "has_recap": true
         }
       ],
       "Roundabouts": [
@@ -5680,7 +5925,8 @@ Returns all hazard perception videos grouped by category and topic. Optionally f
           "video_url": "hazard-perception/def456.mp4",
           "duration_seconds": 75,
           "is_double_hazard": true,
-          "thumbnail_url": null
+          "thumbnail_url": null,
+          "has_recap": false
         }
       ]
     }
@@ -5701,6 +5947,7 @@ Returns all hazard perception videos grouped by category and topic. Optionally f
 | `duration_seconds` | integer | Video length in seconds |
 | `is_double_hazard` | boolean | Whether this clip has two hazards (max score 10 instead of 5) |
 | `thumbnail_url` | string\|null | Optional thumbnail image URL |
+| `has_recap` | boolean | Whether a recap (explainer) video exists for this clip. The recap URL itself is only returned after the student completes the clip. |
 
 > **Note:** Hazard timing windows are NOT returned to the client — scoring is calculated server-side when the student submits response times.
 
@@ -5752,12 +5999,27 @@ Submit all of the student's tap timestamps from the video. The mobile app sends 
     "hazard_2_response_time": "45.20",
     "hazard_2_score": 3,
     "total_score": 7,
-    "completed_at": "2026-04-14T15:30:00+00:00"
+    "completed_at": "2026-04-14T15:30:00+00:00",
+    "recap_video_url": "hazard-perception/recaps/def456.mp4",
+    "video": {
+      "id": 2,
+      "title": "Roundabout with cyclist",
+      "description": "Approaching a roundabout with a cyclist merging from the left.",
+      "category": "Car",
+      "topic": "Roundabouts",
+      "video_url": "hazard-perception/def456.mp4",
+      "duration_seconds": 75,
+      "is_double_hazard": true,
+      "thumbnail_url": null,
+      "has_recap": true
+    }
   }
 }
 ```
 
 > **Note:** `hazard_1_response_time` / `hazard_2_response_time` are the specific taps the backend selected as the best match for each hazard window. They will be `null` if no tap fell within that hazard's window (score = 0).
+
+> **Recap:** the student has just completed the clip, so `recap_video_url` is included (null if the clip has no recap). The app should offer a "watch recap" option when it is non-null.
 
 **Attempt Object Fields:**
 
@@ -5771,8 +6033,12 @@ Submit all of the student's tap timestamps from the video. The mobile app sends 
 | `hazard_2_score` | integer\|null | Score 0-5 for hazard 2 (null if single hazard clip) |
 | `total_score` | integer | Combined score (max 5 single, max 10 double) |
 | `completed_at` | string | ISO 8601 timestamp |
+| `recap_video_url` | string\|null | Recap video URL (null = no recap for this clip). Only present when the response includes the video (practice submit, test detail). |
+| `video` | object | The video object (present on practice submit and in test contexts) |
 
 **Error Response (validation):** `422 Unprocessable Entity`
+
+> **Practice attempts never count toward score stats** — summary `average_score`/`best_score`, dashboard stats, and the `perfect_hazard` badge are computed from test attempts only.
 
 ---
 
@@ -5781,6 +6047,8 @@ Submit all of the student's tap timestamps from the video. The mobile app sends 
 **Auth required:** Yes (Bearer token — student only)
 
 Returns the student's hazard perception performance summary. Optionally filter by category.
+
+**Score stats count TEST attempts only** — `average_score` and `best_score` are computed from attempts made within a test session; practice runs never set a personal best. `attempts_taken` and `recent_attempts` count both modes (activity), and `topic_performance` deliberately counts both (weak-areas learning signal — same exception as mock tests).
 
 **Query Parameters:**
 
@@ -5795,6 +6063,9 @@ Returns the student's hazard perception performance summary. Optionally filter b
     "attempts_taken": 15,
     "average_score": 3.8,
     "best_score": 5,
+    "tests_taken": 2,
+    "best_test_score": 48,
+    "best_test_max_score": 70,
     "recent_attempts": [
       {
         "id": 15,
@@ -5827,11 +6098,211 @@ Returns the student's hazard perception performance summary. Optionally filter b
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `attempts_taken` | integer | Total completed attempts |
-| `average_score` | number | Average score across all attempts |
-| `best_score` | integer | Highest single attempt score |
-| `recent_attempts` | array | Last 10 completed attempts (most recent first) |
-| `topic_performance` | array | Per-topic breakdown with attempt count and average score |
+| `attempts_taken` | integer | Total completed attempts (practice + test) |
+| `average_score` | number | Average per-clip score across TEST attempts only (`0` if no tests yet) |
+| `best_score` | integer | Highest single-clip score from TEST attempts only (`0` if no tests yet) |
+| `tests_taken` | integer | Number of completed test sessions |
+| `best_test_score` | integer | Highest completed-test `total_score` |
+| `best_test_max_score` | integer | Highest completed-test `max_score` (denominator for `best_test_score` — varies with double-hazard mix) |
+| `recent_attempts` | array | Last 10 completed attempts, both modes (most recent first) |
+| `topic_performance` | array | Per-topic breakdown with attempt count and average score (counts both modes — weak-areas signal) |
+
+---
+
+#### `GET /api/v1/student/hazard-perception/tests`
+
+**Auth required:** Yes (Bearer token — student only)
+
+Paginated history of the student's **completed** hazard perception tests, newest first. In-progress tests are not listed (resume them via `GET tests/{id}` using the ID held by the app).
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `topic` | string | No | Filter by the topic the test was generated with (max 100 chars) |
+| `per_page` | integer | No | Items per page, 1–100 (default `20`) |
+| `page` | integer | No | Page number (default `1`) |
+
+**Success Response:** `200 OK` — Laravel standard pagination (`data`, `links`, `meta`)
+```json
+{
+  "data": [
+    {
+      "id": 4,
+      "topic": null,
+      "total_videos": 14,
+      "is_complete": true,
+      "total_score": 48,
+      "max_score": 70,
+      "started_at": "2026-07-14T10:00:00+00:00",
+      "completed_at": "2026-07-14T10:22:41+00:00"
+    }
+  ],
+  "links": { "first": "…", "last": "…", "prev": null, "next": null },
+  "meta": { "current_page": 1, "last_page": 1, "per_page": 20, "total": 1 }
+}
+```
+
+> History items are the header shape only — no `videos` / `next_video`. Fetch `GET tests/{id}` for the full per-video breakdown and recaps.
+
+---
+
+#### `POST /api/v1/student/hazard-perception/tests/start`
+
+**Auth required:** Yes (Bearer token — student only)
+
+Starts a test session: the server randomly selects **14** videos (`config('hazard_perception.videos_per_test')`, env `HAZARD_PERCEPTION_TEST_VIDEOS`) and fixes their playback order. The selection is persisted server-side, so the test can be resumed and cannot be re-rolled. If the (topic-filtered) bank holds fewer than 14 videos, the test uses every available video (`total_videos` reflects the real count); if it holds none, a `422` is returned.
+
+**Request Body:**
+
+| Field | Type | Required | Validation | Description |
+|-------|------|----------|------------|-------------|
+| `topic` | string | No | max:100 | Restrict the random selection to one topic (e.g. `Roundabouts`). All HPT videos are Car category, so topic is the only filter axis. |
+
+**Success Response:** `201 Created`
+```json
+{
+  "data": {
+    "id": 5,
+    "topic": null,
+    "total_videos": 14,
+    "is_complete": false,
+    "completed_videos": 0,
+    "total_score": 0,
+    "max_score": 70,
+    "started_at": "2026-07-14T11:00:00+00:00",
+    "completed_at": null,
+    "videos": [
+      {
+        "position": 1,
+        "max_score": 5,
+        "video": {
+          "id": 1,
+          "title": "Junction approach with pedestrian",
+          "description": "A car approaching a T-junction with a pedestrian stepping into the road.",
+          "category": "Car",
+          "topic": "Junctions",
+          "video_url": "hazard-perception/abc123.mp4",
+          "duration_seconds": 60,
+          "is_double_hazard": false,
+          "thumbnail_url": null,
+          "has_recap": true
+        },
+        "attempt": null,
+        "recap_video_url": null
+      }
+    ],
+    "next_video": {
+      "id": 1,
+      "title": "Junction approach with pedestrian",
+      "category": "Car",
+      "topic": "Junctions",
+      "video_url": "hazard-perception/abc123.mp4",
+      "duration_seconds": 60,
+      "is_double_hazard": false,
+      "thumbnail_url": null,
+      "has_recap": true
+    }
+  }
+}
+```
+
+**Test Object Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | Test session ID |
+| `topic` | string\|null | Topic filter used at start (null = whole bank) |
+| `total_videos` | integer | Number of clips in the test |
+| `is_complete` | boolean | Whether the final video has been submitted |
+| `completed_videos` | integer | Clips submitted so far (only present with the full breakdown) |
+| `total_score` | integer | Running score while in progress; final rolled-up score once complete |
+| `max_score` | integer | Fixed at start: 5 per single-hazard clip + 10 per double |
+| `started_at` / `completed_at` | string\|null | ISO 8601 timestamps |
+| `videos` | array | Per-video breakdown in playback order (see below) — start/detail/submit responses only |
+| `next_video` | object\|null | The first unattempted video (in-progress tests only) — drives the "one after another" flow |
+
+**Per-video breakdown item:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `position` | integer | 1-based playback order |
+| `max_score` | integer | 5 (single hazard) or 10 (double) |
+| `video` | object | Video object (no timing windows, `has_recap` flag) |
+| `attempt` | object\|null | The attempt for this clip within this test (null = not yet played) |
+| `recap_video_url` | string\|null | Recap URL — only non-null once the clip has been completed in this test AND the clip has a recap |
+
+**Error Response:** `422 Unprocessable Entity` — no videos available (empty bank or unknown topic).
+
+---
+
+#### `GET /api/v1/student/hazard-perception/tests/{hazardPerceptionTest}`
+
+**Auth required:** Yes (Bearer token — student only, must own the test)
+
+Returns the full test state — the same shape as the start response. Serves two purposes:
+
+- **Resume** (in progress): `next_video` tells the app which clip to play next; `completed_videos` / running `total_score` drive the progress UI.
+- **Results** (complete): the per-video breakdown lists every clip's score, and the student can manually pick any completed video and watch its recap via `recap_video_url`.
+
+**Success Response:** `200 OK` — Test Object (see Start Test) with `videos` breakdown and, when in progress, `next_video`.
+
+**Error Responses:**
+- `403 Forbidden` — test belongs to another student.
+- `404 Not Found` — unknown test ID.
+
+---
+
+#### `POST /api/v1/student/hazard-perception/tests/{hazardPerceptionTest}/videos/{hazardPerceptionVideo}/submit`
+
+**Auth required:** Yes (Bearer token — student only, must own the test)
+
+Scores one clip within a test session. Identical tap scoring to the practice submit. Submitting the last remaining clip completes the test (`completed_at` set, `total_score` rolled up).
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `hazardPerceptionTest` | integer | The test session ID |
+| `hazardPerceptionVideo` | integer | The video being submitted — must be part of the test and not yet attempted in it |
+
+**Request Body:** same as the practice submit — `taps` (array of numbers, seconds into the video).
+
+**Success Response:** `201 Created`
+```json
+{
+  "data": {
+    "attempt": {
+      "id": 31,
+      "hazard_perception_video_id": 1,
+      "hazard_1_response_time": "18.30",
+      "hazard_1_score": 5,
+      "hazard_2_response_time": null,
+      "hazard_2_score": null,
+      "total_score": 5,
+      "completed_at": "2026-07-14T11:03:10+00:00",
+      "recap_video_url": "hazard-perception/recaps/abc123.mp4",
+      "video": { "id": 1, "title": "Junction approach with pedestrian", "…": "…" }
+    },
+    "test": {
+      "id": 5,
+      "total_videos": 14,
+      "is_complete": false,
+      "completed_videos": 1,
+      "total_score": 5,
+      "max_score": 70,
+      "videos": [ "… full per-video breakdown …" ],
+      "next_video": { "id": 7, "…": "…" }
+    }
+  }
+}
+```
+
+> The updated `test` object is returned with every submission — the app can drive the whole flow from it: play `next_video` until `is_complete` is true, then show the breakdown as the results screen.
+
+**Error Responses:**
+- `403 Forbidden` — test belongs to another student.
+- `422 Unprocessable Entity` — test already completed, video not part of this test, or video already attempted in this test.
 
 ---
 
@@ -6086,7 +6557,10 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-07-08 | **Read receipts for messaging.** New nullable `read_at` on `messages` (`null` = unread; exact per-message/per-recipient since every row is one sender → one recipient). Message objects now include `is_read` + `read_at` (a sender's read receipt on `is_own` messages); conversation objects include `unread_count` and `latest_message.is_read`. New endpoints: `GET /messages/unread-count` (total + per-sender breakdown for badges/polling), `POST /messages/conversations/{user}/read` (bulk-mark thread read — same ID convention as the GET; idempotent, returns `marked_read`), `POST /messages/conversations/instructor/read` (student convenience variant), `POST /messages/{message}/read` (single message, recipient-only via new `MessagePolicy::markAsRead`; returns updated message). Fetching a conversation does **not** auto-mark it read — the app must call a mark-read endpoint. | Messages (all) |
 | 2026-07-09 | **Unified message notification pipeline (`MessageObserver`) + lesson status messages in threads.** Every `messages` row now fires one pipeline from a `Message::created` observer — email, push (token-holders only), activity log — so creating the row IS sending the message; call sites no longer dispatch their own comms. New columns: `type` (`direct`/`broadcast`/`lesson_on_way`/`lesson_arrived`) + `meta` (json); message objects everywhere now include both (additive). On-way / arrived endpoints now create a typed message row (instructor → student, `meta.lesson_id`) so the status update appears in the student's conversation thread and unread counts, with the same lesson-specific email/push/activity as before fired by the observer; students **without** user accounts keep the direct-email + inline-activity fallback (no row possible). **Broadcast messages now email + push each recipient** (previously rows only, no notifications); per-row activity logs suppressed in favour of the caller's single summary entry. Request/response shapes otherwise unchanged. | Messages (all), Instructor (notify-on-way, notify-arrived, broadcast) |
 | 2026-07-09 | **Added `student_id` to conversation objects** (additive — no existing fields changed). `GET /messages/unread-count`: each `conversations[]` item now includes `student_id`; `GET /messages/conversations`: each conversation object includes `student_id` next to `user`. Resolution: when the authenticated user is an **instructor** and the other participant is one of **their** students, it's that student's ID (students table — matches `GET /instructor/students`); otherwise `null` (admin/owner participants, students of other instructors, or student-authenticated users). Lets the instructor app map conversations onto its student-keyed Messages screen for per-pupil unread badges, sorting, and last-message previews. `user_id` / `user.id` remain **user** IDs. | Messages (conversations, unread-count) |
+| 2026-07-14 | **Added mock test practise mode + full test history.** New `mode` field on `POST /mock-tests/start` (`mock` default \| `practice`): practice runs are recorded and reviewable but excluded from summary stats, resource-dashboard stats, and ALL badges (also closes a gaming hole where a short perfect practice run would earn Top Score / Expert perfect_mock), and are never pass/fail (`passed: null` in all responses). Exception: per-topic `category_performance` counts both modes (weak-areas signal). New `question_count` (5–50) on start for shorter runs. Pass mark is now proportional — `correct >= ceil(total × 0.86)` (still 43/50 full-length) — fixing the latent bug where tests shorter than 43 questions could never pass. `mode` added to all test objects. New `GET /student/mock-tests` — paginated completed-test history, newest first, filters `category` (incl. `Mixed`), `mode`, `per_page`. New indexed `mock_tests.mode` column (migration `add_mode_to_mock_tests_table`, default `mock` so existing rows stay counted). | Mock Tests (index NEW, start, submit, review, summary), Student Resources (resource-summary stats + badges) |
+| 2026-07-14 | **Added mock test revision mode** — three new read-only endpoints so students can revise the question bank (practise section): `GET /student/mock-tests/categories` (question-bank index: category names + topics with counts — the app should source category names here, not hard-code them), `GET /student/mock-tests/questions` (paginated questions for a required `category`, optional `topic`, `per_page` ≤ 100; ordered topic→id) and `GET /student/mock-tests/questions/{id}` (single question deep-link). Revision responses INCLUDE `correct_answer` + `explanation` via new `MockTestRevisionQuestionResource` (extends the test-mode resource, which still hides answers). No attempt records are created; no schema changes. | Mock Tests (categories, questions index, question show) |
 | 2026-07-09 | **Added `display_message` to activity log objects** (additive). New nullable `display_message` column on `activity_logs`: `message` stays the full self-contained audit sentence ("Message sent to Sam: hello"); `display_message` is the short user-friendly version for UI timelines ("hello"). The resource falls back to `message` when the column is null (all pre-existing rows), so the field is always a populated string — **prefer it when rendering**. `search` now matches either field. Populated so far for message-sent, welcome/booking-confirmation/payment-reminder emails, payment-reminder pushes, and lesson-cancellation entries; other categories fall back. | Student Activity Log (index) |
+| 2026-07-14 | **Added hazard perception test mode + recap videos.** New test-session flow mirroring mock tests: `POST /student/hazard-perception/tests/start` picks 14 random videos (`config('hazard_perception.videos_per_test')`; optional `topic` filter — HPT is Car-only so topic is the only axis; selection + playback order persisted, fewer used if the bank is smaller, 422 if empty), `POST tests/{test}/videos/{video}/submit` scores one clip (same tap scoring; guards: ownership 403, test complete / video not in test / already attempted 422; final clip completes the test and rolls up `total_score`), `GET tests/{test}` doubles as resume (`next_video`) and results view, `GET tests` is paginated completed-test history. **Score-counting rule:** summary `average_score`/`best_score`, resource-dashboard hazard stats, and the `perfect_hazard` badge now count TEST attempts only — practice never sets a PB (`attempts_taken`, `recent_attempts`, `topic_performance` still count both). Summary gains `tests_taken`, `best_test_score`, `best_test_max_score`. **Recap videos:** new nullable `recap_video_url` on videos, revealed only after completing a clip (list shows `has_recap`); practice submit response now includes `recap_video_url` + `video`. New tables `hazard_perception_tests`, `hazard_perception_test_videos`; new nullable `hazard_perception_attempts.hazard_perception_test_id` (null = practice). | Hazard Perception (all), Student Resources (resource-summary stats + expert badge) |
 
 ---
 

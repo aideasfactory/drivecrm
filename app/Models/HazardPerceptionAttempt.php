@@ -17,6 +17,7 @@ class HazardPerceptionAttempt extends Model
     protected $fillable = [
         'student_id',
         'hazard_perception_video_id',
+        'hazard_perception_test_id',
         'hazard_1_response_time',
         'hazard_1_score',
         'hazard_2_response_time',
@@ -45,5 +46,10 @@ class HazardPerceptionAttempt extends Model
     public function video(): BelongsTo
     {
         return $this->belongsTo(HazardPerceptionVideo::class, 'hazard_perception_video_id');
+    }
+
+    public function test(): BelongsTo
+    {
+        return $this->belongsTo(HazardPerceptionTest::class, 'hazard_perception_test_id');
     }
 }

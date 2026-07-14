@@ -47,6 +47,7 @@ class GetStudentBadgesAction
     {
         $firstCompleted = MockTest::query()
             ->where('student_id', $student->id)
+            ->where('mode', 'mock')
             ->whereNotNull('completed_at')
             ->orderBy('completed_at')
             ->value('completed_at');
@@ -64,6 +65,7 @@ class GetStudentBadgesAction
     {
         $firstPerfect = MockTest::query()
             ->where('student_id', $student->id)
+            ->where('mode', 'mock')
             ->whereNotNull('completed_at')
             ->whereColumn('correct_answers', 'total_questions')
             ->orderBy('completed_at')
@@ -82,6 +84,7 @@ class GetStudentBadgesAction
     {
         $days = DB::table('mock_tests')
             ->where('student_id', $student->id)
+            ->where('mode', 'mock')
             ->whereNotNull('completed_at')
             ->selectRaw('DATE(completed_at) as day')
             ->distinct()
@@ -146,6 +149,7 @@ class GetStudentBadgesAction
     {
         $perfectMockAt = MockTest::query()
             ->where('student_id', $student->id)
+            ->where('mode', 'mock')
             ->whereNotNull('completed_at')
             ->whereColumn('correct_answers', 'total_questions')
             ->orderBy('completed_at')
@@ -153,6 +157,7 @@ class GetStudentBadgesAction
 
         $perfectHazardAt = HazardPerceptionAttempt::query()
             ->where('hazard_perception_attempts.student_id', $student->id)
+            ->whereNotNull('hazard_perception_attempts.hazard_perception_test_id')
             ->join('hazard_perception_videos', 'hazard_perception_videos.id', '=', 'hazard_perception_attempts.hazard_perception_video_id')
             ->whereRaw('hazard_perception_attempts.total_score = CASE WHEN hazard_perception_videos.is_double_hazard THEN 10 ELSE 5 END')
             ->orderBy('hazard_perception_attempts.completed_at')

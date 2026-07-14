@@ -6,10 +6,14 @@ namespace App\Services;
 
 use App\Actions\MockTest\GenerateRandomTestAction;
 use App\Actions\MockTest\GetCategoryPerformanceAction;
+use App\Actions\MockTest\GetQuestionBankIndexAction;
+use App\Actions\MockTest\GetRevisionQuestionsAction;
+use App\Actions\MockTest\GetTestHistoryAction;
 use App\Actions\MockTest\GetTestSummaryAction;
 use App\Actions\MockTest\SubmitTestAnswersAction;
 use App\Models\MockTest;
 use App\Models\Student;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class MockTestService extends BaseService
 {
@@ -18,11 +22,24 @@ class MockTestService extends BaseService
         protected SubmitTestAnswersAction $submitTestAnswers,
         protected GetTestSummaryAction $getTestSummary,
         protected GetCategoryPerformanceAction $getCategoryPerformance,
+        protected GetQuestionBankIndexAction $getQuestionBankIndex,
+        protected GetRevisionQuestionsAction $getRevisionQuestions,
+        protected GetTestHistoryAction $getTestHistory,
     ) {}
 
-    public function startTest(Student $student, ?string $category = null, ?string $topic = null): array
+    public function startTest(
+        Student $student,
+        ?string $category = null,
+        ?string $topic = null,
+        string $mode = 'mock',
+        ?int $questionCount = null,
+    ): array {
+        return ($this->generateRandomTest)($student, $category, $topic, $mode, $questionCount);
+    }
+
+    public function getTestHistory(Student $student, ?string $category = null, ?string $mode = null, int $perPage = 20): LengthAwarePaginator
     {
-        return ($this->generateRandomTest)($student, $category, $topic);
+        return ($this->getTestHistory)($student, $category, $mode, $perPage);
     }
 
     public function submitAnswers(MockTest $mockTest, array $answers): MockTest
@@ -44,6 +61,25 @@ class MockTestService extends BaseService
 
             return $summary;
         });
+    }
+
+    /**
+     * Question-bank index (categories + topics + counts). The bank only
+     * changes via seeding, so a shared cache with TTL expiry is sufficient —
+     * no invalidation hook needed.
+     *
+     * @return array<int, array{category: string, total_questions: int, topics: array<int, array{topic: string, total_questions: int}>}>
+     */
+    public function getQuestionBankIndex(): array
+    {
+        $key = $this->cacheKey('mock_tests', 'bank', 'index');
+
+        return $this->remember($key, fn (): array => ($this->getQuestionBankIndex)());
+    }
+
+    public function getRevisionQuestions(string $category, ?string $topic = null, int $perPage = 20): LengthAwarePaginator
+    {
+        return ($this->getRevisionQuestions)($category, $topic, $perPage);
     }
 
     public function getTestReview(MockTest $mockTest): MockTest

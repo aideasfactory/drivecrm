@@ -23,6 +23,7 @@ class HazardPerceptionAttemptResource extends JsonResource
             'hazard_2_score' => $this->hazard_2_score,
             'total_score' => $this->total_score,
             'completed_at' => $this->completed_at?->toIso8601String(),
+            'recap_video_url' => $this->whenLoaded('video', fn () => $this->video->recap_video_url),
             'video' => new HazardPerceptionVideoResource($this->whenLoaded('video')),
         ];
     }

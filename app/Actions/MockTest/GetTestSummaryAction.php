@@ -35,6 +35,7 @@ class GetTestSummaryAction
     public function __invoke(Student $student, ?string $category = null): array
     {
         $query = MockTest::where('student_id', $student->id)
+            ->where('mode', 'mock')
             ->whereNotNull('completed_at');
 
         if ($category) {
@@ -48,6 +49,7 @@ class GetTestSummaryAction
         ')->first();
 
         $recentScores = MockTest::where('student_id', $student->id)
+            ->where('mode', 'mock')
             ->whereNotNull('completed_at')
             ->when($category, fn ($q) => $q->where('category', $category))
             ->orderByDesc('completed_at')

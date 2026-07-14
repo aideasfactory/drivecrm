@@ -23,11 +23,13 @@ class RecordHazardPerceptionAttemptAction
      * - For each hazard, the best-scoring tap within the window is used.
      *
      * @param  array<int, float>  $taps  All tap timestamps (seconds into video)
+     * @param  int|null  $testId  Links the attempt to a test session (null = practice)
      */
     public function __invoke(
         Student $student,
         HazardPerceptionVideo $video,
         array $taps,
+        ?int $testId = null,
     ): HazardPerceptionAttempt {
         $sortedTaps = $taps;
         sort($sortedTaps);
@@ -54,6 +56,7 @@ class RecordHazardPerceptionAttemptAction
         return HazardPerceptionAttempt::create([
             'student_id' => $student->id,
             'hazard_perception_video_id' => $video->id,
+            'hazard_perception_test_id' => $testId,
             'hazard_1_response_time' => $h1ResponseTime,
             'hazard_1_score' => $h1Score,
             'hazard_2_response_time' => $h2ResponseTime,

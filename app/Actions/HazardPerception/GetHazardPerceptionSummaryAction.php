@@ -5,11 +5,17 @@ declare(strict_types=1);
 namespace App\Actions\HazardPerception;
 
 use App\Models\HazardPerceptionAttempt;
+use App\Models\HazardPerceptionTest;
 use App\Models\Student;
 use Illuminate\Support\Facades\DB;
 
 class GetHazardPerceptionSummaryAction
 {
+    /**
+     * Score stats (average/best) count TEST attempts only — practice runs
+     * never set a personal best. Activity stats (attempts_taken,
+     * recent_attempts) and topic_performance count both modes.
+     */
     public function __invoke(Student $student, ?string $category = null): array
     {
         $query = HazardPerceptionAttempt::query()
@@ -23,9 +29,18 @@ class GetHazardPerceptionSummaryAction
 
         $stats = (clone $query)->selectRaw('
             COUNT(*) as attempts_taken,
-            COALESCE(AVG(hazard_perception_attempts.total_score), 0) as average_score,
-            COALESCE(MAX(hazard_perception_attempts.total_score), 0) as best_score
+            COALESCE(AVG(CASE WHEN hazard_perception_attempts.hazard_perception_test_id IS NOT NULL THEN hazard_perception_attempts.total_score END), 0) as average_score,
+            COALESCE(MAX(CASE WHEN hazard_perception_attempts.hazard_perception_test_id IS NOT NULL THEN hazard_perception_attempts.total_score END), 0) as best_score
         ')->first();
+
+        $testStats = HazardPerceptionTest::query()
+            ->where('student_id', $student->id)
+            ->whereNotNull('completed_at')
+            ->selectRaw('
+                COUNT(*) as tests_taken,
+                COALESCE(MAX(total_score), 0) as best_test_score,
+                COALESCE(MAX(max_score), 0) as best_test_max_score
+            ')->first();
 
         $recentAttempts = HazardPerceptionAttempt::query()
             ->where('hazard_perception_attempts.student_id', $student->id)
@@ -61,6 +76,9 @@ class GetHazardPerceptionSummaryAction
             'attempts_taken' => (int) $stats->attempts_taken,
             'average_score' => round((float) $stats->average_score, 1),
             'best_score' => (int) $stats->best_score,
+            'tests_taken' => (int) $testStats->tests_taken,
+            'best_test_score' => (int) $testStats->best_test_score,
+            'best_test_max_score' => (int) $testStats->best_test_max_score,
             'recent_attempts' => $recentAttempts,
             'topic_performance' => $topicPerformance,
         ];
