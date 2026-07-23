@@ -4,9 +4,9 @@
       <Card class="rounded-none border-b border-t-0 border-x-0">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="flex items-center justify-between h-16 w-full">
-            <div class="flex-shrink-0 min-w-[200px]">
-              <span class="flex items-center w-8">
-                <AppLogoIcon class="w-4 fill-current text-[var(--foreground)] dark:text-white" />
+            <div class="flex-shrink-0 sm:min-w-[200px]">
+              <span class="flex items-center">
+                <AppLogoIcon class="h-8 w-8" />
                 <span class="text-xl font-bold ml-2">DRIVE</span>
               </span>
             </div>
@@ -15,7 +15,7 @@
                 <Phone class="mr-1.5 h-4 w-4" />
                 0800 368 9215
               </a>
-              <a href="mailto:lessons@just-drive.co.uk" class="flex items-center hover:text-primary">
+              <a href="mailto:lessons@just-drive.co.uk" class="hidden md:flex items-center hover:text-primary">
                 <Mail class="mr-1.5 h-4 w-4" />
                 lessons@just-drive.co.uk
               </a>
@@ -147,6 +147,10 @@
                     <AlertCircle class="mr-1 h-4 w-4" />
                     {{ form.errors.email }}
                   </p>
+                  <p v-if="form.email && !validateEmail(form.email)" class="text-sm text-orange-600 flex items-center">
+                    <AlertTriangle class="mr-1 h-4 w-4" />
+                    Please enter a valid email address
+                  </p>
                 </div>
 
                 <div class="space-y-2">
@@ -210,6 +214,10 @@
                     <MapPin class="mr-1 h-4 w-4" />
                     Enter your postcode for lesson pickup location
                   </p>
+                  <p v-if="form.postcode && !validatePostcode(form.postcode)" class="text-sm text-orange-600 flex items-center">
+                    <AlertTriangle class="mr-1 h-4 w-4" />
+                    Please enter a valid postcode
+                  </p>
                 </div>
 
                 <div class="space-y-2">
@@ -243,7 +251,7 @@
                       required
                       class="h-4 w-4 mt-1 rounded border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
                     />
-                    <Label for="privacy_consent" class="text-sm leading-relaxed cursor-pointer">
+                    <Label for="privacy_consent" class="block text-sm leading-relaxed cursor-pointer">
                       I have read and agree to the
                       <a href="/policy/TermsofService.pdf" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Terms of Service</a>,
                       <a href="/policy/PrivacyPolicy.pdf" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Privacy Policy</a>,

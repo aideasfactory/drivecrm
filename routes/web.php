@@ -45,14 +45,15 @@ use App\Http\Middleware\ValidateBookingEnquiryUuid;
 use App\Http\Middleware\ValidateBookingStepAccess;
 use App\Http\Middleware\ValidateEnquiryUuid;
 use App\Http\Middleware\ValidateStepAccess;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-use Laravel\Fortify\Features;
 
-Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'canRegister' => Features::enabled(Features::registration()),
-    ]);
+// Temporary: send visitors straight into the booking flow instead of the
+// coming-soon page. Query params (e.g. ?gclid=…) are forwarded so ad tracking
+// still reaches BookingController@start. Restore the Welcome render to revert.
+Route::get('/', function (Request $request) {
+    return redirect()->route('booking.start', $request->query());
 })->name('home');
 
 Route::get('/no-access', fn () => Inertia::render('NoAccess'))

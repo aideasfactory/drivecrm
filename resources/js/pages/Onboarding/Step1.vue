@@ -138,6 +138,10 @@
                     <AlertCircle class="mr-1 h-4 w-4" />
                     {{ form.errors.email }}
                   </p>
+                  <p v-if="form.email && !validateEmail(form.email)" class="text-sm text-orange-600 flex items-center">
+                    <AlertTriangle class="mr-1 h-4 w-4" />
+                    Please enter a valid email address
+                  </p>
                 </div>
 
                 <div class="space-y-2">
@@ -194,6 +198,10 @@
                     <MapPin class="mr-1 h-4 w-4" />
                     Enter your postcode for lesson pickup location
                   </p>
+                  <p v-if="form.postcode && !validatePostcode(form.postcode)" class="text-sm text-orange-600 flex items-center">
+                    <AlertTriangle class="mr-1 h-4 w-4" />
+                    Please enter a valid postcode
+                  </p>
                 </div>
 
                 <div class="space-y-4 pt-4">
@@ -207,7 +215,7 @@
                       required
                       class="h-4 w-4 mt-1 rounded border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
                     />
-                    <Label for="privacy_consent" class="text-sm leading-relaxed cursor-pointer">
+                    <Label for="privacy_consent" class="block text-sm leading-relaxed cursor-pointer">
                       I have read and agree to the
                       <a href="/policy/TermsofService.pdf" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Terms of Service</a>,
                       <a href="/policy/PrivacyPolicy.pdf" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Privacy Policy</a>,

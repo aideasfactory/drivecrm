@@ -4,10 +4,8 @@
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between h-16 w-full">
           <div class="flex-shrink-0 min-w-[200px]">
-            <span class="flex items-center cursor-pointer w-8">
-              <AppLogoIcon
-                    class="w-4 fill-current text-[var(--foreground)] dark:text-white"
-                />
+            <span class="flex items-center cursor-pointer">
+              <AppLogoIcon class="h-8 w-8" />
               <span class="text-xl font-bold ml-2">DRIVE</span>
             </span>
           </div>

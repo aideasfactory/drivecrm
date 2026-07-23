@@ -8,14 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthBase from '@/layouts/AuthLayout.vue';
-import { register } from '@/routes';
 import { store } from '@/actions/Laravel/Fortify/Http/Controllers/AuthenticatedSessionController';
 import { request } from '@/routes/password';
 
 defineProps<{
     status?: string;
     canResetPassword: boolean;
-    canRegister: boolean;
 }>();
 
 const form = useForm({
@@ -109,14 +107,6 @@ const submit = () => {
                     <Spinner v-if="form.processing" />
                     Log in
                 </Button>
-            </div>
-
-            <div
-                class="text-center text-sm text-muted-foreground"
-                v-if="canRegister"
-            >
-                Don't have an account?
-                <TextLink :href="register()" :tabindex="5">Sign up</TextLink>
             </div>
         </form>
     </AuthBase>
