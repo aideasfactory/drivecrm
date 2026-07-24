@@ -129,6 +129,9 @@ class BirdContactService extends BaseService
             'transmission1' => $transmission,
             'subscribedEmail' => $marketingConsent,
             'subscribedSms' => $marketingConsent,
+            // Bird validates attribute keys case-sensitively: "subscribedWhatsApp",
+            // not "subscribedWhatsapp" (verified against this workspace's schema).
+            'subscribedWhatsApp' => $marketingConsent,
             'source' => $source,
             'gclid' => $gclid,
         ], fn ($value) => $value !== null);
