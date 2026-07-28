@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AccountDeletionController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\HazardPerceptionController;
 use App\Http\Controllers\Api\V1\InstructorCalendarController;
@@ -56,6 +57,13 @@ Route::prefix('v1')->group(function (): void {
             Route::post('logout', [AuthController::class, 'logout']);
             Route::get('user', [AuthController::class, 'user']);
             Route::post('change-password', [AuthController::class, 'changePassword']);
+        });
+
+        // Account deletion (both roles — user resolved from token)
+        Route::prefix('account')->group(function (): void {
+            Route::post('deletion-request', [AccountDeletionController::class, 'store']);
+            Route::get('deletion-request', [AccountDeletionController::class, 'show']);
+            Route::delete('deletion-request', [AccountDeletionController::class, 'destroy']);
         });
 
         // Instructor routes

@@ -22,6 +22,7 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet'
 import { Search, ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { index } from '@/routes/enquiries'
 
 interface Enquiry {
     id: string
@@ -29,7 +30,9 @@ interface Enquiry {
     total_steps: number
     current_step: number
     max_step_reached: number
+    status: 'completed' | 'full_onboarding' | 'in_progress'
     is_complete: boolean
+    in_area: boolean | null
     first_name: string | null
     last_name: string | null
     email: string | null
@@ -60,11 +63,39 @@ interface Paginator {
     links: PaginationLink[]
 }
 
+interface Filters {
+    status: 'all' | 'completed' | 'full_onboarding' | 'in_progress'
+    area: 'all' | 'in_area' | 'out_of_area' | 'unknown'
+}
+
 interface Props {
     enquiries: Paginator
+    filters: Filters
 }
 
 const props = defineProps<Props>()
+
+const statusOptions: { value: Filters['status']; label: string }[] = [
+    { value: 'all', label: 'All' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'full_onboarding', label: 'Full onboarding' },
+    { value: 'in_progress', label: 'In progress' },
+]
+
+const areaOptions: { value: Filters['area']; label: string }[] = [
+    { value: 'all', label: 'All' },
+    { value: 'in_area', label: 'In area' },
+    { value: 'out_of_area', label: 'Out of area' },
+    { value: 'unknown', label: 'Unknown' },
+]
+
+const applyFilters = (changes: Partial<Filters>) => {
+    router.get(
+        index.url(),
+        { ...props.filters, ...changes },
+        { preserveScroll: true, preserveState: true },
+    )
+}
 
 const searchQuery = ref('')
 const selectedEnquiry = ref<Enquiry | null>(null)
@@ -132,11 +163,16 @@ const transmissionLabel = (value: Enquiry['transmission']) => {
 }
 
 const inAreaLabel = (e: Enquiry) => {
-    if (e.source !== 'booking') return null
-    const data = e.data as { steps?: { step2?: { in_area?: boolean } } }
-    const inArea = data?.steps?.step2?.in_area
-    if (inArea === undefined) return null
-    return inArea ? 'In area' : 'Out of area'
+    if (e.in_area === null) return null
+    return e.in_area ? 'In area' : 'Out of area'
+}
+
+const statusBadge = (e: Enquiry): { label: string; variant: 'default' | 'secondary' | 'outline' } => {
+    switch (e.status) {
+        case 'completed': return { label: 'Completed', variant: 'default' }
+        case 'full_onboarding': return { label: 'Full onboarding', variant: 'secondary' }
+        default: return { label: 'In progress', variant: 'outline' }
+    }
 }
 
 const breadcrumbs = [{ title: 'Enquiries' }]
@@ -156,7 +192,7 @@ const breadcrumbs = [{ title: 'Enquiries' }]
 
             <Card>
                 <CardContent class="pt-6">
-                    <div class="flex items-center gap-2 mb-4">
+                    <div class="flex flex-wrap items-center gap-4 mb-4">
                         <div class="relative flex-1 max-w-md">
                             <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
@@ -164,6 +200,28 @@ const breadcrumbs = [{ title: 'Enquiries' }]
                                 placeholder="Search name, email, phone or postcode"
                                 class="pl-9"
                             />
+                        </div>
+                        <div class="flex items-center gap-1 rounded-md border p-1">
+                            <Button
+                                v-for="option in statusOptions"
+                                :key="option.value"
+                                :variant="filters.status === option.value ? 'default' : 'ghost'"
+                                size="sm"
+                                @click="applyFilters({ status: option.value })"
+                            >
+                                {{ option.label }}
+                            </Button>
+                        </div>
+                        <div class="flex items-center gap-1 rounded-md border p-1">
+                            <Button
+                                v-for="option in areaOptions"
+                                :key="option.value"
+                                :variant="filters.area === option.value ? 'default' : 'ghost'"
+                                size="sm"
+                                @click="applyFilters({ area: option.value })"
+                            >
+                                {{ option.label }}
+                            </Button>
                         </div>
                         <div class="text-sm text-muted-foreground ml-auto">
                             {{ enquiries.total }} total
@@ -208,8 +266,9 @@ const breadcrumbs = [{ title: 'Enquiries' }]
                                     {{ enquiry.max_step_reached }}/{{ enquiry.total_steps }}
                                 </TableCell>
                                 <TableCell>
-                                    <Badge v-if="enquiry.is_complete" variant="default">Completed</Badge>
-                                    <Badge v-else variant="outline">In progress</Badge>
+                                    <Badge :variant="statusBadge(enquiry).variant">
+                                        {{ statusBadge(enquiry).label }}
+                                    </Badge>
                                     <Badge
                                         v-if="inAreaLabel(enquiry)"
                                         :variant="inAreaLabel(enquiry) === 'In area' ? 'default' : 'secondary'"
@@ -221,7 +280,7 @@ const breadcrumbs = [{ title: 'Enquiries' }]
                             </TableRow>
                             <TableRow v-if="filteredEnquiries.length === 0">
                                 <TableCell colspan="9" class="text-center text-muted-foreground py-8">
-                                    No enquiries match your search.
+                                    No enquiries match your search or filters.
                                 </TableCell>
                             </TableRow>
                         </TableBody>
@@ -272,7 +331,9 @@ const breadcrumbs = [{ title: 'Enquiries' }]
                 <div v-if="selectedEnquiry" class="mt-6 space-y-6 px-4">
                     <div class="space-y-1">
                         <div class="flex items-center gap-2">
-                            <Badge v-if="selectedEnquiry.is_complete" variant="default">Completed</Badge>
+                            <Badge v-if="selectedEnquiry.status !== 'in_progress'" :variant="statusBadge(selectedEnquiry).variant">
+                                {{ statusBadge(selectedEnquiry).label }}
+                            </Badge>
                             <Badge v-else variant="outline">
                                 In progress — step {{ selectedEnquiry.max_step_reached }} of {{ selectedEnquiry.total_steps }}
                             </Badge>

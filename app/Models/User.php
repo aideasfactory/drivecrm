@@ -120,6 +120,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Get the user's account deletion requests.
+     */
+    public function accountDeletionRequests(): HasMany
+    {
+        return $this->hasMany(AccountDeletionRequest::class);
+    }
+
+    /**
      * Get the user's HMRC OAuth token (one per user).
      */
     public function hmrcToken(): HasOne

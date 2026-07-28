@@ -29,7 +29,8 @@ class UpdateInstructorFinanceRequest extends FormRequest
             'description' => ['sometimes', 'string', 'max:255'],
             'amount_pence' => ['sometimes', 'integer', 'min:1'],
             'is_recurring' => ['sometimes', 'boolean'],
-            'recurrence_frequency' => ['nullable', 'string', 'in:weekly,monthly,yearly'],
+            'recurrence_frequency' => ['nullable', 'string', Rule::in(array_keys(config('finances.recurrence_frequencies', [])))],
+            'recurrence_iterations' => ['nullable', 'integer', 'min:1', 'max:'.(int) config('finances.recurrence.max_iterations', 60)],
             'date' => ['sometimes', 'date', 'date_format:Y-m-d'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ];

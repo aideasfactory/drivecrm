@@ -23,6 +23,8 @@ class InstructorFinance extends Model
         'amount_pence',
         'is_recurring',
         'recurrence_frequency',
+        'recurrence_iterations',
+        'recurrence_group_id',
         'date',
         'notes',
         'receipt_path',
@@ -36,6 +38,7 @@ class InstructorFinance extends Model
         return [
             'amount_pence' => 'integer',
             'is_recurring' => 'boolean',
+            'recurrence_iterations' => 'integer',
             'date' => 'date',
             'receipt_size_bytes' => 'integer',
         ];
@@ -83,6 +86,18 @@ class InstructorFinance extends Model
         }
 
         return config("finances.payment_methods.{$this->payment_method}");
+    }
+
+    /**
+     * Human-readable recurrence-frequency label, resolved from config.
+     */
+    public function getRecurrenceFrequencyLabelAttribute(): ?string
+    {
+        if (! $this->recurrence_frequency) {
+            return null;
+        }
+
+        return config("finances.recurrence_frequencies.{$this->recurrence_frequency}");
     }
 
     /**

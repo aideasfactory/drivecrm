@@ -106,6 +106,10 @@ class InstructorFinanceController extends Controller
             'payment_categories' => config('finances.payment_categories', []),
             'payment_methods' => config('finances.payment_methods', []),
             'mileage_types' => config('finances.mileage_types', []),
+            'recurrence_frequencies' => config('finances.recurrence_frequencies', []),
+            'recurrence' => [
+                'max_iterations' => (int) config('finances.recurrence.max_iterations', 60),
+            ],
             'receipt' => [
                 'max_size_kb' => (int) config('finances.receipt.max_size_kb', 10240),
                 'allowed_mimes' => config('finances.receipt.allowed_mimes', []),

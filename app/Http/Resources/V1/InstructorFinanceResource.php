@@ -27,6 +27,9 @@ class InstructorFinanceResource extends JsonResource
             'formatted_amount' => $this->formatted_amount,
             'is_recurring' => $this->is_recurring,
             'recurrence_frequency' => $this->recurrence_frequency,
+            'recurrence_frequency_label' => $this->recurrence_frequency_label,
+            'recurrence_iterations' => $this->recurrence_iterations,
+            'recurrence_group_id' => $this->recurrence_group_id,
             'date' => $this->date?->format('Y-m-d'),
             'notes' => $this->notes,
             'receipt' => $this->receipt_path ? [

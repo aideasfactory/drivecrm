@@ -54,6 +54,17 @@ return [
         'personal' => 'Personal',
     ],
 
+    'recurrence_frequencies' => [
+        'weekly' => 'Weekly',
+        'monthly' => 'Monthly',
+        'yearly' => 'Annually',
+    ],
+
+    'recurrence' => [
+        // Total occurrences in a series, including the first record.
+        'max_iterations' => 60,
+    ],
+
     'receipt' => [
         // Kilobytes — Laravel's `max` rule on uploaded files is in KB.
         'max_size_kb' => 10240,

@@ -11,6 +11,10 @@
 - [Error Handling](#error-handling)
 - [Endpoints](#endpoints)
   - [Auth](#auth)
+  - [Account](#account)
+    - [Request Deletion](#post-apiv1accountdeletion-request)
+    - [Deletion Status](#get-apiv1accountdeletion-request)
+    - [Cancel Deletion](#delete-apiv1accountdeletion-request)
   - [Instructor](#instructor)
     - [Profile](#put-apiv1instructorprofile)
     - [Profile Picture](#post-apiv1instructorprofilepicture)
@@ -626,6 +630,111 @@ Register a new instructor account. Creates a base user record with the `instruct
     ]
   }
 }
+```
+
+---
+
+### Account
+
+Account-level endpoints shared by **both roles** (student and instructor). The user is resolved from the Bearer token — no role namespacing, no IDs in the URL or body.
+
+---
+
+#### `POST /api/v1/account/deletion-request`
+
+Creates a pending account-deletion request with a **30-day grace period** (App Store 5.1.1(v) / Google Play in-app deletion compliance). The hard delete runs via the daily `account:process-deletion-requests` scheduled command once `scheduled_for` passes.
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+**Request body:**
+
+```json
+{
+  "reason": "No longer learning to drive"
+}
+```
+
+| Field | Rules |
+|-------|-------|
+| `reason` | `nullable\|string\|max:1000` — optional; the app currently sends `{}` |
+
+**Behaviour:**
+- Creates the request with `status = "pending"` and `scheduled_for = now + 30 days`.
+- Queues a confirmation email ("scheduled for deletion on {date} — cancel if this wasn't you").
+- Tokens are **not** revoked and login is **not** blocked during the grace period — the user must be able to open the app to cancel.
+- When the grace period elapses, the daily command anonymises the user (name/email/password/push token scrubbed, profile PII scrubbed, Sanctum tokens revoked), detaches an instructor's students (`students.instructor_id = null`), and sets `status = "completed"`.
+
+**Response 201:**
+
+```json
+{
+  "data": {
+    "id": 12,
+    "status": "pending",
+    "reason": "No longer learning to drive",
+    "requested_at": "2026-07-28T14:32:00.000000Z",
+    "scheduled_for": "2026-08-27T14:32:00.000000Z"
+  }
+}
+```
+
+**Response 422 (a request is already pending):**
+
+```json
+{
+  "message": "A deletion request is already pending for this account.",
+  "errors": {
+    "account": ["A deletion request is already pending for this account."]
+  }
+}
+```
+
+---
+
+#### `GET /api/v1/account/deletion-request`
+
+Returns the authenticated user's **latest** deletion request regardless of status (`pending` | `cancelled` | `completed`), or `data: null` if they have never made one. The app calls this on Settings load to reconcile its locally stored flag across devices — only `status = "pending"` should be treated as active.
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+**Response 200 (active request):**
+
+```json
+{
+  "data": {
+    "id": 12,
+    "status": "pending",
+    "reason": null,
+    "requested_at": "2026-07-28T14:32:00.000000Z",
+    "scheduled_for": "2026-08-27T14:32:00.000000Z"
+  }
+}
+```
+
+**Response 200 (no request ever made):**
+
+```json
+{ "data": null }
+```
+
+---
+
+#### `DELETE /api/v1/account/deletion-request`
+
+Cancels the authenticated user's pending deletion request (`status` → `"cancelled"`) and queues a cancellation confirmation email.
+
+**Auth required:** Yes (Bearer token — student or instructor)
+
+**Response 200:**
+
+```json
+{ "message": "Deletion request cancelled successfully." }
+```
+
+**Response 404 (no pending request):**
+
+```json
+{ "message": "No pending deletion request found." }
 ```
 
 ---
@@ -1348,8 +1457,11 @@ Payments and expenses tracking. Every finance record has an optional receipt (PD
 | `description` | string | Description (max 255 chars) |
 | `amount_pence` | integer | Amount in pence (e.g., 3500 = £35.00) |
 | `formatted_amount` | string | Human-readable GBP amount (e.g., `"£35.00"`) |
-| `is_recurring` | boolean | Whether this is a recurring entry. **Display-only flag — the backend does not auto-generate future occurrences.** |
-| `recurrence_frequency` | string\|null | `weekly`, `monthly`, `yearly`, or `null` when not recurring |
+| `is_recurring` | boolean | Whether this record is part of a recurring series. **On create, the backend generates the full series upfront** — see Finances (Create). |
+| `recurrence_frequency` | string\|null | `weekly`, `monthly`, `yearly`, or `null` when not recurring. Labels come from `/finances/config` → `recurrence_frequencies` (`yearly` displays as "Annually"). |
+| `recurrence_frequency_label` | string\|null | Human-readable label (e.g., `"Annually"`). `null` when not recurring. |
+| `recurrence_iterations` | integer\|null | Total occurrences in the series, **including the first record** (1–60). `null` when not recurring. |
+| `recurrence_group_id` | string\|null | UUID shared by every record generated as one recurring series. `null` for standalone records (including recurring records created before series generation existed, or single-iteration ones). |
 | `date` | string | YYYY-MM-DD |
 | `notes` | string\|null | Free-text notes (max 1000 chars) |
 | `receipt` | object\|null | `null` when no receipt. Object has `url` (signed S3 URL, 20-min TTL), `original_name`, `mime_type`, `size_bytes`. |
@@ -1394,6 +1506,14 @@ Returns the dropdown options used by the finance screens **plus** the per-catego
   "mileage_types": {
     "business": "Business",
     "personal": "Personal"
+  },
+  "recurrence_frequencies": {
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "yearly": "Annually"
+  },
+  "recurrence": {
+    "max_iterations": 60
   },
   "receipt": {
     "max_size_kb": 10240,
@@ -1465,7 +1585,7 @@ When both `from` and `to` are omitted, the response covers **the last 30 days** 
     "default_applied": true
   },
   "finances": [
-    { "id": 12, "type": "expense", "category": "fuel", "category_label": "Fuel", "payment_method": "card", "payment_method_label": "Card", "description": "BP Fillup", "amount_pence": 7500, "formatted_amount": "£75.00", "is_recurring": false, "recurrence_frequency": null, "date": "2026-04-22", "notes": null, "receipt": { "url": "https://...", "original_name": "receipt.pdf", "mime_type": "application/pdf", "size_bytes": 45123 }, "created_at": "2026-04-22T08:12:00+00:00", "updated_at": "2026-04-22T08:12:00+00:00" }
+    { "id": 12, "type": "expense", "category": "fuel", "category_label": "Fuel", "payment_method": "card", "payment_method_label": "Card", "description": "BP Fillup", "amount_pence": 7500, "formatted_amount": "£75.00", "is_recurring": false, "recurrence_frequency": null, "recurrence_frequency_label": null, "recurrence_iterations": null, "recurrence_group_id": null, "date": "2026-04-22", "notes": null, "receipt": { "url": "https://...", "original_name": "receipt.pdf", "mime_type": "application/pdf", "size_bytes": 45123 }, "created_at": "2026-04-22T08:12:00+00:00", "updated_at": "2026-04-22T08:12:00+00:00" }
   ],
   "mileage": [
     { "id": 5, "date": "2026-04-22", "start_mileage": 45210, "end_mileage": 45250, "miles": 40, "type": "business", "type_label": "Business", "notes": null, "created_at": "2026-04-22T16:00:00+00:00", "updated_at": "2026-04-22T16:00:00+00:00" }
@@ -1513,7 +1633,7 @@ Cursor-paginated list of finance records, ordered by date descending. Intended f
 ```json
 {
   "data": [
-    { "id": 12, "type": "expense", "category": "fuel", "category_label": "Fuel", "payment_method": "card", "payment_method_label": "Card", "description": "BP Fillup", "amount_pence": 7500, "formatted_amount": "£75.00", "is_recurring": false, "recurrence_frequency": null, "date": "2026-04-22", "notes": null, "receipt": null, "created_at": "2026-04-22T08:12:00+00:00", "updated_at": "2026-04-22T08:12:00+00:00" }
+    { "id": 12, "type": "expense", "category": "fuel", "category_label": "Fuel", "payment_method": "card", "payment_method_label": "Card", "description": "BP Fillup", "amount_pence": 7500, "formatted_amount": "£75.00", "is_recurring": false, "recurrence_frequency": null, "recurrence_frequency_label": null, "recurrence_iterations": null, "recurrence_group_id": null, "date": "2026-04-22", "notes": null, "receipt": null, "created_at": "2026-04-22T08:12:00+00:00", "updated_at": "2026-04-22T08:12:00+00:00" }
   ],
   "path": "https://example.test/api/v1/instructor/finances",
   "per_page": 25,
@@ -1558,6 +1678,9 @@ Fetch a single finance record by ID. The record must belong to the authenticated
     "formatted_amount": "£75.00",
     "is_recurring": false,
     "recurrence_frequency": null,
+    "recurrence_frequency_label": null,
+    "recurrence_iterations": null,
+    "recurrence_group_id": null,
     "date": "2026-04-22",
     "notes": null,
     "receipt": {
@@ -1585,6 +1708,8 @@ Fetch a single finance record by ID. The record must belong to the authenticated
 
 Creates a finance record. Create first (JSON), then upload a receipt separately via `POST /finances/{finance}/receipt` if desired — this keeps the create call small and makes receipt upload independently retryable over flaky networks.
 
+**Recurring series:** when `is_recurring=true`, the backend creates the **entire series upfront** — `recurrence_iterations` records in total (the first on `date`, subsequent ones stepped by `recurrence_frequency` with no-overflow month/year arithmetic, e.g. 31 Jan + 1 month = 28 Feb). All records share a `recurrence_group_id` UUID. The response returns the **first** record only — refetch `GET /finances` to display the series. Updates and deletes always target single records (no series-wide operations). A receipt uploaded afterwards attaches to the first record only.
+
 **Request Body:**
 
 | Field | Type | Required | Description |
@@ -1595,10 +1720,27 @@ Creates a finance record. Create first (JSON), then upload a receipt separately 
 | `payment_method` | string | No | Slug from `/finances/config.payment_methods`. Omit for unspecified. |
 | `description` | string | Yes | Max 255 chars |
 | `amount_pence` | integer | Yes | Min 1 |
-| `is_recurring` | boolean | No | Default false. **Display-only flag.** |
-| `recurrence_frequency` | string | Conditional | Required when `is_recurring=true`. One of `weekly`, `monthly`, `yearly`. |
-| `date` | string | Yes | YYYY-MM-DD |
+| `is_recurring` | boolean | No | Default false. When true, triggers upfront series generation (see above). |
+| `recurrence_frequency` | string | Conditional | Required when `is_recurring=true`. One of `weekly`, `monthly`, `yearly` (labels in `/finances/config.recurrence_frequencies`). |
+| `recurrence_iterations` | integer | Conditional | Required when `is_recurring=true`. Total occurrences **including the first** (1 to `recurrence.max_iterations` from config, default 60). |
+| `date` | string | Yes | YYYY-MM-DD — date of the first occurrence |
 | `notes` | string | No | Max 1000 chars |
+
+**Example Request (recurring monthly payment, 12 occurrences):**
+```json
+{
+  "type": "payment",
+  "category": "franchise_payout",
+  "payment_method": "bank_transfer",
+  "description": "Franchise payout",
+  "amount_pence": 25000,
+  "is_recurring": true,
+  "recurrence_frequency": "monthly",
+  "recurrence_iterations": 12,
+  "date": "2026-08-01"
+}
+```
+Creates 12 records dated 2026-08-01 through 2027-07-01, all sharing one `recurrence_group_id`.
 
 **Example Request (vehicle-bound expense):**
 ```json
@@ -1642,6 +1784,7 @@ Updates a finance record. All fields optional. Category validation uses the **ef
 **Request Body:** any subset of the `POST` fields. Notes specific to a few:
 
 - `vehicle_id`: send an integer to attach, or `null` to detach (e.g. when changing category from `fuel` to `advertising`). Omitting the key leaves the existing value untouched.
+- `is_recurring` / `recurrence_frequency` / `recurrence_iterations`: **metadata-only on update** — changing them edits this single record's fields and never regenerates, extends, or shortens a series. `recurrence_group_id` is not updatable.
 
 **Success Response:** `200 OK` — returns the updated record.
 
@@ -6561,6 +6704,8 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-07-14 | **Added mock test revision mode** — three new read-only endpoints so students can revise the question bank (practise section): `GET /student/mock-tests/categories` (question-bank index: category names + topics with counts — the app should source category names here, not hard-code them), `GET /student/mock-tests/questions` (paginated questions for a required `category`, optional `topic`, `per_page` ≤ 100; ordered topic→id) and `GET /student/mock-tests/questions/{id}` (single question deep-link). Revision responses INCLUDE `correct_answer` + `explanation` via new `MockTestRevisionQuestionResource` (extends the test-mode resource, which still hides answers). No attempt records are created; no schema changes. | Mock Tests (categories, questions index, question show) |
 | 2026-07-09 | **Added `display_message` to activity log objects** (additive). New nullable `display_message` column on `activity_logs`: `message` stays the full self-contained audit sentence ("Message sent to Sam: hello"); `display_message` is the short user-friendly version for UI timelines ("hello"). The resource falls back to `message` when the column is null (all pre-existing rows), so the field is always a populated string — **prefer it when rendering**. `search` now matches either field. Populated so far for message-sent, welcome/booking-confirmation/payment-reminder emails, payment-reminder pushes, and lesson-cancellation entries; other categories fall back. | Student Activity Log (index) |
 | 2026-07-14 | **Added hazard perception test mode + recap videos.** New test-session flow mirroring mock tests: `POST /student/hazard-perception/tests/start` picks 14 random videos (`config('hazard_perception.videos_per_test')`; optional `topic` filter — HPT is Car-only so topic is the only axis; selection + playback order persisted, fewer used if the bank is smaller, 422 if empty), `POST tests/{test}/videos/{video}/submit` scores one clip (same tap scoring; guards: ownership 403, test complete / video not in test / already attempted 422; final clip completes the test and rolls up `total_score`), `GET tests/{test}` doubles as resume (`next_video`) and results view, `GET tests` is paginated completed-test history. **Score-counting rule:** summary `average_score`/`best_score`, resource-dashboard hazard stats, and the `perfect_hazard` badge now count TEST attempts only — practice never sets a PB (`attempts_taken`, `recent_attempts`, `topic_performance` still count both). Summary gains `tests_taken`, `best_test_score`, `best_test_max_score`. **Recap videos:** new nullable `recap_video_url` on videos, revealed only after completing a clip (list shows `has_recap`); practice submit response now includes `recap_video_url` + `video`. New tables `hazard_perception_tests`, `hazard_perception_test_videos`; new nullable `hazard_perception_attempts.hazard_perception_test_id` (null = practice). | Hazard Perception (all), Student Resources (resource-summary stats + expert badge) |
+| 2026-07-28 | **Added in-app account deletion (App Store 5.1.1(v) / Google Play compliance).** Three new endpoints shared by both roles under `/account`: `POST /account/deletion-request` creates a pending request with `scheduled_for = now + 30 days` (optional `reason`, max 1000 chars; 422 if one is already pending), `GET /account/deletion-request` returns the latest request for cross-device state sync (`data: null` if none — only `pending` is active), `DELETE /account/deletion-request` cancels the pending request (404 if none). Confirmation emails queued on request and cancel; tokens are NOT revoked during the grace period so the user can log in to cancel. Daily `account:process-deletion-requests` command (01:00) anonymises due accounts — user + profile PII scrubbed, Sanctum tokens revoked, instructor's students detached — and marks the request `completed`. New `account_deletion_requests` table. | Account (deletion-request POST/GET/DELETE — NEW) |
+| 2026-07-28 | **Recurring finances now generate their full series.** New `recurrence_iterations` (total occurrences incl. the first, 1–60) and `recurrence_group_id` (series UUID) fields on the Finance object, plus `recurrence_frequency_label`. `POST /instructor/finances` with `is_recurring=true` now requires `recurrence_iterations` (alongside `recurrence_frequency`) and creates the entire series upfront — dates stepped weekly / monthly / annually with no-overflow arithmetic; response returns the first record only, refetch the list to display the series. Updates/deletes stay single-record (recurrence fields are metadata-only on update). `GET /instructor/finances/config` gains `recurrence_frequencies` labels (`yearly` → "Annually") and `recurrence.max_iterations`. | Finances (Config, List, Show, Create, Update) |
 
 ---
 

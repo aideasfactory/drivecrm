@@ -239,6 +239,7 @@ Core user table storing all users in the system (owners, instructors, and studen
 - Has one `Student` profile (if role is student)
 - Has many `Orders` (through Student)
 - Has many `PersonalAccessTokens` (Sanctum API tokens)
+- Has many `AccountDeletionRequests`
 
 **Enums:**
 - Role: `owner`, `instructor`, `student`
@@ -1037,7 +1038,9 @@ Tracks payments received and expenses incurred by instructors. Supports recurrin
 | `description` | varchar(255) | NOT NULL | Description of the payment/expense |
 | `amount_pence` | integer | NOT NULL | Amount in pence (e.g., 3500 = £35.00) |
 | `is_recurring` | boolean | NOT NULL, DEFAULT false | Whether this is a recurring entry |
-| `recurrence_frequency` | varchar(255) | NULLABLE | Frequency: `weekly`, `monthly`, `yearly` |
+| `recurrence_frequency` | varchar(255) | NULLABLE | Frequency: `weekly`, `monthly`, `yearly` (labels in `config('finances.recurrence_frequencies')` — `yearly` displays as "Annually") |
+| `recurrence_iterations` | smallint unsigned | NULLABLE | Total number of occurrences in the series, **including the first** (1–60). Set on every record in the series. |
+| `recurrence_group_id` | uuid (char 36) | NULLABLE, INDEXED | Shared UUID linking all records generated as one recurring series |
 | `date` | date | NOT NULL | Date of the payment/expense |
 | `notes` | text | NULLABLE | Additional notes |
 | `receipt_path` | varchar(255) | NULLABLE | Private S3 path — viewed via temporary signed URLs |
@@ -1047,7 +1050,7 @@ Tracks payments received and expenses incurred by instructors. Supports recurrin
 | `created_at` | timestamp | NULLABLE | Created timestamp |
 | `updated_at` | timestamp | NULLABLE | Updated timestamp |
 
-**Indexes:** `(instructor_id, type)`, `(instructor_id, date)`, `(instructor_id, category)`, `(vehicle_id, date)`
+**Indexes:** `(instructor_id, type)`, `(instructor_id, date)`, `(instructor_id, category)`, `(vehicle_id, date)`, `(recurrence_group_id)`
 
 **Relationships:**
 - `instructor_finances.instructor_id` → `instructors.id` (CASCADE DELETE)
@@ -1057,6 +1060,7 @@ Tracks payments received and expenses incurred by instructors. Supports recurrin
 - Category slugs are config-backed (`config/finances.php`), not enum'd in the DB — lists can grow without migration. Validation at controller level gates the slug by `type`.
 - Receipts live on the private S3 disk. The `receipt_url` accessor returns a time-limited signed URL (TTL from `config('finances.receipt.signed_url_ttl_minutes')`).
 - Existing pre-migration rows were backfilled to `category = 'none'`.
+- **Recurring series are materialised upfront at creation** (`CreateInstructorFinanceAction`): a recurring create generates `recurrence_iterations` records (first on `date`, subsequent dates stepped by frequency using no-overflow month/year arithmetic), all sharing a `recurrence_group_id`. Updates/deletes affect single records only — no series regeneration. Receipts attach to individual records (typically the first).
 
 ---
 
@@ -1320,6 +1324,41 @@ Idempotency/control table for scheduled reminder notifications (miles + payment-
 **Business Logic:**
 - Written by the `SendMilesReminderAction` / `SendPaymentReminderAction` after a delivery is queued (`updateOrCreate` keyed on `lesson_id` + `type`).
 - The scheduled command (`reminders:send`, every 5 minutes) matches due candidates via `whereDoesntHave('reminders', type=…)` so existing rows suppress repeats.
+
+---
+
+### 31. **account_deletion_requests**
+
+In-app account deletion with a 30-day grace period (App Store Guideline 5.1.1(v) / Google Play compliance). One row per request; a user may have many rows over time (e.g. request → cancel → request again) but at most one `pending` at a time (enforced in the controller, not by constraint).
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique deletion request identifier |
+| `user_id` | bigint unsigned | FOREIGN KEY (users.id), ON DELETE CASCADE | User requesting deletion |
+| `status` | varchar(20) | DEFAULT 'pending' | `AccountDeletionRequestStatus`: `pending`, `cancelled`, `completed` |
+| `reason` | text | NULLABLE | Optional free-text reason supplied by the user |
+| `requested_at` | timestamp | NOT NULL | When the request was made |
+| `scheduled_for` | timestamp | NOT NULL | `requested_at` + 30 days — when the hard delete becomes due |
+| `cancelled_at` | timestamp | NULLABLE | When the request was cancelled (if it was) |
+| `completed_at` | timestamp | NULLABLE | When the hard delete was processed (if it was) |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Indexes:**
+- Composite index on `(user_id, status)` — pending/latest lookups per user
+- Composite index on `(status, scheduled_for)` — daily due-request sweep
+
+**Relationships:**
+- Belongs to one `User`
+- `User` has many `AccountDeletionRequest` (via `users.accountDeletionRequests()`)
+
+**Enums:**
+- Status (`App\Enums\AccountDeletionRequestStatus`): `pending`, `cancelled`, `completed`
+
+**Business Logic:**
+- Created by `POST /api/v1/account/deletion-request` (both roles); tokens are NOT revoked during the grace period so the user can log in and cancel.
+- Daily scheduled command `account:process-deletion-requests` (01:00) processes rows where `status = pending` and `scheduled_for <= now`.
+- Processing **anonymises** rather than deletes (users.id cascades would destroy lesson/payment history other parties need): scrubs user name/email/password/push token, revokes all Sanctum tokens, scrubs profile PII (student contact fields; instructor bio/phone/address/pin/nino/utr/vrn etc.), detaches an instructor's students (`students.instructor_id = null`), then sets `status = completed`.
 
 ---
 

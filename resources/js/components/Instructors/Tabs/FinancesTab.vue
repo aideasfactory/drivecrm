@@ -65,6 +65,9 @@ interface InstructorFinance {
     formatted_amount: string
     is_recurring: boolean
     recurrence_frequency: string | null
+    recurrence_frequency_label: string | null
+    recurrence_iterations: number | null
+    recurrence_group_id: string | null
     date: string
     notes: string | null
     receipt: FinanceReceipt | null
@@ -89,6 +92,10 @@ interface FinanceConfig {
     payment_categories: Record<string, string>
     payment_methods: Record<string, string>
     mileage_types: Record<string, string>
+    recurrence_frequencies?: Record<string, string>
+    recurrence?: {
+        max_iterations: number
+    }
     receipt: {
         max_size_kb: number
         allowed_mimes: string[]
@@ -139,6 +146,7 @@ const form = ref({
     amount: '',
     is_recurring: false,
     recurrence_frequency: '' as string,
+    recurrence_iterations: '' as string,
     date: new Date().toISOString().split('T')[0],
     notes: '',
 })
@@ -176,6 +184,12 @@ const categoryIsMethodDependent = computed<boolean>(() => {
 })
 
 const activeVehicles = computed(() => config.value?.vehicles ?? [])
+
+const recurrenceFrequencies = computed<Record<string, string>>(() =>
+    config.value?.recurrence_frequencies ?? { weekly: 'Weekly', monthly: 'Monthly', yearly: 'Annually' },
+)
+
+const maxIterations = computed<number>(() => config.value?.recurrence?.max_iterations ?? 60)
 
 const selectedVehicle = computed(() =>
     activeVehicles.value.find((v) => v.id === form.value.vehicle_id) ?? null,
@@ -239,6 +253,7 @@ const resetForm = () => {
         amount: '',
         is_recurring: false,
         recurrence_frequency: '',
+        recurrence_iterations: '',
         date: new Date().toISOString().split('T')[0],
         notes: '',
     }
@@ -286,6 +301,7 @@ const openEditSheet = (finance: InstructorFinance) => {
         amount: (finance.amount_pence / 100).toFixed(2),
         is_recurring: finance.is_recurring,
         recurrence_frequency: finance.recurrence_frequency || '',
+        recurrence_iterations: finance.recurrence_iterations != null ? String(finance.recurrence_iterations) : '',
         date: finance.date,
         notes: finance.notes || '',
     }
@@ -385,6 +401,7 @@ const handleSubmit = async () => {
         amount_pence: amountPence,
         is_recurring: form.value.is_recurring,
         recurrence_frequency: form.value.is_recurring ? form.value.recurrence_frequency : null,
+        recurrence_iterations: form.value.is_recurring ? parseInt(form.value.recurrence_iterations || '0', 10) || null : null,
         date: form.value.date,
         notes: form.value.notes || null,
     }
@@ -424,6 +441,10 @@ const handleSubmit = async () => {
             const index = finances.value.findIndex((f) => f.id === editingFinance.value!.id)
             if (index !== -1) finances.value[index] = saved
             toast.success('Finance record updated')
+        } else if (payload.is_recurring && Number(payload.recurrence_iterations) > 1) {
+            // A recurring create generates the whole series server-side — reload so every occurrence shows.
+            await loadFinances()
+            toast.success(`Recurring series created (${payload.recurrence_iterations} records)`)
         } else {
             finances.value.unshift(saved)
             toast.success('Finance record created')
@@ -729,7 +750,7 @@ onMounted(() => {
                                 <TableCell>
                                     <Badge v-if="finance.is_recurring" variant="outline" class="gap-1">
                                         <RefreshCw class="h-3 w-3" />
-                                        {{ finance.recurrence_frequency }}
+                                        {{ finance.recurrence_frequency_label || finance.recurrence_frequency }}<template v-if="finance.recurrence_iterations"> ×{{ finance.recurrence_iterations }}</template>
                                     </Badge>
                                     <span v-else class="text-muted-foreground">—</span>
                                 </TableCell>
@@ -934,8 +955,7 @@ onMounted(() => {
                     <div class="flex items-center gap-3 rounded-lg border p-3">
                         <Checkbox
                             id="is_recurring"
-                            :checked="form.is_recurring"
-                            @update:checked="form.is_recurring = !!$event"
+                            v-model="form.is_recurring"
                             :disabled="isSubmitting"
                         />
                         <div class="space-y-0.5">
@@ -954,11 +974,28 @@ onMounted(() => {
                             class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             <option value="" disabled>Select frequency</option>
-                            <option value="weekly">Weekly</option>
-                            <option value="monthly">Monthly</option>
-                            <option value="yearly">Yearly</option>
+                            <option v-for="(label, slug) in recurrenceFrequencies" :key="slug" :value="slug">{{ label }}</option>
                         </select>
                         <p v-if="errors.recurrence_frequency" class="text-sm text-destructive">{{ errors.recurrence_frequency }}</p>
+                    </div>
+
+                    <!-- Recurrence Iterations -->
+                    <div v-if="form.is_recurring" class="space-y-2">
+                        <Label for="recurrence_iterations">Number of payments *</Label>
+                        <Input
+                            id="recurrence_iterations"
+                            v-model="form.recurrence_iterations"
+                            type="number"
+                            min="1"
+                            :max="maxIterations"
+                            step="1"
+                            placeholder="e.g. 12"
+                            :disabled="isSubmitting"
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            How many times this occurs in total, including this first one (max {{ maxIterations }}). The full series is created upfront.
+                        </p>
+                        <p v-if="errors.recurrence_iterations" class="text-sm text-destructive">{{ errors.recurrence_iterations }}</p>
                     </div>
 
                     <!-- Notes -->

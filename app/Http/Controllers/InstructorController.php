@@ -1198,7 +1198,8 @@ class InstructorController extends Controller
             'description' => ['required', 'string', 'max:255'],
             'amount_pence' => ['required', 'integer', 'min:1'],
             'is_recurring' => ['sometimes', 'boolean'],
-            'recurrence_frequency' => ['nullable', 'string', 'in:weekly,monthly,yearly', 'required_if:is_recurring,true'],
+            'recurrence_frequency' => ['nullable', 'string', Rule::in(array_keys(config('finances.recurrence_frequencies', []))), 'required_if:is_recurring,true'],
+            'recurrence_iterations' => ['nullable', 'integer', 'min:1', 'max:'.(int) config('finances.recurrence.max_iterations', 60), 'required_if:is_recurring,true'],
             'date' => ['required', 'date', 'date_format:Y-m-d'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
@@ -1229,7 +1230,8 @@ class InstructorController extends Controller
             'description' => ['sometimes', 'string', 'max:255'],
             'amount_pence' => ['sometimes', 'integer', 'min:1'],
             'is_recurring' => ['sometimes', 'boolean'],
-            'recurrence_frequency' => ['nullable', 'string', 'in:weekly,monthly,yearly'],
+            'recurrence_frequency' => ['nullable', 'string', Rule::in(array_keys(config('finances.recurrence_frequencies', [])))],
+            'recurrence_iterations' => ['nullable', 'integer', 'min:1', 'max:'.(int) config('finances.recurrence.max_iterations', 60)],
             'date' => ['sometimes', 'date', 'date_format:Y-m-d'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
@@ -1404,6 +1406,9 @@ class InstructorController extends Controller
             'formatted_amount' => $f->formatted_amount,
             'is_recurring' => $f->is_recurring,
             'recurrence_frequency' => $f->recurrence_frequency,
+            'recurrence_frequency_label' => $f->recurrence_frequency_label,
+            'recurrence_iterations' => $f->recurrence_iterations,
+            'recurrence_group_id' => $f->recurrence_group_id,
             'date' => $f->date->format('Y-m-d'),
             'notes' => $f->notes,
             'receipt' => $f->receipt_path ? [
@@ -1477,6 +1482,10 @@ class InstructorController extends Controller
             'payment_categories' => config('finances.payment_categories', []),
             'payment_methods' => config('finances.payment_methods', []),
             'mileage_types' => config('finances.mileage_types', []),
+            'recurrence_frequencies' => config('finances.recurrence_frequencies', []),
+            'recurrence' => [
+                'max_iterations' => (int) config('finances.recurrence.max_iterations', 60),
+            ],
             'receipt' => [
                 'max_size_kb' => (int) config('finances.receipt.max_size_kb', 10240),
                 'allowed_mimes' => config('finances.receipt.allowed_mimes', []),

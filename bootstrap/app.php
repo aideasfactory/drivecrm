@@ -23,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('hmrc:sync-itsa-obligations')->dailyAt('07:15');
         $schedule->command('hmrc:check-refresh-health')->hourly();
         $schedule->command('hmrc:prune-year-end-archives')->dailyAt('02:00');
+        $schedule->command('account:process-deletion-requests')->dailyAt('01:00');
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);

@@ -28,7 +28,8 @@ class StoreInstructorFinanceRequest extends FormRequest
             'description' => ['required', 'string', 'max:255'],
             'amount_pence' => ['required', 'integer', 'min:1'],
             'is_recurring' => ['sometimes', 'boolean'],
-            'recurrence_frequency' => ['nullable', 'string', 'in:weekly,monthly,yearly', 'required_if:is_recurring,true'],
+            'recurrence_frequency' => ['nullable', 'string', Rule::in(array_keys(config('finances.recurrence_frequencies', []))), 'required_if:is_recurring,true'],
+            'recurrence_iterations' => ['nullable', 'integer', 'min:1', 'max:'.(int) config('finances.recurrence.max_iterations', 60), 'required_if:is_recurring,true'],
             'date' => ['required', 'date', 'date_format:Y-m-d'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ];
