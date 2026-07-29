@@ -48,6 +48,10 @@ class HandleInertiaRequests extends Middleware
             'hmrc' => [
                 'show_mtd_button' => (bool) config('hmrc.show_mtd_button'),
             ],
+            'appLinks' => [
+                'apple' => config('app_links.apple') ?: null,
+                'android' => config('app_links.android') ?: null,
+            ],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),

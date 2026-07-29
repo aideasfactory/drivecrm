@@ -17,6 +17,7 @@ import FinancesTab from '@/components/Instructors/Tabs/FinancesTab.vue'
 import StudentTab from '@/components/Instructors/Tabs/StudentTab.vue'
 import HmrcTab from '@/components/Instructors/Tabs/HmrcTab.vue'
 import AddInstructorSheet from '@/components/Instructors/AddInstructorSheet.vue'
+import StripeOnboardingWelcome from '@/components/Instructors/StripeOnboardingWelcome.vue'
 import type { InstructorDetail, InstructorFormOptions } from '@/types/instructor'
 
 interface ConnectionStatus {
@@ -179,6 +180,13 @@ const breadcrumbs = [
                     {{ isResendingInvite ? 'Resending…' : 'Resend welcome email' }}
                 </Button>
             </div>
+
+            <!-- Onboarding welcome (shown until Stripe is connected) -->
+            <StripeOnboardingWelcome
+                v-if="!instructor.onboarding_complete"
+                :instructor="instructor"
+                class="py-6"
+            />
 
             <!-- Tab Navigation (hidden when viewing a student or HMRC sub-page) -->
             <div class="flex gap-1 border-b" v-if="instructor.onboarding_complete && activeTab !== 'student' && activeTab !== 'hmrc'">

@@ -14,5 +14,9 @@ export type AppPageProps<
     hmrc: {
         show_mtd_button: boolean;
     };
+    appLinks: {
+        apple: string | null;
+        android: string | null;
+    };
     [key: string]: unknown;
 };
