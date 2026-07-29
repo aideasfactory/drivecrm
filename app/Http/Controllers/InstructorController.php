@@ -30,6 +30,7 @@ use App\Http\Requests\StoreLocationRequest;
 use App\Http\Requests\StorePackageRequest;
 use App\Http\Requests\UpdateCalendarItemRequest;
 use App\Http\Requests\UpdateInstructorRequest;
+use App\Jobs\CreateDefaultInstructorPackageJob;
 use App\Models\CalendarItem;
 use App\Models\Contact;
 use App\Models\Instructor;
@@ -871,6 +872,8 @@ class InstructorController extends Controller
             $instructor->save();
 
             if ($instructor->onboarding_complete && $instructor->charges_enabled) {
+                CreateDefaultInstructorPackageJob::dispatch($instructor);
+
                 return redirect()
                     ->route('instructors.show', $instructor)
                     ->with('success', 'Stripe Connect onboarding completed successfully! Instructor can now create packages and receive payments.');

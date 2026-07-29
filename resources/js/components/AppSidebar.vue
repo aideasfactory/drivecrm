@@ -14,6 +14,7 @@ import {
     Percent,
     Settings,
     ShieldCheck,
+    TrafficCone,
     Users,
     UsersRound,
 } from 'lucide-vue-next';
@@ -40,6 +41,7 @@ import { index as packagesIndex } from '@/routes/packages';
 import { index as pupilsIndex } from '@/routes/pupils';
 import { index as reportsIndex } from '@/routes/reports';
 import { index as pushNotificationsIndex } from '@/routes/push-notifications';
+import { index as hazardPerceptionIndex } from '@/routes/hazard-perception';
 import { index as resourcesIndex } from '@/routes/resources';
 import { index as studentTransfersIndex } from '@/routes/student-transfers';
 import { index as supportMessagesIndex } from '@/routes/support-messages';
@@ -114,6 +116,12 @@ const allNavItems: NavItem[] = [
         href: resourcesIndex(),
         icon: BookOpen,
         roles: ['owner'], // Only visible to owners
+    },
+    {
+        title: 'Hazard Perception',
+        href: hazardPerceptionIndex(),
+        icon: TrafficCone,
+        roles: ['owner'],
     },
     {
         title: 'HMRC / Tax',

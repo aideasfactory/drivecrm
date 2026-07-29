@@ -17,41 +17,61 @@ class HazardPerceptionVideoFactory extends Factory
      */
     public function definition(): array
     {
-        $isDouble = fake()->boolean(15);
-        $duration = fake()->numberBetween(30, 90);
-        $h1Start = fake()->randomFloat(2, 5, $duration - 15);
-        $h1End = $h1Start + fake()->randomFloat(2, 3, 8);
-
-        $data = [
+        return [
             'title' => fake()->sentence(4),
             'description' => fake()->paragraph(),
             'category' => fake()->randomElement(['Car', 'ADI', 'Motorcycle', 'LGV-PCV']),
             'topic' => fake()->randomElement(['Junctions', 'Roundabouts', 'Pedestrians', 'Overtaking', 'Weather', 'Road Works', 'Cyclists', 'Animals', 'Parked Vehicles', 'School Zones']),
             'video_url' => 'hazard-perception/'.fake()->uuid().'.mp4',
-            'duration_seconds' => $duration,
-            'hazard_1_start' => $h1Start,
-            'hazard_1_end' => $h1End,
-            'hazard_2_start' => null,
-            'hazard_2_end' => null,
-            'is_double_hazard' => $isDouble,
+            'duration_seconds' => fake()->numberBetween(30, 90),
+            'is_double_hazard' => fake()->boolean(15),
             'thumbnail_url' => null,
+            'has_recap' => false,
+            'recap_video_url' => null,
         ];
+    }
 
-        if ($isDouble) {
-            $h2Start = $h1End + fake()->randomFloat(2, 5, 15);
-            $data['hazard_2_start'] = min($h2Start, $duration - 5);
-            $data['hazard_2_end'] = min($h2Start + fake()->randomFloat(2, 3, 8), (float) $duration);
-        }
+    public function configure(): static
+    {
+        return $this->afterCreating(function (HazardPerceptionVideo $video): void {
+            $this->createZonesForHazard($video, 1);
 
-        return $data;
+            if ($video->is_double_hazard) {
+                $this->createZonesForHazard($video, 2);
+            }
+        });
     }
 
     public function doubleHazard(): static
     {
         return $this->state(fn (array $attributes) => [
             'is_double_hazard' => true,
-            'hazard_2_start' => $attributes['hazard_1_end'] + 5.0,
-            'hazard_2_end' => $attributes['hazard_1_end'] + 12.0,
         ]);
+    }
+
+    public function withRecap(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'has_recap' => true,
+            'recap_video_url' => 'hazard-perception/recaps/'.fake()->uuid().'.mp4',
+        ]);
+    }
+
+    /**
+     * Create 5 contiguous one-second scoring zones (5 points first).
+     */
+    private function createZonesForHazard(HazardPerceptionVideo $video, int $hazardNumber): void
+    {
+        $offset = $hazardNumber === 1 ? 5 : 30;
+        $start = fake()->randomFloat(2, $offset, $offset + 10);
+
+        foreach ([5, 4, 3, 2, 1] as $index => $score) {
+            $video->scoringZones()->create([
+                'hazard_number' => $hazardNumber,
+                'score' => $score,
+                'start_seconds' => round($start + $index, 2),
+                'end_seconds' => round($start + $index + 1, 2),
+            ]);
+        }
     }
 }

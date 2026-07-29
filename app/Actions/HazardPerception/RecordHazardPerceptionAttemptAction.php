@@ -5,22 +5,22 @@ declare(strict_types=1);
 namespace App\Actions\HazardPerception;
 
 use App\Models\HazardPerceptionAttempt;
+use App\Models\HazardPerceptionScoringZone;
 use App\Models\HazardPerceptionVideo;
 use App\Models\Student;
+use Illuminate\Support\Collection;
 
 class RecordHazardPerceptionAttemptAction
 {
     /**
      * Accept an array of raw tap timestamps from the mobile app,
-     * match the best tap to each hazard window, and calculate scores.
+     * match the best tap to each hazard's scoring zones, and calculate scores.
      *
      * Scoring algorithm:
-     * - The scoring window runs from hazard_X_start to hazard_X_end.
-     * - A tap exactly at hazard_X_start scores 5 (perfect).
-     * - Score decreases linearly as the tap moves further from the start
-     *   toward the end of the window: 5 → 4 → 3 → 2 → 1.
-     * - A tap outside the window scores 0.
-     * - For each hazard, the best-scoring tap within the window is used.
+     * - Each hazard has explicit scoring zones (one time block per score, 5 → 1).
+     * - A tap inside a zone scores that zone's points.
+     * - A tap outside every zone scores 0.
+     * - For each hazard, the best-scoring tap is used.
      *
      * @param  array<int, float>  $taps  All tap timestamps (seconds into video)
      * @param  int|null  $testId  Links the attempt to a test session (null = practice)
@@ -34,20 +34,20 @@ class RecordHazardPerceptionAttemptAction
         $sortedTaps = $taps;
         sort($sortedTaps);
 
+        $zonesByHazard = $video->scoringZones()->get()->groupBy('hazard_number');
+
         [$h1ResponseTime, $h1Score] = $this->findBestTapForHazard(
             $sortedTaps,
-            (float) $video->hazard_1_start,
-            (float) $video->hazard_1_end,
+            $zonesByHazard->get(1, collect()),
         );
 
         $h2ResponseTime = null;
         $h2Score = null;
 
-        if ($video->is_double_hazard && $video->hazard_2_start !== null) {
+        if ($video->is_double_hazard && $zonesByHazard->has(2)) {
             [$h2ResponseTime, $h2Score] = $this->findBestTapForHazard(
                 $sortedTaps,
-                (float) $video->hazard_2_start,
-                (float) $video->hazard_2_end,
+                $zonesByHazard->get(2),
             );
         }
 
@@ -67,26 +67,19 @@ class RecordHazardPerceptionAttemptAction
     }
 
     /**
-     * Find the best-scoring tap within a hazard window.
+     * Find the best-scoring tap across a hazard's scoring zones.
      *
      * @param  array<int, float>  $taps  Sorted tap timestamps
+     * @param  Collection<int, HazardPerceptionScoringZone>  $zones
      * @return array{0: float|null, 1: int} [response_time, score]
      */
-    private function findBestTapForHazard(array $taps, float $windowStart, float $windowEnd): array
+    private function findBestTapForHazard(array $taps, Collection $zones): array
     {
         $bestTime = null;
         $bestScore = 0;
 
         foreach ($taps as $tap) {
-            if ($tap > $windowEnd) {
-                break;
-            }
-
-            if ($tap < $windowStart) {
-                continue;
-            }
-
-            $score = $this->calculateScore($tap, $windowStart, $windowEnd);
+            $score = $this->scoreForTap($tap, $zones);
 
             if ($score > $bestScore) {
                 $bestScore = $score;
@@ -98,32 +91,20 @@ class RecordHazardPerceptionAttemptAction
     }
 
     /**
-     * Calculate score based on how close the tap is to the hazard start.
-     *
-     * The window is divided into 5 equal bands:
-     *   0%–20%  elapsed → 5 points (closest to hazard appearing)
-     *   20%–40% elapsed → 4 points
-     *   40%–60% elapsed → 3 points
-     *   60%–80% elapsed → 2 points
-     *   80%–100% elapsed → 1 point
+     * @param  Collection<int, HazardPerceptionScoringZone>  $zones
      */
-    private function calculateScore(float $tapTime, float $windowStart, float $windowEnd): int
+    private function scoreForTap(float $tapTime, Collection $zones): int
     {
-        $windowDuration = $windowEnd - $windowStart;
+        $best = 0;
 
-        if ($windowDuration <= 0) {
-            return 0;
+        foreach ($zones as $zone) {
+            if ($tapTime >= (float) $zone->start_seconds
+                && $tapTime <= (float) $zone->end_seconds
+                && $zone->score > $best) {
+                $best = $zone->score;
+            }
         }
 
-        $elapsed = $tapTime - $windowStart;
-        $fraction = $elapsed / $windowDuration;
-
-        return match (true) {
-            $fraction <= 0.2 => 5,
-            $fraction <= 0.4 => 4,
-            $fraction <= 0.6 => 3,
-            $fraction <= 0.8 => 2,
-            default => 1,
-        };
+        return $best;
     }
 }

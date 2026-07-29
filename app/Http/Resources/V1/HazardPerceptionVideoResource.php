@@ -20,11 +20,11 @@ class HazardPerceptionVideoResource extends JsonResource
             'description' => $this->description,
             'category' => $this->category,
             'topic' => $this->topic,
-            'video_url' => $this->video_url,
+            'video_url' => $this->resource->resolveStorageUrl($this->video_url),
             'duration_seconds' => $this->duration_seconds,
             'is_double_hazard' => $this->is_double_hazard,
-            'thumbnail_url' => $this->thumbnail_url,
-            'has_recap' => $this->recap_video_url !== null,
+            'thumbnail_url' => $this->resource->resolveStorageUrl($this->thumbnail_url),
+            'has_recap' => $this->has_recap,
         ];
     }
 }

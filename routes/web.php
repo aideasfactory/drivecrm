@@ -17,6 +17,7 @@ use App\Http\Controllers\Hmrc\Itsa\FinalDeclarationController;
 use App\Http\Controllers\Hmrc\Itsa\ItsaController;
 use App\Http\Controllers\Hmrc\Vat\VatController;
 use App\Http\Controllers\Hmrc\Vehicles\VehicleController;
+use App\Http\Controllers\HazardPerceptionVideoController;
 use App\Http\Controllers\InstructorController;
 use App\Http\Controllers\Onboarding\OnboardingController;
 use App\Http\Controllers\Onboarding\StepFiveController;
@@ -352,6 +353,20 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
             ->name('resources.csv-template');
         Route::post('/resources/import-csv', [ResourceController::class, 'importCsv'])
             ->name('resources.import-csv');
+    });
+
+    // Hazard Perception Videos (Owner Only)
+    Route::middleware([EnsureOwner::class])->group(function () {
+        Route::get('/hazard-perception', [HazardPerceptionVideoController::class, 'index'])
+            ->name('hazard-perception.index');
+        Route::get('/hazard-perception/videos', [HazardPerceptionVideoController::class, 'list'])
+            ->name('hazard-perception.videos.list');
+        Route::post('/hazard-perception/videos', [HazardPerceptionVideoController::class, 'store'])
+            ->name('hazard-perception.videos.store');
+        Route::put('/hazard-perception/videos/{hazardPerceptionVideo}', [HazardPerceptionVideoController::class, 'update'])
+            ->name('hazard-perception.videos.update');
+        Route::delete('/hazard-perception/videos/{hazardPerceptionVideo}', [HazardPerceptionVideoController::class, 'destroy'])
+            ->name('hazard-perception.videos.destroy');
     });
 
     // Student Transfers (Owner Only)

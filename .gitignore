@@ -29,3 +29,4 @@ yarn-error.log
 .phase_done
 /docs
 /.claude
+/cgi-hpt
