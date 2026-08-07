@@ -82,7 +82,12 @@ class OrderService extends BaseService
         $checkoutUrl = null;
 
         if ($paymentMode === PaymentMode::UPFRONT) {
-            $checkoutUrl = $this->createCheckoutSession($order, $package, $student);
+            $checkoutUrl = $this->createCheckoutSession(
+                $order,
+                $package,
+                $student,
+                $returnCheckoutUrl ? 'mobile_app' : 'instructor_booking'
+            );
 
             if ($checkoutUrl && ! $returnCheckoutUrl) {
                 $this->sendPaymentLinkEmail->execute($order, $student, $checkoutUrl);
@@ -110,7 +115,7 @@ class OrderService extends BaseService
     /**
      * Create a Stripe Checkout session for upfront payment.
      */
-    protected function createCheckoutSession(Order $order, Package $package, Student $student): ?string
+    protected function createCheckoutSession(Order $order, Package $package, Student $student, string $bookingSource): ?string
     {
         $user = $student->user;
 
@@ -145,7 +150,8 @@ class OrderService extends BaseService
             $user,
             $order->instructor,
             $successUrl,
-            $cancelUrl
+            $cancelUrl,
+            $bookingSource
         );
 
         if ($result['success']) {

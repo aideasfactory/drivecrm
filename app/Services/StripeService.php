@@ -191,11 +191,19 @@ class StripeService
                 'user_name' => $student->name,
             ]);
 
+            $studentProfile = $student->student;
+            $assignedInstructor = $studentProfile?->instructor;
+
             $customer = $this->stripe->customers->create([
                 'email' => $student->email,
                 'name' => $student->name,
+                'phone' => $studentProfile?->phone,
                 'metadata' => [
                     'user_id' => $student->id,
+                    'student_id' => $studentProfile?->id,
+                    'instructor_id' => $assignedInstructor?->id,
+                    'instructor_name' => $assignedInstructor?->user?->name,
+                    'environment' => config('app.env'),
                 ],
             ]);
 
@@ -229,8 +237,11 @@ class StripeService
 
     /**
      * Create a Checkout Session for student enrollment.
+     *
+     * $bookingSource identifies which flow produced the payment
+     * ('onboarding', 'mobile_app', 'instructor_booking') for Dashboard triage.
      */
-    public function createCheckoutSession(Order $order, Package $package, User $student, ?Instructor $instructor, string $successUrl, string $cancelUrl): array
+    public function createCheckoutSession(Order $order, Package $package, User $student, ?Instructor $instructor, string $successUrl, string $cancelUrl, string $bookingSource = 'web'): array
     {
         try {
             // Use total_price_pence (package + booking fee + digital fees) when available,
@@ -274,18 +285,40 @@ class StripeService
                 ];
             }
 
+            // Shared between the session and its PaymentIntent. Session metadata is
+            // NOT propagated to the PaymentIntent/Charge by Stripe, and the Dashboard
+            // payments list shows the PaymentIntent — so both get the full set.
+            $metadata = [
+                'order_id' => $order->id,
+                'package_id' => $package->id,
+                'package_name' => $package->name,
+                'lessons_count' => $package->lessons_count,
+                'student_id' => $student->id,
+                'student_name' => $student->name,
+                'student_email' => $student->email,
+                'instructor_id' => $instructor?->id,
+                'instructor_name' => $instructor?->user?->name,
+                'payment_mode' => $order->payment_mode?->value,
+                'booking_source' => $bookingSource,
+                'booking_fee_pence' => $order->booking_fee_pence,
+                'digital_fee_pence' => $order->digital_fee_pence,
+                'discount_code_id' => $order->discount_code_id,
+                'discount_percentage' => $order->discount_percentage,
+                'environment' => config('app.env'),
+            ];
+
             $sessionData = [
                 'mode' => 'payment',
                 'customer' => $student->stripe_customer_id,
+                'client_reference_id' => (string) $order->id,
                 'line_items' => [$lineItem],
                 'success_url' => $successUrl,
                 'cancel_url' => $cancelUrl,
-                'metadata' => [
-                    'order_id' => $order->id,
-                    'package_id' => $package->id,
-                    'student_id' => $student->id,
-                    'discount_code_id' => $order->discount_code_id,
-                    'discount_percentage' => $order->discount_percentage,
+                'metadata' => $metadata,
+                'payment_intent_data' => [
+                    'description' => "Order #{$order->id} — {$package->name} — {$student->name}",
+                    'transfer_group' => "order_{$order->id}",
+                    'metadata' => $metadata,
                 ],
             ];
 
@@ -347,16 +380,30 @@ class StripeService
     public function createTransfer(Lesson $lesson, Instructor $instructor, int $amountPence, ?string $sourceTransaction = null): array
     {
         try {
+            $order = $lesson->order;
+            $studentUser = $order?->student?->user;
+            $lessonDateLabel = $lesson->date?->format('d M Y');
+
             $payload = [
                 'amount' => $amountPence,
                 'currency' => 'gbp',
                 'destination' => $instructor->stripe_account_id,
+                'description' => implode(' — ', array_filter(['Lesson payout', $studentUser?->name, $lessonDateLabel])),
                 'metadata' => [
                     'lesson_id' => $lesson->id,
+                    'lesson_date' => $lesson->date?->format('Y-m-d'),
                     'order_id' => $lesson->order_id,
                     'instructor_id' => $instructor->id,
+                    'instructor_name' => $instructor->user?->name,
+                    'student_id' => $order?->student_id,
+                    'student_name' => $studentUser?->name,
+                    'environment' => config('app.env'),
                 ],
             ];
+
+            if ($lesson->order_id !== null) {
+                $payload['transfer_group'] = "order_{$lesson->order_id}";
+            }
 
             if ($sourceTransaction !== null) {
                 $payload['source_transaction'] = $sourceTransaction;
@@ -523,9 +570,18 @@ class StripeService
                 'days_until_due' => 1,
                 'metadata' => [
                     'lesson_id' => $lesson->id,
+                    'lesson_date' => $lesson->date?->format('Y-m-d'),
                     'lesson_payment_id' => $lessonPaymentId,
                     'order_id' => $lesson->order_id,
                     'payment_mode' => 'weekly',
+                    'package_id' => $package?->id,
+                    'package_name' => $packageName,
+                    'student_id' => $lesson->order->student_id,
+                    'student_name' => $student->name,
+                    'student_email' => $student->email,
+                    'instructor_id' => $lesson->order->instructor_id,
+                    'instructor_name' => $lesson->order->instructor?->user?->name,
+                    'environment' => config('app.env'),
                 ],
             ]);
 

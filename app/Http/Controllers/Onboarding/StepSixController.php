@@ -389,7 +389,8 @@ class StepSixController extends Controller
             $user,
             $instructor,
             $successUrl,
-            $cancelUrl
+            $cancelUrl,
+            'onboarding'
         );
 
         Log::info('Stripe checkout session creation result', [
