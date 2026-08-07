@@ -16,6 +16,8 @@
     - [Deletion Status](#get-apiv1accountdeletion-request)
     - [Cancel Deletion](#delete-apiv1accountdeletion-request)
   - [Instructor](#instructor)
+    - [App Onboarding (Status)](#get-apiv1instructoronboarding)
+    - [App Onboarding (Complete Step)](#post-apiv1instructoronboardingstep)
     - [Profile](#put-apiv1instructorprofile)
     - [Profile Picture](#post-apiv1instructorprofilepicture)
     - [Students](#get-apiv1instructorstudents)
@@ -346,6 +348,8 @@ Login and receive a Bearer token for subsequent API calls.
       "onboarding_complete": false,
       "charges_enabled": false,
       "payouts_enabled": false,
+      "app_onboarding_step": 0,
+      "app_onboarding_complete": false,
       "profile_picture_url": null
     }
   }
@@ -485,6 +489,8 @@ Returns the authenticated user's profile with role-specific data.
       "onboarding_complete": false,
       "charges_enabled": false,
       "payouts_enabled": false,
+      "app_onboarding_step": 0,
+      "app_onboarding_complete": false,
       "profile_picture_url": null
     }
   }
@@ -614,6 +620,8 @@ Register a new instructor account. Creates a base user record with the `instruct
       "onboarding_complete": false,
       "charges_enabled": false,
       "payouts_enabled": false,
+      "app_onboarding_step": 0,
+      "app_onboarding_complete": false,
       "profile_picture_url": null
     }
   }
@@ -743,6 +751,95 @@ Cancels the authenticated user's pending deletion request (`status` → `"cancel
 
 ---
 
+#### `GET /api/v1/instructor/onboarding`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Get the authenticated instructor's **mobile app onboarding slider** progress. Use this (or the `app_onboarding_*` fields on the profile object returned at login) to decide whether to drop the instructor back onto the onboarding screen when the app loads.
+
+> **Not Stripe.** This is the 5-step in-app onboarding slider. It is unrelated to the Stripe Connect flow reported by `onboarding_complete` on the profile object.
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "current_step": 2,
+    "total_steps": 5,
+    "completed": false,
+    "completed_at": null
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `current_step` | integer | Highest step completed so far (0 = not started, 5 = all done). Resume the slider at `current_step + 1`. |
+| `total_steps` | integer | Always `5` |
+| `completed` | boolean | Whether the whole slider is finished |
+| `completed_at` | string\|null | ISO 8601 timestamp of completion, null until finished |
+
+---
+
+#### `POST /api/v1/instructor/onboarding/step`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Mark an onboarding step as complete for the authenticated instructor. Call this after the instructor finishes each slide. The slides themselves save their data through the existing endpoints (e.g. add pupil, add diary record) — this endpoint only records progress.
+
+**Server-side rules:**
+- Steps must be completed in order — sending a step more than one ahead of `current_step` returns a 422.
+- Re-sending an already-completed step is an **idempotent no-op** (200, unchanged state) — safe to retry.
+- Completing step 5 sets `completed` / `completed_at` automatically. The client never sends a completion flag.
+
+**Request Body:**
+```json
+{
+  "step": 3
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `step` | integer | Yes | The step just completed, `1`–`5` |
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "current_step": 3,
+    "total_steps": 5,
+    "completed": false,
+    "completed_at": null
+  }
+}
+```
+
+**Success Response (final step):** `200 OK`
+```json
+{
+  "data": {
+    "current_step": 5,
+    "total_steps": 5,
+    "completed": true,
+    "completed_at": "2026-08-07T15:30:00+00:00"
+  }
+}
+```
+
+**Error Response (skipping ahead):** `422 Unprocessable Entity`
+```json
+{
+  "message": "Cannot complete step 4 before completing step 3.",
+  "errors": {
+    "step": ["Cannot complete step 4 before completing step 3."]
+  }
+}
+```
+
+---
+
 #### `PUT /api/v1/instructor/profile`
 
 **Auth required:** Yes (Bearer token — instructor only)
@@ -785,6 +882,8 @@ Update the authenticated instructor's own profile. The instructor is derived fro
     "onboarding_complete": false,
     "charges_enabled": false,
     "payouts_enabled": false,
+    "app_onboarding_step": 0,
+    "app_onboarding_complete": false,
     "profile_picture_url": null
   }
 }
@@ -848,6 +947,8 @@ curl -X POST https://drivecrm.test/api/v1/instructor/profile/picture \
     "onboarding_complete": false,
     "charges_enabled": false,
     "payouts_enabled": false,
+    "app_onboarding_step": 0,
+    "app_onboarding_complete": false,
     "profile_picture_url": "https://drivecrm.test/storage/instructor-profile-pictures/abc123.jpg"
   }
 }
@@ -892,6 +993,8 @@ Delete the instructor's profile picture.
     "onboarding_complete": false,
     "charges_enabled": false,
     "payouts_enabled": false,
+    "app_onboarding_step": 0,
+    "app_onboarding_complete": false,
     "profile_picture_url": null
   }
 }
@@ -3243,6 +3346,8 @@ Returns a single student record. Access is controlled by a policy:
 
 Updates an existing student record. Access is controlled by the same policy as the view endpoint.
 
+When the student has a linked user account, `first_name`/`surname` and `email` changes are synced to the user record (`users.name` = `first_name surname`, `users.email` = student email), so app login and re-sent invites always use the latest address. `contact_*` fields are never synced (they are not the login identity).
+
 **URL Parameters:**
 
 | Parameter | Type | Description |
@@ -3263,7 +3368,7 @@ Updates an existing student record. Access is controlled by the same policy as t
 |-------|------|----------|-------|
 | `first_name` | string | No | Student's first name (max 255) |
 | `surname` | string | No | Student's surname (max 255) |
-| `email` | string\|null | No | Student's email address |
+| `email` | string\|null | No | Student's email address. If the student has a linked user account, must not belong to another user (422 otherwise); a non-empty value is synced to the login email |
 | `phone` | string\|null | No | Student's phone number (max 50) |
 | `contact_first_name` | string\|null | No | Booker's first name (max 255) |
 | `contact_surname` | string\|null | No | Booker's surname (max 255) |
@@ -3293,6 +3398,15 @@ Updates an existing student record. Access is controlled by the same policy as t
 
 **Error Response (not authorised):** `403 Forbidden`
 **Error Response (not found):** `404 Not Found`
+**Error Response (email taken by another user):** `422 Unprocessable Entity`
+```json
+{
+  "message": "This email address is already in use by another account.",
+  "errors": {
+    "email": ["This email address is already in use by another account."]
+  }
+}
+```
 
 ---
 
@@ -5461,6 +5575,8 @@ The `profile` key in user responses contains role-specific data. The shape depen
 | `onboarding_complete` | boolean | Whether Stripe onboarding is done |
 | `charges_enabled` | boolean | Whether Stripe charges are enabled |
 | `payouts_enabled` | boolean | Whether Stripe payouts are enabled |
+| `app_onboarding_step` | integer | Highest completed step of the mobile app onboarding slider (0–5). Use to route the instructor back into onboarding on app load. |
+| `app_onboarding_complete` | boolean | Whether the 5-step app onboarding slider is finished (distinct from Stripe `onboarding_complete`) |
 | `profile_picture_url` | string\|null | URL to profile picture (null if not set) |
 
 ### Student Profile
@@ -6711,6 +6827,8 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-07-28 | **Recurring finances now generate their full series.** New `recurrence_iterations` (total occurrences incl. the first, 1–60) and `recurrence_group_id` (series UUID) fields on the Finance object, plus `recurrence_frequency_label`. `POST /instructor/finances` with `is_recurring=true` now requires `recurrence_iterations` (alongside `recurrence_frequency`) and creates the entire series upfront — dates stepped weekly / monthly / annually with no-overflow arithmetic; response returns the first record only, refetch the list to display the series. Updates/deletes stay single-record (recurrence fields are metadata-only on update). `GET /instructor/finances/config` gains `recurrence_frequencies` labels (`yearly` → "Annually") and `recurrence.max_iterations`. | Finances (Config, List, Show, Create, Update) |
 | 2026-07-29 | **HPT scoring zones + explicit recap flag + admin uploads.** Scoring refactored from computed 5-equal-bands (old `hazard_X_start/end` columns, now dropped) to explicit per-score time blocks in the new `hazard_perception_scoring_zones` table (one block per score 5→1 per hazard, admin-managed; existing windows backfilled as equal bands so scores are unchanged until edited). Submit endpoints' request/response shapes are **unchanged** — only the server-side score lookup changed. `has_recap` on video objects is now a real column set by the admin (previously derived from `recap_video_url IS NOT NULL`) — the app should skip the recap step when `false`. Videos are now uploaded from the owner web admin (`/hazard-perception`) to S3 with **public visibility**; for uploaded clips `video_url` / `thumbnail_url` / `recap_video_url` are permanent public S3 URLs resolved at response time (safe to cache; legacy full-URL clips pass through unchanged). | Hazard Perception (videos list, practice submit, test detail/submit) |
 | 2026-08-07 | Added `phone` (string\|null) to `GET /student/instructor` response — instructor's contact number for the student app's tap-to-call buttons (Next Lesson and Your Instructor cards). `null` when the instructor has not set a phone. | Student Home (instructor) |
+| 2026-08-07 | **Student updates now sync the linked user account (bug #13).** `PUT /students/{student}` changes to `first_name`/`surname` update `users.name` (`first_name surname`) and a non-empty `email` updates `users.email`, so re-sent invites and app login use the latest address. New 422 when the email belongs to another user account (`email.unique` against `users`, ignoring the student's own linked user; only enforced when a linked user exists). `contact_*` fields are never synced. | Student (update) |
+| 2026-08-07 | Added instructor app onboarding progress tracking — GET status + POST step completion (5-step slider, ordered, idempotent, server-side completion); added `app_onboarding_step` / `app_onboarding_complete` to the instructor profile object | Instructor (onboarding, onboarding/step), Profile Object |
 
 ---
 

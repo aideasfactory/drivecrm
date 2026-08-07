@@ -259,6 +259,8 @@ Extended profile for users with instructor role.
 | `onboarding_complete` | boolean | DEFAULT false | Stripe onboarding completion status |
 | `charges_enabled` | boolean | DEFAULT false | Stripe charges enabled status |
 | `payouts_enabled` | boolean | DEFAULT false | Stripe payouts enabled status |
+| `app_onboarding_step` | tinyint unsigned | DEFAULT 0 | Highest completed step of the mobile app onboarding slider (0 = not started, 5 = finished). NOT the Stripe flow. |
+| `app_onboarding_completed_at` | timestamp | NULLABLE | When the mobile app onboarding slider was finished (step 5 completed). Null = not complete. Set server-side by `CompleteAppOnboardingStepAction`. |
 | `bio` | text | NULLABLE | Instructor biography for display |
 | `phone` | varchar(20) | NULLABLE | Instructor phone number |
 | `pin` | varchar(10) | NULLABLE, UNIQUE | Instructor PIN code for student attachment |
@@ -300,6 +302,7 @@ Extended profile for users with instructor role.
 **Business Logic:**
 - Instructors must complete Stripe onboarding before receiving payouts
 - Can create bespoke packages for their students
+- `app_onboarding_*` columns track the 5-step mobile app onboarding slider (progress only — the slides save data via existing endpoints). Distinct from Stripe `onboarding_complete`. No backfill: instructors existing before this feature start at step 0.
 
 ---
 

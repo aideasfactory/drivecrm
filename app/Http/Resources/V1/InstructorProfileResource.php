@@ -28,6 +28,8 @@ class InstructorProfileResource extends JsonResource
             'onboarding_complete' => $this->onboarding_complete,
             'charges_enabled' => $this->charges_enabled,
             'payouts_enabled' => $this->payouts_enabled,
+            'app_onboarding_step' => $this->app_onboarding_step,
+            'app_onboarding_complete' => $this->hasCompletedAppOnboarding(),
             'profile_picture_url' => $this->profile_picture_url,
         ];
     }

@@ -7,6 +7,7 @@ use App\Actions\Calendar\DetectCalendarClashesAction;
 use App\Actions\FetchPostcodeCoordinatesAction;
 use App\Actions\FindInstructorsByPostcodeSectorAction;
 use App\Actions\Instructor\BulkImportInstructorsAction;
+use App\Actions\Instructor\CompleteAppOnboardingStepAction;
 use App\Actions\Instructor\CreateCalendarItemAction;
 use App\Actions\Instructor\CreateInstructorFinanceAction;
 use App\Actions\Instructor\CreateInstructorLocationAction;
@@ -96,6 +97,7 @@ class InstructorService extends BaseService
         protected SendBroadcastMessageAction $sendBroadcastMessage,
         protected LogActivityAction $logActivity,
         protected UpdateInstructorProfileAction $updateInstructorProfile,
+        protected CompleteAppOnboardingStepAction $completeAppOnboardingStep,
         protected UploadInstructorProfilePictureAction $uploadProfilePicture,
         protected DeleteInstructorProfilePictureAction $deleteProfilePicture,
         protected DetectCalendarClashesAction $detectCalendarClashes,
@@ -720,6 +722,14 @@ class InstructorService extends BaseService
     public function updateProfile(Instructor $instructor, array $data): Instructor
     {
         return ($this->updateInstructorProfile)($instructor, $data);
+    }
+
+    /**
+     * Mark an app onboarding step as complete for the instructor.
+     */
+    public function completeAppOnboardingStep(Instructor $instructor, int $step): Instructor
+    {
+        return ($this->completeAppOnboardingStep)($instructor, $step);
     }
 
     /**

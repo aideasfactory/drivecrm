@@ -17,12 +17,19 @@ class Instructor extends Model
 {
     use HasFactory;
 
+    /**
+     * Number of steps in the mobile app onboarding slider.
+     */
+    public const APP_ONBOARDING_TOTAL_STEPS = 5;
+
     protected $fillable = [
         'user_id',
         'stripe_account_id',
         'onboarding_complete',
         'charges_enabled',
         'payouts_enabled',
+        'app_onboarding_step',
+        'app_onboarding_completed_at',
         'bio',
         'phone',
         'rating',
@@ -54,6 +61,8 @@ class Instructor extends Model
             'onboarding_complete' => 'boolean',
             'charges_enabled' => 'boolean',
             'payouts_enabled' => 'boolean',
+            'app_onboarding_step' => 'integer',
+            'app_onboarding_completed_at' => 'datetime',
             'priority' => 'boolean',
             'meta' => 'array',
             'business_type' => BusinessType::class,
@@ -206,6 +215,14 @@ class Instructor extends Model
     public function hasCompletedOnboarding(): bool
     {
         return $this->onboarding_complete && $this->stripe_account_id !== null;
+    }
+
+    /**
+     * Check if instructor has completed the mobile app onboarding slider.
+     */
+    public function hasCompletedAppOnboarding(): bool
+    {
+        return $this->app_onboarding_completed_at !== null;
     }
 
     /**

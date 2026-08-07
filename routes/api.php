@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\InstructorCalendarController;
 use App\Http\Controllers\Api\V1\InstructorFinanceController;
 use App\Http\Controllers\Api\V1\InstructorLessonController;
 use App\Http\Controllers\Api\V1\InstructorMileageController;
+use App\Http\Controllers\Api\V1\InstructorOnboardingController;
 use App\Http\Controllers\Api\V1\InstructorPackageController;
 use App\Http\Controllers\Api\V1\InstructorProfileController;
 use App\Http\Controllers\Api\V1\InstructorStudentController;
@@ -68,6 +69,8 @@ Route::prefix('v1')->group(function (): void {
 
         // Instructor routes
         Route::prefix('instructor')->group(function (): void {
+            Route::get('onboarding', [InstructorOnboardingController::class, 'show']);
+            Route::post('onboarding/step', [InstructorOnboardingController::class, 'completeStep']);
             Route::put('profile', [InstructorProfileController::class, 'update']);
             Route::post('profile/picture', [InstructorProfileController::class, 'updateProfilePicture']);
             Route::delete('profile/picture', [InstructorProfileController::class, 'deleteProfilePicture']);
