@@ -21,6 +21,7 @@ class InstructorPublicProfileResource extends JsonResource
             'name' => $this->user?->name,
             'bio' => $this->bio,
             'profile_picture_url' => $this->profile_picture_url,
+            'phone' => $this->phone,
         ];
     }
 }

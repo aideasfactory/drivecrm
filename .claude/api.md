@@ -2643,10 +2643,13 @@ Returns the public profile of the authenticated student's attached instructor. T
     "id": 1,
     "name": "Michael Roberts",
     "bio": "ADI qualified instructor with 15 years experience...",
-    "profile_picture_url": "https://s3.example.com/instructor-pictures/abc.jpg"
+    "profile_picture_url": "https://s3.example.com/instructor-pictures/abc.jpg",
+    "phone": "07700900001"
   }
 }
 ```
+
+`phone` is the instructor's contact number as stored on their profile (`string|null` — `null` when the instructor has not set one). Used by the student app's tap-to-call buttons.
 
 **Error Response — no attached instructor (422):**
 ```json
@@ -6023,7 +6026,7 @@ Hazard perception video system for the student mobile app. Students watch video 
 
 **Recap videos:** a clip may have a recap (explainer) video. Its URL is only revealed after the student completes the clip — the video list exposes just a `has_recap` boolean. The practice submit response, test results, and test-video submit response all include `recap_video_url` for completed clips.
 
-**Scoring:** Each hazard's timing window is divided into 5 equal bands. Responding in the earliest band scores 5 points, the latest band scores 1 point. Responding outside the window scores 0. Single hazard clips have a max score of 5, double hazard clips have a max score of 10.
+**Scoring:** Each hazard has explicit per-score time blocks (scoring zones) stored per video — one block per score, 5 points (earliest) down to 1 point (latest). A tap inside a block scores that block's points; outside every block scores 0. Single hazard clips have a max score of 5, double hazard clips have a max score of 10. Zones are managed in the admin area and never sent to the client.
 
 ---
 
@@ -6092,7 +6095,9 @@ Returns all hazard perception videos grouped by category and topic. Optionally f
 | `thumbnail_url` | string\|null | Optional thumbnail image URL |
 | `has_recap` | boolean | Whether a recap (explainer) video exists for this clip. The recap URL itself is only returned after the student completes the clip. |
 
-> **Note:** Hazard timing windows are NOT returned to the client — scoring is calculated server-side when the student submits response times.
+> **Note:** Hazard scoring zones are NOT returned to the client — scoring is calculated server-side when the student submits response times.
+>
+> **Note:** For admin-uploaded clips, `video_url` / `thumbnail_url` (and `recap_video_url` on completion responses) are permanent public URLs on the Laravel Cloud bucket (bucket visibility is public; R2 has no per-object ACLs) — safe to cache client-side; legacy clips may return external URLs (e.g. Vimeo).
 
 ---
 
@@ -6100,16 +6105,14 @@ Returns all hazard perception videos grouped by category and topic. Optionally f
 
 **Auth required:** Yes (Bearer token — student only)
 
-Submit all of the student's tap timestamps from the video. The mobile app sends every tap the user made during playback as an array of seconds. The backend looks up the video's hazard timing windows, finds the best-matching tap for each hazard, and calculates scores based on closeness to the hazard start time.
+Submit all of the student's tap timestamps from the video. The mobile app sends every tap the user made during playback as an array of seconds. The backend looks up the video's scoring zones, finds the best-matching tap for each hazard, and calculates scores.
 
 **Scoring algorithm:**
-- The scoring window runs from `hazard_X_start` to `hazard_X_end` (stored on the video, not sent to the client).
-- The window is divided into 5 equal bands based on elapsed time from the start.
-- A tap in the **first 20%** of the window (closest to the hazard appearing) = **5 points**.
-- **20%-40%** = 4 points, **40%-60%** = 3 points, **60%-80%** = 2 points, **80%-100%** = 1 point.
-- A tap **outside** the window = 0 points.
-- If multiple taps land in the window, the **best-scoring** tap is used.
-- For double hazard clips, each hazard is scored independently (max 10 total).
+- Each hazard has explicit **scoring zones** stored per video (admin-managed, not sent to the client): one time block per score, **5 points** (earliest) down to **1 point** (latest).
+- A tap inside a zone scores that zone's points.
+- A tap **outside** every zone = 0 points.
+- If multiple taps land in zones, the **best-scoring** tap is used.
+- For double hazard clips, each hazard is scored independently against its own zones (max 10 total).
 
 **URL Parameters:**
 
@@ -6706,6 +6709,8 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-07-14 | **Added hazard perception test mode + recap videos.** New test-session flow mirroring mock tests: `POST /student/hazard-perception/tests/start` picks 14 random videos (`config('hazard_perception.videos_per_test')`; optional `topic` filter — HPT is Car-only so topic is the only axis; selection + playback order persisted, fewer used if the bank is smaller, 422 if empty), `POST tests/{test}/videos/{video}/submit` scores one clip (same tap scoring; guards: ownership 403, test complete / video not in test / already attempted 422; final clip completes the test and rolls up `total_score`), `GET tests/{test}` doubles as resume (`next_video`) and results view, `GET tests` is paginated completed-test history. **Score-counting rule:** summary `average_score`/`best_score`, resource-dashboard hazard stats, and the `perfect_hazard` badge now count TEST attempts only — practice never sets a PB (`attempts_taken`, `recent_attempts`, `topic_performance` still count both). Summary gains `tests_taken`, `best_test_score`, `best_test_max_score`. **Recap videos:** new nullable `recap_video_url` on videos, revealed only after completing a clip (list shows `has_recap`); practice submit response now includes `recap_video_url` + `video`. New tables `hazard_perception_tests`, `hazard_perception_test_videos`; new nullable `hazard_perception_attempts.hazard_perception_test_id` (null = practice). | Hazard Perception (all), Student Resources (resource-summary stats + expert badge) |
 | 2026-07-28 | **Added in-app account deletion (App Store 5.1.1(v) / Google Play compliance).** Three new endpoints shared by both roles under `/account`: `POST /account/deletion-request` creates a pending request with `scheduled_for = now + 30 days` (optional `reason`, max 1000 chars; 422 if one is already pending), `GET /account/deletion-request` returns the latest request for cross-device state sync (`data: null` if none — only `pending` is active), `DELETE /account/deletion-request` cancels the pending request (404 if none). Confirmation emails queued on request and cancel; tokens are NOT revoked during the grace period so the user can log in to cancel. Daily `account:process-deletion-requests` command (01:00) anonymises due accounts — user + profile PII scrubbed, Sanctum tokens revoked, instructor's students detached — and marks the request `completed`. New `account_deletion_requests` table. | Account (deletion-request POST/GET/DELETE — NEW) |
 | 2026-07-28 | **Recurring finances now generate their full series.** New `recurrence_iterations` (total occurrences incl. the first, 1–60) and `recurrence_group_id` (series UUID) fields on the Finance object, plus `recurrence_frequency_label`. `POST /instructor/finances` with `is_recurring=true` now requires `recurrence_iterations` (alongside `recurrence_frequency`) and creates the entire series upfront — dates stepped weekly / monthly / annually with no-overflow arithmetic; response returns the first record only, refetch the list to display the series. Updates/deletes stay single-record (recurrence fields are metadata-only on update). `GET /instructor/finances/config` gains `recurrence_frequencies` labels (`yearly` → "Annually") and `recurrence.max_iterations`. | Finances (Config, List, Show, Create, Update) |
+| 2026-07-29 | **HPT scoring zones + explicit recap flag + admin uploads.** Scoring refactored from computed 5-equal-bands (old `hazard_X_start/end` columns, now dropped) to explicit per-score time blocks in the new `hazard_perception_scoring_zones` table (one block per score 5→1 per hazard, admin-managed; existing windows backfilled as equal bands so scores are unchanged until edited). Submit endpoints' request/response shapes are **unchanged** — only the server-side score lookup changed. `has_recap` on video objects is now a real column set by the admin (previously derived from `recap_video_url IS NOT NULL`) — the app should skip the recap step when `false`. Videos are now uploaded from the owner web admin (`/hazard-perception`) to S3 with **public visibility**; for uploaded clips `video_url` / `thumbnail_url` / `recap_video_url` are permanent public S3 URLs resolved at response time (safe to cache; legacy full-URL clips pass through unchanged). | Hazard Perception (videos list, practice submit, test detail/submit) |
+| 2026-08-07 | Added `phone` (string\|null) to `GET /student/instructor` response — instructor's contact number for the student app's tap-to-call buttons (Next Lesson and Your Instructor cards). `null` when the instructor has not set a phone. | Student Home (instructor) |
 
 ---
 

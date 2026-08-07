@@ -17,7 +17,8 @@ This document provides a comprehensive overview of the database structure for th
 - `MockTestQuestion` → Theory test question bank (~2,923 questions across 4 categories)
 - `MockTest` → Student test session (score, pass/fail, timestamps)
 - `MockTestAnswer` → Individual answers per test (right/wrong, for category performance tracking)
-- `HazardPerceptionVideo` → Hazard perception video clips with hazard timing windows, categorisation, and optional recap video
+- `HazardPerceptionVideo` → Hazard perception video clips with categorisation, recap flag, and optional recap video; admin-uploaded to S3
+- `HazardPerceptionScoringZone` → Per-video, per-hazard scoring time blocks: one start/end block per score value (5 → 1)
 - `HazardPerceptionAttempt` → Student attempt scores per video (response times, per-hazard scores); practice (no test FK) or part of a test session
 - `HazardPerceptionTest` → Test-mode session: random video selection (default 14, optional topic filter) with persisted playback order, rolled-up score on completion
 
@@ -1585,7 +1586,7 @@ Individual answers per test. Enables category performance tracking and test revi
 
 ### hazard_perception_videos
 
-Hazard perception video clips. Each clip has 1 or 2 developing hazards with scored timing windows. Videos are categorised by category (Car, ADI, Motorcycle, LGV-PCV) and topic for filtered browsing.
+Hazard perception video clips. Each clip has 1 or 2 developing hazards; each hazard's scoring is defined by explicit per-score time blocks in `hazard_perception_scoring_zones`. Videos are categorised by category (Car, ADI, Motorcycle, LGV-PCV) and topic for filtered browsing. Admin-uploaded files are stored on the `s3` disk (Laravel Cloud bucket `drivecrm_main`, **public** bucket-level visibility — R2 has no per-object ACLs) with their path in the URL columns; API resources resolve paths to permanent public URLs (`AWS_URL` + path) at serialization time (full http(s) values pass through unchanged).
 
 | Column | Type | Nullable | Description |
 |--------|------|----------|-------------|
@@ -1594,20 +1595,37 @@ Hazard perception video clips. Each clip has 1 or 2 developing hazards with scor
 | description | text | Yes | Brief description of the clip scenario |
 | category | varchar(50) | No | Category: Car, ADI, Motorcycle, LGV-PCV |
 | topic | varchar(100) | No | Topic within category (e.g., Junctions, Roundabouts) |
-| video_url | varchar(255) | No | Path/URL to the video file |
+| video_url | varchar(255) | No | S3 path (admin uploads) or full URL (legacy) to the video file |
 | duration_seconds | int unsigned | No | Video length in seconds |
-| hazard_1_start | decimal(6,2) | No | Seconds when hazard 1 scoring window opens |
-| hazard_1_end | decimal(6,2) | No | Seconds when hazard 1 scoring window closes |
-| hazard_2_start | decimal(6,2) | Yes | Seconds when hazard 2 scoring window opens (double hazard only) |
-| hazard_2_end | decimal(6,2) | Yes | Seconds when hazard 2 scoring window closes (double hazard only) |
 | is_double_hazard | boolean | No | Whether this clip has two hazards (default false) |
-| thumbnail_url | varchar(255) | Yes | Optional thumbnail image URL |
-| recap_video_url | varchar(255) | Yes | Explainer video offered after the clip is completed (null = no recap available) |
+| thumbnail_url | varchar(255) | Yes | Optional thumbnail image path/URL |
+| has_recap | boolean | No | Whether a recap (explainer) step exists — the app skips the recap when false (default false) |
+| recap_video_url | varchar(255) | Yes | Explainer video offered after the clip is completed |
 | created_at | timestamp | Yes | |
 | updated_at | timestamp | Yes | |
 
 **Indexes:** category, topic, is_double_hazard
-**Relationships:** HasMany → HazardPerceptionAttempt, BelongsToMany → HazardPerceptionTest (via hazard_perception_test_videos)
+**Relationships:** HasMany → HazardPerceptionScoringZone, HasMany → HazardPerceptionAttempt, BelongsToMany → HazardPerceptionTest (via hazard_perception_test_videos)
+
+> **Migration note (2026-07-29):** `hazard_1_start/end` and `hazard_2_start/end` were dropped in `refactor_hazard_perception_videos_scoring_columns`. Existing windows were backfilled into `hazard_perception_scoring_zones` as 5 equal bands, preserving the previous scoring behaviour.
+
+### hazard_perception_scoring_zones
+
+Explicit scoring time blocks per video hazard: one row per score value (5 → 1), each with its own start/end time. A tap inside a zone earns that zone's points; outside every zone scores 0. Replaces the old computed 5-equal-bands scoring.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| hazard_perception_video_id | bigint FK | No | References hazard_perception_videos.id. Cascade on delete. |
+| hazard_number | tinyint unsigned | No | 1 or 2 (double hazard clips) (default 1) |
+| score | tinyint unsigned | No | Points awarded for a tap inside this zone (1-5) |
+| start_seconds | decimal(6,2) | No | Seconds into video when this scoring zone opens |
+| end_seconds | decimal(6,2) | No | Seconds into video when this scoring zone closes |
+| created_at / updated_at | timestamp | Yes | |
+
+**Unique constraint:** (hazard_perception_video_id, hazard_number, score) `hp_scoring_zones_video_hazard_score_unique` — one block per score per hazard.
+**FK name:** `hp_scoring_zones_video_id_foreign` — shortened like `hp_test_videos_*`; the auto-generated name exceeds MySQL's 64-char identifier limit.
+**Relationships:** BelongsTo → HazardPerceptionVideo
 
 ### hazard_perception_attempts
 
@@ -1615,7 +1633,7 @@ Records each student attempt at a hazard perception video. Stores response times
 
 An attempt is either a **practice** attempt (`hazard_perception_test_id` null) or part of a **test session** (`hazard_perception_test_id` set). Score stats (summary average/best, resource-dashboard hazard stats, `perfect_hazard` badge) count TEST attempts only — practice runs never set a personal best.
 
-Scoring: Each hazard's timing window is divided into 5 equal bands. Responding in band 1 (earliest) = 5 points, band 5 (latest) = 1 point, outside window = 0 points. Single hazard clips max 5 points, double hazard clips max 10 points.
+Scoring: Each hazard has explicit scoring zones (see `hazard_perception_scoring_zones`) — one time block per score, 5 points (earliest) down to 1 point (latest). A tap inside a zone earns that zone's points; outside every zone = 0. Single hazard clips max 5 points, double hazard clips max 10 points.
 
 | Column | Type | Nullable | Description |
 |--------|------|----------|-------------|
