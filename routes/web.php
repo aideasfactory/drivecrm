@@ -9,6 +9,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DiscountCodeController;
 use App\Http\Controllers\EnquiryController;
 use App\Http\Controllers\GetAppController;
+use App\Http\Controllers\HazardPerceptionVideoController;
 use App\Http\Controllers\Hmrc\Archive\ArchiveController;
 use App\Http\Controllers\Hmrc\HmrcConnectionController;
 use App\Http\Controllers\Hmrc\HmrcFraudHeadersController;
@@ -17,8 +18,8 @@ use App\Http\Controllers\Hmrc\Itsa\FinalDeclarationController;
 use App\Http\Controllers\Hmrc\Itsa\ItsaController;
 use App\Http\Controllers\Hmrc\Vat\VatController;
 use App\Http\Controllers\Hmrc\Vehicles\VehicleController;
-use App\Http\Controllers\HazardPerceptionVideoController;
 use App\Http\Controllers\InstructorController;
+use App\Http\Controllers\MobileStripeOnboardingController;
 use App\Http\Controllers\Onboarding\OnboardingController;
 use App\Http\Controllers\Onboarding\StepFiveController;
 use App\Http\Controllers\Onboarding\StepFourController;
@@ -554,6 +555,18 @@ Route::get('/resources/view/{resource}', [ResourceController::class, 'emailView'
 // Stripe Webhook (must be outside auth middleware)
 Route::post('/webhook/stripe', [WebhookController::class, 'handle'])
     ->name('webhook.stripe');
+
+// Mobile Stripe Connect onboarding return/refresh. Unauthenticated — the
+// instructor arrives in the app's in-app browser with no web session, so the
+// signed URL is the access control. The app independently verifies completion
+// via GET /api/v1/instructor/stripe/status; hitting the return URL is never
+// treated as proof of a finished onboarding.
+Route::middleware('signed')->group(function (): void {
+    Route::get('/stripe/onboarding/mobile/{instructor}/return', [MobileStripeOnboardingController::class, 'handleReturn'])
+        ->name('stripe.mobile.return');
+    Route::get('/stripe/onboarding/mobile/{instructor}/refresh', [MobileStripeOnboardingController::class, 'handleRefresh'])
+        ->name('stripe.mobile.refresh');
+});
 
 // Payment-link checkout return (instructor-sent Stripe payment links).
 // Unauthenticated — the student is clicking through from an email and has

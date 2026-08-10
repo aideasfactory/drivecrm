@@ -57,6 +57,7 @@ class HazardPerceptionTestResource extends JsonResource
                 'video' => new HazardPerceptionVideoResource($video),
                 'attempt' => $attempt ? new HazardPerceptionAttemptResource($attempt) : null,
                 'recap_video_url' => $attempt ? $video->resolveStorageUrl($video->recap_video_url) : null,
+                'scoring_zones' => $attempt ? $video->scoringZonesForRecap() : null,
             ];
         })->all();
     }

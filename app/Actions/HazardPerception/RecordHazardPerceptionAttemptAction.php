@@ -34,7 +34,7 @@ class RecordHazardPerceptionAttemptAction
         $sortedTaps = $taps;
         sort($sortedTaps);
 
-        $zonesByHazard = $video->scoringZones()->get()->groupBy('hazard_number');
+        $zonesByHazard = $video->scoringZones->groupBy('hazard_number');
 
         [$h1ResponseTime, $h1Score] = $this->findBestTapForHazard(
             $sortedTaps,

@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\InstructorMileageController;
 use App\Http\Controllers\Api\V1\InstructorOnboardingController;
 use App\Http\Controllers\Api\V1\InstructorPackageController;
 use App\Http\Controllers\Api\V1\InstructorProfileController;
+use App\Http\Controllers\Api\V1\InstructorStripeController;
 use App\Http\Controllers\Api\V1\InstructorStudentController;
 use App\Http\Controllers\Api\V1\InstructorStudentProgressController;
 use App\Http\Controllers\Api\V1\InstructorVehicleController;
@@ -71,6 +72,8 @@ Route::prefix('v1')->group(function (): void {
         Route::prefix('instructor')->group(function (): void {
             Route::get('onboarding', [InstructorOnboardingController::class, 'show']);
             Route::post('onboarding/step', [InstructorOnboardingController::class, 'completeStep']);
+            Route::post('stripe/onboarding', [InstructorStripeController::class, 'startOnboarding']);
+            Route::get('stripe/status', [InstructorStripeController::class, 'status']);
             Route::put('profile', [InstructorProfileController::class, 'update']);
             Route::post('profile/picture', [InstructorProfileController::class, 'updateProfilePicture']);
             Route::delete('profile/picture', [InstructorProfileController::class, 'deleteProfilePicture']);

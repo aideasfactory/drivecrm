@@ -51,6 +51,32 @@ class HazardPerceptionVideo extends Model
     }
 
     /**
+     * Scoring zone bands grouped per hazard, for post-completion (recap)
+     * responses only. Anti-cheat: must never appear in anything a student
+     * can read before submitting an attempt — expose it exactly where
+     * recap_video_url is exposed.
+     *
+     * @return array{hazard_1: array<int, array{score: int, start: float, end: float}>|null, hazard_2: array<int, array{score: int, start: float, end: float}>|null}
+     */
+    public function scoringZonesForRecap(): array
+    {
+        $zonesByHazard = $this->scoringZones->groupBy('hazard_number');
+
+        $bands = fn (int $hazardNumber): ?array => $zonesByHazard->has($hazardNumber)
+            ? $zonesByHazard->get($hazardNumber)->map(fn (HazardPerceptionScoringZone $zone): array => [
+                'score' => $zone->score,
+                'start' => round((float) $zone->start_seconds, 2),
+                'end' => round((float) $zone->end_seconds, 2),
+            ])->values()->all()
+            : null;
+
+        return [
+            'hazard_1' => $bands(1),
+            'hazard_2' => $bands(2),
+        ];
+    }
+
+    /**
      * Resolve a stored media value to a playable URL. Uploaded files are
      * stored as public S3 paths and resolved to their permanent public URL;
      * legacy rows that already hold a full http(s) URL pass through untouched.

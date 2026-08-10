@@ -34,6 +34,8 @@ use App\Actions\Instructor\Mileage\GetMileageLogsAction;
 use App\Actions\Instructor\Mileage\UpdateMileageLogAction;
 use App\Actions\Instructor\ReplaceInstructorLocationsAction;
 use App\Actions\Instructor\SendInstructorWelcomeEmailAction;
+use App\Actions\Instructor\StartStripeOnboardingAction;
+use App\Actions\Instructor\SyncStripeAccountStatusAction;
 use App\Actions\Instructor\UpdateCalendarItemAction;
 use App\Actions\Instructor\UpdateInstructorFinanceAction;
 use App\Actions\Instructor\UpdateInstructorProfileAction;
@@ -116,6 +118,8 @@ class InstructorService extends BaseService
         protected SendInstructorWelcomeEmailAction $sendInstructorWelcomeEmail,
         protected CancelBookingAction $cancelBooking,
         protected RecalculateStudentLessonNumbersAction $recalculateStudentLessonNumbers,
+        protected StartStripeOnboardingAction $startStripeOnboarding,
+        protected SyncStripeAccountStatusAction $syncStripeAccountStatus,
     ) {}
 
     /**
@@ -730,6 +734,25 @@ class InstructorService extends BaseService
     public function completeAppOnboardingStep(Instructor $instructor, int $step): Instructor
     {
         return ($this->completeAppOnboardingStep)($instructor, $step);
+    }
+
+    /**
+     * Create the instructor's Stripe Connect account (if needed) and mint a
+     * fresh single-use onboarding Account Link.
+     *
+     * @return array{url: string, stripe_account_id: string}
+     */
+    public function startStripeOnboarding(Instructor $instructor, string $returnUrl, string $refreshUrl): array
+    {
+        return ($this->startStripeOnboarding)($instructor, $returnUrl, $refreshUrl);
+    }
+
+    /**
+     * Sync the instructor's Stripe Connect flags from the live Stripe account.
+     */
+    public function syncStripeAccountStatus(Instructor $instructor): Instructor
+    {
+        return ($this->syncStripeAccountStatus)($instructor);
     }
 
     /**

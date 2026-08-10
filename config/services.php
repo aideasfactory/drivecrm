@@ -43,6 +43,7 @@ return [
         'key' => env('STRIPE_KEY'),
         'secret' => env('STRIPE_SECRET'),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'mobile_return_deeplink' => env('STRIPE_MOBILE_RETURN_DEEPLINK', 'drive-app://stripe-onboarding'),
     ],
 
     'google' => [

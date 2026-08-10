@@ -18,6 +18,8 @@
   - [Instructor](#instructor)
     - [App Onboarding (Status)](#get-apiv1instructoronboarding)
     - [App Onboarding (Complete Step)](#post-apiv1instructoronboardingstep)
+    - [Stripe Connect (Get Onboarding Link)](#post-apiv1instructorstripeonboarding)
+    - [Stripe Connect (Status)](#get-apiv1instructorstripestatus)
     - [Profile](#put-apiv1instructorprofile)
     - [Profile Picture](#post-apiv1instructorprofilepicture)
     - [Students](#get-apiv1instructorstudents)
@@ -835,6 +837,89 @@ Mark an onboarding step as complete for the authenticated instructor. Call this 
   "errors": {
     "step": ["Cannot complete step 4 before completing step 3."]
   }
+}
+```
+
+---
+
+#### `POST /api/v1/instructor/stripe/onboarding`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Start (or resume) **Stripe Connect onboarding** for the authenticated instructor. Creates their Stripe Express account on first call, then returns a fresh onboarding link. Open the returned `url` in an **in-app browser**.
+
+> **The link is single-use and expires after a few minutes.** Always call this endpoint immediately before opening the browser — never cache or reuse a URL. Calling it again is safe and idempotent: the existing Stripe account is kept and only a new link is minted, so this same endpoint also powers a "Continue setup" button for a partially-onboarded instructor.
+
+**In-app browser flow:**
+
+1. `POST /api/v1/instructor/stripe/onboarding` → get `url`
+2. Open `url` in the in-app browser
+3. When the instructor exits the Stripe flow, the browser is sent to a hosted "return" page which immediately redirects to the deep link **`drive-app://stripe-onboarding?status=return`** — register this scheme in the app and close the in-app browser when it fires. (The page also shows a "Return to app" button and a close-this-window hint, so a manual dismissal is fine too.)
+4. Whether the deep link fired or the instructor dismissed the browser manually, **always** call `GET /api/v1/instructor/stripe/status` to find out what actually happened — reaching the return page does **not** mean onboarding finished.
+
+Other deep-link values you may receive: `drive-app://stripe-onboarding?status=refresh_failed` — the link expired mid-flow and the backend couldn't mint a replacement; call this endpoint again and reopen the browser. (Normal mid-flow expiry is handled server-side: the instructor is transparently redirected to a fresh Stripe link and never leaves the browser.)
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "url": "https://connect.stripe.com/setup/e/acct_1O9XXXXXXXXXX/aBcDeFgHiJkL",
+    "stripe_account_id": "acct_1O9XXXXXXXXXX"
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `url` | string | Stripe-hosted onboarding URL — open in the in-app browser straight away |
+| `stripe_account_id` | string | The instructor's Stripe Connect account ID (created on first call) |
+
+**Error Response:** `500` — Stripe account or link creation failed
+```json
+{
+  "message": "Failed to create onboarding link: <stripe error>"
+}
+```
+
+---
+
+#### `GET /api/v1/instructor/stripe/status`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Get the authenticated instructor's **live** Stripe Connect status. This performs a real-time sync against Stripe (it does not just read cached flags), so it is the source of truth for "did they finish onboarding?" — call it every time the in-app browser closes.
+
+An instructor is fully connected and able to take payments when **`onboarding_complete && charges_enabled`** — check both, not just one. If either is still `false`, show a "Continue setup" state that re-calls `POST /instructor/stripe/onboarding`.
+
+> The same three flags also appear on the instructor profile object (login / `GET /auth/user`), but those are cached values updated by webhooks — fine for cold-start routing, but use this endpoint for the moment-of-truth check after the browser closes.
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "connected": true,
+    "onboarding_complete": true,
+    "charges_enabled": true,
+    "payouts_enabled": true
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `connected` | boolean | Whether a Stripe account exists at all (`false` = onboarding never started) |
+| `onboarding_complete` | boolean | Whether the instructor submitted all details Stripe asked for |
+| `charges_enabled` | boolean | Whether Stripe will accept charges for this account |
+| `payouts_enabled` | boolean | Whether Stripe will pay out to the instructor's bank |
+
+**Error Response:** `500` — Stripe account lookup failed
+```json
+{
+  "message": "Failed to retrieve Stripe account: <stripe error>"
 }
 ```
 
@@ -5616,6 +5701,8 @@ The `role` field is always returned in user responses. Use it to determine which
 | POST | `/api/v1/auth/logout` | Yes | Any | Logout |
 | POST | `/api/v1/auth/change-password` | Yes | Any | Change password (clears forced-change flag) |
 | GET | `/api/v1/auth/user` | Yes | Any | Get current user |
+| POST | `/api/v1/instructor/stripe/onboarding` | Yes | Instructor | Get a fresh Stripe Connect onboarding link (creates account on first call) |
+| GET | `/api/v1/instructor/stripe/status` | Yes | Instructor | Live Stripe Connect status (call after in-app browser closes) |
 | PUT | `/api/v1/instructor/profile` | Yes | Instructor | Update profile |
 | POST | `/api/v1/instructor/profile/picture` | Yes | Instructor | Upload profile picture |
 | DELETE | `/api/v1/instructor/profile/picture` | Yes | Instructor | Delete profile picture |
@@ -6142,7 +6229,7 @@ Hazard perception video system for the student mobile app. Students watch video 
 
 **Recap videos:** a clip may have a recap (explainer) video. Its URL is only revealed after the student completes the clip — the video list exposes just a `has_recap` boolean. The practice submit response, test results, and test-video submit response all include `recap_video_url` for completed clips.
 
-**Scoring:** Each hazard has explicit per-score time blocks (scoring zones) stored per video — one block per score, 5 points (earliest) down to 1 point (latest). A tap inside a block scores that block's points; outside every block scores 0. Single hazard clips have a max score of 5, double hazard clips have a max score of 10. Zones are managed in the admin area and never sent to the client.
+**Scoring:** Each hazard has explicit per-score time blocks (scoring zones) stored per video — one block per score, 5 points (earliest) down to 1 point (latest). A tap inside a block scores that block's points; outside every block scores 0. Single hazard clips have a max score of 5, double hazard clips have a max score of 10. Zones are managed in the admin area and are **never sent to the client pre-attempt** (anti-cheat). After a clip is completed, the zones are revealed as `scoring_zones` in exactly the same places `recap_video_url` is revealed (practice submit response, test-video submit response, test detail breakdown) so the recap timeline can draw the 5→1 point bands.
 
 ---
 
@@ -6211,7 +6298,7 @@ Returns all hazard perception videos grouped by category and topic. Optionally f
 | `thumbnail_url` | string\|null | Optional thumbnail image URL |
 | `has_recap` | boolean | Whether a recap (explainer) video exists for this clip. The recap URL itself is only returned after the student completes the clip. |
 
-> **Note:** Hazard scoring zones are NOT returned to the client — scoring is calculated server-side when the student submits response times.
+> **Note:** Hazard scoring zones are NOT returned in this list (or anywhere else pre-attempt) — scoring is calculated server-side when the student submits response times. Zones are only revealed post-completion as `scoring_zones`, alongside `recap_video_url`.
 >
 > **Note:** For admin-uploaded clips, `video_url` / `thumbnail_url` (and `recap_video_url` on completion responses) are permanent public URLs on the Laravel Cloud bucket (bucket visibility is public; R2 has no per-object ACLs) — safe to cache client-side; legacy clips may return external URLs (e.g. Vimeo).
 
@@ -6224,7 +6311,7 @@ Returns all hazard perception videos grouped by category and topic. Optionally f
 Submit all of the student's tap timestamps from the video. The mobile app sends every tap the user made during playback as an array of seconds. The backend looks up the video's scoring zones, finds the best-matching tap for each hazard, and calculates scores.
 
 **Scoring algorithm:**
-- Each hazard has explicit **scoring zones** stored per video (admin-managed, not sent to the client): one time block per score, **5 points** (earliest) down to **1 point** (latest).
+- Each hazard has explicit **scoring zones** stored per video (admin-managed, never sent pre-attempt): one time block per score, **5 points** (earliest) down to **1 point** (latest).
 - A tap inside a zone scores that zone's points.
 - A tap **outside** every zone = 0 points.
 - If multiple taps land in zones, the **best-scoring** tap is used.
@@ -6263,6 +6350,22 @@ Submit all of the student's tap timestamps from the video. The mobile app sends 
     "total_score": 7,
     "completed_at": "2026-04-14T15:30:00+00:00",
     "recap_video_url": "hazard-perception/recaps/def456.mp4",
+    "scoring_zones": {
+      "hazard_1": [
+        { "score": 5, "start": 22.0, "end": 23.1 },
+        { "score": 4, "start": 23.1, "end": 24.2 },
+        { "score": 3, "start": 24.2, "end": 25.3 },
+        { "score": 2, "start": 25.3, "end": 26.4 },
+        { "score": 1, "start": 26.4, "end": 27.5 }
+      ],
+      "hazard_2": [
+        { "score": 5, "start": 44.0, "end": 45.1 },
+        { "score": 4, "start": 45.1, "end": 46.2 },
+        { "score": 3, "start": 46.2, "end": 47.3 },
+        { "score": 2, "start": 47.3, "end": 48.4 },
+        { "score": 1, "start": 48.4, "end": 49.5 }
+      ]
+    },
     "video": {
       "id": 2,
       "title": "Roundabout with cyclist",
@@ -6283,6 +6386,8 @@ Submit all of the student's tap timestamps from the video. The mobile app sends 
 
 > **Recap:** the student has just completed the clip, so `recap_video_url` is included (null if the clip has no recap). The app should offer a "watch recap" option when it is non-null.
 
+> **Scoring zones (post-completion only):** because the attempt is locked in, the response also reveals `scoring_zones` — the 5→1 point time bands per hazard — so the recap timeline can draw the bands under the student's taps. Values are decimal seconds (2dp, same clock as `taps`), ordered 5 → 1. `hazard_2` is `null` for single-hazard clips. Bands are contiguous but treat each `start`/`end` as authoritative — do not assume equal widths. These zones are NEVER available before the clip is submitted.
+
 **Attempt Object Fields:**
 
 | Field | Type | Description |
@@ -6296,6 +6401,7 @@ Submit all of the student's tap timestamps from the video. The mobile app sends 
 | `total_score` | integer | Combined score (max 5 single, max 10 double) |
 | `completed_at` | string | ISO 8601 timestamp |
 | `recap_video_url` | string\|null | Recap video URL (null = no recap for this clip). Only present when the response includes the video (practice submit, test detail). |
+| `scoring_zones` | object | Post-completion reveal of the hazard timing bands: `hazard_1` / `hazard_2`, each an array of `{ score, start, end }` (decimal seconds, score 5 → 1) or `null` when that hazard doesn't exist. Present in the same responses as `recap_video_url`. |
 | `video` | object | The video object (present on practice submit and in test contexts) |
 
 **Error Response (validation):** `422 Unprocessable Entity`
@@ -6451,7 +6557,8 @@ Starts a test session: the server randomly selects **14** videos (`config('hazar
           "has_recap": true
         },
         "attempt": null,
-        "recap_video_url": null
+        "recap_video_url": null,
+        "scoring_zones": null
       }
     ],
     "next_video": {
@@ -6493,6 +6600,7 @@ Starts a test session: the server randomly selects **14** videos (`config('hazar
 | `video` | object | Video object (no timing windows, `has_recap` flag) |
 | `attempt` | object\|null | The attempt for this clip within this test (null = not yet played) |
 | `recap_video_url` | string\|null | Recap URL — only non-null once the clip has been completed in this test AND the clip has a recap |
+| `scoring_zones` | object\|null | Timing bands (`hazard_1` / `hazard_2` arrays of `{ score, start, end }`, decimal seconds, 5 → 1) — `null` until the clip has been completed in this test (same reveal rule as `recap_video_url`) |
 
 **Error Response:** `422 Unprocessable Entity` — no videos available (empty bank or unknown topic).
 
@@ -6505,7 +6613,7 @@ Starts a test session: the server randomly selects **14** videos (`config('hazar
 Returns the full test state — the same shape as the start response. Serves two purposes:
 
 - **Resume** (in progress): `next_video` tells the app which clip to play next; `completed_videos` / running `total_score` drive the progress UI.
-- **Results** (complete): the per-video breakdown lists every clip's score, and the student can manually pick any completed video and watch its recap via `recap_video_url`.
+- **Results** (complete): the per-video breakdown lists every clip's score, and the student can manually pick any completed video and watch its recap via `recap_video_url`, with `scoring_zones` available to draw the timing bands on the recap timeline.
 
 **Success Response:** `200 OK` — Test Object (see Start Test) with `videos` breakdown and, when in progress, `next_video`.
 
@@ -6544,6 +6652,10 @@ Scores one clip within a test session. Identical tap scoring to the practice sub
       "total_score": 5,
       "completed_at": "2026-07-14T11:03:10+00:00",
       "recap_video_url": "hazard-perception/recaps/abc123.mp4",
+      "scoring_zones": {
+        "hazard_1": [ { "score": 5, "start": 17.2, "end": 18.4 }, { "…": "… down to score 1 …" } ],
+        "hazard_2": null
+      },
       "video": { "id": 1, "title": "Junction approach with pedestrian", "…": "…" }
     },
     "test": {
@@ -6829,6 +6941,8 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-08-07 | Added `phone` (string\|null) to `GET /student/instructor` response — instructor's contact number for the student app's tap-to-call buttons (Next Lesson and Your Instructor cards). `null` when the instructor has not set a phone. | Student Home (instructor) |
 | 2026-08-07 | **Student updates now sync the linked user account (bug #13).** `PUT /students/{student}` changes to `first_name`/`surname` update `users.name` (`first_name surname`) and a non-empty `email` updates `users.email`, so re-sent invites and app login use the latest address. New 422 when the email belongs to another user account (`email.unique` against `users`, ignoring the student's own linked user; only enforced when a linked user exists). `contact_*` fields are never synced. | Student (update) |
 | 2026-08-07 | Added instructor app onboarding progress tracking — GET status + POST step completion (5-step slider, ordered, idempotent, server-side completion); added `app_onboarding_step` / `app_onboarding_complete` to the instructor profile object | Instructor (onboarding, onboarding/step), Profile Object |
+| 2026-08-10 | **Added mobile Stripe Connect onboarding.** `POST /instructor/stripe/onboarding` creates the instructor's Stripe Express account on first call and returns a fresh single-use onboarding link (idempotent — also powers "Continue setup"); open it in an in-app browser. `GET /instructor/stripe/status` live-syncs flags from Stripe (`connected` / `onboarding_complete` / `charges_enabled` / `payouts_enabled`) — call it every time the browser closes; it also triggers default-package creation on the transition to fully onboarded. New public **signed** web routes handle Stripe's return/refresh redirects sessionlessly: the return page deep-links back to the app (`drive-app://stripe-onboarding?status=return`, configurable via `STRIPE_MOBILE_RETURN_DEEPLINK`); mid-flow link expiry transparently 302s the instructor back into a fresh Stripe link. Reuses the same `StripeService` + default-package job as the web CRM flow. | Instructor (stripe/onboarding, stripe/status) |
+| 2026-08-10 | **HPT scoring zones revealed post-completion (additive).** New `scoring_zones` field — `{ hazard_1, hazard_2 }`, each an array of `{ score, start, end }` bands (decimal seconds 2dp, ordered 5 → 1) or `null` — exposed in exactly the same places as `recap_video_url`: the attempt object on practice submit and test-video submit, and each per-clip breakdown item on test start/detail/submit (`null` until that clip is completed in the test). Lets the recap timeline draw the point windows under the student's tap flags. Zones remain hidden everywhere pre-attempt (videos list unchanged — anti-cheat). No schema changes. | Hazard Perception (practice submit, test start/detail/submit) |
 
 ---
 

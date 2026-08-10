@@ -14,6 +14,6 @@ class GetHazardPerceptionTestAction
      */
     public function __invoke(HazardPerceptionTest $test): HazardPerceptionTest
     {
-        return $test->load(['videos', 'attempts']);
+        return $test->load(['videos.scoringZones', 'attempts']);
     }
 }

@@ -53,7 +53,7 @@ class SubmitHazardPerceptionTestVideoAction
 
         return [
             'attempt' => $attempt,
-            'test' => $test->load(['videos', 'attempts']),
+            'test' => $test->load(['videos.scoringZones', 'attempts']),
         ];
     }
 }
