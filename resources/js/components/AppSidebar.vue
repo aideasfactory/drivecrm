@@ -6,12 +6,12 @@ import {
     BookOpen,
     FileText,
     GraduationCap,
-    Grid3x3,
     Inbox,
     LayoutGrid,
     MessageSquare,
     Package,
     Percent,
+    Plug,
     Settings,
     ShieldCheck,
     TrafficCone,
@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/sidebar';
 import { useRole } from '@/composables/useRole';
 import { dashboard } from '@/routes';
-import { index as appsIndex } from '@/routes/apps';
+import { index as integrationsIndex } from '@/routes/integrations';
 import { index as instructorsIndex } from '@/routes/instructors';
 import { edit as profileEdit } from '@/routes/profile';
 import { index as discountCodesIndex } from '@/routes/discount-codes';
@@ -135,9 +135,9 @@ const allNavItems: NavItem[] = [
         icon: Settings,
     },
     {
-        title: 'Apps',
-        href: appsIndex(),
-        icon: Grid3x3,
+        title: 'Integrations',
+        href: integrationsIndex(),
+        icon: Plug,
     },
 ];
 

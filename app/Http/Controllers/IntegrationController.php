@@ -5,13 +5,13 @@ namespace App\Http\Controllers;
 use Inertia\Inertia;
 use Inertia\Response;
 
-class AppController extends Controller
+class IntegrationController extends Controller
 {
     /**
-     * Display the apps index page.
+     * Display the integrations index page.
      */
     public function index(): Response
     {
-        return Inertia::render('Apps/Index');
+        return Inertia::render('Integrations/Index');
     }
 }

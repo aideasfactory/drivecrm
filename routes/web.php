@@ -1,7 +1,6 @@
 <?php
 
 use App\Enums\UserRole;
-use App\Http\Controllers\AppController;
 use App\Http\Controllers\Booking\BookingController;
 use App\Http\Controllers\Booking\StepOneController as BookingStepOneController;
 use App\Http\Controllers\Booking\StepTwoController as BookingStepTwoController;
@@ -19,6 +18,7 @@ use App\Http\Controllers\Hmrc\Itsa\ItsaController;
 use App\Http\Controllers\Hmrc\Vat\VatController;
 use App\Http\Controllers\Hmrc\Vehicles\VehicleController;
 use App\Http\Controllers\InstructorController;
+use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\MobileStripeOnboardingController;
 use App\Http\Controllers\Onboarding\OnboardingController;
 use App\Http\Controllers\Onboarding\StepFiveController;
@@ -378,8 +378,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
             ->name('student-transfers.store');
     });
 
-    Route::get('/apps', [AppController::class, 'index'])
-        ->name('apps.index');
+    Route::get('/integrations', [IntegrationController::class, 'index'])
+        ->name('integrations.index');
 
     Route::get('/enquiries', [EnquiryController::class, 'index'])
         ->name('enquiries.index');
