@@ -100,7 +100,7 @@ class LessonSignOffService extends BaseService
             ]
         );
 
-        // Send lesson signed off notification to student and instructor
+        // Send lesson signed off confirmation to the instructor
         $this->sendLessonSignedOffNotification($lesson, $student, $instructor);
 
         // Send feedback request email to student
@@ -119,50 +119,26 @@ class LessonSignOffService extends BaseService
             ]);
         }
 
-        // Dispatch AI resource recommendations (separate async job)
+        // Dispatch AI resource recommendations (separate async job), delayed so
+        // the email doesn't land alongside the feedback request
         if ($summary !== '') {
-            ProcessResourceRecommendationsJob::dispatch($lesson);
+            ProcessResourceRecommendationsJob::dispatch($lesson)
+                ->delay(now()->addMinutes((int) config('lessons.recommendations_delay_minutes')));
         }
 
         return $result;
     }
 
     /**
-     * Send lesson signed off notification to student and instructor, and log notification activity.
+     * Send the lesson signed off confirmation to the instructor, and log
+     * notification activity. Students intentionally no longer receive this
+     * email — they already get the feedback request (and weekly payers the
+     * next invoice), so the sign-off notice added noise without value.
      */
     protected function sendLessonSignedOffNotification(Lesson $lesson, Student $student, Instructor $instructor): void
     {
         $lessonDate = $lesson->date?->format('d M Y') ?? 'N/A';
-        $isBookedByContact = ! $student->owns_account;
 
-        // Determine student-side recipient (learner or parent)
-        if ($isBookedByContact) {
-            $recipientEmail = $student->contact_email;
-            $recipientName = trim(($student->contact_first_name ?? '').' '.($student->contact_surname ?? ''));
-        } else {
-            $recipientEmail = $student->email;
-            $recipientName = trim(($student->first_name ?? '').' '.($student->surname ?? ''));
-        }
-
-        // Send to student/parent
-        if ($recipientEmail) {
-            Notification::route('mail', [$recipientEmail => $recipientName])->notify(
-                new LessonSignedOffNotification($lesson, $student, $instructor, false)
-            );
-
-            ($this->logActivity)(
-                $student,
-                "Lesson signed off notification sent to {$recipientEmail} for lesson on {$lessonDate}",
-                'notification',
-                [
-                    'type' => 'lesson_signed_off',
-                    'lesson_id' => $lesson->id,
-                    'recipient_email' => $recipientEmail,
-                ]
-            );
-        }
-
-        // Send to instructor
         $instructorUser = $instructor->user;
         if ($instructorUser?->email) {
             Notification::send(
