@@ -23,11 +23,10 @@ class StepThreeController extends Controller
         // Get selected instructor from step 2
         $instructorId = $step2Data['instructor_id'] ?? null;
         $selectedInstructor = null;
-        $packages = collect();
 
         if ($instructorId) {
             // Find the instructor and get their full details
-            $instructor = Instructor::with(['user', 'locations', 'packages'])->find($instructorId);
+            $instructor = Instructor::with(['user', 'locations'])->find($instructorId);
             if ($instructor) {
                 // Parse meta JSON manually since casting might not be working
                 $meta = is_string($instructor->meta) ? json_decode($instructor->meta, true) : ($instructor->meta ?? []);
@@ -41,45 +40,31 @@ class StepThreeController extends Controller
                     'bio' => $instructor->bio,
                     'address' => $instructor->address,
                 ];
-
-                // Get packages and sort them (intro offers first, then by price)
-                $packages = $instructor->packages
-                    ->sortByDesc('is_intro_offer')
-                    ->where('active', true)
-                    ->sortBy('hours_total')
-                    ->values()
-                    ->map(function ($package) {
-                        return [
-                            'id' => $package->id,
-                            'name' => $package->name,
-                            'description' => $package->description,
-                            'promoted' => $package->promoted,
-                            'formatted_total_price' => $package->formatted_total_price,
-                            'formatted_lesson_price' => $package->formatted_lesson_price,
-                            'lessons_count' => $package->lessons_count,
-                            'isIntroOffer' => $package->is_intro_offer,
-                            'pricePerHour' => $package->less_price_pence,
-                        ];
-                    });
-                // add all packages with a null instructor_id
-                $packages = $packages->merge(Package::whereNull('instructor_id')
-                    ->where('active', true)
-                    ->get()
-                    ->map(function ($package) {
-                        return [
-                            'id' => $package->id,
-                            'name' => $package->name,
-                            'description' => $package->description,
-                            'promoted' => $package->promoted,
-                            'formatted_total_price' => $package->formatted_total_price,
-                            'formatted_lesson_price' => $package->formatted_lesson_price,
-                            'lessons_count' => $package->lessons_count,
-                            'isIntroOffer' => $package->is_intro_offer,
-                            'pricePerHour' => $package->less_price_pence,
-                        ];
-                    }));
             }
         }
+
+        // Only Drive packages (no instructor_id) are offered during onboarding —
+        // instructor-owned packages must never appear here, even when an
+        // instructor was selected in step 2. Intro offers first, then by size.
+        $packages = Package::whereNull('instructor_id')
+            ->where('active', true)
+            ->get()
+            ->sortByDesc('is_intro_offer')
+            ->sortBy('hours_total')
+            ->values()
+            ->map(function ($package) {
+                return [
+                    'id' => $package->id,
+                    'name' => $package->name,
+                    'description' => $package->description,
+                    'promoted' => $package->promoted,
+                    'formatted_total_price' => $package->formatted_total_price,
+                    'formatted_lesson_price' => $package->formatted_lesson_price,
+                    'lessons_count' => $package->lessons_count,
+                    'isIntroOffer' => $package->is_intro_offer,
+                    'pricePerHour' => $package->less_price_pence,
+                ];
+            });
 
         // Get discount data if present
         $discount = $enquiry->getDiscountData();

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Onboarding;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StepThreeRequest extends FormRequest
 {
@@ -14,7 +15,14 @@ class StepThreeRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'package_id' => ['required', 'exists:packages,id'],
+            'package_id' => [
+                'required',
+                // Onboarding only offers Drive packages — reject
+                // instructor-owned or inactive packages outright.
+                Rule::exists('packages', 'id')
+                    ->whereNull('instructor_id')
+                    ->where('active', true),
+            ],
         ];
     }
 
