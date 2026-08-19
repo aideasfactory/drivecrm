@@ -24,9 +24,14 @@ class FindInstructorsByPostcodeSectorAction
             return collect();
         }
 
+        $excludedIds = $this->excludedInstructorIds();
+
         // Find instructors who cover this postcode sector
         $instructors = Instructor::query()
             ->active()
+            ->when($excludedIds !== [], function ($query) use ($excludedIds) {
+                $query->whereNotIn('id', $excludedIds);
+            })
             ->whereHas('locations', function ($query) use ($postcodeSector) {
                 $query->where('postcode_sector', $postcodeSector);
             })
@@ -45,6 +50,28 @@ class FindInstructorsByPostcodeSectorAction
             ->get();
 
         return $instructors;
+    }
+
+    /**
+     * Instructor IDs excluded from public search results: the nationwide-coverage
+     * instructors that gate the /booking flow (config/booking.php), plus any
+     * extra IDs listed in config/onboarding.php.
+     *
+     * @return array<int, int>
+     */
+    private function excludedInstructorIds(): array
+    {
+        $bookingGateIds = array_values(config('booking.instructor_ids', []));
+
+        $extraIds = explode(',', (string) config('onboarding.excluded_instructor_ids', ''));
+
+        return collect($bookingGateIds)
+            ->merge($extraIds)
+            ->map(fn ($id) => (int) trim((string) $id))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**
