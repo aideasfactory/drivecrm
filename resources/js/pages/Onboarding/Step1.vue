@@ -153,7 +153,7 @@
                       id="country-code"
                       v-model="countryCode"
                       aria-label="Country code"
-                      class="h-9 w-28 shrink-0 rounded-md border border-input bg-transparent dark:bg-input/30 px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                      class="h-9 w-28 shrink-0 rounded-md border border-input bg-transparent dark:bg-input/30 px-3 py-1 text-base md:text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
                     >
                       <option v-for="country in countryCodes" :key="country.code" :value="country.code">
                         {{ country.flag }} {{ country.code }}
