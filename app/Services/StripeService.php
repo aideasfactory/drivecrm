@@ -7,6 +7,7 @@ use App\Models\Lesson;
 use App\Models\Order;
 use App\Models\Package;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Exception;
 use Illuminate\Support\Facades\Log;
 use Stripe\Account;
@@ -562,12 +563,26 @@ class StripeService
             $packageName = $lesson->order->package_name ?? ($package->name ?? 'Driving lessons');
             $lessonDateLabel = $lesson->date->format('d M Y').' '.$lesson->start_time->format('H:i');
 
+            // Invoice is due 24 hours before the lesson starts (matching
+            // LessonPayment::due_date), so an invoice sent a week ahead is not
+            // marked overdue by Stripe after a day. Stripe rejects past due
+            // dates, so invoices created inside that window fall back to one
+            // hour from now.
+            $lessonStart = CarbonImmutable::parse(
+                $lesson->date->toDateString().' '.$lesson->start_time->format('H:i')
+            );
+            $dueDate = $lessonStart->subHours(24);
+
+            if ($dueDate->isPast()) {
+                $dueDate = CarbonImmutable::now()->addHour();
+            }
+
             // Create draft invoice first, then attach the line item(s) to it
             $invoice = $this->stripe->invoices->create([
                 'customer' => $student->stripe_customer_id,
                 'auto_advance' => true,
                 'collection_method' => 'send_invoice',
-                'days_until_due' => 1,
+                'due_date' => $dueDate->getTimestamp(),
                 'metadata' => [
                     'lesson_id' => $lesson->id,
                     'lesson_date' => $lesson->date?->format('Y-m-d'),
