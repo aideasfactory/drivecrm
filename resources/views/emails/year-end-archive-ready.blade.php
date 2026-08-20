@@ -95,6 +95,7 @@
         </div>
         <div class="footer">
             Sent by DRIVE — your driving-instructor admin platform.
+            @include('emails.partials.legal-footer')
         </div>
     </div>
 </body>

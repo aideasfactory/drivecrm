@@ -253,10 +253,10 @@
                     />
                     <Label for="privacy_consent" class="block text-sm leading-relaxed cursor-pointer">
                       I have read and agree to the
-                      <a href="/policy/TermsofService.pdf" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Terms of Service</a>,
-                      <a href="/policy/PrivacyPolicy.pdf" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Privacy Policy</a>,
+                      <a href="/terms-of-service" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Terms of Service</a>,
+                      <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Privacy Policy</a>,
                       and
-                      <a href="/policy/CookiePolicy.pdf" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Cookie Policy</a>
+                      <a href="/cookie-policy" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Cookie Policy</a>
                     </Label>
                   </div>
                   <p v-if="form.errors.privacy_consent" class="text-sm text-destructive flex items-center ml-7">

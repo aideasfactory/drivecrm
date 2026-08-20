@@ -69,6 +69,31 @@ class CalendarItem extends Model
         return $this->item_type === CalendarItemType::PracticalTest;
     }
 
+    /**
+     * Check if this item is an open, unbooked availability slot.
+     */
+    public function isEmptyAvailability(): bool
+    {
+        return $this->item_type === CalendarItemType::Slot
+            && $this->is_available
+            && $this->status === null
+            && ! $this->lessons()->exists();
+    }
+
+    /**
+     * Check if a rescheduled booking may take over (consume) this item when
+     * moved on top of it: an empty availability slot, or the travel block
+     * belonging to one. Consumed items are deleted by the move.
+     */
+    public function isConsumableByReschedule(): bool
+    {
+        if ($this->isTravel()) {
+            return (bool) $this->parentItem?->isEmptyAvailability();
+        }
+
+        return $this->isEmptyAvailability();
+    }
+
     public function calendar(): BelongsTo
     {
         return $this->belongsTo(Calendar::class, 'calendar_id');

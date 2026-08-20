@@ -2496,6 +2496,56 @@ Creates a new calendar item (time slot) for the authenticated instructor. Suppor
 
 ---
 
+#### `POST /api/v1/instructor/calendar/fill-slots`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Bulk-fills the authenticated instructor's diary with **available** 2-hour lesson slots across a date range — the mobile counterpart of the admin "Fill Available Time Slots" sheet. For each selected day, the server walks candidate start times in 15-minute steps from `day_start_time`, creating a 2-hour available slot (plus a travel block when `travel_time_minutes` is set) whenever the whole window — **including travel time** — is clash-free, then jumps past the created block. Candidates that clash with existing diary items are skipped (not errors), so days with existing bookings are filled around them. On today's date, start times that have already passed are skipped. Reuses the same `InstructorService::fillAvailableCalendarSlots` + `FillAvailableCalendarSlotsAction` as the web admin — no parallel logic.
+
+Created slots are plain independent items (`recurrence_pattern: none`, no `recurrence_group_id`) — each is edited/deleted individually.
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `start_date` | string | **Yes** | First date of the range in `Y-m-d` format. Cannot be in the past. |
+| `weeks` | integer | **Yes** | Number of weeks to fill from `start_date` (1–12). |
+| `days` | integer[] | **Yes** | ISO weekdays to fill: `1` = Monday … `7` = Sunday. At least one required. |
+| `day_start_time` | string | **Yes** | Earliest slot start each day, `H:i` format. Must be at or after `00:00`. |
+| `day_end_time` | string | **Yes** | Latest slot **end** each day, `H:i` format. Must be after `day_start_time`, at or before `23:59`, and at least 2 hours after `day_start_time` (must fit one slot). |
+| `travel_time_minutes` | integer\|null | No | Travel block after **each** created slot: `15`, `30`, or `45` minutes. Omit or `null` for none. |
+
+**Example — fill Mon–Fri, 08:00–18:00, for 4 weeks with 30-min travel:**
+```json
+{
+  "start_date": "2026-08-24",
+  "weeks": 4,
+  "days": [1, 2, 3, 4, 5],
+  "day_start_time": "08:00",
+  "day_end_time": "18:00",
+  "travel_time_minutes": 30
+}
+```
+
+**Response (201):**
+```json
+{
+  "created_count": 80,
+  "days_filled": 20
+}
+```
+
+- `created_count` — total lesson slots created (travel blocks are not counted).
+- `days_filled` — number of distinct dates that received at least one new slot.
+- `created_count: 0` is a valid success response — it means every candidate in the range clashed with existing items. The app should refetch `GET /calendar/items` for visible dates rather than expecting item payloads here.
+
+**Validation errors (422):**
+- `start_date` in the past, `weeks` outside 1–12, empty `days`, or a day value outside 1–7.
+- `day_end_time` not after `day_start_time`, or a daily window shorter than 2 hours ("The daily window must be at least 2 hours to fit a lesson slot.").
+- `travel_time_minutes` not one of `15`, `30`, `45`.
+
+---
+
 #### `PUT /api/v1/instructor/calendar/items/{calendarItem}`
 
 **Auth required:** Yes (Bearer token — instructor only)
@@ -2613,8 +2663,10 @@ Updates a calendar item belonging to the authenticated instructor — used to **
 ```
 
 **Validation errors (422):**
-- Overlapping time slots are rejected (the slot's own row is excluded from the check).
+- Overlapping time slots are rejected (the slot's own row — and its own travel block — are excluded from the check), **except** when moving a **booked** item onto **empty availability** (see below).
 - `start_time` before `00:00` or `end_time` after `23:59` is rejected; `end_time` must be after `start_time`; `date` cannot be in the past.
+
+> **Rescheduling onto empty availability (consume-on-move):** when the item being moved has a booked lesson and its new window overlaps an **open, unbooked availability slot** (`item_type: slot`, `is_available: true`, no status, no lessons) — or the travel block belonging to one — the move is **allowed** and the booking **takes over** that slot: the overlapped availability slot and its travel block are **deleted** as part of the move. Anything else overlapping (another booking, a practical test, an unavailable block, a travel block tied to a booking) still 422s. Applies to single and bulk modes (bulk sibling moves consume in the same way). The app should refetch `GET /calendar/items` for the affected date(s) after a move — the consumed slot will be gone. Same behaviour on the admin web diary.
 
 **Error — Not found / not owned (404):**
 ```json
@@ -5714,6 +5766,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | PUT | `/api/v1/instructor/packages/{package}` | Yes | Instructor | Update package |
 | GET | `/api/v1/instructor/calendar/items` | Yes | Instructor | List calendar items for a date |
 | POST | `/api/v1/instructor/calendar/items` | Yes | Instructor | Create calendar item |
+| POST | `/api/v1/instructor/calendar/fill-slots` | Yes | Instructor | Bulk-fill diary with available slots (skips clashes) |
 | PUT | `/api/v1/instructor/calendar/items/{calendarItem}` | Yes | Instructor | Update / move / reschedule calendar item (single or bulk) |
 | DELETE | `/api/v1/instructor/calendar/items/{calendarItem}` | Yes | Instructor | Delete calendar item |
 | GET | `/api/v1/instructor/finances` | Yes | Instructor | List finance records |
@@ -6943,6 +6996,10 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-08-07 | Added instructor app onboarding progress tracking — GET status + POST step completion (5-step slider, ordered, idempotent, server-side completion); added `app_onboarding_step` / `app_onboarding_complete` to the instructor profile object | Instructor (onboarding, onboarding/step), Profile Object |
 | 2026-08-10 | **Added mobile Stripe Connect onboarding.** `POST /instructor/stripe/onboarding` creates the instructor's Stripe Express account on first call and returns a fresh single-use onboarding link (idempotent — also powers "Continue setup"); open it in an in-app browser. `GET /instructor/stripe/status` live-syncs flags from Stripe (`connected` / `onboarding_complete` / `charges_enabled` / `payouts_enabled`) — call it every time the browser closes; it also triggers default-package creation on the transition to fully onboarded. New public **signed** web routes handle Stripe's return/refresh redirects sessionlessly: the return page deep-links back to the app (`drive-app://stripe-onboarding?status=return`, configurable via `STRIPE_MOBILE_RETURN_DEEPLINK`); mid-flow link expiry transparently 302s the instructor back into a fresh Stripe link. Reuses the same `StripeService` + default-package job as the web CRM flow. | Instructor (stripe/onboarding, stripe/status) |
 | 2026-08-10 | **HPT scoring zones revealed post-completion (additive).** New `scoring_zones` field — `{ hazard_1, hazard_2 }`, each an array of `{ score, start, end }` bands (decimal seconds 2dp, ordered 5 → 1) or `null` — exposed in exactly the same places as `recap_video_url`: the attempt object on practice submit and test-video submit, and each per-clip breakdown item on test start/detail/submit (`null` until that clip is completed in the test). Lets the recap timeline draw the point windows under the student's tap flags. Zones remain hidden everywhere pre-attempt (videos list unchanged — anti-cheat). No schema changes. | Hazard Perception (practice submit, test start/detail/submit) |
+
+| 2026-08-20 | Added `POST /api/v1/instructor/calendar/fill-slots` — bulk-fill the instructor's diary with available 2-hour slots (+ optional travel blocks) across selected ISO weekdays for 1–12 weeks from a start date, between a daily start/end time. Walks each day in 15-min steps, skipping any candidate whose window (incl. travel) clashes with existing items, and skipping already-started times today. Created slots are independent (no recurrence group). Returns `created_count` + `days_filled` only — refetch `GET /calendar/items` to render. Reuses `InstructorService::fillAvailableCalendarSlots` + `FillAvailableCalendarSlotsAction`, shared with the admin "Fill Available Time Slots" sheet. | Instructor Calendar (fill-slots — NEW) |
+
+| 2026-08-20 | **Rescheduling a booked lesson onto an empty availability slot now succeeds and consumes it** (`PUT /api/v1/instructor/calendar/items/{calendarItem}`, single + bulk modes; mirrored on the admin web diary). Previously the overlap check 422'd ("This time slot overlaps with an existing time slot.") even when the target was the instructor's own open, unbooked slot. Now: moving an item **with a booked lesson**, overlapped items that are empty availability slots (`item_type: slot`, `is_available: true`, no status, no lessons) — or their travel blocks — no longer count as clashes; the move deletes them (slot + its travel block) so the diary stays clean. All other overlaps still 422. The moved item's **own travel block** is also now excluded from the overlap check. Implemented in the shared `UpdateCalendarItemAction` (+ new `CalendarItem::isEmptyAvailability()` / `isConsumableByReschedule()` helpers), so web drag-drop, web edit, app single reschedule, and bulk "move whole booking" all behave identically. Refetch `GET /calendar/items` after a move. | Instructor Calendar (update) |
 
 ---
 

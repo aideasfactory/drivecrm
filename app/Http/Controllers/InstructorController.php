@@ -22,6 +22,7 @@ use App\Http\Controllers\Hmrc\Itsa\ItsaController;
 use App\Http\Controllers\Hmrc\Vat\VatController;
 use App\Http\Controllers\Hmrc\Vehicles\VehicleController;
 use App\Http\Requests\AdminResetPasswordRequest;
+use App\Http\Requests\FillAvailableSlotsRequest;
 use App\Http\Requests\ImportInstructorsCsvRequest;
 use App\Http\Requests\ImportLocationsCsvRequest;
 use App\Http\Requests\StoreCalendarItemRequest;
@@ -611,6 +612,32 @@ class InstructorController extends Controller
         }
 
         return response()->json($response, 201);
+    }
+
+    /**
+     * Bulk-fill the instructor's diary with available time slots across a
+     * date range, skipping any candidate that clashes with existing items.
+     */
+    public function fillAvailableSlots(FillAvailableSlotsRequest $request, Instructor $instructor): JsonResponse
+    {
+        $items = $this->instructorService->fillAvailableCalendarSlots(
+            $instructor,
+            $request->input('start_date'),
+            $request->integer('weeks'),
+            array_map('intval', $request->input('days')),
+            $request->input('day_start_time'),
+            $request->input('day_end_time'),
+            $request->integer('travel_time_minutes') ?: null
+        );
+
+        return response()->json([
+            'created_count' => $items->count(),
+            'days_filled' => $items
+                ->map(fn ($item) => $item->calendar?->date?->format('Y-m-d'))
+                ->filter()
+                ->unique()
+                ->count(),
+        ], 201);
     }
 
     /**

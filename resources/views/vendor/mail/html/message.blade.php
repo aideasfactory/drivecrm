@@ -22,6 +22,10 @@
 <x-slot:footer>
 <x-mail::footer>
 © {{ date('Y') }} {{ config('app.name') }}. {{ __('All rights reserved.') }}
+
+This email was sent from a no-reply address. Please don't reply — the inbox isn't monitored and you won't receive a response.
+
+[View our Terms of Service]({{ route('legal.terms') }}) · [Privacy Policy]({{ route('legal.privacy') }}) · [Cookie Policy]({{ route('legal.cookies') }})
 </x-mail::footer>
 </x-slot:footer>
 </x-mail::layout>

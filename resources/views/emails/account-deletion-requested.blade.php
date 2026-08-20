@@ -114,6 +114,7 @@
 
             <div class="footer">
                 <p>&copy; {{ date('Y') }} {{ $appName }}. All rights reserved.</p>
+                @include('emails.partials.legal-footer')
             </div>
         </div>
     </div>

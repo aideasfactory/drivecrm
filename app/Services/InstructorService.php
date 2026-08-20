@@ -20,6 +20,7 @@ use App\Actions\Instructor\DeleteInstructorFinanceAction;
 use App\Actions\Instructor\DeleteInstructorLocationAction;
 use App\Actions\Instructor\DeleteInstructorProfilePictureAction;
 use App\Actions\Instructor\DeleteRecurringCalendarItemsAction;
+use App\Actions\Instructor\FillAvailableCalendarSlotsAction;
 use App\Actions\Instructor\GetGroupedStudentsAction;
 use App\Actions\Instructor\GetInstructorCalendarAction;
 use App\Actions\Instructor\GetInstructorDayLessonsAction;
@@ -91,6 +92,7 @@ class InstructorService extends BaseService
         protected UpdateCalendarItemAction $updateCalendarItem,
         protected CreateRecurringCalendarItemsAction $createRecurringCalendarItems,
         protected DeleteRecurringCalendarItemsAction $deleteRecurringCalendarItems,
+        protected FillAvailableCalendarSlotsAction $fillAvailableCalendarSlots,
         protected CreatePupilAction $createPupil,
         protected GetInstructorPayoutsAction $getInstructorPayouts,
         protected GetInstructorDayLessonsAction $getInstructorDayLessons,
@@ -499,6 +501,41 @@ class InstructorService extends BaseService
             $itemDate = $item->calendar?->date?->format('Y-m-d') ?? $date;
             $this->checkAndNotifyClashes($instructor, $item, $itemDate, $startTime, $endTime);
         }
+
+        return $items;
+    }
+
+    /**
+     * Bulk-fill a date range with available lesson slots, skipping clashes.
+     *
+     * @param  array<int>  $days  ISO weekdays to fill (1 = Monday ... 7 = Sunday)
+     * @return Collection<int, CalendarItem> The created lesson slots
+     */
+    public function fillAvailableCalendarSlots(
+        Instructor $instructor,
+        string $startDate,
+        int $weeks,
+        array $days,
+        string $dayStartTime,
+        string $dayEndTime,
+        ?int $travelTimeMinutes = null
+    ): Collection {
+        $items = ($this->fillAvailableCalendarSlots)(
+            $instructor,
+            $startDate,
+            $weeks,
+            $days,
+            $dayStartTime,
+            $dayEndTime,
+            $travelTimeMinutes
+        );
+
+        $calendarService = app(InstructorCalendarService::class);
+        $items
+            ->map(fn (CalendarItem $item) => $item->calendar?->date?->format('Y-m-d'))
+            ->filter()
+            ->unique()
+            ->each(fn (string $date) => $calendarService->invalidateCalendarCache($instructor->id, $date));
 
         return $items;
     }

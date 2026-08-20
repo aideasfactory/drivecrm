@@ -14,6 +14,7 @@ import {
     Repeat,
     CalendarDays,
     CalendarRange,
+    CalendarPlus,
     Car,
     ClipboardCheck,
     User,
@@ -543,6 +544,120 @@ async function handleCreateSubmit() {
     }
 }
 
+// ── Fill available slots (bulk) ──────────────────────────
+const isFillSheetOpen = ref(false)
+const fillLoading = ref(false)
+
+const weekdayOptions = [
+    { value: 1, label: 'Mon' },
+    { value: 2, label: 'Tue' },
+    { value: 3, label: 'Wed' },
+    { value: 4, label: 'Thu' },
+    { value: 5, label: 'Fri' },
+    { value: 6, label: 'Sat' },
+    { value: 7, label: 'Sun' },
+]
+
+const weeksOptions = Array.from({ length: 12 }, (_, i) => i + 1)
+
+const fillForm = ref({
+    start_date: '',
+    weeks: 1,
+    days: [1, 2, 3, 4, 5] as number[],
+    day_start_time: '08:00',
+    day_end_time: '18:00',
+    travel_time_minutes: 30,
+})
+
+function openFillSheet() {
+    const today = new Date()
+    const yyyy = today.getFullYear()
+    const mm = String(today.getMonth() + 1).padStart(2, '0')
+    const dd = String(today.getDate()).padStart(2, '0')
+    fillForm.value = {
+        start_date: `${yyyy}-${mm}-${dd}`,
+        weeks: 1,
+        days: [1, 2, 3, 4, 5],
+        day_start_time: '08:00',
+        day_end_time: '18:00',
+        travel_time_minutes: 30,
+    }
+    isFillSheetOpen.value = true
+}
+
+/** End-of-day options: must fit at least one 2-hour slot after the daily start */
+const fillEndTimeOptions = computed(() => {
+    const options: { value: string; label: string }[] = []
+    const first = timeToMinutes(fillForm.value.day_start_time) + SLOT_DURATION_HOURS * 60
+    for (let mins = first; mins <= DIARY_MAX_END_MINUTES; mins += 15) {
+        const time = minutesToTime(mins)
+        options.push({ value: time, label: time })
+    }
+    return options
+})
+
+// Keep the daily end time valid when the start time moves past it
+watch(() => fillForm.value.day_start_time, (newStart) => {
+    const minEnd = timeToMinutes(newStart) + SLOT_DURATION_HOURS * 60
+    if (timeToMinutes(fillForm.value.day_end_time) < minEnd) {
+        fillForm.value.day_end_time = minutesToTime(Math.min(minEnd, DIARY_MAX_END_MINUTES))
+    }
+})
+
+/** The slot pattern a clash-free day would get, e.g. 08:00 – 10:00, 10:30 – 12:30 … */
+const fillDayPreview = computed(() => {
+    const slots: string[] = []
+    const dayEnd = timeToMinutes(fillForm.value.day_end_time)
+    let start = timeToMinutes(fillForm.value.day_start_time)
+    while (start + SLOT_DURATION_HOURS * 60 <= dayEnd) {
+        const end = start + SLOT_DURATION_HOURS * 60
+        slots.push(`${minutesToTime(start)} – ${minutesToTime(end)}`)
+        start = end + (fillForm.value.travel_time_minutes || 0)
+    }
+    return slots
+})
+
+const fillTotalDays = computed(() => fillForm.value.days.length * fillForm.value.weeks)
+
+async function handleFillSubmit() {
+    if (fillForm.value.days.length === 0) {
+        toast({ title: 'Please select at least one day of the week', variant: 'destructive' })
+        return
+    }
+
+    fillLoading.value = true
+    try {
+        const response = await axios.post(
+            `/instructors/${props.instructorId}/calendar/fill-slots`,
+            {
+                start_date: fillForm.value.start_date,
+                weeks: fillForm.value.weeks,
+                days: fillForm.value.days,
+                day_start_time: fillForm.value.day_start_time,
+                day_end_time: fillForm.value.day_end_time,
+                travel_time_minutes: fillForm.value.travel_time_minutes || null,
+            },
+        )
+
+        const created = response.data.created_count
+        const daysFilled = response.data.days_filled
+
+        toast({
+            title: created > 0
+                ? `${created} time slot${created === 1 ? '' : 's'} added across ${daysFilled} day${daysFilled === 1 ? '' : 's'}!`
+                : 'No free slots found — everything in that range clashes with existing diary items.',
+        })
+
+        await loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
+        isFillSheetOpen.value = false
+    } catch (error: any) {
+        const message = error.response?.data?.message || 'Failed to fill time slots'
+        toast({ title: message, variant: 'destructive' })
+    } finally {
+        fillLoading.value = false
+    }
+}
+
 // ── Click on event → open edit sheet ─────────────────────
 function handleEventClick(event: CalendarEvent) {
     const item = itemsMap.value.get(event.id)
@@ -860,6 +975,10 @@ onMounted(() => {
                     <Button variant="outline" size="icon" @click="goToNext">
                         <ChevronRight class="h-4 w-4" />
                     </Button>
+                    <Button variant="outline" size="sm" @click="openFillSheet">
+                        <CalendarPlus class="mr-1.5 h-4 w-4" />
+                        Fill Slots
+                    </Button>
                 </div>
 
                 <span class="text-sm font-medium text-foreground">
@@ -1145,6 +1264,141 @@ onMounted(() => {
                         <Loader2 v-if="formLoading" class="mr-2 h-4 w-4 animate-spin" />
                         <Plus v-else class="mr-2 h-4 w-4" />
                         {{ createForm.is_practical_test ? 'Add Practical Test' : (createForm.recurrence_pattern && createForm.recurrence_pattern !== 'none' ? 'Add Recurring Slots' : 'Add Time Slot') }}
+                    </Button>
+                </form>
+            </SheetContent>
+        </Sheet>
+
+        <!-- Fill Available Slots Sheet -->
+        <Sheet v-model:open="isFillSheetOpen">
+            <SheetContent side="right">
+                <SheetHeader>
+                    <SheetTitle class="flex items-center gap-2">
+                        <CalendarPlus class="h-5 w-5" />
+                        Fill Available Time Slots
+                    </SheetTitle>
+                </SheetHeader>
+
+                <form @submit.prevent="handleFillSubmit" class="mt-6 flex-1 space-y-6 overflow-y-auto px-6 py-4">
+                    <p class="text-sm text-muted-foreground">
+                        Bulk-add available 2-hour lesson slots across the days you pick.
+                        Anything that clashes with existing diary items is skipped automatically.
+                    </p>
+
+                    <div class="space-y-2">
+                        <Label for="fill-start-date">Start Date</Label>
+                        <Input
+                            id="fill-start-date"
+                            v-model="fillForm.start_date"
+                            type="date"
+                            required
+                        />
+                    </div>
+
+                    <div class="space-y-2">
+                        <Label for="fill-weeks">
+                            <span class="flex items-center gap-1.5">
+                                <Repeat class="h-4 w-4" />
+                                Number of Weeks
+                            </span>
+                        </Label>
+                        <select
+                            id="fill-weeks"
+                            v-model.number="fillForm.weeks"
+                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                            <option v-for="weekCount in weeksOptions" :key="weekCount" :value="weekCount">
+                                {{ weekCount }} {{ weekCount === 1 ? 'week' : 'weeks' }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="space-y-2">
+                        <Label>Days of the Week</Label>
+                        <div class="grid grid-cols-4 gap-2">
+                            <label
+                                v-for="day in weekdayOptions"
+                                :key="day.value"
+                                class="flex cursor-pointer items-center gap-2 rounded-md border border-input px-3 py-2 text-sm"
+                                :class="fillForm.days.includes(day.value) ? 'border-primary bg-primary/5 font-medium' : 'text-muted-foreground'"
+                            >
+                                <input
+                                    type="checkbox"
+                                    :value="day.value"
+                                    v-model="fillForm.days"
+                                    class="h-4 w-4 rounded border-input"
+                                />
+                                {{ day.label }}
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <Label for="fill-day-start">Daily Start Time</Label>
+                            <select
+                                id="fill-day-start"
+                                v-model="fillForm.day_start_time"
+                                class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            >
+                                <option v-for="opt in startTimeOptions" :key="opt.value" :value="opt.value">
+                                    {{ opt.label }}
+                                </option>
+                            </select>
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="fill-day-end">Fill Until</Label>
+                            <select
+                                id="fill-day-end"
+                                v-model="fillForm.day_end_time"
+                                class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            >
+                                <option v-for="opt in fillEndTimeOptions" :key="opt.value" :value="opt.value">
+                                    {{ opt.label }}
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <Label for="fill-travel">
+                            <span class="flex items-center gap-1.5">
+                                <Car class="h-4 w-4" />
+                                Travel Time After Each Lesson
+                            </span>
+                        </Label>
+                        <select
+                            id="fill-travel"
+                            v-model.number="fillForm.travel_time_minutes"
+                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                            <option v-for="opt in travelTimeOptions" :key="opt.value" :value="opt.value">
+                                {{ opt.label }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div v-if="fillDayPreview.length > 0" class="rounded-md border bg-muted/50 p-3 text-xs">
+                        <p class="font-medium">
+                            Up to {{ fillDayPreview.length }} slot{{ fillDayPreview.length === 1 ? '' : 's' }} per day,
+                            across {{ fillTotalDays }} day{{ fillTotalDays === 1 ? '' : 's' }}:
+                        </p>
+                        <p class="mt-1 text-muted-foreground">
+                            {{ fillDayPreview.join(', ') }}
+                        </p>
+                        <p class="mt-2 text-muted-foreground">
+                            Days with existing bookings may get fewer slots — clashes are skipped.
+                        </p>
+                    </div>
+
+                    <Button
+                        type="submit"
+                        :disabled="fillLoading || fillForm.days.length === 0"
+                        class="w-full min-w-[120px]"
+                    >
+                        <Loader2 v-if="fillLoading" class="mr-2 h-4 w-4 animate-spin" />
+                        <CalendarPlus v-else class="mr-2 h-4 w-4" />
+                        Fill Available Slots
                     </Button>
                 </form>
             </SheetContent>

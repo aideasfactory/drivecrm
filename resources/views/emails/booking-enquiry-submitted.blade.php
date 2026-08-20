@@ -149,6 +149,10 @@
             <a class="button" href="{{ $enquiriesUrl }}">View all enquiries</a>
 
             <p class="meta">Enquiry ID: {{ $enquiryId }}</p>
+
+
+
+            @include('emails.partials.legal-footer')
         </div>
     </div>
 </body>

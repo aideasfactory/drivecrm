@@ -82,6 +82,10 @@ class UpdateCalendarItemAction
 
         $calendarItem->save();
 
+        // A booked lesson may land on an empty availability slot — take that
+        // slot over by deleting it (and its travel block) instead of clashing.
+        $this->consumeOverlappedAvailability($calendarItem, $startTime, $endTime);
+
         // Sync linked lessons when the calendar item is moved
         $this->syncLessonDates($calendarItem, $newDate, $startTime, $endTime);
 
@@ -91,6 +95,46 @@ class UpdateCalendarItemAction
         $calendarItem->load('calendar');
 
         return $calendarItem;
+    }
+
+    /**
+     * When a booked item is moved on top of empty availability, consume the
+     * overlapped slot(s): delete each open, unbooked slot (and its travel
+     * block) whose window intersects the booking's new window. Anything else
+     * overlapping was already rejected by request validation.
+     */
+    private function consumeOverlappedAvailability(CalendarItem $calendarItem, string $startTime, string $endTime): void
+    {
+        if (! $calendarItem->lessons()->exists()) {
+            return;
+        }
+
+        $overlapping = CalendarItem::query()
+            ->where('calendar_id', $calendarItem->calendar_id)
+            ->where('id', '!=', $calendarItem->id)
+            ->where(function ($query) use ($calendarItem): void {
+                $query->whereNull('parent_item_id')
+                    ->orWhere('parent_item_id', '!=', $calendarItem->id);
+            })
+            ->whereRaw('TIME(?) < TIME(end_time)', [$startTime])
+            ->whereRaw('TIME(?) > TIME(start_time)', [$endTime])
+            ->with('parentItem')
+            ->get();
+
+        $consumedSlots = collect();
+
+        foreach ($overlapping as $item) {
+            if ($item->isTravel() && $item->parentItem?->isEmptyAvailability()) {
+                $consumedSlots->put($item->parentItem->id, $item->parentItem);
+            } elseif ($item->isEmptyAvailability()) {
+                $consumedSlots->put($item->id, $item);
+            }
+        }
+
+        foreach ($consumedSlots as $slot) {
+            $slot->travelItem?->delete();
+            $slot->delete();
+        }
     }
 
     /**

@@ -106,15 +106,29 @@ class UpdateCalendarItemRequest extends FormRequest
             return;
         }
 
-        $overlap = $calendar->items()
+        $overlappingItems = $calendar->items()
             ->where('id', '!=', $calendarItem->id)
+            ->where(function ($query) use ($calendarItem) {
+                // The item's own travel block moves with it — never a clash.
+                $query->whereNull('parent_item_id')
+                    ->orWhere('parent_item_id', '!=', $calendarItem->id);
+            })
             ->where(function ($query) use ($startTime, $endTime) {
                 $query->whereRaw('TIME(?) < TIME(end_time)', [$startTime])
                     ->whereRaw('TIME(?) > TIME(start_time)', [$endTime]);
             })
-            ->exists();
+            ->with('parentItem')
+            ->get();
 
-        if ($overlap) {
+        // A booked lesson may take over empty availability slots it lands on —
+        // those are consumed (deleted) by the move rather than treated as clashes.
+        $isMovingBooking = $calendarItem->lessons()->exists();
+
+        $blocking = $overlappingItems->contains(
+            fn ($item) => ! ($isMovingBooking && $item->isConsumableByReschedule())
+        );
+
+        if ($blocking) {
             $validator->errors()->add(
                 'start_time',
                 'This time slot overlaps with an existing time slot.'

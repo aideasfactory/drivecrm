@@ -8,6 +8,7 @@ use App\Actions\Calendar\MoveLessonAndFutureSiblingsAction;
 use App\Enums\RecurrencePattern;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\DeleteCalendarItemRequest;
+use App\Http\Requests\Api\V1\FillAvailableSlotsRequest;
 use App\Http\Requests\Api\V1\GetCalendarItemsRequest;
 use App\Http\Requests\Api\V1\StoreCalendarItemRequest;
 use App\Http\Requests\Api\V1\UpdateCalendarItemRequest;
@@ -119,6 +120,39 @@ class InstructorCalendarController extends Controller
         }
 
         return response()->json($response, 201);
+    }
+
+
+    /**
+     * Bulk-fill the authenticated instructor's diary with available time slots.
+     *
+     * Reuses the same Service/Action layer as the admin "Fill Available Time
+     * Slots" sheet: walks each selected day in 15-minute steps creating 2-hour
+     * available slots (plus travel blocks), skipping any candidate whose window
+     * — including travel time — clashes with existing diary items.
+     */
+    public function fillSlots(FillAvailableSlotsRequest $request): JsonResponse
+    {
+        $instructor = $request->user()->instructor;
+
+        $items = $this->instructorService->fillAvailableCalendarSlots(
+            $instructor,
+            $request->input('start_date'),
+            $request->integer('weeks'),
+            array_map('intval', $request->input('days')),
+            $request->input('day_start_time'),
+            $request->input('day_end_time'),
+            $request->integer('travel_time_minutes') ?: null
+        );
+
+        return response()->json([
+            'created_count' => $items->count(),
+            'days_filled' => $items
+                ->map(fn (CalendarItem $item) => $item->calendar?->date?->format('Y-m-d'))
+                ->filter()
+                ->unique()
+                ->count(),
+        ], 201);
     }
 
     /**

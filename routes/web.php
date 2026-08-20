@@ -61,6 +61,14 @@ Route::get('/', function (Request $request) {
 Route::get('/no-access', fn () => Inertia::render('NoAccess'))
     ->name('no-access');
 
+// Public legal pages (linked from onboarding, booking and outgoing emails).
+Route::get('/terms-of-service', fn () => Inertia::render('Legal/TermsOfService'))
+    ->name('legal.terms');
+Route::get('/privacy-policy', fn () => Inertia::render('Legal/PrivacyPolicy'))
+    ->name('legal.privacy');
+Route::get('/cookie-policy', fn () => Inertia::render('Legal/CookiePolicy'))
+    ->name('legal.cookies');
+
 Route::get('dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified', RestrictInstructor::class])
     ->name('dashboard');
@@ -106,6 +114,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('instructors.calendar');
     Route::post('/instructors/{instructor}/calendar/items', [InstructorController::class, 'storeCalendarItem'])
         ->name('instructors.calendar.items.store');
+    Route::post('/instructors/{instructor}/calendar/fill-slots', [InstructorController::class, 'fillAvailableSlots'])
+        ->name('instructors.calendar.fill-slots');
     Route::put('/instructors/{instructor}/calendar/items/{calendarItem}', [InstructorController::class, 'updateCalendarItem'])
         ->name('instructors.calendar.items.update');
     Route::delete('/instructors/{instructor}/calendar/items/{calendarItem}', [InstructorController::class, 'destroyCalendarItem'])
