@@ -65,9 +65,7 @@ class CalendarService
 
         return [
             'dates' => $availability,
-            'default_selected_index' => $firstAvailableIndex !== null
-                ? min($firstAvailableIndex + 2, count($availability) - 1) // Third available date
-                : null,
+            'default_selected_index' => $firstAvailableIndex,
         ];
     }
 }

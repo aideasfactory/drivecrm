@@ -17,10 +17,11 @@ class GetNotesAction
      *
      * @param  Instructor|Student  $noteable  The entity to fetch notes for
      * @param  int  $perPage  Number of notes per page
+     * @param  bool|null  $internal  Filter to internal (admin-only) or regular notes; null returns both
      *
      * @throws InvalidArgumentException If noteable is not Instructor or Student
      */
-    public function __invoke(Model $noteable, int $perPage = 20): LengthAwarePaginator
+    public function __invoke(Model $noteable, int $perPage = 20, ?bool $internal = null): LengthAwarePaginator
     {
         if (! $noteable instanceof Instructor && ! $noteable instanceof Student) {
             throw new InvalidArgumentException(
@@ -28,6 +29,10 @@ class GetNotesAction
             );
         }
 
-        return $noteable->notes()->latest()->paginate($perPage);
+        return $noteable->notes()
+            ->with('user:id,name')
+            ->when($internal !== null, fn ($query) => $query->where('is_internal', $internal))
+            ->latest()
+            ->paginate($perPage);
     }
 }

@@ -40,8 +40,10 @@ class StepFourController extends Controller
             $instructor = Instructor::with('user')->find($instructorId);
         }
 
-        // Get all available instructors for the dropdown
-        $availableInstructors = $this->instructorService->findByPostcode($postcode);
+        // Get all available instructors for the dropdown (no postcode yet = none)
+        $availableInstructors = $postcode
+            ? $this->instructorService->findByPostcode($postcode)
+            : collect();
 
         // Get available dates and time slots
         $availability = $instructorId ? $this->calendarService->getAvailability(

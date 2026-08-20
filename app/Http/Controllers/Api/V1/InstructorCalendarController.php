@@ -122,7 +122,6 @@ class InstructorCalendarController extends Controller
         return response()->json($response, 201);
     }
 
-
     /**
      * Bulk-fill the authenticated instructor's diary with available time slots.
      *

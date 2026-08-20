@@ -22,10 +22,12 @@ class CreateNoteAction
      *
      * @param  Instructor|Student  $noteable  The entity to create a note for
      * @param  string  $note  The note content
+     * @param  bool  $isInternal  Admin-only internal note (skips the activity log,
+     *                            which is visible to instructors and would leak the content)
      *
      * @throws InvalidArgumentException If noteable is not Instructor or Student
      */
-    public function __invoke(Model $noteable, string $note): Note
+    public function __invoke(Model $noteable, string $note, bool $isInternal = false): Note
     {
         if (! $noteable instanceof Instructor && ! $noteable instanceof Student) {
             throw new InvalidArgumentException(
@@ -35,9 +37,15 @@ class CreateNoteAction
 
         $created = $noteable->notes()->create([
             'note' => $note,
+            'is_internal' => $isInternal,
+            'user_id' => auth()->id(),
         ]);
 
-        ($this->logActivity)($noteable, 'Note added: '.$note, 'note');
+        $created->load('user:id,name');
+
+        if (! $isInternal) {
+            ($this->logActivity)($noteable, 'Note added: '.$note, 'note');
+        }
 
         return $created;
     }

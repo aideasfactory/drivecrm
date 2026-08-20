@@ -226,11 +226,37 @@ class PupilController extends Controller
     }
 
     /**
-     * Get notes for a student.
+     * Authorize note access: owners manage all notes; instructors manage only
+     * regular (non-internal) notes for their own pupils.
+     */
+    private function authorizeNoteAccess(Student $student, bool $internal): void
+    {
+        $user = request()->user();
+
+        if ($user?->isOwner()) {
+            return;
+        }
+
+        if ($internal) {
+            abort(403, 'Internal notes are admin only.');
+        }
+
+        if ($user?->isInstructor() && $student->instructor_id !== $user->instructor?->id) {
+            abort(403, 'You can only manage notes for your own pupils.');
+        }
+    }
+
+    /**
+     * Get notes for a student. Instructors only ever receive regular notes;
+     * owners choose the set via the `internal` query param.
      */
     public function notes(Student $student): JsonResponse
     {
-        $notes = (new GetNotesAction)($student);
+        $internal = request()->boolean('internal');
+
+        $this->authorizeNoteAccess($student, $internal);
+
+        $notes = (new GetNotesAction)($student, 20, $internal);
 
         return response()->json([
             'notes' => $notes->items(),
@@ -250,9 +276,14 @@ class PupilController extends Controller
     {
         $data = request()->validate([
             'note' => 'required|string|max:5000',
+            'is_internal' => 'sometimes|boolean',
         ]);
 
-        $note = app(CreateNoteAction::class)($student, $data['note']);
+        $internal = (bool) ($data['is_internal'] ?? false);
+
+        $this->authorizeNoteAccess($student, $internal);
+
+        $note = app(CreateNoteAction::class)($student, $data['note'], $internal);
 
         return response()->json([
             'note' => $note,
@@ -267,6 +298,8 @@ class PupilController extends Controller
         if ($note->noteable_id !== $student->id || $note->noteable_type !== Student::class) {
             return response()->json(['message' => 'Note not found for this student.'], 404);
         }
+
+        $this->authorizeNoteAccess($student, $note->is_internal);
 
         (new DeleteNoteAction)($note);
 

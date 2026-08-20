@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Link } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -8,6 +9,8 @@ import { index as reportsIndex, invoiceDue } from '@/routes/reports';
 
 interface InvoiceDueRow {
     lesson_id: number;
+    student_id: number | null;
+    instructor_id: number | null;
     learner_name: string;
     learner_phone: string | null;
     learner_email: string | null;
@@ -78,7 +81,16 @@ const targetDateLabel = new Date(props.report.target_date).toLocaleDateString('e
                         </TableHeader>
                         <TableBody>
                             <TableRow v-for="row in report.rows" :key="row.lesson_id">
-                                <TableCell class="font-medium">{{ row.learner_name }}</TableCell>
+                                <TableCell class="font-medium">
+                                    <Link
+                                        v-if="row.student_id && row.instructor_id"
+                                        :href="`/instructors/${row.instructor_id}?tab=student&student=${row.student_id}&subtab=overview`"
+                                        class="hover:text-primary hover:underline"
+                                    >
+                                        {{ row.learner_name }}
+                                    </Link>
+                                    <span v-else>{{ row.learner_name }}</span>
+                                </TableCell>
                                 <TableCell>
                                     <div class="flex flex-col gap-1 text-sm">
                                         <a

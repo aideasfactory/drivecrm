@@ -23,8 +23,10 @@ class StepTwoController extends Controller
         // Get postcode from step 1
         $postcode = $step1Data['postcode'] ?? null;
 
-        // Search for instructors by postcode sector
-        $instructors = $this->instructorService->findByPostcode($postcode);
+        // Search for instructors by postcode sector (no postcode yet = no results)
+        $instructors = $postcode
+            ? $this->instructorService->findByPostcode($postcode)
+            : collect();
 
         $instructors->each(function ($instructor) {
             $instructor->next_available = $this->instructorService->nextAvailableDate($instructor);

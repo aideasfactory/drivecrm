@@ -45,6 +45,10 @@ import { Skeleton } from '@/components/ui/skeleton';
                     </CardContent>
                 </Card>
 
+                <!-- Bird screen is built and live at /integrations/bird —
+                     card temporarily reverted to Coming soon while the
+                     scorecard is revisited. Restore the Link version from git
+                     history when ready. -->
                 <Card>
                     <CardHeader>
                         <CardTitle class="flex items-center gap-2">

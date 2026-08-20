@@ -24,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('hmrc:check-refresh-health')->hourly();
         $schedule->command('hmrc:prune-year-end-archives')->dailyAt('02:00');
         $schedule->command('account:process-deletion-requests')->dailyAt('01:00');
+        // $schedule->command('bird:sync')->dailyAt('02:30');
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);

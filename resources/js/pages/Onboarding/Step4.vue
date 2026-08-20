@@ -334,8 +334,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { usePage, Link, useForm } from '@inertiajs/vue3'
+import axios from 'axios'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -367,6 +368,9 @@ const showCalendarSheet = ref(false)
 const weekOffset = ref(0)
 const currentViewMonth = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
 const loadingCalendar = ref(false)
+// Suppresses the date/slot watchers while we programmatically pre-select,
+// so initialization doesn't wipe the chosen slot or fire toasts on load
+const initializing = ref(false)
 
 const form = useForm({
   date: page.props.enquiry?.data?.steps?.step4?.date || '',
@@ -515,6 +519,7 @@ const canGoToNextMonth = computed(() => {
 
 // Watch for changes and show toast
 watch(() => form.date, () => {
+  if (initializing.value) return
   if (form.date) {
     // Reset time selection when date changes
     form.calendar_item_id = null
@@ -525,6 +530,7 @@ watch(() => form.date, () => {
 })
 
 watch(() => form.calendar_item_id, () => {
+  if (initializing.value) return
   if (form.calendar_item_id) {
     toast({ title: 'Time slot selected' })
   }
@@ -590,6 +596,50 @@ function selectDate(dateString) {
   form.date = dateString
 }
 
+function daysFromToday(dateString) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const [year, month, day] = dateString.split('-').map(Number)
+  return Math.floor((new Date(year, month - 1, day) - today) / (1000 * 60 * 60 * 24))
+}
+
+// Scroll the week carousel and month view so the given date is visible
+function revealDate(dateString) {
+  weekOffset.value = Math.max(0, Math.floor(daysFromToday(dateString) / 7))
+  const [year, month] = dateString.split('-').map(Number)
+  currentViewMonth.value = new Date(year, month - 1, 1)
+}
+
+function defaultAvailableDate() {
+  const dates = props.availability?.dates
+  if (!dates?.length) return null
+  const defaultIndex = props.availability.default_selected_index
+  if (defaultIndex !== null && defaultIndex !== undefined && dates[defaultIndex]?.has_availability) {
+    return dates[defaultIndex]
+  }
+  return dates.find(d => d.has_availability) || null
+}
+
+// Pre-select the instructor's next available date, bring it into view,
+// and pre-select its first open time slot
+function applyDefaultSelection() {
+  const target = defaultAvailableDate()
+  if (!target) return
+
+  initializing.value = true
+  selectDate(target.date)
+  revealDate(target.date)
+
+  const firstSlot = timeSlots.value.find(s => !s.booked)
+  if (firstSlot) {
+    selectTime(firstSlot)
+  }
+
+  nextTick(() => {
+    initializing.value = false
+  })
+}
+
 function selectTime(slot) {
   form.calendar_item_id = slot.id
   form.start_time = slot.time
@@ -606,44 +656,25 @@ async function selectInstructor(instructor) {
 
   // Fetch calendar for the selected instructor
   try {
-    const response = await fetch(`/onboarding/${props.uuid}/instructor/${instructor.id}/availability`, {
-      headers: {
-        'Accept': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest'
-      }
-    })
+    const response = await axios.get(`/onboarding/${props.uuid}/instructor/${instructor.id}/availability`)
+    const data = response.data
 
-    if (response.ok) {
-      const data = await response.json()
+    if (data.availability) {
+      // Update the props availability data
+      props.availability.dates = data.availability.dates
+      props.availability.default_selected_index = data.availability.default_selected_index
 
-      // Update availability data
-      if (data.availability) {
-        // Update the props availability data
-        props.availability.dates = data.availability.dates
-        props.availability.default_selected_index = data.availability.default_selected_index
+      // Reset date selection to force re-selection with new availability
+      form.date = ''
+      form.calendar_item_id = null
+      form.start_time = ''
+      form.end_time = ''
 
-        // Reset date selection to force re-selection with new availability
-        form.date = ''
-        form.calendar_item_id = null
-        form.start_time = ''
-        form.end_time = ''
+      // Pre-select the new instructor's next available date and slot
+      applyDefaultSelection()
 
-        // Automatically select first available date
-        if (data.availability.dates && data.availability.dates.length > 0) {
-          const defaultIndex = data.availability.default_selected_index
-          if (defaultIndex !== null && data.availability.dates[defaultIndex]) {
-            selectDate(data.availability.dates[defaultIndex].date)
-          } else {
-            const firstAvailable = data.availability.dates.find(d => d.has_availability)
-            if (firstAvailable) {
-              selectDate(firstAvailable.date)
-            }
-          }
-        }
-
-        // Show confirmation toast
-        toast({ title: 'Instructor changed successfully' })
-      }
+      // Show confirmation toast
+      toast({ title: 'Instructor changed successfully' })
     }
   } catch (error) {
     console.error('Failed to fetch instructor availability:', error)
@@ -667,8 +698,10 @@ function previousWeek() {
 }
 
 function nextWeek() {
-  // Only allow next if we have more dates to show
-  const maxWeeks = Math.ceil((props.availability?.dates?.length || 0) / 7) - 1
+  // Only allow next while the availability window (last known date) is in view
+  const dates = props.availability?.dates
+  if (!dates?.length) return
+  const maxWeeks = Math.floor(daysFromToday(dates[dates.length - 1].date) / 7)
   if (weekOffset.value < maxWeeks) {
     weekOffset.value++
   }
@@ -689,25 +722,23 @@ function submit() {
 }
 
 onMounted(() => {
-  // Initialize with first available date if not set
-  if (!form.date && props.availability?.dates?.length > 0) {
-    // Use default_selected_index if provided, otherwise find first available
-    const defaultIndex = props.availability.default_selected_index
-    if (defaultIndex !== null && props.availability.dates[defaultIndex]) {
-      selectDate(props.availability.dates[defaultIndex].date)
-    } else {
-      const firstAvailable = props.availability.dates.find(d => d.has_availability)
-      if (firstAvailable) {
-        selectDate(firstAvailable.date)
+  if (form.date) {
+    // Resuming with a previously saved date — bring it into view and
+    // restore a slot selection if none was saved
+    initializing.value = true
+    revealDate(form.date)
+    if (!form.calendar_item_id) {
+      const firstSlot = timeSlots.value.find(s => !s.booked)
+      if (firstSlot) {
+        selectTime(firstSlot)
       }
     }
-  }
-  // Initialize with first available time slot if not set
-  if (!form.calendar_item_id && form.date) {
-    const firstAvailable = timeSlots.value.find(s => !s.booked)
-    if (firstAvailable) {
-      selectTime(firstAvailable)
-    }
+    nextTick(() => {
+      initializing.value = false
+    })
+  } else {
+    // Fresh visit — pre-select the next available date and its first slot
+    applyDefaultSelection()
   }
 })
 </script>

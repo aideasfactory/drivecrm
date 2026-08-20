@@ -647,7 +647,9 @@ Polymorphic notes for instructors and students. Supports soft deletes for audit 
 | `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique note identifier |
 | `noteable_type` | varchar(255) | NOT NULL | Model type (App\Models\Instructor or App\Models\Student) |
 | `noteable_id` | bigint unsigned | NOT NULL | Model ID |
+| `user_id` | bigint unsigned | NULLABLE, FK → users.id (null on delete) | Author of the note (added 2026-08-20; null for older notes) |
 | `note` | text | NOT NULL | Note content |
+| `is_internal` | boolean | NOT NULL, DEFAULT false | Admin-only internal CRM note (added 2026-08-20) |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 | `deleted_at` | timestamp | NULLABLE | Soft delete timestamp |
@@ -657,11 +659,18 @@ Polymorphic notes for instructors and students. Supports soft deletes for audit 
 
 **Relationships:**
 - Morphs to one `Instructor` or `Student` (polymorphic)
+- Belongs to one `User` (author, nullable)
 
 **Business Logic:**
 - Soft deletes enabled for audit trail
-- Creating a note triggers an activity log entry (category: `note`)
-- Used for internal notes/comments on student or instructor profiles
+- Creating a regular note triggers an activity log entry (category: `note`);
+  internal notes skip the activity log because the student Log subtab is
+  visible to instructors and would leak the content
+- Regular notes (`is_internal = false`): instructor-facing notes about their
+  own pupils; owners can also see/manage them
+- Internal notes (`is_internal = true`): owner/admin-only CRM notes, enforced
+  in `PupilController::authorizeNoteAccess()` — instructors can never list,
+  create, or delete them (403)
 
 ---
 
@@ -2146,3 +2155,39 @@ Tracks the asynchronous build, delivery, and 6-year HMRC-retention lifecycle of 
 **Constraints:** UNIQUE (instructor_id, tax_year_start)
 **Indexes:** INDEX (status); INDEX (expires_at) for the daily pruning cron.
 **Relationships:** BelongsTo → Instructor.
+
+## Bird AI Conversations Mirror
+
+Read-only local mirror of Bird AI Employee (chatbot) conversations, populated exclusively by the `bird:sync` artisan command (scheduled nightly at 02:30, plus a "Sync now" button and one-off `bird:sync --full` backfill). Nothing in the app writes to Bird — the sync only GETs from the Bird Conversations API and upserts here. Both tables use Bird's own UUIDs as primary keys, making every sync idempotent. Powers the /integrations/bird screen (table, transcript sheet, client-side CSV exports).
+
+### bird_conversations
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | uuid PK | No | Bird's conversation UUID (not auto-generated). |
+| contact_name | string | No | Customer display name from Bird's featured contact participant. Default ''. |
+| contact_email | string | No | Contact identifier when identifierKey = emailaddress. Default ''. |
+| contact_phone | string | No | Contact identifier when identifierKey = phonenumber (WhatsApp/SMS). Default ''. |
+| last_message | text | Yes | Preview text of the most recent message. |
+| status | string | No | Bird conversation status (active, closed, …). Default ''. |
+| channel_id | uuid | Yes | Bird channel the conversation lives on (e.g. WhatsApp - Bookings). |
+| last_activity_at | timestamp | Yes | Bird's updatedAt — drives table sort and the incremental sync watermark. |
+| created_at / updated_at | timestamp | Yes | Row updated_at = when this row was last synced. |
+
+**Indexes:** INDEX (last_activity_at)
+**Relationships:** HasMany → BirdMessage.
+
+### bird_messages
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | uuid PK | No | Bird's message UUID (not auto-generated). |
+| bird_conversation_id | uuid FK | No | References bird_conversations.id. Cascade on delete. |
+| sender_type | string | No | Bird participant type: `contact` = customer, `bot` = AI Employee. Default ''. |
+| sender_name | string | No | e.g. "Andrew @ DRIVE" or the customer's name. Default ''. |
+| text | text | Yes | Message text ("[image message]"-style placeholder for non-text payloads). |
+| sent_at | timestamp | Yes | Bird's createdAt — messages render in true chronological order. |
+| created_at / updated_at | timestamp | Yes | |
+
+**Indexes:** INDEX (sent_at); FK index on bird_conversation_id.
+**Relationships:** BelongsTo → BirdConversation (as `conversation`).

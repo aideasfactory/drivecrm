@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\UserRole;
+use App\Http\Controllers\BirdConversationController;
 use App\Http\Controllers\Booking\BookingController;
 use App\Http\Controllers\Booking\StepOneController as BookingStepOneController;
 use App\Http\Controllers\Booking\StepTwoController as BookingStepTwoController;
@@ -246,7 +247,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
     Route::post('/students/{student}/contacts/auto-create', [PupilController::class, 'autoCreateEmergencyContact'])
         ->name('students.contacts.auto-create');
 
-    // Student Notes
+    // Student Notes — instructors manage regular notes for their own pupils;
+    // internal (admin-only) notes are enforced per-request in PupilController
     Route::get('/students/{student}/notes', [PupilController::class, 'notes'])
         ->name('students.notes');
     Route::post('/students/{student}/notes', [PupilController::class, 'storeNote'])
@@ -390,6 +392,18 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
 
     Route::get('/integrations', [IntegrationController::class, 'index'])
         ->name('integrations.index');
+
+    // Bird AI Employee conversation history (Conversations API)
+    Route::get('/integrations/bird', [BirdConversationController::class, 'index'])
+        ->name('integrations.bird');
+    Route::get('/integrations/bird/conversations', [BirdConversationController::class, 'conversations'])
+        ->name('integrations.bird.conversations');
+    Route::get('/integrations/bird/conversations/{conversationId}/messages', [BirdConversationController::class, 'messages'])
+        ->name('integrations.bird.messages');
+    Route::get('/integrations/bird/messages', [BirdConversationController::class, 'allMessages'])
+        ->name('integrations.bird.messages.all');
+    Route::post('/integrations/bird/sync', [BirdConversationController::class, 'sync'])
+        ->name('integrations.bird.sync');
 
     Route::get('/enquiries', [EnquiryController::class, 'index'])
         ->name('enquiries.index');

@@ -174,10 +174,43 @@
                           </div>
                         </CardContent>
                       </Card>
+                    <!-- No instructors cover this postcode -->
+                    <Card v-if="instructors.length === 0">
+                      <CardContent class="pt-6 pb-8 text-center">
+                        <SearchX class="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                        <h4 class="font-semibold text-base mb-2">No instructors cover your area yet</h4>
+                        <p class="text-sm text-muted-foreground mb-6">
+                          We couldn't find an instructor covering {{ postcode }}. Double-check your
+                          postcode, or email us and we'll let you know as soon as an instructor
+                          becomes available in your area.
+                        </p>
+                        <div class="flex flex-col items-stretch gap-3 max-w-xs mx-auto">
+                          <Button @click="goBack" type="button" variant="outline" class="w-full">
+                            <ArrowLeft class="mr-2 h-4 w-4" />
+                            Change postcode
+                          </Button>
+                          <a href="mailto:lessons@just-drive.co.uk" class="block w-full">
+                            <Button type="button" class="w-full">
+                              <Mail class="mr-2 h-4 w-4" />
+                              Email lessons@just-drive.co.uk
+                            </Button>
+                          </a>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <!-- Instructors exist, but none match the transmission filter -->
+                    <Card v-else-if="filteredInstructors.length === 0">
+                      <CardContent class="pt-6 pb-8 text-center">
+                        <Users class="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+                        <h4 class="font-semibold text-base mb-1">No {{ selectedTransmission }} instructors available</h4>
+                        <p class="text-sm text-muted-foreground">Try a different transmission type above.</p>
+                      </CardContent>
+                    </Card>
                   </div>
 
                   <!-- Load More -->
-                  <div class="mt-4 text-center">
+                  <div v-if="filteredInstructors.length > 0" class="mt-4 text-center">
                     <Button
                       @click="loadMoreInstructors"
                       variant="link"
@@ -355,7 +388,9 @@ import {
   Award,
   CircleCheck,
   Languages,
-  Flame
+  Flame,
+  Mail,
+  SearchX
 } from 'lucide-vue-next'
 
 const props = defineProps({

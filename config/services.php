@@ -70,6 +70,11 @@ return [
         'api_key' => env('BIRD_API_KEY'),
         'workspace_id' => env('BIRD_WORKSPACE_ID'),
         'booking_list_id' => env('BIRD_BOOKING_LIST_ID'),
+        'ai_channel_id' => env('BIRD_AI_CHANNEL_ID'),
+        // Separate read-only key for the AI conversations screen so the
+        // contact-sync key's roles are never touched. Falls back to the main
+        // key when unset.
+        'conversations_api_key' => env('BIRD_CONVERSATIONS_API_KEY', env('BIRD_API_KEY')),
     ],
 
     'gtm' => [

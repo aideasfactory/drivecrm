@@ -17,7 +17,7 @@ class GetInvoiceDueWithin48HoursAction
      * (any time of day) and whose lesson payment is still due (unpaid), so they
      * can be chased manually before their lesson.
      *
-     * @return array{rows: Collection<int, array{lesson_id: int, learner_name: string, learner_phone: ?string, learner_email: ?string, instructor_name: ?string, lesson_date: string, lesson_time: string, amount_due: string, amount_pence: int, due_date: ?string}>, generated_at: string, target_date: string}
+     * @return array{rows: Collection<int, array{lesson_id: int, student_id: ?int, instructor_id: ?int, learner_name: string, learner_phone: ?string, learner_email: ?string, instructor_name: ?string, lesson_date: string, lesson_time: string, amount_due: string, amount_pence: int, due_date: ?string}>, generated_at: string, target_date: string}
      */
     public function __invoke(): array
     {
@@ -44,6 +44,10 @@ class GetInvoiceDueWithin48HoursAction
 
                 return [
                     'lesson_id' => $lesson->id,
+                    'student_id' => $student?->id,
+                    // Profile link target: the student's assigned instructor page,
+                    // falling back to the lesson's instructor
+                    'instructor_id' => $student?->instructor_id ?? $lesson->instructor_id,
                     'learner_name' => $student
                         ? trim($student->first_name.' '.$student->surname)
                         : 'Unknown learner',
