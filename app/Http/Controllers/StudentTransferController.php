@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Enums\TransferReason;
 use App\Http\Requests\StudentTransferRequest;
 use App\Models\Instructor;
 use App\Models\Student;
@@ -41,6 +42,7 @@ class StudentTransferController extends Controller
         return Inertia::render('StudentTransfers/Index', [
             'students' => $students,
             'instructors' => $instructors,
+            'reasons' => TransferReason::options(),
         ]);
     }
 
@@ -53,6 +55,8 @@ class StudentTransferController extends Controller
             $student,
             $destination,
             $request->user(),
+            TransferReason::from($request->validated('reason')),
+            $request->validated('notes'),
         );
 
         $studentName = trim("{$student->first_name} {$student->surname}") ?: ($student->email ?? "Student #{$student->id}");

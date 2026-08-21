@@ -5,6 +5,7 @@ import AppLayout from '@/layouts/AppLayout.vue'
 import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/sonner'
 import { ArrowRightLeft, CheckCircle2, Loader2, X } from 'lucide-vue-next'
 
@@ -22,15 +23,23 @@ interface InstructorOption {
     email: string | null
 }
 
+interface ReasonOption {
+    value: string
+    label: string
+}
+
 interface Props {
     students: StudentOption[]
     instructors: InstructorOption[]
+    reasons: ReasonOption[]
 }
 
 const props = defineProps<Props>()
 
 const selectedStudentId = ref<number | ''>('')
 const selectedInstructorId = ref<number | ''>('')
+const selectedReason = ref<string>('')
+const notes = ref('')
 const submitting = ref(false)
 const lastTransferMessage = ref<string | null>(null)
 
@@ -51,6 +60,7 @@ const canSubmit = computed(
     () =>
         selectedStudentId.value !== '' &&
         selectedInstructorId.value !== '' &&
+        selectedReason.value !== '' &&
         !submitting.value,
 )
 
@@ -64,6 +74,8 @@ const handleSubmit = () => {
         {
             student_id: selectedStudentId.value,
             destination_instructor_id: selectedInstructorId.value,
+            reason: selectedReason.value,
+            notes: notes.value.trim() || null,
         },
         {
             preserveScroll: true,
@@ -74,6 +86,8 @@ const handleSubmit = () => {
                 lastTransferMessage.value = message
                 selectedStudentId.value = ''
                 selectedInstructorId.value = ''
+                selectedReason.value = ''
+                notes.value = ''
             },
             onError: (errors) => {
                 const firstError = Object.values(errors)[0]
@@ -194,6 +208,41 @@ const breadcrumbs = [{ title: 'Transfer Student' }]
                                 Only instructors who have completed Stripe onboarding
                                 are listed.
                             </p>
+                        </div>
+
+                        <div class="flex flex-col gap-2">
+                            <Label for="reason">Reason for transfer</Label>
+                            <select
+                                id="reason"
+                                v-model="selectedReason"
+                                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            >
+                                <option value="" disabled>
+                                    Select a reason...
+                                </option>
+                                <option
+                                    v-for="reason in props.reasons"
+                                    :key="reason.value"
+                                    :value="reason.value"
+                                >
+                                    {{ reason.label }}
+                                </option>
+                            </select>
+                            <p class="text-xs text-muted-foreground">
+                                Recorded in the audit trail along with the staff
+                                member who actioned the transfer.
+                            </p>
+                        </div>
+
+                        <div class="flex flex-col gap-2">
+                            <Label for="notes">Why? (optional)</Label>
+                            <Textarea
+                                id="notes"
+                                v-model="notes"
+                                rows="3"
+                                maxlength="1000"
+                                placeholder="Add any extra detail about why this transfer is happening..."
+                            />
                         </div>
 
                         <div class="flex items-center gap-3">

@@ -175,8 +175,8 @@ class InstructorService extends BaseService
                 'onboarding_complete' => false,
                 'charges_enabled' => false,
                 'payouts_enabled' => false,
+                'transmission_type' => $data['transmission_type'] ?? null,
                 'meta' => [
-                    'transmission_type' => $data['transmission_type'] ?? null,
                     'avatar' => 'https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-'.$avatarNumber.'.jpg',
                 ],
             ]);

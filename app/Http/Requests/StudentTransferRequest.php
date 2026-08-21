@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Enums\TransferReason;
 use App\Models\Instructor;
 use App\Models\Student;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StudentTransferRequest extends FormRequest
 {
@@ -24,6 +26,8 @@ class StudentTransferRequest extends FormRequest
         return [
             'student_id' => ['required', 'integer', 'exists:students,id'],
             'destination_instructor_id' => ['required', 'integer', 'exists:instructors,id'],
+            'reason' => ['required', 'string', Rule::enum(TransferReason::class)],
+            'notes' => ['nullable', 'string', 'max:1000'],
         ];
     }
 
@@ -37,6 +41,9 @@ class StudentTransferRequest extends FormRequest
             'student_id.exists' => 'Selected student could not be found.',
             'destination_instructor_id.required' => 'Please select a destination instructor.',
             'destination_instructor_id.exists' => 'Selected instructor could not be found.',
+            'reason.required' => 'Please select a reason for the transfer.',
+            'reason.enum' => 'Selected transfer reason is not valid.',
+            'notes.max' => 'The explanation must be 1,000 characters or fewer.',
         ];
     }
 

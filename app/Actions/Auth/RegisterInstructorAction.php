@@ -37,9 +37,7 @@ class RegisterInstructorAction
                 'payouts_enabled' => false,
                 'rating' => 4,
                 'priority' => false,
-                'meta' => [
-                    'transmission_type' => $data['transmission_type'] ?? null,
-                ],
+                'transmission_type' => $data['transmission_type'] ?? null,
             ]);
 
             return [

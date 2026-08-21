@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Actions\Student\Transfer\ExecuteStudentTransferAction;
+use App\Enums\TransferReason;
 use App\Actions\Student\Transfer\GetOnboardedInstructorsAction;
 use App\Actions\Student\Transfer\GetTransferableStudentsAction;
 use App\Models\Instructor;
@@ -46,8 +47,13 @@ class StudentTransferService extends BaseService
      *     clashing_lessons: Collection<int, Lesson>,
      * }
      */
-    public function transferStudent(Student $student, Instructor $destination, User $admin): array
-    {
-        return ($this->executeTransfer)($student, $destination, $admin);
+    public function transferStudent(
+        Student $student,
+        Instructor $destination,
+        User $admin,
+        TransferReason $reason,
+        ?string $notes = null,
+    ): array {
+        return ($this->executeTransfer)($student, $destination, $admin, $reason, $notes);
     }
 }

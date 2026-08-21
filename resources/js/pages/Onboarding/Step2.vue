@@ -70,7 +70,7 @@
                   <div class="space-y-3">
                     <!-- Priority Instructor Card -->
                     <Card
-                      v-for="instructor in filteredInstructors"
+                      v-for="instructor in displayedInstructors"
                       :key="instructor.id"
                       :class="[
                         'cursor-pointer transition-all relative overflow-hidden',
@@ -108,6 +108,7 @@
                                 <div class="flex-1">
                                   <div class="flex items-center space-x-2">
                                     <h4 class="font-semibold text-base">{{ instructor.name }}</h4>
+                                    <!-- Info icon hidden for now
                                     <Button
                                       @click.stop="showInstructorInfo(instructor)"
                                       variant="ghost"
@@ -116,7 +117,9 @@
                                     >
                                       <Info class="h-4 w-4" />
                                     </Button>
+                                    -->
                                   </div>
+                                  <!-- Rating stars hidden for now
                                   <div class="flex items-center space-x-2 mt-1">
                                     <div class="flex items-center">
                                       <div class="flex">
@@ -130,9 +133,11 @@
                                       <span class="text-xs ml-1">{{ instructor.rating }}</span>
                                     </div>
                                   </div>
+                                  -->
+
                                   <div class="flex items-center space-x-1 mt-1">
                                     <Badge
-                                      v-for="transmission in instructor.transmissions"
+                                      v-for="transmission in transmissionsFor(instructor)"
                                       :key="transmission"
                                       variant="secondary"
                                       class="text-xs"
@@ -210,13 +215,13 @@
                   </div>
 
                   <!-- Load More -->
-                  <div v-if="filteredInstructors.length > 0" class="mt-4 text-center">
+                  <div v-if="filteredInstructors.length > visibleCount" class="mt-4 text-center">
                     <Button
                       @click="loadMoreInstructors"
                       variant="link"
-                      :disabled="loadingMore"
                     >
-                      {{ loadingMore ? 'Loading...' : 'Load more instructors' }}
+                      <ChevronDown class="mr-1 h-4 w-4" />
+                      Load more instructors ({{ filteredInstructors.length - visibleCount }} more)
                     </Button>
                   </div>
                 </div>
@@ -381,6 +386,7 @@ import {
   Star,
   Calendar,
   Check,
+  ChevronDown,
   Clock,
   TrendingUp,
   Users,
@@ -406,11 +412,13 @@ const props = defineProps({
 
 const page = usePage()
 
+const INITIAL_VISIBLE_COUNT = 5
+
 const selectedInstructor = ref(null)
 const selectedTransmission = ref('all')
 const showModal = ref(false)
 const modalInstructor = ref(null)
-const loadingMore = ref(false)
+const visibleCount = ref(INITIAL_VISIBLE_COUNT)
 
 const form = useForm({
   instructor_id: null
@@ -434,9 +442,21 @@ const filteredInstructors = computed(() => {
     return instructors.value
   }
   return instructors.value.filter(instructor =>
-    instructor.transmissions && instructor.transmissions.includes(selectedTransmission.value)
+    instructor.transmission_type === selectedTransmission.value ||
+    instructor.transmission_type === 'both'
   )
 })
+
+const displayedInstructors = computed(() =>
+  filteredInstructors.value.slice(0, visibleCount.value)
+)
+
+function transmissionsFor(instructor): string[] {
+  if (instructor.transmission_type === 'both') {
+    return ['manual', 'automatic']
+  }
+  return instructor.transmission_type ? [instructor.transmission_type] : []
+}
 
 function getInitials(name: string): string {
   return name
@@ -449,11 +469,19 @@ function getInitials(name: string): string {
 
 function setTransmissionFilter(filter) {
   selectedTransmission.value = filter
+  visibleCount.value = INITIAL_VISIBLE_COUNT
 }
 
 function selectInstructor(instructorId) {
   selectedInstructor.value = instructorId
   form.instructor_id = instructorId
+
+  // Selecting from a map pin can target an instructor beyond the visible
+  // list slice — expand the list so the selected card is on screen
+  const index = filteredInstructors.value.findIndex(i => i.id === instructorId)
+  if (index >= visibleCount.value) {
+    visibleCount.value = index + 1
+  }
 
   // Show success toast using Sonner
   toast({ title: 'Instructor selected', description: 'You can continue to the next step' })
@@ -465,10 +493,7 @@ function showInstructorInfo(instructor) {
 }
 
 function loadMoreInstructors() {
-  loadingMore.value = true
-  setTimeout(() => {
-    loadingMore.value = false
-  }, 1000)
+  visibleCount.value += INITIAL_VISIBLE_COUNT
 }
 
 function onMapLoaded() {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Student\Transfer;
 
+use App\Enums\TransferReason;
 use App\Models\Calendar;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
@@ -38,8 +39,13 @@ class ExecuteStudentTransferAction
      *     clashing_lessons: Collection<int, Lesson>,
      * }
      */
-    public function __invoke(Student $student, Instructor $destination, User $admin): array
-    {
+    public function __invoke(
+        Student $student,
+        Instructor $destination,
+        User $admin,
+        TransferReason $reason,
+        ?string $notes = null,
+    ): array {
         $sourceInstructor = $student->instructor()->with('user')->first();
 
         if (! $sourceInstructor) {
@@ -97,6 +103,10 @@ class ExecuteStudentTransferAction
             'from_instructor_id' => $sourceInstructor->id,
             'to_instructor_id' => $destination->id,
             'transferred_by_user_id' => $admin->id,
+            'transferred_by_name' => $admin->name,
+            'reason' => $reason->value,
+            'reason_label' => $reason->label(),
+            'notes' => $notes,
             'affected_lesson_ids' => $futureLessons->pluck('id')->all(),
             'clashing_lesson_ids' => $clashingLessons->pluck('id')->all(),
         ];
@@ -104,21 +114,23 @@ class ExecuteStudentTransferAction
         $studentDisplayName = trim("{$student->first_name} {$student->surname}") ?: ($student->email ?? "Student #{$student->id}");
         $sourceName = $sourceInstructor->name ?? "Instructor #{$sourceInstructor->id}";
         $destinationName = $destination->name ?? "Instructor #{$destination->id}";
+        $actionedBy = $admin->name ?? "User #{$admin->id}";
+        $auditSuffix = " by {$actionedBy}. Reason: {$reason->label()}".($notes !== null && $notes !== '' ? " — {$notes}" : '');
 
         $student->logActivity(
-            "Transferred from {$sourceName} to {$destinationName}",
+            "Transferred from {$sourceName} to {$destinationName}{$auditSuffix}",
             'instructor_transfer',
             $metadata,
         );
 
         $sourceInstructor->logActivity(
-            "Student {$studentDisplayName} transferred to {$destinationName}",
+            "Student {$studentDisplayName} transferred to {$destinationName}{$auditSuffix}",
             'student_lost',
             $metadata,
         );
 
         $destination->logActivity(
-            "Student {$studentDisplayName} transferred from {$sourceName}",
+            "Student {$studentDisplayName} transferred from {$sourceName}{$auditSuffix}",
             'student_gained',
             $metadata,
         );
