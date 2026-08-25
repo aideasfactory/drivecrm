@@ -25,17 +25,17 @@ class StudentTransferService extends BaseService
     /**
      * @return Collection<int, Student>
      */
-    public function getTransferableStudents(): Collection
+    public function getTransferableStudents(?string $search = null, ?int $limit = null): Collection
     {
-        return ($this->getTransferableStudents)();
+        return ($this->getTransferableStudents)($search, $limit);
     }
 
     /**
      * @return Collection<int, Instructor>
      */
-    public function getOnboardedInstructors(): Collection
+    public function getOnboardedInstructors(?string $search = null, ?int $limit = null): Collection
     {
-        return ($this->getOnboardedInstructors)();
+        return ($this->getOnboardedInstructors)($search, $limit);
     }
 
     /**

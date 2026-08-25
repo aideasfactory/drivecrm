@@ -388,6 +388,10 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
     Route::middleware([EnsureOwner::class])->group(function () {
         Route::get('/student-transfers', [StudentTransferController::class, 'index'])
             ->name('student-transfers.index');
+        Route::get('/student-transfers/search-students', [StudentTransferController::class, 'searchStudents'])
+            ->name('student-transfers.search-students');
+        Route::get('/student-transfers/search-instructors', [StudentTransferController::class, 'searchInstructors'])
+            ->name('student-transfers.search-instructors');
         Route::post('/student-transfers', [StudentTransferController::class, 'store'])
             ->name('student-transfers.store');
     });

@@ -6,44 +6,62 @@ namespace App\Http\Controllers;
 
 use App\Enums\TransferReason;
 use App\Http\Requests\StudentTransferRequest;
+use App\Http\Requests\StudentTransferSearchRequest;
 use App\Models\Instructor;
 use App\Models\Student;
 use App\Services\StudentTransferService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class StudentTransferController extends Controller
 {
+    protected const SEARCH_RESULT_LIMIT = 25;
+
     public function __construct(
         protected StudentTransferService $studentTransferService,
     ) {}
 
     public function index(): Response
     {
-        $students = $this->studentTransferService->getTransferableStudents()
+        return Inertia::render('StudentTransfers/Index', [
+            'hasStudents' => $this->studentTransferService->getTransferableStudents(limit: 1)->isNotEmpty(),
+            'hasInstructors' => $this->studentTransferService->getOnboardedInstructors(limit: 1)->isNotEmpty(),
+            'reasons' => TransferReason::options(),
+        ]);
+    }
+
+    public function searchStudents(StudentTransferSearchRequest $request): JsonResponse
+    {
+        $students = $this->studentTransferService
+            ->getTransferableStudents($request->validated('q'), self::SEARCH_RESULT_LIMIT)
             ->map(fn (Student $student) => [
                 'id' => $student->id,
                 'name' => trim("{$student->first_name} {$student->surname}"),
                 'email' => $student->email,
+                'phone' => $student->phone,
                 'current_instructor_id' => $student->instructor_id,
                 'current_instructor_name' => $student->instructor?->name,
             ])
             ->values();
 
-        $instructors = $this->studentTransferService->getOnboardedInstructors()
+        return response()->json(['students' => $students]);
+    }
+
+    public function searchInstructors(StudentTransferSearchRequest $request): JsonResponse
+    {
+        $instructors = $this->studentTransferService
+            ->getOnboardedInstructors($request->validated('q'), self::SEARCH_RESULT_LIMIT)
             ->map(fn (Instructor $instructor) => [
                 'id' => $instructor->id,
                 'name' => $instructor->name,
                 'email' => $instructor->user?->email,
+                'phone' => $instructor->phone,
             ])
             ->values();
 
-        return Inertia::render('StudentTransfers/Index', [
-            'students' => $students,
-            'instructors' => $instructors,
-            'reasons' => TransferReason::options(),
-        ]);
+        return response()->json(['instructors' => $instructors]);
     }
 
     public function store(StudentTransferRequest $request): RedirectResponse

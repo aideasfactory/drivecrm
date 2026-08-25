@@ -7,20 +7,14 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/sonner'
+import TransferSearchSelect, {
+    type TransferSearchOption,
+} from '@/components/StudentTransfers/TransferSearchSelect.vue'
 import { ArrowRightLeft, CheckCircle2, Loader2, X } from 'lucide-vue-next'
 
-interface StudentOption {
-    id: number
-    name: string
-    email: string | null
+interface StudentOption extends TransferSearchOption {
     current_instructor_id: number | null
     current_instructor_name: string | null
-}
-
-interface InstructorOption {
-    id: number
-    name: string
-    email: string | null
 }
 
 interface ReasonOption {
@@ -29,40 +23,40 @@ interface ReasonOption {
 }
 
 interface Props {
-    students: StudentOption[]
-    instructors: InstructorOption[]
+    hasStudents: boolean
+    hasInstructors: boolean
     reasons: ReasonOption[]
 }
 
 const props = defineProps<Props>()
 
-const selectedStudentId = ref<number | ''>('')
-const selectedInstructorId = ref<number | ''>('')
+const selectedStudent = ref<StudentOption | null>(null)
+const selectedInstructor = ref<TransferSearchOption | null>(null)
 const selectedReason = ref<string>('')
 const notes = ref('')
 const submitting = ref(false)
 const lastTransferMessage = ref<string | null>(null)
 
-const selectedStudent = computed(() =>
-    props.students.find((s) => s.id === selectedStudentId.value),
-)
-
-const availableInstructors = computed(() => {
-    if (!selectedStudent.value) {
-        return props.instructors
-    }
-    return props.instructors.filter(
-        (i) => i.id !== selectedStudent.value!.current_instructor_id,
-    )
-})
-
 const canSubmit = computed(
     () =>
-        selectedStudentId.value !== '' &&
-        selectedInstructorId.value !== '' &&
+        selectedStudent.value !== null &&
+        selectedInstructor.value !== null &&
         selectedReason.value !== '' &&
         !submitting.value,
 )
+
+const handleStudentSelected = (option: TransferSearchOption | null) => {
+    selectedStudent.value = option as StudentOption | null
+
+    if (
+        option &&
+        selectedInstructor.value &&
+        selectedInstructor.value.id ===
+            (option as StudentOption).current_instructor_id
+    ) {
+        selectedInstructor.value = null
+    }
+}
 
 const handleSubmit = () => {
     if (!canSubmit.value) return
@@ -72,8 +66,8 @@ const handleSubmit = () => {
     router.post(
         '/student-transfers',
         {
-            student_id: selectedStudentId.value,
-            destination_instructor_id: selectedInstructorId.value,
+            student_id: selectedStudent.value!.id,
+            destination_instructor_id: selectedInstructor.value!.id,
             reason: selectedReason.value,
             notes: notes.value.trim() || null,
         },
@@ -84,8 +78,8 @@ const handleSubmit = () => {
                 const message = flash.success ?? 'Transfer complete.'
                 toast.success(message)
                 lastTransferMessage.value = message
-                selectedStudentId.value = ''
-                selectedInstructorId.value = ''
+                selectedStudent.value = null
+                selectedInstructor.value = null
                 selectedReason.value = ''
                 notes.value = ''
             },
@@ -153,22 +147,14 @@ const breadcrumbs = [{ title: 'Transfer Student' }]
                     >
                         <div class="flex flex-col gap-2">
                             <Label for="student">Student</Label>
-                            <select
-                                id="student"
-                                v-model="selectedStudentId"
-                                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                            >
-                                <option value="" disabled>
-                                    Select a student...
-                                </option>
-                                <option
-                                    v-for="student in props.students"
-                                    :key="student.id"
-                                    :value="student.id"
-                                >
-                                    {{ student.name }}<template v-if="student.email"> ({{ student.email }})</template>
-                                </option>
-                            </select>
+                            <TransferSearchSelect
+                                input-id="student"
+                                endpoint="/student-transfers/search-students"
+                                results-key="students"
+                                placeholder="Search by name, email or phone..."
+                                :model-value="selectedStudent"
+                                @update:model-value="handleStudentSelected"
+                            />
                             <p
                                 v-if="selectedStudent"
                                 class="text-xs text-muted-foreground"
@@ -182,31 +168,23 @@ const breadcrumbs = [{ title: 'Transfer Student' }]
                                 v-else
                                 class="text-xs text-muted-foreground"
                             >
-                                Only students with a current instructor are listed.
+                                Only students with a current instructor can be found.
                             </p>
                         </div>
 
                         <div class="flex flex-col gap-2">
                             <Label for="destination">Transfer to instructor</Label>
-                            <select
-                                id="destination"
-                                v-model="selectedInstructorId"
-                                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                            >
-                                <option value="" disabled>
-                                    Select an instructor...
-                                </option>
-                                <option
-                                    v-for="instructor in availableInstructors"
-                                    :key="instructor.id"
-                                    :value="instructor.id"
-                                >
-                                    {{ instructor.name }}<template v-if="instructor.email"> ({{ instructor.email }})</template>
-                                </option>
-                            </select>
+                            <TransferSearchSelect
+                                input-id="destination"
+                                endpoint="/student-transfers/search-instructors"
+                                results-key="instructors"
+                                placeholder="Search by name, email or phone..."
+                                v-model="selectedInstructor"
+                                :exclude-id="selectedStudent?.current_instructor_id"
+                            />
                             <p class="text-xs text-muted-foreground">
                                 Only instructors who have completed Stripe onboarding
-                                are listed.
+                                can be found.
                             </p>
                         </div>
 
@@ -264,7 +242,7 @@ const breadcrumbs = [{ title: 'Transfer Student' }]
             </Card>
 
             <div
-                v-if="props.students.length === 0"
+                v-if="!props.hasStudents"
                 class="rounded-md border border-dashed p-8 text-center max-w-2xl"
             >
                 <p class="text-muted-foreground">
@@ -273,7 +251,7 @@ const breadcrumbs = [{ title: 'Transfer Student' }]
             </div>
 
             <div
-                v-else-if="props.instructors.length === 0"
+                v-else-if="!props.hasInstructors"
                 class="rounded-md border border-dashed p-8 text-center max-w-2xl"
             >
                 <p class="text-muted-foreground">
