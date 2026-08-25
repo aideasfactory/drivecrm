@@ -30,6 +30,7 @@ use App\Http\Requests\StoreInstructorRequest;
 use App\Http\Requests\StoreLocationRequest;
 use App\Http\Requests\StorePackageRequest;
 use App\Http\Requests\UpdateCalendarItemRequest;
+use App\Http\Requests\UpdateInstructorPriceUpliftRequest;
 use App\Http\Requests\UpdateInstructorRequest;
 use App\Jobs\CreateDefaultInstructorPackageJob;
 use App\Models\CalendarItem;
@@ -44,6 +45,7 @@ use App\Models\Student;
 use App\Models\User;
 use App\Services\HmrcService;
 use App\Services\InstructorService;
+use App\Services\PriceUpliftService;
 use App\Services\StripeService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -63,6 +65,7 @@ class InstructorController extends Controller
         protected StripeService $stripeService,
         protected HmrcService $hmrc,
         protected MoveLessonAndFutureSiblingsAction $moveLessonAndFutureSiblings,
+        protected PriceUpliftService $priceUpliftService,
     ) {}
 
     /**
@@ -385,6 +388,7 @@ class InstructorController extends Controller
         $packages = $this->instructorService->getPackages($instructor);
 
         return response()->json([
+            'price_uplift_pence' => $instructor->price_uplift_pence,
             'packages' => $packages->map(fn (Package $package) => [
                 'id' => $package->id,
                 'name' => $package->name,
@@ -475,6 +479,22 @@ class InstructorController extends Controller
 
         return response()->json([
             'message' => 'Location removed successfully.',
+        ]);
+    }
+
+    /**
+     * Set the instructor's per-lesson Drive package price uplift (owner only).
+     */
+    public function updatePriceUplift(UpdateInstructorPriceUpliftRequest $request, Instructor $instructor): JsonResponse
+    {
+        $updated = $this->priceUpliftService->updateForInstructor(
+            $instructor,
+            (int) round((float) $request->validated('price_uplift') * 100),
+        );
+
+        return response()->json([
+            'message' => 'Price uplift updated.',
+            'price_uplift_pence' => $updated->price_uplift_pence,
         ]);
     }
 

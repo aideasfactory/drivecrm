@@ -1,0 +1,27 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Per-lesson uplift (pence) applied to Drive platform package prices
+     * during website onboarding when this instructor is selected at step 2.
+     * 0 = base pricing; negative values discount.
+     */
+    public function up(): void
+    {
+        Schema::table('instructors', function (Blueprint $table) {
+            $table->integer('price_uplift_pence')->default(0)->after('priority');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('instructors', function (Blueprint $table) {
+            $table->dropColumn('price_uplift_pence');
+        });
+    }
+};

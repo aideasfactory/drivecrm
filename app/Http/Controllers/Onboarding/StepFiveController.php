@@ -10,6 +10,7 @@ use App\Models\CalendarItem;
 use App\Models\Instructor;
 use App\Models\Location;
 use App\Models\Package;
+use App\Services\PriceUpliftService;
 use App\Support\Fees;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -17,6 +18,10 @@ use Inertia\Inertia;
 
 class StepFiveController extends Controller
 {
+    public function __construct(
+        protected PriceUpliftService $priceUpliftService,
+    ) {}
+
     public function show(Request $request)
     {
         $enquiry = $request->get('enquiry');
@@ -34,10 +39,18 @@ class StepFiveController extends Controller
             $instructor = Instructor::with('user')->find($step2['instructor_id']);
         }
 
-        // Load package
+        // Load package (instructor uplift applied in-memory so all price
+        // accessors reflect the uplifted price shown at Step 3)
         $package = null;
         if (! empty($step3['package_id'])) {
             $package = Package::find($step3['package_id']);
+
+            if ($package) {
+                $this->priceUpliftService->applyUpliftToPackage(
+                    $package,
+                    $this->priceUpliftService->upliftForEnquiry($enquiry),
+                );
+            }
         }
 
         // Load calendar item for lesson time

@@ -1310,6 +1310,29 @@ UUID-based discount codes for the onboarding flow. Each code maps to a percentag
 
 ---
 
+### 29a. Per-Instructor Price Uplift (replaces the dropped `area_pricing` table)
+
+Customer feedback (2026-08-25) replaced postcode/transmission area pricing with a single **per-instructor, per-lesson uplift**. The `area_pricing` table was dropped (`2026_08_25_drop_area_pricing_table`).
+
+**Instructors Table — added field:**
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `price_uplift_pence` | int | DEFAULT 0 | Per-lesson uplift (pence) added to Drive platform package prices during website onboarding when this instructor is selected at Step 2. 0 = base pricing; negative = discount. |
+
+**Orders Table — added field (replaces `area_outcode`/`area_premium_pence`):**
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `price_uplift_pence` | int | DEFAULT 0 | Per-lesson uplift applied at purchase (snapshot; already included in `package_total_price_pence`) |
+
+**Business Logic:**
+- Resolved from the enquiry's Step 2 `instructor_id` (`ResolveEnquiryPriceUpliftAction`); applied at onboarding Steps 3/5/6 display and snapshotted onto the order (`CreateOrderFromEnquiryAction`) — Stripe charges the order total via `price_data`, so the charge follows the snapshot.
+- Uplift applies ONLY to Drive platform packages bought through website onboarding. Instructor bespoke packages — the only packages students buy in-app — are NEVER uplifted; `PriceUpliftService::applyUpliftToPackage()` and `CreateOrderFromEnquiryAction` guard on package type.
+- Managed on the instructor Details → Packages sub-tab (owner-only, `PUT /instructors/{id}/price-uplift`).
+
+---
+
 ### 30. **lesson_reminders**
 
 Idempotency/control table for scheduled reminder notifications (miles + payment-due). One row per `(lesson_id, type)` records that a given reminder has been dispatched, so the `reminders:send` scheduled command never sends the same reminder twice — even after downtime, the unique key guarantees at-most-once delivery. Audit history is still written separately to `activity_logs`; this table holds delivery *state* only.

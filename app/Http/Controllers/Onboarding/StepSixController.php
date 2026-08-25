@@ -16,6 +16,7 @@ use App\Models\Instructor;
 use App\Models\Order;
 use App\Models\Package;
 use App\Services\OrderService;
+use App\Services\PriceUpliftService;
 use App\Services\StripeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,7 +34,8 @@ class StepSixController extends Controller
         protected CreateUserAndStudentFromEnquiryAction $createUserAndStudentAction,
         protected CreateOrderFromEnquiryAction $createOrderAction,
         protected SendOrderConfirmationEmailAction $sendEmailAction,
-        protected OrderService $orderService
+        protected OrderService $orderService,
+        protected PriceUpliftService $priceUpliftService
     ) {}
 
     /**
@@ -67,6 +69,13 @@ class StepSixController extends Controller
                 ->route('onboarding.step3', ['uuid' => $enquiry->id])
                 ->with('error', 'Please select a package first.');
         }
+
+        // Instructor uplift applied in-memory so all price accessors reflect
+        // the uplifted price shown at Step 3
+        $this->priceUpliftService->applyUpliftToPackage(
+            $package,
+            $this->priceUpliftService->upliftForEnquiry($enquiry),
+        );
 
         // Calculate pricing (in pounds for display)
         $packagePrice = $package->total_price;

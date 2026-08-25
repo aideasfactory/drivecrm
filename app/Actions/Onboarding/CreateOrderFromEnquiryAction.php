@@ -28,6 +28,10 @@ use Illuminate\Support\Facades\Log;
 
 class CreateOrderFromEnquiryAction
 {
+    public function __construct(
+        protected ResolveEnquiryPriceUpliftAction $resolveEnquiryPriceUplift,
+    ) {}
+
     /**
      * Create order with scheduled lessons from enquiry data.
      *
@@ -56,13 +60,19 @@ class CreateOrderFromEnquiryAction
             $bookingFeePence = Fees::bookingFeePence();
             $digitalFeePence = Fees::digitalFeeTotalPence($package->lessons_count);
 
-            // Apply discount to base package price if present
-            $packagePricePence = $package->total_price_pence;
-            $lessonPricePence = $package->lesson_price_pence;
+            // Apply the selected instructor's per-lesson price uplift to the
+            // base package price, then any discount on top. Only Drive
+            // platform packages are ever uplifted — instructor bespoke
+            // packages always sell at their own price.
+            $priceUpliftPence = $package->isPlatformPackage()
+                ? ($this->resolveEnquiryPriceUplift)($enquiry)
+                : 0;
+            $packagePricePence = $package->total_price_pence + ($priceUpliftPence * $package->lessons_count);
+            $lessonPricePence = $package->lesson_price_pence + $priceUpliftPence;
 
             if ($discount) {
                 $discountMultiplier = 1 - ($discount['percentage'] / 100);
-                $packagePricePence = (int) round($package->total_price_pence * $discountMultiplier);
+                $packagePricePence = (int) round($packagePricePence * $discountMultiplier);
                 $lessonPricePence = (int) floor($packagePricePence / $package->lessons_count);
             }
 
@@ -78,6 +88,7 @@ class CreateOrderFromEnquiryAction
                 'package_total_price_pence' => $packagePricePence,
                 'package_lesson_price_pence' => $lessonPricePence,
                 'package_lessons_count' => $package->lessons_count,
+                'price_uplift_pence' => $priceUpliftPence,
                 'booking_fee_pence' => $bookingFeePence,
                 'digital_fee_pence' => $digitalFeePence,
                 'total_price_pence' => $totalPricePence,

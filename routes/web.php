@@ -102,6 +102,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
     // Coverage area mutations and CSV import/export are admin (owner) only.
     // Instructors can still view their own coverage via the GET above.
     Route::middleware([EnsureOwner::class])->group(function () {
+        Route::put('/instructors/{instructor}/price-uplift', [InstructorController::class, 'updatePriceUplift'])
+            ->name('instructors.price-uplift.update');
         Route::post('/instructors/{instructor}/locations', [InstructorController::class, 'storeLocation'])
             ->name('instructors.locations.store');
         Route::delete('/instructors/{instructor}/locations/{location}', [InstructorController::class, 'destroyLocation'])

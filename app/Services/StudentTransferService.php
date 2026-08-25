@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Actions\Student\Transfer\ExecuteStudentTransferAction;
-use App\Enums\TransferReason;
 use App\Actions\Student\Transfer\GetOnboardedInstructorsAction;
 use App\Actions\Student\Transfer\GetTransferableStudentsAction;
+use App\Enums\TransferReason;
 use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Student;

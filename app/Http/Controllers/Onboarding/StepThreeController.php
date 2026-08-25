@@ -6,11 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Onboarding\StepThreeRequest;
 use App\Models\Instructor;
 use App\Models\Package;
+use App\Services\PriceUpliftService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class StepThreeController extends Controller
 {
+    public function __construct(
+        protected PriceUpliftService $priceUpliftService,
+    ) {}
+
     public function show(Request $request)
     {
         $enquiry = $request->get('enquiry');
@@ -43,6 +48,11 @@ class StepThreeController extends Controller
             }
         }
 
+        // Per-instructor price uplift: the instructor chosen at step 2 may
+        // carry a per-lesson uplift, applied in-memory so every price
+        // accessor reflects the uplifted price.
+        $uplift = $this->priceUpliftService->upliftForEnquiry($enquiry);
+
         // Only Drive packages (no instructor_id) are offered during onboarding —
         // instructor-owned packages must never appear here, even when an
         // instructor was selected in step 2. Intro offers first, then by size.
@@ -52,7 +62,9 @@ class StepThreeController extends Controller
             ->sortByDesc('is_intro_offer')
             ->sortBy('hours_total')
             ->values()
-            ->map(function ($package) {
+            ->map(function ($package) use ($uplift) {
+                $this->priceUpliftService->applyUpliftToPackage($package, $uplift);
+
                 return [
                     'id' => $package->id,
                     'name' => $package->name,
