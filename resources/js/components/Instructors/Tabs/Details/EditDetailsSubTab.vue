@@ -18,9 +18,10 @@ import {
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Edit, Package as PackageIcon, Plus, PackagePlus, PackageOpen, TrendingUp, Loader2 } from 'lucide-vue-next'
+import { Edit, Package as PackageIcon, Plus, PackagePlus, PackageOpen, TrendingUp, Loader2, ShieldAlert } from 'lucide-vue-next'
 import { useRole } from '@/composables/useRole'
 import PackageForm, { type PackageFormData } from '@/components/Instructors/PackageForm.vue'
 import type { Package } from '@/types/instructor'
@@ -163,12 +164,16 @@ const savePackage = async (formData: PackageFormData) => {
 
 <template>
     <div class="space-y-6">
-        <!-- Drive Package Uplift (owner only) -->
-        <Card v-if="isOwner">
+        <!-- Drive Package Uplift (owner only — never rendered for other roles) -->
+        <Card v-if="isOwner" class="border-destructive/40">
             <CardHeader class="flex flex-row items-center justify-between">
                 <CardTitle class="flex items-center gap-2">
                     <TrendingUp class="h-5 w-5" />
                     Drive Package Uplift
+                    <Badge variant="destructive" class="ml-1 gap-1">
+                        <ShieldAlert class="h-3 w-3" />
+                        Owner only
+                    </Badge>
                 </CardTitle>
                 <Button @click="openUpliftSheet" size="sm" variant="outline" :disabled="loading">
                     <Edit class="mr-2 h-4 w-4" />
@@ -185,7 +190,8 @@ const savePackage = async (formData: PackageFormData) => {
                     <p class="text-sm text-muted-foreground">
                         Added to Drive package prices when a learner selects this
                         instructor during website signup. Bespoke packages below are
-                        never affected. £0.00 = base pricing.
+                        never affected. £0.00 = base pricing. Only owners can see
+                        or change this — it is never shown to the instructor.
                     </p>
                 </div>
             </CardContent>

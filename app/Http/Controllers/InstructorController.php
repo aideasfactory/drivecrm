@@ -383,12 +383,15 @@ class InstructorController extends Controller
     /**
      * Get instructor's packages (both platform and bespoke).
      */
-    public function packages(Instructor $instructor): JsonResponse
+    public function packages(Request $request, Instructor $instructor): JsonResponse
     {
         $packages = $this->instructorService->getPackages($instructor);
 
         return response()->json([
-            'price_uplift_pence' => $instructor->price_uplift_pence,
+            // Owner-only figure — never expose the uplift to other viewers
+            'price_uplift_pence' => $request->user()?->isOwner() === true
+                ? $instructor->price_uplift_pence
+                : null,
             'packages' => $packages->map(fn (Package $package) => [
                 'id' => $package->id,
                 'name' => $package->name,
