@@ -228,6 +228,10 @@ class GetDashboardMetricsAction
     }
 
     /**
+     * Revenue is money actually received in the window — paid lesson_payments
+     * (covers both modes: upfront orders create them as paid at checkout,
+     * weekly orders as each invoice is paid) — not order totals at booking.
+     *
      * @return array<int, array{id: int, name: string, revenue: int, lessons_completed: int}>
      */
     private function topInstructors(CarbonImmutable $thirtyDaysAgo): array
@@ -235,14 +239,8 @@ class GetDashboardMetricsAction
         return DB::table('instructors')
             ->select('instructors.id', 'users.name as instructor_name')
             ->join('users', 'users.id', '=', 'instructors.user_id')
-            ->leftJoin('orders', function ($join) use ($thirtyDaysAgo) {
-                $join->on('orders.instructor_id', '=', 'instructors.id')
-                    ->whereIn('orders.status', ['active', 'completed'])
-                    ->where('orders.created_at', '>=', $thirtyDaysAgo);
-            })
-            ->selectRaw('COALESCE(SUM(orders.total_price_pence), 0) as revenue')
+            ->selectRaw('(SELECT COALESCE(SUM(lesson_payments.amount_pence), 0) FROM lesson_payments INNER JOIN lessons ON lessons.id = lesson_payments.lesson_id WHERE lessons.instructor_id = instructors.id AND lesson_payments.status = "paid" AND lesson_payments.paid_at >= ?) as revenue', [$thirtyDaysAgo])
             ->selectRaw('(SELECT COUNT(*) FROM lessons WHERE lessons.instructor_id = instructors.id AND lessons.status = "completed" AND lessons.completed_at >= ?) as lessons_completed', [$thirtyDaysAgo])
-            ->groupBy('instructors.id', 'users.name')
             ->orderByDesc('revenue')
             ->limit(5)
             ->get()

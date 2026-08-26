@@ -389,14 +389,14 @@ const roleVariant = (role: string): 'default' | 'secondary' | 'outline' => {
                             <Trophy class="h-5 w-5" />
                             Top Instructors (30d)
                         </CardTitle>
-                        <CardDescription>By revenue from new orders</CardDescription>
+                        <CardDescription>By payments received in the last 30 days</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <Table>
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Instructor</TableHead>
-                                    <TableHead class="text-right">Revenue</TableHead>
+                                    <TableHead class="text-right">Received</TableHead>
                                     <TableHead class="text-right">Lessons</TableHead>
                                 </TableRow>
                             </TableHeader>
