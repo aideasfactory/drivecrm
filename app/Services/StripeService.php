@@ -708,6 +708,46 @@ class StripeService
     }
 
     /**
+     * Refund a Stripe charge (full or partial). Amount is in pence.
+     *
+     * @param  array<string, string>  $metadata
+     * @return array{success: bool, refund_id?: string, refund?: mixed, error?: string}
+     */
+    public function createRefund(string $chargeId, int $amountPence, array $metadata = [], ?string $idempotencyKey = null): array
+    {
+        try {
+            $options = [];
+
+            if ($idempotencyKey) {
+                $options['idempotency_key'] = $idempotencyKey;
+            }
+
+            $refund = $this->stripe->refunds->create([
+                'charge' => $chargeId,
+                'amount' => $amountPence,
+                'metadata' => $metadata,
+            ], $options);
+
+            return [
+                'success' => true,
+                'refund_id' => $refund->id,
+                'refund' => $refund,
+            ];
+        } catch (ApiErrorException $e) {
+            Log::error('Stripe refund failed', [
+                'charge_id' => $chargeId,
+                'amount_pence' => $amountPence,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
      * Get the raw Stripe client for advanced operations.
      */
     public function getClient(): StripeClient

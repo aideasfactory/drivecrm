@@ -49,6 +49,7 @@ use App\Actions\Shared\Message\SendBroadcastMessageAction;
 use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
 use App\Enums\MessageType;
 use App\Enums\RecurrencePattern;
+use App\Enums\RefundAction;
 use App\Enums\UserRole;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
@@ -460,11 +461,16 @@ class InstructorService extends BaseService
      * is handled inside the action.
      *
      * @param  bool  $applyToFutureInOrder  Also cancel future un-signed-off lessons in the same order.
-     * @return array{cancelled_count: int, refund_required_count: int}
+     * @return array{cancelled_count: int, refund_required_count: int, refunds_created_count: int, refunds_processed_count: int}
      */
-    public function cancelBooking(CalendarItem $calendarItem, string $reason, bool $applyToFutureInOrder, User $actor): array
-    {
-        return ($this->cancelBooking)($calendarItem, $reason, $applyToFutureInOrder, $actor);
+    public function cancelBooking(
+        CalendarItem $calendarItem,
+        string $reason,
+        bool $applyToFutureInOrder,
+        User $actor,
+        RefundAction $refundAction = RefundAction::REQUEST,
+    ): array {
+        return ($this->cancelBooking)($calendarItem, $reason, $applyToFutureInOrder, $actor, $refundAction);
     }
 
     /**

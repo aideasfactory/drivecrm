@@ -98,6 +98,11 @@ class Order extends Model
         return $this->hasManyThrough(LessonPayment::class, Lesson::class);
     }
 
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(Refund::class);
+    }
+
     /**
      * Check if order is active.
      */

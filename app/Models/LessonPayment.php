@@ -6,6 +6,7 @@ use App\Enums\PaymentStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class LessonPayment extends Model
 {
@@ -37,6 +38,14 @@ class LessonPayment extends Model
     public function lesson(): BelongsTo
     {
         return $this->belongsTo(Lesson::class);
+    }
+
+    /**
+     * Get the refund recorded for this payment, if any.
+     */
+    public function refund(): HasOne
+    {
+        return $this->hasOne(Refund::class);
     }
 
     /**

@@ -34,6 +34,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProgressTrackerController;
 use App\Http\Controllers\PupilController;
 use App\Http\Controllers\PushNotificationController;
+use App\Http\Controllers\RefundController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ResourceController;
 use App\Http\Controllers\StudentTransferController;
@@ -322,6 +323,15 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('reports.invoice-due');
     Route::get('/reports/invoice-due/export', [ReportController::class, 'exportInvoiceDue'])
         ->name('reports.invoice-due.export');
+
+    Route::middleware([EnsureOwner::class])->group(function () {
+        Route::get('/refunds', [RefundController::class, 'index'])
+            ->name('refunds.index');
+        Route::post('/refunds/{refund}/process', [RefundController::class, 'process'])
+            ->name('refunds.process');
+        Route::post('/refunds/{refund}/complete', [RefundController::class, 'complete'])
+            ->name('refunds.complete');
+    });
     // Push Notifications (Owner Only)
     Route::middleware([EnsureOwner::class])->group(function () {
         Route::get('/push-notifications', [PushNotificationController::class, 'index'])

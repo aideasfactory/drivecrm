@@ -69,7 +69,7 @@ class RefundRequiredNotification extends Notification implements ShouldQueue
             ->line('**Cancellation reason:**')
             ->line($this->reason)
             ->line('')
-            ->line('Please action the refund manually in Stripe. No automatic refund has been issued.')
+            ->line('Review and action these from the **Refunds** section of the admin dashboard. You can issue the refund through Stripe there, or mark it complete after refunding in Stripe by hand.')
             ->salutation('— '.config('app.name'));
 
         return $message;

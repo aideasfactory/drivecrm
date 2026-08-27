@@ -61,7 +61,7 @@ Users (1) ──┬── (1) Instructors ──┬── (Many) Packages
             │                     └── (Many) Contacts    │
             │                                            │
             └── (1) Students ──── (Many) Orders ──── (Many) Lessons ──┬── (1) LessonPayments
-                      │                  │              │              │
+                      │                  │              │              ├── (1) Refunds
                       │                  │              └──────────────┤
                       │                  │                             └── (1) Payouts
                       │                  │
@@ -116,8 +116,9 @@ Users (1) ──┬── (1) Instructors ──┬── (Many) Packages
    - Many-to-one with `orders` (parent order)
    - Many-to-one with `instructors` (who conducts)
    - Many-to-one with `calendar_items` (scheduled time slot)
-   - One-to-one with `lesson_payments` (payment tracking for weekly mode)
-   - One-to-one with `payouts` (instructor payout)
+  - One-to-one with `lesson_payments` (payment tracking for weekly mode)
+  - One-to-one with `refunds` (pending/completed refund for a cancelled paid lesson)
+  - One-to-one with `payouts` (instructor payout)
    - One-to-one with `reflective_logs` (student's reflective log)
    - Many-to-many with `resources` (via `lesson_resource` pivot)
 
@@ -164,7 +165,8 @@ User (role=instructor) → Instructor → Creates Packages
                                    → Has Notes (morphMany)
 
 User (role=student) → Student → Purchases Orders → Contains Lessons → Has LessonPayments
-                             → Assigned to Instructor                → Has Payouts
+                             → Assigned to Instructor                → Has Refunds
+                                                                     → Has Payouts
                              → Has ActivityLogs (morphMany)
                              → Has Contacts (morphMany)
                              → Has Notes (morphMany)
@@ -486,7 +488,7 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 - Scheduling information (date, start_time, end_time) can be set when booking lesson
 - Links to calendar_item for slot availability tracking
 - Instructor gets paid after lesson is completed
-- A booking (draft/reserved/booked lesson) can be cancelled from the instructor schedule: `status` → `cancelled`, `cancellation_reason` + `cancelled_at` set, and `calendar_item_id` nulled so the lesson is retained for history while its calendar slot is freed. Cancellation never touches `completed` lessons or lessons with a `Payout`
+- A booking (draft/reserved/booked lesson) can be cancelled from the instructor schedule: `status` → `cancelled`, `cancellation_reason` + `cancelled_at` set, and `calendar_item_id` nulled so the lesson is retained for history while its calendar slot is freed. Cancellation never touches `completed` lessons or lessons with a `Payout`. When the cancelled lesson had been paid, a `refunds` row is created (unless staff chose "don't refund") so Head Office can review it on `/refunds` — either issuing the Stripe refund from the CRM or marking it complete after refunding in Stripe by hand.
 - `summary` is written by the instructor at sign-off time; used by AI (AWS Bedrock Nova) to match against resource tags and recommend relevant videos/PDFs to the student
 - `mileage` is recorded by the instructor after the lesson is completed, via the schedule view
 - `student_lesson_number` is assigned at lesson creation time inside the order's transaction. Computed as `MAX(student_lesson_number) + 1` over the student's existing lessons (across all orders), with `lockForUpdate()` on the existing rows to serialise concurrent same-student order creations. Numbers are immutable after assignment — a cancelled or cleaned-up draft lesson keeps its number, so gaps in the sequence are expected and intentional
@@ -523,6 +525,55 @@ Tracks payment status for individual lessons (used in weekly payment mode).
 - Created for each lesson in weekly payment mode
 - Weekly payments are charged via Stripe Subscriptions/Invoices
 - Payment must be completed before lesson can be marked as completed
+- Status moves to `refunded` when a linked `refunds` row is completed (Stripe refund from the admin dashboard, or marked complete after a manual Stripe refund)
+
+---
+
+### 7a. **refunds**
+
+Admin paper trail for refunds requested when a paid lesson is cancelled. Learners cannot self-cancel; staff cancel from the instructor diary. One refund per lesson.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique refund identifier |
+| `lesson_id` | bigint unsigned | FOREIGN KEY (lessons.id), UNIQUE, ON DELETE CASCADE | Cancelled lesson this refund is for |
+| `order_id` | bigint unsigned | FOREIGN KEY (orders.id), NULLABLE, ON DELETE SET NULL | Parent order |
+| `lesson_payment_id` | bigint unsigned | FOREIGN KEY (lesson_payments.id), NULLABLE, ON DELETE SET NULL | Weekly lesson payment being refunded (null for upfront) |
+| `student_id` | bigint unsigned | FOREIGN KEY (students.id), NULLABLE, ON DELETE SET NULL | Learner |
+| `instructor_id` | bigint unsigned | FOREIGN KEY (instructors.id), NULLABLE, ON DELETE SET NULL | Instructor on the lesson |
+| `requested_by_user_id` | bigint unsigned | FOREIGN KEY (users.id), NULLABLE, ON DELETE SET NULL | Staff member who cancelled / requested the refund |
+| `processed_by_user_id` | bigint unsigned | FOREIGN KEY (users.id), NULLABLE, ON DELETE SET NULL | Staff member who issued or marked the refund complete |
+| `amount_pence` | unsigned integer | NOT NULL | Refund amount in pence |
+| `status` | varchar(20) | DEFAULT 'pending' | `pending` or `completed` |
+| `method` | varchar(20) | NULLABLE | How it was completed: `stripe` (issued from the CRM) or `manual` (refunded in Stripe by hand, then marked complete) |
+| `stripe_refund_id` | varchar(255) | NULLABLE | Stripe Refund ID when issued from the CRM |
+| `reason` | text | NULLABLE | Cancellation / refund reason (shown to the student on cancel) |
+| `requested_at` | timestamp | NULLABLE | When the refund was requested |
+| `completed_at` | timestamp | NULLABLE | When staff completed it |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Indexes:**
+- Unique on `lesson_id`
+- Composite index on `(status, requested_at)`
+
+**Relationships:**
+- Belongs to one `Lesson`
+- Belongs to one `Order` (optional)
+- Belongs to one `LessonPayment` (optional, weekly)
+- Belongs to one `Student` / `Instructor` (optional)
+- Belongs to `User` as `requestedBy` and `processedBy`
+
+**Enums:**
+- Status (`App\Enums\RefundStatus`): `pending`, `completed`
+- Method (`App\Enums\RefundMethod`): `stripe`, `manual`
+
+**Business Logic:**
+- Created by `CancelBookingAction` when a paid lesson is cancelled and staff did not choose "don't refund" (`refund_action=none`)
+- Amount is the weekly `lesson_payments.amount_pence` when present, otherwise `lessons.amount_pence` (upfront share)
+- Stripe refunds use the existing charge IDs on `lesson_payments.stripe_charge_id` (weekly) or `orders.stripe_charge_id` / `stripe_payment_intent_id` (upfront) via `StripeService::createRefund`
+- Completing a refund (Stripe or manual) sets the linked `LessonPayment.status` to `refunded` and writes an activity log paper trail: "{staff name} made refund on {d/m/Y H:i}"
+- Owner-only `/refunds` lists newest first with running totals (pending / completed / all requested)
 
 ---
 
@@ -1474,6 +1525,18 @@ Moves a student from one instructor to another. No money is moved at transfer ti
    - `CreateLessonPayoutAction` reads `$lesson->instructor` at the moment of sign-off → the source instructor cannot draw down on a lesson now owned by the destination.
 
 No new tables and no schema changes — the feature reuses `lessons.instructor_id`, `students.instructor_id`, and `activity_logs`.
+
+### 7. Lesson Cancellation & Refund Flow
+
+Learners cannot self-cancel. Staff cancel from the instructor diary (`Cancel Booking`).
+
+1. Admin (or instructor via the app) cancels a booking with a required reason and a scope (this lesson / this + future in the booking).
+2. `CancelBookingAction` marks the lesson(s) cancelled, frees diary slots, and identifies paid lessons (weekly `LessonPayment` paid, or a confirmed upfront order).
+3. For each paid lesson, unless `refund_action=none`, a pending `refunds` row is created (requested_by = the staff member).
+4. If the admin chose **Refund now via Stripe**, `ProcessStripeRefundAction` refunds the stored Stripe charge immediately and records `{name} made refund on {d/m/Y H:i}`. Failures stay pending.
+5. Otherwise the request appears on `/refunds` (owner-only), newest first, with running totals. Staff can **Refund via Stripe** or **Mark complete** after refunding in Stripe by hand.
+6. Completing a refund sets `lesson_payments.status = refunded` when a weekly payment exists, and writes a student activity log paper trail.
+7. Head Office still receives `RefundRequiredNotification` when any refund remains pending after cancel.
 
 ---
 

@@ -90,6 +90,8 @@ const events = ref<CalendarEvent[]>([])
 const deleteScope = ref<'single' | 'future'>('single')
 /** Reason entered when cancelling a booking (required for booking slots). */
 const cancelReason = ref('')
+/** Refund choice when cancelling a paid booking. */
+const cancelRefundAction = ref<'none' | 'request' | 'stripe'>('request')
 
 // Map of backend items by ID for quick lookup
 const itemsMap = ref<Map<number, CalendarItemResponse>>(new Map())
@@ -211,6 +213,10 @@ const BOOKING_STATUSES = ['booked', 'reserved', 'draft']
 const editItemIsBooking = computed(() => {
     const item = itemsMap.value.get(editForm.value.id)
     return item ? BOOKING_STATUSES.includes(item.status as string) : false
+})
+
+const editItemIsPaid = computed(() => {
+    return itemsMap.value.get(editForm.value.id)?.is_paid === true
 })
 
 /** Whether the edit form should be stripped down to reschedule-only (date/time
@@ -862,6 +868,7 @@ function openDeleteDialog() {
     isEditSheetOpen.value = false
     deleteScope.value = 'single'
     cancelReason.value = ''
+    cancelRefundAction.value = 'request'
     isDeleteDialogOpen.value = true
 }
 
@@ -880,17 +887,23 @@ async function handleDelete() {
         // for availability slots it keeps its recurrence meaning.
         const scopeParam = deleteScope.value === 'future' && (isBooking || editItemIsRecurring.value) ? 'future' : 'single'
 
-        await axios.delete(
+        const response = await axios.delete(
             `/instructors/${props.instructorId}/calendar/items/${editForm.value.id}`,
             {
                 params: { scope: scopeParam },
-                data: isBooking ? { scope: scopeParam, reason: cancelReason.value.trim() } : undefined,
+                data: isBooking
+                    ? {
+                        scope: scopeParam,
+                        reason: cancelReason.value.trim(),
+                        refund_action: editItemIsPaid.value ? cancelRefundAction.value : 'none',
+                    }
+                    : undefined,
             },
         )
 
         // Always reload to pick up travel item deletions
         if (isBooking) {
-            toast({ title: 'Booking cancelled. The student has been notified.' })
+            toast({ title: response.data?.message || 'Booking cancelled. The student has been notified.' })
         } else {
             toast({ title: scopeParam === 'future' ? 'Recurring time slots removed successfully!' : 'Time slot removed successfully!' })
         }
@@ -1815,6 +1828,31 @@ onMounted(() => {
                             <div>
                                 <div class="text-sm font-medium">This and all future lessons in this booking</div>
                                 <div class="text-xs text-muted-foreground">Cancel this lesson and every upcoming lesson in the same booking</div>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div v-if="editItemIsPaid" class="space-y-2">
+                        <Label class="text-sm font-medium">Refund</Label>
+                        <label class="flex cursor-pointer items-center gap-3 rounded-md border border-input px-3 py-2.5 transition-colors hover:bg-muted/50" :class="{ 'border-primary bg-primary/5': cancelRefundAction === 'request' }">
+                            <input type="radio" v-model="cancelRefundAction" value="request" class="accent-primary" />
+                            <div>
+                                <div class="text-sm font-medium">Request a refund</div>
+                                <div class="text-xs text-muted-foreground">Add it to the Refunds dashboard for review</div>
+                            </div>
+                        </label>
+                        <label class="flex cursor-pointer items-center gap-3 rounded-md border border-input px-3 py-2.5 transition-colors hover:bg-muted/50" :class="{ 'border-primary bg-primary/5': cancelRefundAction === 'stripe' }">
+                            <input type="radio" v-model="cancelRefundAction" value="stripe" class="accent-primary" />
+                            <div>
+                                <div class="text-sm font-medium">Refund now via Stripe</div>
+                                <div class="text-xs text-muted-foreground">Issue the refund immediately. Your name is recorded on the paper trail.</div>
+                            </div>
+                        </label>
+                        <label class="flex cursor-pointer items-center gap-3 rounded-md border border-input px-3 py-2.5 transition-colors hover:bg-muted/50" :class="{ 'border-primary bg-primary/5': cancelRefundAction === 'none' }">
+                            <input type="radio" v-model="cancelRefundAction" value="none" class="accent-primary" />
+                            <div>
+                                <div class="text-sm font-medium">Don't refund</div>
+                                <div class="text-xs text-muted-foreground">Cancel the lesson without requesting a refund</div>
                             </div>
                         </label>
                     </div>

@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace App\Actions\Calendar;
 
 use App\Actions\Instructor\DeleteCalendarItemAction;
+use App\Actions\Refund\CreateRefundsForCancelledLessonsAction;
+use App\Actions\Refund\ProcessStripeRefundAction;
 use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
 use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
+use App\Enums\RefundAction;
 use App\Models\CalendarItem;
 use App\Models\Lesson;
 use App\Models\Order;
+use App\Models\Refund;
 use App\Models\User;
 use App\Notifications\BookingCancelledNotification;
 use App\Notifications\RefundRequiredNotification;
@@ -25,6 +29,8 @@ class CancelBookingAction
     public function __construct(
         protected DeleteCalendarItemAction $deleteCalendarItem,
         protected RecalculateStudentLessonNumbersAction $recalculateStudentLessonNumbers,
+        protected CreateRefundsForCancelledLessonsAction $createRefunds,
+        protected ProcessStripeRefundAction $processStripeRefund,
     ) {}
 
     /**
@@ -32,17 +38,19 @@ class CancelBookingAction
      * longer wants lessons, so the lesson(s) are marked cancelled (kept for
      * history) and their calendar slots are freed from the diary. Future weekly
      * invoices stop automatically because the invoice sender skips cancelled
-     * lessons. No Stripe void/refund happens here — paid lessons are reported to
-     * Head Office for a manual refund.
+     * lessons. Paid lessons create a pending refund request on the admin Refunds
+     * dashboard unless staff chose not to refund. Staff can also issue the Stripe
+     * refund immediately from the cancel dialog.
      *
      * @param  bool  $applyToFutureInOrder  When true, also cancel every future un-signed-off lesson in the same order.
-     * @return array{cancelled_count: int, refund_required_count: int}
+     * @return array{cancelled_count: int, refund_required_count: int, refunds_created_count: int, refunds_processed_count: int}
      */
     public function __invoke(
         CalendarItem $item,
         string $reason,
         bool $applyToFutureInOrder,
         User $actor,
+        RefundAction $refundAction = RefundAction::REQUEST,
     ): array {
         $item->loadMissing(['calendar', 'lessons.order.student.user', 'lessons.lessonPayment', 'lessons.payout']);
 
@@ -98,14 +106,62 @@ class CancelBookingAction
 
         $this->invalidateCalendarCache($instructor?->id, $affectedDates);
 
-        $refundRequiredCount = $paidLessons->count();
+        $refunds = $this->queueRefundRequests($paidLessons, $actor, $reason, $refundAction);
+        $processedCount = $this->attemptStripeRefunds($refunds, $actor, $refundAction);
 
-        $this->sendNotifications($cancelSet, $paidLessons, $order, $reason, $orderCancelled, $actor);
+        $pendingRefunds = $refunds
+            ->map(fn (Refund $refund) => $refund->fresh() ?? $refund)
+            ->filter(fn (Refund $refund) => $refund->isPending());
+
+        $pendingLessonIds = $pendingRefunds->pluck('lesson_id');
+        $lessonsNeedingRefund = $paidLessons
+            ->filter(fn (Lesson $lesson) => $pendingLessonIds->contains($lesson->id))
+            ->values();
+
+        $this->sendNotifications($cancelSet, $lessonsNeedingRefund, $order, $reason, $orderCancelled, $actor);
 
         return [
             'cancelled_count' => $cancelSet->count(),
-            'refund_required_count' => $refundRequiredCount,
+            'refund_required_count' => $pendingRefunds->count(),
+            'refunds_created_count' => $refunds->count(),
+            'refunds_processed_count' => $processedCount,
         ];
+    }
+
+    /**
+     * @param  Collection<int, Lesson>  $paidLessons
+     * @return Collection<int, Refund>
+     */
+    protected function queueRefundRequests(Collection $paidLessons, User $actor, string $reason, RefundAction $refundAction): Collection
+    {
+        if ($refundAction === RefundAction::NONE || $paidLessons->isEmpty()) {
+            return new Collection;
+        }
+
+        return ($this->createRefunds)($paidLessons, $actor, $reason);
+    }
+
+    /**
+     * @param  Collection<int, Refund>  $refunds
+     */
+    protected function attemptStripeRefunds(Collection $refunds, User $actor, RefundAction $refundAction): int
+    {
+        if ($refundAction !== RefundAction::STRIPE) {
+            return 0;
+        }
+
+        $processedCount = 0;
+
+        foreach ($refunds as $refund) {
+            try {
+                ($this->processStripeRefund)($refund, $actor);
+                $processedCount++;
+            } catch (RuntimeException) {
+                // Leave the request pending so staff can retry from the dashboard.
+            }
+        }
+
+        return $processedCount;
     }
 
     /**

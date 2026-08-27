@@ -107,6 +107,11 @@ class Lesson extends Model
         return $this->hasMany(LessonReminder::class);
     }
 
+    public function refund(): HasOne
+    {
+        return $this->hasOne(Refund::class);
+    }
+
     /**
      * Check if lesson is a draft (pre-payment).
      */

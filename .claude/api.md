@@ -2684,7 +2684,7 @@ Updates a calendar item belonging to the authenticated instructor — used to **
 Deletes a calendar item belonging to the authenticated instructor. Behaviour depends on whether the item is a plain availability slot or an active booking:
 
 - **Availability slot (no lesson attached):** removed from the diary. For recurring items, `scope` controls single-occurrence vs all-future deletion.
-- **Booking slot (a draft / reserved / booked lesson is attached):** the booking is **cancelled** (the student has left / no longer wants lessons). A `reason` is **required**. `scope=single` cancels just this lesson; `scope=future` cancels this lesson and every future un-signed-off lesson in the same booking. The lesson rows are kept for history with `status = cancelled`, but their calendar slots (and travel blocks) are freed from the diary. Future weekly invoices stop automatically. **No Stripe refund is issued** — when a cancelled lesson had already been paid, Head Office is emailed to action a manual refund. The student is always emailed a cancellation confirmation.
+- **Booking slot (a draft / reserved / booked lesson is attached):** the booking is **cancelled** (the student has left / no longer wants lessons). A `reason` is **required**. `scope=single` cancels just this lesson; `scope=future` cancels this lesson and every future un-signed-off lesson in the same booking. The lesson rows are kept for history with `status = cancelled`, but their calendar slots (and travel blocks) are freed from the diary. Future weekly invoices stop automatically. The student is always emailed a cancellation confirmation. **Paid lessons create a pending refund request** on the admin Refunds dashboard (`/refunds`) so Head Office can issue the Stripe refund from the CRM or mark it complete after refunding in Stripe by hand. The instructor app does not initiate Stripe refunds — it always queues a request. Head Office is still emailed when any refund remains pending.
 
 **Path Parameters:**
 
@@ -2732,14 +2732,18 @@ DELETE /api/v1/instructor/calendar/items/42
 {
   "message": "3 lesson(s) cancelled. The student has been notified.",
   "cancelled_count": 3,
-  "refund_required_count": 1
+  "refund_required_count": 1,
+  "refunds_created_count": 1,
+  "refunds_processed_count": 0
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `cancelled_count` | integer | Number of lessons cancelled (1 for `scope=single`, more for `scope=future`). |
-| `refund_required_count` | integer | How many of the cancelled lessons had been paid and so need a manual Head Office refund. `0` when nothing was paid (e.g. reserved/draft only). |
+| `refund_required_count` | integer | How many of the cancelled lessons still have a **pending** refund request after this call. `0` when nothing was paid, staff skipped refunds, or every refund was issued immediately. |
+| `refunds_created_count` | integer | Pending refund rows created for paid cancelled lessons. |
+| `refunds_processed_count` | integer | How many of those were issued via Stripe during this request. Always `0` on the instructor API (refunds are queued for admin review). |
 
 **Error — Booking cancellation missing reason (422):**
 ```json
@@ -7000,6 +7004,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-08-20 | Added `POST /api/v1/instructor/calendar/fill-slots` — bulk-fill the instructor's diary with available 2-hour slots (+ optional travel blocks) across selected ISO weekdays for 1–12 weeks from a start date, between a daily start/end time. Walks each day in 15-min steps, skipping any candidate whose window (incl. travel) clashes with existing items, and skipping already-started times today. Created slots are independent (no recurrence group). Returns `created_count` + `days_filled` only — refetch `GET /calendar/items` to render. Reuses `InstructorService::fillAvailableCalendarSlots` + `FillAvailableCalendarSlotsAction`, shared with the admin "Fill Available Time Slots" sheet. | Instructor Calendar (fill-slots — NEW) |
 
 | 2026-08-20 | **Rescheduling a booked lesson onto an empty availability slot now succeeds and consumes it** (`PUT /api/v1/instructor/calendar/items/{calendarItem}`, single + bulk modes; mirrored on the admin web diary). Previously the overlap check 422'd ("This time slot overlaps with an existing time slot.") even when the target was the instructor's own open, unbooked slot. Now: moving an item **with a booked lesson**, overlapped items that are empty availability slots (`item_type: slot`, `is_available: true`, no status, no lessons) — or their travel blocks — no longer count as clashes; the move deletes them (slot + its travel block) so the diary stays clean. All other overlaps still 422. The moved item's **own travel block** is also now excluded from the overlap check. Implemented in the shared `UpdateCalendarItemAction` (+ new `CalendarItem::isEmptyAvailability()` / `isConsumableByReschedule()` helpers), so web drag-drop, web edit, app single reschedule, and bulk "move whole booking" all behave identically. Refetch `GET /calendar/items` after a move. | Instructor Calendar (update) |
+| 2026-08-27 | **Paid booking cancellations now queue refund requests for admin review.** `DELETE /api/v1/instructor/calendar/items/{calendarItem}` still cancels the lesson(s) and emails the student. When a cancelled lesson had been paid, a pending `refunds` row is created (one per lesson) so owners can action it on the web `/refunds` dashboard — issue via Stripe or mark complete after a manual Stripe refund, with a staff paper trail. Response adds `refunds_created_count` + `refunds_processed_count` (always `0` on the instructor API; Stripe initiation is owner-web-only). `refund_required_count` is now the number of **still-pending** refunds after the call. Head Office email still fires when any refund remains pending. | Instructor Calendar (destroy) |
 
 ---
 

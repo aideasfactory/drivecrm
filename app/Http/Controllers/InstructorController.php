@@ -15,6 +15,7 @@ use App\Enums\BusinessType;
 use App\Enums\InstructorStatus;
 use App\Enums\PdiStatus;
 use App\Enums\RecurrencePattern;
+use App\Enums\RefundAction;
 use App\Enums\TransmissionType;
 use App\Enums\VehicleMethod;
 use App\Http\Controllers\Hmrc\Archive\ArchiveController;
@@ -744,12 +745,23 @@ class InstructorController extends Controller
                     $reason,
                     $deleteScope === 'future',
                     request()->user(),
+                    $this->refundActionFromRequest(),
                 );
 
+                $message = "{$result['cancelled_count']} lesson(s) cancelled. The student has been notified.";
+
+                if ($result['refunds_processed_count'] > 0) {
+                    $message .= " {$result['refunds_processed_count']} refund(s) issued via Stripe.";
+                } elseif ($result['refunds_created_count'] > 0) {
+                    $message .= ' Refund request(s) added to the Refunds dashboard.';
+                }
+
                 return response()->json([
-                    'message' => "{$result['cancelled_count']} lesson(s) cancelled. The student has been notified.",
+                    'message' => $message,
                     'cancelled_count' => $result['cancelled_count'],
                     'refund_required_count' => $result['refund_required_count'],
+                    'refunds_created_count' => $result['refunds_created_count'],
+                    'refunds_processed_count' => $result['refunds_processed_count'],
                 ]);
             }
 
@@ -772,6 +784,12 @@ class InstructorController extends Controller
                 'message' => $e->getMessage(),
             ], 400);
         }
+    }
+
+    protected function refundActionFromRequest(): RefundAction
+    {
+        return RefundAction::tryFrom((string) request()->input('refund_action', RefundAction::REQUEST->value))
+            ?? RefundAction::REQUEST;
     }
 
     /**

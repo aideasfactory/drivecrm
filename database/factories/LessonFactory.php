@@ -31,7 +31,7 @@ class LessonFactory extends Factory
             'date' => $date->format('Y-m-d'),
             'start_time' => '10:00',
             'end_time' => '11:00',
-            'status' => LessonStatus::PENDING,
+            'student_lesson_number' => 1,
         ];
     }
 

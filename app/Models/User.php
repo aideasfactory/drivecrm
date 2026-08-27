@@ -155,6 +155,16 @@ class User extends Authenticatable
         );
     }
 
+    public function requestedRefunds(): HasMany
+    {
+        return $this->hasMany(Refund::class, 'requested_by_user_id');
+    }
+
+    public function processedRefunds(): HasMany
+    {
+        return $this->hasMany(Refund::class, 'processed_by_user_id');
+    }
+
     /**
      * Check if user is owner.
      */
