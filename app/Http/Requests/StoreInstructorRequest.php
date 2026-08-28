@@ -10,7 +10,6 @@ use App\Enums\TransmissionType;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password;
 
 class StoreInstructorRequest extends FormRequest
 {
@@ -33,7 +32,6 @@ class StoreInstructorRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['nullable', 'string', Password::default()],
             'phone' => ['nullable', 'string', 'max:50'],
             'bio' => ['nullable', 'string'],
             'transmission_type' => ['required', Rule::in(TransmissionType::values())],

@@ -33,14 +33,14 @@ test('creating an instructor sends a welcome email with a password-setup link', 
     /** @var InstructorService $service */
     $service = app(InstructorService::class);
 
-    $result = $service->createInstructor([
+    $instructor = $service->createInstructor([
         'name' => 'Jane Doe',
         'email' => 'jane.doe@example.com',
         'postcode' => 'TS7 8BA',
         'transmission_type' => 'manual',
     ]);
 
-    expect($result['success'])->toBeTrue();
+    expect($instructor)->toBeInstanceOf(Instructor::class);
 
     $user = User::where('email', 'jane.doe@example.com')->firstOrFail();
     expect($user->role)->toBe(UserRole::INSTRUCTOR)

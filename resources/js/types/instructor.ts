@@ -50,7 +50,6 @@ export interface BookingHours {
 export interface CreateInstructorData {
   name: string
   email: string
-  password?: string
   phone?: string
   bio?: string
   transmission_type: 'manual' | 'automatic' | 'both'
