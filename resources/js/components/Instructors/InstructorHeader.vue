@@ -34,7 +34,7 @@ const { isOwner, isInstructor } = useRole()
 
 const page = usePage()
 const showMtdButton = computed<boolean>(
-    () => Boolean((page.props as { hmrc?: { show_mtd_button?: boolean } }).hmrc?.show_mtd_button),
+    () => Boolean((page.props as { hmrcFlags?: { show_mtd_button?: boolean } }).hmrcFlags?.show_mtd_button),
 )
 
 const loading = ref(false)

@@ -11,7 +11,7 @@ export type AppPageProps<
     name: string;
     auth: Auth;
     sidebarOpen: boolean;
-    hmrc: {
+    hmrcFlags: {
         show_mtd_button: boolean;
     };
     appLinks: {
