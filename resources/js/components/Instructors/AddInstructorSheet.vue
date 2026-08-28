@@ -63,10 +63,9 @@ const defaultTransmission = () =>
         | 'both'
         | undefined) ?? 'manual'
 
-const form = ref<CreateInstructorData>({
+const emptyForm = (): CreateInstructorData => ({
     name: '',
     email: '',
-    password: '',
     phone: '',
     bio: '',
     transmission_type: defaultTransmission(),
@@ -75,6 +74,8 @@ const form = ref<CreateInstructorData>({
     address: '',
     postcode: '',
 })
+
+const form = ref<CreateInstructorData>(emptyForm())
 
 const selectClass =
     'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50'
@@ -167,7 +168,6 @@ watch(
             form.value = {
                 name: instructor.name,
                 email: instructor.email,
-                password: '',
                 phone: instructor.phone || '',
                 bio: instructor.bio || '',
                 transmission_type: snapToOption(
@@ -189,19 +189,7 @@ watch(
                 postcode: instructor.postcode || '',
             }
         } else {
-            // Reset form for add mode
-            form.value = {
-                name: '',
-                email: '',
-                password: '',
-                phone: '',
-                bio: '',
-                transmission_type: defaultTransmission(),
-                status: defaultStatus(),
-                pdi_status: defaultPdiStatus(),
-                address: '',
-                postcode: '',
-            }
+            form.value = emptyForm()
         }
     },
     { immediate: true }
@@ -248,20 +236,8 @@ const handleSubmit = () => {
         router.post('/instructors', form.value, {
             preserveScroll: true,
             onSuccess: () => {
-                // Reset form
-                form.value = {
-                    name: '',
-                    email: '',
-                    password: '',
-                    phone: '',
-                    bio: '',
-                    transmission_type: defaultTransmission(),
-                    status: defaultStatus(),
-                    pdi_status: defaultPdiStatus(),
-                    address: '',
-                    postcode: '',
-                }
-                toast({ title: 'Instructor created.' })
+                form.value = emptyForm()
+                toast({ title: 'Instructor created. A setup email has been sent.' })
                 emit('instructor-created')
                 emit('update:open', false)
             },
@@ -315,7 +291,7 @@ const handleRequestDeletion = () => {
                     {{
                         isEditMode
                             ? 'Update instructor profile information.'
-                            : 'Create a new instructor profile. All fields marked with * are required.'
+                            : 'Create a new instructor profile. They will be emailed a link to set their own password. All fields marked with * are required.'
                     }}
                 </SheetDescription>
             </SheetHeader>
@@ -398,22 +374,8 @@ const handleRequestDeletion = () => {
                         <p v-if="errors.email" class="text-sm text-destructive">
                             {{ errors.email }}
                         </p>
-                    </div>
-
-                    <div v-if="!isEditMode" class="space-y-2">
-                        <Label for="password">Password</Label>
-                        <Input
-                            id="password"
-                            v-model="form.password"
-                            type="password"
-                            placeholder="Leave blank for default (password123)"
-                            :disabled="isSubmitting"
-                        />
-                        <p class="text-xs text-muted-foreground">
-                            Default password: password123
-                        </p>
-                        <p v-if="errors.password" class="text-sm text-destructive">
-                            {{ errors.password }}
+                        <p v-if="!isEditMode" class="text-xs text-muted-foreground">
+                            We'll email them a link to set their password. They can then sign in to the admin area.
                         </p>
                     </div>
 

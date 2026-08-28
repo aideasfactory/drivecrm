@@ -302,7 +302,7 @@ class InstructorController extends Controller
         $this->instructorService->createInstructor($request->validated());
 
         return redirect()->route('instructors.index')
-            ->with('success', 'Instructor created successfully.');
+            ->with('success', 'Instructor created successfully. A setup email has been sent.');
     }
 
     /**

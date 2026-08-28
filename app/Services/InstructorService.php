@@ -145,12 +145,12 @@ class InstructorService extends BaseService
         DB::beginTransaction();
 
         try {
-            // 2. Create user account.
-            // The account is created with a cryptographically-random password the admin
-            // never sees — the instructor sets their real password via the welcome email
-            // setup link. `welcome_email_pending` is set so we can show admins if the
-            // email never goes out, and `password_change_required` is a belt-and-braces
-            // gate in case anyone bypasses the setup link.
+            // Create the user with a random password the admin never sees and cannot
+            // supply. A `password` key on $data (legacy create-form payloads) is
+            // ignored — instructors always set their password via the welcome email.
+            // `welcome_email_pending` lets admins see if the email never goes out, and
+            // `password_change_required` is a belt-and-braces gate if anyone bypasses
+            // the setup link.
             $user = User::create([
                 'name' => $data['name'],
                 'email' => $data['email'],
