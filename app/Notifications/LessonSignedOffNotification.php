@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Enums\EmailTemplateKey;
+use App\Mail\RendersTemplatedMail;
 use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Student;
@@ -15,6 +17,7 @@ use Illuminate\Notifications\Notification;
 class LessonSignedOffNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+    use RendersTemplatedMail;
 
     public function __construct(
         public Lesson $lesson,
@@ -34,63 +37,42 @@ class LessonSignedOffNotification extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $lessonDate = $this->lesson->date?->format('l, j F Y') ?? 'N/A';
-        $lessonTime = null;
+        $lessonTimeLine = '';
 
         if ($this->lesson->start_time && $this->lesson->end_time) {
-            $lessonTime = $this->lesson->start_time->format('H:i').' - '.$this->lesson->end_time->format('H:i');
+            $lessonTimeLine = 'Lesson time: '.$this->lesson->start_time->format('H:i').' - '.$this->lesson->end_time->format('H:i');
         }
 
         if ($this->isForInstructor) {
-            return $this->buildInstructorMail($lessonDate, $lessonTime);
+            $studentName = trim(($this->student->first_name ?? '').' '.($this->student->surname ?? ''));
+
+            return $this->templatedMail(
+                EmailTemplateKey::InstructorLessonSignedOff,
+                [
+                    'recipient_name' => $this->instructor->user?->name ?? 'there',
+                    'student_name' => $studentName,
+                    'lesson_date' => $lessonDate,
+                    'lesson_time_line' => $lessonTimeLine,
+                    'app_name' => config('app.name'),
+                ],
+            );
         }
 
-        return $this->buildStudentMail($lessonDate, $lessonTime);
-    }
+        $notesBlock = $this->lesson->summary
+            ? "**Instructor Notes:**\n".$this->lesson->summary
+            : '';
 
-    protected function buildStudentMail(string $lessonDate, ?string $lessonTime): MailMessage
-    {
-        $instructorName = $this->instructor->user?->name ?? 'your instructor';
-        $studentName = $this->student->first_name ?? 'there';
-
-        $message = (new MailMessage)
-            ->subject('Your Driving Lesson Has Been Signed Off')
-            ->greeting("Hello {$studentName}!")
-            ->line("Great news! Your driving lesson on **{$lessonDate}** has been signed off by {$instructorName}.");
-
-        if ($lessonTime) {
-            $message->line("Lesson time: {$lessonTime}");
-        }
-
-        if ($this->lesson->summary) {
-            $message->line('**Instructor Notes:**')
-                ->line($this->lesson->summary);
-        }
-
-        $message->line('')
-            ->line('Keep up the great work on your driving journey!')
-            ->salutation("Safe driving,\nThe ".config('app.name').' Team');
-
-        return $message;
-    }
-
-    protected function buildInstructorMail(string $lessonDate, ?string $lessonTime): MailMessage
-    {
-        $instructorName = $this->instructor->user?->name ?? 'there';
-        $studentName = trim(($this->student->first_name ?? '').' '.($this->student->surname ?? ''));
-
-        $message = (new MailMessage)
-            ->subject('Lesson Signed Off — '.$studentName)
-            ->greeting("Hello {$instructorName}!")
-            ->line("You have signed off the lesson with **{$studentName}** on **{$lessonDate}**.");
-
-        if ($lessonTime) {
-            $message->line("Lesson time: {$lessonTime}");
-        }
-
-        $message->line('The payout for this lesson has been initiated to your account.')
-            ->salutation("Thanks,\nThe ".config('app.name').' Team');
-
-        return $message;
+        return $this->templatedMail(
+            EmailTemplateKey::LearnerLessonSignedOff,
+            [
+                'recipient_name' => $this->student->first_name ?? 'there',
+                'instructor_name' => $this->instructor->user?->name ?? 'your instructor',
+                'lesson_date' => $lessonDate,
+                'lesson_time_line' => $lessonTimeLine,
+                'instructor_notes_block' => $notesBlock,
+                'app_name' => config('app.name'),
+            ],
+        );
     }
 
     /**

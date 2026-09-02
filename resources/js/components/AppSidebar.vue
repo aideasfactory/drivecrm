@@ -4,6 +4,7 @@ import {
     ArrowRightLeft,
     Bell,
     BookOpen,
+    Mail,
     FileText,
     GraduationCap,
     Inbox,
@@ -41,6 +42,7 @@ import { index as packagesIndex } from '@/routes/packages';
 import { index as pupilsIndex } from '@/routes/pupils';
 import { index as reportsIndex } from '@/routes/reports';
 import { index as pushNotificationsIndex } from '@/routes/push-notifications';
+import { index as emailTemplatesIndex } from '@/routes/email-templates';
 import { index as hazardPerceptionIndex } from '@/routes/hazard-perception';
 import { index as resourcesIndex } from '@/routes/resources';
 import { index as studentTransfersIndex } from '@/routes/student-transfers';
@@ -97,6 +99,12 @@ const allNavItems: NavItem[] = [
         title: 'Push Notifications',
         href: pushNotificationsIndex(),
         icon: Bell,
+        roles: ['owner'],
+    },
+    {
+        title: 'Email templates',
+        href: emailTemplatesIndex(),
+        icon: Mail,
         roles: ['owner'],
     },
     {

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Enums\EmailTemplateKey;
+use App\Mail\RendersTemplatedMail;
 use App\Models\LessonPayment;
 use App\Models\Student;
 use Illuminate\Bus\Queueable;
@@ -14,6 +16,7 @@ use Illuminate\Notifications\Notification;
 class PaymentDueSoonNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+    use RendersTemplatedMail;
 
     public function __construct(
         public LessonPayment $lessonPayment,
@@ -38,37 +41,30 @@ class PaymentDueSoonNotification extends Notification implements ShouldQueue
         $lessonTime = $lesson->start_time->format('g:i A');
         $amount = $this->lessonPayment->formatted_amount;
 
-        return (new MailMessage)
-            ->subject("Payment Due Soon: Your Driving Lesson on {$lessonDate}")
-            ->greeting($this->getGreeting())
-            ->line($this->getIntroLine($lessonDate, $lessonTime))
-            ->line('**Lesson Details:**')
-            ->line("Package: {$order->package_name}")
-            ->line("Date: {$lessonDate}")
-            ->line("Time: {$lessonTime}")
-            ->line("Amount due: {$amount}")
-            ->line('')
-            ->line('Your lesson is in less than 48 hours. Please complete your payment using the link below to secure it.')
-            ->action('Pay Now', $this->hostedInvoiceUrl)
-            ->line('If you have already paid, please disregard this email.')
-            ->salutation('Safe driving,
-The Driving School Team');
+        return $this->templatedMail(
+            EmailTemplateKey::LearnerPaymentDueSoon,
+            [
+                'recipient_name' => $this->recipientName(),
+                'intro' => $this->introLine($lessonDate, $lessonTime),
+                'package_name' => $order->package_name,
+                'lesson_date' => $lessonDate,
+                'lesson_time' => $lessonTime,
+                'amount' => $amount,
+            ],
+            $this->hostedInvoiceUrl,
+        );
     }
 
-    protected function getGreeting(): string
+    protected function recipientName(): string
     {
         if ($this->isBookedByContact) {
-            $name = $this->student->contact_first_name ?? 'there';
-
-            return "Hello {$name}!";
+            return $this->student->contact_first_name ?? 'there';
         }
 
-        $name = $this->student->first_name ?? 'there';
-
-        return "Hello {$name}!";
+        return $this->student->first_name ?? 'there';
     }
 
-    protected function getIntroLine(string $lessonDate, string $lessonTime): string
+    protected function introLine(string $lessonDate, string $lessonTime): string
     {
         $learnerName = trim(($this->student->first_name ?? '').' '.($this->student->surname ?? ''));
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Enums\EmailTemplateKey;
+use App\Mail\RendersTemplatedMail;
 use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Student;
@@ -16,6 +18,7 @@ use Illuminate\Support\Collection;
 class BookingCancelledNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+    use RendersTemplatedMail;
 
     /**
      * @param  Collection<int, Lesson>  $lessons  The cancelled lessons.
@@ -38,40 +41,33 @@ class BookingCancelledNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $studentName = $this->student->first_name ?? 'there';
-        $instructorName = $this->instructor?->user?->name ?? 'your instructor';
         $count = $this->lessons->count();
         $lessonWord = $count === 1 ? 'lesson has' : 'lessons have';
+        $lessonNoun = $count === 1 ? 'Lesson Has' : 'Lessons Have';
 
-        $message = (new MailMessage)
-            ->subject($count === 1 ? 'Your Driving Lesson Has Been Cancelled' : 'Your Driving Lessons Have Been Cancelled')
-            ->greeting("Hello {$studentName},")
-            ->line("We're letting you know that the following {$lessonWord} been cancelled by **{$instructorName}**:");
+        $lessonList = $this->lessons
+            ->map(fn (Lesson $lesson): string => '• '.$this->formatLesson($lesson))
+            ->implode("\n");
 
-        foreach ($this->lessons as $lesson) {
-            $message->line('• '.$this->formatLesson($lesson));
-        }
+        $refundLine = $this->refundRequired
+            ? 'Any payments you have already made for these lessons will be refunded — our head office will be in touch about this shortly.'
+            : 'There is nothing further you need to do, and you will not be charged for these lessons.';
 
-        $message->line('')
-            ->line('**Reason:**')
-            ->line($this->reason)
-            ->line('');
-
-        if ($this->refundRequired) {
-            $message->line('Any payments you have already made for these lessons will be refunded — our head office will be in touch about this shortly.');
-        } else {
-            $message->line('There is nothing further you need to do, and you will not be charged for these lessons.');
-        }
-
-        $message->line('If you have any questions, please get in touch with your instructor.')
-            ->salutation("Kind regards,\nThe ".config('app.name').' Team');
-
-        return $message;
+        return $this->templatedMail(
+            EmailTemplateKey::LearnerBookingCancelled,
+            [
+                'recipient_name' => $this->student->first_name ?? 'there',
+                'instructor_name' => $this->instructor?->user?->name ?? 'your instructor',
+                'lesson_word' => $lessonWord,
+                'lesson_noun' => $lessonNoun,
+                'lesson_list' => $lessonList,
+                'reason' => $this->reason,
+                'refund_line' => $refundLine,
+                'app_name' => config('app.name'),
+            ],
+        );
     }
 
-    /**
-     * Format a single cancelled lesson as a readable date/time line.
-     */
     protected function formatLesson(Lesson $lesson): string
     {
         $date = $lesson->date?->format('l, j F Y') ?? 'Date to be confirmed';

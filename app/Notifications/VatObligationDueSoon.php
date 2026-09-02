@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Enums\EmailTemplateKey;
+use App\Mail\RendersTemplatedMail;
 use App\Models\HmrcVatObligation;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -13,6 +15,7 @@ use Illuminate\Notifications\Notification;
 class VatObligationDueSoon extends Notification implements ShouldQueue
 {
     use Queueable;
+    use RendersTemplatedMail;
 
     public function __construct(
         public HmrcVatObligation $obligation,
@@ -39,11 +42,14 @@ class VatObligationDueSoon extends Notification implements ShouldQueue
             .' – '
             .$this->obligation->period_end_date->format('j M Y');
 
-        return (new MailMessage)
-            ->subject("MTD VAT return due {$when}")
-            ->greeting("Hello {$notifiable->name},")
-            ->line("Your VAT return for {$period} is due {$when}.")
-            ->action('Open VAT submissions', url('/hmrc/vat'))
-            ->line('VAT submissions are final once filed — corrections must be made in a future period.');
+        return $this->templatedMail(
+            EmailTemplateKey::InstructorVatDueSoon,
+            [
+                'recipient_name' => $notifiable->name,
+                'when' => $when,
+                'period' => $period,
+            ],
+            url('/hmrc/vat'),
+        );
     }
 }

@@ -1,74 +1,64 @@
-# Task: Resend transactional mail
+# Task: Admin-editable instructor and learner emails
 
 ## Overview
 
-Switch Drive CRM transactional email to Resend via Laravel's native Resend
-mailer. The API key is supplied later via `.env` (`RESEND_API_KEY`); this
-work wires the SDK, config, env template, and a diagnostic send command.
+Staff need to see and edit the copy of emails sent to instructors and
+learners, without changing when those emails send, who they go to, or
+enrolment/scheduling/payment behaviour.
+
+Emails today are hardcoded in Laravel Mailables (Blade HTML) and
+Notifications (`MailMessage` fluent lines). Mandrill-hosted templates are
+unused except for a diagnostic command. This work adds a catalog-backed
+`email_templates` store and an owner-only admin UI. Senders resolve copy
+from the store (falling back to catalog defaults) and only interpolate
+placeholders for dynamic data.
 
 ## Phase 1: Planning ✅
 
 ### Current state
-- Laravel already had a `resend` mailer stub in `config/mail.php` and
-  `config/services.php` (`RESEND_API_KEY`), but `resend/resend-php` was not
-  installed (`composer.lock` only listed it as a Laravel suggest).
-- Default mailer was `log`. Mandrill remains available as a custom transport.
-- All Mailables and Notifications go through Laravel Mail, so changing
-  `MAIL_MAILER` is enough to send them through Resend.
+- Instructor/learner copy lives in `app/Mail/*` and `app/Notifications/*`.
+- No admin-editable store. No `email_templates` table.
+- Sending, queueing, and recipients stay in existing Actions/Services.
 
 ### Approach
-1. Install `resend/resend-php` (Laravel 12 native driver).
-2. Point `.env.example` at Resend (`MAIL_MAILER=resend`, empty `RESEND_API_KEY`).
-3. Keep Mandrill code in place as a fallback mailer.
-4. Add `mail:test-resend` so the key can be verified after it is added.
-5. Update comments that still described Mandrill as the live transport.
+1. PHP catalog of template keys, audience, description, placeholders, and default copy.
+2. `email_templates` table stores staff overrides (subject, greeting, body, salutation, action label).
+3. Renderer interpolates `{{placeholders}}`; missing keys become empty strings.
+4. Notifications/Mailables ask the renderer for copy; they still compute data blocks and action URLs.
+5. Owner-only Inertia page to list, view, edit, and reset-to-default.
+6. Sync inserts missing catalog keys without overwriting edits.
 
 ### Reflection
-Native Laravel Resend transport is the smallest change: no new service layer,
-no template rewrite, no API contract. The user only needs to drop in
-`RESEND_API_KEY` (and verify the from-domain in Resend).
+Catalog + DB overrides keeps sending working with an empty table, so a
+missed migration cannot silence mail. Staff cannot change keys, recipients,
+or triggers.
+
+**Last Updated:** 2026-09-02.
 
 ## Phase 2: Implementation ✅
 
-### Files edited
-1. **`composer.json` / `composer.lock`** — `resend/resend-php` `^1.0` (v1.12.0).
-2. **`.env.example`** — `MAIL_MAILER=resend`, empty `RESEND_API_KEY`, comments
-   for verified from-domain and local `log` fallback.
-3. **`config/mail.php`** — Resend mailer now carries `key` from `RESEND_API_KEY`.
-4. **`config/services.php`** — comment documenting the Resend key.
-5. **`app/Actions/YearEndArchive/SendArchiveReadyEmailAction.php`** — comment
-   now names Resend as the transport.
+### Currently working on
+Complete.
 
-### Files created
-- **`app/Mail/ResendTestMail.php`** — diagnostic mailable used by the test command.
-- **`app/Console/Commands/TestResendSend.php`** — `php artisan mail:test-resend {email}`.
-- **`tests/Unit/Mail/ResendMailerTest.php`** — config, resolve, command, content.
+### Tasks
+- [x] Migration, model, factory, enums
+- [x] Catalog, interpolator, actions, service
+- [x] Controller, form request, routes
+- [x] Wire Mailables and Notifications
+- [x] Inertia list/edit UI and sidebar
+- [x] Tests
+- [x] database-schema.md
 
-### Key decisions
-- **Native Laravel driver over `resend/resend-laravel`**: matches Laravel 12 docs.
-- **Force `Mail::mailer('resend')` in the diagnostic command**: works even when
-  local `MAIL_MAILER` is `log`.
-- **Leave Mandrill in place**: unused unless `MAIL_MAILER=mandrill`.
-- **No API key in the repo**: user supplies it in `.env` after merge.
+### Reflection
+Owner-only `/email-templates` lists all instructor/learner templates with
+search and audience filters. Edits persist in `email_templates` and are
+interpolated at send time. Action URLs, recipients, and queueing stay in
+existing senders. Catalog defaults are used when the table or row is missing.
 
 ## Phase 3: Reflection ✅
 
-**Why this shape is right for the brief:**
-- Transactional mail already flows through Laravel Mailables/Notifications.
-  Installing the SDK and switching `MAIL_MAILER` is the whole production path.
-- The diagnostic command is the only extra surface so the key can be verified
-  without waiting for a real booking/invoice email.
+Staff can now view and edit instructor and learner email copy from the CRM
+without disrupting sending, scheduling, or enrolments. Adding a new email
+means an enum case, a catalog row, and wiring the sender to the renderer.
 
-**Operational notes:**
-- After adding `RESEND_API_KEY`, run `php artisan config:clear` then
-  `php artisan mail:test-resend you@example.com`.
-- `MAIL_FROM_ADDRESS` must be on a domain verified in the Resend dashboard.
-- Tests keep `MAIL_MAILER=array` via `phpunit.xml`.
-
-**Follow-ups not done (out of scope):**
-- Did not remove Mandrill or MailerSend packages.
-- Did not migrate Mandrill-hosted templates (the template service is unused
-  outside `mail:test-mandrill`).
-
-**Status:** All phases complete.
 **Last Updated:** 2026-09-02.

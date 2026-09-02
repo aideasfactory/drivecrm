@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Mail;
 
+use App\Enums\EmailTemplateKey;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -13,7 +14,11 @@ use Illuminate\Queue\SerializesModels;
 
 class PupilPasswordResetMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable;
+    use RendersTemplatedMail;
+    use SerializesModels;
+
+    private ?RenderedEmailTemplate $renderedCache = null;
 
     public function __construct(
         public User $user,
@@ -23,21 +28,30 @@ class PupilPasswordResetMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your '.config('app.name').' password has been reset',
+            subject: $this->rendered()->subject,
         );
     }
 
     public function content(): Content
     {
         return new Content(
-            view: 'emails.pupil-password-reset',
-            with: [
-                'pupilName' => $this->firstName(),
+            view: 'emails.templated',
+            with: $this->templatedViewData($this->rendered()),
+        );
+    }
+
+    private function rendered(): RenderedEmailTemplate
+    {
+        return $this->renderedCache ??= $this->renderedTemplate(
+            EmailTemplateKey::LearnerPasswordReset,
+            [
+                'recipient_name' => $this->firstName(),
+                'app_name' => config('app.name'),
                 'email' => $this->user->email,
-                'newPassword' => $this->newPassword,
-                'loginUrl' => url('/login'),
-                'appName' => config('app.name'),
+                'new_password' => $this->newPassword,
+                'login_url' => url('/login'),
             ],
+            url('/login'),
         );
     }
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Enums\EmailTemplateKey;
+use App\Mail\RendersTemplatedMail;
 use App\Models\LessonPayment;
 use App\Models\Student;
 use Illuminate\Bus\Queueable;
@@ -14,6 +16,7 @@ use Illuminate\Notifications\Notification;
 class LessonPaymentReminderNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+    use RendersTemplatedMail;
 
     /**
      * @param  array{lesson: int, booking_fee: int, digital_fee: int}|null  $breakdown
@@ -42,36 +45,29 @@ class LessonPaymentReminderNotification extends Notification implements ShouldQu
         $lessonTime = $lesson->start_time->format('g:i A');
         $amount = $this->lessonPayment->formatted_amount;
 
-        $message = (new MailMessage)
-            ->subject("Payment Required: Your Driving Lesson on {$lessonDate}")
-            ->greeting($this->getGreeting())
-            ->line($this->getIntroLine($lessonDate, $lessonTime))
-            ->line('**Lesson Details:**')
-            ->line("Package: {$order->package_name}")
-            ->line("Date: {$lessonDate}")
-            ->line("Time: {$lessonTime}");
+        return $this->templatedMail(
+            EmailTemplateKey::LearnerLessonPaymentReminder,
+            [
+                'recipient_name' => $this->recipientName(),
+                'intro' => $this->introLine($lessonDate, $lessonTime),
+                'package_name' => $order->package_name,
+                'lesson_date' => $lessonDate,
+                'lesson_time' => $lessonTime,
+                'cost_breakdown' => $this->costBreakdown(),
+                'amount' => $amount,
+            ],
+            $this->hostedInvoiceUrl,
+        );
+    }
 
-        foreach ($this->breakdownLines() as $breakdownLine) {
-            $message->line($breakdownLine);
-        }
+    protected function costBreakdown(): string
+    {
+        $lines = $this->breakdownLines();
 
-        $message->line("**Amount due: {$amount}**")
-            ->line('')
-            ->line('Please complete your payment using the link below to secure your lesson.')
-            ->action('Pay Now', $this->hostedInvoiceUrl)
-            ->line('If you have already paid, please disregard this email.')
-            ->salutation('Safe driving,
-The Driving School Team');
-
-        return $message;
+        return $lines === [] ? '' : implode("\n", $lines);
     }
 
     /**
-     * Format the per-lesson cost breakdown as human-readable lines. Returns
-     * an empty array when the breakdown is missing, incoherent, or when the
-     * order has no fees (so the invoice degrades to a single "Amount due"
-     * line as before).
-     *
      * @return array<int, string>
      */
     protected function breakdownLines(): array
@@ -88,7 +84,7 @@ The Driving School Team');
             return [];
         }
 
-        $lines = ['', '**Cost breakdown:**'];
+        $lines = ['**Cost breakdown:**'];
 
         if ($lesson > 0) {
             $lines[] = 'Lesson cost: '.$this->formatPence($lesson);
@@ -112,20 +108,16 @@ The Driving School Team');
         return '£'.number_format($pence / 100, 2);
     }
 
-    protected function getGreeting(): string
+    protected function recipientName(): string
     {
         if ($this->isBookedByContact) {
-            $name = $this->student->contact_first_name ?? 'there';
-
-            return "Hello {$name}!";
+            return $this->student->contact_first_name ?? 'there';
         }
 
-        $name = $this->student->first_name ?? 'there';
-
-        return "Hello {$name}!";
+        return $this->student->first_name ?? 'there';
     }
 
-    protected function getIntroLine(string $lessonDate, string $lessonTime): string
+    protected function introLine(string $lessonDate, string $lessonTime): string
     {
         $learnerName = $this->student->first_name.' '.$this->student->surname;
 

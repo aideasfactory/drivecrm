@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Mail;
 
+use App\Enums\EmailTemplateKey;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -13,7 +14,11 @@ use Illuminate\Queue\SerializesModels;
 
 class InstructorWelcomeMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable;
+    use RendersTemplatedMail;
+    use SerializesModels;
+
+    private ?RenderedEmailTemplate $renderedCache = null;
 
     public function __construct(
         public User $user,
@@ -24,22 +29,31 @@ class InstructorWelcomeMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Welcome to '.config('app.name').' — set up your instructor account',
+            subject: $this->rendered()->subject,
         );
     }
 
     public function content(): Content
     {
         return new Content(
-            view: 'emails.instructor-welcome',
-            with: [
-                'instructorName' => $this->firstName(),
+            view: 'emails.templated',
+            with: $this->templatedViewData($this->rendered()),
+        );
+    }
+
+    private function rendered(): RenderedEmailTemplate
+    {
+        return $this->renderedCache ??= $this->renderedTemplate(
+            EmailTemplateKey::InstructorWelcome,
+            [
+                'recipient_name' => $this->firstName(),
+                'app_name' => config('app.name'),
                 'email' => $this->user->email,
-                'setupUrl' => $this->setupUrl,
-                'expiresInMinutes' => $this->expiresInMinutes,
-                'appName' => config('app.name'),
-                'loginUrl' => url('/login'),
+                'setup_url' => $this->setupUrl,
+                'expires_in_minutes' => $this->expiresInMinutes,
+                'login_url' => url('/login'),
             ],
+            $this->setupUrl,
         );
     }
 

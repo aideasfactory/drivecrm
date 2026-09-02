@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Notifications\LessonRescheduling;
 
+use App\Enums\EmailTemplateKey;
+use App\Mail\RendersTemplatedMail;
 use App\Models\Instructor;
 use App\Models\Student;
 use Carbon\Carbon;
@@ -15,6 +17,7 @@ use Illuminate\Notifications\Notification;
 class LessonsBulkRescheduledStudentNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+    use RendersTemplatedMail;
 
     public function __construct(
         public Student $student,
@@ -35,23 +38,22 @@ class LessonsBulkRescheduledStudentNotification extends Notification implements 
 
     public function toMail(object $notifiable): MailMessage
     {
-        $studentName = $this->student->first_name ?: 'there';
-        $instructorName = $this->instructor->user?->name ?? 'your instructor';
         $startDate = Carbon::parse($this->newStartDate);
-        $dayOfWeek = $startDate->format('l');
-        $startDateFormatted = $startDate->format('l, j F Y');
-        $time = $this->newStartTime.' – '.$this->newEndTime;
-
         $lessonWord = $this->totalLessons === 1 ? 'lesson' : 'lessons';
 
-        return (new MailMessage)
-            ->subject('Your driving lessons have been rescheduled')
-            ->greeting("Hello {$studentName},")
-            ->line("Your upcoming {$lessonWord} with **{$instructorName}** have been rescheduled.")
-            ->line("From **{$startDateFormatted}**, you will now have your lessons on **{$dayOfWeek}s at {$time}**.")
-            ->line("Total {$lessonWord} moved: **{$this->totalLessons}**.")
-            ->line('If this new schedule does not work for you, please contact your instructor to arrange alternatives.')
-            ->salutation("Safe driving,\nThe ".config('app.name').' Team');
+        return $this->templatedMail(
+            EmailTemplateKey::LearnerLessonsBulkRescheduled,
+            [
+                'recipient_name' => $this->student->first_name ?: 'there',
+                'instructor_name' => $this->instructor->user?->name ?? 'your instructor',
+                'lesson_word' => $lessonWord,
+                'start_date' => $startDate->format('l, j F Y'),
+                'day_of_week' => $startDate->format('l'),
+                'time' => $this->newStartTime.' – '.$this->newEndTime,
+                'total_lessons' => $this->totalLessons,
+                'app_name' => config('app.name'),
+            ],
+        );
     }
 
     /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Mail;
 
+use App\Enums\EmailTemplateKey;
 use App\Models\Lesson;
 use App\Models\Resource;
 use App\Models\Student;
@@ -17,7 +18,11 @@ use Illuminate\Support\Facades\URL;
 
 class LessonResourceRecommendations extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable;
+    use RendersTemplatedMail;
+    use SerializesModels;
+
+    private ?RenderedEmailTemplate $renderedCache = null;
 
     /**
      * @param  Collection<int, resource>  $resources
@@ -31,30 +36,48 @@ class LessonResourceRecommendations extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Recommended resources from your driving lesson',
+            subject: $this->rendered()->subject,
         );
     }
 
     public function content(): Content
     {
-        $resourceLinks = $this->resources->map(fn (Resource $resource) => [
-            'title' => $resource->title,
-            'description' => $resource->description,
-            'type' => $resource->isVideo() ? 'Video' : ($resource->isPdf() ? 'PDF' : 'File'),
-            'url' => URL::signedRoute('resources.email-view', [
-                'resource' => $resource->id,
-            ], now()->addDays(7)),
-        ]);
-
         return new Content(
-            view: 'emails.lesson-resource-recommendations',
-            with: [
-                'studentName' => $this->student->first_name ?? 'there',
-                'instructorName' => $this->lesson->instructor?->user?->name ?? 'your instructor',
-                'lessonDate' => $this->lesson->date?->format('l, j F Y') ?? 'your recent lesson',
-                'summaryExcerpt' => str($this->lesson->summary ?? '')->limit(200)->toString(),
-                'resourceLinks' => $resourceLinks,
+            view: 'emails.templated',
+            with: $this->templatedViewData($this->rendered()),
+        );
+    }
+
+    private function rendered(): RenderedEmailTemplate
+    {
+        $excerpt = str($this->lesson->summary ?? '')->limit(200)->toString();
+
+        return $this->renderedCache ??= $this->renderedTemplate(
+            EmailTemplateKey::LearnerLessonResourceRecommendations,
+            [
+                'recipient_name' => $this->student->first_name ?? 'there',
+                'instructor_name' => $this->lesson->instructor?->user?->name ?? 'your instructor',
+                'lesson_date' => $this->lesson->date?->format('l, j F Y') ?? 'your recent lesson',
+                'summary_excerpt' => $excerpt,
+                'resource_list' => $this->resourceList(),
             ],
         );
+    }
+
+    private function resourceList(): string
+    {
+        return $this->resources
+            ->map(function (Resource $resource): string {
+                $type = $resource->isVideo() ? 'Video' : ($resource->isPdf() ? 'PDF' : 'File');
+                $url = URL::signedRoute('resources.email-view', [
+                    'resource' => $resource->id,
+                ], now()->addDays(7));
+                $description = $resource->description
+                    ? "\n".$resource->description
+                    : '';
+
+                return "**{$type}: {$resource->title}**{$description}\n[View resource]({$url})";
+            })
+            ->implode("\n\n");
     }
 }

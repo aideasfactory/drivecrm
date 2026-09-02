@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Enums\EmailTemplateKey;
+use App\Mail\RendersTemplatedMail;
 use App\Models\LessonPayment;
 use App\Models\Student;
 use Illuminate\Bus\Queueable;
@@ -14,6 +16,7 @@ use Illuminate\Notifications\Notification;
 class InstructorLessonPaymentReceivedNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+    use RendersTemplatedMail;
 
     public function __construct(
         public LessonPayment $lessonPayment,
@@ -36,18 +39,15 @@ class InstructorLessonPaymentReceivedNotification extends Notification implement
         $amount = $this->lessonPayment->formatted_amount;
         $studentName = trim(($this->student->first_name ?? '').' '.($this->student->surname ?? ''));
 
-        return (new MailMessage)
-            ->subject("Payment Received: {$studentName} — Lesson on {$lessonDate}")
-            ->greeting('Hello!')
-            ->line("**{$studentName}** has paid **{$amount}** for their upcoming lesson.")
-            ->line('**Lesson Details:**')
-            ->line("Date: {$lessonDate}")
-            ->line("Time: {$lessonTime}")
-            ->line("Amount: {$amount}")
-            ->line('')
-            ->line('This lesson is now confirmed and paid.')
-            ->salutation('Best regards,
-The Driving School Team');
+        return $this->templatedMail(
+            EmailTemplateKey::InstructorLessonPaymentReceived,
+            [
+                'student_name' => $studentName,
+                'amount' => $amount,
+                'lesson_date' => $lessonDate,
+                'lesson_time' => $lessonTime,
+            ],
+        );
     }
 
     /**

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Enums\EmailTemplateKey;
+use App\Mail\RendersTemplatedMail;
 use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Student;
@@ -15,6 +17,7 @@ use Illuminate\Notifications\Notification;
 class InstructorOnWayNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+    use RendersTemplatedMail;
 
     public function __construct(
         public Lesson $lesson,
@@ -32,15 +35,15 @@ class InstructorOnWayNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $studentName = $this->student->getBookerDetails()['first_name'] ?? 'there';
-        $instructorName = $this->instructor->name ?? 'Your instructor';
-
-        return (new MailMessage)
-            ->subject('Your instructor is on the way')
-            ->greeting("Hello {$studentName},")
-            ->line("**{$instructorName}** is on their way to your driving lesson{$this->lessonWhen()}.")
-            ->line('Please be ready at your agreed pickup point.')
-            ->salutation("See you soon,\nThe ".config('app.name').' Team');
+        return $this->templatedMail(
+            EmailTemplateKey::LearnerInstructorOnWay,
+            [
+                'recipient_name' => $this->student->getBookerDetails()['first_name'] ?? 'there',
+                'instructor_name' => $this->instructor->name ?? 'Your instructor',
+                'lesson_when' => $this->lessonWhen(),
+                'app_name' => config('app.name'),
+            ],
+        );
     }
 
     /**
