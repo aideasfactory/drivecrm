@@ -16,7 +16,7 @@ class SendArchiveReadyEmailAction
 {
     /**
      * Send the "your archive is ready" email as a Blade-rendered Mailable
-     * (Mandrill is just the transport, configured via MAIL_MAILER). Includes a
+     * (Resend is the transport, configured via MAIL_MAILER). Includes a
      * signed download URL with the configured TTL. Logs and swallows transport
      * failures — the archive itself is already built and available in the UI.
      */
