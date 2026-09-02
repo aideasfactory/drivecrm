@@ -87,6 +87,7 @@ export interface Package {
   formatted_total_price: string
   formatted_lesson_price: string
   active: boolean
+  is_one_off?: boolean
   is_platform_package: boolean
   is_bespoke_package: boolean
 }
@@ -161,6 +162,7 @@ export interface CalendarItemResponse {
   recurrence_pattern: RecurrencePattern
   recurrence_end_date: string | null
   recurrence_group_id: string | null
+  has_open_offer?: boolean
 }
 
 export interface InstructorPayout {

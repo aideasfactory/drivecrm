@@ -56,7 +56,7 @@ Users (1) ──┬── (1) Instructors ──┬── (Many) Packages
             │                     │                      │
             │                     ├── (Many) Payouts     │
             │                     │                      │
-            │                     ├── (Many) Calendars ──┼── (Many) CalendarItems
+            │                     ├── (Many) Calendars ──┼── (Many) CalendarItems ── (0..1) SlotOffers
             │                     │                      │
             │                     └── (Many) Contacts    │
             │                                            │
@@ -370,6 +370,7 @@ Lesson packages (both platform defaults and instructor bespoke packages).
 | `stripe_product_id` | varchar(255) | NULLABLE | Stripe product ID |
 | `stripe_price_id` | varchar(255) | NULLABLE | Stripe price ID |
 | `active` | boolean | DEFAULT true | Whether package is active/available |
+| `is_one_off` | boolean | DEFAULT false | True for reusable short-notice "One-Off Package" rows created from Offer Slot |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
@@ -385,6 +386,7 @@ Lesson packages (both platform defaults and instructor bespoke packages).
 - Bespoke packages are created by instructors for specific students
 - `lesson_price_pence` is automatically calculated on save: `total_price_pence / lessons_count`
 - Prices are stored in pence (GBP smallest unit)
+- `is_one_off` packages are 1-lesson instructor packages created when offering a slot at a custom price. The same instructor + price combination is reused on later offers.
 
 ---
 
@@ -822,6 +824,45 @@ Defines time slots within a calendar date.
 - Recurring slots: materialized instances pattern — each occurrence is a separate row linked by `recurrence_group_id`
 - Individual occurrences can be modified/deleted without affecting the rest of the series
 - Deleting "this and all future" removes all items in the group from the selected date forward (excluding those with lessons)
+- An empty available slot may have at most one `slot_offers` row. Open offers are cancelled when the slot is booked (Add Booking or a student accepting the offer). Deleting the slot cascades the offer away.
+
+---
+
+### 15b. **slot_offers**
+
+Short-notice lesson offers created from an empty diary slot ("Offer Slot"). Students of that instructor see these as **Short Notice Lesson Available**.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique offer identifier |
+| `calendar_item_id` | bigint unsigned | FOREIGN KEY (calendar_items.id), UNIQUE, ON DELETE CASCADE | The empty diary slot being offered |
+| `instructor_id` | bigint unsigned | FOREIGN KEY (instructors.id), ON DELETE CASCADE | Instructor whose students receive the offer |
+| `package_id` | bigint unsigned | FOREIGN KEY (packages.id), ON DELETE CASCADE | Package charged when a student books (1-lesson, including reused One-Off Packages) |
+| `student_id` | bigint unsigned | FOREIGN KEY (students.id), NULLABLE, ON DELETE SET NULL | Student who accepted/booked the offer |
+| `message` | text | NULLABLE | Bespoke message shown with the offer and used in the push body when set |
+| `status` | varchar(20) | DEFAULT `open` | `open`, `booked`, or `cancelled` |
+| `booked_at` | timestamp | NULLABLE | When a student accepted the offer |
+| `created_at` | timestamp | - | Record creation timestamp |
+| `updated_at` | timestamp | - | Record update timestamp |
+
+**Indexes:**
+- Unique on `calendar_item_id` (one offer row per slot; re-offering reuses the row)
+- Composite on `(instructor_id, status)`
+- Index on `status`
+
+**Relationships:**
+- Belongs to one `CalendarItem`
+- Belongs to one `Instructor`
+- Belongs to one `Package`
+- Optionally belongs to one `Student` (the student who booked it)
+
+**Business Logic:**
+- Only empty availability slots can be offered
+- Selecting a multi-lesson package stores a 1-lesson One-Off Package at that package's `lesson_price_pence`
+- A one-off price find-or-creates `name = One-Off Package`, `lessons_count = 1`, `is_one_off = true` for that instructor and price
+- Push notifications are queued for the instructor's active students who have an Expo token
+- Accepting the offer books the slot immediately (before payment). Concurrent accepts are serialised with `lockForUpdate` on the offer and calendar item; the loser receives 422
+- The slot stops being available when the **booking is created**, not when payment completes
 
 ---
 

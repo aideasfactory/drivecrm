@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Actions\Calendar\CloseOpenSlotOffersForItemsAction;
 use App\Actions\Calendar\DetectCalendarClashesAction;
 use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
 use App\Actions\Payment\SendLessonInvoiceAction;
@@ -24,6 +25,7 @@ use App\Models\Student;
 use App\Notifications\CalendarClashDetectedNotification;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class OrderService extends BaseService
 {
@@ -37,7 +39,8 @@ class OrderService extends BaseService
         protected DetectCalendarClashesAction $detectCalendarClashes,
         protected LogActivityAction $logActivity,
         protected InstructorService $instructorService,
-        protected SendLessonInvoiceAction $sendLessonInvoice
+        protected SendLessonInvoiceAction $sendLessonInvoice,
+        protected CloseOpenSlotOffersForItemsAction $closeOpenSlotOffersForItems
     ) {}
 
     /**
@@ -57,14 +60,16 @@ class OrderService extends BaseService
         string $firstLessonDate,
         string $startTime,
         string $endTime,
-        bool $returnCheckoutUrl = false
+        bool $returnCheckoutUrl = false,
+        ?int $anchorCalendarItemId = null
     ): array {
         $calendarItemIds = ($this->createDraftCalendarItems)(
             $student->instructor_id,
             $firstLessonDate,
             $startTime,
             $endTime,
-            $package->lessons_count
+            $package->lessons_count,
+            $anchorCalendarItemId
         );
 
         $this->checkDraftItemClashes($student->instructor_id, $calendarItemIds, $startTime, $endTime);
@@ -106,10 +111,54 @@ class OrderService extends BaseService
         // Invalidate grouped students cache so the instructor sees the new booking immediately
         $this->invalidateStudentCacheForBooking($student->instructor_id);
 
+        ($this->closeOpenSlotOffersForItems)($calendarItemIds);
+
         return [
             'order' => $order->fresh(['lessons']),
             'checkout_url' => $returnCheckoutUrl ? $checkoutUrl : null,
         ];
+    }
+
+    /**
+     * Book lessons using a specific open diary slot as the first lesson.
+     *
+     * @return array{order: Order, checkout_url?: string|null}
+     */
+    public function bookLessonsFromCalendarItem(
+        Student $student,
+        Package $package,
+        PaymentMode $paymentMode,
+        CalendarItem $calendarItem,
+        bool $returnCheckoutUrl = false
+    ): array {
+        $calendarItem->loadMissing('calendar');
+
+        if (! $student->instructor_id || $calendarItem->calendar->instructor_id !== $student->instructor_id) {
+            throw ValidationException::withMessages([
+                'calendar_item_id' => 'This diary slot does not belong to the student\'s instructor.',
+            ]);
+        }
+
+        if (! $calendarItem->isEmptyAvailability()) {
+            throw ValidationException::withMessages([
+                'calendar_item_id' => 'This diary slot is no longer available.',
+            ]);
+        }
+
+        $date = $calendarItem->calendar->date->format('Y-m-d');
+        $startTime = Carbon::parse($calendarItem->start_time)->format('H:i');
+        $endTime = Carbon::parse($calendarItem->end_time)->format('H:i');
+
+        return $this->bookLessons(
+            $student,
+            $package,
+            $paymentMode,
+            $date,
+            $startTime,
+            $endTime,
+            $returnCheckoutUrl,
+            $calendarItem->id
+        );
     }
 
     /**

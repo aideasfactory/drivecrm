@@ -9,6 +9,8 @@ use App\Enums\CalendarItemType;
 use App\Models\Calendar;
 use App\Models\CalendarItem;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class CreateDraftCalendarItemsAction
 {
@@ -27,67 +29,92 @@ class CreateDraftCalendarItemsAction
         string $firstLessonDate,
         string $startTime,
         string $endTime,
-        int $lessonsCount
+        int $lessonsCount,
+        ?int $anchorCalendarItemId = null
     ): array {
-        $calendarItemIds = [];
-        $travelTimeMinutes = null;
+        return DB::transaction(function () use ($instructorId, $firstLessonDate, $startTime, $endTime, $lessonsCount, $anchorCalendarItemId): array {
+            $calendarItemIds = [];
+            $travelTimeMinutes = null;
 
-        for ($i = 0; $i < $lessonsCount; $i++) {
-            $lessonDate = Carbon::parse($firstLessonDate)->addWeeks($i);
+            for ($i = 0; $i < $lessonsCount; $i++) {
+                $lessonDate = Carbon::parse($firstLessonDate)->addWeeks($i);
 
-            $calendar = Calendar::firstOrCreate([
-                'instructor_id' => $instructorId,
-                'date' => $lessonDate->toDateString(),
-            ]);
+                $calendar = Calendar::firstOrCreate([
+                    'instructor_id' => $instructorId,
+                    'date' => $lessonDate->toDateString(),
+                ]);
 
-            // Check for an existing available slot that matches the time range
-            $existingItem = CalendarItem::query()
-                ->where('calendar_id', $calendar->id)
-                ->where('start_time', $startTime)
-                ->where('end_time', $endTime)
-                ->where('is_available', true)
-                ->whereDoesntHave('lessons')
-                ->first();
+                $existingItem = null;
 
-            if ($existingItem) {
-                // Capture travel time from the first existing slot to propagate to new slots
-                if ($travelTimeMinutes === null && $existingItem->travel_time_minutes) {
-                    $travelTimeMinutes = $existingItem->travel_time_minutes;
+                if ($i === 0 && $anchorCalendarItemId) {
+                    $existingItem = CalendarItem::query()
+                        ->whereKey($anchorCalendarItemId)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (! $existingItem || $existingItem->calendar_id !== $calendar->id) {
+                        throw ValidationException::withMessages([
+                            'calendar_item_id' => 'The selected diary slot could not be found.',
+                        ]);
+                    }
+
+                    if (! $existingItem->isEmptyAvailability()) {
+                        throw ValidationException::withMessages([
+                            'calendar_item_id' => 'This diary slot is no longer available.',
+                        ]);
+                    }
+                } else {
+                    // Check for an existing available slot that matches the time range
+                    $existingItem = CalendarItem::query()
+                        ->where('calendar_id', $calendar->id)
+                        ->where('start_time', $startTime)
+                        ->where('end_time', $endTime)
+                        ->where('is_available', true)
+                        ->whereDoesntHave('lessons')
+                        ->lockForUpdate()
+                        ->first();
                 }
 
-                $existingItem->update([
-                    'is_available' => false,
-                    'status' => CalendarItemStatus::DRAFT,
-                ]);
+                if ($existingItem) {
+                    // Capture travel time from the first existing slot to propagate to new slots
+                    if ($travelTimeMinutes === null && $existingItem->travel_time_minutes) {
+                        $travelTimeMinutes = $existingItem->travel_time_minutes;
+                    }
 
-                // Also mark the existing travel block as DRAFT so it gets confirmed with the lesson
-                $existingItem->travelItem?->update([
-                    'is_available' => false,
-                    'status' => CalendarItemStatus::DRAFT,
-                ]);
+                    $existingItem->update([
+                        'is_available' => false,
+                        'status' => CalendarItemStatus::DRAFT,
+                    ]);
 
-                $calendarItemIds[] = $existingItem->id;
-            } else {
-                $calendarItem = CalendarItem::create([
-                    'calendar_id' => $calendar->id,
-                    'start_time' => $startTime,
-                    'end_time' => $endTime,
-                    'is_available' => false,
-                    'status' => CalendarItemStatus::DRAFT,
-                    'item_type' => CalendarItemType::Slot,
-                    'travel_time_minutes' => $travelTimeMinutes,
-                ]);
+                    // Also mark the existing travel block as DRAFT so it gets confirmed with the lesson
+                    $existingItem->travelItem?->update([
+                        'is_available' => false,
+                        'status' => CalendarItemStatus::DRAFT,
+                    ]);
 
-                // Create travel-time block for newly generated slots
-                if ($travelTimeMinutes && $travelTimeMinutes > 0) {
-                    $this->createTravelBlock($calendar, $calendarItem, $endTime, $travelTimeMinutes);
+                    $calendarItemIds[] = $existingItem->id;
+                } else {
+                    $calendarItem = CalendarItem::create([
+                        'calendar_id' => $calendar->id,
+                        'start_time' => $startTime,
+                        'end_time' => $endTime,
+                        'is_available' => false,
+                        'status' => CalendarItemStatus::DRAFT,
+                        'item_type' => CalendarItemType::Slot,
+                        'travel_time_minutes' => $travelTimeMinutes,
+                    ]);
+
+                    // Create travel-time block for newly generated slots
+                    if ($travelTimeMinutes && $travelTimeMinutes > 0) {
+                        $this->createTravelBlock($calendar, $calendarItem, $endTime, $travelTimeMinutes);
+                    }
+
+                    $calendarItemIds[] = $calendarItem->id;
                 }
-
-                $calendarItemIds[] = $calendarItem->id;
             }
-        }
 
-        return $calendarItemIds;
+            return $calendarItemIds;
+        });
     }
 
     /**

@@ -34,7 +34,7 @@ class GetInstructorCalendarAction
             ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->with(['items' => function ($query) {
                 $query->orderBy('start_time');
-            }, 'items.lessons.order.student', 'items.lessons.order.lessons.payout', 'items.lessons.lessonPayment', 'items.lessons.reflectiveLog'])
+            }, 'items.lessons.order.student', 'items.lessons.order.lessons.payout', 'items.lessons.lessonPayment', 'items.lessons.reflectiveLog', 'items.slotOffer'])
             ->orderBy('date')
             ->get();
 
@@ -133,6 +133,7 @@ class GetInstructorCalendarAction
                         'recurrence_pattern' => $item->recurrence_pattern?->value ?? 'none',
                         'recurrence_end_date' => $item->recurrence_end_date?->format('Y-m-d'),
                         'recurrence_group_id' => $item->recurrence_group_id,
+                        'has_open_offer' => $item->slotOffer?->isOpen() ?? false,
                     ];
                 }),
             ];

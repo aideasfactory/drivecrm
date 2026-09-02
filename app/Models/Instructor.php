@@ -116,6 +116,14 @@ class Instructor extends Model
     }
 
     /**
+     * Get students assigned to this instructor.
+     */
+    public function students(): HasMany
+    {
+        return $this->hasMany(Student::class);
+    }
+
+    /**
      * Get orders assigned to this instructor.
      */
     public function orders(): HasMany

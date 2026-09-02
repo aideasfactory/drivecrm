@@ -22,6 +22,7 @@ class Package extends Model
         'stripe_product_id',
         'stripe_price_id',
         'active',
+        'is_one_off',
     ];
 
     /**
@@ -43,6 +44,7 @@ class Package extends Model
             'lessons_count' => 'integer',
             'lesson_price_pence' => 'integer',
             'active' => 'boolean',
+            'is_one_off' => 'boolean',
         ];
     }
 

@@ -28,6 +28,7 @@ class PackageResource extends JsonResource
             'total_price' => $this->total_price,
             'weekly_payment' => $this->weekly_payment,
             'active' => $this->active,
+            'is_one_off' => (bool) $this->is_one_off,
             'has_stripe_price' => $this->stripe_price_id !== null,
         ];
     }

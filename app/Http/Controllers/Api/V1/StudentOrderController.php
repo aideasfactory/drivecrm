@@ -9,6 +9,7 @@ use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\CreateOrderRequest;
 use App\Http\Resources\V1\OrderResource;
+use App\Models\CalendarItem;
 use App\Models\Order;
 use App\Models\Package;
 use App\Models\Student;
@@ -50,15 +51,26 @@ class StudentOrderController extends Controller
         $paymentMode = PaymentMode::from($validated['payment_mode']);
         $isStudentInitiated = $request->user()->role === UserRole::STUDENT;
 
-        $result = $this->orderService->bookLessons(
-            $student,
-            $package,
-            $paymentMode,
-            $validated['first_lesson_date'],
-            $validated['start_time'],
-            $validated['end_time'],
-            returnCheckoutUrl: $isStudentInitiated
-        );
+        if (! empty($validated['calendar_item_id'])) {
+            $calendarItem = CalendarItem::with('calendar')->findOrFail($validated['calendar_item_id']);
+            $result = $this->orderService->bookLessonsFromCalendarItem(
+                $student,
+                $package,
+                $paymentMode,
+                $calendarItem,
+                returnCheckoutUrl: $isStudentInitiated
+            );
+        } else {
+            $result = $this->orderService->bookLessons(
+                $student,
+                $package,
+                $paymentMode,
+                $validated['first_lesson_date'],
+                $validated['start_time'],
+                $validated['end_time'],
+                returnCheckoutUrl: $isStudentInitiated
+            );
+        }
 
         if ($paymentMode === PaymentMode::WEEKLY) {
             $message = 'Order created and activated. Lesson invoices will be sent before each lesson.';

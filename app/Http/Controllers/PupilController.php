@@ -36,6 +36,7 @@ use App\Http\Requests\StorePickupPointRequest;
 use App\Http\Requests\UpdatePickupPointRequest;
 use App\Http\Requests\UpdateStudentStatusRequest;
 use App\Jobs\ProcessLessonSignOffJob;
+use App\Models\CalendarItem;
 use App\Models\Contact;
 use App\Models\Instructor;
 use App\Models\Lesson;
@@ -446,14 +447,24 @@ class PupilController extends Controller
 
         $paymentMode = PaymentMode::from($validated['payment_mode']);
 
-        $result = $orderService->bookLessons(
-            $student,
-            $package,
-            $paymentMode,
-            $validated['first_lesson_date'],
-            $validated['start_time'],
-            $validated['end_time']
-        );
+        if (! empty($validated['calendar_item_id'])) {
+            $calendarItem = CalendarItem::with('calendar')->findOrFail($validated['calendar_item_id']);
+            $result = $orderService->bookLessonsFromCalendarItem(
+                $student,
+                $package,
+                $paymentMode,
+                $calendarItem
+            );
+        } else {
+            $result = $orderService->bookLessons(
+                $student,
+                $package,
+                $paymentMode,
+                $validated['first_lesson_date'],
+                $validated['start_time'],
+                $validated['end_time']
+            );
+        }
 
         $message = $paymentMode === PaymentMode::WEEKLY
             ? 'Order created and activated. Lesson invoices will be sent before each lesson.'

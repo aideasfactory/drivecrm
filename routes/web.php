@@ -123,6 +123,10 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('instructors.calendar.items.update');
     Route::delete('/instructors/{instructor}/calendar/items/{calendarItem}', [InstructorController::class, 'destroyCalendarItem'])
         ->name('instructors.calendar.items.destroy');
+    Route::post('/instructors/{instructor}/calendar/items/{calendarItem}/offers', [InstructorController::class, 'storeSlotOffer'])
+        ->name('instructors.calendar.items.offers.store');
+    Route::delete('/instructors/{instructor}/calendar/items/{calendarItem}/offers', [InstructorController::class, 'destroySlotOffer'])
+        ->name('instructors.calendar.items.offers.destroy');
     Route::patch('/instructors/{instructor}/lessons/{lesson}/mileage', [InstructorController::class, 'updateLessonMileage'])
         ->name('instructors.lessons.mileage.update');
 
