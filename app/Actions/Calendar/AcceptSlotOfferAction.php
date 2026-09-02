@@ -7,6 +7,7 @@ namespace App\Actions\Calendar;
 use App\Enums\PaymentMode;
 use App\Enums\SlotOfferStatus;
 use App\Models\CalendarItem;
+use App\Models\Order;
 use App\Models\SlotOffer;
 use App\Models\Student;
 use App\Services\OrderService;
@@ -26,7 +27,7 @@ class AcceptSlotOfferAction
      * Availability is decided here under a row lock so two students cannot
      * take the same slot even if they tap at the same time.
      *
-     * @return array{order: \App\Models\Order, checkout_url?: string|null}
+     * @return array{order: Order, checkout_url?: string|null}
      */
     public function __invoke(Student $student, SlotOffer $offer, PaymentMode $paymentMode, bool $returnCheckoutUrl = true): array
     {

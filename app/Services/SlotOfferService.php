@@ -12,6 +12,7 @@ use App\Actions\Calendar\GetActiveSlotOffersForStudentAction;
 use App\Enums\PaymentMode;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
+use App\Models\Order;
 use App\Models\SlotOffer;
 use App\Models\Student;
 use Illuminate\Database\Eloquent\Collection;
@@ -59,7 +60,7 @@ class SlotOfferService extends BaseService
     }
 
     /**
-     * @return array{order: \App\Models\Order, checkout_url?: string|null}
+     * @return array{order: Order, checkout_url?: string|null}
      */
     public function acceptOffer(Student $student, SlotOffer $offer, PaymentMode $paymentMode, bool $returnCheckoutUrl = true): array
     {
