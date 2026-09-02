@@ -230,8 +230,8 @@ const handleOpenChange = (value: boolean) => {
                     />
                     <p class="text-xs text-muted-foreground">
                         Markdown is supported (**bold**, lists, links). Put
-                        {{ '{{action_button}}' }} where the button should
-                        appear.
+                        <span v-text="'{{action_button}}'" /> where the button
+                        should appear.
                     </p>
                     <p v-if="errors.body" class="text-sm text-destructive">
                         {{ errors.body }}
