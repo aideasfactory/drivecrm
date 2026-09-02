@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { router, Link } from '@inertiajs/vue3';
+import { computed, ref, watch } from 'vue';
+import { router, Link, usePage } from '@inertiajs/vue3';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +13,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import { toast } from '@/components/ui/sonner';
 import { useHmrcAction } from '@/composables/useHmrcAction';
 import {
     AlertCircle,
@@ -66,6 +67,13 @@ interface SubmissionRow {
     is_itemised: boolean;
 }
 
+interface PageProps {
+    flash?: {
+        success?: string | null;
+        error?: string | null;
+    };
+}
+
 const props = defineProps<{
     connected: boolean;
     enrolmentStatus: EnrolmentStatus;
@@ -81,6 +89,22 @@ const formatGbp = (amount: number): string =>
     amount.toLocaleString(undefined, { style: 'currency', currency: 'GBP' });
 
 const hmrcAction = useHmrcAction();
+const page = usePage<PageProps>();
+
+watch(
+    () => page.props.flash?.success,
+    (value) => {
+        if (value) toast.success(value);
+    },
+    { immediate: true },
+);
+watch(
+    () => page.props.flash?.error,
+    (value) => {
+        if (value) toast.error(value);
+    },
+    { immediate: true },
+);
 
 // Inline feedback — set after a successful refresh/sync so users get a
 // visible confirmation next to the button even if the toast system fails.
@@ -97,22 +121,51 @@ const showFeedback = (kind: 'success' | 'error', message: string) => {
     }, 5000);
 };
 
+const flashFromPage = (pageArg: { props: PageProps }): { success?: string | null; error?: string | null } =>
+    pageArg.props.flash ?? {};
+
 const refreshStatus = async () => {
     refreshing.value = true;
-    await hmrcAction.refreshFingerprint();
+    try {
+        await hmrcAction.refreshFingerprint();
+    } catch {
+        showFeedback('error', 'Could not prepare the HMRC request. Try again.');
+        refreshing.value = false;
+        return;
+    }
     router.post('/hmrc/itsa/refresh-status', {}, {
         preserveScroll: true,
-        onSuccess: () => showFeedback('success', 'MTD ITSA enrolment status refreshed.'),
+        onSuccess: (pageArg) => {
+            const flash = flashFromPage(pageArg);
+            if (flash.error) {
+                showFeedback('error', flash.error);
+                return;
+            }
+            showFeedback('success', flash.success ?? 'MTD ITSA enrolment status refreshed.');
+        },
         onError: () => showFeedback('error', 'Could not refresh status. Try again or check the HMRC connection.'),
         onFinish: () => { refreshing.value = false; },
     });
 };
 const syncObligations = async () => {
     syncing.value = true;
-    await hmrcAction.refreshFingerprint();
+    try {
+        await hmrcAction.refreshFingerprint();
+    } catch {
+        showFeedback('error', 'Could not prepare the HMRC request. Try again.');
+        syncing.value = false;
+        return;
+    }
     router.post('/hmrc/itsa/sync-obligations', {}, {
         preserveScroll: true,
-        onSuccess: () => showFeedback('success', 'Obligations refreshed from HMRC.'),
+        onSuccess: (pageArg) => {
+            const flash = flashFromPage(pageArg);
+            if (flash.error) {
+                showFeedback('error', flash.error);
+                return;
+            }
+            showFeedback('success', flash.success ?? 'Obligations refreshed from HMRC.');
+        },
         onError: () => showFeedback('error', 'Could not sync obligations. Try again or check the HMRC connection.'),
         onFinish: () => { syncing.value = false; },
     });
