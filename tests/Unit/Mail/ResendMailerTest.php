@@ -5,6 +5,9 @@ declare(strict_types=1);
 use App\Mail\ResendTestMail;
 use Illuminate\Mail\Mailer;
 use Illuminate\Support\Facades\Mail;
+use Tests\TestCase;
+
+uses(TestCase::class);
 
 test('the resend mailer is registered with a key from services config', function () {
     expect(config('mail.mailers.resend.transport'))->toBe('resend');

@@ -42,7 +42,7 @@ no template rewrite, no API contract. The user only needs to drop in
 ### Files created
 - **`app/Mail/ResendTestMail.php`** — diagnostic mailable used by the test command.
 - **`app/Console/Commands/TestResendSend.php`** — `php artisan mail:test-resend {email}`.
-- **`tests/Feature/Mail/ResendMailerTest.php`** — config, resolve, command, content.
+- **`tests/Unit/Mail/ResendMailerTest.php`** — config, resolve, command, content.
 
 ### Key decisions
 - **Native Laravel driver over `resend/resend-laravel`**: matches Laravel 12 docs.
