@@ -22,6 +22,10 @@ return [
         'key' => env('POSTMARK_API_KEY'),
     ],
 
+    /*
+    | Transactional email via Resend. MAIL_MAILER=resend reads this key.
+    | Leave empty in local .env until the production/staging key is supplied.
+    */
     'resend' => [
         'key' => env('RESEND_API_KEY'),
     ],
