@@ -73,6 +73,15 @@ class YearEndArchive extends Model
         return sprintf('%d/%s', $start, substr((string) ($start + 1), -2));
     }
 
+    /**
+     * Attachment filename for the ZIP download. Hyphenates the tax-year label
+     * because Symfony rejects Content-Disposition filenames containing `/`.
+     */
+    public function downloadFilename(): string
+    {
+        return sprintf('drive-tax-archive-%s.zip', str_replace('/', '-', $this->taxYearLabel()));
+    }
+
     public function taxYearStartDate(): Carbon
     {
         return Carbon::create((int) $this->tax_year_start, 4, 6)->startOfDay();

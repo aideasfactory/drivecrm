@@ -1,6 +1,8 @@
 <?php
 
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /*
@@ -17,6 +19,9 @@ use Tests\TestCase;
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
     ->in('Feature');
+
+pest()->extend(TestCase::class)
+    ->in('Unit/Hmrc');
 
 /*
 |--------------------------------------------------------------------------
@@ -47,4 +52,69 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * Minimal schema for HMRC archive/ITSA HTTP tests. Full RefreshDatabase
+ * migrations are MySQL-specific in this repo (ALTER ... MODIFY ENUM, etc.).
+ */
+function createHmrcTestSchema(): void
+{
+    Schema::dropIfExists('year_end_archives');
+    Schema::dropIfExists('instructors');
+    Schema::dropIfExists('users');
+    Schema::dropIfExists('teams');
+
+    Schema::create('teams', function (Blueprint $table) {
+        $table->id();
+        $table->uuid('uuid')->unique();
+        $table->string('name');
+        $table->json('settings')->nullable();
+        $table->timestamps();
+    });
+
+    Schema::create('users', function (Blueprint $table) {
+        $table->id();
+        $table->string('name');
+        $table->string('email')->unique();
+        $table->timestamp('email_verified_at')->nullable();
+        $table->string('password');
+        $table->string('role')->default('student');
+        $table->unsignedBigInteger('current_team_id')->nullable();
+        $table->text('two_factor_secret')->nullable();
+        $table->text('two_factor_recovery_codes')->nullable();
+        $table->timestamp('two_factor_confirmed_at')->nullable();
+        $table->rememberToken();
+        $table->timestamps();
+    });
+
+    Schema::create('instructors', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('user_id')->unique();
+        $table->string('stripe_account_id')->nullable();
+        $table->boolean('onboarding_complete')->default(false);
+        $table->boolean('charges_enabled')->default(false);
+        $table->boolean('payouts_enabled')->default(false);
+        $table->string('status')->default('active');
+        $table->boolean('priority')->default(false);
+        $table->string('mtd_itsa_status', 32)->default('unknown');
+        $table->timestamp('mtd_itsa_status_checked_at')->nullable();
+        $table->timestamps();
+    });
+
+    Schema::create('year_end_archives', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('instructor_id');
+        $table->unsignedSmallInteger('tax_year_start');
+        $table->string('status', 16)->default('queued');
+        $table->string('file_path')->nullable();
+        $table->unsignedBigInteger('file_size_bytes')->nullable();
+        $table->json('counts')->nullable();
+        $table->text('error_message')->nullable();
+        $table->timestamp('queued_at')->nullable();
+        $table->timestamp('generated_at')->nullable();
+        $table->timestamp('expires_at')->nullable();
+        $table->timestamp('purged_at')->nullable();
+        $table->timestamps();
+    });
 }
