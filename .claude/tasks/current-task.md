@@ -61,4 +61,9 @@ Staff can now view and edit instructor and learner email copy from the CRM
 without disrupting sending, scheduling, or enrolments. Adding a new email
 means an enum case, a catalog row, and wiring the sender to the renderer.
 
+## Follow-up: Save toasts ✅
+
+Save/restore now use Inertia visits (not axios + full reload), so the success
+toast is not wiped when the list refreshes. Validation failures also toast.
+
 **Last Updated:** 2026-09-02.

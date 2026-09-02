@@ -79,7 +79,8 @@ test('owners can edit email copy without changing the template key', function ()
             'action_text' => 'Open the app',
         ]);
 
-    $response->assertRedirect();
+    $response->assertRedirect()
+        ->assertSessionHas('success', 'Email template saved.');
 
     $this->assertDatabaseHas('email_templates', [
         'key' => EmailTemplateKey::LearnerWelcome->value,
@@ -120,7 +121,8 @@ test('owners can restore an edited template to the default copy', function () {
     $this->withoutMiddleware(ValidateCsrfToken::class)
         ->actingAs($owner)
         ->post(route('email-templates.restore', EmailTemplateKey::LearnerWelcome->value))
-        ->assertRedirect();
+        ->assertRedirect()
+        ->assertSessionHas('success', 'Email template restored to the default copy.');
 
     $template = EmailTemplate::query()
         ->where('key', EmailTemplateKey::LearnerWelcome->value)

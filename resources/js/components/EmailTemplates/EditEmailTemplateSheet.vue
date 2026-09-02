@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import axios from 'axios'
+import { router } from '@inertiajs/vue3'
 import {
     Sheet,
     SheetContent,
@@ -92,7 +92,17 @@ const insertPlaceholder = (key: string) => {
     form.body = form.body ? `${form.body}${token}` : token
 }
 
-const handleSave = async () => {
+const applyValidationErrors = (validationErrors: Record<string, string>) => {
+    Object.keys(errors).forEach((key) => delete errors[key])
+    Object.entries(validationErrors).forEach(([key, message]) => {
+        errors[key] = Array.isArray(message) ? message[0] : message
+    })
+
+    const firstError = Object.values(errors)[0]
+    toast.error(firstError || 'Please fix the highlighted errors')
+}
+
+const handleSave = () => {
     if (!props.template || !canSave.value) {
         return
     }
@@ -100,52 +110,59 @@ const handleSave = async () => {
     saving.value = true
     Object.keys(errors).forEach((key) => delete errors[key])
 
-    try {
-        await axios.put(updateEmailTemplate.url(props.template.key), {
+    router.put(
+        updateEmailTemplate.url(props.template.key),
+        {
             subject: form.subject,
             greeting: form.greeting,
             body: form.body,
             salutation: form.salutation,
             action_text: form.action_text,
-        })
-        toast.success('Email copy saved')
-        emit('saved')
-        emit('update:open', false)
-    } catch (error: any) {
-        if (error.response?.status === 422) {
-            const validationErrors = error.response.data.errors || {}
-            Object.entries(validationErrors).forEach(([key, msgs]) => {
-                errors[key] = (msgs as string[])[0]
-            })
-        } else {
-            toast.error(
-                error.response?.data?.message || 'Failed to save email copy',
-            )
-        }
-    } finally {
-        saving.value = false
-    }
+        },
+        {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                toast.success('Email template saved.')
+                emit('saved')
+                emit('update:open', false)
+            },
+            onError: (validationErrors) => {
+                applyValidationErrors(validationErrors as Record<string, string>)
+            },
+            onFinish: () => {
+                saving.value = false
+            },
+        },
+    )
 }
 
-const handleRestore = async () => {
+const handleRestore = () => {
     if (!props.template) {
         return
     }
 
     restoring.value = true
 
-    try {
-        await axios.post(restoreEmailTemplate.url(props.template.key))
-        toast.success('Restored to the default copy')
-        emit('saved')
-        emit('update:open', false)
-    } catch (error: any) {
-        toast.error(
-            error.response?.data?.message || 'Failed to restore default copy',
-        )
-    } finally {
-        restoring.value = false
-    }
+    router.post(
+        restoreEmailTemplate.url(props.template.key),
+        {},
+        {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                toast.success('Email template restored to the default copy.')
+                emit('saved')
+                emit('update:open', false)
+            },
+            onError: () => {
+                toast.error('Failed to restore default copy')
+            },
+            onFinish: () => {
+                restoring.value = false
+            },
+        },
+    )
 }
 
 const handleOpenChange = (value: boolean) => {

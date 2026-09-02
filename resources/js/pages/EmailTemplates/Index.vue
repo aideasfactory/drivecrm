@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Head, router } from '@inertiajs/vue3'
+import { Head } from '@inertiajs/vue3'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -62,7 +62,8 @@ const openEditor = (template: EmailTemplateItem) => {
 }
 
 const handleSaved = () => {
-    router.reload({ only: ['templates'] })
+    isEditSheetOpen.value = false
+    editingTemplate.value = null
 }
 
 const breadcrumbs = [{ title: 'Email templates' }]
