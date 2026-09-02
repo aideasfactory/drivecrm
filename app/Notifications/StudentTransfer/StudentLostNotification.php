@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Notifications\StudentTransfer;
 
+use App\Enums\EmailTemplateKey;
+use App\Mail\RendersTemplatedMail;
 use App\Models\Instructor;
 use App\Models\Student;
 use Illuminate\Bus\Queueable;
@@ -14,6 +16,7 @@ use Illuminate\Notifications\Notification;
 class StudentLostNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+    use RendersTemplatedMail;
 
     public function __construct(
         public Student $student,
@@ -32,7 +35,6 @@ class StudentLostNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $instructorFirstName = $this->sourceInstructor->first_name ?? 'there';
         $studentName = trim("{$this->student->first_name} {$this->student->surname}") ?: 'A student';
         $destinationName = $this->destinationInstructor->name ?? 'another instructor';
 
@@ -42,13 +44,16 @@ class StudentLostNotification extends Notification implements ShouldQueue
                 ? '1 future lesson has been removed from your diary.'
                 : "{$this->lessonsRemoved} future lessons have been removed from your diary.");
 
-        return (new MailMessage)
-            ->subject("Student transferred: {$studentName}")
-            ->greeting("Hello {$instructorFirstName},")
-            ->line("**{$studentName}** has been transferred to **{$destinationName}**.")
-            ->line($lessonsLine)
-            ->line('Any lessons you have already taught and been paid for remain attached to you — this transfer only affects future bookings.')
-            ->salutation("Thanks,\nThe ".config('app.name').' Team');
+        return $this->templatedMail(
+            EmailTemplateKey::InstructorStudentLost,
+            [
+                'recipient_name' => $this->sourceInstructor->first_name ?? 'there',
+                'student_name' => $studentName,
+                'destination_name' => $destinationName,
+                'lessons_line' => $lessonsLine,
+                'app_name' => config('app.name'),
+            ],
+        );
     }
 
     /**

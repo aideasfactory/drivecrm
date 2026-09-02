@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Enums\EmailTemplateKey;
+use App\Mail\RendersTemplatedMail;
 use App\Models\Instructor;
 use App\Models\Student;
 use Illuminate\Bus\Queueable;
@@ -14,6 +16,7 @@ use Illuminate\Notifications\Notification;
 class StudentAssignedByAdminNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+    use RendersTemplatedMail;
 
     public function __construct(
         public Student $student,
@@ -30,17 +33,18 @@ class StudentAssignedByAdminNotification extends Notification implements ShouldQ
 
     public function toMail(object $notifiable): MailMessage
     {
-        $instructorFirstName = $this->instructor->first_name ?? 'there';
         $studentName = trim("{$this->student->first_name} {$this->student->surname}")
             ?: ($this->student->email ?? 'A new student');
 
-        return (new MailMessage)
-            ->subject("New student assigned: {$studentName}")
-            ->greeting("Hello {$instructorFirstName},")
-            ->line("A new student, **{$studentName}**, has been assigned to you by an administrator.")
-            ->line('Log in to view their details and get in touch to arrange their first lesson.')
-            ->action('View student', url('/pupils'))
-            ->salutation("Thanks,\nThe ".config('app.name').' Team');
+        return $this->templatedMail(
+            EmailTemplateKey::InstructorStudentAssigned,
+            [
+                'recipient_name' => $this->instructor->first_name ?? 'there',
+                'student_name' => $studentName,
+                'app_name' => config('app.name'),
+            ],
+            url('/pupils'),
+        );
     }
 
     /**

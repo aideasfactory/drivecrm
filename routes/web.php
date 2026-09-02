@@ -7,6 +7,7 @@ use App\Http\Controllers\Booking\StepOneController as BookingStepOneController;
 use App\Http\Controllers\Booking\StepTwoController as BookingStepTwoController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DiscountCodeController;
+use App\Http\Controllers\EmailTemplateController;
 use App\Http\Controllers\EnquiryController;
 use App\Http\Controllers\GetAppController;
 use App\Http\Controllers\HazardPerceptionVideoController;
@@ -328,6 +329,16 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
             ->name('push-notifications.index');
         Route::post('/push-notifications', [PushNotificationController::class, 'store'])
             ->name('push-notifications.store');
+    });
+
+    // Email templates (Owner Only) — view/edit instructor and learner copy
+    Route::middleware([EnsureOwner::class])->group(function () {
+        Route::get('/email-templates', [EmailTemplateController::class, 'index'])
+            ->name('email-templates.index');
+        Route::put('/email-templates/{emailTemplate}', [EmailTemplateController::class, 'update'])
+            ->name('email-templates.update');
+        Route::post('/email-templates/{emailTemplate}/restore', [EmailTemplateController::class, 'restore'])
+            ->name('email-templates.restore');
     });
 
     // Support Messages (Owner Only)

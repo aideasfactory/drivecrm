@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Mail;
 
+use App\Enums\EmailTemplateKey;
 use App\Models\AccountDeletionRequest;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
@@ -14,7 +15,11 @@ use Illuminate\Queue\SerializesModels;
 
 class AccountDeletionRequestedMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable;
+    use RendersTemplatedMail;
+    use SerializesModels;
+
+    private ?RenderedEmailTemplate $renderedCache = null;
 
     public function __construct(
         public User $user,
@@ -24,19 +29,26 @@ class AccountDeletionRequestedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your '.config('app.name').' account is scheduled for deletion',
+            subject: $this->rendered()->subject,
         );
     }
 
     public function content(): Content
     {
         return new Content(
-            view: 'emails.account-deletion-requested',
-            with: [
-                'firstName' => $this->firstName(),
-                'deletionDate' => $this->deletionRequest->scheduled_for->format('j F Y'),
-                'appName' => config('app.name'),
-                'loginUrl' => url('/login'),
+            view: 'emails.templated',
+            with: $this->templatedViewData($this->rendered()),
+        );
+    }
+
+    private function rendered(): RenderedEmailTemplate
+    {
+        return $this->renderedCache ??= $this->renderedTemplate(
+            EmailTemplateKey::LearnerAccountDeletionRequested,
+            [
+                'recipient_name' => $this->firstName(),
+                'app_name' => config('app.name'),
+                'deletion_date' => $this->deletionRequest->scheduled_for->format('j F Y'),
             ],
         );
     }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Enums\EmailTemplateKey;
+use App\Mail\RendersTemplatedMail;
 use App\Models\Order;
 use App\Models\Student;
 use Carbon\Carbon;
@@ -15,10 +17,8 @@ use Illuminate\Notifications\Notification;
 class OrderConfirmationNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+    use RendersTemplatedMail;
 
-    /**
-     * Create a new notification instance.
-     */
     public function __construct(
         public Order $order,
         public Student $student,
@@ -26,8 +26,6 @@ class OrderConfirmationNotification extends Notification implements ShouldQueue
     ) {}
 
     /**
-     * Get the notification's delivery channels.
-     *
      * @return array<int, string>
      */
     public function via(object $notifiable): array
@@ -35,87 +33,49 @@ class OrderConfirmationNotification extends Notification implements ShouldQueue
         return ['mail'];
     }
 
-    /**
-     * Get the mail representation of the notification.
-     */
     public function toMail(object $notifiable): MailMessage
     {
         $order = $this->order;
         $instructor = $order->instructor;
         $firstLesson = $order->lessons()->orderBy('date')->first();
 
-        $message = (new MailMessage)
-            ->subject('Your Driving Lessons Have Been Booked!')
-            ->greeting($this->getGreeting())
-            ->line($this->getIntroLine())
-            ->line('**Order Details:**')
-            ->line("Package: {$order->package_name}")
-            ->line("Number of lessons: {$order->package_lessons_count}")
-            ->line("Instructor: {$instructor->user->name}");
+        $firstLessonLine = $firstLesson
+            ? 'First lesson: '.Carbon::parse($firstLesson->date)->format('l, F j, Y')
+            : '';
 
-        if ($firstLesson) {
-            $message->line('First lesson: '.Carbon::parse($firstLesson->date)->format('l, F j, Y'));
-        }
-
-        if ($order->isUpfront()) {
-            $message->line('**Payment — paid in full:**')
-                ->line("Lessons: {$order->formatted_package_total_price}");
-
-            if ($order->booking_fee_pence > 0) {
-                $message->line("Booking fee: {$order->formatted_booking_fee}");
-            }
-
-            if ($order->digital_fee_pence > 0) {
-                $message->line("Digital fee: {$order->formatted_digital_fee}");
-            }
-
-            $message->line("**Total paid: {$order->formatted_amount_paid}**");
-        } else {
-            $message->line('Payment: Weekly (£'.number_format($order->package_lesson_price_pence / 100, 2).' per lesson)');
-        }
-
-        $message->line('')
-            ->line('**Next Steps:**')
-            ->line('1. Download the app to view your lesson schedule')
-            ->line('2. Your instructor will contact you to confirm the details')
-            ->line('3. Make sure to arrive 5 minutes early for your first lesson');
-
+        $bookedForLine = '';
         if ($this->isBookedByContact) {
             $learnerName = $this->student->first_name.' '.$this->student->surname;
-            $message->line('')
-                ->line("This booking was made for: **{$learnerName}**");
+            $bookedForLine = "\nThis booking was made for: **{$learnerName}**";
         }
 
-        $message->action('Download app', url('/get-app'))
-            ->line('Thank you for choosing us for your driving lessons!')
-            ->salutation('Safe driving,
-The Driving School Team');
-
-        return $message;
+        return $this->templatedMail(
+            EmailTemplateKey::LearnerOrderConfirmation,
+            [
+                'recipient_name' => $this->recipientName(),
+                'intro' => $this->introLine(),
+                'package_name' => $order->package_name,
+                'lessons_count' => $order->package_lessons_count,
+                'instructor_name' => $instructor->user->name,
+                'first_lesson_line' => $firstLessonLine,
+                'payment_block' => $this->paymentBlock(),
+                'booked_for_line' => $bookedForLine,
+                'app_name' => config('app.name'),
+            ],
+            url('/get-app'),
+        );
     }
 
-    /**
-     * Get the appropriate greeting based on booking context.
-     */
-    protected function getGreeting(): string
+    protected function recipientName(): string
     {
         if ($this->isBookedByContact) {
-            // Email to contact person
-            $contactName = $this->student->contact_first_name ?? 'there';
-
-            return "Hello {$contactName}!";
+            return $this->student->contact_first_name ?? 'there';
         }
 
-        // Email to learner
-        $learnerName = $this->student->first_name ?? 'there';
-
-        return "Hello {$learnerName}!";
+        return $this->student->first_name ?? 'there';
     }
 
-    /**
-     * Get the appropriate intro line based on booking context.
-     */
-    protected function getIntroLine(): string
+    protected function introLine(): string
     {
         if ($this->isBookedByContact) {
             $learnerName = $this->student->first_name.' '.$this->student->surname;
@@ -126,9 +86,33 @@ The Driving School Team');
         return 'Great news! Your driving lessons have been successfully booked.';
     }
 
+    protected function paymentBlock(): string
+    {
+        $order = $this->order;
+
+        if ($order->isUpfront()) {
+            $lines = [
+                '**Payment — paid in full:**',
+                "Lessons: {$order->formatted_package_total_price}",
+            ];
+
+            if ($order->booking_fee_pence > 0) {
+                $lines[] = "Booking fee: {$order->formatted_booking_fee}";
+            }
+
+            if ($order->digital_fee_pence > 0) {
+                $lines[] = "Digital fee: {$order->formatted_digital_fee}";
+            }
+
+            $lines[] = "**Total paid: {$order->formatted_amount_paid}**";
+
+            return implode("\n", $lines);
+        }
+
+        return 'Payment: Weekly (£'.number_format($order->package_lesson_price_pence / 100, 2).' per lesson)';
+    }
+
     /**
-     * Get the array representation of the notification.
-     *
      * @return array<string, mixed>
      */
     public function toArray(object $notifiable): array

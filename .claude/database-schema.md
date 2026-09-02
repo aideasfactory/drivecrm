@@ -149,6 +149,25 @@ Users (1) ──┬── (1) Instructors ──┬── (Many) Packages
 12. **sessions** - Laravel session storage
 13. **cache** - Laravel cache
 14. **jobs** - Laravel queue jobs
+15. **email_templates** - Staff-editable copy for instructor and learner transactional emails (subject, greeting, body, salutation, button label). Keys, audience, and placeholders live in `App\Mail\EmailTemplateCatalog`; sending falls back to those defaults if a row is missing.
+
+### email_templates
+
+Owner-only CRM screen at `/email-templates`. Staff can change wording only — recipients, triggers, and action URLs stay in code.
+
+| Column | Type | Nullable | Description |
+|--------|------|----------|-------------|
+| id | bigint PK | No | Auto-increment |
+| key | string | No | Catalog key, e.g. `learner.welcome`. Unique. Used as the route key. |
+| subject | text | No | Subject line. Supports `{{placeholders}}`. |
+| greeting | text | Yes | Optional MailMessage greeting. |
+| body | longtext | No | Body copy (markdown). `{{action_button}}` marks where the CTA is injected. |
+| salutation | text | Yes | Optional sign-off. |
+| action_text | string | Yes | Button label. The URL is supplied by the sender, not stored here. |
+| created_at / updated_at | timestamp | Yes | |
+
+**Constraints:** UNIQUE (key)
+**Notes:** `SyncEmailTemplatesAction` inserts missing catalog keys and never overwrites staff edits. `RenderEmailTemplateAction` uses catalog defaults when the table or row is absent, so sending does not depend on this table being migrated yet.
 
 ### Relationship Summary
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Mail;
 
+use App\Enums\EmailTemplateKey;
 use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Student;
@@ -15,7 +16,11 @@ use Illuminate\Queue\SerializesModels;
 
 class LessonFeedbackRequest extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable;
+    use RendersTemplatedMail;
+    use SerializesModels;
+
+    private ?RenderedEmailTemplate $renderedCache = null;
 
     public function __construct(
         public Lesson $lesson,
@@ -26,21 +31,31 @@ class LessonFeedbackRequest extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'How was your driving lesson?',
+            subject: $this->rendered()->subject,
         );
     }
 
     public function content(): Content
     {
         return new Content(
-            view: 'emails.lesson-feedback-request',
-            with: [
-                'studentName' => $this->student->first_name ?? 'there',
-                'instructorName' => $this->instructor->user?->name ?? 'your instructor',
-                'lessonDate' => $this->lesson->date?->format('l, j F Y') ?? 'your recent lesson',
-                'lessonTime' => $this->lesson->start_time?->format('H:i') && $this->lesson->end_time?->format('H:i')
-                    ? $this->lesson->start_time->format('H:i').' - '.$this->lesson->end_time->format('H:i')
-                    : null,
+            view: 'emails.templated',
+            with: $this->templatedViewData($this->rendered()),
+        );
+    }
+
+    private function rendered(): RenderedEmailTemplate
+    {
+        $lessonTime = $this->lesson->start_time?->format('H:i') && $this->lesson->end_time?->format('H:i')
+            ? ' ('.$this->lesson->start_time->format('H:i').' - '.$this->lesson->end_time->format('H:i').')'
+            : '';
+
+        return $this->renderedCache ??= $this->renderedTemplate(
+            EmailTemplateKey::LearnerLessonFeedbackRequest,
+            [
+                'recipient_name' => $this->student->first_name ?? 'there',
+                'instructor_name' => $this->instructor->user?->name ?? 'your instructor',
+                'lesson_date' => $this->lesson->date?->format('l, j F Y') ?? 'your recent lesson',
+                'lesson_time' => $lessonTime,
             ],
         );
     }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Enums\EmailTemplateKey;
+use App\Mail\RendersTemplatedMail;
 use App\Models\Order;
 use App\Models\Student;
 use Carbon\Carbon;
@@ -15,6 +17,7 @@ use Illuminate\Notifications\Notification;
 class PaymentLinkNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+    use RendersTemplatedMail;
 
     public function __construct(
         public Order $order,
@@ -38,51 +41,42 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
         $firstLesson = $order->lessons()->orderBy('date')->first();
         $totalFormatted = '£'.number_format($order->total_price_pence / 100, 2);
 
-        $message = (new MailMessage)
-            ->subject('Complete Your Payment for Driving Lessons')
-            ->greeting($this->getGreeting())
-            ->line($this->getIntroLine())
-            ->line('**Booking Details:**')
-            ->line("Package: {$order->package_name}")
-            ->line("Number of lessons: {$order->package_lessons_count}")
-            ->line("Instructor: {$instructor->user->name}")
-            ->line("Total: {$totalFormatted}");
+        $firstLessonLine = $firstLesson
+            ? 'First lesson: '.Carbon::parse($firstLesson->date)->format('l, F j, Y')
+            : '';
 
-        if ($firstLesson) {
-            $message->line('First lesson: '.Carbon::parse($firstLesson->date)->format('l, F j, Y'));
-        }
-
-        $message->line('')
-            ->line('Please complete your payment using the link below to confirm your lessons.')
-            ->action('Pay Now', $this->checkoutUrl)
-            ->line('This payment link will expire after 24 hours.');
-
+        $bookedForLine = '';
         if ($this->isBookedByContact) {
             $learnerName = $this->student->first_name.' '.$this->student->surname;
-            $message->line('')
-                ->line("This booking was made for: **{$learnerName}**");
+            $bookedForLine = "\nThis booking was made for: **{$learnerName}**";
         }
 
-        $message->salutation('Safe driving,
-The Driving School Team');
-
-        return $message;
+        return $this->templatedMail(
+            EmailTemplateKey::LearnerPaymentLink,
+            [
+                'recipient_name' => $this->recipientName(),
+                'intro' => $this->introLine(),
+                'package_name' => $order->package_name,
+                'lessons_count' => $order->package_lessons_count,
+                'instructor_name' => $instructor->user->name,
+                'total' => $totalFormatted,
+                'first_lesson_line' => $firstLessonLine,
+                'booked_for_line' => $bookedForLine,
+            ],
+            $this->checkoutUrl,
+        );
     }
 
-    protected function getGreeting(): string
+    protected function recipientName(): string
     {
         if ($this->isBookedByContact) {
-            $contactName = $this->student->contact_first_name ?? 'there';
-
-            return "Hello {$contactName}!";
+            return $this->student->contact_first_name ?? 'there';
         }
 
-        $learnerName = $this->student->first_name ?? 'there';
-
-        return "Hello {$learnerName}!";
+        return $this->student->first_name ?? 'there';
     }
 
-    protected function getIntroLine(): string
+    protected function introLine(): string
     {
         $instructorName = $this->order->instructor->user->name;
 

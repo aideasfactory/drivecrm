@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Enums\EmailTemplateKey;
+use App\Mail\RendersTemplatedMail;
 use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Student;
@@ -16,6 +18,7 @@ use Illuminate\Notifications\Notification;
 class LessonRescheduledNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+    use RendersTemplatedMail;
 
     public function __construct(
         public Lesson $lesson,
@@ -37,9 +40,6 @@ class LessonRescheduledNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $studentName = $this->student->first_name ?? 'there';
-        $instructorName = $this->instructor->user?->name ?? 'your instructor';
-
         $oldDateFormatted = Carbon::parse($this->oldDate)->format('l, j F Y');
         $oldTime = $this->oldStartTime.' - '.$this->oldEndTime;
 
@@ -49,28 +49,21 @@ class LessonRescheduledNotification extends Notification implements ShouldQueue
             $newTime = $this->lesson->start_time->format('H:i').' - '.$this->lesson->end_time->format('H:i');
         }
 
-        $message = (new MailMessage)
-            ->subject('Your Driving Lesson Has Been Rescheduled')
-            ->greeting("Hello {$studentName}!")
-            ->line("Your driving lesson with **{$instructorName}** has been rescheduled.")
-            ->line('')
-            ->line('**Previous:**')
-            ->line("{$oldDateFormatted} at {$oldTime}")
-            ->line('')
-            ->line('**New:**')
-            ->line("{$newDateFormatted}".($newTime ? " at {$newTime}" : ''));
+        $notesBlock = $this->notes
+            ? "\n**Notes from your instructor:**\n".$this->notes
+            : '';
 
-        if ($this->notes) {
-            $message->line('')
-                ->line('**Notes from your instructor:**')
-                ->line($this->notes);
-        }
-
-        $message->line('')
-            ->line('If this new time does not work for you, please contact your instructor to arrange an alternative.')
-            ->salutation("Safe driving,\nThe ".config('app.name').' Team');
-
-        return $message;
+        return $this->templatedMail(
+            EmailTemplateKey::LearnerLessonRescheduled,
+            [
+                'recipient_name' => $this->student->first_name ?? 'there',
+                'instructor_name' => $this->instructor->user?->name ?? 'your instructor',
+                'old_when' => $oldDateFormatted.' at '.$oldTime,
+                'new_when' => $newDateFormatted.($newTime ? ' at '.$newTime : ''),
+                'notes_block' => $notesBlock,
+                'app_name' => config('app.name'),
+            ],
+        );
     }
 
     /**

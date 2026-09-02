@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Enums\EmailTemplateKey;
+use App\Mail\RendersTemplatedMail;
 use App\Models\Instructor;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -13,18 +15,14 @@ use Illuminate\Notifications\Notification;
 class WelcomeStudentNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+    use RendersTemplatedMail;
 
-    /**
-     * Create a new notification instance.
-     */
     public function __construct(
         public string $temporaryPassword,
         public Instructor $instructor
     ) {}
 
     /**
-     * Get the notification's delivery channels.
-     *
      * @return array<int, string>
      */
     public function via(object $notifiable): array
@@ -32,29 +30,22 @@ class WelcomeStudentNotification extends Notification implements ShouldQueue
         return ['mail'];
     }
 
-    /**
-     * Get the mail representation of the notification.
-     */
     public function toMail(object $notifiable): MailMessage
     {
-        $instructorName = $this->instructor->user?->name ?? 'your instructor';
-        $appName = config('app.name');
-
-        return (new MailMessage)
-            ->subject('Welcome to '.$appName.'!')
-            ->greeting('Hello '.$notifiable->name.'!')
-            ->line($instructorName.' has added you as a student on '.$appName.'.')
-            ->line('Your temporary login details are:')
-            ->line('**Email:** '.$notifiable->email)
-            ->line('**Password:** '.$this->temporaryPassword)
-            ->action('Download App Now', route('get-app'))
-            ->line('Please change your password the first time you sign in.')
-            ->salutation('Thanks, '.$appName);
+        return $this->templatedMail(
+            EmailTemplateKey::LearnerWelcome,
+            [
+                'recipient_name' => $notifiable->name,
+                'instructor_name' => $this->instructor->user?->name ?? 'your instructor',
+                'app_name' => config('app.name'),
+                'email' => $notifiable->email,
+                'temporary_password' => $this->temporaryPassword,
+            ],
+            route('get-app'),
+        );
     }
 
     /**
-     * Get the array representation of the notification.
-     *
      * @return array<string, mixed>
      */
     public function toArray(object $notifiable): array

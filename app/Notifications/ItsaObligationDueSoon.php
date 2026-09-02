@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Enums\EmailTemplateKey;
+use App\Mail\RendersTemplatedMail;
 use App\Models\HmrcItsaObligation;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -13,6 +15,7 @@ use Illuminate\Notifications\Notification;
 class ItsaObligationDueSoon extends Notification implements ShouldQueue
 {
     use Queueable;
+    use RendersTemplatedMail;
 
     public function __construct(
         public HmrcItsaObligation $obligation,
@@ -39,11 +42,14 @@ class ItsaObligationDueSoon extends Notification implements ShouldQueue
             .' – '
             .$this->obligation->period_end_date->format('j M Y');
 
-        return (new MailMessage)
-            ->subject("MTD ITSA quarterly update due {$when}")
-            ->greeting("Hello {$notifiable->name},")
-            ->line("Your quarterly self-employment update for {$period} is due {$when}.")
-            ->action('Open ITSA submissions', url('/hmrc/itsa'))
-            ->line('Filing on time keeps you compliant with HMRC and avoids automatic penalties.');
+        return $this->templatedMail(
+            EmailTemplateKey::InstructorItsaDueSoon,
+            [
+                'recipient_name' => $notifiable->name,
+                'when' => $when,
+                'period' => $period,
+            ],
+            url('/hmrc/itsa'),
+        );
     }
 }

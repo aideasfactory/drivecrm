@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Enums\EmailTemplateKey;
+use App\Mail\RendersTemplatedMail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -12,6 +14,7 @@ use Illuminate\Notifications\Notification;
 class HmrcReconnectSoonNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+    use RendersTemplatedMail;
 
     public function __construct(public int $daysUntilExpiry) {}
 
@@ -28,12 +31,14 @@ class HmrcReconnectSoonNotification extends Notification implements ShouldQueue
         $days = $this->daysUntilExpiry;
         $when = $days === 1 ? 'tomorrow' : "in {$days} days";
 
-        return (new MailMessage)
-            ->subject("HMRC connection needs reconnecting {$when}")
-            ->greeting("Hello {$notifiable->name},")
-            ->line("Your HMRC connection will need to be renewed {$when}.")
-            ->line('You can keep filing as usual until then. After that, you will need to sign in to HMRC again so we can keep submitting on your behalf.')
-            ->action('Renew HMRC connection', url('/hmrc'))
-            ->line('Thank you for using '.config('app.name').'.');
+        return $this->templatedMail(
+            EmailTemplateKey::InstructorHmrcReconnect,
+            [
+                'recipient_name' => $notifiable->name,
+                'when' => $when,
+                'app_name' => config('app.name'),
+            ],
+            url('/hmrc'),
+        );
     }
 }
