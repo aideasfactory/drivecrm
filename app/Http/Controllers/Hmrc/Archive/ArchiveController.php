@@ -12,6 +12,7 @@ use App\Services\YearEndArchiveService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -83,7 +84,7 @@ class ArchiveController extends Controller
         );
     }
 
-    public function download(Request $request, YearEndArchive $archive): StreamedResponse|RedirectResponse
+    public function download(Request $request, YearEndArchive $archive): StreamedResponse|HttpResponse
     {
         // Two access paths:
         //  1. Signed URL from the Mandrill email — no session required.
@@ -91,28 +92,40 @@ class ArchiveController extends Controller
         if (! $request->hasValidSignature()) {
             $instructor = $request->user()?->instructor;
             if ($instructor === null || $archive->instructor_id !== $instructor->id) {
-                abort(403);
+                return $this->downloadMessage(
+                    'This download link is invalid or has expired. Open Year-end archives in DRIVE and click "Email link" for a fresh one.',
+                    403,
+                );
             }
         }
 
-        $fallback = route('hmrc.archive.index');
-
         if (! $archive->isReady() || $archive->file_path === null) {
-            return back(fallback: $fallback)
-                ->with('error', 'This archive is not available — it may still be building or has been purged.');
+            return $this->downloadMessage(
+                'This archive is not available — it may still be building or has been purged.',
+                404,
+            );
         }
 
         $disk = (string) config('hmrc.year_end_archive.disk', 'local');
         if (! Storage::disk($disk)->exists($archive->file_path)) {
-            return back(fallback: $fallback)
-                ->with('error', 'Archive file is missing on disk. Regenerate it from the archives page.');
+            return $this->downloadMessage(
+                'Archive file is missing. Generate it again from the year-end archives page.',
+                404,
+            );
         }
 
         return Storage::disk($disk)->download(
             $archive->file_path,
-            sprintf('drive-tax-archive-%s.zip', $archive->taxYearLabel()),
+            $archive->downloadFilename(),
             ['Content-Type' => 'application/zip'],
         );
+    }
+
+    private function downloadMessage(string $message, int $status): HttpResponse
+    {
+        return response($message, $status, [
+            'Content-Type' => 'text/plain; charset=UTF-8',
+        ]);
     }
 
     public function regenerate(Request $request, YearEndArchive $archive): RedirectResponse
