@@ -56,6 +56,25 @@ class StudentPolicy
     }
 
     /**
+     * Determine whether staff can delete the learner profile (soft delete).
+     *
+     * Owners can delete any profile, including unassigned duplicates.
+     * Instructors can delete only pupils assigned to them.
+     */
+    public function deleteProfile(User $user, Student $student): bool
+    {
+        if ($user->isOwner()) {
+            return true;
+        }
+
+        if ($user->isInstructor() && $student->instructor_id === $user->instructor?->id) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Check if the user is the student themselves or their linked instructor.
      */
     private function isStudentOrLinkedInstructor(User $user, Student $student): bool
