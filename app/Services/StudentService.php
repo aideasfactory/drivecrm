@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Actions\Instructor\CreatePupilAction;
 use App\Actions\Student\AttachStudentToInstructorAction;
+use App\Actions\Student\DeleteStudentAction;
 use App\Actions\Student\DeleteStudentProfilePictureAction;
 use App\Actions\Student\GetAllStudentsAction;
 use App\Actions\Student\GetStudentByIdAction;
@@ -23,6 +24,7 @@ use App\Actions\Student\UploadStudentProfilePictureAction;
 use App\Models\Instructor;
 use App\Models\Student;
 use App\Models\StudentPickupPoint;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\UploadedFile;
 
@@ -35,6 +37,7 @@ class StudentService extends BaseService
         protected ResendStudentInviteAction $resendStudentInvite,
         protected UpdateStudentAction $updateStudent,
         protected RemoveStudentFromInstructorAction $removeStudent,
+        protected DeleteStudentAction $deleteStudent,
         protected GetStudentPickupPointsAction $getStudentPickupPoints,
         protected CreatePickupPointAction $createPickupPoint,
         protected UpdatePickupPointAction $updatePickupPoint,
@@ -116,6 +119,22 @@ class StudentService extends BaseService
         }
 
         return $result;
+    }
+
+    /**
+     * Soft-delete a learner profile and lock the linked login.
+     */
+    public function deleteProfile(Student $student, ?User $deletedBy = null): void
+    {
+        $instructor = $student->instructor;
+
+        ($this->deleteStudent)($student, $deletedBy);
+
+        if ($instructor) {
+            $this->invalidateInstructorStudentCache($instructor);
+        }
+
+        $this->invalidateStudentDashboardCache($student);
     }
 
     /**

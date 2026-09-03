@@ -306,6 +306,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('students.status.update');
     Route::delete('/students/{student}/remove', [PupilController::class, 'removeStudent'])
         ->name('students.remove');
+    Route::delete('/students/{student}', [PupilController::class, 'destroy'])
+        ->name('students.destroy');
     Route::put('/students/{student}/password', [PupilController::class, 'updatePassword'])
         ->name('students.password.update');
     Route::post('/students/{student}/resend-invite', [PupilController::class, 'resendInvite'])

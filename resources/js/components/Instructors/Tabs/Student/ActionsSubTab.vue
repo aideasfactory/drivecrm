@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { router } from '@inertiajs/vue3'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import EmergencyContactManager from '@/components/Shared/EmergencyContactManager.vue'
@@ -8,6 +9,7 @@ import PasswordResetSection from '@/components/Shared/PasswordResetSection.vue'
 import PickupPointsSection from '@/components/Instructors/Tabs/Student/Actions/PickupPointsSection.vue'
 import StudentStatusSection from '@/components/Instructors/Tabs/Student/Actions/StudentStatusSection.vue'
 import RemoveStudentSection from '@/components/Instructors/Tabs/Student/Actions/RemoveStudentSection.vue'
+import DeleteLearnerSection from '@/components/Instructors/Tabs/Student/Actions/DeleteLearnerSection.vue'
 import StudentChecklistSection from '@/components/Instructors/Tabs/Student/Actions/StudentChecklistSection.vue'
 
 interface Props {
@@ -17,6 +19,7 @@ interface Props {
 const props = defineProps<Props>()
 
 const student = ref<{
+    name: string
     student_status: string
     inactive_reason: string | null
     instructor_id: number | null
@@ -119,6 +122,22 @@ const handleStatusUpdated = (
                     v-else-if="student"
                     :student-id="studentId"
                     :has-instructor="student.instructor_id !== null"
+                />
+            </CardContent>
+        </Card>
+
+        <Card class="md:col-span-2">
+            <CardContent class="p-6">
+                <div v-if="isLoadingStudent" class="space-y-4">
+                    <Skeleton class="h-5 w-40" />
+                    <Skeleton class="h-4 w-80" />
+                    <Skeleton class="h-10 w-40" />
+                </div>
+                <DeleteLearnerSection
+                    v-else-if="student"
+                    :student-id="studentId"
+                    :student-name="student.name"
+                    @deleted="router.visit('/pupils')"
                 />
             </CardContent>
         </Card>

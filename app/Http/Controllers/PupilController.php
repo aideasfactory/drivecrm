@@ -31,6 +31,7 @@ use App\Actions\Student\Status\UpdateStudentStatusAction;
 use App\Actions\Student\Transfer\GetOnboardedInstructorsAction;
 use App\Enums\PaymentMode;
 use App\Http\Requests\AdminResetPasswordRequest;
+use App\Http\Requests\DeleteStudentProfileRequest;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\StorePickupPointRequest;
 use App\Http\Requests\UpdatePickupPointRequest;
@@ -666,6 +667,20 @@ class PupilController extends Controller
         return response()->json([
             'student' => $student,
             'message' => 'Student status updated successfully.',
+        ]);
+    }
+
+    /**
+     * Soft-delete a learner profile so it no longer appears in admin listings.
+     *
+     * Orders, lessons, and invoices are kept. The linked login is locked.
+     */
+    public function destroy(DeleteStudentProfileRequest $request, Student $student): JsonResponse
+    {
+        $this->studentService->deleteProfile($student, $request->user());
+
+        return response()->json([
+            'message' => 'Learner profile has been deleted.',
         ]);
     }
 

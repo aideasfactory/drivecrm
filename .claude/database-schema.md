@@ -352,6 +352,7 @@ Extended profile for users with student role.
 | `app_last_active_at` | timestamp | NULLABLE | Last time the student made an authenticated mobile-app API request. NULL means they have never used the app. Drives the "App" / has_app indicator on the instructor pupils view. Stamped (throttled to every 15 min) by the `ResolveApiProfile` middleware. |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
+| `deleted_at` | timestamp | NULLABLE | Soft-delete timestamp. Staff "delete learner" sets this so the profile disappears from listings. The row is kept because `orders.student_id` cascades on hard delete and would wipe lessons, invoices, and payouts. |
 
 **Indexes:**
 - `instructor_id`
@@ -370,7 +371,8 @@ Extended profile for users with student role.
 - Students can be assigned to a specific instructor
 - Students inherit instructor assignments from their orders
 - Status change to `inactive` should include a reason in `inactive_reason`
-- Removing a student from an instructor sets `instructor_id = null` (soft-remove)
+- Removing a student from an instructor sets `instructor_id = null` (soft-remove). This does **not** delete the profile.
+- Staff delete (`DELETE /students/{student}`, owners or the assigned instructor) soft-deletes the student (`deleted_at`), detaches `instructor_id`, sets `status = inactive` / `inactive_reason = Profile deleted by staff`, removes the profile picture, and locks the linked `users` row (tokens revoked, sessions cleared, password randomised, email rewritten to `deleted-student-{student_id}@deleted.invalid`). Historical `belongsTo` student relations use `withTrashed()` so invoices and lessons still resolve. This is separate from user-requested GDPR deletion (`ProcessAccountDeletionAction`), which anonymises PII in place without setting `deleted_at`.
 
 ---
 
@@ -1414,6 +1416,7 @@ In-app account deletion with a 30-day grace period (App Store Guideline 5.1.1(v)
 - Created by `POST /api/v1/account/deletion-request` (both roles); tokens are NOT revoked during the grace period so the user can log in and cancel.
 - Daily scheduled command `account:process-deletion-requests` (01:00) processes rows where `status = pending` and `scheduled_for <= now`.
 - Processing **anonymises** rather than deletes (users.id cascades would destroy lesson/payment history other parties need): scrubs user name/email/password/push token, revokes all Sanctum tokens, scrubs profile PII (student contact fields; instructor bio/phone/address/pin/nino/utr/vrn etc.), detaches an instructor's students (`students.instructor_id = null`), then sets `status = completed`.
+- Distinct from **staff learner-profile delete** (`DeleteStudentAction`): that soft-deletes the `students` row and locks the login so duplicates disappear from CRM lists, but it does not scrub historical student names on invoices.
 
 ---
 
@@ -1500,6 +1503,7 @@ No new tables and no schema changes — the feature reuses `lessons.instructor_i
 
 1. **Cascading Deletes:**
    - Deleting a User cascades to Instructor/Student profiles
+   - Deleting a Student hard-deletes cascaded Orders (and therefore Lessons, LessonPayments, and Payouts). Staff must never hard-delete a student row; use SoftDeletes + login lock instead.
    - Deleting an Order cascades to all Lessons
    - Deleting a Lesson cascades to LessonPayments and Payouts
 

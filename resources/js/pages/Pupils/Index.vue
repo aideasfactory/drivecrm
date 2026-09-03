@@ -25,6 +25,7 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet'
+import DeleteLearnerSection from '@/components/Instructors/Tabs/Student/Actions/DeleteLearnerSection.vue'
 import { Search, GraduationCap } from 'lucide-vue-next'
 import { show as instructorsShow } from '@/routes/instructors'
 import { toast } from '@/components/ui/sonner'
@@ -164,6 +165,11 @@ const submitAssignment = async () => {
 }
 
 const breadcrumbs = [{ title: 'Students' }]
+
+const onLearnerDeleted = () => {
+    sheetOpen.value = false
+    router.reload({ only: ['pupils'] })
+}
 </script>
 
 <template>
@@ -349,6 +355,13 @@ const breadcrumbs = [{ title: 'Students' }]
                                 </div>
                             </div>
                         </div>
+
+                        <DeleteLearnerSection
+                            compact
+                            :student-id="summary.id"
+                            :student-name="summary.name"
+                            @deleted="onLearnerDeleted"
+                        />
 
                         <!-- Assign form -->
                         <div class="flex flex-col gap-2">

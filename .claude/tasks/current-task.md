@@ -1,39 +1,51 @@
-# Task: Admin-editable instructor and learner emails
+# Task: Admin and instructor learner profile deletion
 
 ## Overview
 
-Staff need to see and edit the copy of emails sent to instructors and
-learners, without changing when those emails send, who they go to, or
-enrolment/scheduling/payment behaviour.
+Staff can unassign a learner from an instructor but cannot remove the
+profile. Duplicate learners (e.g. XXXXXXXXAbhinay James) stay on the
+Students list with only Assign Instructor available. This work adds a
+safe delete for owners and for instructors on their own pupils.
 
-Emails today are hardcoded in Laravel Mailables (Blade HTML) and
-Notifications (`MailMessage` fluent lines). Mandrill-hosted templates are
-unused except for a diagnostic command. This work adds a catalog-backed
-`email_templates` store and an owner-only admin UI. Senders resolve copy
-from the store (falling back to catalog defaults) and only interpolate
-placeholders for dynamic data.
+Hard-deleting `students` would cascade-delete `orders` (and therefore
+lessons, invoices, and payouts). Staff delete is therefore a soft delete
+plus login lock, so listings hide the profile while historical records
+keep their `student_id`.
 
 ## Phase 1: Planning ✅
 
 ### Current state
-- Instructor/learner copy lives in `app/Mail/*` and `app/Notifications/*`.
-- No admin-editable store. No `email_templates` table.
-- Sending, queueing, and recipients stay in existing Actions/Services.
+- `DELETE /students/{student}/remove` and API `DELETE /api/v1/students/{id}`
+  only set `instructor_id = null`.
+- `DeleteStudentAction` hard-deletes the row and is unused.
+- `ProcessAccountDeletionAction` already anonymises rather than hard-deletes
+  because user/student cascades would wipe lesson/payment history.
+- Unassigned duplicates are managed from the Pupils Assign Instructor sheet.
+- Instructors cannot open `/pupils` but can manage their pupils on
+  `/instructors/{id}` (Actions tab).
 
 ### Approach
-1. PHP catalog of template keys, audience, description, placeholders, and default copy.
-2. `email_templates` table stores staff overrides (subject, greeting, body, salutation, action label).
-3. Renderer interpolates `{{placeholders}}`; missing keys become empty strings.
-4. Notifications/Mailables ask the renderer for copy; they still compute data blocks and action URLs.
-5. Owner-only Inertia page to list, view, edit, and reset-to-default.
-6. Sync inserts missing catalog keys without overwriting edits.
+1. Soft-delete `students` (`deleted_at`). Default queries hide deleted rows.
+2. Lock the linked user (revoke tokens, randomise password, unique deleted
+   email) so the duplicate cannot log in or reset a password.
+3. Keep student PII on the soft-deleted row; `belongsTo` student relations
+   use `withTrashed()` so invoices/lessons still resolve.
+4. Web `DELETE /students/{student}` for owners (any pupil) and instructors
+   (assigned pupils only). Do not change the mobile API unassign endpoint.
+5. UI: delete control on the Assign Instructor sheet and on the student
+   Actions tab, each with a confirmation dialog.
+
+### Tasks
+- [x] Confirm data-model risk (orders cascade) and choose soft delete
+- [x] Plan auth (owner + assigned instructor) and UI surfaces
 
 ### Reflection
-Catalog + DB overrides keeps sending working with an empty table, so a
-missed migration cannot silence mail. Staff cannot change keys, recipients,
-or triggers.
+Soft delete is the only safe general delete. Hard delete would wipe
+financial history even for a "duplicate" if that row later had an order.
+Unassigned duplicates are owner-only because instructors cannot open
+`/pupils` and unassigned rows have `instructor_id = null`.
 
-**Last Updated:** 2026-09-02.
+**Last Updated:** 2026-09-03.
 
 ## Phase 2: Implementation ✅
 
@@ -41,29 +53,28 @@ or triggers.
 Complete.
 
 ### Tasks
-- [x] Migration, model, factory, enums
-- [x] Catalog, interpolator, actions, service
-- [x] Controller, form request, routes
-- [x] Wire Mailables and Notifications
-- [x] Inertia list/edit UI and sidebar
-- [x] Tests
-- [x] database-schema.md
+- [x] Migration: `students.deleted_at`
+- [x] Student SoftDeletes + withTrashed on historical relations
+- [x] Rewrite DeleteStudentAction (soft delete + lock user)
+- [x] StudentService, policy, form request, PupilController, route
+- [x] Assign Instructor sheet + Actions tab delete UI
+- [x] Update database-schema.md
 
 ### Reflection
-Owner-only `/email-templates` lists all instructor/learner templates with
-search and audience filters. Edits persist in `email_templates` and are
-interpolated at send time. Action URLs, recipients, and queueing stay in
-existing senders. Catalog defaults are used when the table or row is missing.
+Mobile `DELETE /api/v1/students/{id}` is still unassign-only — this ticket
+is admin CRM. `DeleteStudentAction` is now the shared web path.
 
 ## Phase 3: Reflection ✅
 
-Staff can now view and edit instructor and learner email copy from the CRM
-without disrupting sending, scheduling, or enrolments. Adding a new email
-means an enum case, a catalog row, and wiring the sender to the renderer.
+Staff can delete duplicate and unwanted learner profiles from the Assign
+Instructor sheet (owners, including unassigned rows) and from the student
+Actions tab (owners and the assigned instructor). Profiles leave listings
+without cascading away lessons or invoices. Linked logins are locked.
 
-## Follow-up: Save toasts ✅
+### Tasks
+- [x] Document decisions and leftover risks
 
-Save/restore now use Inertia visits (not axios + full reload), so the success
-toast is not wiped when the list refreshes. Validation failures also toast.
-
-**Last Updated:** 2026-09-02.
+### Reflection
+Leftover: no restore UI; GDPR anonymise and staff soft-delete remain two
+paths. Instructors still cannot delete an unassigned profile they created
+and then removed — owners handle that from Students.
