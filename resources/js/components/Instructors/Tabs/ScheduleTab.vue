@@ -15,6 +15,10 @@ import {
     CalendarDays,
     CalendarRange,
     CalendarPlus,
+    CalendarX,
+    Pencil,
+    BellRing,
+    Move,
     Car,
     ClipboardCheck,
     User,
@@ -46,6 +50,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/toast'
 import WeeklyCalendarGrid from './Schedule/WeeklyCalendarGrid.vue'
 import MonthlyCalendarGrid from './Schedule/MonthlyCalendarGrid.vue'
+import AddBookingFromSlotSheet from './Schedule/AddBookingFromSlotSheet.vue'
+import OfferSlotSheet from './Schedule/OfferSlotSheet.vue'
 import type { CalendarEvent } from './Schedule/CalendarEventBlock.vue'
 import { useCalendarNavigation } from '@/composables/useCalendarNavigation'
 import {
@@ -85,6 +91,10 @@ const loading = ref(true)
 const isCreateSheetOpen = ref(false)
 const isEditSheetOpen = ref(false)
 const isDeleteDialogOpen = ref(false)
+const isEmptySlotActionsOpen = ref(false)
+const isBookedSlotActionsOpen = ref(false)
+const isAddBookingSheetOpen = ref(false)
+const isOfferSlotSheetOpen = ref(false)
 const formLoading = ref(false)
 const events = ref<CalendarEvent[]>([])
 const deleteScope = ref<'single' | 'future'>('single')
@@ -386,6 +396,7 @@ async function loadCalendarRange(startDate: string, endDate: string) {
                     recurrence_pattern: item.recurrence_pattern ?? 'none',
                     recurrence_end_date: item.recurrence_end_date ?? null,
                     recurrence_group_id: item.recurrence_group_id ?? null,
+                    has_open_offer: item.has_open_offer ?? false,
                 }
                 newItemsMap.set(item.id, calItem)
             }
@@ -658,11 +669,29 @@ async function handleFillSubmit() {
     }
 }
 
-// ── Click on event → open edit sheet ─────────────────────
-function handleEventClick(event: CalendarEvent) {
-    const item = itemsMap.value.get(event.id)
-    if (!item) return
+const actionSlot = computed(() => {
+    const item = itemsMap.value.get(editForm.value.id)
+    if (!item) {
+        return null
+    }
 
+    return {
+        id: item.id,
+        date: item.date,
+        start_time: normaliseTime(item.start_time),
+        end_time: normaliseTime(item.end_time),
+    }
+})
+
+function isEmptyAvailabilityItem(item: CalendarItemResponse): boolean {
+    const status = item.status
+    return item.item_type === 'slot'
+        && item.is_available
+        && !item.lesson_id
+        && (status === null || status === 'available' || status === '')
+}
+
+function populateEditForm(item: CalendarItemResponse) {
     const isSpecialType = item.item_type === 'travel' || item.item_type === 'practical_test'
     const startTime = isSpecialType
         ? normaliseTime(item.start_time)
@@ -682,12 +711,59 @@ function handleEventClick(event: CalendarEvent) {
         travel_time_minutes: item.travel_time_minutes ?? 0,
     }
 
-    // Populate lesson details for completed/booked items
     editItemLessonId.value = item.lesson_id ?? null
     mileageInput.value = item.mileage ?? null
     editItemReflectiveLog.value = item.reflective_log ?? null
+}
+
+// ── Click on event → action menu or edit sheet ───────────
+function handleEventClick(event: CalendarEvent) {
+    const item = itemsMap.value.get(event.id)
+    if (!item) return
+
+    populateEditForm(item)
+
+    if (isEmptyAvailabilityItem(item)) {
+        isEmptySlotActionsOpen.value = true
+        return
+    }
+
+    if (BOOKING_STATUSES.includes(item.status as string)) {
+        isBookedSlotActionsOpen.value = true
+        return
+    }
 
     isEditSheetOpen.value = true
+}
+
+function openEmptySlotEdit() {
+    isEmptySlotActionsOpen.value = false
+    isEditSheetOpen.value = true
+}
+
+function openEmptySlotDelete() {
+    isEmptySlotActionsOpen.value = false
+    openDeleteDialog()
+}
+
+function openAddBookingFromSlot() {
+    isEmptySlotActionsOpen.value = false
+    isAddBookingSheetOpen.value = true
+}
+
+function openOfferSlot() {
+    isEmptySlotActionsOpen.value = false
+    isOfferSlotSheetOpen.value = true
+}
+
+function openBookedSlotMove() {
+    isBookedSlotActionsOpen.value = false
+    isEditSheetOpen.value = true
+}
+
+function openBookedSlotDelete() {
+    isBookedSlotActionsOpen.value = false
+    openDeleteDialog()
 }
 
 // ── Edit time slot ───────────────────────────────────────
@@ -1737,6 +1813,7 @@ onMounted(() => {
                         </Button>
 
                         <Button
+                            v-if="!editItemIsBooking"
                             type="button"
                             variant="destructive"
                             :disabled="formLoading"
@@ -1891,5 +1968,78 @@ onMounted(() => {
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+
+        <Dialog v-model:open="isEmptySlotActionsOpen">
+            <DialogContent class="sm:max-w-sm">
+                <DialogHeader>
+                    <DialogTitle>Diary slot</DialogTitle>
+                    <DialogDescription>
+                        {{ editForm.date }} · {{ editForm.start_time }} – {{ editForm.end_time }}
+                    </DialogDescription>
+                </DialogHeader>
+                <div class="flex flex-col gap-2">
+                    <Button class="w-full justify-start" @click="openEmptySlotEdit">
+                        <Pencil class="mr-2 h-4 w-4" />
+                        Edit
+                    </Button>
+                    <Button variant="destructive" class="w-full justify-start" @click="openEmptySlotDelete">
+                        <Trash2 class="mr-2 h-4 w-4" />
+                        Delete
+                    </Button>
+                    <Button variant="outline" class="w-full justify-start" @click="openAddBookingFromSlot">
+                        <CalendarPlus class="mr-2 h-4 w-4" />
+                        Add Booking
+                    </Button>
+                    <Button variant="outline" class="w-full justify-start" @click="openOfferSlot">
+                        <BellRing class="mr-2 h-4 w-4" />
+                        Offer Slot
+                    </Button>
+                    <Button variant="ghost" class="w-full" @click="isEmptySlotActionsOpen = false">
+                        <X class="mr-2 h-4 w-4" />
+                        Close
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+
+        <Dialog v-model:open="isBookedSlotActionsOpen">
+            <DialogContent class="sm:max-w-sm">
+                <DialogHeader>
+                    <DialogTitle>Booked lesson</DialogTitle>
+                    <DialogDescription>
+                        {{ editForm.date }} · {{ editForm.start_time }} – {{ editForm.end_time }}
+                    </DialogDescription>
+                </DialogHeader>
+                <div class="flex flex-col gap-2">
+                    <Button class="w-full justify-start" @click="openBookedSlotMove">
+                        <Move class="mr-2 h-4 w-4" />
+                        Move
+                    </Button>
+                    <Button variant="destructive" class="w-full justify-start" @click="openBookedSlotDelete">
+                        <CalendarX class="mr-2 h-4 w-4" />
+                        Cancel booking
+                    </Button>
+                    <Button variant="ghost" class="w-full" @click="isBookedSlotActionsOpen = false">
+                        <X class="mr-2 h-4 w-4" />
+                        Close
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+
+        <AddBookingFromSlotSheet
+            v-model:open="isAddBookingSheetOpen"
+            :instructor-id="instructorId"
+            :students="students"
+            :slot="actionSlot"
+            @booked="loadCalendarRange(rangeStartFormatted, rangeEndFormatted)"
+        />
+
+        <OfferSlotSheet
+            v-model:open="isOfferSlotSheetOpen"
+            :instructor-id="instructorId"
+            :slot="actionSlot"
+            @offered="loadCalendarRange(rangeStartFormatted, rangeEndFormatted)"
+        />
     </div>
 </template>

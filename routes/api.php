@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\V1\StudentPickupPointController;
 use App\Http\Controllers\Api\V1\StudentProfilePictureController;
 use App\Http\Controllers\Api\V1\StudentProgressController;
 use App\Http\Controllers\Api\V1\StudentResourceController;
+use App\Http\Controllers\Api\V1\StudentSlotOfferController;
 use App\Http\Middleware\ResolveApiProfile;
 use Illuminate\Support\Facades\Route;
 
@@ -90,6 +91,8 @@ Route::prefix('v1')->group(function (): void {
             Route::post('calendar/fill-slots', [InstructorCalendarController::class, 'fillSlots']);
             Route::put('calendar/items/{calendarItem}', [InstructorCalendarController::class, 'update']);
             Route::delete('calendar/items/{calendarItem}', [InstructorCalendarController::class, 'destroy']);
+            Route::post('calendar/items/{calendarItem}/offers', [InstructorCalendarController::class, 'storeOffer']);
+            Route::delete('calendar/items/{calendarItem}/offers', [InstructorCalendarController::class, 'destroyOffer']);
             Route::get('finances/config', [InstructorFinanceController::class, 'config']);
             Route::get('finances/summary', [InstructorFinanceController::class, 'summary']);
             Route::get('finances', [InstructorFinanceController::class, 'index']);
@@ -118,6 +121,8 @@ Route::prefix('v1')->group(function (): void {
         Route::prefix('student')->group(function (): void {
             Route::get('packages', [StudentPackageController::class, 'index']);
             Route::get('calendar/items', [StudentCalendarController::class, 'index']);
+            Route::get('slot-offers', [StudentSlotOfferController::class, 'index']);
+            Route::post('slot-offers/{slotOffer}/accept', [StudentSlotOfferController::class, 'accept']);
             Route::get('instructor', [StudentDashboardController::class, 'instructor']);
             Route::get('dashboard', [StudentDashboardController::class, 'dashboard']);
             Route::get('progress', [StudentProgressController::class, 'show']);

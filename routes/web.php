@@ -124,6 +124,10 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('instructors.calendar.items.update');
     Route::delete('/instructors/{instructor}/calendar/items/{calendarItem}', [InstructorController::class, 'destroyCalendarItem'])
         ->name('instructors.calendar.items.destroy');
+    Route::post('/instructors/{instructor}/calendar/items/{calendarItem}/offers', [InstructorController::class, 'storeSlotOffer'])
+        ->name('instructors.calendar.items.offers.store');
+    Route::delete('/instructors/{instructor}/calendar/items/{calendarItem}/offers', [InstructorController::class, 'destroySlotOffer'])
+        ->name('instructors.calendar.items.offers.destroy');
     Route::patch('/instructors/{instructor}/lessons/{lesson}/mileage', [InstructorController::class, 'updateLessonMileage'])
         ->name('instructors.lessons.mileage.update');
 
@@ -325,6 +329,10 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('reports.invoice-due');
     Route::get('/reports/invoice-due/export', [ReportController::class, 'exportInvoiceDue'])
         ->name('reports.invoice-due.export');
+    Route::get('/reports/cancelled-lessons', [ReportController::class, 'cancelledLessons'])
+        ->name('reports.cancelled-lessons');
+    Route::get('/reports/cancelled-lessons/export', [ReportController::class, 'exportCancelledLessons'])
+        ->name('reports.cancelled-lessons.export');
     // Push Notifications (Owner Only)
     Route::middleware([EnsureOwner::class])->group(function () {
         Route::get('/push-notifications', [PushNotificationController::class, 'index'])

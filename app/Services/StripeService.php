@@ -271,12 +271,19 @@ class StripeService
             // Always use price_data when fees are included or a discount is applied,
             // since the pre-created Stripe Price only reflects the base package price
             if ($hasFeesOrDiscount) {
+                $priceData = [
+                    'currency' => 'gbp',
+                    'unit_amount' => $chargeAmountPence,
+                ];
+
+                if ($package->stripe_product_id) {
+                    $priceData['product'] = $package->stripe_product_id;
+                } else {
+                    $priceData['product_data'] = ['name' => $package->name];
+                }
+
                 $lineItem = [
-                    'price_data' => [
-                        'currency' => 'gbp',
-                        'product' => $package->stripe_product_id,
-                        'unit_amount' => $chargeAmountPence,
-                    ],
+                    'price_data' => $priceData,
                     'quantity' => 1,
                 ];
             } else {

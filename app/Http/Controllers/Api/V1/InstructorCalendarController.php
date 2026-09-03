@@ -11,12 +11,16 @@ use App\Http\Requests\Api\V1\DeleteCalendarItemRequest;
 use App\Http\Requests\Api\V1\FillAvailableSlotsRequest;
 use App\Http\Requests\Api\V1\GetCalendarItemsRequest;
 use App\Http\Requests\Api\V1\StoreCalendarItemRequest;
+use App\Http\Requests\Api\V1\StoreSlotOfferRequest;
 use App\Http\Requests\Api\V1\UpdateCalendarItemRequest;
 use App\Http\Resources\V1\CalendarItemResource;
+use App\Http\Resources\V1\SlotOfferResource;
 use App\Models\CalendarItem;
 use App\Services\InstructorCalendarService;
 use App\Services\InstructorService;
+use App\Services\SlotOfferService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class InstructorCalendarController extends Controller
@@ -25,6 +29,7 @@ class InstructorCalendarController extends Controller
         protected InstructorCalendarService $calendarService,
         protected InstructorService $instructorService,
         protected MoveLessonAndFutureSiblingsAction $moveLessonAndFutureSiblings,
+        protected SlotOfferService $slotOfferService,
     ) {}
 
     /**
@@ -54,6 +59,7 @@ class InstructorCalendarController extends Controller
             'lessons.order.student',
             'lessons.order.lessons.payout',
             'lessons.lessonPayment',
+            'slotOffer',
         ]);
 
         return CalendarItemResource::collection($items);
@@ -265,5 +271,55 @@ class InstructorCalendarController extends Controller
                 'message' => $e->getMessage(),
             ], 400);
         }
+    }
+
+    /**
+     * Offer an empty diary slot to the instructor's students at short notice.
+     */
+    public function storeOffer(StoreSlotOfferRequest $request, CalendarItem $calendarItem): JsonResponse
+    {
+        $instructor = $request->user()->instructor;
+
+        if ($calendarItem->calendar->instructor_id !== $instructor->id) {
+            return response()->json([
+                'message' => 'Calendar item not found.',
+            ], 404);
+        }
+
+        $result = $this->slotOfferService->createOffer(
+            $instructor,
+            $calendarItem,
+            $request->input('message'),
+            $request->input('package_id') ? $request->integer('package_id') : null,
+            $request->has('one_off_price_pence') ? $request->integer('one_off_price_pence') : null,
+        );
+
+        return (new SlotOfferResource($result['offer']))
+            ->additional([
+                'notified_count' => $result['notified_count'],
+            ])
+            ->response()
+            ->setStatusCode(201);
+    }
+
+    /**
+     * Withdraw an open short-notice offer without deleting the diary slot.
+     */
+    public function destroyOffer(Request $request, CalendarItem $calendarItem): JsonResponse
+    {
+        $instructor = $request->user()->instructor;
+
+        if ($calendarItem->calendar->instructor_id !== $instructor->id) {
+            return response()->json([
+                'message' => 'Calendar item not found.',
+            ], 404);
+        }
+
+        $offer = $this->slotOfferService->cancelOffer($instructor, $calendarItem);
+
+        return response()->json([
+            'message' => 'Short-notice offer withdrawn.',
+            'data' => new SlotOfferResource($offer),
+        ]);
     }
 }

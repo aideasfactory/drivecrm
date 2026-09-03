@@ -31,6 +31,8 @@
     - [Packages (Create)](#post-apiv1instructorpackages)
     - [Packages (Update)](#put-apiv1instructorpackagespackage)
     - [Calendar Items](#get-apiv1instructorcalendaritems)
+    - [Offer Slot (Create)](#post-apiv1instructorcalendaritemscalendaritemoffers)
+    - [Offer Slot (Withdraw)](#delete-apiv1instructorcalendaritemscalendaritemoffers)
     - [Finances (Config)](#get-apiv1instructorfinancesconfig)
     - [Finances (Summary)](#get-apiv1instructorfinancessummary)
     - [Finances (List)](#get-apiv1instructorfinances)
@@ -49,6 +51,8 @@
   - [Student Home](#student-home)
     - [Instructor Profile](#get-apiv1studentinstructor)
     - [Dashboard](#get-apiv1studentdashboard)
+    - [Slot Offers (List)](#get-apiv1studentslot-offers)
+    - [Slot Offers (Accept)](#post-apiv1studentslot-offersslotofferaccept)
   - [Package Pricing](#get-apiv1packagespackagepricing)
   - [Students](#students)
     - [Attach to Instructor](#post-apiv1studentsattach)
@@ -1456,6 +1460,7 @@ Returns all active packages for the authenticated instructor.
       "total_price": "350.00",
       "weekly_payment": "35.00",
       "active": true,
+      "is_one_off": false,
       "has_stripe_price": true
     }
   ]
@@ -1479,6 +1484,7 @@ Returns all active packages for the authenticated instructor.
 | `total_price` | string | Total price as decimal string |
 | `weekly_payment` | string | Weekly payment amount as decimal string |
 | `active` | boolean | Whether the package is active |
+| `is_one_off` | boolean | `true` for reusable short-notice "One-Off Package" rows created from Offer Slot |
 | `has_stripe_price` | boolean | Whether a Stripe price is configured for this package |
 
 > **Note:** Only active packages are returned. Packages without a Stripe price (`has_stripe_price: false`) cannot be used for upfront payments.
@@ -2370,6 +2376,7 @@ Returns the authenticated instructor's calendar items for a specific date. By de
 | `amount_pence` | integer\|null | Lesson cost in pence |
 | `mileage` | integer\|null | Recorded mileage (completed lessons) |
 | `future_siblings_count` | integer | Number of future un-signed-off lessons in the same booking. When `> 0`, prompt "just this one / this and all future lessons" before a move (`apply_to_future_in_order` on PUT) or a cancel (`scope=future` on DELETE). |
+| `has_open_offer` | boolean | `true` when this empty availability slot has an active short-notice offer (`GET /student/slot-offers`). `false` for booked items and slots with no offer. |
 
 > **Note:** `draft` items are only returned when you pass `available_only=false&exclude_drafts=false`.
 
@@ -2760,6 +2767,169 @@ DELETE /api/v1/instructor/calendar/items/42
 
 > **Note:** Completed lessons and lessons that already have a payout (signed off) are never cancelled — they are excluded from the `scope=future` cascade. If every non-completed lesson in the order ends up cancelled, the order itself is marked cancelled.
 
+Empty availability deletes and booking cancellations both reuse the same `InstructorService` paths as the admin diary (`removeCalendarItem` / `cancelBooking` → `CancelBookingAction`). The instructor is **not** emailed on cancel. Head Office receives `RefundRequiredNotification` only when one or more cancelled lessons were already paid. Stripe refunds stay manual.
+
+---
+
+#### `POST /api/v1/instructor/calendar/items/{calendarItem}/offers`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Offers an **empty available diary slot** to all of the instructor's active students at short notice. Same behaviour as the admin **Offer Slot** sheet. Reuses `SlotOfferService::createOffer` → `CreateSlotOfferAction`.
+
+The instructor identity is taken from the Bearer token. The slot must belong to that instructor and must still be empty availability (`item_type: slot`, `is_available: true`, no status, no lesson).
+
+Supply **either** an existing `package_id` **or** a `one_off_price_pence`, not both.
+
+- A **1-lesson** package is stored on the offer as-is.
+- A **multi-lesson** package is not booked as a full course against this single slot. The server find-or-creates a reusable `One-Off Package` (`is_one_off: true`, `lessons_count: 1`) at that package's `lesson_price_pence`.
+- A **one-off price** find-or-creates a reusable `One-Off Package` at that price for this instructor. Later offers at the same price reuse it.
+
+Once created, the offer is `open`. Active students with an Expo push token are queued a **Short Notice Lesson Available** notification. Students list the offer from `GET /api/v1/student/slot-offers`. Re-offering the same slot while it is still empty updates the existing offer row (message/package) and notifies again. A booked offer cannot be reused.
+
+**Path Parameters:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `calendarItem` | integer | Empty diary slot ID (must belong to the authenticated instructor) |
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `message` | string\|null | No | Bespoke message (max 1000 chars). Used as the push body when set; otherwise a date/time default is used. |
+| `package_id` | integer | **Yes without** `one_off_price_pence` | One of this instructor's active packages. Prohibited when `one_off_price_pence` is sent. |
+| `one_off_price_pence` | integer | **Yes without** `package_id` | Price in pence (min 1). Prohibited when `package_id` is sent. |
+
+**Example — existing package:**
+```json
+{
+  "message": "Free this afternoon if anyone wants it",
+  "package_id": 12
+}
+```
+
+**Example — one-off price:**
+```json
+{
+  "message": "Last-minute lesson at 3pm",
+  "one_off_price_pence": 4500
+}
+```
+
+**Response (201):**
+```json
+{
+  "data": {
+    "id": 8,
+    "message": "Free this afternoon if anyone wants it",
+    "status": "open",
+    "package": {
+      "id": 12,
+      "name": "One-Off Package",
+      "description": "Short-notice one-off lesson",
+      "total_price_pence": 4500,
+      "lessons_count": 1,
+      "lesson_price_pence": 4500,
+      "formatted_total_price": "£45.00",
+      "formatted_lesson_price": "£45.00",
+      "booking_fee": "£19.99",
+      "digital_fee": "£3.99",
+      "total_price": "£68.98",
+      "weekly_payment": "£68.98",
+      "active": true,
+      "is_one_off": true,
+      "has_stripe_price": false
+    },
+    "calendar_item": {
+      "id": 42,
+      "date": "2026-09-04",
+      "start_time": "15:00",
+      "end_time": "17:00"
+    },
+    "booked_at": null,
+    "created_at": "2026-09-02T14:00:00+00:00"
+  },
+  "notified_count": 3
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `notified_count` | integer | How many of the instructor's active students had a push token and were queued a notification |
+
+**Validation errors (422):**
+- Neither `package_id` nor `one_off_price_pence` supplied, or both supplied.
+- Slot is not empty availability, already booked, or no longer available.
+- `package_id` is not one of this instructor's active packages.
+
+**Error — Not found / not owned (404):**
+```json
+{
+  "message": "Calendar item not found."
+}
+```
+
+---
+
+#### `DELETE /api/v1/instructor/calendar/items/{calendarItem}/offers`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Withdraws an **open** short-notice offer without deleting the diary slot. Same as cancelling an offer from the admin diary. Reuses `SlotOfferService::cancelOffer` → `CancelSlotOfferAction`.
+
+The slot stays available. Students no longer see the offer. A new offer can be created on the same slot afterwards (the existing row is reused).
+
+**Path Parameters:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `calendarItem` | integer | Diary slot ID that currently has an open offer |
+
+**Request Body:** None
+
+**Response (200):**
+```json
+{
+  "message": "Short-notice offer withdrawn.",
+  "data": {
+    "id": 8,
+    "message": "Free this afternoon if anyone wants it",
+    "status": "cancelled",
+    "package": {
+      "id": 12,
+      "name": "One-Off Package",
+      "is_one_off": true
+    },
+    "calendar_item": {
+      "id": 42,
+      "date": "2026-09-04",
+      "start_time": "15:00",
+      "end_time": "17:00"
+    },
+    "booked_at": null,
+    "created_at": "2026-09-02T14:00:00+00:00"
+  }
+}
+```
+
+**Validation errors (422):**
+```json
+{
+  "message": "There is no open offer on this diary slot.",
+  "errors": {
+    "calendar_item_id": ["There is no open offer on this diary slot."]
+  }
+}
+```
+
+**Error — Not found / not owned (404):**
+```json
+{
+  "message": "Calendar item not found."
+}
+```
+
 ---
 
 ### Student Booking (attached instructor)
@@ -2863,6 +3033,164 @@ Returns available calendar slots for the authenticated student's attached instru
   "errors": {
     "date": ["The date field is required."]
   }
+}
+```
+
+---
+
+#### `GET /api/v1/student/slot-offers`
+
+**Auth required:** Yes (Bearer token — student only)
+
+Returns **open** short-notice lesson offers from the authenticated student's attached instructor that are still bookable. This is the **Short Notice Lesson Available** list for the student app.
+
+The student identity is taken from the Bearer token. Offers are included only when:
+
+- `status` is `open`
+- the diary slot is still empty availability
+- the slot date is today or in the future
+
+Once another student accepts an offer, it disappears from this list. Do **not** treat a stale client-side list as availability — accepting an offer that has already been taken returns **422**. The backend decides whether the slot is still free.
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": [
+    {
+      "id": 8,
+      "message": "Free this afternoon if anyone wants it",
+      "status": "open",
+      "package": {
+        "id": 12,
+        "name": "One-Off Package",
+        "description": "Short-notice one-off lesson",
+        "total_price_pence": 4500,
+        "lessons_count": 1,
+        "lesson_price_pence": 4500,
+        "formatted_total_price": "£45.00",
+        "formatted_lesson_price": "£45.00",
+        "booking_fee": "£19.99",
+        "digital_fee": "£3.99",
+        "total_price": "£68.98",
+        "weekly_payment": "£68.98",
+        "active": true,
+        "is_one_off": true,
+        "has_stripe_price": false
+      },
+      "calendar_item": {
+        "id": 42,
+        "date": "2026-09-04",
+        "start_time": "15:00",
+        "end_time": "17:00"
+      },
+      "booked_at": null,
+      "created_at": "2026-09-02T14:00:00+00:00"
+    }
+  ]
+}
+```
+
+An empty `data` array means there are no bookable short-notice offers.
+
+**Error — student profile missing (404):**
+```json
+{
+  "message": "Student profile not found for the authenticated user."
+}
+```
+
+---
+
+#### `POST /api/v1/student/slot-offers/{slotOffer}/accept`
+
+**Auth required:** Yes (Bearer token — student only)
+
+Books the short-notice lesson for the authenticated student. Availability is decided on the **booking**, not on payment.
+
+Reuses `SlotOfferService::acceptOffer` → `AcceptSlotOfferAction` → `OrderService::bookLessonsFromCalendarItem` (the same booking path as admin Add Booking). Concurrent accepts are serialised with `lockForUpdate` on the diary slot and the offer row. The first successful booking wins; the second student receives **422**.
+
+The slot stops being available as soon as the order/lessons are created. If the student does not complete payment, the instructor can cancel the booking from the diary and offer the slot again.
+
+Payment behaviour matches `POST /api/v1/students/{student}/orders`:
+
+- `upfront` (default): order is created and a Stripe Checkout URL is returned as `checkout_url` for the in-app browser. One-off packages without a Stripe product use Stripe `product_data` rather than a Connect product ID.
+- `weekly`: the order is activated immediately and lesson invoices are sent as for a normal weekly booking.
+
+**Path Parameters:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `slotOffer` | integer | Offer ID from `GET /api/v1/student/slot-offers` |
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `payment_mode` | string | No | `upfront` (default) or `weekly` |
+
+**Example:**
+```json
+{
+  "payment_mode": "upfront"
+}
+```
+
+**Response — upfront (201):**
+```json
+{
+  "message": "Lesson booked. Open the checkout URL to complete payment.",
+  "checkout_url": "https://checkout.stripe.com/c/pay/cs_test_abc123...",
+  "data": {
+    "id": 91,
+    "student_id": 4,
+    "instructor_id": 1,
+    "package_id": 12,
+    "package_name": "One-Off Package",
+    "package_total_price_pence": 4500,
+    "package_lesson_price_pence": 4500,
+    "package_lessons_count": 1,
+    "booking_fee_pence": 1999,
+    "digital_fee_pence": 399,
+    "total_price_pence": 6898,
+    "payment_mode": "upfront",
+    "status": "pending",
+    "lessons_count": 1,
+    "created_at": "2026-09-02T14:05:00.000000Z"
+  }
+}
+```
+
+**Response — weekly (201):**
+```json
+{
+  "message": "Lesson booked. Lesson invoices will be sent before each lesson.",
+  "data": {
+    "id": 92,
+    "payment_mode": "weekly",
+    "status": "active",
+    "lessons_count": 1
+  }
+}
+```
+
+**Error — already taken / no longer open (422):**
+```json
+{
+  "message": "This short-notice lesson is no longer available.",
+  "errors": {
+    "slot_offer": ["This short-notice lesson is no longer available."]
+  }
+}
+```
+
+Other 422 cases use the same `slot_offer` key: the offer is not for this student's instructor, the slot was booked another way, or the package is inactive.
+
+**Error — student profile missing (404):**
+```json
+{
+  "message": "Student profile not found for the authenticated user."
 }
 ```
 
@@ -4698,11 +5026,15 @@ Sets a pickup point as the default (primary) for a student. Automatically unsets
 
 Book lessons — creates an order, calendar items, and lessons.
 
+The **same** `OrderService::bookLessons` / `bookLessonsFromCalendarItem` path is used by the admin diary **Add Booking** sheet and by this endpoint. Do not implement a separate mobile booking flow.
+
 For `upfront` payment the Stripe Checkout session is handled differently based on who is booking:
 - **Student (mobile app):** the Stripe Checkout URL is returned in the response as `checkout_url`. The mobile app should load this URL in an in-app browser so the student can complete payment.
 - **Instructor:** the payment link is emailed to the student (or their contact person). No `checkout_url` is returned.
 
 For `weekly` payment the order is activated immediately and a confirmation email is sent.
+
+**Booking against a specific open diary slot:** send `calendar_item_id` instead of `first_lesson_date` / `start_time` / `end_time`. Date and time are taken from that slot. The slot must belong to the student's instructor and still be empty availability. The first lesson claims that slot (under a row lock); remaining lessons in a multi-lesson package are placed weekly at the same time, reusing matching empty slots where they exist. Any open short-notice offer on a claimed slot is closed.
 
 **URL Parameters:**
 
@@ -4710,7 +5042,7 @@ For `weekly` payment the order is activated immediately and a confirmation email
 |-----------|------|-------------|
 | `student` | integer | The student record ID |
 
-**Request Body:**
+**Request Body — date/time (existing flow):**
 ```json
 {
   "package_id": 1,
@@ -4721,13 +5053,23 @@ For `weekly` payment the order is activated immediately and a confirmation email
 }
 ```
 
+**Request Body — from a diary slot (Add Booking / short-notice):**
+```json
+{
+  "package_id": 1,
+  "payment_mode": "weekly",
+  "calendar_item_id": 42
+}
+```
+
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
-| `package_id` | integer | Yes | Package ID to book (must exist in `packages` table) |
+| `package_id` | integer | Yes | Package ID to book (must exist in `packages` table and be active) |
 | `payment_mode` | string | Yes | One of: `upfront`, `weekly` |
-| `first_lesson_date` | string | Yes | First lesson date (YYYY-MM-DD, must be after today) |
-| `start_time` | string | Yes | Lesson start time (HH:MM format) |
-| `end_time` | string | Yes | Lesson end time (HH:MM format, must be after start_time) |
+| `calendar_item_id` | integer | No | Open diary slot to use as the first lesson. When set, `first_lesson_date`, `start_time`, and `end_time` are omitted. |
+| `first_lesson_date` | string | Yes without `calendar_item_id` | First lesson date (YYYY-MM-DD, `after_or_equal:today` — same-day short-notice bookings are allowed) |
+| `start_time` | string | Yes without `calendar_item_id` | Lesson start time (HH:MM format) |
+| `end_time` | string | Yes without `calendar_item_id` | Lesson end time (HH:MM format, must be after start_time) |
 
 **Success Response (upfront payment — student-initiated):** `201 Created`
 ```json
@@ -4841,6 +5183,18 @@ For `weekly` payment the order is activated immediately and a confirmation email
   }
 }
 ```
+
+**Error Response (diary slot no longer available):** `422 Unprocessable Entity`
+```json
+{
+  "message": "This diary slot is no longer available.",
+  "errors": {
+    "calendar_item_id": ["This diary slot is no longer available."]
+  }
+}
+```
+
+The same `calendar_item_id` error is returned when the slot belongs to a different instructor. Concurrent bookings of the same slot are serialised with `lockForUpdate`; the loser receives this 422.
 
 > **Mobile App Flow (upfront payment — student booking via mobile app):**
 > 1. POST to create order as an authenticated student → response includes `checkout_url`
@@ -5768,13 +6122,17 @@ The `role` field is always returned in user responses. Use it to determine which
 | POST | `/api/v1/instructor/calendar/items` | Yes | Instructor | Create calendar item |
 | POST | `/api/v1/instructor/calendar/fill-slots` | Yes | Instructor | Bulk-fill diary with available slots (skips clashes) |
 | PUT | `/api/v1/instructor/calendar/items/{calendarItem}` | Yes | Instructor | Update / move / reschedule calendar item (single or bulk) |
-| DELETE | `/api/v1/instructor/calendar/items/{calendarItem}` | Yes | Instructor | Delete calendar item |
+| DELETE | `/api/v1/instructor/calendar/items/{calendarItem}` | Yes | Instructor | Delete empty slot, or cancel a booking (`reason` required) |
+| POST | `/api/v1/instructor/calendar/items/{calendarItem}/offers` | Yes | Instructor | Offer an empty diary slot at short notice |
+| DELETE | `/api/v1/instructor/calendar/items/{calendarItem}/offers` | Yes | Instructor | Withdraw an open short-notice offer |
 | GET | `/api/v1/instructor/finances` | Yes | Instructor | List finance records |
 | POST | `/api/v1/instructor/finances` | Yes | Instructor | Create finance record |
 | PUT | `/api/v1/instructor/finances/{finance}` | Yes | Instructor | Update finance record |
 | DELETE | `/api/v1/instructor/finances/{finance}` | Yes | Instructor | Delete finance record |
 | GET | `/api/v1/student/packages` | Yes | Student | List attached instructor's packages |
 | GET | `/api/v1/student/calendar/items` | Yes | Student | List attached instructor's available slots |
+| GET | `/api/v1/student/slot-offers` | Yes | Student | List active Short Notice Lesson Available offers |
+| POST | `/api/v1/student/slot-offers/{slotOffer}/accept` | Yes | Student | Accept/book a short-notice offer (first booking wins) |
 | GET | `/api/v1/student/instructor` | Yes | Student | View attached instructor's public profile |
 | GET | `/api/v1/student/dashboard` | Yes | Student | Student dashboard data (practice hours, suggested resources) |
 | GET | `/api/v1/student/resource-summary` | Yes | Student | Aggregated resource dashboard (recent activity, stats, progress, tips) |
@@ -5801,7 +6159,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | PUT | `/api/v1/students/{student}/pickup-points/{pickupPoint}` | Yes | Both | Update pickup point |
 | DELETE | `/api/v1/students/{student}/pickup-points/{pickupPoint}` | Yes | Both | Delete pickup point |
 | PATCH | `/api/v1/students/{student}/pickup-points/{pickupPoint}/default` | Yes | Both | Set default pickup point |
-| POST | `/api/v1/students/{student}/orders` | Yes | Both | Create order/booking |
+| POST | `/api/v1/students/{student}/orders` | Yes | Both | Create order/booking (optional `calendar_item_id` for a specific slot) |
 | GET | `/api/v1/orders/{order}/checkout/verify` | Yes | Both | Verify payment |
 | GET | `/api/v1/packages/{package}/pricing` | Yes | Any | Package pricing breakdown |
 | GET | `/api/v1/resources` | Yes | Any | List resources |
@@ -7000,6 +7358,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-08-20 | Added `POST /api/v1/instructor/calendar/fill-slots` — bulk-fill the instructor's diary with available 2-hour slots (+ optional travel blocks) across selected ISO weekdays for 1–12 weeks from a start date, between a daily start/end time. Walks each day in 15-min steps, skipping any candidate whose window (incl. travel) clashes with existing items, and skipping already-started times today. Created slots are independent (no recurrence group). Returns `created_count` + `days_filled` only — refetch `GET /calendar/items` to render. Reuses `InstructorService::fillAvailableCalendarSlots` + `FillAvailableCalendarSlotsAction`, shared with the admin "Fill Available Time Slots" sheet. | Instructor Calendar (fill-slots — NEW) |
 
 | 2026-08-20 | **Rescheduling a booked lesson onto an empty availability slot now succeeds and consumes it** (`PUT /api/v1/instructor/calendar/items/{calendarItem}`, single + bulk modes; mirrored on the admin web diary). Previously the overlap check 422'd ("This time slot overlaps with an existing time slot.") even when the target was the instructor's own open, unbooked slot. Now: moving an item **with a booked lesson**, overlapped items that are empty availability slots (`item_type: slot`, `is_available: true`, no status, no lessons) — or their travel blocks — no longer count as clashes; the move deletes them (slot + its travel block) so the diary stays clean. All other overlaps still 422. The moved item's **own travel block** is also now excluded from the overlap check. Implemented in the shared `UpdateCalendarItemAction` (+ new `CalendarItem::isEmptyAvailability()` / `isConsumableByReschedule()` helpers), so web drag-drop, web edit, app single reschedule, and bulk "move whole booking" all behave identically. Refetch `GET /calendar/items` after a move. | Instructor Calendar (update) |
+| 2026-09-02 | **Instructor diary slot actions (admin + API).** Empty slots now open an action menu (Edit / Delete / Add Booking / Offer Slot / Close); booked slots open Move / Delete / Close. Add Booking reuses `OrderService::bookLessons` with optional `calendar_item_id` on `POST /students/{student}/orders` (date/time from the slot; `first_lesson_date` is now `after_or_equal:today`). Offer Slot creates a short-notice offer (`POST/DELETE /instructor/calendar/items/{id}/offers`) with package or one-off price (reusable `is_one_off` One-Off Package), pushes students, and exposes `GET /student/slot-offers` + `POST /student/slot-offers/{id}/accept`. Accept books immediately under `lockForUpdate` (not on payment); a second student receives 422. Calendar items include `has_open_offer`. Move/cancel APIs unchanged and still share `InstructorService::updateCalendarItem`, `MoveLessonAndFutureSiblingsAction`, and `CancelBookingAction` with the admin diary. | Instructor Calendar (offers — NEW), Student Slot Offers (NEW), Orders (store), Packages (`is_one_off`), Calendar Items (`has_open_offer`) |
 
 ---
 

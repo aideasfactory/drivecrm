@@ -29,6 +29,7 @@ use App\Http\Requests\StoreCalendarItemRequest;
 use App\Http\Requests\StoreInstructorRequest;
 use App\Http\Requests\StoreLocationRequest;
 use App\Http\Requests\StorePackageRequest;
+use App\Http\Requests\StoreSlotOfferRequest;
 use App\Http\Requests\UpdateCalendarItemRequest;
 use App\Http\Requests\UpdateInstructorPriceUpliftRequest;
 use App\Http\Requests\UpdateInstructorRequest;
@@ -46,6 +47,7 @@ use App\Models\User;
 use App\Services\HmrcService;
 use App\Services\InstructorService;
 use App\Services\PriceUpliftService;
+use App\Services\SlotOfferService;
 use App\Services\StripeService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -66,6 +68,7 @@ class InstructorController extends Controller
         protected HmrcService $hmrc,
         protected MoveLessonAndFutureSiblingsAction $moveLessonAndFutureSiblings,
         protected PriceUpliftService $priceUpliftService,
+        protected SlotOfferService $slotOfferService,
     ) {}
 
     /**
@@ -402,6 +405,7 @@ class InstructorController extends Controller
                 'formatted_total_price' => $package->formatted_total_price,
                 'formatted_lesson_price' => $package->formatted_lesson_price,
                 'active' => $package->active,
+                'is_one_off' => (bool) $package->is_one_off,
                 'is_platform_package' => $package->isPlatformPackage(),
                 'is_bespoke_package' => $package->isBespokePackage(),
             ]),
@@ -426,6 +430,7 @@ class InstructorController extends Controller
                 'formatted_total_price' => $package->formatted_total_price,
                 'formatted_lesson_price' => $package->formatted_lesson_price,
                 'active' => $package->active,
+                'is_one_off' => (bool) $package->is_one_off,
                 'is_platform_package' => $package->isPlatformPackage(),
                 'is_bespoke_package' => $package->isBespokePackage(),
             ],
@@ -772,6 +777,55 @@ class InstructorController extends Controller
                 'message' => $e->getMessage(),
             ], 400);
         }
+    }
+
+    /**
+     * Offer an empty diary slot to this instructor's students at short notice.
+     */
+    public function storeSlotOffer(StoreSlotOfferRequest $request, Instructor $instructor, CalendarItem $calendarItem): JsonResponse
+    {
+        if ($calendarItem->calendar->instructor_id !== $instructor->id) {
+            return response()->json([
+                'message' => 'Calendar item not found for this instructor.',
+            ], 404);
+        }
+
+        $result = $this->slotOfferService->createOffer(
+            $instructor,
+            $calendarItem,
+            $request->input('message'),
+            $request->input('package_id') ? $request->integer('package_id') : null,
+            $request->has('one_off_price_pence') ? $request->integer('one_off_price_pence') : null,
+        );
+
+        return response()->json([
+            'message' => 'Short-notice offer sent to students.',
+            'offer' => [
+                'id' => $result['offer']->id,
+                'status' => $result['offer']->status?->value,
+                'package_id' => $result['offer']->package_id,
+                'message' => $result['offer']->message,
+            ],
+            'notified_count' => $result['notified_count'],
+        ], 201);
+    }
+
+    /**
+     * Withdraw an open short-notice offer without deleting the diary slot.
+     */
+    public function destroySlotOffer(Instructor $instructor, CalendarItem $calendarItem): JsonResponse
+    {
+        if ($calendarItem->calendar->instructor_id !== $instructor->id) {
+            return response()->json([
+                'message' => 'Calendar item not found for this instructor.',
+            ], 404);
+        }
+
+        $this->slotOfferService->cancelOffer($instructor, $calendarItem);
+
+        return response()->json([
+            'message' => 'Short-notice offer withdrawn.',
+        ]);
     }
 
     /**

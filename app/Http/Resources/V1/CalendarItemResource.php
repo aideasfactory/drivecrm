@@ -6,6 +6,7 @@ namespace App\Http\Resources\V1;
 
 use App\Enums\CalendarItemStatus;
 use App\Enums\LessonStatus;
+use App\Enums\SlotOfferStatus;
 use App\Models\Lesson;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -48,6 +49,7 @@ class CalendarItemResource extends JsonResource
             'amount_pence' => $lesson?->amount_pence,
             'mileage' => $lesson?->mileage,
             'future_siblings_count' => $this->futureSiblingsCount($lesson),
+            'has_open_offer' => $this->hasOpenOffer(),
         ];
     }
 
@@ -138,5 +140,14 @@ class CalendarItemResource extends JsonResource
                 && $sibling->payout === null
                 && $sibling->status !== LessonStatus::COMPLETED)
             ->count();
+    }
+
+    protected function hasOpenOffer(): bool
+    {
+        if ($this->resource->relationLoaded('slotOffer')) {
+            return $this->slotOffer?->status === SlotOfferStatus::Open;
+        }
+
+        return false;
     }
 }
