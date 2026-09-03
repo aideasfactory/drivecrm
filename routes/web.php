@@ -326,6 +326,10 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('reports.invoice-due');
     Route::get('/reports/invoice-due/export', [ReportController::class, 'exportInvoiceDue'])
         ->name('reports.invoice-due.export');
+    Route::get('/reports/cancelled-lessons', [ReportController::class, 'cancelledLessons'])
+        ->name('reports.cancelled-lessons');
+    Route::get('/reports/cancelled-lessons/export', [ReportController::class, 'exportCancelledLessons'])
+        ->name('reports.cancelled-lessons.export');
     // Push Notifications (Owner Only)
     Route::middleware([EnsureOwner::class])->group(function () {
         Route::get('/push-notifications', [PushNotificationController::class, 'index'])

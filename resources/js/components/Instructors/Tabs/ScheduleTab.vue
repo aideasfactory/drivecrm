@@ -15,6 +15,7 @@ import {
     CalendarDays,
     CalendarRange,
     CalendarPlus,
+    CalendarX,
     Pencil,
     BellRing,
     Move,
@@ -2015,8 +2016,8 @@ onMounted(() => {
                         Move
                     </Button>
                     <Button variant="destructive" class="w-full justify-start" @click="openBookedSlotDelete">
-                        <Trash2 class="mr-2 h-4 w-4" />
-                        Delete
+                        <CalendarX class="mr-2 h-4 w-4" />
+                        Cancel booking
                     </Button>
                     <Button variant="ghost" class="w-full" @click="isBookedSlotActionsOpen = false">
                         <X class="mr-2 h-4 w-4" />

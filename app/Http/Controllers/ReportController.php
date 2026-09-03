@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\ReportService;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -41,6 +42,23 @@ class ReportController extends Controller
     {
         return Inertia::render('Reports/InvoiceDue', [
             'report' => $this->reportService->getInvoiceDueWithin48Hours(),
+        ]);
+    }
+
+    /**
+     * Display lessons cancelled when a booked diary slot was removed.
+     */
+    public function cancelledLessons(Request $request): Response
+    {
+        $filters = $this->cancelledLessonsFilters($request);
+
+        return Inertia::render('Reports/CancelledLessons', [
+            'report' => $this->reportService->getCancelledLessons(
+                $filters['cancelled_from'],
+                $filters['cancelled_to'],
+                $filters['payment_status'],
+            ),
+            'filters' => $filters,
         ]);
     }
 
@@ -102,6 +120,64 @@ class ReportController extends Controller
     }
 
     /**
+     * Download the cancelled lessons report as a CSV file.
+     */
+    public function exportCancelledLessons(Request $request): StreamedResponse
+    {
+        $filters = $this->cancelledLessonsFilters($request);
+
+        $report = $this->reportService->getCancelledLessons(
+            $filters['cancelled_from'],
+            $filters['cancelled_to'],
+            $filters['payment_status'],
+        );
+
+        return response()->streamDownload(function () use ($report): void {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Learner', 'Phone', 'Email', 'Instructor', 'Lesson Date', 'Lesson Time', 'Amount', 'Payment Status', 'Reason', 'Cancelled At']);
+
+            foreach ($report['rows'] as $row) {
+                fputcsv($handle, [
+                    $row['learner_name'],
+                    $row['learner_phone'],
+                    $row['learner_email'],
+                    $row['instructor_name'],
+                    $row['lesson_date'],
+                    $row['lesson_time'],
+                    $row['amount'],
+                    $row['payment_status'],
+                    $row['cancellation_reason'],
+                    $row['cancelled_at'],
+                ]);
+            }
+
+            fclose($handle);
+        }, 'cancelled-lessons-'.CarbonImmutable::now()->format('Y-m-d').'.csv', [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
+    /**
+     * Extract and sanitise the cancelled lessons report filters from the request.
+     *
+     * @return array{cancelled_from: ?string, cancelled_to: ?string, payment_status: ?string}
+     */
+    protected function cancelledLessonsFilters(Request $request): array
+    {
+        $validated = $request->validate([
+            'cancelled_from' => ['nullable', 'date_format:Y-m-d'],
+            'cancelled_to' => ['nullable', 'date_format:Y-m-d'],
+            'payment_status' => ['nullable', 'in:paid,due,refunded'],
+        ]);
+
+        return [
+            'cancelled_from' => $validated['cancelled_from'] ?? null,
+            'cancelled_to' => $validated['cancelled_to'] ?? null,
+            'payment_status' => $validated['payment_status'] ?? null,
+        ];
+    }
+
+    /**
      * Metadata for the reports listed on the hub page.
      *
      * @return array<int, array{key: string, title: string, description: string, icon: string, route: string}>
@@ -122,6 +198,13 @@ class ReportController extends Controller
                 'description' => 'Learners with an unpaid lesson two days from today — chase manually.',
                 'icon' => 'ReceiptText',
                 'route' => route('reports.invoice-due'),
+            ],
+            [
+                'key' => 'cancelled-lessons',
+                'title' => 'Cancelled Lessons',
+                'description' => 'Lessons cancelled when an instructor\'s booked diary slot was removed.',
+                'icon' => 'CalendarX',
+                'route' => route('reports.cancelled-lessons'),
             ],
         ];
     }
