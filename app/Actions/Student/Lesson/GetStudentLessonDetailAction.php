@@ -15,7 +15,8 @@ class GetStudentLessonDetailAction
      * Fetch a single lesson belonging to a student, with full relationships.
      *
      * Ensures the lesson belongs to the student via one of their orders.
-     * Draft lessons (pre-payment) and cancelled lessons are excluded.
+     * Draft (awaiting-payment) lessons are returned so the instructor's
+     * pupil view can open pending bookings; cancelled lessons are excluded.
      *
      * @throws ModelNotFoundException
      */
@@ -23,7 +24,6 @@ class GetStudentLessonDetailAction
     {
         return Lesson::query()
             ->whereIn('order_id', $student->orders()->select('id'))
-            ->where('status', '!=', LessonStatus::DRAFT)
             ->where('status', '!=', LessonStatus::CANCELLED)
             ->with([
                 'instructor.user:id,name',

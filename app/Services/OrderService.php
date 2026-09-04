@@ -14,6 +14,7 @@ use App\Actions\Student\Order\CreateOrderFromApiAction;
 use App\Actions\Student\Order\SendPaymentLinkEmailAction;
 use App\Actions\Student\Order\VerifyCheckoutAction;
 use App\Enums\LessonStatus;
+use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use App\Enums\PaymentStatus;
 use App\Models\CalendarItem;
@@ -26,6 +27,7 @@ use App\Notifications\CalendarClashDetectedNotification;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Stripe\Checkout\Session;
 
 class OrderService extends BaseService
 {
@@ -40,7 +42,8 @@ class OrderService extends BaseService
         protected LogActivityAction $logActivity,
         protected InstructorService $instructorService,
         protected SendLessonInvoiceAction $sendLessonInvoice,
-        protected CloseOpenSlotOffersForItemsAction $closeOpenSlotOffersForItems
+        protected CloseOpenSlotOffersForItemsAction $closeOpenSlotOffersForItems,
+        protected PushNotificationService $pushNotificationService
     ) {}
 
     /**
@@ -255,6 +258,114 @@ class OrderService extends BaseService
                     ]
                 );
             }
+        }
+    }
+
+    /**
+     * Re-send the payment-link email for an upfront order still awaiting payment.
+     *
+     * Reuses the order's existing Stripe Checkout session when it is still open,
+     * otherwise creates a fresh session. Also queues an additive push to the
+     * learner, mirroring the weekly payment-reminder behaviour (only when the
+     * learner owns their account and has an Expo push token).
+     *
+     * @return array{email: string}
+     *
+     * @throws ValidationException When the order is not awaiting upfront payment or no link can be sent.
+     */
+    public function resendPaymentLink(Order $order, Student $student): array
+    {
+        $this->ensureOrderAwaitingUpfrontPayment($order);
+
+        $package = $order->package;
+
+        if (! $package) {
+            throw ValidationException::withMessages([
+                'order' => 'The package for this order is no longer available, so a payment link cannot be generated.',
+            ]);
+        }
+
+        $checkoutUrl = $this->resolveOpenCheckoutUrl($order)
+            ?? $this->createCheckoutSession($order, $package, $student, 'payment_link_resend');
+
+        if (! $checkoutUrl) {
+            throw ValidationException::withMessages([
+                'order' => 'Unable to generate a payment link right now. Please try again shortly.',
+            ]);
+        }
+
+        $recipientEmail = $this->sendPaymentLinkEmail->execute($order, $student, $checkoutUrl);
+
+        if (! $recipientEmail) {
+            throw ValidationException::withMessages([
+                'order' => 'No email address is on file for this student, so the payment link could not be sent.',
+            ]);
+        }
+
+        if ($student->owns_account && $student->user?->expo_push_token) {
+            $this->pushNotificationService->queueIfHasToken(
+                $student->user,
+                'Payment link re-sent',
+                'Your lesson payment link has been re-sent — tap to pay',
+                [
+                    'type' => 'payment_link_resent',
+                    'order_id' => $order->id,
+                    'checkout_url' => $checkoutUrl,
+                ],
+            );
+        }
+
+        return ['email' => $recipientEmail];
+    }
+
+    /**
+     * Reject orders that are not upfront orders still awaiting their checkout payment.
+     *
+     * @throws ValidationException
+     */
+    protected function ensureOrderAwaitingUpfrontPayment(Order $order): void
+    {
+        if (! $order->isUpfront()) {
+            throw ValidationException::withMessages([
+                'order' => 'Payment links only apply to upfront orders. This order is paid weekly per lesson.',
+            ]);
+        }
+
+        if (! $order->isPending()) {
+            $message = match ($order->status) {
+                OrderStatus::ACTIVE, OrderStatus::COMPLETED => 'This order has already been paid.',
+                OrderStatus::CANCELLED => 'This order has been cancelled.',
+                default => 'This order is not awaiting payment.',
+            };
+
+            throw ValidationException::withMessages(['order' => $message]);
+        }
+    }
+
+    /**
+     * Return the order's existing Stripe Checkout session URL when the session
+     * is still open. Returns null when there is no stored session, it has
+     * completed or expired, or the lookup fails — the caller then creates a
+     * fresh session.
+     */
+    protected function resolveOpenCheckoutUrl(Order $order): ?string
+    {
+        if (! $order->stripe_checkout_session_id) {
+            return null;
+        }
+
+        try {
+            $session = Session::retrieve($order->stripe_checkout_session_id);
+
+            return $session->status === 'open' ? ($session->url ?: null) : null;
+        } catch (\Exception $e) {
+            Log::warning('Failed to retrieve existing checkout session for payment-link resend', [
+                'order_id' => $order->id,
+                'session_id' => $order->stripe_checkout_session_id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
         }
     }
 

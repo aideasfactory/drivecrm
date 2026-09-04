@@ -14,9 +14,11 @@ use App\Models\Order;
 use App\Models\Package;
 use App\Models\Student;
 use App\Services\OrderService;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 
 class StudentOrderController extends Controller
 {
@@ -90,6 +92,37 @@ class StudentOrderController extends Controller
         }
 
         return response()->json($response, 201);
+    }
+
+    /**
+     * Re-send the upfront payment-link email for an order awaiting payment.
+     *
+     * Rate limited to one send per order every 3 minutes so a double-tap
+     * in the app never sends duplicate emails.
+     */
+    public function resendPaymentLink(Request $request, Student $student, Order $order): JsonResponse
+    {
+        Gate::authorize('update', $student);
+
+        if ($order->student_id !== $student->id) {
+            throw (new ModelNotFoundException)->setModel(Order::class, [$order->id]);
+        }
+
+        $rateLimitKey = "resend-payment-link:order:{$order->id}";
+
+        if (RateLimiter::tooManyAttempts($rateLimitKey, 1)) {
+            return response()->json([
+                'message' => 'A payment link was sent moments ago. Please wait a few minutes before re-sending.',
+            ], 429);
+        }
+
+        $result = $this->orderService->resendPaymentLink($order, $student);
+
+        RateLimiter::hit($rateLimitKey, 180);
+
+        return response()->json([
+            'message' => "Payment link re-sent to {$result['email']}",
+        ]);
     }
 
     /**

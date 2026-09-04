@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Student\Lesson;
 
 use App\Enums\LessonCardStatus;
+use App\Enums\LessonStatus;
 use App\Models\Lesson;
 use App\Models\Student;
 use Illuminate\Support\Carbon;
@@ -19,6 +20,10 @@ class ComputeLessonCardStatusAction
     public function __invoke(Lesson $lesson, Student $student): LessonCardStatus
     {
         $today = Carbon::today();
+
+        if ($lesson->status === LessonStatus::DRAFT) {
+            return LessonCardStatus::Draft;
+        }
 
         if ($lesson->completed_at !== null) {
             return LessonCardStatus::SignedOff;
@@ -39,11 +44,15 @@ class ComputeLessonCardStatusAction
 
     /**
      * Find the ID of the student's next upcoming lesson (today or future, not completed).
+     *
+     * Draft and cancelled lessons never consume the "current" slot,
+     * matching the card-status logic on the lessons index.
      */
     private function getNextLessonId(Student $student, Carbon $today): ?int
     {
         return Lesson::query()
             ->whereIn('order_id', $student->orders()->select('id'))
+            ->whereNotIn('status', [LessonStatus::DRAFT, LessonStatus::CANCELLED])
             ->whereNull('completed_at')
             ->where('date', '>=', $today)
             ->orderBy('date')

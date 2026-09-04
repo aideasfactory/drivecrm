@@ -72,6 +72,7 @@
     - [Pickup Points (Delete)](#delete-apiv1studentsstudentpickup-pointspickuppoint)
     - [Pickup Points (Set Default)](#patch-apiv1studentsstudentpickup-pointspickuppointdefault)
     - [Orders](#post-apiv1studentsstudentorders)
+    - [Orders (Resend Payment Link)](#post-apiv1studentsstudentordersorderresend-payment-link)
   - [Resources](#get-apiv1resources)
     - [Instructor Resource Tree](#get-apiv1instructorresources)
     - [Resource Detail](#get-apiv1resourcesresource)
@@ -4167,6 +4168,8 @@ Returns lessons for a given student across all their orders. Supports optional f
 
 Returns full detail for a single lesson belonging to a student. The lesson must belong to the student via one of their orders — otherwise a 404 is returned.
 
+**Draft lessons ARE returned by this endpoint** (unlike the index, which requires `include_drafts=true`). Tapping a draft card from the instructor's pupil view therefore resolves. Cancelled lessons still return 404. A draft lesson comes back with `status: "draft"`, `card_status: "draft"`, `payment_mode: "upfront"`, and `payment_status: null` (no payment record exists until Stripe Checkout completes — same as the index). Sign-off remains impossible for drafts: `POST .../sign-off` only accepts `pending` lessons and returns 404 for a draft.
+
 **URL Parameters:**
 
 | Parameter | Type | Description |
@@ -4240,15 +4243,15 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 | `date` | string\|null | Lesson date (YYYY-MM-DD) |
 | `start_time` | string\|null | Start time (HH:MM) |
 | `end_time` | string\|null | End time (HH:MM) |
-| `status` | string | Lesson status: `pending`, `completed`, or `cancelled` |
+| `status` | string | Lesson status: `pending`, `completed`, or `draft` (upfront booking awaiting payment). **Cancelled lessons return 404, so `cancelled` never appears.** |
 | `completed_at` | string\|null | ISO 8601 timestamp when lesson was completed |
 | `summary` | string\|null | Instructor's lesson summary/notes |
-| `payment_status` | string\|null | Payment status: `paid`, `due`, `refunded`, or null |
+| `payment_status` | string\|null | Payment status: `paid`, `due`, `refunded`, or null. **Always `null` for `draft` lessons** (no payment record exists until checkout completes) |
 | `payment_mode` | string\|null | Package payment mode: `upfront` or `weekly` |
 | `payout_status` | string\|null | Instructor payout status: `pending`, `paid`, `failed`, or null |
 | `has_payout` | boolean | Whether a payout has been created for this lesson |
 | `calendar_date` | string\|null | Calendar date for the lesson slot (YYYY-MM-DD) |
-| `card_status` | string | Computed UI card status: `signed_off`, `needs_sign_off`, `current`, `upcoming` |
+| `card_status` | string | Computed UI card status: `signed_off`, `needs_sign_off`, `current`, `upcoming`, `draft`. Draft lessons never consume the `current` slot |
 | `has_reflective_log` | boolean | Whether a reflective log exists for this lesson |
 | `reflective_log` | object\|null | The reflective log data (see below) |
 | `resources` | array | List of resources attached to this lesson (see below) |
@@ -5221,6 +5224,67 @@ The same `calendar_item_id` error is returned when the slot belongs to a differe
 
 ---
 
+#### `POST /api/v1/students/{student}/orders/{order}/resend-payment-link`
+
+**Auth required:** Yes (Bearer token — instructor or the student themselves; same student policy as the other student-management routes)
+
+Re-sends the upfront payment-link email for an order that is still awaiting payment (upfront order with `status: "pending"` and draft lessons attached). Use this when the student lost or never received the original payment-link email sent at booking time.
+
+Behaviour:
+- The order's existing Stripe Checkout session is **reused when it is still open**; if it has expired (Stripe Checkout sessions expire after 24 hours) a **fresh session is created** and stored on the order — the old link in the original email stops working once a new session replaces it.
+- The email goes to the **booker**: the student's own email when they own their account, otherwise the contact (parent/guardian) email — same recipient logic as the original booking email.
+- An **additive push notification** is queued for the student's user when the student owns their account and has a registered Expo push token (mirrors the weekly payment-reminder behaviour). Payload: `{ type: "payment_link_resent", order_id, checkout_url }`. No token / contact-owned account → email only, no push, still 200.
+- **Rate limited per order: one send every 3 minutes.** A second tap inside the cooldown returns `429` and sends nothing.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+| `order` | integer | The order record ID (must belong to the student) |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "message": "Payment link re-sent to parent@example.com"
+}
+```
+
+The recipient email is embedded in `message` so the app can surface it in a toast.
+
+**Error Responses:**
+
+`404 Not Found` — the order does not exist **or belongs to a different student** (mirrors the lesson-show no-information-leak convention: never a 403 revealing the order exists).
+
+`422 Unprocessable Entity` — the order is not awaiting upfront payment:
+```json
+{
+  "message": "This order has already been paid.",
+  "errors": {
+    "order": ["This order has already been paid."]
+  }
+}
+```
+
+| Condition | Message |
+|-----------|---------|
+| Weekly order | `Payment links only apply to upfront orders. This order is paid weekly per lesson.` |
+| Order `active` / `completed` | `This order has already been paid.` |
+| Order `cancelled` | `This order has been cancelled.` |
+| No email on file for the booker | `No email address is on file for this student, so the payment link could not be sent.` |
+| Stripe session could not be created | `Unable to generate a payment link right now. Please try again shortly.` |
+
+`429 Too Many Requests` — cooldown active (one send per order per 3 minutes):
+```json
+{
+  "message": "A payment link was sent moments ago. Please wait a few minutes before re-sending."
+}
+```
+
+---
+
 #### `GET /api/v1/orders/{order}/checkout/verify`
 
 **Auth required:** Yes (Bearer token — student or instructor)
@@ -6160,6 +6224,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | DELETE | `/api/v1/students/{student}/pickup-points/{pickupPoint}` | Yes | Both | Delete pickup point |
 | PATCH | `/api/v1/students/{student}/pickup-points/{pickupPoint}/default` | Yes | Both | Set default pickup point |
 | POST | `/api/v1/students/{student}/orders` | Yes | Both | Create order/booking (optional `calendar_item_id` for a specific slot) |
+| POST | `/api/v1/students/{student}/orders/{order}/resend-payment-link` | Yes | Both | Re-send upfront payment-link email (pending upfront orders only; 3-min cooldown) |
 | GET | `/api/v1/orders/{order}/checkout/verify` | Yes | Both | Verify payment |
 | GET | `/api/v1/packages/{package}/pricing` | Yes | Any | Package pricing breakdown |
 | GET | `/api/v1/resources` | Yes | Any | List resources |
@@ -7359,6 +7424,8 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 
 | 2026-08-20 | **Rescheduling a booked lesson onto an empty availability slot now succeeds and consumes it** (`PUT /api/v1/instructor/calendar/items/{calendarItem}`, single + bulk modes; mirrored on the admin web diary). Previously the overlap check 422'd ("This time slot overlaps with an existing time slot.") even when the target was the instructor's own open, unbooked slot. Now: moving an item **with a booked lesson**, overlapped items that are empty availability slots (`item_type: slot`, `is_available: true`, no status, no lessons) — or their travel blocks — no longer count as clashes; the move deletes them (slot + its travel block) so the diary stays clean. All other overlaps still 422. The moved item's **own travel block** is also now excluded from the overlap check. Implemented in the shared `UpdateCalendarItemAction` (+ new `CalendarItem::isEmptyAvailability()` / `isConsumableByReschedule()` helpers), so web drag-drop, web edit, app single reschedule, and bulk "move whole booking" all behave identically. Refetch `GET /calendar/items` after a move. | Instructor Calendar (update) |
 | 2026-09-02 | **Instructor diary slot actions (admin + API).** Empty slots now open an action menu (Edit / Delete / Add Booking / Offer Slot / Close); booked slots open Move / Delete / Close. Add Booking reuses `OrderService::bookLessons` with optional `calendar_item_id` on `POST /students/{student}/orders` (date/time from the slot; `first_lesson_date` is now `after_or_equal:today`). Offer Slot creates a short-notice offer (`POST/DELETE /instructor/calendar/items/{id}/offers`) with package or one-off price (reusable `is_one_off` One-Off Package), pushes students, and exposes `GET /student/slot-offers` + `POST /student/slot-offers/{id}/accept`. Accept books immediately under `lockForUpdate` (not on payment); a second student receives 422. Calendar items include `has_open_offer`. Move/cancel APIs unchanged and still share `InstructorService::updateCalendarItem`, `MoveLessonAndFutureSiblingsAction`, and `CancelBookingAction` with the admin diary. | Instructor Calendar (offers — NEW), Student Slot Offers (NEW), Orders (store), Packages (`is_one_off`), Calendar Items (`has_open_offer`) |
+| 2026-09-04 | **Draft lessons are now returned by `GET /api/v1/students/{student}/lessons/{lesson}` (show).** Previously the show lookup excluded drafts, so tapping "View Details" on a draft card (listed by the index with `include_drafts=true` since 2026-06-26) produced a raw 404. Show now always includes drafts — no query param needed — with `status: "draft"`, `card_status: "draft"` (new value on show), `payment_mode: "upfront"`, and `payment_status: null` (matches the index; no payment record exists until checkout completes). Cancelled lessons still 404. Sign-off remains impossible for drafts (sign-off only accepts `pending` lessons). Also fixed: draft lessons no longer consume the `current` card slot in the show endpoint's card-status computation (already true on the index). | Student Lessons (show) |
+| 2026-09-04 | **Added `POST /api/v1/students/{student}/orders/{order}/resend-payment-link`** — re-send the upfront payment-link email for an order still awaiting payment (pending upfront order with draft lessons). Reuses the existing Stripe Checkout session while open, creates a fresh one when expired (old emailed link then stops working). Email goes to the booker (student or contact — same logic as the booking email); an additive push (`{ type: "payment_link_resent", order_id, checkout_url }`) is queued when the student owns the account and has an Expo push token, mirroring the weekly payment-reminder. 200 returns `{ "message": "Payment link re-sent to {email}" }`; 404 when the order isn't the student's (no-information-leak); 422 when the order is weekly/active/completed/cancelled or no link could be generated; 429 on the per-order 3-minute cooldown. Auth: student policy (assigned instructor or the student). | Orders (resend-payment-link — NEW) |
 
 ---
 

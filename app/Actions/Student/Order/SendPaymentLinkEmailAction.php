@@ -19,8 +19,11 @@ class SendPaymentLinkEmailAction
 
     /**
      * Send payment link email to the student or their contact person.
+     *
+     * Returns the recipient email address, or null when no email could
+     * be resolved (or sending failed).
      */
-    public function execute(Order $order, Student $student, string $checkoutUrl): void
+    public function execute(Order $order, Student $student, string $checkoutUrl): ?string
     {
         try {
             $isBookedByContact = ! $student->owns_account;
@@ -40,7 +43,7 @@ class SendPaymentLinkEmailAction
                     'owns_account' => $student->owns_account,
                 ]);
 
-                return;
+                return null;
             }
 
             Notification::route('mail', $recipientEmail)
@@ -79,6 +82,7 @@ class SendPaymentLinkEmailAction
                 );
             }
 
+            return $recipientEmail;
         } catch (\Exception $e) {
             Log::error('Failed to send payment link email', [
                 'order_id' => $order->id,
@@ -86,6 +90,8 @@ class SendPaymentLinkEmailAction
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
+
+            return null;
         }
     }
 }
