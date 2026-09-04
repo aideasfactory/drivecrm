@@ -21,6 +21,7 @@ import {
     CheckCircle2,
     ExternalLink,
     Info,
+    Link2,
     Loader2,
     Pencil,
     RefreshCw,
@@ -74,14 +75,20 @@ interface PageProps {
     };
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
     connected: boolean;
+    hasItsaScope?: boolean;
+    environment?: string;
     enrolmentStatus: EnrolmentStatus;
     businesses: BusinessLite[];
     openObligations: ObligationLite[];
     history: SubmissionRow[];
     instructorId?: number;
-}>();
+}>(), {
+    hasItsaScope: true,
+    environment: 'production',
+    instructorId: undefined,
+});
 
 const formatDate = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateString() : '—');
 const formatDateTime = (iso: string | null): string => (iso ? new Date(iso).toLocaleString() : '—');
@@ -191,6 +198,24 @@ const dueBadge = (days: number): 'default' | 'secondary' | 'destructive' | 'outl
 };
 
 const showSubmissionUi = computed(() => props.enrolmentStatus.can_submit);
+
+const isSandbox = computed(() => props.environment === 'sandbox');
+const taxProfileUrl = computed(() => (
+    props.instructorId
+        ? `/instructors/${props.instructorId}?tab=hmrc`
+        : '/hmrc'
+));
+const showMissingScope = computed(() => (
+    props.connected && (!props.hasItsaScope || props.enrolmentStatus.value === 'missing_scope')
+));
+const showNotAuthorised = computed(() => (
+    props.connected && props.hasItsaScope && props.enrolmentStatus.value === 'not_authorised'
+));
+const showUncheckedEnrolment = computed(() => (
+    props.connected
+    && props.hasItsaScope
+    && props.enrolmentStatus.value === 'unknown'
+));
 </script>
 
 <template>
@@ -284,7 +309,66 @@ const showSubmissionUi = computed(() => props.enrolmentStatus.can_submit);
             </AlertDescription>
         </Alert>
 
-        <Alert v-else-if="connected && enrolmentStatus.value === 'unknown'" variant="default">
+        <Alert v-else-if="showMissingScope" variant="destructive">
+            <AlertCircle class="h-4 w-4" />
+            <AlertTitle>{{ enrolmentStatus.value === 'missing_scope' ? enrolmentStatus.label : 'Income Tax permissions not granted' }}</AlertTitle>
+            <AlertDescription class="space-y-2">
+                <p>
+                    Your HMRC login is connected, but this connection does not include
+                    Income Tax permissions. Reconnect to grant them — existing permissions
+                    are kept.
+                </p>
+                <Button as-child size="sm">
+                    <a href="/hmrc/connect">
+                        <Link2 class="mr-2 h-3 w-3" />
+                        Reconnect to HMRC
+                    </a>
+                </Button>
+            </AlertDescription>
+        </Alert>
+
+        <Alert v-else-if="showNotAuthorised" variant="destructive">
+            <AlertCircle class="h-4 w-4" />
+            <AlertTitle>{{ enrolmentStatus.label }}</AlertTitle>
+            <AlertDescription class="space-y-3">
+                <p>
+                    HMRC accepted your login, but will not let us read Making Tax Digital
+                    for Income Tax for the National Insurance number on your tax profile.
+                    Reconnecting the same account will not fix this.
+                </p>
+                <p>
+                    Check that the NI number matches the HMRC account you signed in with,
+                    and that this business is signed up for MTD Income Tax.
+                </p>
+                <p v-if="isSandbox" class="text-sm">
+                    On the HMRC sandbox this usually means the test user is not enrolled
+                    for MTD ITSA, or its NI number does not match the tax profile.
+                </p>
+                <div class="flex flex-wrap gap-2">
+                    <Button as-child variant="outline" size="sm">
+                        <Link :href="taxProfileUrl">Review tax profile</Link>
+                    </Button>
+                    <Button as-child variant="outline" size="sm">
+                        <a
+                            href="https://www.gov.uk/guidance/sign-up-your-business-for-making-tax-digital-for-income-tax"
+                            target="_blank"
+                            rel="noopener"
+                        >
+                            Open gov.uk sign-up
+                            <ExternalLink class="ml-2 h-3 w-3" />
+                        </a>
+                    </Button>
+                    <Button as-child variant="outline" size="sm">
+                        <a href="/hmrc/connect">
+                            <Link2 class="mr-2 h-3 w-3" />
+                            Reconnect with a different HMRC account
+                        </a>
+                    </Button>
+                </div>
+            </AlertDescription>
+        </Alert>
+
+        <Alert v-else-if="showUncheckedEnrolment" variant="default">
             <Info class="h-4 w-4" />
             <AlertTitle>{{ enrolmentStatus.label }}</AlertTitle>
             <AlertDescription>

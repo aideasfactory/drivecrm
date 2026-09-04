@@ -1,51 +1,47 @@
-# Task: Admin and instructor learner profile deletion
+# Task: MTD ITSA Connected + not-authorised contradiction
 
 ## Overview
 
-Staff can unassign a learner from an instructor but cannot remove the
-profile. Duplicate learners (e.g. XXXXXXXXAbhinay James) stay on the
-Students list with only Assign Instructor available. This work adds a
-safe delete for owners and for instructors on their own pupils.
+Instructor HMRC tab can show a green "HMRC Connected" badge, a red
+`CLIENT_OR_AGENT_NOT_AUTHORISED` flash ("Reconnect to grant the required
+permissions"), and a grey "We haven't checked your MTD enrolment yet"
+card at the same time.
 
-Hard-deleting `students` would cascade-delete `orders` (and therefore
-lessons, invoices, and payouts). Staff delete is therefore a soft delete
-plus login lock, so listings hide the profile while historical records
-keep their `student_id`.
+Root cause: "Connected" is token-presence only. Enrolment check failures
+are flashed and thrown, so `mtd_itsa_status` stays `unknown`. The error
+copy treats HMRC identity/enrolment rejection as a missing OAuth scope.
 
 ## Phase 1: Planning ✅
 
 ### Current state
-- `DELETE /students/{student}/remove` and API `DELETE /api/v1/students/{id}`
-  only set `instructor_id = null`.
-- `DeleteStudentAction` hard-deletes the row and is unused.
-- `ProcessAccountDeletionAction` already anonymises rather than hard-deletes
-  because user/student cascades would wipe lesson/payment history.
-- Unassigned duplicates are managed from the Pupils Assign Instructor sheet.
-- Instructors cannot open `/pupils` but can manage their pupils on
-  `/instructors/{id}` (Actions tab).
+- Header badge = `hmrc_tokens` row exists.
+- Refresh calls Business Details; `RULE_NOT_SIGNED_UP_TO_MTD` is mapped
+  to `not_signed_up`, but `CLIENT_OR_AGENT_NOT_AUTHORISED` and
+  `INVALID_SCOPE` are rethrown. Status stays `unknown`.
+- VAT already surfaces missing scopes; ITSA does not.
+- OAuth only adds ITSA scopes when `itsa.applies` is already true, so a
+  connect-before-profile token can lack `read:self-assessment`.
 
 ### Approach
-1. Soft-delete `students` (`deleted_at`). Default queries hide deleted rows.
-2. Lock the linked user (revoke tokens, randomise password, unique deleted
-   email) so the duplicate cannot log in or reset a password.
-3. Keep student PII on the soft-deleted row; `belongsTo` student relations
-   use `withTrashed()` so invoices/lessons still resolve.
-4. Web `DELETE /students/{student}` for owners (any pupil) and instructors
-   (assigned pupils only). Do not change the mobile API unassign endpoint.
-5. UI: delete control on the Assign Instructor sheet and on the student
-   Actions tab, each with a confirmation dialog.
+1. Persist `not_authorised` / `missing_scope` enrolment statuses.
+2. Detect missing ITSA scopes on page load (same pattern as VAT).
+3. Request ITSA scopes whenever the instructor is not a limited company.
+4. Replace reconnect-for-permissions copy with NINO / MTD / sandbox
+   guidance and real CTAs.
+5. Hide the "haven't checked yet" card when a check has failed or
+   scopes are missing.
 
 ### Tasks
-- [x] Confirm data-model risk (orders cascade) and choose soft delete
-- [x] Plan auth (owner + assigned instructor) and UI surfaces
+- [x] Trace Connected vs enrolment vs HMRC error codes
+- [x] Choose persist-status + clearer messaging (no new columns)
 
 ### Reflection
-Soft delete is the only safe general delete. Hard delete would wipe
-financial history even for a "duplicate" if that row later had an order.
-Unassigned duplicates are owner-only because instructors cannot open
-`/pupils` and unassigned rows have `instructor_id = null`.
+This is a product-state bug, not only a test-account limitation.
+Sandbox test users often return `CLIENT_OR_AGENT_NOT_AUTHORISED` when
+the NINO or MTD enrolment does not match; reconnecting the same login
+does not fix that.
 
-**Last Updated:** 2026-09-03.
+**Last Updated:** 2026-09-04.
 
 ## Phase 2: Implementation ✅
 
@@ -53,28 +49,31 @@ Unassigned duplicates are owner-only because instructors cannot open
 Complete.
 
 ### Tasks
-- [x] Migration: `students.deleted_at`
-- [x] Student SoftDeletes + withTrashed on historical relations
-- [x] Rewrite DeleteStudentAction (soft delete + lock user)
-- [x] StudentService, policy, form request, PupilController, route
-- [x] Assign Instructor sheet + Actions tab delete UI
+- [x] ItsaEnrolmentStatus + HmrcErrorCode copy
+- [x] ResolveEnrolmentStatusAction maps auth/scope errors
+- [x] scopesFor always requests ITSA scopes when they can apply
+- [x] ItsaController passes hasItsaScope + environment
+- [x] IndexPanel alerts and CTAs
 - [x] Update database-schema.md
 
 ### Reflection
-Mobile `DELETE /api/v1/students/{id}` is still unassign-only — this ticket
-is admin CRM. `DeleteStudentAction` is now the shared web path.
+Persisting `not_authorised` removes the stale "haven't checked yet"
+card. Reconnect is only offered as "different HMRC account" or missing
+scopes — not as the fix for a matching-but-unenrolled test user.
+
+I've updated database-schema.md to reflect the new enrolment statuses.
 
 ## Phase 3: Reflection ✅
 
-Staff can delete duplicate and unwanted learner profiles from the Assign
-Instructor sheet (owners, including unassigned rows) and from the student
-Actions tab (owners and the assigned instructor). Profiles leave listings
-without cascading away lessons or invoices. Linked logins are locked.
+Staff and instructors now see a persistent explanation when HMRC rejects
+the enrolment check. Connected still means "OAuth token on file"; the
+ITSA panel no longer pretends the check has not run.
 
 ### Tasks
 - [x] Document decisions and leftover risks
 
 ### Reflection
-Leftover: no restore UI; GDPR anonymise and staff soft-delete remain two
-paths. Instructors still cannot delete an unassigned profile they created
-and then removed — owners handle that from Students.
+Leftover: owner viewing an instructor ITSA tab still loads
+`$request->user()` (the owner), not the instructor. Out of scope here.
+Sandbox test-account setup remains an HMRC limitation — we now say so
+instead of telling them to reconnect for permissions.

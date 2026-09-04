@@ -24,13 +24,13 @@ class ListBusinessesAction
     public function __invoke(User $user, array $fraudContext = []): Collection
     {
         $instructor = $user->instructor;
-        if ($instructor === null || ! is_string($instructor->utr) || $instructor->utr === '') {
+        $nino = is_string($instructor?->nino) ? $instructor->nino : '';
+        if ($instructor === null || $nino === '' || ! is_string($instructor->utr) || $instructor->utr === '') {
             throw new HmrcApiException(
                 message: 'Tax profile must include a UTR/NINO before listing HMRC businesses.',
                 statusCode: 400,
             );
         }
-        $nino = (string) $instructor->nino;
 
         $response = ($this->callHmrcApi)(
             user: $user,

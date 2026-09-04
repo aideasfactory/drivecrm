@@ -77,9 +77,9 @@ class HmrcService extends BaseService
      * Resolve the union of scopes DRIVE should request for this user.
      *
      * Always includes the `hello` scope (Phase 1 diagnostics). Adds ITSA scopes
-     * if the instructor's tax profile makes them applicable. Adds VAT scopes
-     * for VAT-registered instructors (Phase 4 turns this on; the policy lives
-     * here so future scopes are additive, never narrowed).
+     * unless the instructor is a confirmed limited company (including when the
+     * tax profile is still incomplete). Adds VAT scopes for VAT-registered
+     * instructors. Existing granted scopes are preserved — re-auth never narrows.
      *
      * Existing granted scopes are preserved — re-auth never narrows.
      *
@@ -92,7 +92,11 @@ class HmrcService extends BaseService
         $instructor = $user->instructor;
         if ($instructor !== null) {
             $applicability = ($this->getMtdApplicability)($instructor);
-            if (($applicability['itsa']['applies'] ?? false) === true) {
+            // Request ITSA scopes whenever the instructor is not a confirmed
+            // limited company — including an incomplete tax profile — so a
+            // connect-before-profile token can actually call Business Details.
+            $businessType = $instructor->business_type;
+            if ($businessType === null || $businessType->itsaCanApply()) {
                 $scopes = array_merge($scopes, (array) config('hmrc.scopes.itsa', []));
             }
             if (($applicability['vat']['applies'] ?? false) === true) {

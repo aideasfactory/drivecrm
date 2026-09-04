@@ -34,7 +34,7 @@ enum HmrcErrorCode: string
             self::RuleObligationFulfilled => 'This obligation has already been fulfilled at HMRC.',
             self::InvalidNino => 'The National Insurance number on file is not valid. Update your tax profile and reconnect.',
             self::InvalidUtr => 'The UTR on file is not valid. Update your tax profile and reconnect.',
-            self::ClientOrAgentNotAuthorised => 'HMRC says you are not authorised for this action. Reconnect to grant the required permissions.',
+            self::ClientOrAgentNotAuthorised => 'HMRC will not authorise this action for the National Insurance number on your tax profile. The HMRC account you connected must match that NI number and be signed up for Making Tax Digital for Income Tax. Reconnecting only helps if you signed in with the wrong HMRC account.',
             self::InvalidScope => 'Your HMRC connection is missing a required permission. Reconnect to grant it.',
             self::InvalidRequest => 'HMRC rejected the request as malformed. Please contact support — this is a bug we need to fix.',
             self::RuleIncorrectGovTestScenario => 'The HMRC sandbox test scenario is wrong for this call. Operations team — check the Gov-Test-Scenario header.',

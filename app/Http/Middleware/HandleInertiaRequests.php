@@ -49,6 +49,7 @@ class HandleInertiaRequests extends Middleware
             // Show page's 'hmrc' payload can't clobber it.
             'hmrcFlags' => [
                 'show_mtd_button' => (bool) config('hmrc.show_mtd_button'),
+                'environment' => (string) config('hmrc.environment', 'sandbox'),
             ],
             'appLinks' => [
                 'apple' => config('app_links.apple') ?: null,
