@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands\Hmrc;
 
 use App\Models\YearEndArchive;
+use App\Services\YearEndArchiveService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -16,12 +17,13 @@ class PruneYearEndArchivesCommand extends Command
 
     protected $description = 'Delete year-end archive files older than HMRC retention. Keeps the DB row with status=expired so the UI can offer "Regenerate".';
 
-    public function handle(): int
+    public function handle(YearEndArchiveService $archives): int
     {
         $disk = (string) config('hmrc.year_end_archive.disk', 'local');
         $now = Carbon::now();
 
         $expired = YearEndArchive::query()
+            ->with('instructor')
             ->where('status', YearEndArchive::STATUS_READY)
             ->whereNotNull('expires_at')
             ->where('expires_at', '<=', $now)
@@ -49,6 +51,7 @@ class PruneYearEndArchivesCommand extends Command
                 'file_size_bytes' => null,
                 'purged_at' => $now,
             ]);
+            $archives->invalidateArchiveCache($archive->instructor);
 
             $count++;
         }
