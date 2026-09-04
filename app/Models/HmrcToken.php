@@ -66,4 +66,24 @@ class HmrcToken extends Model
     {
         return (int) max(0, now()->diffInDays($this->refresh_expires_at, false));
     }
+
+    /**
+     * @param  array<int, string>  $required
+     */
+    public function hasScopes(array $required): bool
+    {
+        if ($required === []) {
+            return false;
+        }
+
+        $granted = is_array($this->scopes) ? $this->scopes : [];
+
+        foreach ($required as $scope) {
+            if (! in_array($scope, $granted, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
 }

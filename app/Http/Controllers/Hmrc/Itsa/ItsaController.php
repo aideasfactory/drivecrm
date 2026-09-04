@@ -43,11 +43,15 @@ class ItsaController extends Controller
         $user = $request->user();
         $instructor = $user->instructor;
 
-        $connected = HmrcToken::query()->where('user_id', $user->id)->exists();
+        $token = HmrcToken::query()->where('user_id', $user->id)->first();
+        $connected = $token !== null;
         $status = $instructor?->mtd_itsa_status ?? ItsaEnrolmentStatus::Unknown;
+        $hasItsaScope = $token?->hasScopes((array) config('hmrc.scopes.itsa', [])) ?? false;
 
         return [
             'connected' => $connected,
+            'hasItsaScope' => $hasItsaScope,
+            'environment' => (string) config('hmrc.environment', 'sandbox'),
             'enrolmentStatus' => [
                 'value' => $status instanceof ItsaEnrolmentStatus ? $status->value : (string) $status,
                 'label' => $status instanceof ItsaEnrolmentStatus ? $status->label() : ItsaEnrolmentStatus::Unknown->label(),

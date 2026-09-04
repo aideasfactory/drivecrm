@@ -45,6 +45,8 @@ interface SubmissionRow {
 
 const props = defineProps<{
     connected: boolean;
+    hasItsaScope: boolean;
+    environment: string;
     enrolmentStatus: EnrolmentStatus;
     businesses: BusinessLite[];
     openObligations: ObligationLite[];
@@ -64,6 +66,8 @@ const breadcrumbs = [
         <div class="p-6">
             <ItsaIndexPanel
                 :connected="props.connected"
+                :has-itsa-scope="props.hasItsaScope"
+                :environment="props.environment"
                 :enrolment-status="props.enrolmentStatus"
                 :businesses="props.businesses"
                 :open-obligations="props.openObligations"

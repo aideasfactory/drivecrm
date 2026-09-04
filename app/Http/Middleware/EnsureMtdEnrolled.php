@@ -13,7 +13,7 @@ use Symfony\Component\HttpFoundation\Response;
  * Gates ITSA submission routes — only instructors whose MTD ITSA enrolment is
  * resolved AND whose status permits submission may pass. The Index route is
  * deliberately NOT gated so users in the not_signed_up / income_source_missing
- * states can still see the explanatory page.
+ * / not_authorised / missing_scope states can still see the explanatory page.
  */
 class EnsureMtdEnrolled
 {

@@ -300,7 +300,7 @@ Extended profile for users with instructor role.
 | `nino` | text | NULLABLE, ENCRYPTED | National Insurance Number — encrypted at rest (PII); plaintext is 9 chars |
 | `companies_house_number` | varchar(8) | NULLABLE | Companies House registration number — limited company only |
 | `tax_profile_completed_at` | timestamp | NULLABLE | When the instructor first completed their HMRC tax profile |
-| `mtd_itsa_status` | varchar(32) | DEFAULT 'unknown' | MTD ITSA enrolment state machine: `unknown`, `not_signed_up`, `income_source_missing`, `signed_up_voluntary`, `mandated` |
+| `mtd_itsa_status` | varchar(32) | DEFAULT 'unknown' | MTD ITSA enrolment state machine: `unknown`, `not_signed_up`, `income_source_missing`, `not_authorised`, `missing_scope`, `signed_up_voluntary`, `mandated` |
 | `mtd_itsa_status_checked_at` | timestamp | NULLABLE | When `mtd_itsa_status` was last refreshed against HMRC |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |

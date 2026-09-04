@@ -7,6 +7,7 @@ namespace App\Actions\Hmrc\Itsa;
 use App\Enums\HmrcErrorCode;
 use App\Enums\ItsaEnrolmentStatus;
 use App\Exceptions\Hmrc\HmrcApiException;
+use App\Models\HmrcToken;
 use App\Models\Instructor;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
@@ -45,6 +46,10 @@ class ResolveEnrolmentStatusAction
      */
     private function resolve(User $user, Instructor $instructor, array $fraudContext): ItsaEnrolmentStatus
     {
+        if (! $this->tokenHasItsaScopes($user)) {
+            return ItsaEnrolmentStatus::MissingScope;
+        }
+
         try {
             $businesses = ($this->listBusinesses)($user, $fraudContext);
         } catch (HmrcApiException $exception) {
@@ -54,8 +59,18 @@ class ResolveEnrolmentStatusAction
                 return ItsaEnrolmentStatus::NotSignedUp;
             }
 
-            // Genuine API problem (auth/network/etc.) — leave the status alone
-            // and surface the error so the caller can decide what to do.
+            if ($code === HmrcErrorCode::InvalidScope) {
+                return ItsaEnrolmentStatus::MissingScope;
+            }
+
+            // HMRC often returns this when the Government Gateway login does
+            // not match the NINO, or the sandbox/test user is not enrolled
+            // for MTD ITSA. Persist it so the UI does not keep saying the
+            // check has never run.
+            if ($code === HmrcErrorCode::ClientOrAgentNotAuthorised) {
+                return ItsaEnrolmentStatus::NotAuthorised;
+            }
+
             Log::warning('ITSA enrolment resolution failed', [
                 'user_id' => $user->id,
                 'status' => $exception->statusCode,
@@ -82,5 +97,12 @@ class ResolveEnrolmentStatusAction
     private function isMandated(Instructor $instructor): bool
     {
         return now()->greaterThanOrEqualTo('2026-04-06');
+    }
+
+    private function tokenHasItsaScopes(User $user): bool
+    {
+        $token = HmrcToken::query()->where('user_id', $user->id)->first();
+
+        return $token !== null && $token->hasScopes((array) config('hmrc.scopes.itsa', []));
     }
 }

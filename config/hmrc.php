@@ -76,8 +76,9 @@ return [
     | OAuth scopes by feature
     |--------------------------------------------------------------------------
     |
-    | Phase 1 only requests the `hello` scope (Hello World). Phase 3 will add
-    | self-assessment scopes; Phase 4 will add VAT scopes.
+    | Hello World always. ITSA scopes are requested for instructors who are
+    | not limited companies (including an incomplete tax profile). VAT
+    | scopes are added when the tax profile is VAT-registered.
     */
 
     'scopes' => [
