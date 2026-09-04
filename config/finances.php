@@ -32,6 +32,7 @@ return [
 
     'payment_categories' => [
         'none' => 'None',
+        'lesson_fee' => 'Lesson Fee',
         'franchise_payout' => 'Franchise Payout',
         'hmrc_tax' => 'HMRC Tax',
         'insurance' => 'Insurance',

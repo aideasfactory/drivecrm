@@ -6,6 +6,7 @@ use App\Enums\PaymentStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class LessonPayment extends Model
 {
@@ -37,6 +38,11 @@ class LessonPayment extends Model
     public function lesson(): BelongsTo
     {
         return $this->belongsTo(Lesson::class);
+    }
+
+    public function instructorFinance(): HasOne
+    {
+        return $this->hasOne(InstructorFinance::class);
     }
 
     /**
@@ -129,5 +135,26 @@ class LessonPayment extends Model
             'booking_fee' => $bookingComponent,
             'digital_fee' => $digitalComponent,
         ];
+    }
+
+    /**
+     * Lesson-fee portion of this payment in pence.
+     *
+     * Weekly invoices include booking and digital fees — those are stripped
+     * via weeklyBreakdown(). Upfront lesson payments already store the
+     * lesson price only (platform fees sit on the order).
+     */
+    public function lessonFeePence(): int
+    {
+        $this->loadMissing('lesson.order');
+
+        $lesson = $this->lesson;
+        $order = $lesson?->order;
+
+        if ($order?->isWeekly()) {
+            return self::weeklyBreakdown($order, (int) $this->amount_pence)['lesson'];
+        }
+
+        return (int) ($lesson?->amount_pence ?? $this->amount_pence);
     }
 }

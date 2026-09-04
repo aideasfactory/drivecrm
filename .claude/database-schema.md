@@ -538,6 +538,7 @@ Tracks payment status for individual lessons (used in weekly payment mode).
 
 **Relationships:**
 - Belongs to one `Lesson`
+- Has one `InstructorFinance` (auto lesson-fee ledger row; optional)
 
 **Enums:**
 - Status: `due`, `paid`, `refunded`
@@ -546,6 +547,7 @@ Tracks payment status for individual lessons (used in weekly payment mode).
 - Created for each lesson in weekly payment mode
 - Weekly payments are charged via Stripe Subscriptions/Invoices
 - Payment must be completed before lesson can be marked as completed
+- When status becomes `paid`, the lesson-fee portion is posted to the assigned instructor's `instructor_finances` ledger (`category=lesson_fee`). Weekly amounts are split with `weeklyBreakdown()` so booking fee and digital charge stay on the platform.
 
 ---
 
@@ -1106,6 +1108,7 @@ Tracks payments received and expenses incurred by instructors. Supports recurrin
 |--------|------|-------------|-------------|
 | `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Finance record ID |
 | `instructor_id` | bigint unsigned | FOREIGN KEY → instructors.id, CASCADE DELETE, INDEXED | Owning instructor |
+| `lesson_payment_id` | bigint unsigned | NULLABLE, UNIQUE, FOREIGN KEY → lesson_payments.id, NULL ON DELETE | Set when this payment was auto-created from a paid lesson. Guarantees one finance row per lesson payment. Manual ledger entries stay null. |
 | `vehicle_id` | bigint unsigned | NULLABLE, FOREIGN KEY → vehicles.id, NULL ON DELETE | Vehicle this row belongs to. Nullable because non-vehicle categories (advertising, phone, accountant fees, business insurance, etc.) don't carry one. Populated by `BackfillPrimaryVehicleAction` for historical rows. |
 | `type` | enum('payment','expense') | NOT NULL | Whether this is income or an expense |
 | `category` | varchar(64) | NOT NULL, DEFAULT 'none' | Slug from `config/finances.php` — `expense_categories` when type=expense, `payment_categories` when type=payment. Joined to `category_tax_mapping.category` for HMRC bucket + VAT treatment + method-dependence. |
@@ -1125,10 +1128,11 @@ Tracks payments received and expenses incurred by instructors. Supports recurrin
 | `created_at` | timestamp | NULLABLE | Created timestamp |
 | `updated_at` | timestamp | NULLABLE | Updated timestamp |
 
-**Indexes:** `(instructor_id, type)`, `(instructor_id, date)`, `(instructor_id, category)`, `(vehicle_id, date)`, `(recurrence_group_id)`
+**Indexes:** `(instructor_id, type)`, `(instructor_id, date)`, `(instructor_id, category)`, `(vehicle_id, date)`, `(recurrence_group_id)`, UNIQUE `(lesson_payment_id)`
 
 **Relationships:**
 - `instructor_finances.instructor_id` → `instructors.id` (CASCADE DELETE)
+- `instructor_finances.lesson_payment_id` → `lesson_payments.id` (NULL ON DELETE)
 - `instructor_finances.vehicle_id` → `vehicles.id` (NULL ON DELETE)
 
 **Notes:**
@@ -1136,6 +1140,7 @@ Tracks payments received and expenses incurred by instructors. Supports recurrin
 - Receipts live on the private S3 disk. The `receipt_url` accessor returns a time-limited signed URL (TTL from `config('finances.receipt.signed_url_ttl_minutes')`).
 - Existing pre-migration rows were backfilled to `category = 'none'`.
 - **Recurring series are materialised upfront at creation** (`CreateInstructorFinanceAction`): a recurring create generates `recurrence_iterations` records (first on `date`, subsequent dates stepped by frequency using no-overflow month/year arithmetic), all sharing a `recurrence_group_id`. Updates/deletes affect single records only — no series regeneration. Receipts attach to individual records (typically the first).
+- **Auto lesson-fee posts:** when a pupil pays for a lesson, `RecordLessonFeeOnInstructorProfileAction` writes a `type=payment`, `category=lesson_fee` row for the lesson-fee pence only (weekly: `LessonPayment::weeklyBreakdown()['lesson']`; upfront: `lesson.amount_pence`). Booking fee and digital charge are never included. Triggered from the Stripe `invoice.paid` webhook (weekly) and `checkout.session.completed` upfront payment path. Idempotent via `lesson_payment_id`. This is a ledger entry on the instructor profile Finances tab — it is not a Stripe Connect transfer (`payouts` still happen at lesson sign-off).
 
 ---
 
@@ -1471,6 +1476,7 @@ In-app account deletion with a 30-day grace period (App Store Guideline 5.1.1(v)
 4. Webhook `checkout.session.completed` updates order to `status = 'active'`
 5. Creates N lessons (where N = package's `lessons_count`)
 6. Assigns instructor to order and lessons
+7. Creates PAID `LessonPayment` rows and posts each lesson fee (`lesson.amount_pence`) to the instructor's `instructor_finances` ledger. Booking fee and digital charge stay on the order only.
 
 ### 2. Student Purchase Flow (Weekly Payment)
 
@@ -1481,6 +1487,7 @@ In-app account deletion with a 30-day grace period (App Store Guideline 5.1.1(v)
 5. Creates N lessons with corresponding `LessonPayment` records
 6. Each week, Stripe charges the student and fires `invoice.paid` webhook
 7. Webhook updates `LessonPayment.status = 'paid'`
+8. Webhook posts the lesson-fee portion only to the instructor's `instructor_finances` ledger (`category=lesson_fee`). Booking fee and digital charge are not added.
 
 ### 3. Lesson Completion & Payout Flow
 
@@ -2218,6 +2225,7 @@ Lookup table joining DRIVE's finance-category slugs to the HMRC ITSA expense buc
 - Seeded baseline (migration `2026_05_19_075511_create_category_tax_mapping_table`): the 18 slugs from `config/finances.php` as of Phase 6.
 - Phase 6 additions (migration `2026_05_19_075511_update_finance_categories_for_method_aware_picker`): `servicing`, `repairs`, `road_tax`, `breakdown_cover`, `vehicle_insurance` (method-dependent vehicle running costs); `business_insurance`, `phone`, `accountant_fees` (general); plus `food_drink.selectable_in_picker = false`.
 - The legacy `insurance` slug remains in the table for historical-row integrity but new rows should use `vehicle_insurance` or `business_insurance`. The one-time `InsuranceReview` UI re-tags existing rows.
+- `lesson_fee` (migration `2026_09_04_103300_add_lesson_payment_id_to_instructor_finances_and_lesson_fee_category`): payment-category slug for auto-posted lesson income. VAT `exempt`, `itsa_bucket` null, `claimable` false — this is instructor turnover, not an allowable expense.
 
 ### year_end_archives
 

@@ -29,6 +29,7 @@ class CreateInstructorFinanceAction
         $attributes = [
             'type' => $data['type'],
             'category' => $data['category'] ?? 'none',
+            'lesson_payment_id' => $data['lesson_payment_id'] ?? null,
             'vehicle_id' => $data['vehicle_id'] ?? null,
             'payment_method' => $data['payment_method'] ?? null,
             'description' => $data['description'],

@@ -1,51 +1,45 @@
-# Task: Admin and instructor learner profile deletion
+# Task: Auto-add lesson fee to instructor profile on payment
 
 ## Overview
 
-Staff can unassign a learner from an instructor but cannot remove the
-profile. Duplicate learners (e.g. XXXXXXXXAbhinay James) stay on the
-Students list with only Assign Instructor available. This work adds a
-safe delete for owners and for instructors on their own pupils.
+When a pupil pays for a lesson, the **lesson fee only** (not booking fee or
+digital charge) must appear automatically on the instructor profile Finances
+tab (`instructor_finances`). Stripe Connect transfers / `payouts` stay on
+lesson sign-off and are out of scope.
 
-Hard-deleting `students` would cascade-delete `orders` (and therefore
-lessons, invoices, and payouts). Staff delete is therefore a soft delete
-plus login lock, so listings hide the profile while historical records
-keep their `student_id`.
+Ticket: 01a06bcc-d752-7094-beb8-0984be625cf3
+Hard rule: no tests.
 
 ## Phase 1: Planning ✅
 
 ### Current state
-- `DELETE /students/{student}/remove` and API `DELETE /api/v1/students/{id}`
-  only set `instructor_id = null`.
-- `DeleteStudentAction` hard-deletes the row and is unused.
-- `ProcessAccountDeletionAction` already anonymises rather than hard-deletes
-  because user/student cascades would wipe lesson/payment history.
-- Unassigned duplicates are managed from the Pupils Assign Instructor sheet.
-- Instructors cannot open `/pupils` but can manage their pupils on
-  `/instructors/{id}` (Actions tab).
+- Weekly pay: `invoice.paid` marks `lesson_payments` PAID. Amount includes
+  lesson + booking + digital (split via `LessonPayment::weeklyBreakdown`).
+- Upfront pay: `checkout.session.completed` creates PAID `lesson_payments`
+  at `lesson.amount_pence` (lesson price only).
+- Instructor profile Finances tab lists `instructor_finances` (payments /
+  expenses). Staff and the mobile app already read this ledger.
+- `payouts` are Stripe transfers created at sign-off from
+  `$lesson->amount_pence`. Separate concern; backlog may cover transfers.
 
 ### Approach
-1. Soft-delete `students` (`deleted_at`). Default queries hide deleted rows.
-2. Lock the linked user (revoke tokens, randomise password, unique deleted
-   email) so the duplicate cannot log in or reset a password.
-3. Keep student PII on the soft-deleted row; `belongsTo` student relations
-   use `withTrashed()` so invoices/lessons still resolve.
-4. Web `DELETE /students/{student}` for owners (any pupil) and instructors
-   (assigned pupils only). Do not change the mobile API unassign endpoint.
-5. UI: delete control on the Assign Instructor sheet and on the student
-   Actions tab, each with a confirmation dialog.
+1. New payment category `lesson_fee`.
+2. On paid lesson, create an idempotent `instructor_finances` payment
+   (`type=payment`, `category=lesson_fee`) for the lesson-fee pence only.
+3. Link via unique nullable `lesson_payment_id` so webhooks cannot double-post.
+4. Weekly: use `weeklyBreakdown()['lesson']`. Upfront: use
+   `lesson.amount_pence` (already excludes platform fees).
 
 ### Tasks
-- [x] Confirm data-model risk (orders cascade) and choose soft delete
-- [x] Plan auth (owner + assigned instructor) and UI surfaces
+- [x] Confirm landing surface (instructor_finances, not payouts)
+- [x] Confirm weekly vs upfront amount rules
 
 ### Reflection
-Soft delete is the only safe general delete. Hard delete would wipe
-financial history even for a "duplicate" if that row later had an order.
-Unassigned duplicates are owner-only because instructors cannot open
-`/pupils` and unassigned rows have `instructor_id = null`.
+The Finances tab is the instructor-profile money ledger. Recording there at
+payment time matches “added to the instructor's profile” without touching
+Stripe transfers.
 
-**Last Updated:** 2026-09-03.
+**Last Updated:** 2026-09-04.
 
 ## Phase 2: Implementation ✅
 
@@ -53,28 +47,23 @@ Unassigned duplicates are owner-only because instructors cannot open
 Complete.
 
 ### Tasks
-- [x] Migration: `students.deleted_at`
-- [x] Student SoftDeletes + withTrashed on historical relations
-- [x] Rewrite DeleteStudentAction (soft delete + lock user)
-- [x] StudentService, policy, form request, PupilController, route
-- [x] Assign Instructor sheet + Actions tab delete UI
-- [x] Update database-schema.md
+- [x] Migration: `lesson_payment_id` + `lesson_fee` tax mapping
+- [x] Config + models + RecordLessonFee action + InstructorService
+- [x] Call from weekly `invoice.paid` and upfront checkout
+- [x] Update database-schema.md and api.md
 
 ### Reflection
-Mobile `DELETE /api/v1/students/{id}` is still unassign-only — this ticket
-is admin CRM. `DeleteStudentAction` is now the shared web path.
+Existing Finances UI and mobile list pick up the new category from config.
+No Stripe transfer changes. Webhook finance failures are logged so payment
+confirmation still completes.
 
 ## Phase 3: Reflection ✅
 
-Staff can delete duplicate and unwanted learner profiles from the Assign
-Instructor sheet (owners, including unassigned rows) and from the student
-Actions tab (owners and the assigned instructor). Profiles leave listings
-without cascading away lessons or invoices. Linked logins are locked.
-
 ### Tasks
-- [x] Document decisions and leftover risks
+- [x] Document decisions
 
 ### Reflection
-Leftover: no restore UI; GDPR anonymise and staff soft-delete remain two
-paths. Instructors still cannot delete an unassigned profile they created
-and then removed — owners handle that from Students.
+Landing surface is `instructor_finances` (instructor profile Finances tab),
+not `payouts`. Amount is lesson fee only. Idempotent via unique
+`lesson_payment_id`. Historical paid lessons are not backfilled except when
+`GetStudentPaymentsAction` creates a missing PAID upfront payment row.

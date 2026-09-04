@@ -43,6 +43,7 @@ use App\Actions\Instructor\UpdateInstructorProfileAction;
 use App\Actions\Instructor\UploadFinanceReceiptAction;
 use App\Actions\Instructor\UploadInstructorProfilePictureAction;
 use App\Actions\Lesson\UpdateLessonMileageAction;
+use App\Actions\Payment\RecordLessonFeeOnInstructorProfileAction;
 use App\Actions\ProgressTracker\SeedInstructorProgressTrackerAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Shared\Message\SendBroadcastMessageAction;
@@ -54,6 +55,7 @@ use App\Models\CalendarItem;
 use App\Models\Instructor;
 use App\Models\InstructorFinance;
 use App\Models\Lesson;
+use App\Models\LessonPayment;
 use App\Models\Location;
 use App\Models\Message;
 use App\Models\MileageLog;
@@ -122,6 +124,7 @@ class InstructorService extends BaseService
         protected RecalculateStudentLessonNumbersAction $recalculateStudentLessonNumbers,
         protected StartStripeOnboardingAction $startStripeOnboarding,
         protected SyncStripeAccountStatusAction $syncStripeAccountStatus,
+        protected RecordLessonFeeOnInstructorProfileAction $recordLessonFeeOnInstructorProfile,
     ) {}
 
     /**
@@ -969,6 +972,14 @@ class InstructorService extends BaseService
     public function createFinance(Instructor $instructor, array $data): InstructorFinance
     {
         return ($this->createInstructorFinance)($instructor, $data);
+    }
+
+    /**
+     * Record the lesson-fee portion of a paid lesson on the instructor profile.
+     */
+    public function recordLessonFee(LessonPayment $lessonPayment): ?InstructorFinance
+    {
+        return ($this->recordLessonFeeOnInstructorProfile)($lessonPayment);
     }
 
     /**

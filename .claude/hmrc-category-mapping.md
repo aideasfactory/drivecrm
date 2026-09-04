@@ -248,6 +248,7 @@ These are money flowing **out** that aren't general expenses — they need separ
 | `insurance` | (same split as expense) | ✅ | Same routing as expense `insurance` after split |
 | `referral` | `advertisingCosts` | ✅ | Commission paid for new pupil intro |
 | `pupil_transfer_referral` | `advertisingCosts` | ✅ | Same — commission for taking on another instructor's pupil |
+| `lesson_fee` | — | ❌ | **Instructor lesson income (turnover), not an expense.** Auto-posted when a pupil pays; booking fee and digital charge are excluded. Leave out of ITSA expense derivation. |
 
 ### 4.3 Mileage logs
 

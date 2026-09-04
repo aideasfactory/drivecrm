@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Student\Payment;
 
+use App\Actions\Payment\RecordLessonFeeOnInstructorProfileAction;
 use App\Enums\PaymentMode;
 use App\Enums\PaymentStatus;
 use App\Models\LessonPayment;
@@ -13,6 +14,10 @@ use Illuminate\Support\Collection;
 
 class GetStudentPaymentsAction
 {
+    public function __construct(
+        protected RecordLessonFeeOnInstructorProfileAction $recordLessonFeeOnInstructorProfile,
+    ) {}
+
     public function __invoke(Student $student): Collection
     {
         $orderIds = $student->orders()->pluck('id');
@@ -69,13 +74,15 @@ class GetStudentPaymentsAction
                 ->get();
 
             foreach ($lessons as $lesson) {
-                LessonPayment::create([
+                $lessonPayment = LessonPayment::create([
                     'lesson_id' => $lesson->id,
                     'amount_pence' => $lesson->amount_pence,
                     'status' => PaymentStatus::PAID,
                     'due_date' => $lesson->date,
                     'paid_at' => $order->updated_at,
                 ]);
+
+                ($this->recordLessonFeeOnInstructorProfile)($lessonPayment);
             }
         }
     }

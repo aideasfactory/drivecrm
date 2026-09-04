@@ -17,6 +17,7 @@ use App\Models\Student;
 use App\Models\WebhookEvent;
 use App\Notifications\InstructorLessonPaymentReceivedNotification;
 use App\Notifications\LessonPaymentReceivedNotification;
+use App\Services\InstructorService;
 use App\Services\StripeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -381,6 +382,8 @@ class WebhookController extends Controller
             'lesson_payment_id' => $lessonPayment->id,
         ]);
 
+        $this->recordLessonFeeOnInstructorProfile($lessonPayment->fresh());
+
         // Load relationships for notifications
         $lesson = $lessonPayment->lesson;
         $order = $lesson?->order;
@@ -448,6 +451,22 @@ class WebhookController extends Controller
             'lesson_id' => $lessonPayment->lesson_id,
             'invoice_id' => $invoice->id,
         ]);
+    }
+
+    /**
+     * Add the lesson-fee portion to the instructor Finances ledger.
+     * Failures are logged so payment confirmation is not blocked.
+     */
+    protected function recordLessonFeeOnInstructorProfile(LessonPayment $lessonPayment): void
+    {
+        try {
+            app(InstructorService::class)->recordLessonFee($lessonPayment);
+        } catch (\Exception $e) {
+            Log::error('Webhook: Failed to record lesson fee on instructor profile', [
+                'lesson_payment_id' => $lessonPayment->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -588,18 +607,19 @@ class WebhookController extends Controller
         $lessons = $order->lessons()->orderBy('date')->get();
 
         foreach ($lessons as $lesson) {
-            // Skip if a payment record already exists for this lesson
-            if (LessonPayment::where('lesson_id', $lesson->id)->exists()) {
-                continue;
+            $lessonPayment = LessonPayment::query()->where('lesson_id', $lesson->id)->first();
+
+            if ($lessonPayment === null) {
+                $lessonPayment = LessonPayment::create([
+                    'lesson_id' => $lesson->id,
+                    'amount_pence' => $lesson->amount_pence,
+                    'status' => PaymentStatus::PAID,
+                    'due_date' => $lesson->date,
+                    'paid_at' => now(),
+                ]);
             }
 
-            LessonPayment::create([
-                'lesson_id' => $lesson->id,
-                'amount_pence' => $lesson->amount_pence,
-                'status' => PaymentStatus::PAID,
-                'due_date' => $lesson->date,
-                'paid_at' => now(),
-            ]);
+            $this->recordLessonFeeOnInstructorProfile($lessonPayment);
         }
 
         Log::info('Webhook: Created upfront lesson payment records', [

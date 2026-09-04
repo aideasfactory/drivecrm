@@ -15,6 +15,7 @@ class InstructorFinance extends Model
 
     protected $fillable = [
         'instructor_id',
+        'lesson_payment_id',
         'vehicle_id',
         'type',
         'category',
@@ -47,6 +48,11 @@ class InstructorFinance extends Model
     public function instructor(): BelongsTo
     {
         return $this->belongsTo(Instructor::class);
+    }
+
+    public function lessonPayment(): BelongsTo
+    {
+        return $this->belongsTo(LessonPayment::class);
     }
 
     public function vehicle(): BelongsTo
