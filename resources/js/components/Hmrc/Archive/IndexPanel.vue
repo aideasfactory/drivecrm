@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { router, usePage } from '@inertiajs/vue3';
+import { router, usePage, usePoll } from '@inertiajs/vue3';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +41,7 @@ interface PageProps {
         success?: string | null;
         error?: string | null;
     };
+    hmrcService?: unknown;
 }
 
 const props = defineProps<{
@@ -117,7 +118,32 @@ const emailLink = (archive: ArchiveRow) => {
     router.post(`/hmrc/archive/${archive.id}/email-link`, {}, { preserveScroll: true });
 };
 
-const refresh = () => router.reload({ only: ['archives', 'hmrcService'] });
+const isEmbeddedOnInstructor = 'hmrcService' in page.props;
+const reloadOnly = isEmbeddedOnInstructor ? ['hmrcService'] : ['archives'];
+
+const refresh = () => router.reload({ only: reloadOnly, preserveScroll: true });
+
+const hasInFlightArchive = computed(() =>
+    props.archives.some((a) => a.status === 'queued' || a.status === 'building'),
+);
+
+const { start: startProgressPoll, stop: stopProgressPoll } = usePoll(
+    4000,
+    { only: reloadOnly, preserveScroll: true },
+    { autoStart: false },
+);
+
+watch(
+    hasInFlightArchive,
+    (inFlight) => {
+        if (inFlight) {
+            startProgressPoll();
+        } else {
+            stopProgressPoll();
+        }
+    },
+    { immediate: true },
+);
 </script>
 
 <template>
@@ -173,6 +199,9 @@ const refresh = () => router.reload({ only: ['archives', 'hmrcService'] });
         <Card>
             <CardHeader>
                 <CardTitle>Your archives</CardTitle>
+                <CardDescription v-if="hasInFlightArchive">
+                    This page updates automatically while an archive is building. You will also get an email when the ZIP is ready.
+                </CardDescription>
             </CardHeader>
             <CardContent>
                 <Alert v-if="archives.length === 0">
@@ -247,7 +276,7 @@ const refresh = () => router.reload({ only: ['archives', 'hmrcService'] });
                                 </Button>
                                 <span v-if="['queued', 'building'].includes(a.status)" class="text-xs text-muted-foreground">
                                     <Loader2 class="inline h-3 w-3 animate-spin mr-1" />
-                                    Refresh to check progress
+                                    {{ a.status === 'building' ? 'Building archive…' : 'Waiting in queue…' }}
                                 </span>
                             </TableCell>
                         </TableRow>

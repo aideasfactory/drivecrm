@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\YearEndArchive;
 
 use App\Models\YearEndArchive;
+use App\Services\YearEndArchiveService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -19,6 +20,7 @@ class BuildYearEndArchiveAction
         private readonly WriteSubmissionsJsonAction $writeSubmissions,
         private readonly RenderArchiveCoverSheetPdfAction $renderCoverSheet,
         private readonly BuildArchiveZipAction $buildZip,
+        private readonly YearEndArchiveService $archives,
     ) {}
 
     /**
@@ -30,6 +32,7 @@ class BuildYearEndArchiveAction
         $archive->status = YearEndArchive::STATUS_BUILDING;
         $archive->error_message = null;
         $archive->save();
+        $this->forgetDashboardCache($archive);
 
         $instructor = $archive->instructor;
         $taxYearStart = $archive->taxYearStartDate();
@@ -69,6 +72,7 @@ class BuildYearEndArchiveAction
                 'expires_at' => $taxYearEnd->copy()->addYears($retentionYears),
                 'error_message' => null,
             ]);
+            $this->forgetDashboardCache($archive);
         } catch (Throwable $e) {
             Log::error('Year-end archive build failed', [
                 'archive_id' => $archive->id,
@@ -99,6 +103,12 @@ class BuildYearEndArchiveAction
             'status' => YearEndArchive::STATUS_FAILED,
             'error_message' => $message,
         ]);
+        $this->forgetDashboardCache($archive);
+    }
+
+    private function forgetDashboardCache(YearEndArchive $archive): void
+    {
+        $this->archives->invalidateArchiveCache($archive->instructor);
     }
 
     private function cleanupStaging(string $dir): void

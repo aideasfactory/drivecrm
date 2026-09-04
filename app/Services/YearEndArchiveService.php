@@ -16,18 +16,16 @@ class YearEndArchiveService extends BaseService
     /**
      * Archives a given instructor has on file, newest tax year first.
      *
+     * Not cached: the dashboard polls this list for queued/building progress,
+     * and a 10-minute remember() left the UI stuck after the ZIP email went out.
+     *
      * @return Collection<int, YearEndArchive>
      */
     public function archivesFor(Instructor $instructor): Collection
     {
-        $key = $this->cacheKey('instructor', $instructor->id, 'year_end_archives');
-
-        return $this->remember(
-            $key,
-            fn () => $instructor->yearEndArchives()
-                ->orderByDesc('tax_year_start')
-                ->get(),
-        );
+        return $instructor->yearEndArchives()
+            ->orderByDesc('tax_year_start')
+            ->get();
     }
 
     /**
