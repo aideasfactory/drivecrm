@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,7 +22,8 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet'
-import { Search, ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { Search, ChevronLeft, ChevronRight, Download, X } from 'lucide-vue-next'
+import { exportCsv } from '@/actions/App/Http/Controllers/EnquiryController'
 import { index } from '@/routes/enquiries'
 
 interface Enquiry {
@@ -66,6 +68,9 @@ interface Paginator {
 interface Filters {
     status: 'all' | 'completed' | 'full_onboarding' | 'in_progress'
     area: 'all' | 'in_area' | 'out_of_area' | 'unknown'
+    date_from: string | null
+    date_to: string | null
+    q: string | null
 }
 
 interface Props {
@@ -89,33 +94,122 @@ const areaOptions: { value: Filters['area']; label: string }[] = [
     { value: 'unknown', label: 'Unknown' },
 ]
 
-const applyFilters = (changes: Partial<Filters>) => {
-    router.get(
-        index.url(),
-        { ...props.filters, ...changes },
-        { preserveScroll: true, preserveState: true },
-    )
+const monthFromRange = (from: string | null, to: string | null): string => {
+    if (!from || !to) {
+        return ''
+    }
+
+    const fromDate = new Date(`${from}T00:00:00`)
+    const toDate = new Date(`${to}T00:00:00`)
+
+    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+        return ''
+    }
+
+    if (fromDate.getDate() !== 1) {
+        return ''
+    }
+
+    const lastDay = new Date(fromDate.getFullYear(), fromDate.getMonth() + 1, 0)
+
+    if (
+        toDate.getFullYear() !== lastDay.getFullYear() ||
+        toDate.getMonth() !== lastDay.getMonth() ||
+        toDate.getDate() !== lastDay.getDate()
+    ) {
+        return ''
+    }
+
+    return `${fromDate.getFullYear()}-${String(fromDate.getMonth() + 1).padStart(2, '0')}`
 }
 
-const searchQuery = ref('')
+const searchQuery = ref(props.filters.q ?? '')
+const dateFrom = ref(props.filters.date_from ?? '')
+const dateTo = ref(props.filters.date_to ?? '')
+const selectedMonth = ref(monthFromRange(props.filters.date_from, props.filters.date_to))
 const selectedEnquiry = ref<Enquiry | null>(null)
 const isSheetOpen = ref(false)
 
-const filteredEnquiries = computed(() => {
-    if (!searchQuery.value) {
-        return props.enquiries.data
+let searchDebounce: ReturnType<typeof setTimeout> | undefined
+
+const activeFilterParams = (changes: Partial<Filters> = {}): Record<string, string> => {
+    const merged: Filters = {
+        status: props.filters.status,
+        area: props.filters.area,
+        date_from: dateFrom.value || null,
+        date_to: dateTo.value || null,
+        q: searchQuery.value.trim() || null,
+        ...changes,
     }
 
-    const query = searchQuery.value.toLowerCase()
-    return props.enquiries.data.filter((e) => {
-        const name = `${e.first_name ?? ''} ${e.last_name ?? ''}`.toLowerCase()
-        return (
-            name.includes(query) ||
-            (e.email?.toLowerCase().includes(query) ?? false) ||
-            (e.postcode?.toLowerCase().includes(query) ?? false) ||
-            (e.phone?.toLowerCase().includes(query) ?? false)
-        )
+    const params: Record<string, string> = {
+        status: merged.status,
+        area: merged.area,
+    }
+
+    if (merged.date_from) {
+        params.date_from = merged.date_from
+    }
+
+    if (merged.date_to) {
+        params.date_to = merged.date_to
+    }
+
+    if (merged.q) {
+        params.q = merged.q
+    }
+
+    return params
+}
+
+const applyFilters = (changes: Partial<Filters> = {}) => {
+    router.get(index.url(), activeFilterParams(changes), { preserveScroll: true, preserveState: true })
+}
+
+const applyMonth = () => {
+    if (!selectedMonth.value) {
+        dateFrom.value = ''
+        dateTo.value = ''
+        applyFilters({ date_from: null, date_to: null })
+        return
+    }
+
+    const [year, month] = selectedMonth.value.split('-').map(Number)
+    const lastDay = new Date(year, month, 0).getDate()
+    const paddedMonth = String(month).padStart(2, '0')
+    dateFrom.value = `${year}-${paddedMonth}-01`
+    dateTo.value = `${year}-${paddedMonth}-${String(lastDay).padStart(2, '0')}`
+    applyFilters({ date_from: dateFrom.value, date_to: dateTo.value })
+}
+
+const applyDates = () => {
+    selectedMonth.value = monthFromRange(dateFrom.value, dateTo.value)
+    applyFilters({
+        date_from: dateFrom.value || null,
+        date_to: dateTo.value || null,
     })
+}
+
+const clearDates = () => {
+    selectedMonth.value = ''
+    dateFrom.value = ''
+    dateTo.value = ''
+    applyFilters({ date_from: null, date_to: null })
+}
+
+const hasDateFilter = computed(() => dateFrom.value !== '' || dateTo.value !== '')
+
+const exportUrl = computed(() => exportCsv.url({ query: activeFilterParams() }))
+
+watch(searchQuery, () => {
+    clearTimeout(searchDebounce)
+    searchDebounce = setTimeout(() => {
+        if ((props.filters.q ?? '') === searchQuery.value.trim()) {
+            return
+        }
+
+        applyFilters()
+    }, 400)
 })
 
 const formatDate = (iso: string | null) => {
@@ -183,11 +277,17 @@ const breadcrumbs = [{ title: 'Enquiries' }]
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex flex-col gap-6 p-6">
-            <div class="flex flex-col gap-2">
-                <h2 class="text-3xl font-bold">Enquiries</h2>
-                <p class="text-muted-foreground">
-                    Every enquiry started via the onboarding or booking flows, with the step they reached.
-                </p>
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div class="flex flex-col gap-2">
+                    <h2 class="text-3xl font-bold">Enquiries</h2>
+                    <p class="text-muted-foreground">
+                        Every enquiry started via the onboarding or booking flows, with the step they reached.
+                    </p>
+                </div>
+                <Button as="a" :href="exportUrl" variant="outline">
+                    <Download class="h-4 w-4" />
+                    Download CSV
+                </Button>
             </div>
 
             <Card>
@@ -228,6 +328,43 @@ const breadcrumbs = [{ title: 'Enquiries' }]
                         </div>
                     </div>
 
+                    <div class="flex flex-wrap items-end gap-4 mb-4">
+                        <div class="flex flex-col gap-1.5">
+                            <Label for="enquiry-month" class="text-xs text-muted-foreground">Month</Label>
+                            <Input
+                                id="enquiry-month"
+                                v-model="selectedMonth"
+                                type="month"
+                                class="w-44"
+                                @change="applyMonth()"
+                            />
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <Label for="enquiry-from" class="text-xs text-muted-foreground">From</Label>
+                            <Input
+                                id="enquiry-from"
+                                v-model="dateFrom"
+                                type="date"
+                                class="w-40"
+                                @change="applyDates()"
+                            />
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <Label for="enquiry-to" class="text-xs text-muted-foreground">To</Label>
+                            <Input
+                                id="enquiry-to"
+                                v-model="dateTo"
+                                type="date"
+                                class="w-40"
+                                @change="applyDates()"
+                            />
+                        </div>
+                        <Button v-if="hasDateFilter" variant="ghost" size="sm" @click="clearDates">
+                            <X class="h-4 w-4" />
+                            Clear dates
+                        </Button>
+                    </div>
+
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -244,7 +381,7 @@ const breadcrumbs = [{ title: 'Enquiries' }]
                         </TableHeader>
                         <TableBody>
                             <TableRow
-                                v-for="enquiry in filteredEnquiries"
+                                v-for="enquiry in enquiries.data"
                                 :key="enquiry.id"
                                 class="cursor-pointer"
                                 @click="openEnquiry(enquiry)"
@@ -278,7 +415,7 @@ const breadcrumbs = [{ title: 'Enquiries' }]
                                     </Badge>
                                 </TableCell>
                             </TableRow>
-                            <TableRow v-if="filteredEnquiries.length === 0">
+                            <TableRow v-if="enquiries.data.length === 0">
                                 <TableCell colspan="9" class="text-center text-muted-foreground py-8">
                                     No enquiries match your search or filters.
                                 </TableCell>

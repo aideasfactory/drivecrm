@@ -1,13 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
+use App\Http\Requests\FilterEnquiriesRequest;
 use App\Models\Enquiry;
 use App\Services\EnquiryService;
-use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EnquiryController extends Controller
 {
@@ -23,29 +26,127 @@ class EnquiryController extends Controller
      * anything else = in progress. In-area comes from the snapshot written
      * by Booking\StepTwoController at data->steps.step2.in_area.
      */
-    public function index(Request $request): Response
+    public function index(FilterEnquiriesRequest $request): Response
     {
-        $status = $this->filterValue($request, 'status', ['all', 'completed', 'full_onboarding', 'in_progress']);
-        $area = $this->filterValue($request, 'area', ['all', 'in_area', 'out_of_area', 'unknown']);
+        $filters = $request->filters();
 
         $enquiries = $this->enquiryService
-            ->getFiltered($status, $area)
+            ->getFiltered($filters)
             ->through(fn (Enquiry $enquiry) => $this->serializeEnquiry($enquiry));
 
         return Inertia::render('Enquiries/Index', [
             'enquiries' => $enquiries,
-            'filters' => [
-                'status' => $status,
-                'area' => $area,
-            ],
+            'filters' => $filters,
         ]);
     }
 
-    private function filterValue(Request $request, string $key, array $allowed): string
+    /**
+     * Download every enquiry matching the current list filters as CSV.
+     */
+    public function exportCsv(FilterEnquiriesRequest $request): StreamedResponse
     {
-        $value = $request->query($key, 'all');
+        $filters = $request->filters();
+        $enquiries = $this->enquiryService->getFilteredForExport($filters);
 
-        return in_array($value, $allowed, true) ? $value : 'all';
+        $filename = $this->exportFilename($filters);
+
+        return response()->streamDownload(function () use ($enquiries): void {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, [
+                'ID',
+                'Created at',
+                'Source',
+                'First name',
+                'Last name',
+                'Email',
+                'Phone',
+                'Postcode',
+                'Transmission',
+                'Current step',
+                'Max step reached',
+                'Total steps',
+                'Status',
+                'In area',
+                'Instructor ID',
+                'Privacy consent',
+                'Marketing consent',
+                'Consented at',
+                'Tracking source',
+                'GCLID',
+            ]);
+
+            foreach ($enquiries as $enquiry) {
+                fputcsv($handle, $this->csvRow($enquiry));
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
+    /**
+     * @param  array{status: string, area: string, date_from: ?string, date_to: ?string, q: ?string}  $filters
+     */
+    private function exportFilename(array $filters): string
+    {
+        $range = ($filters['date_from'] && $filters['date_to'])
+            ? $filters['date_from'].'_'.$filters['date_to']
+            : now()->format('Y-m-d');
+
+        return 'enquiries-'.$range.'.csv';
+    }
+
+    /**
+     * @return list<string|int|null>
+     */
+    private function csvRow(Enquiry $enquiry): array
+    {
+        $row = $this->serializeEnquiry($enquiry);
+        $step2 = $row['data']['steps']['step2'] ?? [];
+        $tracking = $row['data']['tracking'] ?? [];
+
+        return [
+            $row['id'],
+            $enquiry->created_at?->timezone((string) config('app.timezone'))->format('Y-m-d H:i:s'),
+            $row['source'] === 'booking' ? 'Booking' : 'Onboarding',
+            $row['first_name'],
+            $row['last_name'],
+            $row['email'],
+            $row['phone'],
+            $row['postcode'],
+            $this->transmissionLabel($row['transmission']),
+            $row['current_step'],
+            $row['max_step_reached'],
+            $row['total_steps'],
+            match ($row['status']) {
+                'completed' => 'Completed',
+                'full_onboarding' => 'Full onboarding',
+                default => 'In progress',
+            },
+            match ($row['in_area']) {
+                true => 'In area',
+                false => 'Out of area',
+                default => '',
+            },
+            $step2['instructor_id'] ?? null,
+            $enquiry->privacy_consent ? 'Yes' : 'No',
+            $enquiry->marketing_consent ? 'Yes' : 'No',
+            $enquiry->consented_at?->timezone((string) config('app.timezone'))->format('Y-m-d H:i:s'),
+            $tracking['source'] ?? null,
+            $tracking['gclid'] ?? null,
+        ];
+    }
+
+    private function transmissionLabel(?string $value): string
+    {
+        return match ($value) {
+            'manual' => 'Manual',
+            'automatic' => 'Automatic',
+            'both' => 'Either',
+            default => '',
+        };
     }
 
     /**
