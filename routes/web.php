@@ -434,6 +434,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
 
     Route::get('/enquiries', [EnquiryController::class, 'index'])
         ->name('enquiries.index');
+    Route::get('/enquiries/export', [EnquiryController::class, 'exportCsv'])
+        ->name('enquiries.export-csv');
 });
 
 // HMRC Making Tax Digital — instructor-only

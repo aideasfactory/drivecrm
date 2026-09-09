@@ -1,47 +1,41 @@
-# Task: MTD ITSA Connected + not-authorised contradiction
+# Task: Enquiry list CSV export with date filters
 
 ## Overview
 
-Instructor HMRC tab can show a green "HMRC Connected" badge, a red
-`CLIENT_OR_AGENT_NOT_AUTHORISED` flash ("Reconnect to grant the required
-permissions"), and a grey "We haven't checked your MTD enrolment yet"
-card at the same time.
-
-Root cause: "Connected" is token-presence only. Enrolment check failures
-are flashed and thrown, so `mtd_itsa_status` stays `unknown`. The error
-copy treats HMRC identity/enrolment rejection as a missing OAuth scope.
+Admin Enquiries list (`/enquiries`) has status and area filters but no
+date/month filter and no CSV export. Staff need to export the currently
+filtered enquiry list (by month/date range and the existing filter types).
 
 ## Phase 1: Planning ✅
 
 ### Current state
-- Header badge = `hmrc_tokens` row exists.
-- Refresh calls Business Details; `RULE_NOT_SIGNED_UP_TO_MTD` is mapped
-  to `not_signed_up`, but `CLIENT_OR_AGENT_NOT_AUTHORISED` and
-  `INVALID_SCOPE` are rethrown. Status stays `unknown`.
-- VAT already surfaces missing scopes; ITSA does not.
-- OAuth only adds ITSA scopes when `itsa.applies` is already true, so a
-  connect-before-profile token can lack `read:self-assessment`.
+- `GET /enquiries` (owner/admin, `RestrictInstructor`) lists paginated
+  enquiries via `EnquiryController` → `EnquiryService` →
+  `GetFilteredEnquiriesAction`.
+- Server filters: `status` (all/completed/full_onboarding/in_progress),
+  `area` (all/in_area/out_of_area/unknown).
+- Search was client-side on the current page only.
+- No date filter. No export. Reports already stream CSV with
+  `response()->streamDownload` + `fputcsv`.
 
 ### Approach
-1. Persist `not_authorised` / `missing_scope` enrolment statuses.
-2. Detect missing ITSA scopes on page load (same pattern as VAT).
-3. Request ITSA scopes whenever the instructor is not a limited company.
-4. Replace reconnect-for-permissions copy with NINO / MTD / sandbox
-   guidance and real CTAs.
-5. Hide the "haven't checked yet" card when a check has failed or
-   scopes are missing.
+1. Extend the shared filter query with `date_from` / `date_to` (created_at)
+   and server-side `q` search so list and export stay in sync.
+2. `GET /enquiries/export` streams a CSV of every matching row (not just
+   the current page), using the same filters.
+3. UI: month picker (sets month bounds) + from/to date inputs + Download
+   CSV button, matching the cancelled-lessons report pattern.
+4. CSV columns = table columns plus consent, instructor id, and tracking.
 
 ### Tasks
-- [x] Trace Connected vs enrolment vs HMRC error codes
-- [x] Choose persist-status + clearer messaging (no new columns)
+- [x] Trace enquiries list, filters, and existing CSV export patterns
+- [x] Choose UI placement and CSV columns (no new library)
 
 ### Reflection
-This is a product-state bug, not only a test-account limitation.
-Sandbox test users often return `CLIENT_OR_AGENT_NOT_AUTHORISED` when
-the NINO or MTD enrolment does not match; reconnecting the same login
-does not fix that.
+Reuse the reports CSV stream pattern and the existing Controller →
+Service → Action chain. No migration. Web admin only — not a mobile API.
 
-**Last Updated:** 2026-09-04.
+**Last Updated:** 2026-09-08.
 
 ## Phase 2: Implementation ✅
 
@@ -49,31 +43,32 @@ does not fix that.
 Complete.
 
 ### Tasks
-- [x] ItsaEnrolmentStatus + HmrcErrorCode copy
-- [x] ResolveEnrolmentStatusAction maps auth/scope errors
-- [x] scopesFor always requests ITSA scopes when they can apply
-- [x] ItsaController passes hasItsaScope + environment
-- [x] IndexPanel alerts and CTAs
-- [x] Update database-schema.md
+- [x] FilterEnquiriesRequest + date/search on GetFilteredEnquiriesAction
+- [x] EnquiryService paginate vs export collection
+- [x] EnquiryController@exportCsv + named route
+- [x] Enquiries/Index.vue month + date pickers and Download CSV
+- [x] Wayfinder import via EnquiryController.exportCsv (generated at build)
 
 ### Reflection
-Persisting `not_authorised` removes the stale "haven't checked yet"
-card. Reconnect is only offered as "different HMRC account" or missing
-scopes — not as the fix for a matching-but-unenrolled test user.
+Export is a GET with the same query string as the list. Month picker is a
+convenience that writes `date_from`/`date_to`; custom ranges still work.
+Search is now server-side so CSV matches the visible filter set, not the
+current page.
 
-I've updated database-schema.md to reflect the new enrolment statuses.
+No database-schema.md update — no migration.
+No api.md update — web admin download, not a mobile API endpoint.
 
 ## Phase 3: Reflection ✅
 
-Staff and instructors now see a persistent explanation when HMRC rejects
-the enrolment check. Connected still means "OAuth token on file"; the
-ITSA panel no longer pretends the check has not run.
+Staff can pick a month or a from/to range, keep status/area/search, and
+download every matching enquiry as CSV. Unfiltered export only happens
+when no filters are set.
 
 ### Tasks
 - [x] Document decisions and leftover risks
 
 ### Reflection
-Leftover: owner viewing an instructor ITSA tab still loads
-`$request->user()` (the owner), not the instructor. Out of scope here.
-Sandbox test-account setup remains an HMRC limitation — we now say so
-instead of telling them to reconnect for permissions.
+Leftover: this environment has no PHP binary, so Wayfinder was not
+generated here (Vite plugin will generate on `npm run dev` / build).
+Very large exports stream via cursor but may still hit web timeouts.
+JSON name search uses MySQL `JSON_EXTRACT` / `CONCAT_WS`.
