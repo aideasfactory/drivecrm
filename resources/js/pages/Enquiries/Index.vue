@@ -94,39 +94,9 @@ const areaOptions: { value: Filters['area']; label: string }[] = [
     { value: 'unknown', label: 'Unknown' },
 ]
 
-const monthFromRange = (from: string | null, to: string | null): string => {
-    if (!from || !to) {
-        return ''
-    }
-
-    const fromDate = new Date(`${from}T00:00:00`)
-    const toDate = new Date(`${to}T00:00:00`)
-
-    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
-        return ''
-    }
-
-    if (fromDate.getDate() !== 1) {
-        return ''
-    }
-
-    const lastDay = new Date(fromDate.getFullYear(), fromDate.getMonth() + 1, 0)
-
-    if (
-        toDate.getFullYear() !== lastDay.getFullYear() ||
-        toDate.getMonth() !== lastDay.getMonth() ||
-        toDate.getDate() !== lastDay.getDate()
-    ) {
-        return ''
-    }
-
-    return `${fromDate.getFullYear()}-${String(fromDate.getMonth() + 1).padStart(2, '0')}`
-}
-
 const searchQuery = ref(props.filters.q ?? '')
 const dateFrom = ref(props.filters.date_from ?? '')
 const dateTo = ref(props.filters.date_to ?? '')
-const selectedMonth = ref(monthFromRange(props.filters.date_from, props.filters.date_to))
 const selectedEnquiry = ref<Enquiry | null>(null)
 const isSheetOpen = ref(false)
 
@@ -166,24 +136,7 @@ const applyFilters = (changes: Partial<Filters> = {}) => {
     router.get(index.url(), activeFilterParams(changes), { preserveScroll: true, preserveState: true })
 }
 
-const applyMonth = () => {
-    if (!selectedMonth.value) {
-        dateFrom.value = ''
-        dateTo.value = ''
-        applyFilters({ date_from: null, date_to: null })
-        return
-    }
-
-    const [year, month] = selectedMonth.value.split('-').map(Number)
-    const lastDay = new Date(year, month, 0).getDate()
-    const paddedMonth = String(month).padStart(2, '0')
-    dateFrom.value = `${year}-${paddedMonth}-01`
-    dateTo.value = `${year}-${paddedMonth}-${String(lastDay).padStart(2, '0')}`
-    applyFilters({ date_from: dateFrom.value, date_to: dateTo.value })
-}
-
 const applyDates = () => {
-    selectedMonth.value = monthFromRange(dateFrom.value, dateTo.value)
     applyFilters({
         date_from: dateFrom.value || null,
         date_to: dateTo.value || null,
@@ -191,7 +144,6 @@ const applyDates = () => {
 }
 
 const clearDates = () => {
-    selectedMonth.value = ''
     dateFrom.value = ''
     dateTo.value = ''
     applyFilters({ date_from: null, date_to: null })
@@ -329,16 +281,6 @@ const breadcrumbs = [{ title: 'Enquiries' }]
                     </div>
 
                     <div class="flex flex-wrap items-end gap-4 mb-4">
-                        <div class="flex flex-col gap-1.5">
-                            <Label for="enquiry-month" class="text-xs text-muted-foreground">Month</Label>
-                            <Input
-                                id="enquiry-month"
-                                v-model="selectedMonth"
-                                type="month"
-                                class="w-44"
-                                @change="applyMonth()"
-                            />
-                        </div>
                         <div class="flex flex-col gap-1.5">
                             <Label for="enquiry-from" class="text-xs text-muted-foreground">From</Label>
                             <Input
