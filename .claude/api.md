@@ -3391,12 +3391,12 @@ Returns an aggregated summary of the authenticated student's resource activity f
 | `stats.hazard_attempts_taken` | Number of hazard perception TEST attempts the student has made (practice attempts excluded — mirrors mock stats counting `mode = 'mock'` only). |
 | `stats.hazard_perception_average` | Average score across TEST attempts, normalised to a /5 scale — double-hazard attempts (max 10) are halved before averaging, so the denominator is always `/5`. Format `"{avg}/5"` to 1 decimal. Returns `"0/5"` if none. |
 | `stats.hazard_perception_percentage` | Normalised hazard average as a percentage of the max (`/5`). `0` if no test attempts taken. |
-| `study_progress` | Per top-level folder: total resources (including children), watched count, percentage. Only folders with ≥1 resource. |
+| `study_progress` | Per top-level folder: total resources (including children), watched count, percentage. Only folders with ≥1 resource. Instructor-only folders (`visibility = instructor`) are omitted; child folders hidden from pupils are excluded from the totals. |
 | `recommended` | Resources suggested via lesson sign-offs (`lesson_resource` pivot). Unwatched first, then watched. Limit 5. |
 | `badges.first_test` | Earned when the student has ≥1 completed mock test. `earned_at` = `completed_at` of the earliest completed test. |
 | `badges.top_score` | Earned when the student has any completed mock test where `correct_answers = total_questions`. `earned_at` = earliest such test's `completed_at`. |
 | `badges.seven_day_streak` | Earned when the student has taken ≥1 completed mock test on each of 7 consecutive calendar days (hazard perception attempts do **not** count). `earned_at` = the 7th day of the first qualifying run. `current_streak_days` counts the ongoing run ending today or yesterday; any missed day resets it to `0`. Once earned, stays earned — a broken streak does not revoke the badge. |
-| `badges.expert` | Earned when **all three** `criteria` are true: `perfect_mock` (any 50/50 mock test), `perfect_hazard` (any hazard TEST attempt where `total_score` = max for that clip — 5 single, 10 double; practice attempts don't count), `all_resources_watched` (a `resource_watches` row exists for every published resource). `earned_at` = latest of the three timestamps. |
+| `badges.expert` | Earned when **all three** `criteria` are true: `perfect_mock` (any 50/50 mock test), `perfect_hazard` (any hazard TEST attempt where `total_score` = max for that clip — 5 single, 10 double; practice attempts don't count), `all_resources_watched` (a `resource_watches` row exists for every published **pupil-visible** student-audience resource — folders with `visibility = instructor` are excluded from the denominator). `earned_at` = latest of the three timestamps. |
 | `study_tip` | Random driving study tip from a pool of 20. |
 
 **Error Responses:**
@@ -3414,7 +3414,7 @@ Returns an aggregated summary of the authenticated student's resource activity f
 
 Returns the full resource library for the student. The response contains two top-level keys:
 
-- **`folders`** — the complete folder tree with all published resources nested inside. Each resource includes `is_suggested` (assigned to the student via a lesson sign-off) and `is_watched` booleans.
+- **`folders`** — the folder tree visible to pupils, with published student-audience resources nested inside. Each resource includes `is_suggested` (assigned to the student via a lesson sign-off) and `is_watched` booleans. Folders with `visibility` of `instructor` are omitted. Empty folders (no remaining student resources and no non-empty children) are pruned.
 - **`my_resources`** — a flat array of resources specifically suggested to this student (via `lesson_resource` pivot), for the "My Resources" tab.
 
 **Request Body:** None
@@ -3429,12 +3429,14 @@ Returns the full resource library for the student. The response contains two top
         "name": "Learn to Drive",
         "slug": "learn-to-drive",
         "sort_order": 0,
+        "visibility": "both",
         "children": [
           {
             "id": 3,
             "name": "Moving Off & Stopping",
             "slug": "moving-off-stopping",
             "sort_order": 0,
+            "visibility": "student",
             "resources": [
               {
                 "id": 2,
@@ -3478,6 +3480,9 @@ Returns the full resource library for the student. The response contains two top
 | `sort_order` | integer | Admin-defined display position among sibling folders (0-based after a reorder) |
 | `children` | array | Nested child folders (same structure, recursive), ordered by `sort_order` then name |
 | `resources` | array | Published resources in this folder, ordered by `sort_order` then title |
+| `visibility` | string | `student`, `instructor`, or `both`. This endpoint only returns `student` and `both`. Included so the app can hide folders client-side if it caches a mixed tree. |
+| `children` | array | Nested child folders (same structure, recursive) |
+| `resources` | array | Published resources in this folder |
 
 **Resource Object Fields (within folders):**
 
@@ -3508,6 +3513,7 @@ Returns the full resource library for the student. The response contains two top
 > **Note:** `video_url` and `file_url` are intentionally excluded from this endpoint to keep the payload lightweight. Use `GET /student/resources/{resource}` to retrieve the actual content URL when the user taps a resource.
 >
 > **Ordering:** `folders`, `children`, and `resources` arrays are returned in the admin-defined order (`sort_order` ascending, then name/title). Render them in array order — do not re-sort by title. Until a folder is reordered in Drive CRM, existing rows may all have `sort_order = 0` and will fall back to name/title. `my_resources` stays suggestion-order (newest first) and has no `sort_order`.
+> **Folder visibility:** Admin sets `visibility` on each folder (`student` | `instructor` | `both`, default `both`). This endpoint is hard-filtered server-side to folders visible to pupils (`student` or `both`). Instructor-only folders such as VTS or Standards Check Success are omitted entirely — not returned as empty folders. Empty folders (no remaining student-audience resources after the audience filter) are also pruned. `my_resources` excludes items whose parent folder is not pupil-visible. No client-side folder filtering is required, but `visibility` is still present on every folder object.
 
 ---
 
@@ -3581,7 +3587,7 @@ Returns a single resource with its full details including the actual content URL
 | `sort_order` | integer | Admin-defined display position within the parent folder |
 | `is_watched` | boolean | Whether the student has watched this resource |
 
-**Error Response — resource not found:** `404 Not Found`
+**Error Response — resource not found:** `404 Not Found` (unpublished, instructor-audience, or the parent folder is not visible to pupils)
 ```json
 {
   "message": "No query results for model [App\\Models\\Resource] 999."
@@ -3613,7 +3619,7 @@ Call this endpoint when the student finishes watching a video or opens a PDF doc
 }
 ```
 
-**Error Response — resource not found:** `404 Not Found`
+**Error Response — resource not found:** `404 Not Found` (unpublished, instructor-audience, or the parent folder is not visible to pupils)
 ```json
 {
   "message": "No query results for model [App\\Models\\Resource] 999."
@@ -5447,6 +5453,7 @@ Returns published learning resources, optionally filtered by audience. Resources
 > - The list is ordered by `resource_folder_id`, then `sort_order`, then `title`. Prefer the folder-tree endpoints when rendering a library — they keep siblings in the admin-defined order.
 > - The instructor mobile app should call `GET /api/v1/resources?audience=instructor`; the student app can either call this with `?audience=student` or use the richer `/api/v1/student/resources` tree view.
 > - All `/api/v1/student/...` resource endpoints (`/student/resources`, `/student/resources/{resource}`, `/student/resource-summary`) are hard-filtered server-side to `audience = 'student'`. Instructor resources never appear in the student app, even if dropped into a shared folder. No client-side filtering needed.
+> - When `audience` is supplied, resources whose **parent folder** is not visible to that audience are also omitted (`visibility` of `instructor` hidden from `audience=student`, and `visibility` of `student` hidden from `audience=instructor`). Omit `audience` to return every published resource regardless of folder visibility.
 
 ---
 
@@ -5480,12 +5487,14 @@ Differences from `/student/resources`:
         "name": "Learn to Drive",
         "slug": "learn-to-drive",
         "sort_order": 0,
+        "visibility": "both",
         "children": [
           {
             "id": 3,
             "name": "Moving Off & Stopping",
             "slug": "moving-off-stopping",
             "sort_order": 0,
+            "visibility": "both",
             "resources": [
               {
                 "id": 2,
@@ -5523,6 +5532,9 @@ Differences from `/student/resources`:
 | `sort_order` | integer | Admin-defined display position among sibling folders |
 | `children` | array | Nested child folders (same shape). `[]` when none. Ordered by `sort_order` then name. |
 | `resources` | array | Published resources directly in this folder. `[]` when none. Ordered by `sort_order` then title. |
+| `visibility` | string | `student`, `instructor`, or `both`. This endpoint only returns `instructor` and `both`. |
+| `children` | array | Nested child folders (same shape). `[]` when none. |
+| `resources` | array | Published resources directly in this folder. `[]` when none. |
 
 **Resource Object Fields (within folders):** same as `GET /api/v1/resources` — `id`, `title`, `description`, `tags`, `audience`, `resource_type`, `video_url`, `file_path`, `file_name`, `file_size`, `mime_type`, `thumbnail_url`, `sort_order`.
 
@@ -5531,6 +5543,7 @@ Differences from `/student/resources`:
 
 > **Notes:**
 > - Only published resources are returned.
+> - **Folder visibility:** Admin sets `visibility` on each folder (`student` | `instructor` | `both`, default `both`). This endpoint is hard-filtered to folders visible to instructors (`instructor` or `both`). Pupil-only folders are omitted. `visibility` is still present on every returned folder so the app can hide folders client-side if needed.
 > - **Empty folders are pruned**: child folders with no resources (after the optional audience filter) are dropped, and top-level folders left with neither their own resources nor any non-empty children are omitted — so the app never renders empty category pills.
 > - `folders`, `children`, and `resources` are in admin-defined order (`sort_order` then name/title). Render in array order — do not re-sort by title. Until a folder is reordered in Drive CRM, existing rows may all have `sort_order = 0`.
 > - `video_url` / `file_path` are included here, but use `GET /api/v1/resources/{resource}` to get a freshly signed S3 URL when opening a file resource.
@@ -7453,6 +7466,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-09-04 | **Draft lessons are now returned by `GET /api/v1/students/{student}/lessons/{lesson}` (show).** Previously the show lookup excluded drafts, so tapping "View Details" on a draft card (listed by the index with `include_drafts=true` since 2026-06-26) produced a raw 404. Show now always includes drafts — no query param needed — with `status: "draft"`, `card_status: "draft"` (new value on show), `payment_mode: "upfront"`, and `payment_status: null` (matches the index; no payment record exists until checkout completes). Cancelled lessons still 404. Sign-off remains impossible for drafts (sign-off only accepts `pending` lessons). Also fixed: draft lessons no longer consume the `current` card slot in the show endpoint's card-status computation (already true on the index). | Student Lessons (show) |
 | 2026-09-04 | **Added `POST /api/v1/students/{student}/orders/{order}/resend-payment-link`** — re-send the upfront payment-link email for an order still awaiting payment (pending upfront order with draft lessons). Reuses the existing Stripe Checkout session while open, creates a fresh one when expired (old emailed link then stops working). Email goes to the booker (student or contact — same logic as the booking email); an additive push (`{ type: "payment_link_resent", order_id, checkout_url }`) is queued when the student owns the account and has an Expo push token, mirroring the weekly payment-reminder. 200 returns `{ "message": "Payment link re-sent to {email}" }`; 404 when the order isn't the student's (no-information-leak); 422 when the order is weekly/active/completed/cancelled or no link could be generated; 429 on the per-order 3-minute cooldown. Auth: student policy (assigned instructor or the student). | Orders (resend-payment-link — NEW) |
 | 2026-09-10 | **Admin-defined resource/folder display order.** Existing `resources.sort_order` and `resource_folders.sort_order` columns are now writable from Drive CRM (`POST /resources/folders/root/reorder`, `POST /resources/folders/{folder}/reorder`, `POST /resources/folders/{folder}/resources/reorder` — owner web, not mobile). Tree endpoints already queried `sort_order` then name/title; they now also **return** `sort_order` on every folder and resource. Flat `GET /api/v1/resources` is ordered by folder, then `sort_order`, then title (was title only). Lesson-attached resources follow the same library order. Render `folders` / `children` / `resources` in array order — do not re-sort by title. Until a folder is reordered in admin, existing rows may all be `0` and fall back to name/title. New uploads/imports append (`max + 1`). Resource-library cache is invalidated on admin writes. `my_resources` / suggested lists stay suggestion-order and have no `sort_order`. | Resources (index, show), Instructor Resource Tree, Student Resources (index, show), Lesson Detail (resources) |
+| 2026-09-10 | **Folder visibility for instructors and pupils.** New `resource_folders.visibility` (`student` \| `instructor` \| `both`, default `both`). Admin create/edit folder sheets set it. `GET /api/v1/student/resources` only returns folders visible to pupils and prunes empty folders (so instructor-only libraries such as VTS no longer appear as empty categories). `GET /api/v1/instructor/resources` only returns folders visible to instructors. Both tree folder objects now include `visibility`. Student show/watched 404 when the parent folder is instructor-only. `GET /api/v1/resources?audience=` also excludes resources whose parent folder is hidden from that audience. Student resource-summary study progress, recommended, stats, my_resources, and the Expert badge denominator all ignore instructor-only folders. | Resources (index), Student Resources (index, show, watched, summary), Instructor Resource Tree (tree) |
 
 ---
 

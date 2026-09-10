@@ -17,6 +17,7 @@ use App\Actions\Resource\UpdateFolderAction;
 use App\Actions\Resource\UpdateResourceAction;
 use App\Actions\Resource\UploadResourceAction;
 use App\Enums\ResourceAudience;
+use App\Enums\ResourceFolderVisibility;
 use App\Models\Resource;
 use App\Models\ResourceFolder;
 use Illuminate\Database\Eloquent\Collection;
@@ -36,7 +37,8 @@ class ResourceService extends BaseService
         protected UpdateResourceAction $updateResource,
         protected DeleteResourceAction $deleteResource,
         protected ReorderFoldersAction $reorderFolders,
-        protected ReorderResourcesAction $reorderResources
+        protected ReorderResourcesAction $reorderResources,
+        protected ResourceApiService $resourceApiService
     ) {}
 
     /**
@@ -62,9 +64,12 @@ class ResourceService extends BaseService
     /**
      * Create a new folder.
      */
-    public function createFolder(string $name, ?int $parentId = null): ResourceFolder
-    {
-        $folder = ($this->createFolder)($name, $parentId);
+    public function createFolder(
+        string $name,
+        ?int $parentId = null,
+        ResourceFolderVisibility $visibility = ResourceFolderVisibility::BOTH
+    ): ResourceFolder {
+        $folder = ($this->createFolder)($name, $parentId, $visibility);
 
         $this->invalidateLibraryCache();
 
@@ -72,11 +77,14 @@ class ResourceService extends BaseService
     }
 
     /**
-     * Rename a folder.
+     * Update a folder's name and visibility.
      */
-    public function updateFolder(ResourceFolder $folder, string $name): ResourceFolder
-    {
-        $folder = ($this->updateFolder)($folder, $name);
+    public function updateFolder(
+        ResourceFolder $folder,
+        string $name,
+        ResourceFolderVisibility $visibility
+    ): ResourceFolder {
+        $folder = ($this->updateFolder)($folder, $name, $visibility);
 
         $this->invalidateLibraryCache();
 
@@ -204,17 +212,7 @@ class ResourceService extends BaseService
      */
     public function invalidateLibraryCache(): void
     {
-        $this->invalidate([
-            'resources:published',
-            'resources:published:'.ResourceAudience::STUDENT->value,
-            'resources:published:'.ResourceAudience::INSTRUCTOR->value,
-            'resources:folder_tree',
-            'resources:folder_tree:'.ResourceAudience::STUDENT->value,
-            'resources:folder_tree:'.ResourceAudience::INSTRUCTOR->value,
-            'resources:instructor_folder_tree',
-            'resources:instructor_folder_tree:'.ResourceAudience::STUDENT->value,
-            'resources:instructor_folder_tree:'.ResourceAudience::INSTRUCTOR->value,
-        ]);
+        $this->resourceApiService->invalidateLibraryCache();
     }
 
     /**

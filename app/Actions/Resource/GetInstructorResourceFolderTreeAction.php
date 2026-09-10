@@ -10,14 +10,20 @@ use Illuminate\Database\Eloquent\Collection;
 
 class GetInstructorResourceFolderTreeAction
 {
+    public function __construct(
+        protected PruneEmptyResourceFoldersAction $pruneEmptyResourceFolders
+    ) {}
+
     /**
      * Get the folder tree with published resources nested inside, for the instructor app.
      *
-     * Unlike GetResourceFolderTreeAction (student), this is NOT hard-filtered to
-     * `audience = 'student'`. By default both student and instructor resources are
-     * returned so the app's audience pills can filter client-side; an optional
-     * audience narrows the result server-side. Each resource keeps its `audience`
-     * field, and the student-only `is_watched` / `is_suggested` flags are omitted.
+     * Only folders visible to instructors are included. Unlike
+     * GetResourceFolderTreeAction (student), resources are NOT hard-filtered to
+     * `audience = 'student'`. By default both student and instructor resources
+     * are returned so the app's audience pills can filter client-side; an
+     * optional audience narrows the result server-side. Each resource keeps its
+     * `audience` field, and the student-only `is_watched` / `is_suggested`
+     * flags are omitted.
      *
      * Empty folders (no resources after the optional audience filter, and no
      * non-empty children) are pruned so the app never renders empty category pills.
@@ -34,8 +40,12 @@ class GetInstructorResourceFolderTreeAction
 
         $folders = ResourceFolder::query()
             ->whereNull('parent_id')
+            ->visibleTo(ResourceAudience::INSTRUCTOR)
             ->with([
-                'children' => fn ($q) => $q->orderBy('sort_order')->orderBy('name'),
+                'children' => fn ($q) => $q
+                    ->visibleTo(ResourceAudience::INSTRUCTOR)
+                    ->orderBy('sort_order')
+                    ->orderBy('name'),
                 'children.resources' => $resources,
                 'resources' => $resources,
             ])
@@ -43,29 +53,6 @@ class GetInstructorResourceFolderTreeAction
             ->orderBy('name')
             ->get();
 
-        return $this->prune($folders);
-    }
-
-    /**
-     * Drop child folders with no resources, then top-level folders left with
-     * neither their own resources nor any non-empty children.
-     *
-     * @param  Collection<int, ResourceFolder>  $folders
-     * @return Collection<int, ResourceFolder>
-     */
-    protected function prune(Collection $folders): Collection
-    {
-        $folders->each(function (ResourceFolder $folder): void {
-            $folder->setRelation(
-                'children',
-                $folder->children->filter(
-                    fn (ResourceFolder $child) => $child->resources->isNotEmpty()
-                )->values()
-            );
-        });
-
-        return $folders->filter(
-            fn (ResourceFolder $folder) => $folder->resources->isNotEmpty() || $folder->children->isNotEmpty()
-        )->values();
+        return ($this->pruneEmptyResourceFolders)($folders);
     }
 }

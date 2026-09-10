@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\ResourceAudience;
+use App\Enums\ResourceFolderVisibility;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -16,12 +19,21 @@ class ResourceFolder extends Model
         'name',
         'slug',
         'sort_order',
+        'visibility',
+    ];
+
+    /**
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'visibility' => 'both',
     ];
 
     protected function casts(): array
     {
         return [
             'sort_order' => 'integer',
+            'visibility' => ResourceFolderVisibility::class,
         ];
     }
 
@@ -62,6 +74,19 @@ class ResourceFolder extends Model
     public function resources(): HasMany
     {
         return $this->hasMany(Resource::class)->orderBy('sort_order')->orderBy('title');
+    }
+
+    /**
+     * Limit folders to those visible to the given audience.
+     */
+    public function scopeVisibleTo(Builder $query, ResourceAudience $audience): Builder
+    {
+        return $query->whereIn('visibility', ResourceFolderVisibility::valuesVisibleTo($audience));
+    }
+
+    public function isVisibleTo(ResourceAudience $audience): bool
+    {
+        return $this->visibility->isVisibleTo($audience);
     }
 
     /**

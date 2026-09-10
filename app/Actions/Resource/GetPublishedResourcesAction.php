@@ -19,8 +19,18 @@ class GetPublishedResourcesAction
     {
         return Resource::query()
             ->published()
-            ->when($audience, fn ($q, $a) => $q->where('audience', $a))
-            ->join('resource_folders', 'resource_folders.id', '=', 'resources.resource_folder_id')
+            ->when(
+                $audience,
+                fn ($q, $a) => $q
+                    ->where('resources.audience', $a)
+                    ->inVisibleFolder($a)
+            )
+            ->join(
+                'resource_folders',
+                'resource_folders.id',
+                '=',
+                'resources.resource_folder_id'
+            )
             ->orderBy('resource_folders.sort_order')
             ->orderBy('resource_folders.name')
             ->orderBy('resources.sort_order')
