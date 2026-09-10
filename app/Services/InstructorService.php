@@ -35,6 +35,7 @@ use App\Actions\Instructor\Mileage\GetMileageLogsAction;
 use App\Actions\Instructor\Mileage\UpdateMileageLogAction;
 use App\Actions\Instructor\ReplaceInstructorLocationsAction;
 use App\Actions\Instructor\SendInstructorWelcomeEmailAction;
+use App\Actions\Instructor\SetInstructorPackageActiveAction;
 use App\Actions\Instructor\StartStripeOnboardingAction;
 use App\Actions\Instructor\SyncStripeAccountStatusAction;
 use App\Actions\Instructor\UpdateCalendarItemAction;
@@ -82,6 +83,7 @@ class InstructorService extends BaseService
         protected BulkImportInstructorsAction $bulkImportInstructors,
         protected GetInstructorPackagesAction $getInstructorPackages,
         protected CreateInstructorPackageAction $createInstructorPackage,
+        protected SetInstructorPackageActiveAction $setInstructorPackageActive,
         protected GetInstructorLocationsAction $getInstructorLocations,
         protected CreateInstructorLocationAction $createInstructorLocation,
         protected DeleteInstructorLocationAction $deleteInstructorLocation,
@@ -270,7 +272,49 @@ class InstructorService extends BaseService
      */
     public function createPackage(Instructor $instructor, array $data): Package
     {
-        return ($this->createInstructorPackage)($instructor, $data);
+        $package = ($this->createInstructorPackage)($instructor, $data);
+
+        $this->invalidatePackageCache($instructor);
+
+        return $package;
+    }
+
+    /**
+     * Hide an instructor package without deleting it (keeps order/payment FKs).
+     */
+    public function deactivatePackage(Package $package): Package
+    {
+        $updated = ($this->setInstructorPackageActive)($package, false);
+
+        if ($updated->instructor_id) {
+            $this->invalidatePackageCache($updated->instructor);
+        }
+
+        return $updated;
+    }
+
+    /**
+     * Restore a previously hidden instructor package.
+     */
+    public function reactivatePackage(Package $package): Package
+    {
+        $updated = ($this->setInstructorPackageActive)($package, true);
+
+        if ($updated->instructor_id) {
+            $this->invalidatePackageCache($updated->instructor);
+        }
+
+        return $updated;
+    }
+
+    /**
+     * Invalidate cached packages for an instructor (shared with InstructorPackageService).
+     */
+    protected function invalidatePackageCache(Instructor $instructor): void
+    {
+        $this->invalidate(
+            $this->cacheKey('instructor', $instructor->id, 'packages')
+        );
     }
 
     /**

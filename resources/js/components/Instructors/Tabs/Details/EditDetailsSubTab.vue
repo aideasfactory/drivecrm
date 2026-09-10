@@ -16,12 +16,19 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet'
+import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Edit, Package as PackageIcon, Plus, PackagePlus, PackageOpen, TrendingUp, Loader2, ShieldAlert } from 'lucide-vue-next'
+import { Edit, Package as PackageIcon, Plus, PackagePlus, PackageOpen, TrendingUp, Loader2, ShieldAlert, Trash2, RotateCcw, AlertTriangle } from 'lucide-vue-next'
 import { useRole } from '@/composables/useRole'
 import PackageForm, { type PackageFormData } from '@/components/Instructors/PackageForm.vue'
 import type { Package } from '@/types/instructor'
@@ -43,6 +50,10 @@ const selectedPackage = ref<Package | null>(null)
 const isSheetOpen = ref(false)
 const saving = ref(false)
 const isCreating = ref(false)
+const packagePendingRemoval = ref<Package | null>(null)
+const isRemoveDialogOpen = ref(false)
+const removing = ref(false)
+const restoringId = ref<number | null>(null)
 
 // Drive package uplift state (owner only)
 const priceUpliftPence = ref(0)
@@ -160,6 +171,61 @@ const savePackage = async (formData: PackageFormData) => {
         saving.value = false
     }
 }
+
+const confirmRemovePackage = (pkg: Package) => {
+    packagePendingRemoval.value = pkg
+    isRemoveDialogOpen.value = true
+}
+
+const closeRemoveDialog = () => {
+    if (removing.value) {
+        return
+    }
+
+    isRemoveDialogOpen.value = false
+    packagePendingRemoval.value = null
+}
+
+const removePackage = async () => {
+    const pkg = packagePendingRemoval.value
+    if (!pkg) {
+        return
+    }
+
+    removing.value = true
+    try {
+        await axios.delete(
+            `/instructors/${props.instructor.id}/packages/${pkg.id}`
+        )
+        toast({ title: 'Package removed. Existing orders and payments are unchanged.' })
+        isRemoveDialogOpen.value = false
+        packagePendingRemoval.value = null
+        await loadPackages()
+    } catch (error: any) {
+        const message =
+            error.response?.data?.message || 'Failed to remove package'
+        toast({ title: message, variant: 'destructive' })
+    } finally {
+        removing.value = false
+    }
+}
+
+const restorePackage = async (pkg: Package) => {
+    restoringId.value = pkg.id
+    try {
+        await axios.patch(
+            `/instructors/${props.instructor.id}/packages/${pkg.id}/restore`
+        )
+        toast({ title: 'Package restored' })
+        await loadPackages()
+    } catch (error: any) {
+        const message =
+            error.response?.data?.message || 'Failed to restore package'
+        toast({ title: message, variant: 'destructive' })
+    } finally {
+        restoringId.value = null
+    }
+}
 </script>
 
 <template>
@@ -248,25 +314,42 @@ const savePackage = async (formData: PackageFormData) => {
                                     pkg.formatted_lesson_price
                                 }}</TableCell>
                                 <TableCell>
-                                    <span
-                                        class="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
-                                        :class="
-                                            pkg.active
-                                                ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-                                                : 'bg-gray-50 text-gray-700 dark:bg-gray-900/20 dark:text-gray-400'
-                                        "
-                                    >
+                                    <Badge :variant="pkg.active ? 'default' : 'secondary'">
                                         {{ pkg.active ? 'Active' : 'Inactive' }}
-                                    </span>
+                                    </Badge>
                                 </TableCell>
                                 <TableCell class="text-right">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        @click.stop="editPackage(pkg)"
-                                    >
-                                        <Edit class="h-4 w-4" />
-                                    </Button>
+                                    <div class="flex items-center justify-end gap-1">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            @click.stop="editPackage(pkg)"
+                                        >
+                                            <Edit class="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            v-if="pkg.active"
+                                            variant="ghost"
+                                            size="sm"
+                                            @click.stop="confirmRemovePackage(pkg)"
+                                        >
+                                            <Trash2 class="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            v-else
+                                            variant="ghost"
+                                            size="sm"
+                                            class="min-w-[36px]"
+                                            :disabled="restoringId === pkg.id"
+                                            @click.stop="restorePackage(pkg)"
+                                        >
+                                            <Loader2
+                                                v-if="restoringId === pkg.id"
+                                                class="h-4 w-4 animate-spin"
+                                            />
+                                            <RotateCcw v-else class="h-4 w-4" />
+                                        </Button>
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         </TableBody>
@@ -352,5 +435,49 @@ const savePackage = async (formData: PackageFormData) => {
                 </div>
             </SheetContent>
         </Sheet>
+
+        <Dialog :open="isRemoveDialogOpen" @update:open="(open) => !open && closeRemoveDialog()">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle class="flex items-center gap-2">
+                        <AlertTriangle class="h-5 w-5 text-destructive" />
+                        Remove Package?
+                    </DialogTitle>
+                </DialogHeader>
+                <div class="py-4">
+                    <p class="text-sm text-muted-foreground">
+                        This hides
+                        <span class="font-medium text-foreground">{{ packagePendingRemoval?.name }}</span>
+                        from booking and the mobile app. Existing orders, lessons,
+                        and payments keep their history and are not changed.
+                    </p>
+                    <p class="mt-3 text-sm text-muted-foreground">
+                        You can restore the package later from this list.
+                    </p>
+                </div>
+                <DialogFooter>
+                    <Button
+                        variant="outline"
+                        :disabled="removing"
+                        @click="closeRemoveDialog"
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="destructive"
+                        class="min-w-[120px]"
+                        :disabled="removing"
+                        @click="removePackage"
+                    >
+                        <Loader2
+                            v-if="removing"
+                            class="mr-2 h-4 w-4 animate-spin"
+                        />
+                        <Trash2 v-else class="mr-2 h-4 w-4" />
+                        Remove
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </div>
 </template>

@@ -388,27 +388,14 @@ class InstructorController extends Controller
      */
     public function packages(Request $request, Instructor $instructor): JsonResponse
     {
-        $packages = $this->instructorService->getPackages($instructor);
+        $packages = $this->instructorService->getPackages($instructor, onlyActive: false);
 
         return response()->json([
             // Owner-only figure — never expose the uplift to other viewers
             'price_uplift_pence' => $request->user()?->isOwner() === true
                 ? $instructor->price_uplift_pence
                 : null,
-            'packages' => $packages->map(fn (Package $package) => [
-                'id' => $package->id,
-                'name' => $package->name,
-                'description' => $package->description,
-                'total_price_pence' => $package->total_price_pence,
-                'lessons_count' => $package->lessons_count,
-                'lesson_price_pence' => $package->lesson_price_pence,
-                'formatted_total_price' => $package->formatted_total_price,
-                'formatted_lesson_price' => $package->formatted_lesson_price,
-                'active' => $package->active,
-                'is_one_off' => (bool) $package->is_one_off,
-                'is_platform_package' => $package->isPlatformPackage(),
-                'is_bespoke_package' => $package->isBespokePackage(),
-            ]),
+            'packages' => $packages->map(fn (Package $package) => $this->packagePayload($package)),
         ]);
     }
 
@@ -420,21 +407,38 @@ class InstructorController extends Controller
         $package = $this->instructorService->createPackage($instructor, $request->validated());
 
         return response()->json([
-            'package' => [
-                'id' => $package->id,
-                'name' => $package->name,
-                'description' => $package->description,
-                'total_price_pence' => $package->total_price_pence,
-                'lessons_count' => $package->lessons_count,
-                'lesson_price_pence' => $package->lesson_price_pence,
-                'formatted_total_price' => $package->formatted_total_price,
-                'formatted_lesson_price' => $package->formatted_lesson_price,
-                'active' => $package->active,
-                'is_one_off' => (bool) $package->is_one_off,
-                'is_platform_package' => $package->isPlatformPackage(),
-                'is_bespoke_package' => $package->isBespokePackage(),
-            ],
+            'package' => $this->packagePayload($package),
         ], 201);
+    }
+
+    /**
+     * Hide an instructor-owned package without deleting it.
+     */
+    public function deactivatePackage(Instructor $instructor, Package $package): JsonResponse
+    {
+        $this->assertPackageBelongsToInstructor($instructor, $package);
+
+        $updated = $this->instructorService->deactivatePackage($package);
+
+        return response()->json([
+            'message' => 'Package removed.',
+            'package' => $this->packagePayload($updated),
+        ]);
+    }
+
+    /**
+     * Restore a previously hidden instructor-owned package.
+     */
+    public function reactivatePackage(Instructor $instructor, Package $package): JsonResponse
+    {
+        $this->assertPackageBelongsToInstructor($instructor, $package);
+
+        $updated = $this->instructorService->reactivatePackage($package);
+
+        return response()->json([
+            'message' => 'Package restored.',
+            'package' => $this->packagePayload($updated),
+        ]);
     }
 
     /**
@@ -1617,5 +1621,33 @@ class InstructorController extends Controller
             'message' => 'Mileage updated successfully.',
             'mileage' => $lesson->mileage,
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function packagePayload(Package $package): array
+    {
+        return [
+            'id' => $package->id,
+            'name' => $package->name,
+            'description' => $package->description,
+            'total_price_pence' => $package->total_price_pence,
+            'lessons_count' => $package->lessons_count,
+            'lesson_price_pence' => $package->lesson_price_pence,
+            'formatted_total_price' => $package->formatted_total_price,
+            'formatted_lesson_price' => $package->formatted_lesson_price,
+            'active' => $package->active,
+            'is_one_off' => (bool) $package->is_one_off,
+            'is_platform_package' => $package->isPlatformPackage(),
+            'is_bespoke_package' => $package->isBespokePackage(),
+        ];
+    }
+
+    private function assertPackageBelongsToInstructor(Instructor $instructor, Package $package): void
+    {
+        if ($package->instructor_id !== $instructor->id) {
+            abort(403, 'This package does not belong to this instructor.');
+        }
     }
 }
