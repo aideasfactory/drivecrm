@@ -67,17 +67,20 @@ watch(
     { immediate: true }
 )
 
+const HOURS_PER_LESSON = 2
+
 // Computed: formatted price in pounds
 const formattedPrice = computed(() => {
     return '£' + (formData.value.total_price_pounds || 0).toFixed(2)
 })
 
-// Computed: price per lesson
-const pricePerLesson = computed(() => {
-    if (formData.value.lessons_count === 0) return '£0.00'
-    const perLesson =
-        (formData.value.total_price_pounds || 0) / formData.value.lessons_count
-    return '£' + perLesson.toFixed(2)
+// Computed: price per hour (each lesson is 2 hours)
+const pricePerHour = computed(() => {
+    const hours = formData.value.lessons_count * HOURS_PER_LESSON
+    if (hours === 0) return '£0.00'
+    const perHour =
+        (formData.value.total_price_pounds || 0) / hours
+    return '£' + perHour.toFixed(2)
 })
 
 // Handle form submission — convert pounds back to pence for the backend.
@@ -126,7 +129,10 @@ const handleCancel = () => {
 
         <!-- Lessons Count Field -->
         <div class="space-y-2">
-            <Label for="lessons_count">Number of Lessons</Label>
+            <Label for="lessons_count">
+                Number of Lessons
+                <span class="font-normal text-muted-foreground">(2 hours per lesson)</span>
+            </Label>
             <Input
                 id="lessons_count"
                 v-model.number="formData.lessons_count"
@@ -150,7 +156,7 @@ const handleCancel = () => {
                 required
             />
             <p class="text-sm text-muted-foreground">
-                {{ formattedPrice }} total ({{ pricePerLesson }} per lesson)
+                {{ formattedPrice }} total ({{ pricePerHour }} per hour)
             </p>
         </div>
  
