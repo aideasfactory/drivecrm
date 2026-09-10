@@ -106,7 +106,7 @@ final class EmailTemplateCatalog
                 'payment_block' => 'Payment summary for this order',
                 'booked_for_line' => 'Shown when a contact booked on behalf of a learner',
                 'app_name' => 'Application name',
-            ], 'Your Driving Lessons Have Been Booked!', 'Hello {{recipient_name}}!', "{{intro}}\n\n**Order Details:**\nPackage: {{package_name}}\nNumber of lessons: {{lessons_count}}\nInstructor: {{instructor_name}}\n{{first_lesson_line}}\n\n{{payment_block}}\n\n**Next Steps:**\n1. Download the app to view your lesson schedule\n2. Your instructor will contact you to confirm the details\n3. Make sure to arrive 5 minutes early for your first lesson\n{{booked_for_line}}\n\n{{action_button}}\n\nThank you for choosing us for your driving lessons!", "Safe driving,\nThe Driving School Team", 'Download app'),
+            ], 'Your Driving Lessons Have Been Booked!', 'Hello {{recipient_name}}!', "{{intro}}\n\n**Order Details:**\nPackage: {{package_name}}\nNumber of lessons: {{lessons_count}}\nInstructor: {{instructor_name}}\n{{first_lesson_line}}\n\n{{payment_block}}\n\n**Next Steps:**\n1. Download the app to view your lesson schedule\n2. Your instructor will contact you to confirm the details\n3. Make sure to arrive 5 minutes early for your first lesson\n4. Please give at least 48 hours' notice if you need to reschedule a lesson\n{{booked_for_line}}\n\n{{action_button}}\n\nThank you for choosing us for your driving lessons!", "Safe driving,\nThe Driving School Team", 'Download app'),
 
             self::entry(EmailTemplateKey::LearnerPaymentLink, 'Payment link for booked lessons', $audience, 'Sent when an instructor books lessons that still need paying.', [
                 'recipient_name' => 'Greeting name (learner or contact)',
@@ -157,7 +157,7 @@ final class EmailTemplateCatalog
                 'time' => 'New time range',
                 'total_lessons' => 'How many lessons moved',
                 'app_name' => 'Application name',
-            ], 'Your driving lessons have been rescheduled', 'Hello {{recipient_name}},', "Your upcoming {{lesson_word}} with **{{instructor_name}}** have been rescheduled.\n\nFrom **{{start_date}}**, you will now have your lessons on **{{day_of_week}}s at {{time}}**.\n\nTotal {{lesson_word}} moved: **{{total_lessons}}**.\n\nIf this new schedule does not work for you, please contact your instructor to arrange alternatives.", "Safe driving,\nThe {{app_name}} Team", null),
+            ], 'Your driving lessons have been rescheduled', 'Hello {{recipient_name}},', "Your upcoming {{lesson_word}} with **{{instructor_name}}** have been rescheduled.\n\nFrom **{{start_date}}**, you will now have your lessons on **{{day_of_week}}s at {{time}}**.\n\nTotal {{lesson_word}} moved: **{{total_lessons}}**.\n\nPlease give at least 48 hours' notice if you need to reschedule a lesson. If this new schedule does not work for you, please contact your instructor to arrange alternatives.", "Safe driving,\nThe {{app_name}} Team", null),
 
             self::entry(EmailTemplateKey::LearnerLessonRescheduled, 'Single lesson rescheduled', $audience, 'Sent when one lesson is moved to a new date or time.', [
                 'recipient_name' => 'Learner first name',
@@ -166,7 +166,7 @@ final class EmailTemplateCatalog
                 'new_when' => 'New date and time',
                 'notes_block' => 'Optional notes from the instructor',
                 'app_name' => 'Application name',
-            ], 'Your Driving Lesson Has Been Rescheduled', 'Hello {{recipient_name}}!', "Your driving lesson with **{{instructor_name}}** has been rescheduled.\n\n**Previous:**\n{{old_when}}\n\n**New:**\n{{new_when}}\n{{notes_block}}\n\nIf this new time does not work for you, please contact your instructor to arrange an alternative.", "Safe driving,\nThe {{app_name}} Team", null),
+            ], 'Your Driving Lesson Has Been Rescheduled', 'Hello {{recipient_name}}!', "Your driving lesson with **{{instructor_name}}** has been rescheduled.\n\n**Previous:**\n{{old_when}}\n\n**New:**\n{{new_when}}\n{{notes_block}}\n\nPlease give at least 48 hours' notice if you need to reschedule a lesson. If this new time does not work for you, please contact your instructor to arrange an alternative.", "Safe driving,\nThe {{app_name}} Team", null),
 
             self::entry(EmailTemplateKey::LearnerLessonPaymentReminder, 'Lesson payment required', $audience, 'Sent when a weekly lesson invoice is waiting to be paid.', [
                 'recipient_name' => 'Greeting name (learner or contact)',
@@ -186,7 +186,7 @@ final class EmailTemplateCatalog
                 'lesson_time' => 'Lesson time',
                 'instructor_name' => 'Instructor name',
                 'amount' => 'Amount paid',
-            ], 'Payment Confirmed: Your Driving Lesson on {{lesson_date}}', 'Hello {{recipient_name}}!', "{{intro}}\n\n**Lesson Details:**\nPackage: {{package_name}}\nDate: {{lesson_date}}\nTime: {{lesson_time}}\nInstructor: {{instructor_name}}\nAmount paid: {{amount}}\n\nYour lesson is confirmed. Please arrive 5 minutes early.\nIf you need to make any changes, please contact us as soon as possible.", "Safe driving,\nThe Driving School Team", null),
+            ], 'Payment Confirmed: Your Driving Lesson on {{lesson_date}}', 'Hello {{recipient_name}}!', "{{intro}}\n\n**Lesson Details:**\nPackage: {{package_name}}\nDate: {{lesson_date}}\nTime: {{lesson_time}}\nInstructor: {{instructor_name}}\nAmount paid: {{amount}}\n\nYour lesson is confirmed. Please arrive 5 minutes early.\nPlease give at least 48 hours' notice if you need to reschedule a lesson, and contact us as soon as possible.", "Safe driving,\nThe Driving School Team", null),
 
             self::entry(EmailTemplateKey::LearnerInstructorOnWay, 'Instructor on the way', $audience, 'Sent when the instructor taps “on my way” for a lesson.', [
                 'recipient_name' => 'Booker first name',

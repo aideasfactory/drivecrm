@@ -50,7 +50,7 @@
                 <ul class="list-disc list-inside space-y-1 mt-2">
                   <li>Check your email for the confirmation and lesson schedule.</li>
                   <li>Your instructor will be in touch to confirm the first lesson details.</li>
-                  <li>You can reschedule lessons up to 24 hours in advance from the Drive app.</li>
+                  <li>You must give at least 48 hours' notice to reschedule a lesson.</li>
                 </ul>
               </AlertDescription>
             </Alert>

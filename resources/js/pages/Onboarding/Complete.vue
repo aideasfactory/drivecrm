@@ -73,7 +73,7 @@
             <AlertDescription>
               <ul class="list-disc list-inside space-y-1 mt-2">
                 <li>Keep your confirmation email safe for your records</li>
-                <li>You can reschedule lessons up to 24 hours in advance</li>
+                <li>You must give at least 48 hours' notice to reschedule a lesson</li>
                 <li>Contact your instructor directly for any questions</li>
               </ul>
             </AlertDescription>

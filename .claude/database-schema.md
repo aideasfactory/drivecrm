@@ -167,7 +167,7 @@ Owner-only CRM screen at `/email-templates`. Staff can change wording only — r
 | created_at / updated_at | timestamp | Yes | |
 
 **Constraints:** UNIQUE (key)
-**Notes:** `SyncEmailTemplatesAction` inserts missing catalog keys and never overwrites staff edits. `RenderEmailTemplateAction` uses catalog defaults when the table or row is absent, so sending does not depend on this table being migrated yet.
+**Notes:** `SyncEmailTemplatesAction` inserts missing catalog keys and never overwrites staff edits. `RenderEmailTemplateAction` uses catalog defaults when the table or row is absent, so sending does not depend on this table being migrated yet. Learner booking confirmation, single/bulk reschedule, and lesson-payment-confirmed defaults tell pupils they must give at least 48 hours' notice to reschedule. `2026_09_10_100000_add_48_hour_notice_to_pupil_reschedule_email_templates` updates stored rows that still match the previous default body and leaves staff edits alone.
 
 ### Relationship Summary
 

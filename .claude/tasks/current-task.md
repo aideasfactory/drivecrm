@@ -1,41 +1,41 @@
-# Task: Enquiry list CSV export with date filters
+# Task: Pupil 48-hour reschedule notice copy
 
 ## Overview
 
-Admin Enquiries list (`/enquiries`) has status and area filters but no
-date/month filter and no CSV export. Staff need to export the currently
-filtered enquiry list (by month/date range and the existing filter types).
+Mission Control ticket `01a08ab7-4436-7047-843c-aed5e43170ab`:
+confirmation to pupils must say they have to give 48 hours' notice to
+reschedule. Copy lives in admin-editable `email_templates` (defaults in
+`EmailTemplateCatalog`) and two web confirmation pages that still said
+24 hours. Mobile app is out of scope. No tests.
 
 ## Phase 1: Planning ✅
 
 ### Current state
-- `GET /enquiries` (owner/admin, `RestrictInstructor`) lists paginated
-  enquiries via `EnquiryController` → `EnquiryService` →
-  `GetFilteredEnquiriesAction`.
-- Server filters: `status` (all/completed/full_onboarding/in_progress),
-  `area` (all/in_area/out_of_area/unknown).
-- Search was client-side on the current page only.
-- No date filter. No export. Reports already stream CSV with
-  `response()->streamDownload` + `fputcsv`.
+- Pupil reschedule emails (`learner.lesson_rescheduled`,
+  `learner.lessons_bulk_rescheduled`) only said contact the instructor.
+- Booking confirmation (`learner.order_confirmation`) had no
+  reschedule policy.
+- Payment confirmed (`learner.lesson_payment_received`) said "contact
+  us as soon as possible".
+- Stored `email_templates` rows are not overwritten by sync; restore
+  uses catalog defaults.
+- Onboarding Complete and Payment Link Success said 24 hours.
 
 ### Approach
-1. Extend the shared filter query with `date_from` / `date_to` (created_at)
-   and server-side `q` search so list and export stay in sync.
-2. `GET /enquiries/export` streams a CSV of every matching row (not just
-   the current page), using the same filters.
-3. UI: month picker (sets month bounds) + from/to date inputs + Download
-   CSV button, matching the cancelled-lessons report pattern.
-4. CSV columns = table columns plus consent, instructor id, and tracking.
+1. Update catalog defaults for those four learner templates.
+2. Data-migrate stored rows that still match the old default body.
+3. Fix the two pupil web confirmation pages (not the mobile app).
 
 ### Tasks
-- [x] Trace enquiries list, filters, and existing CSV export patterns
-- [x] Choose UI placement and CSV columns (no new library)
+- [x] Trace mailables, catalog keys, and confirmation pages
+- [x] Choose copy that states the 48-hour notice requirement
 
 ### Reflection
-Reuse the reports CSV stream pattern and the existing Controller →
-Service → Action chain. No migration. Web admin only — not a mobile API.
+Catalog + exact-match data migration preserves staff edits. Vue
+confirmation pages are in scope because they previously told pupils
+the wrong notice period.
 
-**Last Updated:** 2026-09-08.
+**Last Updated:** 2026-09-10.
 
 ## Phase 2: Implementation ✅
 
@@ -43,32 +43,29 @@ Service → Action chain. No migration. Web admin only — not a mobile API.
 Complete.
 
 ### Tasks
-- [x] FilterEnquiriesRequest + date/search on GetFilteredEnquiriesAction
-- [x] EnquiryService paginate vs export collection
-- [x] EnquiryController@exportCsv + named route
-- [x] Enquiries/Index.vue month + date pickers and Download CSV
-- [x] Wayfinder import via EnquiryController.exportCsv (generated at build)
+- [x] Update EmailTemplateCatalog learner copy
+- [x] Data-migrate unmodified stored templates
+- [x] Update database-schema.md
+- [x] Fix Onboarding Complete and Payment Success copy
 
 ### Reflection
-Export is a GET with the same query string as the list. Month picker is a
-convenience that writes `date_from`/`date_to`; custom ranges still work.
-Search is now server-side so CSV matches the visible filter set, not the
-current page.
+Four learner catalog bodies now include "Please give at least 48
+hours' notice if you need to reschedule a lesson." The data migration
+only replaces exact previous defaults. Instructor emails and the
+mobile app were left unchanged.
 
-No database-schema.md update — no migration.
-No api.md update — web admin download, not a mobile API endpoint.
+I've updated database-schema.md to reflect the migration changes.
 
 ## Phase 3: Reflection ✅
 
-Staff can pick a month or a from/to range, keep status/area/search, and
-download every matching enquiry as CSV. Unfiltered export only happens
-when no filters are set.
+Staff-edited email templates are not overwritten. Marketing bullets
+on booking/onboarding step 1 still say "reschedule anytime" — that
+was left as a follow-up, not a confirmation message.
 
 ### Tasks
 - [x] Document decisions and leftover risks
 
 ### Reflection
-Leftover: this environment has no PHP binary, so Wayfinder was not
-generated here (Vite plugin will generate on `npm run dev` / build).
-Very large exports stream via cursor but may still hit web timeouts.
-JSON name search uses MySQL `JSON_EXTRACT` / `CONCAT_WS`.
+Leftover: if an owner already customized one of the four templates,
+they still need to add the 48-hour line (or restore defaults) in
+`/email-templates`. No API change. No mobile app change.
