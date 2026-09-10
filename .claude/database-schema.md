@@ -390,7 +390,7 @@ Lesson packages (both platform defaults and instructor bespoke packages).
 | `lesson_price_pence` | integer | NOT NULL | Price per lesson in pence (auto-calculated) |
 | `stripe_product_id` | varchar(255) | NULLABLE | Stripe product ID |
 | `stripe_price_id` | varchar(255) | NULLABLE | Stripe price ID |
-| `active` | boolean | DEFAULT true | Whether package is active/available |
+| `active` | boolean | DEFAULT true | Whether package is available for new bookings. Instructors hide packages from the CRM admin (Details → Packages) by setting this to false. The row is kept so `orders.package_id` and `slot_offers.package_id` stay valid. Mobile and booking UIs only list `active = true`. Do not hard-delete packages: those FKs are `ON DELETE CASCADE` and would wipe orders (and therefore lessons and payments). |
 | `is_one_off` | boolean | DEFAULT false | True for reusable short-notice "One-Off Package" rows created from Offer Slot |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
@@ -408,6 +408,7 @@ Lesson packages (both platform defaults and instructor bespoke packages).
 - `lesson_price_pence` is automatically calculated on save: `total_price_pence / lessons_count`
 - Prices are stored in pence (GBP smallest unit)
 - `is_one_off` packages are 1-lesson instructor packages created when offering a slot at a custom price. The same instructor + price combination is reused on later offers.
+- Instructor-created packages are hidden, not deleted: `DELETE /instructors/{id}/packages/{package}` sets `active = false`. `PATCH .../restore` sets `active = true`. Lessons and `lesson_payments` have no `package_id` — they belong to orders, which snapshot package name and prices.
 
 ---
 
@@ -1547,6 +1548,7 @@ No new tables and no schema changes — the feature reuses `lessons.instructor_i
    - Deleting a Student hard-deletes cascaded Orders (and therefore Lessons, LessonPayments, and Payouts). Staff must never hard-delete a student row; use SoftDeletes + login lock instead.
    - Deleting an Order cascades to all Lessons
    - Deleting a Lesson cascades to LessonPayments and Payouts
+   - Deleting a Package cascades to Orders and SlotOffers. Never hard-delete a package row; deactivate it (`active = false`) so payment history stays intact.
 
 2. **Nullable Foreign Keys:**
    - `packages.instructor_id` - NULL = platform package
