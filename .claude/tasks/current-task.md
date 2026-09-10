@@ -1,41 +1,42 @@
-# Task: Enquiry list CSV export with date filters
+# Task: Admin Schedule Weekly calendar view
 
 ## Overview
 
-Admin Enquiries list (`/enquiries`) has status and area filters but no
-date/month filter and no CSV export. Staff need to export the currently
-filtered enquiry list (by month/date range and the existing filter types).
+Instructors in admin Schedule (`/instructors/{id}?tab=schedule`) can see
+Today and Monthly calendar modes. They need a Weekly view so they can
+see that week's diary layout. Web admin only — do not change the mobile
+API or app.
 
 ## Phase 1: Planning ✅
 
 ### Current state
-- `GET /enquiries` (owner/admin, `RestrictInstructor`) lists paginated
-  enquiries via `EnquiryController` → `EnquiryService` →
-  `GetFilteredEnquiriesAction`.
-- Server filters: `status` (all/completed/full_onboarding/in_progress),
-  `area` (all/in_area/out_of_area/unknown).
-- Search was client-side on the current page only.
-- No date filter. No export. Reports already stream CSV with
-  `response()->streamDownload` + `fputcsv`.
+- `ScheduleTab.vue` loads calendar items via
+  `GET /instructors/{id}/calendar?start_date&end_date`.
+- `useCalendarNavigation` supports `week` | `month`.
+- `WeeklyCalendarGrid` is a Mon–Sun time-grid diary.
+- `MonthlyCalendarGrid` is a month overview.
+- Nav has a Today jump button plus Week / Month toggles.
+  The ticket describes Today + Monthly and asks for Weekly
+  alongside them.
 
 ### Approach
-1. Extend the shared filter query with `date_from` / `date_to` (created_at)
-   and server-side `q` search so list and export stay in sync.
-2. `GET /enquiries/export` streams a CSV of every matching row (not just
-   the current page), using the same filters.
-3. UI: month picker (sets month bounds) + from/to date inputs + Download
-   CSV button, matching the cancelled-lessons report pattern.
-4. CSV columns = table columns plus consent, instructor id, and tracking.
+1. Add a first-class `day` view (labeled Today) using the existing
+   time-grid with a single column.
+2. Relabel the view toggle to **Today | Weekly | Monthly**.
+3. Keep prev / next / Today jump working for all three views.
+4. Reuse the existing range loader — no backend or mobile API change.
 
 ### Tasks
-- [x] Trace enquiries list, filters, and existing CSV export patterns
-- [x] Choose UI placement and CSV columns (no new library)
+- [x] Trace Schedule tab, navigation composable, and calendar grids
+- [x] Confirm calendar range endpoint already supports a single day
+- [x] Choose Today | Weekly | Monthly toggle matching existing patterns
 
 ### Reflection
-Reuse the reports CSV stream pattern and the existing Controller →
-Service → Action chain. No migration. Web admin only — not a mobile API.
+Weekly already existed as "Week". The reporter asked for Weekly
+alongside Today and Monthly, so expose three explicit views and
+generalise the time-grid for 1 or 7 days. No migration. No mobile API.
 
-**Last Updated:** 2026-09-08.
+**Last Updated:** 2026-09-10.
 
 ## Phase 2: Implementation ✅
 
@@ -43,32 +44,23 @@ Service → Action chain. No migration. Web admin only — not a mobile API.
 Complete.
 
 ### Tasks
-- [x] FilterEnquiriesRequest + date/search on GetFilteredEnquiriesAction
-- [x] EnquiryService paginate vs export collection
-- [x] EnquiryController@exportCsv + named route
-- [x] Enquiries/Index.vue month + date pickers and Download CSV
-- [x] Wayfinder import via EnquiryController.exportCsv (generated at build)
+- [x] Extend `useCalendarNavigation` with day view + setView
+- [x] Generalise `WeeklyCalendarGrid` for a variable number of days
+- [x] Update `ScheduleTab` toggle, labels, and prev/next/today
+- [x] No tests (HARD RULE). No mobile app changes.
 
 ### Reflection
-Export is a GET with the same query string as the list. Month picker is a
-convenience that writes `date_from`/`date_to`; custom ranges still work.
-Search is now server-side so CSV matches the visible filter set, not the
-current page.
+Today is a single-day time-grid, Weekly is the existing 7-day diary
+(relabelled), Monthly is unchanged. Prev/next/Today jump work in all
+three views. Calendar range API already accepted a single day.
 
 No database-schema.md update — no migration.
-No api.md update — web admin download, not a mobile API endpoint.
+No api.md update — web admin UI only, not a mobile API endpoint.
 
-## Phase 3: Reflection ✅
-
-Staff can pick a month or a from/to range, keep status/area/search, and
-download every matching enquiry as CSV. Unfiltered export only happens
-when no filters are set.
+## Phase 3: Reflection ⏸️
 
 ### Tasks
-- [x] Document decisions and leftover risks
+- [ ] Document decisions
 
 ### Reflection
-Leftover: this environment has no PHP binary, so Wayfinder was not
-generated here (Vite plugin will generate on `npm run dev` / build).
-Very large exports stream via cursor but may still hit web timeouts.
-JSON name search uses MySQL `JSON_EXTRACT` / `CONCAT_WS`.
+(pending)
