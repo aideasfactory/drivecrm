@@ -30,6 +30,7 @@ class ResourceDetailResource extends JsonResource
             'file_url' => $this->fileUrl,
             'file_name' => $this->file_name,
             'thumbnail_url' => $this->thumbnail_url,
+            'sort_order' => $this->sort_order,
         ];
     }
 }

@@ -985,6 +985,7 @@ Hierarchical folder structure for organising resources (videos, PDFs). Self-refe
 - Deleting a folder cascades to all sub-folders and resources within
 - Slug is auto-generated from name on create/update
 - Example hierarchy: `Roundabouts` → `Turning right at roundabout`, `Turning left at roundabout`
+- `sort_order` is the admin-defined display position among sibling folders (same `parent_id`). Owners drag-and-drop folders on `/resources`; `POST /resources/folders/{folder}/reorder` (or `/resources/folders/root/reorder`) writes 0-based positions. New folders append (`max + 1`). Queries order by `sort_order` then `name`. Existing rows default to `0` (alphabetical) until first reordered.
 - `visibility` is independent of `resources.audience`. A folder can be instructor-only even if it still contains student-audience files (those files will not appear in the pupil library tree). Existing folders default to `both`.
 - Student mobile endpoints only return folders with `visibility` in (`student`, `both`). Instructor tree endpoints only return folders with `visibility` in (`instructor`, `both`). The admin Resources screen always shows every folder.
 
@@ -1032,6 +1033,7 @@ Stores uploaded files (videos, PDFs) or video links (Vimeo/YouTube) with metadat
 - Deleting a file-type resource also removes the file from S3; deleting a video_link resource only removes the DB record
 - `thumbnail_url` stores an external image URL for video link resources (e.g. YouTube thumbnail)
 - `audience` partitions resources between the student and instructor mobile apps. Admins must pick one on create/edit (and in the CSV import). The generic `GET /api/v1/resources` endpoint accepts `?audience=student|instructor`; omit to return all. Existing rows default to `student`.
+- `sort_order` is the admin-defined display position within the parent folder. Owners drag-and-drop files on `/resources`; `POST /resources/folders/{folder}/resources/reorder` writes 0-based positions. New uploads, video links, and CSV imports append (`max + 1`). Queries order by `sort_order` then `title`. Existing rows default to `0` (alphabetical by title) until first reordered — this is why "Moving Off & Stopping Intro" previously appeared near the bottom of its folder.
 
 ---
 

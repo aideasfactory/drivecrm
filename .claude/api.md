@@ -3428,12 +3428,14 @@ Returns the full resource library for the student. The response contains two top
         "id": 1,
         "name": "Learn to Drive",
         "slug": "learn-to-drive",
+        "sort_order": 0,
         "visibility": "both",
         "children": [
           {
             "id": 3,
             "name": "Moving Off & Stopping",
             "slug": "moving-off-stopping",
+            "sort_order": 0,
             "visibility": "student",
             "resources": [
               {
@@ -3443,6 +3445,7 @@ Returns the full resource library for the student. The response contains two top
                 "resource_type": "video_link",
                 "thumbnail_url": null,
                 "tags": ["moving off and stopping", "moving off", "stopping"],
+                "sort_order": 0,
                 "is_suggested": true,
                 "is_watched": false
               }
@@ -3474,6 +3477,9 @@ Returns the full resource library for the student. The response contains two top
 | `id` | integer | Folder ID |
 | `name` | string | Folder display name (e.g. "Manoeuvres") |
 | `slug` | string | URL-safe slug |
+| `sort_order` | integer | Admin-defined display position among sibling folders (0-based after a reorder) |
+| `children` | array | Nested child folders (same structure, recursive), ordered by `sort_order` then name |
+| `resources` | array | Published resources in this folder, ordered by `sort_order` then title |
 | `visibility` | string | `student`, `instructor`, or `both`. This endpoint only returns `student` and `both`. Included so the app can hide folders client-side if it caches a mixed tree. |
 | `children` | array | Nested child folders (same structure, recursive) |
 | `resources` | array | Published resources in this folder |
@@ -3488,6 +3494,7 @@ Returns the full resource library for the student. The response contains two top
 | `resource_type` | string | `video_link` or `file` |
 | `thumbnail_url` | string\|null | Thumbnail image URL |
 | `tags` | array\|null | Tag strings for search/filtering |
+| `sort_order` | integer | Admin-defined display position within the folder (0-based after a reorder) |
 | `is_suggested` | boolean | Whether this resource was assigned to the student via a lesson |
 | `is_watched` | boolean | Whether the student has marked this resource as watched |
 
@@ -3505,6 +3512,7 @@ Returns the full resource library for the student. The response contains two top
 
 > **Note:** `video_url` and `file_url` are intentionally excluded from this endpoint to keep the payload lightweight. Use `GET /student/resources/{resource}` to retrieve the actual content URL when the user taps a resource.
 >
+> **Ordering:** `folders`, `children`, and `resources` arrays are returned in the admin-defined order (`sort_order` ascending, then name/title). Render them in array order — do not re-sort by title. Until a folder is reordered in Drive CRM, existing rows may all have `sort_order = 0` and will fall back to name/title. `my_resources` stays suggestion-order (newest first) and has no `sort_order`.
 > **Folder visibility:** Admin sets `visibility` on each folder (`student` | `instructor` | `both`, default `both`). This endpoint is hard-filtered server-side to folders visible to pupils (`student` or `both`). Instructor-only folders such as VTS or Standards Check Success are omitted entirely — not returned as empty folders. Empty folders (no remaining student-audience resources after the audience filter) are also pruned. `my_resources` excludes items whose parent folder is not pupil-visible. No client-side folder filtering is required, but `visibility` is still present on every folder object.
 
 ---
@@ -3538,6 +3546,7 @@ Returns a single resource with its full details including the actual content URL
     "thumbnail_url": null,
     "file_name": null,
     "tags": ["moving off and stopping", "moving off", "stopping"],
+    "sort_order": 0,
     "is_watched": true
   }
 }
@@ -3556,6 +3565,7 @@ Returns a single resource with its full details including the actual content URL
     "thumbnail_url": null,
     "file_name": "highway-code.pdf",
     "tags": ["highway code", "theory"],
+    "sort_order": 1,
     "is_watched": false
   }
 }
@@ -3574,6 +3584,7 @@ Returns a single resource with its full details including the actual content URL
 | `thumbnail_url` | string\|null | Thumbnail image URL |
 | `file_name` | string\|null | Original file name (file resources only) |
 | `tags` | array\|null | Tag strings |
+| `sort_order` | integer | Admin-defined display position within the parent folder |
 | `is_watched` | boolean | Whether the student has watched this resource |
 
 **Error Response — resource not found:** `404 Not Found` (unpublished, instructor-audience, or the parent folder is not visible to pupils)
@@ -4227,7 +4238,8 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
         "file_name": "parallel-parking-guide.pdf",
         "file_size": 245760,
         "mime_type": "application/pdf",
-        "thumbnail_url": null
+        "thumbnail_url": null,
+        "sort_order": 0
       }
     ]
   }
@@ -4286,8 +4298,9 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 | `file_size` | integer\|null | File size in bytes |
 | `mime_type` | string\|null | MIME type of the file |
 | `thumbnail_url` | string\|null | Thumbnail URL if available |
+| `sort_order` | integer | Admin-defined display position within the resource's library folder |
 
-> **Note:** If the lesson exists but belongs to a different student, a 404 is returned (not 403), preventing information leakage.
+> **Note:** If the lesson exists but belongs to a different student, a 404 is returned (not 403), preventing information leakage. Lesson `resources` are ordered by library `sort_order` then title.
 
 ---
 
@@ -4394,7 +4407,8 @@ Assign learning resources to a lesson. Sends an email notification to the studen
       "file_name": "highway-code-roundabouts.pdf",
       "file_size": 102400,
       "mime_type": "application/pdf",
-      "thumbnail_url": null
+      "thumbnail_url": null,
+      "sort_order": 0
     },
     {
       "id": 5,
@@ -4406,7 +4420,8 @@ Assign learning resources to a lesson. Sends an email notification to the studen
       "file_name": null,
       "file_size": null,
       "mime_type": null,
-      "thumbnail_url": "https://img.youtube.com/vi/example/hqdefault.jpg"
+      "thumbnail_url": "https://img.youtube.com/vi/example/hqdefault.jpg",
+      "sort_order": 1
     }
   ]
 }
@@ -5390,7 +5405,8 @@ Returns published learning resources, optionally filtered by audience. Resources
       "file_name": "highway-code-roundabouts.pdf",
       "file_size": 102400,
       "mime_type": "application/pdf",
-      "thumbnail_url": null
+      "thumbnail_url": null,
+      "sort_order": 0
     },
     {
       "id": 2,
@@ -5404,7 +5420,8 @@ Returns published learning resources, optionally filtered by audience. Resources
       "file_name": null,
       "file_size": null,
       "mime_type": null,
-      "thumbnail_url": "https://img.youtube.com/vi/example/hqdefault.jpg"
+      "thumbnail_url": "https://img.youtube.com/vi/example/hqdefault.jpg",
+      "sort_order": 0
     }
   ]
 }
@@ -5426,12 +5443,14 @@ Returns published learning resources, optionally filtered by audience. Resources
 | `file_size` | integer\|null | File size in bytes |
 | `mime_type` | string\|null | MIME type (e.g., `application/pdf`, `image/png`) |
 | `thumbnail_url` | string\|null | Thumbnail URL if available |
+| `sort_order` | integer | Admin-defined display position within the parent folder |
 
 **Validation Errors:** `422 Unprocessable Entity`
 - `audience` must be `student` or `instructor` if provided.
 
 > **Notes:**
 > - Only published resources are returned.
+> - The list is ordered by `resource_folder_id`, then `sort_order`, then `title`. Prefer the folder-tree endpoints when rendering a library — they keep siblings in the admin-defined order.
 > - The instructor mobile app should call `GET /api/v1/resources?audience=instructor`; the student app can either call this with `?audience=student` or use the richer `/api/v1/student/resources` tree view.
 > - All `/api/v1/student/...` resource endpoints (`/student/resources`, `/student/resources/{resource}`, `/student/resource-summary`) are hard-filtered server-side to `audience = 'student'`. Instructor resources never appear in the student app, even if dropped into a shared folder. No client-side filtering needed.
 > - When `audience` is supplied, resources whose **parent folder** is not visible to that audience are also omitted (`visibility` of `instructor` hidden from `audience=student`, and `visibility` of `student` hidden from `audience=instructor`). Omit `audience` to return every published resource regardless of folder visibility.
@@ -5467,12 +5486,14 @@ Differences from `/student/resources`:
         "id": 1,
         "name": "Learn to Drive",
         "slug": "learn-to-drive",
+        "sort_order": 0,
         "visibility": "both",
         "children": [
           {
             "id": 3,
             "name": "Moving Off & Stopping",
             "slug": "moving-off-stopping",
+            "sort_order": 0,
             "visibility": "both",
             "resources": [
               {
@@ -5487,7 +5508,8 @@ Differences from `/student/resources`:
                 "file_name": null,
                 "file_size": null,
                 "mime_type": null,
-                "thumbnail_url": null
+                "thumbnail_url": null,
+                "sort_order": 0
               }
             ],
             "children": []
@@ -5507,11 +5529,14 @@ Differences from `/student/resources`:
 | `id` | integer | Folder ID |
 | `name` | string | Folder name |
 | `slug` | string | URL-friendly slug |
+| `sort_order` | integer | Admin-defined display position among sibling folders |
+| `children` | array | Nested child folders (same shape). `[]` when none. Ordered by `sort_order` then name. |
+| `resources` | array | Published resources directly in this folder. `[]` when none. Ordered by `sort_order` then title. |
 | `visibility` | string | `student`, `instructor`, or `both`. This endpoint only returns `instructor` and `both`. |
 | `children` | array | Nested child folders (same shape). `[]` when none. |
 | `resources` | array | Published resources directly in this folder. `[]` when none. |
 
-**Resource Object Fields (within folders):** same as `GET /api/v1/resources` — `id`, `title`, `description`, `tags`, `audience`, `resource_type`, `video_url`, `file_path`, `file_name`, `file_size`, `mime_type`, `thumbnail_url`.
+**Resource Object Fields (within folders):** same as `GET /api/v1/resources` — `id`, `title`, `description`, `tags`, `audience`, `resource_type`, `video_url`, `file_path`, `file_name`, `file_size`, `mime_type`, `thumbnail_url`, `sort_order`.
 
 **Validation Errors:** `422 Unprocessable Entity`
 - `audience` must be `student` or `instructor` if provided.
@@ -5520,6 +5545,7 @@ Differences from `/student/resources`:
 > - Only published resources are returned.
 > - **Folder visibility:** Admin sets `visibility` on each folder (`student` | `instructor` | `both`, default `both`). This endpoint is hard-filtered to folders visible to instructors (`instructor` or `both`). Pupil-only folders are omitted. `visibility` is still present on every returned folder so the app can hide folders client-side if needed.
 > - **Empty folders are pruned**: child folders with no resources (after the optional audience filter) are dropped, and top-level folders left with neither their own resources nor any non-empty children are omitted — so the app never renders empty category pills.
+> - `folders`, `children`, and `resources` are in admin-defined order (`sort_order` then name/title). Render in array order — do not re-sort by title. Until a folder is reordered in Drive CRM, existing rows may all have `sort_order = 0`.
 > - `video_url` / `file_path` are included here, but use `GET /api/v1/resources/{resource}` to get a freshly signed S3 URL when opening a file resource.
 
 ---
@@ -5555,7 +5581,8 @@ Unlike `GET /api/v1/student/resources/{resource}`, this endpoint is **not studen
     "video_url": "https://www.youtube.com/watch?v=example",
     "file_url": null,
     "file_name": null,
-    "thumbnail_url": null
+    "thumbnail_url": null,
+    "sort_order": 0
   }
 }
 ```
@@ -5573,7 +5600,8 @@ Unlike `GET /api/v1/student/resources/{resource}`, this endpoint is **not studen
     "video_url": null,
     "file_url": "https://drivecrm.s3.eu-west-2.amazonaws.com/resources/highway-code-roundabouts.pdf?X-Amz-Expires=1800&...",
     "file_name": "highway-code-roundabouts.pdf",
-    "thumbnail_url": null
+    "thumbnail_url": null,
+    "sort_order": 1
   }
 }
 ```
@@ -5592,6 +5620,7 @@ Unlike `GET /api/v1/student/resources/{resource}`, this endpoint is **not studen
 | `file_url` | string\|null | Signed S3 URL, valid 30 minutes (file resources only) |
 | `file_name` | string\|null | Original file name (file resources only) |
 | `thumbnail_url` | string\|null | Thumbnail image URL |
+| `sort_order` | integer | Admin-defined display position within the parent folder |
 
 **Error Response — resource not found or unpublished:** `404 Not Found`
 ```json
@@ -7436,6 +7465,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-09-02 | **Instructor diary slot actions (admin + API).** Empty slots now open an action menu (Edit / Delete / Add Booking / Offer Slot / Close); booked slots open Move / Delete / Close. Add Booking reuses `OrderService::bookLessons` with optional `calendar_item_id` on `POST /students/{student}/orders` (date/time from the slot; `first_lesson_date` is now `after_or_equal:today`). Offer Slot creates a short-notice offer (`POST/DELETE /instructor/calendar/items/{id}/offers`) with package or one-off price (reusable `is_one_off` One-Off Package), pushes students, and exposes `GET /student/slot-offers` + `POST /student/slot-offers/{id}/accept`. Accept books immediately under `lockForUpdate` (not on payment); a second student receives 422. Calendar items include `has_open_offer`. Move/cancel APIs unchanged and still share `InstructorService::updateCalendarItem`, `MoveLessonAndFutureSiblingsAction`, and `CancelBookingAction` with the admin diary. | Instructor Calendar (offers — NEW), Student Slot Offers (NEW), Orders (store), Packages (`is_one_off`), Calendar Items (`has_open_offer`) |
 | 2026-09-04 | **Draft lessons are now returned by `GET /api/v1/students/{student}/lessons/{lesson}` (show).** Previously the show lookup excluded drafts, so tapping "View Details" on a draft card (listed by the index with `include_drafts=true` since 2026-06-26) produced a raw 404. Show now always includes drafts — no query param needed — with `status: "draft"`, `card_status: "draft"` (new value on show), `payment_mode: "upfront"`, and `payment_status: null` (matches the index; no payment record exists until checkout completes). Cancelled lessons still 404. Sign-off remains impossible for drafts (sign-off only accepts `pending` lessons). Also fixed: draft lessons no longer consume the `current` card slot in the show endpoint's card-status computation (already true on the index). | Student Lessons (show) |
 | 2026-09-04 | **Added `POST /api/v1/students/{student}/orders/{order}/resend-payment-link`** — re-send the upfront payment-link email for an order still awaiting payment (pending upfront order with draft lessons). Reuses the existing Stripe Checkout session while open, creates a fresh one when expired (old emailed link then stops working). Email goes to the booker (student or contact — same logic as the booking email); an additive push (`{ type: "payment_link_resent", order_id, checkout_url }`) is queued when the student owns the account and has an Expo push token, mirroring the weekly payment-reminder. 200 returns `{ "message": "Payment link re-sent to {email}" }`; 404 when the order isn't the student's (no-information-leak); 422 when the order is weekly/active/completed/cancelled or no link could be generated; 429 on the per-order 3-minute cooldown. Auth: student policy (assigned instructor or the student). | Orders (resend-payment-link — NEW) |
+| 2026-09-10 | **Admin-defined resource/folder display order.** Existing `resources.sort_order` and `resource_folders.sort_order` columns are now writable from Drive CRM (`POST /resources/folders/root/reorder`, `POST /resources/folders/{folder}/reorder`, `POST /resources/folders/{folder}/resources/reorder` — owner web, not mobile). Tree endpoints already queried `sort_order` then name/title; they now also **return** `sort_order` on every folder and resource. Flat `GET /api/v1/resources` is ordered by folder, then `sort_order`, then title (was title only). Lesson-attached resources follow the same library order. Render `folders` / `children` / `resources` in array order — do not re-sort by title. Until a folder is reordered in admin, existing rows may all be `0` and fall back to name/title. New uploads/imports append (`max + 1`). Resource-library cache is invalidated on admin writes. `my_resources` / suggested lists stay suggestion-order and have no `sort_order`. | Resources (index, show), Instructor Resource Tree, Student Resources (index, show), Lesson Detail (resources) |
 | 2026-09-10 | **Folder visibility for instructors and pupils.** New `resource_folders.visibility` (`student` \| `instructor` \| `both`, default `both`). Admin create/edit folder sheets set it. `GET /api/v1/student/resources` only returns folders visible to pupils and prunes empty folders (so instructor-only libraries such as VTS no longer appear as empty categories). `GET /api/v1/instructor/resources` only returns folders visible to instructors. Both tree folder objects now include `visibility`. Student show/watched 404 when the parent folder is instructor-only. `GET /api/v1/resources?audience=` also excludes resources whose parent folder is hidden from that audience. Student resource-summary study progress, recommended, stats, my_resources, and the Expert badge denominator all ignore instructor-only folders. | Resources (index), Student Resources (index, show, watched, summary), Instructor Resource Tree (tree) |
 
 ---

@@ -3,7 +3,7 @@ import { computed } from 'vue';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Folder, Pencil, Trash2 } from 'lucide-vue-next';
+import { Folder, GripVertical, Pencil, Trash2 } from 'lucide-vue-next';
 
 type FolderVisibility = 'student' | 'instructor' | 'both';
 
@@ -44,6 +44,10 @@ const emit = defineEmits<{
         <CardContent class="p-4">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3 overflow-hidden">
+                    <GripVertical
+                        class="folder-drag-handle h-4 w-4 shrink-0 cursor-grab text-muted-foreground active:cursor-grabbing"
+                        @click.stop
+                    />
                     <div
                         class="bg-primary/10 text-primary flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
                     >

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
+// @ts-expect-error vuedraggable has no bundled types
+import draggable from 'vuedraggable';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -191,6 +193,47 @@ const openDeleteResource = (resource: ResourceItem) => {
     isDeleteResourceDialogOpen.value = true;
 };
 
+const persistFolderOrder = async () => {
+    if (folders.value.length === 0) {
+        return;
+    }
+
+    const url = currentFolderId.value
+        ? `/resources/folders/${currentFolderId.value}/reorder`
+        : '/resources/folders/root/reorder';
+
+    try {
+        await axios.post(url, {
+            folder_ids: folders.value.map((folder) => folder.id),
+        });
+        toast.success('Folder order saved');
+    } catch (error: any) {
+        toast.error(
+            error.response?.data?.message || 'Failed to save folder order',
+        );
+        loadContents(currentFolderId.value);
+    }
+};
+
+const persistResourceOrder = async () => {
+    if (!currentFolderId.value || resources.value.length === 0) {
+        return;
+    }
+
+    try {
+        await axios.post(
+            `/resources/folders/${currentFolderId.value}/resources/reorder`,
+            { resource_ids: resources.value.map((resource) => resource.id) },
+        );
+        toast.success('Resource order saved');
+    } catch (error: any) {
+        toast.error(
+            error.response?.data?.message || 'Failed to save resource order',
+        );
+        loadContents(currentFolderId.value);
+    }
+};
+
 const handleDeleteResource = async () => {
     if (!deletingResource.value) return;
     isDeletingResource.value = true;
@@ -374,18 +417,30 @@ onMounted(() => {
                     >
                         Folders
                     </h3>
-                    <div
-                        class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3"
+                    <p
+                        v-if="folders.length > 1"
+                        class="text-muted-foreground mb-2 text-xs"
                     >
-                        <FolderCard
-                            v-for="folder in folders"
-                            :key="folder.id"
-                            :folder="folder"
-                            @open="navigateToFolder"
-                            @edit="openEditFolder"
-                            @delete="openDeleteFolder"
-                        />
-                    </div>
+                        Drag the handle to change the order shown in the app.
+                    </p>
+                    <draggable
+                        v-model="folders"
+                        item-key="id"
+                        handle=".folder-drag-handle"
+                        animation="150"
+                        ghost-class="opacity-40"
+                        class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3"
+                        @end="persistFolderOrder"
+                    >
+                        <template #item="{ element: folder }">
+                            <FolderCard
+                                :folder="folder"
+                                @open="navigateToFolder"
+                                @edit="openEditFolder"
+                                @delete="openDeleteFolder"
+                            />
+                        </template>
+                    </draggable>
                 </div>
 
                 <!-- Resources Section -->
@@ -395,16 +450,30 @@ onMounted(() => {
                     >
                         Files
                     </h3>
-                    <div class="space-y-3">
-                        <ResourceCard
-                            v-for="resource in resources"
-                            :key="resource.id"
-                            :resource="resource"
-                            @preview="openPreview"
-                            @edit="openEditResource"
-                            @delete="openDeleteResource"
-                        />
-                    </div>
+                    <p
+                        v-if="resources.length > 1"
+                        class="text-muted-foreground mb-2 text-xs"
+                    >
+                        Drag the handle to change the order shown in the app.
+                    </p>
+                    <draggable
+                        v-model="resources"
+                        item-key="id"
+                        handle=".resource-drag-handle"
+                        animation="150"
+                        ghost-class="opacity-40"
+                        class="space-y-3"
+                        @end="persistResourceOrder"
+                    >
+                        <template #item="{ element: resource }">
+                            <ResourceCard
+                                :resource="resource"
+                                @preview="openPreview"
+                                @edit="openEditResource"
+                                @delete="openDeleteResource"
+                            />
+                        </template>
+                    </draggable>
                 </div>
             </template>
         </div>

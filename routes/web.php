@@ -381,6 +381,12 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
             ->name('resources.folders.update');
         Route::delete('/resources/folders/{folder}', [ResourceController::class, 'destroyFolder'])
             ->name('resources.folders.destroy');
+        Route::post('/resources/folders/root/reorder', [ResourceController::class, 'reorderFolders'])
+            ->name('resources.folders.root-reorder');
+        Route::post('/resources/folders/{folder}/reorder', [ResourceController::class, 'reorderFolders'])
+            ->name('resources.folders.reorder');
+        Route::post('/resources/folders/{folder}/resources/reorder', [ResourceController::class, 'reorderResources'])
+            ->name('resources.folders.resources.reorder');
         Route::post('/resources/files', [ResourceController::class, 'storeResource'])
             ->name('resources.files.store');
         Route::get('/resources/files/{resource}/url', [ResourceController::class, 'getFileUrl'])

@@ -31,6 +31,9 @@ class StoreVideoLinkResourceAction
             'description' => $description,
             'tags' => $tags,
             'thumbnail_url' => $thumbnailUrl,
+            'sort_order' => (int) Resource::query()
+                ->where('resource_folder_id', $folder->id)
+                ->max('sort_order') + 1,
         ]);
     }
 }

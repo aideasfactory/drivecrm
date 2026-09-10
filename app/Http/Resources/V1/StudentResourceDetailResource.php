@@ -34,6 +34,7 @@ class StudentResourceDetailResource extends JsonResource
             'thumbnail_url' => $this->thumbnail_url,
             'file_name' => $this->file_name,
             'tags' => $this->tags,
+            'sort_order' => $this->sort_order,
             'is_watched' => $this->isWatched,
         ];
     }
