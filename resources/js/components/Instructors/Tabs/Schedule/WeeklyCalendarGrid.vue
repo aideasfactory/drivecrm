@@ -145,7 +145,15 @@ const overlapLayoutByDate = computed(() => {
 })
 
 // ── Day header formatting ────────────────────────────────
-const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+const dayCount = computed(() => Math.max(props.weekDays.length, 1))
+
+const gridTemplateColumns = computed(() => `4rem repeat(${dayCount.value}, minmax(0, 1fr))`)
+
+function dayLabel(date: Date): string {
+    return weekdayLabels[date.getDay()] ?? ''
+}
 
 function isToday(date: Date): boolean {
     const now = new Date()
@@ -251,10 +259,10 @@ function handlePointerMove(e: PointerEvent) {
     // Determine which day column we're over (accounting for the time gutter)
     const timeGutterWidth = 64 // 4rem = 64px
     const dayColumnsWidth = gridRect.width - timeGutterWidth
-    const dayColumnWidth = dayColumnsWidth / 7
+    const dayColumnWidth = dayColumnsWidth / dayCount.value
     const relativeX = e.clientX - gridRect.left - timeGutterWidth
     const dayIndex = Math.floor(relativeX / dayColumnWidth)
-    const clampedDayIndex = Math.max(0, Math.min(dayIndex, 6))
+    const clampedDayIndex = Math.max(0, Math.min(dayIndex, dayCount.value - 1))
 
     dragging.value.currentDayIndex = clampedDayIndex
     dragging.value.ghostLeft = timeGutterWidth + clampedDayIndex * dayColumnWidth + 4
@@ -349,7 +357,7 @@ watch(() => props.weekDays, () => {
     <div ref="scrollRef" class="relative max-h-[70vh] overflow-y-auto">
     <div ref="gridRef" class="relative select-none">
         <!-- Header Row: Time gutter + 7 day columns (pinned while the body scrolls) -->
-        <div class="sticky top-0 z-20 grid grid-cols-[4rem_repeat(7,1fr)] border-b border-border bg-card">
+        <div class="sticky top-0 z-20 grid border-b border-border bg-card" :style="{ gridTemplateColumns }">
             <div class="border-r border-border p-2"></div>
             <div
                 v-for="(day, i) in weekDays"
@@ -358,7 +366,7 @@ watch(() => props.weekDays, () => {
                 :class="isToday(day) ? 'bg-primary/5 dark:bg-primary/10' : ''"
             >
                 <div class="text-xs font-medium text-muted-foreground">
-                    {{ dayNames[i] }}
+                    {{ dayLabel(day) }}
                 </div>
                 <div
                     class="mt-0.5 text-sm font-semibold"
@@ -370,7 +378,7 @@ watch(() => props.weekDays, () => {
         </div>
 
         <!-- Time Grid: rows of 30-min slots -->
-        <div ref="bodyRef" class="relative grid grid-cols-[4rem_repeat(7,1fr)]">
+        <div ref="bodyRef" class="relative grid" :style="{ gridTemplateColumns }">
             <!-- Time gutter -->
             <div class="border-r border-border">
                 <div
