@@ -15,6 +15,7 @@ use App\Actions\Resource\UpdateFolderAction;
 use App\Actions\Resource\UpdateResourceAction;
 use App\Actions\Resource\UploadResourceAction;
 use App\Enums\ResourceAudience;
+use App\Enums\ResourceFolderVisibility;
 use App\Models\Resource;
 use App\Models\ResourceFolder;
 use Illuminate\Database\Eloquent\Collection;
@@ -32,7 +33,8 @@ class ResourceService
         protected UploadResourceAction $uploadResource,
         protected StoreVideoLinkResourceAction $storeVideoLinkResource,
         protected UpdateResourceAction $updateResource,
-        protected DeleteResourceAction $deleteResource
+        protected DeleteResourceAction $deleteResource,
+        protected ResourceApiService $resourceApiService
     ) {}
 
     /**
@@ -58,17 +60,31 @@ class ResourceService
     /**
      * Create a new folder.
      */
-    public function createFolder(string $name, ?int $parentId = null): ResourceFolder
-    {
-        return ($this->createFolder)($name, $parentId);
+    public function createFolder(
+        string $name,
+        ?int $parentId = null,
+        ResourceFolderVisibility $visibility = ResourceFolderVisibility::BOTH
+    ): ResourceFolder {
+        $folder = ($this->createFolder)($name, $parentId, $visibility);
+
+        $this->resourceApiService->invalidateLibraryCache();
+
+        return $folder;
     }
 
     /**
-     * Rename a folder.
+     * Update a folder's name and visibility.
      */
-    public function updateFolder(ResourceFolder $folder, string $name): ResourceFolder
-    {
-        return ($this->updateFolder)($folder, $name);
+    public function updateFolder(
+        ResourceFolder $folder,
+        string $name,
+        ResourceFolderVisibility $visibility
+    ): ResourceFolder {
+        $folder = ($this->updateFolder)($folder, $name, $visibility);
+
+        $this->resourceApiService->invalidateLibraryCache();
+
+        return $folder;
     }
 
     /**
@@ -77,6 +93,8 @@ class ResourceService
     public function deleteFolder(ResourceFolder $folder): void
     {
         ($this->deleteFolder)($folder);
+
+        $this->resourceApiService->invalidateLibraryCache();
     }
 
     /**

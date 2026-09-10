@@ -13,6 +13,9 @@ import {
 } from '@/components/ui/sheet';
 import { toast } from '@/components/ui/sonner';
 import { FolderPlus, Loader2, Save } from 'lucide-vue-next';
+import FolderVisibilityField, {
+    type FolderVisibility,
+} from '@/components/Resources/FolderVisibilityField.vue';
 
 const props = defineProps<{
     open: boolean;
@@ -26,13 +29,16 @@ const emit = defineEmits<{
 
 const isSubmitting = ref(false);
 const errors = ref<Record<string, string>>({});
-const form = ref({ name: '' });
+const form = ref<{ name: string; visibility: FolderVisibility }>({
+    name: '',
+    visibility: 'both',
+});
 
 watch(
     () => props.open,
     (val) => {
         if (val) {
-            form.value = { name: '' };
+            form.value = { name: '', visibility: 'both' };
             errors.value = {};
         }
     },
@@ -46,6 +52,7 @@ const handleSubmit = async () => {
         await axios.post('/resources/folders', {
             name: form.value.name,
             parent_id: props.parentId,
+            visibility: form.value.visibility,
         });
         toast.success('Folder created successfully');
         emit('update:open', false);
@@ -103,6 +110,12 @@ const handleSubmit = async () => {
                         {{ errors.name }}
                     </p>
                 </div>
+
+                <FolderVisibilityField
+                    v-model="form.visibility"
+                    :disabled="isSubmitting"
+                    :error="errors.visibility"
+                />
 
                 <div class="flex justify-end gap-2 pt-4">
                     <Button

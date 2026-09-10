@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Enums\ResourceAudience;
+use App\Enums\ResourceFolderVisibility;
 use App\Http\Requests\ImportResourcesCsvRequest;
 use App\Http\Requests\StoreFolderRequest;
 use App\Http\Requests\StoreResourceRequest;
@@ -51,6 +52,7 @@ class ResourceController extends Controller
                 'id' => $folder->id,
                 'name' => $folder->name,
                 'slug' => $folder->slug,
+                'visibility' => $folder->visibility?->value,
             ] : null,
         ]);
     }
@@ -62,7 +64,8 @@ class ResourceController extends Controller
     {
         $folder = $this->resourceService->createFolder(
             $request->validated('name'),
-            $request->validated('parent_id')
+            $request->validated('parent_id'),
+            ResourceFolderVisibility::from($request->validated('visibility'))
         );
 
         return response()->json([
@@ -78,11 +81,12 @@ class ResourceController extends Controller
     {
         $folder = $this->resourceService->updateFolder(
             $folder,
-            $request->validated('name')
+            $request->validated('name'),
+            ResourceFolderVisibility::from($request->validated('visibility'))
         );
 
         return response()->json([
-            'message' => 'Folder renamed successfully.',
+            'message' => 'Folder updated successfully.',
             'folder' => $folder,
         ]);
     }

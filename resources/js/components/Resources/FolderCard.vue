@@ -1,17 +1,33 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Folder, Pencil, Trash2 } from 'lucide-vue-next';
+
+type FolderVisibility = 'student' | 'instructor' | 'both';
 
 interface FolderItem {
     id: number;
     name: string;
     slug: string;
+    visibility?: FolderVisibility;
 }
 
-defineProps<{
+const props = defineProps<{
     folder: FolderItem;
 }>();
+
+const visibilityLabel = computed(() => {
+    switch (props.folder.visibility) {
+        case 'instructor':
+            return 'Instructors';
+        case 'student':
+            return 'Pupils';
+        default:
+            return 'Both';
+    }
+});
 
 const emit = defineEmits<{
     (e: 'open', folder: FolderItem): void;
@@ -33,7 +49,21 @@ const emit = defineEmits<{
                     >
                         <Folder class="h-5 w-5" />
                     </div>
-                    <span class="truncate font-medium">{{ folder.name }}</span>
+                    <div class="min-w-0">
+                        <span class="truncate font-medium">{{ folder.name }}</span>
+                        <div class="mt-1">
+                            <Badge
+                                :variant="
+                                    folder.visibility === 'instructor'
+                                        ? 'default'
+                                        : 'secondary'
+                                "
+                                class="text-xs"
+                            >
+                                {{ visibilityLabel }}
+                            </Badge>
+                        </div>
+                    </div>
                 </div>
                 <div class="flex shrink-0 items-center gap-1" @click.stop>
                     <Button

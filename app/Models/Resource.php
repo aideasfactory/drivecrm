@@ -75,6 +75,17 @@ class Resource extends Model
     }
 
     /**
+     * Limit resources to those whose parent folder is visible to the audience.
+     */
+    public function scopeInVisibleFolder(Builder $query, ResourceAudience $audience): Builder
+    {
+        return $query->whereHas(
+            'folder',
+            fn (Builder $folderQuery) => $folderQuery->visibleTo($audience)
+        );
+    }
+
+    /**
      * Check if the resource is a video link (Vimeo/YouTube).
      */
     public function isVideoLink(): bool

@@ -24,6 +24,7 @@ class InstructorResourceFolderTreeResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'slug' => $this->slug,
+            'visibility' => $this->visibility?->value,
             'children' => static::collection($this->whenLoaded('children')),
             'resources' => ResourceResource::collection($this->whenLoaded('resources')),
         ];
