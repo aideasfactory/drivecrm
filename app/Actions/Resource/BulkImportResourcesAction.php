@@ -19,6 +19,13 @@ class BulkImportResourcesAction
     private array $folderCache = [];
 
     /**
+     * Next sort_order per folder id, incremented as rows are imported.
+     *
+     * @var array<int, int>
+     */
+    private array $nextResourceSortOrder = [];
+
+    /**
      * Parse and import video link resources from CSV data.
      *
      * @param  array<int, array<string, string>>  $rows  Parsed CSV rows (associative arrays)
@@ -31,6 +38,7 @@ class BulkImportResourcesAction
         $skipped = 0;
         $errors = [];
         $this->folderCache = [];
+        $this->nextResourceSortOrder = [];
 
         foreach ($rows as $index => $row) {
             $rowNumber = $index + 2; // +2 for header row + 0-index
@@ -95,6 +103,7 @@ class BulkImportResourcesAction
                     'description' => $validated['description'] ?? null,
                     'tags' => $tags,
                     'thumbnail_url' => $validated['thumbnail_url'] ?? null,
+                    'sort_order' => $this->nextResourceSortOrder($targetFolder),
                 ]);
 
                 $imported++;
@@ -152,6 +161,9 @@ class BulkImportResourcesAction
                 [
                     'parent_id' => $currentParent->id,
                     'name' => $segmentName,
+                    'sort_order' => (int) ResourceFolder::query()
+                        ->where('parent_id', $currentParent->id)
+                        ->max('sort_order') + 1,
                 ]
             );
 
@@ -162,5 +174,18 @@ class BulkImportResourcesAction
         $this->folderCache[$cacheKey] = $currentParent;
 
         return $currentParent;
+    }
+
+    private function nextResourceSortOrder(ResourceFolder $folder): int
+    {
+        if (! isset($this->nextResourceSortOrder[$folder->id])) {
+            $this->nextResourceSortOrder[$folder->id] = (int) Resource::query()
+                ->where('resource_folder_id', $folder->id)
+                ->max('sort_order');
+        }
+
+        $this->nextResourceSortOrder[$folder->id]++;
+
+        return $this->nextResourceSortOrder[$folder->id];
     }
 }

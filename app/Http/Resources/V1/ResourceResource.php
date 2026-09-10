@@ -27,6 +27,7 @@ class ResourceResource extends JsonResource
             'file_size' => $this->file_size,
             'mime_type' => $this->mime_type,
             'thumbnail_url' => $this->thumbnail_url,
+            'sort_order' => $this->sort_order,
         ];
     }
 }

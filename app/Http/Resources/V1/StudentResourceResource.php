@@ -24,6 +24,7 @@ class StudentResourceResource extends JsonResource
             'resource_type' => $this->resource_type,
             'thumbnail_url' => $this->thumbnail_url,
             'tags' => $this->tags,
+            'sort_order' => $this->sort_order,
             'is_suggested' => $suggestedIds?->contains($this->id) ?? false,
             'is_watched' => $watchedIds?->contains($this->id) ?? false,
         ];

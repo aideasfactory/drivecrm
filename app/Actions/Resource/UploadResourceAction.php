@@ -36,6 +36,9 @@ class UploadResourceAction
             'file_name' => $fileName,
             'file_size' => $file->getSize(),
             'mime_type' => $file->getMimeType(),
+            'sort_order' => (int) Resource::query()
+                ->where('resource_folder_id', $folder->id)
+                ->max('sort_order') + 1,
         ]);
     }
 }

@@ -6,6 +6,8 @@ namespace App\Http\Controllers;
 
 use App\Enums\ResourceAudience;
 use App\Http\Requests\ImportResourcesCsvRequest;
+use App\Http\Requests\ReorderFoldersRequest;
+use App\Http\Requests\ReorderResourcesRequest;
 use App\Http\Requests\StoreFolderRequest;
 use App\Http\Requests\StoreResourceRequest;
 use App\Http\Requests\UpdateFolderRequest;
@@ -84,6 +86,30 @@ class ResourceController extends Controller
         return response()->json([
             'message' => 'Folder renamed successfully.',
             'folder' => $folder,
+        ]);
+    }
+
+    /**
+     * Reorder sibling folders under a parent (or at root).
+     */
+    public function reorderFolders(ReorderFoldersRequest $request, ?ResourceFolder $folder = null): JsonResponse
+    {
+        $this->resourceService->reorderFolders($folder, $request->validated('folder_ids'));
+
+        return response()->json([
+            'message' => 'Folders reordered successfully.',
+        ]);
+    }
+
+    /**
+     * Reorder resources within a folder.
+     */
+    public function reorderResources(ReorderResourcesRequest $request, ResourceFolder $folder): JsonResponse
+    {
+        $this->resourceService->reorderResources($folder, $request->validated('resource_ids'));
+
+        return response()->json([
+            'message' => 'Resources reordered successfully.',
         ]);
     }
 

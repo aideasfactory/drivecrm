@@ -10,6 +10,8 @@ use App\Actions\Resource\DeleteFolderAction;
 use App\Actions\Resource\DeleteResourceAction;
 use App\Actions\Resource\GetFolderBreadcrumbsAction;
 use App\Actions\Resource\GetFolderContentsAction;
+use App\Actions\Resource\ReorderFoldersAction;
+use App\Actions\Resource\ReorderResourcesAction;
 use App\Actions\Resource\StoreVideoLinkResourceAction;
 use App\Actions\Resource\UpdateFolderAction;
 use App\Actions\Resource\UpdateResourceAction;
@@ -20,7 +22,7 @@ use App\Models\ResourceFolder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\UploadedFile;
 
-class ResourceService
+class ResourceService extends BaseService
 {
     public function __construct(
         protected BulkImportResourcesAction $bulkImportResources,
@@ -32,7 +34,9 @@ class ResourceService
         protected UploadResourceAction $uploadResource,
         protected StoreVideoLinkResourceAction $storeVideoLinkResource,
         protected UpdateResourceAction $updateResource,
-        protected DeleteResourceAction $deleteResource
+        protected DeleteResourceAction $deleteResource,
+        protected ReorderFoldersAction $reorderFolders,
+        protected ReorderResourcesAction $reorderResources
     ) {}
 
     /**
@@ -60,7 +64,11 @@ class ResourceService
      */
     public function createFolder(string $name, ?int $parentId = null): ResourceFolder
     {
-        return ($this->createFolder)($name, $parentId);
+        $folder = ($this->createFolder)($name, $parentId);
+
+        $this->invalidateLibraryCache();
+
+        return $folder;
     }
 
     /**
@@ -68,7 +76,11 @@ class ResourceService
      */
     public function updateFolder(ResourceFolder $folder, string $name): ResourceFolder
     {
-        return ($this->updateFolder)($folder, $name);
+        $folder = ($this->updateFolder)($folder, $name);
+
+        $this->invalidateLibraryCache();
+
+        return $folder;
     }
 
     /**
@@ -77,6 +89,8 @@ class ResourceService
     public function deleteFolder(ResourceFolder $folder): void
     {
         ($this->deleteFolder)($folder);
+
+        $this->invalidateLibraryCache();
     }
 
     /**
@@ -90,7 +104,11 @@ class ResourceService
         ?string $description = null,
         ?array $tags = null
     ): Resource {
-        return ($this->uploadResource)($folder, $file, $title, $audience, $description, $tags);
+        $resource = ($this->uploadResource)($folder, $file, $title, $audience, $description, $tags);
+
+        $this->invalidateLibraryCache();
+
+        return $resource;
     }
 
     /**
@@ -105,7 +123,11 @@ class ResourceService
         ?array $tags = null,
         ?string $thumbnailUrl = null
     ): Resource {
-        return ($this->storeVideoLinkResource)($folder, $videoUrl, $title, $audience, $description, $tags, $thumbnailUrl);
+        $resource = ($this->storeVideoLinkResource)($folder, $videoUrl, $title, $audience, $description, $tags, $thumbnailUrl);
+
+        $this->invalidateLibraryCache();
+
+        return $resource;
     }
 
     /**
@@ -119,7 +141,11 @@ class ResourceService
         ?string $thumbnailUrl = null,
         ?ResourceAudience $audience = null
     ): Resource {
-        return ($this->updateResource)($resource, $title, $description, $tags, $thumbnailUrl, $audience);
+        $resource = ($this->updateResource)($resource, $title, $description, $tags, $thumbnailUrl, $audience);
+
+        $this->invalidateLibraryCache();
+
+        return $resource;
     }
 
     /**
@@ -128,6 +154,8 @@ class ResourceService
     public function deleteResource(Resource $resource): void
     {
         ($this->deleteResource)($resource);
+
+        $this->invalidateLibraryCache();
     }
 
     /**
@@ -139,7 +167,54 @@ class ResourceService
      */
     public function bulkImportResources(array $rows, ResourceFolder $folder): array
     {
-        return ($this->bulkImportResources)($rows, $folder);
+        $result = ($this->bulkImportResources)($rows, $folder);
+
+        $this->invalidateLibraryCache();
+
+        return $result;
+    }
+
+    /**
+     * Persist a new display order for sibling folders.
+     *
+     * @param  array<int, int>  $orderedFolderIds
+     */
+    public function reorderFolders(?ResourceFolder $parent, array $orderedFolderIds): void
+    {
+        ($this->reorderFolders)($parent, $orderedFolderIds);
+
+        $this->invalidateLibraryCache();
+    }
+
+    /**
+     * Persist a new display order for resources in a folder.
+     *
+     * @param  array<int, int>  $orderedResourceIds
+     */
+    public function reorderResources(ResourceFolder $folder, array $orderedResourceIds): void
+    {
+        ($this->reorderResources)($folder, $orderedResourceIds);
+
+        $this->invalidateLibraryCache();
+    }
+
+    /**
+     * Drop cached published lists and folder trees so the mobile API
+     * reflects admin library changes immediately.
+     */
+    public function invalidateLibraryCache(): void
+    {
+        $this->invalidate([
+            'resources:published',
+            'resources:published:'.ResourceAudience::STUDENT->value,
+            'resources:published:'.ResourceAudience::INSTRUCTOR->value,
+            'resources:folder_tree',
+            'resources:folder_tree:'.ResourceAudience::STUDENT->value,
+            'resources:folder_tree:'.ResourceAudience::INSTRUCTOR->value,
+            'resources:instructor_folder_tree',
+            'resources:instructor_folder_tree:'.ResourceAudience::STUDENT->value,
+            'resources:instructor_folder_tree:'.ResourceAudience::INSTRUCTOR->value,
+        ]);
     }
 
     /**

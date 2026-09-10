@@ -3,7 +3,7 @@ import { computed } from 'vue';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { FileVideo, FileText, Pencil, Trash2, Eye, Link } from 'lucide-vue-next';
+import { FileVideo, FileText, Pencil, Trash2, Eye, Link, GripVertical } from 'lucide-vue-next';
 
 interface ResourceItem {
     id: number;
@@ -56,6 +56,10 @@ const formattedSize = computed(() => {
         <CardContent class="p-4">
             <div class="flex items-start justify-between gap-3">
                 <div class="flex items-start gap-3 overflow-hidden">
+                    <GripVertical
+                        class="resource-drag-handle mt-3 h-4 w-4 shrink-0 cursor-grab text-muted-foreground active:cursor-grabbing"
+                        @click.stop
+                    />
                     <div
                         v-if="resource.thumbnail_url"
                         class="h-10 w-10 shrink-0 overflow-hidden rounded-lg"
