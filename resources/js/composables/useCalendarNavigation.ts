@@ -1,17 +1,33 @@
 import { computed, ref } from 'vue'
 
-export type CalendarView = 'week' | 'month'
+export type CalendarView = 'day' | 'week' | 'month'
+
+/**
+ * Midnight on the given date.
+ */
+function startOfDay(date: Date): Date {
+    const d = new Date(date)
+    d.setHours(0, 0, 0, 0)
+    return d
+}
 
 /**
  * Get Monday of the week containing the given date.
  */
 function getMonday(date: Date): Date {
-    const d = new Date(date)
+    const d = startOfDay(date)
     const day = d.getDay()
     const diff = day === 0 ? -6 : 1 - day // Monday = 1
     d.setDate(d.getDate() + diff)
-    d.setHours(0, 0, 0, 0)
     return d
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+    return (
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate()
+    )
 }
 
 /**
@@ -26,8 +42,31 @@ export function formatDate(date: Date): string {
 
 export function useCalendarNavigation() {
     const currentView = ref<CalendarView>('week')
+    const currentDay = ref<Date>(startOfDay(new Date()))
     const currentWeekStart = ref<Date>(getMonday(new Date()))
     const currentMonth = ref<Date>(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
+
+    // ── Day ─────────────────────────────────────────────────
+    const dayDays = computed<Date[]>(() => [currentDay.value])
+
+    const dayStartFormatted = computed(() => formatDate(currentDay.value))
+    const dayEndFormatted = computed(() => formatDate(currentDay.value))
+
+    function goToNextDay() {
+        const next = new Date(currentDay.value)
+        next.setDate(next.getDate() + 1)
+        syncFromDate(next)
+    }
+
+    function goToPreviousDay() {
+        const prev = new Date(currentDay.value)
+        prev.setDate(prev.getDate() - 1)
+        syncFromDate(prev)
+    }
+
+    function goToCurrentDay() {
+        syncFromDate(new Date())
+    }
 
     // ── Week ────────────────────────────────────────────────
     const weekDays = computed<Date[]>(() => {
@@ -53,16 +92,28 @@ export function useCalendarNavigation() {
         const next = new Date(currentWeekStart.value)
         next.setDate(next.getDate() + 7)
         currentWeekStart.value = next
+        const nextEnd = new Date(next)
+        nextEnd.setDate(nextEnd.getDate() + 6)
+        if (currentDay.value < next || currentDay.value > nextEnd) {
+            currentDay.value = new Date(next)
+        }
+        currentMonth.value = new Date(next.getFullYear(), next.getMonth(), 1)
     }
 
     function goToPreviousWeek() {
         const prev = new Date(currentWeekStart.value)
         prev.setDate(prev.getDate() - 7)
         currentWeekStart.value = prev
+        const prevEnd = new Date(prev)
+        prevEnd.setDate(prevEnd.getDate() + 6)
+        if (currentDay.value < prev || currentDay.value > prevEnd) {
+            currentDay.value = new Date(prev)
+        }
+        currentMonth.value = new Date(prev.getFullYear(), prev.getMonth(), 1)
     }
 
     function goToToday() {
-        currentWeekStart.value = getMonday(new Date())
+        syncFromDate(new Date())
     }
 
     // ── Month ───────────────────────────────────────────────
@@ -112,31 +163,104 @@ export function useCalendarNavigation() {
         const next = new Date(currentMonth.value)
         next.setMonth(next.getMonth() + 1)
         currentMonth.value = next
+        syncDayAndWeekIfOutsideMonth(next)
     }
 
     function goToPreviousMonth() {
         const prev = new Date(currentMonth.value)
         prev.setMonth(prev.getMonth() - 1)
         currentMonth.value = prev
+        syncDayAndWeekIfOutsideMonth(prev)
     }
 
     function goToCurrentMonth() {
-        currentMonth.value = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+        syncFromDate(new Date())
+    }
+
+    function syncDayAndWeekIfOutsideMonth(monthStart: Date) {
+        const inMonth =
+            currentDay.value.getFullYear() === monthStart.getFullYear() &&
+            currentDay.value.getMonth() === monthStart.getMonth()
+
+        if (!inMonth) {
+            syncFromDate(monthStart)
+        }
+    }
+
+    function syncFromDate(date: Date) {
+        const day = startOfDay(date)
+        currentDay.value = day
+        currentWeekStart.value = getMonday(day)
+        currentMonth.value = new Date(day.getFullYear(), day.getMonth(), 1)
+    }
+
+    function setView(view: CalendarView) {
+        if (view === currentView.value) {
+            return
+        }
+
+        if (view === 'day') {
+            const today = startOfDay(new Date())
+            if (currentView.value === 'week') {
+                const match = weekDays.value.find((d) => isSameDay(d, today))
+                currentDay.value = startOfDay(match ?? weekDays.value[0] ?? today)
+            } else if (currentView.value === 'month') {
+                const inMonth =
+                    today.getFullYear() === currentMonth.value.getFullYear() &&
+                    today.getMonth() === currentMonth.value.getMonth()
+                currentDay.value = inMonth ? today : new Date(currentMonth.value)
+            }
+            currentWeekStart.value = getMonday(currentDay.value)
+            currentMonth.value = new Date(currentDay.value.getFullYear(), currentDay.value.getMonth(), 1)
+        }
+
+        if (view === 'week') {
+            currentWeekStart.value = getMonday(currentDay.value)
+        }
+
+        if (view === 'month') {
+            currentMonth.value = new Date(currentDay.value.getFullYear(), currentDay.value.getMonth(), 1)
+        }
+
+        currentView.value = view
     }
 
     // ── View-aware date range ───────────────────────────────
-    const rangeStartFormatted = computed(() =>
-        currentView.value === 'week' ? weekStartFormatted.value : monthStartFormatted.value,
-    )
+    const rangeStartFormatted = computed(() => {
+        if (currentView.value === 'day') {
+            return dayStartFormatted.value
+        }
 
-    const rangeEndFormatted = computed(() =>
-        currentView.value === 'week' ? weekEndFormatted.value : monthEndFormatted.value,
-    )
+        return currentView.value === 'week' ? weekStartFormatted.value : monthStartFormatted.value
+    })
+
+    const rangeEndFormatted = computed(() => {
+        if (currentView.value === 'day') {
+            return dayEndFormatted.value
+        }
+
+        return currentView.value === 'week' ? weekEndFormatted.value : monthEndFormatted.value
+    })
+
+    const visibleDays = computed<Date[]>(() => {
+        if (currentView.value === 'day') {
+            return dayDays.value
+        }
+
+        return currentView.value === 'week' ? weekDays.value : monthDays.value
+    })
 
     return {
         currentView,
+        currentDay,
         currentWeekStart,
         currentMonth,
+        dayDays,
+        dayStartFormatted,
+        dayEndFormatted,
+        goToNextDay,
+        goToPreviousDay,
+        goToCurrentDay,
         weekDays,
         weekEnd,
         weekStartFormatted,
@@ -150,6 +274,8 @@ export function useCalendarNavigation() {
         goToNextMonth,
         goToPreviousMonth,
         goToCurrentMonth,
+        setView,
+        visibleDays,
         rangeStartFormatted,
         rangeEndFormatted,
         formatDate,

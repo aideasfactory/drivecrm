@@ -97,6 +97,10 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('instructors.packages');
     Route::post('/instructors/{instructor}/packages', [InstructorController::class, 'createPackage'])
         ->name('instructors.packages.store');
+    Route::delete('/instructors/{instructor}/packages/{package}', [InstructorController::class, 'deactivatePackage'])
+        ->name('instructors.packages.destroy');
+    Route::patch('/instructors/{instructor}/packages/{package}/restore', [InstructorController::class, 'reactivatePackage'])
+        ->name('instructors.packages.restore');
     Route::get('/instructors/{instructor}/locations', [InstructorController::class, 'locations'])
         ->name('instructors.locations');
 

@@ -69,22 +69,24 @@ const props = defineProps<Props>()
 // ── Navigation ───────────────────────────────────────────
 const {
     currentView,
+    currentDay,
     weekDays,
-    weekStartFormatted,
-    weekEndFormatted,
     goToNextWeek,
     goToPreviousWeek,
     goToToday,
+    goToNextDay,
+    goToPreviousDay,
     monthDays,
     currentMonth,
-    monthStartFormatted,
-    monthEndFormatted,
     goToNextMonth,
     goToPreviousMonth,
     goToCurrentMonth,
+    setView,
     rangeStartFormatted,
     rangeEndFormatted,
 } = useCalendarNavigation()
+
+const gridDays = computed(() => currentView.value === 'day' ? [currentDay.value] : weekDays.value)
 
 // ── State ────────────────────────────────────────────────
 const loading = ref(true)
@@ -426,7 +428,9 @@ watch(currentView, () => {
 
 // ── View navigation helpers ─────────────────────────────
 function goToPrevious() {
-    if (currentView.value === 'week') {
+    if (currentView.value === 'day') {
+        goToPreviousDay()
+    } else if (currentView.value === 'week') {
         goToPreviousWeek()
     } else {
         goToPreviousMonth()
@@ -434,7 +438,9 @@ function goToPrevious() {
 }
 
 function goToNext() {
-    if (currentView.value === 'week') {
+    if (currentView.value === 'day') {
+        goToNextDay()
+    } else if (currentView.value === 'week') {
         goToNextWeek()
     } else {
         goToNextMonth()
@@ -442,10 +448,10 @@ function goToNext() {
 }
 
 function goToNow() {
-    if (currentView.value === 'week') {
-        goToToday()
-    } else {
+    if (currentView.value === 'month') {
         goToCurrentMonth()
+    } else {
+        goToToday()
     }
 }
 
@@ -985,10 +991,15 @@ async function handleDelete() {
 const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const shortMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
+function formatDayLabel(date: Date): string {
+    const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+    return `${weekdayNames[date.getDay()]} ${date.getDate()} ${monthNames[date.getMonth()]} ${date.getFullYear()}`
+}
+
 function formatWeekLabel(days: Date[]): string {
     if (days.length === 0) return ''
     const first = days[0]
-    const last = days[6]
+    const last = days[days.length - 1]
 
     if (first.getMonth() === last.getMonth()) {
         return `${first.getDate()} - ${last.getDate()} ${shortMonthNames[first.getMonth()]} ${first.getFullYear()}`
@@ -999,6 +1010,18 @@ function formatWeekLabel(days: Date[]): string {
 function formatMonthLabel(date: Date): string {
     return `${monthNames[date.getMonth()]} ${date.getFullYear()}`
 }
+
+const viewLabel = computed(() => {
+    if (currentView.value === 'day') {
+        return formatDayLabel(currentDay.value)
+    }
+
+    if (currentView.value === 'week') {
+        return formatWeekLabel(weekDays.value)
+    }
+
+    return formatMonthLabel(currentMonth.value)
+})
 
 // ── Save mileage for completed lesson ───────────────────
 async function handleSaveMileage() {
@@ -1040,7 +1063,7 @@ onMounted(() => {
         <!-- Navigation + Calendar Grid -->
         <Card class="!pb-6 !pt-0">
             <!-- Navigation Bar -->
-            <div class="flex items-center justify-between border-b border-border px-4 py-3">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
                 <div class="flex items-center gap-2">
                     <Button variant="outline" size="icon" @click="goToPrevious">
                         <ChevronLeft class="h-4 w-4" />
@@ -1058,7 +1081,7 @@ onMounted(() => {
                 </div>
 
                 <span class="text-sm font-medium text-foreground">
-                    {{ currentView === 'week' ? formatWeekLabel(weekDays) : formatMonthLabel(currentMonth) }}
+                    {{ viewLabel }}
                 </span>
 
                 <!-- View Toggle -->
@@ -1066,20 +1089,29 @@ onMounted(() => {
                     <Button
                         variant="ghost"
                         size="sm"
+                        :class="currentView === 'day' ? 'bg-muted' : ''"
+                        @click="setView('day')"
+                    >
+                        <CalendarIcon class="mr-1.5 h-4 w-4" />
+                        Today
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
                         :class="currentView === 'week' ? 'bg-muted' : ''"
-                        @click="currentView = 'week'"
+                        @click="setView('week')"
                     >
                         <CalendarDays class="mr-1.5 h-4 w-4" />
-                        Week
+                        Weekly
                     </Button>
                     <Button
                         variant="ghost"
                         size="sm"
                         :class="currentView === 'month' ? 'bg-muted' : ''"
-                        @click="currentView = 'month'"
+                        @click="setView('month')"
                     >
                         <CalendarRange class="mr-1.5 h-4 w-4" />
-                        Month
+                        Monthly
                     </Button>
                 </div>
             </div>
@@ -1091,11 +1123,12 @@ onMounted(() => {
                     <Skeleton class="h-[500px] w-full" />
                 </div>
 
-                <!-- Weekly View -->
-                <div v-else-if="currentView === 'week'" class="overflow-x-auto">
-                    <div class="min-w-[700px]">
+                <!-- Today / Weekly diary grid -->
+                <div v-else-if="currentView === 'day' || currentView === 'week'" class="overflow-x-auto">
+                    <div :class="currentView === 'week' ? 'min-w-[700px]' : ''">
                         <WeeklyCalendarGrid
-                            :week-days="weekDays"
+                            :key="currentView"
+                            :week-days="gridDays"
                             :events="events"
                             @click-slot="handleSlotClick"
                             @event-click="handleEventClick"
