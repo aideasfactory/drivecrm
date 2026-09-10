@@ -48,7 +48,8 @@ class ResourceController extends Controller
      *
      * Same folders → children → resources structure as the student tree, but not scoped to
      * `audience = 'student'`: both audiences are returned by default (each resource keeps its
-     * `audience`), with an optional audience to narrow server-side. Empty folders are pruned.
+     * `audience`), with an optional audience to narrow server-side. Only folders visible to
+     * instructors are included. Empty folders are pruned.
      *
      * Query params:
      * - audience=student    → only student resources

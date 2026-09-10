@@ -21,6 +21,7 @@ class UpdateFolderRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
+            'visibility' => ['required', 'string', 'in:student,instructor,both'],
         ];
     }
 
@@ -31,6 +32,8 @@ class UpdateFolderRequest extends FormRequest
     {
         return [
             'name.required' => 'The folder name is required.',
+            'visibility.required' => 'Choose who can see this folder.',
+            'visibility.in' => 'Visibility must be student, instructor, or both.',
         ];
     }
 }

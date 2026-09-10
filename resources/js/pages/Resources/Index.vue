@@ -47,6 +47,7 @@ interface FolderItem {
     id: number;
     name: string;
     slug: string;
+    visibility?: 'student' | 'instructor' | 'both';
 }
 
 interface ResourceItem {

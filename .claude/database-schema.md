@@ -201,6 +201,7 @@ Note → Morphs to Instructor or Student
 Message → Belongs to User (sender via 'from') + Belongs to User (recipient via 'to')
 
 ResourceFolder → Self-referencing (parent/children) → Has many Resources
+                 visibility: student | instructor | both (default both)
 Resource → Belongs to ResourceFolder (videos, PDFs stored on S3)
        → Many-to-many with Lessons (via lesson_resource pivot)
 
@@ -964,12 +965,14 @@ Hierarchical folder structure for organising resources (videos, PDFs). Self-refe
 | `name` | varchar(255) | NOT NULL | Folder display name |
 | `slug` | varchar(255) | NOT NULL | URL-friendly name (auto-generated) |
 | `sort_order` | integer | DEFAULT 0 | Display ordering within parent |
+| `visibility` | varchar(20) | NOT NULL, DEFAULT 'both' | Who can see this folder in the mobile apps: `student`, `instructor`, or `both` |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
 **Indexes:**
 - Index on `parent_id`
 - Unique constraint on `(parent_id, slug)`
+- Index on `visibility`
 
 **Relationships:**
 - Belongs to one `ResourceFolder` as parent (optional — NULL = root)
@@ -981,6 +984,8 @@ Hierarchical folder structure for organising resources (videos, PDFs). Self-refe
 - Deleting a folder cascades to all sub-folders and resources within
 - Slug is auto-generated from name on create/update
 - Example hierarchy: `Roundabouts` → `Turning right at roundabout`, `Turning left at roundabout`
+- `visibility` is independent of `resources.audience`. A folder can be instructor-only even if it still contains student-audience files (those files will not appear in the pupil library tree). Existing folders default to `both`.
+- Student mobile endpoints only return folders with `visibility` in (`student`, `both`). Instructor tree endpoints only return folders with `visibility` in (`instructor`, `both`). The admin Resources screen always shows every folder.
 
 ---
 
@@ -1583,7 +1588,7 @@ No new tables and no schema changes — the feature reuses `lessons.instructor_i
 - **calendars:** Unique constraint on `(instructor_id, date)`
 - **calendar_items:** `recurrence_group_id`
 - **messages:** `from`, `to`
-- **resource_folders:** `parent_id`, unique on `(parent_id, slug)`
+- **resource_folders:** `parent_id`, `visibility`, unique on `(parent_id, slug)`
 - **resources:** `resource_folder_id`
 - **student_pickup_points:** `student_id`
 - **student_checklist_items:** `student_id`, unique on `(student_id, key)`

@@ -1,74 +1,93 @@
-# Task: Enquiry list CSV export with date filters
+# Task: Folder visibility control for instructors and pupils
+
+**Created:** 2026-09-10
+**Last Updated:** 2026-09-10
+**Status:** Complete
+
+---
 
 ## Overview
 
-Admin Enquiries list (`/enquiries`) has status and area filters but no
-date/month filter and no CSV export. Staff need to export the currently
-filtered enquiry list (by month/date range and the existing filter types).
+Pupils could see instructor-only folders (e.g. VTS, Standards Check Success)
+in the mobile library even when those folders contained no pupil resources.
+Admin can now set folder visibility (instructor / pupil / both). The mobile
+API hides folders the caller should not see and exposes `visibility` on
+folder objects.
 
-## Phase 1: Planning ✅
+### Success Criteria
+- [x] Admin can set folder visibility (instructor / pupil / both) on create and edit
+- [x] Student resource tree and related student library endpoints omit hidden folders
+- [x] Instructor resource tree omits folders hidden from instructors
+- [x] Folder `visibility` is exposed on API folder objects
+- [x] `.claude/api.md` and `.claude/database-schema.md` are updated
+- [x] No tests added (HARD RULE)
 
-### Current state
-- `GET /enquiries` (owner/admin, `RestrictInstructor`) lists paginated
-  enquiries via `EnquiryController` → `EnquiryService` →
-  `GetFilteredEnquiriesAction`.
-- Server filters: `status` (all/completed/full_onboarding/in_progress),
-  `area` (all/in_area/out_of_area/unknown).
-- Search was client-side on the current page only.
-- No date filter. No export. Reports already stream CSV with
-  `response()->streamDownload` + `fputcsv`.
+---
 
-### Approach
-1. Extend the shared filter query with `date_from` / `date_to` (created_at)
-   and server-side `q` search so list and export stay in sync.
-2. `GET /enquiries/export` streams a CSV of every matching row (not just
-   the current page), using the same filters.
-3. UI: month picker (sets month bounds) + from/to date inputs + Download
-   CSV button, matching the cancelled-lessons report pattern.
-4. CSV columns = table columns plus consent, instructor id, and tracking.
+## PHASE 1: PLANNING
+
+**Status:** ✅ Complete
 
 ### Tasks
-- [x] Trace enquiries list, filters, and existing CSV export patterns
-- [x] Choose UI placement and CSV columns (no new library)
+- [x] Trace folders, admin UI, and mobile resource APIs
+- [x] Choose storage (`visibility` enum) and API shape
+
+### Decisions Made
+- Single `visibility` column (`student` | `instructor` | `both`), default `both`.
+  API uses `student` (not `pupil`) to match existing resource `audience`.
+- Server-side filter AND include `visibility` on folder objects for the app.
+- Student tree also prunes empty folders after the audience filter.
 
 ### Reflection
-Reuse the reports CSV stream pattern and the existing Controller →
-Service → Action chain. No migration. Web admin only — not a mobile API.
+Reusing the resource audience button-group and the instructor-tree prune
+kept the change small. No mobile app work.
 
-**Last Updated:** 2026-09-08.
+**Last Updated:** 2026-09-10.
 
-## Phase 2: Implementation ✅
+---
+
+## PHASE 2: IMPLEMENTATION
+
+**Status:** ✅ Complete
 
 ### Currently working on
 Complete.
 
 ### Tasks
-- [x] FilterEnquiriesRequest + date/search on GetFilteredEnquiriesAction
-- [x] EnquiryService paginate vs export collection
-- [x] EnquiryController@exportCsv + named route
-- [x] Enquiries/Index.vue month + date pickers and Download CSV
-- [x] Wayfinder import via EnquiryController.exportCsv (generated at build)
+- [x] Migration + enum + model scopes
+- [x] Admin create/edit folder visibility + FolderCard badge
+- [x] Student and instructor trees filter + prune
+- [x] Student summary / my_resources / badges / published list respect folder visibility
+- [x] Invalidate cached folder trees on folder write
+- [x] Update api.md and database-schema.md
 
 ### Reflection
-Export is a GET with the same query string as the list. Month picker is a
-convenience that writes `date_from`/`date_to`; custom ranges still work.
-Search is now server-side so CSV matches the visible filter set, not the
-current page.
+Folder visibility is independent of per-resource `audience`. Existing
+folders stay `both` until staff toggle VTS / Standards Check Success to
+instructor-only.
 
-No database-schema.md update — no migration.
-No api.md update — web admin download, not a mobile API endpoint.
+I've updated database-schema.md to reflect the migration changes.
+I've updated api.md to reflect the new/changed endpoint.
 
-## Phase 3: Reflection ✅
+**Last Updated:** 2026-09-10.
 
-Staff can pick a month or a from/to range, keep status/area/search, and
-download every matching enquiry as CSV. Unfiltered export only happens
-when no filters are set.
+---
+
+## PHASE 3: REFLECTION
+
+**Status:** ✅ Complete
 
 ### Tasks
 - [x] Document decisions and leftover risks
 
 ### Reflection
-Leftover: this environment has no PHP binary, so Wayfinder was not
-generated here (Vite plugin will generate on `npm run dev` / build).
-Very large exports stream via cursor but may still hit web timeouts.
-JSON name search uses MySQL `JSON_EXTRACT` / `CONCAT_WS`.
+Leftover: staff must set instructor-only on existing folders after
+migrate — default `both` is conservative. Student tree now also prunes
+empty folders, so even untoggled instructor libraries disappear from
+pupils if they contain no student-audience files. App consumption is
+Sam's follow-up.
+
+No tests added, per HARD RULE. I understand I must not run tests or
+linting commands.
+
+**Last Updated:** 2026-09-10.

@@ -4,16 +4,23 @@ declare(strict_types=1);
 
 namespace App\Actions\Resource;
 
+use App\Enums\ResourceFolderVisibility;
 use App\Models\ResourceFolder;
 
 class UpdateFolderAction
 {
     /**
-     * Rename a resource folder.
+     * Update a resource folder's name and visibility.
      */
-    public function __invoke(ResourceFolder $folder, string $name): ResourceFolder
-    {
-        $folder->update(['name' => $name]);
+    public function __invoke(
+        ResourceFolder $folder,
+        string $name,
+        ResourceFolderVisibility $visibility
+    ): ResourceFolder {
+        $folder->update([
+            'name' => $name,
+            'visibility' => $visibility,
+        ]);
 
         return $folder->fresh();
     }

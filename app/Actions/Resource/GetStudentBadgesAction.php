@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Actions\Resource;
 
+use App\Enums\ResourceAudience;
+use App\Enums\ResourceFolderVisibility;
 use App\Models\HazardPerceptionAttempt;
 use App\Models\MockTest;
 use App\Models\Resource;
@@ -163,12 +165,17 @@ class GetStudentBadgesAction
             ->orderBy('hazard_perception_attempts.completed_at')
             ->value('hazard_perception_attempts.completed_at');
 
-        $publishedCount = Resource::published()->where('audience', 'student')->count();
+        $publishedCount = Resource::published()
+            ->where('audience', 'student')
+            ->inVisibleFolder(ResourceAudience::STUDENT)
+            ->count();
         $watchedCount = DB::table('resource_watches')
             ->join('resources', 'resources.id', '=', 'resource_watches.resource_id')
+            ->join('resource_folders', 'resource_folders.id', '=', 'resources.resource_folder_id')
             ->where('resource_watches.user_id', $user->id)
             ->where('resources.status', 'published')
             ->where('resources.audience', 'student')
+            ->whereIn('resource_folders.visibility', ResourceFolderVisibility::valuesVisibleTo(ResourceAudience::STUDENT))
             ->count();
 
         $allWatched = $publishedCount > 0 && $watchedCount >= $publishedCount;
@@ -176,9 +183,11 @@ class GetStudentBadgesAction
         if ($allWatched) {
             $allWatchedAt = DB::table('resource_watches')
                 ->join('resources', 'resources.id', '=', 'resource_watches.resource_id')
+                ->join('resource_folders', 'resource_folders.id', '=', 'resources.resource_folder_id')
                 ->where('resource_watches.user_id', $user->id)
                 ->where('resources.status', 'published')
                 ->where('resources.audience', 'student')
+                ->whereIn('resource_folders.visibility', ResourceFolderVisibility::valuesVisibleTo(ResourceAudience::STUDENT))
                 ->max('resource_watches.created_at');
             $allWatchedAt = $allWatchedAt ? Carbon::parse($allWatchedAt) : null;
         }

@@ -13,11 +13,15 @@ import {
 } from '@/components/ui/sheet';
 import { toast } from '@/components/ui/sonner';
 import { Pencil, Loader2, Save } from 'lucide-vue-next';
+import FolderVisibilityField, {
+    type FolderVisibility,
+} from '@/components/Resources/FolderVisibilityField.vue';
 
 interface FolderItem {
     id: number;
     name: string;
     slug: string;
+    visibility?: FolderVisibility;
 }
 
 const props = defineProps<{
@@ -32,13 +36,19 @@ const emit = defineEmits<{
 
 const isSubmitting = ref(false);
 const errors = ref<Record<string, string>>({});
-const form = ref({ name: '' });
+const form = ref<{ name: string; visibility: FolderVisibility }>({
+    name: '',
+    visibility: 'both',
+});
 
 watch(
     () => props.open,
     (val) => {
         if (val && props.folder) {
-            form.value = { name: props.folder.name };
+            form.value = {
+                name: props.folder.name,
+                visibility: props.folder.visibility ?? 'both',
+            };
             errors.value = {};
         }
     },
@@ -53,8 +63,9 @@ const handleSubmit = async () => {
     try {
         await axios.put(`/resources/folders/${props.folder.id}`, {
             name: form.value.name,
+            visibility: form.value.visibility,
         });
-        toast.success('Folder renamed successfully');
+        toast.success('Folder updated successfully');
         emit('update:open', false);
         emit('updated');
     } catch (error: any) {
@@ -66,7 +77,7 @@ const handleSubmit = async () => {
             );
         } else {
             toast.error(
-                error.response?.data?.message || 'Failed to rename folder',
+                error.response?.data?.message || 'Failed to update folder',
             );
         }
     } finally {
@@ -84,10 +95,10 @@ const handleSubmit = async () => {
             <SheetHeader>
                 <SheetTitle class="flex items-center gap-2">
                     <Pencil class="h-5 w-5" />
-                    Rename Folder
+                    Edit Folder
                 </SheetTitle>
                 <SheetDescription>
-                    Update the name of this folder.
+                    Update the name and who can see this folder.
                 </SheetDescription>
             </SheetHeader>
 
@@ -110,6 +121,12 @@ const handleSubmit = async () => {
                         {{ errors.name }}
                     </p>
                 </div>
+
+                <FolderVisibilityField
+                    v-model="form.visibility"
+                    :disabled="isSubmitting"
+                    :error="errors.visibility"
+                />
 
                 <div class="flex justify-end gap-2 pt-4">
                     <Button

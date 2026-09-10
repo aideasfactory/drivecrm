@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Actions\Resource;
 
+use App\Enums\ResourceAudience;
+use App\Enums\ResourceFolderVisibility;
 use App\Models\HazardPerceptionAttempt;
 use App\Models\MockTest;
 use App\Models\Resource;
@@ -66,9 +68,11 @@ class GetResourceSummaryAction
     {
         return DB::table('resource_watches')
             ->join('resources', 'resources.id', '=', 'resource_watches.resource_id')
+            ->join('resource_folders', 'resource_folders.id', '=', 'resources.resource_folder_id')
             ->where('resource_watches.user_id', $user->id)
             ->where('resources.status', 'published')
             ->where('resources.audience', 'student')
+            ->whereIn('resource_folders.visibility', ResourceFolderVisibility::valuesVisibleTo(ResourceAudience::STUDENT))
             ->select([
                 'resources.id',
                 'resources.title',
@@ -94,6 +98,7 @@ class GetResourceSummaryAction
         $resourceCounts = Resource::query()
             ->published()
             ->where('audience', 'student')
+            ->inVisibleFolder(ResourceAudience::STUDENT)
             ->selectRaw("
                 SUM(CASE WHEN resource_type = 'video_link' THEN 1 ELSE 0 END) as total_videos,
                 SUM(CASE WHEN resource_type = 'file' THEN 1 ELSE 0 END) as total_files
@@ -102,9 +107,11 @@ class GetResourceSummaryAction
 
         $watchCounts = DB::table('resource_watches')
             ->join('resources', 'resources.id', '=', 'resource_watches.resource_id')
+            ->join('resource_folders', 'resource_folders.id', '=', 'resources.resource_folder_id')
             ->where('resource_watches.user_id', $user->id)
             ->where('resources.status', 'published')
             ->where('resources.audience', 'student')
+            ->whereIn('resource_folders.visibility', ResourceFolderVisibility::valuesVisibleTo(ResourceAudience::STUDENT))
             ->select(DB::raw("
                 SUM(CASE WHEN resources.resource_type = 'video_link' THEN 1 ELSE 0 END) as videos_watched,
                 SUM(CASE WHEN resources.resource_type = 'file' THEN 1 ELSE 0 END) as files_opened
@@ -212,8 +219,10 @@ class GetResourceSummaryAction
         // Get all top-level folders with their resources and children's resources
         $folders = ResourceFolder::query()
             ->whereNull('parent_id')
+            ->visibleTo(ResourceAudience::STUDENT)
             ->with([
                 'resources' => fn ($q) => $q->published()->where('audience', 'student'),
+                'children' => fn ($q) => $q->visibleTo(ResourceAudience::STUDENT),
                 'children.resources' => fn ($q) => $q->published()->where('audience', 'student'),
             ])
             ->orderBy('sort_order')
@@ -268,6 +277,7 @@ class GetResourceSummaryAction
             ->where('orders.student_id', $student->id)
             ->where('resources.status', 'published')
             ->where('resources.audience', 'student')
+            ->whereIn('resource_folders.visibility', ResourceFolderVisibility::valuesVisibleTo(ResourceAudience::STUDENT))
             ->select([
                 'resources.id',
                 'resources.title',

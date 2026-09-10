@@ -17,7 +17,7 @@ class GetPublishedResourcesAction
     {
         return Resource::query()
             ->published()
-            ->when($audience, fn ($q, $a) => $q->where('audience', $a))
+            ->when($audience, fn ($q, $a) => $q->where('audience', $a)->inVisibleFolder($a))
             ->orderBy('title')
             ->get();
     }

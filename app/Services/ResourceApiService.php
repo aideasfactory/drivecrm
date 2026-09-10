@@ -13,6 +13,7 @@ use App\Actions\Resource\GetUserWatchedResourceIdsAction;
 use App\Actions\Resource\MarkResourceWatchedAction;
 use App\Actions\Student\Lesson\AssignResourcesToLessonAction;
 use App\Enums\ResourceAudience;
+use App\Enums\ResourceFolderVisibility;
 use App\Models\Lesson;
 use App\Models\Resource;
 use App\Models\ResourceFolder;
@@ -117,6 +118,7 @@ class ResourceApiService extends BaseService
                 ->where('orders.student_id', $student->id)
                 ->where('resources.status', 'published')
                 ->where('resources.audience', 'student')
+                ->whereIn('resource_folders.visibility', ResourceFolderVisibility::valuesVisibleTo(ResourceAudience::STUDENT))
                 ->select([
                     'resources.id as resource_id',
                     'resources.title as resource_title',
@@ -145,13 +147,34 @@ class ResourceApiService extends BaseService
 
     /**
      * Get a single published resource by ID, optionally scoped to an audience.
+     *
+     * When an audience is supplied, the parent folder must also be visible to
+     * that audience — otherwise the resource 404s (same as an unpublished file).
      */
     public function getPublishedResource(int $resourceId, ?ResourceAudience $audience = null): Resource
     {
         return Resource::query()
             ->published()
-            ->when($audience, fn ($q, $a) => $q->where('audience', $a))
+            ->when($audience, fn ($q, $a) => $q->where('audience', $a)->inVisibleFolder($a))
             ->findOrFail($resourceId);
+    }
+
+    /**
+     * Drop cached published-resource lists and folder trees.
+     */
+    public function invalidateLibraryCache(): void
+    {
+        $this->invalidate([
+            'resources:published',
+            'resources:published:'.ResourceAudience::STUDENT->value,
+            'resources:published:'.ResourceAudience::INSTRUCTOR->value,
+            'resources:folder_tree',
+            'resources:folder_tree:'.ResourceAudience::STUDENT->value,
+            'resources:folder_tree:'.ResourceAudience::INSTRUCTOR->value,
+            'resources:instructor_folder_tree',
+            'resources:instructor_folder_tree:'.ResourceAudience::STUDENT->value,
+            'resources:instructor_folder_tree:'.ResourceAudience::INSTRUCTOR->value,
+        ]);
     }
 
     /**
@@ -190,6 +213,7 @@ class ResourceApiService extends BaseService
             ->leftJoin('resource_folders', 'resource_folders.id', '=', 'resources.resource_folder_id')
             ->where('resources.status', 'published')
             ->where('resources.audience', 'student')
+            ->whereIn('resource_folders.visibility', ResourceFolderVisibility::valuesVisibleTo(ResourceAudience::STUDENT))
             ->select([
                 'resources.id as resource_id',
                 'resources.title as resource_title',

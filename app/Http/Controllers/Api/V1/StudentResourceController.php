@@ -35,9 +35,10 @@ class StudentResourceController extends Controller
     /**
      * Get the full resource library for the student.
      *
-     * Returns the folder tree with all published resources (each annotated with
-     * is_suggested and is_watched flags) plus a flat "my_resources" array of
-     * resources suggested to this student via lesson sign-offs.
+     * Returns the pupil-visible folder tree with published student resources
+     * (each annotated with is_suggested and is_watched flags) plus a flat
+     * "my_resources" array of resources suggested to this student via lesson
+     * sign-offs. Instructor-only folders are omitted; empty folders are pruned.
      */
     public function index(Request $request): JsonResponse
     {

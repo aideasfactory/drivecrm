@@ -33,6 +33,7 @@ class ResourceFolderTreeResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'slug' => $this->slug,
+            'visibility' => $this->visibility?->value,
             'children' => static::collection($this->whenLoaded('children')),
             'resources' => StudentResourceResource::collection($this->whenLoaded('resources')),
         ];
