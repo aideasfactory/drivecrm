@@ -1238,11 +1238,14 @@ class InstructorController extends Controller
 
     /**
      * Download the instructor CSV import template.
+     *
+     * Coverage is a single optional column of comma-separated postcode
+     * sectors (same format as locations.postcode_sector, e.g. TS7, NE12).
      */
     public function downloadCsvTemplate(): StreamedResponse
     {
-        $headers = ['name', 'email', 'transmission_type', 'phone', 'bio', 'status', 'pdi_status', 'address', 'postcode'];
-        $exampleRow = ['John Smith', 'john@example.com', 'manual', '07700900000', 'Experienced instructor', 'active', '', '123 High Street', 'SW1A 1AA'];
+        $headers = ['name', 'email', 'transmission_type', 'phone', 'bio', 'status', 'pdi_status', 'address', 'postcode', 'coverage'];
+        $exampleRow = ['John Smith', 'john@example.com', 'manual', '07700900000', 'Experienced instructor', 'active', '', '123 High Street', 'SW1A 1AA', 'TS7, TS8, NE12'];
 
         return response()->streamDownload(function () use ($headers, $exampleRow) {
             $handle = fopen('php://output', 'w');

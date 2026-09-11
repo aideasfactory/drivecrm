@@ -213,7 +213,7 @@ const breadcrumbs = [{ title: 'Instructors' }]
         <CsvImportSheet
             v-model:open="isCsvImportOpen"
             title="Import Instructors from CSV"
-            description="Upload a CSV file to bulk-create instructor records. Download the template first to see the required format."
+            description="Upload a CSV file to bulk-create instructor records and their coverage areas in one go. Download the template first — the coverage column is a comma-separated list of postcode sectors (e.g. TS7, TS8, NE12)."
             import-url="/instructors/import-csv"
             @imported="handleCsvImported"
         />
