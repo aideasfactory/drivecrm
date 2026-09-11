@@ -23,7 +23,8 @@ class SendInstructorWelcomeEmailAction
      *
      * Flow:
      * 1. Mark the user's `welcome_email_pending` flag so admins can see if it never sends.
-     * 2. Mint a password-broker reset token (Laravel's standard, time-limited token).
+     * 2. Mint (or reuse) a password-broker reset token. Repeat sends share the
+     *    same outstanding token so earlier unused setup links stay valid.
      * 3. Queue the welcome email with a link to the standard password.reset page.
      * 4. On success, clear the pending flag and log activity on the instructor.
      * 5. On failure, leave the pending flag set, log the error, and return false —
@@ -53,7 +54,7 @@ class SendInstructorWelcomeEmailAction
                 'email' => $user->email,
             ]);
 
-            $expiresInMinutes = (int) config('auth.passwords.users.expire', 60);
+            $expiresInMinutes = (int) config('auth.passwords.users.expire', 1440);
 
             Mail::to($user->email)->queue(new InstructorWelcomeMail(
                 user: $user,

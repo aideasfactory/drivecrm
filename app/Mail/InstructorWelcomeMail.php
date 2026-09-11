@@ -51,6 +51,8 @@ class InstructorWelcomeMail extends Mailable
                 'email' => $this->user->email,
                 'setup_url' => $this->setupUrl,
                 'expires_in_minutes' => $this->expiresInMinutes,
+                'expires_in' => $this->formatExpiry(),
+                'link_validity' => $this->linkValidityMessage(),
                 'login_url' => url('/login'),
             ],
             $this->setupUrl,
@@ -66,5 +68,40 @@ class InstructorWelcomeMail extends Mailable
         }
 
         return explode(' ', $name)[0];
+    }
+
+    /**
+     * Human-readable idle window for the shared password-reset token.
+     */
+    private function formatExpiry(): string
+    {
+        $minutes = $this->expiresInMinutes;
+
+        if ($minutes <= 0) {
+            return 'until you set your password';
+        }
+
+        if ($minutes % 1440 === 0) {
+            $days = intdiv($minutes, 1440);
+
+            return $days === 1 ? '24 hours' : $days.' days';
+        }
+
+        if ($minutes % 60 === 0) {
+            $hours = intdiv($minutes, 60);
+
+            return $hours === 1 ? '1 hour' : $hours.' hours';
+        }
+
+        return $minutes === 1 ? '1 minute' : $minutes.' minutes';
+    }
+
+    private function linkValidityMessage(): string
+    {
+        if ($this->expiresInMinutes <= 0) {
+            return 'This setup link remains valid until you set your password.';
+        }
+
+        return 'For your security, this setup link remains valid for '.$this->formatExpiry().'.';
     }
 }

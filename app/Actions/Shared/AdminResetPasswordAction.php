@@ -7,6 +7,7 @@ namespace App\Actions\Shared;
 use App\Mail\PupilPasswordResetMail;
 use App\Models\User;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Password;
 
 class AdminResetPasswordAction
 {
@@ -20,6 +21,8 @@ class AdminResetPasswordAction
             'password' => $password,
             'password_change_required' => true,
         ]);
+
+        Password::broker()->deleteToken($user);
 
         (new LogActivityAction)(
             $user->instructor ?? $user->student,

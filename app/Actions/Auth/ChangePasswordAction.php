@@ -6,6 +6,7 @@ namespace App\Actions\Auth;
 
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
 
 class ChangePasswordAction
@@ -27,5 +28,7 @@ class ChangePasswordAction
             'password' => $newPassword,
             'password_change_required' => false,
         ]);
+
+        Password::broker()->deleteToken($user);
     }
 }

@@ -86,6 +86,15 @@ return [
     | considered valid. This security feature keeps tokens short-lived so
     | they have less time to be guessed. You may change this as needed.
     |
+    | Drive CRM uses a custom DatabaseTokenRepository that resends the same
+    | outstanding token instead of minting a new hash on every request (the
+    | Laravel default invalidates earlier unused emails). Set expire to 0 to
+    | keep an unused token valid until the password is actually changed —
+    | that conflicts with Laravel's short-lived-token default and leaves a
+    | stolen mailbox link usable indefinitely, so the application default
+    | is 24 hours. Requesting reset again refreshes that idle window and
+    | resends the same token. Throttle still applies to email sends.
+    |
     | The throttle setting is the number of seconds a user must wait before
     | generating more password reset tokens. This prevents the user from
     | quickly generating a very large amount of password reset tokens.
@@ -96,8 +105,8 @@ return [
         'users' => [
             'provider' => 'users',
             'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
-            'expire' => 60,
-            'throttle' => 60,
+            'expire' => (int) env('AUTH_PASSWORD_RESET_EXPIRE', 1440),
+            'throttle' => (int) env('AUTH_PASSWORD_RESET_THROTTLE', 60),
         ],
     ],
 
