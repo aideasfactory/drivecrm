@@ -781,6 +781,7 @@ Links instructors to postcode sectors they cover.
 **Business Logic:**
 - An instructor can have multiple location records
 - Postcode sector format: area + district, e.g., "TS7", "NE12"
+- Admin bulk instructor CSV import (`POST /instructors/import-csv`) can set coverage in the same upload via an optional `coverage` column: comma-separated postcode sectors matching this format (aliases: `coverage_areas`, `postcode_sectors`, `postcode_sector`). Invalid sectors are skipped with a per-row warning; the instructor row is still created. Per-instructor coverage CSV (`POST /instructors/{id}/locations-import`) still uses one `postcode_sector` per row and replaces existing areas.
 
 ---
 

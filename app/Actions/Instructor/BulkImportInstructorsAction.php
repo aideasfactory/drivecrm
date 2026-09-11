@@ -20,9 +20,22 @@ use Illuminate\Validation\Rule;
 
 class BulkImportInstructorsAction
 {
+    /**
+     * Optional CSV headers that may carry comma-separated coverage sectors.
+     *
+     * @var list<string>
+     */
+    private const COVERAGE_COLUMN_ALIASES = [
+        'coverage',
+        'coverage_areas',
+        'postcode_sectors',
+        'postcode_sector',
+    ];
+
     public function __construct(
         protected FetchPostcodeCoordinatesAction $fetchPostcodeCoordinates,
         protected SendInstructorWelcomeEmailAction $sendInstructorWelcomeEmail,
+        protected ReplaceInstructorLocationsAction $replaceInstructorLocations,
     ) {}
 
     /**
@@ -42,6 +55,7 @@ class BulkImportInstructorsAction
 
             // Normalize keys to lowercase/trimmed
             $row = array_change_key_case(array_map('trim', $row), CASE_LOWER);
+            $row['coverage'] = $this->coverageFromRow($row);
 
             // Validate the row
             $validator = Validator::make($row, [
@@ -54,6 +68,7 @@ class BulkImportInstructorsAction
                 'pdi_status' => ['nullable', Rule::in(PdiStatus::values())],
                 'address' => ['nullable', 'string'],
                 'postcode' => ['nullable', 'string', 'max:10'],
+                'coverage' => ['nullable', 'string'],
             ], [
                 'name.required' => 'Name is required.',
                 'email.required' => 'Email is required.',
@@ -137,8 +152,18 @@ class BulkImportInstructorsAction
                     ],
                 ]);
 
+                $coverageErrors = $this->importCoverage($instructor, $validated['coverage'] ?? '');
+
                 DB::commit();
                 $imported++;
+
+                foreach ($coverageErrors as $message) {
+                    $errors[] = [
+                        'row' => $rowNumber,
+                        'field' => 'coverage',
+                        'message' => $message,
+                    ];
+                }
 
                 // Dispatch welcome email after commit. On send failure the action
                 // leaves welcome_email_pending = true and we surface a per-row
@@ -174,5 +199,53 @@ class BulkImportInstructorsAction
             'skipped' => $skipped,
             'errors' => $errors,
         ];
+    }
+
+    /**
+     * Read coverage from the template column or accepted aliases.
+     *
+     * @param  array<string, string>  $row
+     */
+    private function coverageFromRow(array $row): string
+    {
+        foreach (self::COVERAGE_COLUMN_ALIASES as $key) {
+            if (! empty($row[$key])) {
+                return $row[$key];
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Persist comma-separated postcode sectors onto a newly created instructor.
+     * Invalid or duplicate sectors are reported; valid ones are still saved.
+     *
+     * @return list<string>
+     */
+    private function importCoverage(Instructor $instructor, string $coverage): array
+    {
+        if ($coverage === '') {
+            return [];
+        }
+
+        $sectorRows = [];
+
+        foreach (preg_split('/[,;|]+/', $coverage) ?: [] as $token) {
+            if (trim($token) !== '') {
+                $sectorRows[] = ['postcode_sector' => trim($token)];
+            }
+        }
+
+        if ($sectorRows === []) {
+            return [];
+        }
+
+        $result = ($this->replaceInstructorLocations)($instructor, $sectorRows);
+
+        return array_values(array_map(
+            static fn (array $error): string => $error['message'],
+            $result['errors'],
+        ));
     }
 }
