@@ -724,13 +724,24 @@ Logs Stripe webhook events for debugging and idempotency.
 
 ### 11. **password_reset_tokens**
 
-Laravel's password reset token storage.
+Laravel's password reset token storage. Drive CRM uses a custom
+`ReusableDatabaseTokenRepository` so requesting reset again **resends
+the same outstanding token** instead of replacing the hash (which made
+earlier unused emails fail with an invalid-token error). One row per
+email. The row is deleted when the password is successfully changed
+(Fortify reset, admin reset, settings/API change, student re-invite).
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `email` | varchar(255) | PRIMARY KEY | User's email |
-| `token` | varchar(255) | NOT NULL | Reset token |
-| `created_at` | timestamp | NULLABLE | Token creation time |
+| `token` | varchar(255) | NOT NULL | Bcrypt hash of the reset token (Laravel `exists()` check) |
+| `encrypted_token` | text | NULLABLE | APP_KEY-encrypted plaintext so the same token can be resent. Null on rows minted before this column existed — the next request issues a new token. |
+| `created_at` | timestamp | NULLABLE | Token issue / last-resend time. Idle expiry is `auth.passwords.users.expire` minutes (default 1440 / 24 hours). `0` means never expire while unused. |
+
+**Business Logic:**
+- Instructor welcome / password-setup emails mint a token via `Password::broker()->createToken()` and share this row. Resending welcome reuses the same link.
+- Student app invites use a temporary password, not this table.
+- Throttle (`auth.passwords.users.throttle`, default 60 seconds) still applies to `/forgot-password` email sends.
 
 ---
 
@@ -1545,6 +1556,18 @@ Moves a student from one instructor to another. No money is moved at transfer ti
    - `CreateLessonPayoutAction` reads `$lesson->instructor` at the moment of sign-off → the source instructor cannot draw down on a lesson now owned by the destination.
 
 No new tables and no schema changes — the feature reuses `lessons.instructor_id`, `students.instructor_id`, and `activity_logs`.
+
+### 7. Password Reset / Instructor Setup Link
+
+Fortify forgot-password and instructor welcome emails share Laravel's `users` password broker and the `password_reset_tokens` table.
+
+1. First request (forgot-password or instructor welcome) mints a HMAC token, stores the bcrypt hash plus an APP_KEY-encrypted copy, and emails `password.reset`.
+2. Later requests **resend the same token** (custom `ReusableDatabaseTokenRepository`) and refresh `created_at`. Earlier unused emails keep working.
+3. `/forgot-password` is still throttled (`auth.passwords.users.throttle`, default 60 seconds).
+4. Unused tokens expire after `auth.passwords.users.expire` minutes (default 1440 / 24 hours). `0` means never expire while unused — a mailbox-compromise trade-off vs Laravel's short-lived default.
+5. The row is deleted when the password is actually changed: Fortify reset, admin reset, settings/API change, or student re-invite (new temporary password).
+
+Student app invites do **not** use this table — they issue a temporary password.
 
 ---
 

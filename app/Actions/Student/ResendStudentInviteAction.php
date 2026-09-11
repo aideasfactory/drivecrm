@@ -8,6 +8,7 @@ use App\Actions\Shared\LogActivityAction;
 use App\Models\Student;
 use App\Notifications\WelcomeStudentNotification;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 
 class ResendStudentInviteAction
@@ -43,6 +44,8 @@ class ResendStudentInviteAction
             'password' => Hash::make($temporaryPassword),
             'password_change_required' => true,
         ]);
+
+        Password::broker()->deleteToken($user);
 
         $user->notify(new WelcomeStudentNotification($temporaryPassword, $instructor));
 
