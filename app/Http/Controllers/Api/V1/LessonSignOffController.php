@@ -26,10 +26,11 @@ class LessonSignOffController extends Controller
     /**
      * Sign off a lesson as completed.
      *
-     * Persists the summary and reflective log immediately, marks the lesson
-     * completed in the same request, and returns the refreshed lesson so the
-     * client can clear Needs Sign Off. Stripe payout, emails, and AI
-     * recommendations stay on the background job.
+     * Mirrors admin CRM: a lesson summary is required; the four-prompt
+     * reflective log is not part of this flow. The summary is persisted and
+     * the lesson is marked completed in this request so the client can clear
+     * Needs Sign Off. Stripe payout, emails, and AI recommendations stay on
+     * the background job (same job as admin).
      */
     public function store(SignOffLessonRequest $request, Student $student, int $lessonId): JsonResponse
     {
@@ -38,7 +39,7 @@ class LessonSignOffController extends Controller
         $lesson = Lesson::query()
             ->whereHas('order', fn ($q) => $q->where('student_id', $student->id))
             ->whereNotIn('status', [LessonStatus::CANCELLED])
-            ->with(['order', 'lessonPayment', 'reflectiveLog', 'instructor'])
+            ->with(['order', 'lessonPayment', 'instructor'])
             ->findOrFail($lessonId);
 
         if ($lesson->isDraft()) {
@@ -59,25 +60,9 @@ class LessonSignOffController extends Controller
             return response()->json(['message' => 'No instructor assigned to this lesson.'], 422);
         }
 
-        $validated = $request->validated();
+        $summary = $request->validated('summary');
 
-        $this->lessonSignOffService->saveLessonSummary($lesson, $validated['summary']);
-
-        if (isset($validated['reflective_log'])) {
-            $this->lessonSignOffService->saveReflectiveLog($lesson, $validated['reflective_log']);
-            $lesson->unsetRelation('reflectiveLog');
-        }
-
-        $lesson->load('reflectiveLog');
-
-        if (! $lesson->hasCompleteReflectiveLog()) {
-            return response()->json([
-                'message' => 'Reflective log must be completed before sign-off.',
-                'errors' => [
-                    'reflective_log' => ['Reflective log must be completed before sign-off.'],
-                ],
-            ], 422);
-        }
+        $this->lessonSignOffService->saveLessonSummary($lesson, $summary);
 
         try {
             $this->lessonSignOffService->completeLesson($lesson);
@@ -87,7 +72,7 @@ class LessonSignOffController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        ProcessLessonSignOffJob::dispatch($lesson->fresh(), $instructor, $validated['summary']);
+        ProcessLessonSignOffJob::dispatch($lesson->fresh(), $instructor, $summary);
 
         $lesson = $this->lessonSignOffService->getLessonDetail($student, $lesson->id);
 

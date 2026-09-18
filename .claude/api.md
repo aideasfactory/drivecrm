@@ -1261,7 +1261,7 @@ Returns the authenticated instructor's lessons for a specific date, ordered by s
 | `payout_status` | string\|null | Instructor payout status: `pending`, `paid`, `failed`, or null |
 | `has_payout` | boolean | Whether a payout has been created for this lesson |
 | `calendar_item` | object\|null | Calendar item data (see Calendar Item Object below) |
-| `has_reflective_log` | boolean | Whether a **complete** reflective log exists (what I learned, what went well, and what to improve are all filled) |
+| `has_reflective_log` | boolean | Leftover four-prompt log present and complete. **Do not** gate sign-off on this — use `status` / `card_status` / `summary` |
 | `resources_count` | integer | Number of resources attached to this lesson |
 
 **Nested Student Object Fields:**
@@ -4163,7 +4163,7 @@ Returns lessons for a given student across all their orders. Supports optional f
 | `status` | string | Lesson status: `pending`, `completed`, or `draft` (drafts only returned when `include_drafts=true`). **Cancelled lessons are never returned by this endpoint.** |
 | `completed_at` | string\|null | ISO 8601 timestamp when lesson was completed |
 | `card_status` | string | Computed UI card status (see Card Status Logic below) |
-| `has_reflective_log` | boolean | Whether a **complete** reflective log exists (what I learned, what went well, and what to improve are all filled) |
+| `has_reflective_log` | boolean | Leftover four-prompt log present and complete. **Do not** gate sign-off on this — use `status` / `card_status` / `summary` |
 | `resources_count` | integer | Number of resources attached to this lesson |
 | `payment_status` | string\|null | Payment status: `paid`, `due`, `refunded`, or null |
 
@@ -4172,7 +4172,7 @@ Returns lessons for a given student across all their orders. Supports optional f
 | Value | Color | Condition |
 |-------|-------|-----------|
 | `signed_off` | Green | Past lesson that has been completed/signed off |
-| `needs_sign_off` | Red | Past lesson not yet signed off (`completed_at` is null). Independently, `has_reflective_log` is false until the three reflection prompts are saved. |
+| `needs_sign_off` | Red | Past lesson not yet signed off (`completed_at` is null). **Do not** gate this on `has_reflective_log` — that four-prompt log is leftover and is not part of sign-off. |
 | `current` | Orange | The next lesson (today or future) — the one to sign off next |
 | `upcoming` | Blue | Future lessons beyond the next one |
 | `draft` | Grey | Upfront booking awaiting payment. Only returned when `include_drafts=true`. Draft lessons never consume the `current` slot — the "next lesson to sign off" is still the next non-draft lesson. |
@@ -4270,7 +4270,7 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 | `has_payout` | boolean | Whether a payout has been created for this lesson |
 | `calendar_date` | string\|null | Calendar date for the lesson slot (YYYY-MM-DD) |
 | `card_status` | string | Computed UI card status: `signed_off`, `needs_sign_off`, `current`, `upcoming`, `draft`. Draft lessons never consume the `current` slot |
-| `has_reflective_log` | boolean | Whether a **complete** reflective log exists (what I learned, what went well, and what to improve are all filled) |
+| `has_reflective_log` | boolean | Leftover four-prompt log present and complete. **Do not** gate sign-off on this — use `status` / `card_status` / `summary` |
 | `reflective_log` | object\|null | The reflective log data (see below) |
 | `resources` | array | List of resources attached to this lesson (see below) |
 
@@ -4307,81 +4307,15 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 
 #### `PUT /api/v1/students/{student}/lessons/{lesson}/reflective-log`
 
+> **Leftover — do not use for sign-off.** The four-prompt reflective log (`what_i_learned` / `what_went_well` / `what_to_improve` / `additional_notes`) is earlier work. Instructors should **not** be asked to fill it. Sign-off mirrors admin CRM: a single **lesson summary** only. This upsert remains so an old app build does not 404 if it still calls it. `has_reflective_log` must **not** gate Complete Sign Off or Needs Sign Off.
+
 **Auth required:** Yes (Bearer token — instructor only)
 
-**Also accepted:** `POST` on the same path, and `PUT`/`POST` `/api/v1/students/{student}/lessons/{lesson}/reflective-logs` (plural alias). All four routes upsert the same one-to-one log.
+**Also accepted:** `POST` on the same path, and `PUT`/`POST` `.../reflective-logs`.
 
-Save or replace the reflective log for a lesson. The three prompts must be non-empty. Persistence is **synchronous** — a `200` means the log is stored and `has_reflective_log` is `true` on the returned lesson. Use this before sign-off so the app can clear "Reflective log not completed".
+**Request Body:** `{ "what_i_learned", "what_went_well", "what_to_improve", "additional_notes?" }` (all strings, first three required if this leftover endpoint is called).
 
-Draft and cancelled lessons return `404`. Only the student's assigned instructor can write the log.
-
-**URL Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `student` | integer | The student record ID |
-| `lesson` | integer | The lesson record ID |
-
-**Request Body:**
-```json
-{
-  "what_i_learned": "How to parallel park between two cars",
-  "what_went_well": "Managed to park first time in a tight space",
-  "what_to_improve": "Need to check mirrors more frequently",
-  "additional_notes": null
-}
-```
-
-A nested `reflective_log` object is also accepted, as are camelCase aliases (`whatILearned`, `whatWentWell`, `whatToImprove`, `additionalNotes`).
-
-| Field | Type | Required | Notes |
-|-------|------|----------|-------|
-| `what_i_learned` | string | Yes | What the student learned (max 5000 characters) |
-| `what_went_well` | string | Yes | What went well (max 5000 characters) |
-| `what_to_improve` | string | Yes | Areas to improve (max 5000 characters) |
-| `additional_notes` | string\|null | No | Optional extra notes (max 5000 characters) |
-
-**Success Response:** `200 OK`
-```json
-{
-  "message": "Reflective log saved.",
-  "data": {
-    "id": 2,
-    "status": "pending",
-    "card_status": "needs_sign_off",
-    "has_reflective_log": true,
-    "reflective_log": {
-      "id": 1,
-      "what_i_learned": "How to parallel park between two cars",
-      "what_went_well": "Managed to park first time in a tight space",
-      "what_to_improve": "Need to check mirrors more frequently",
-      "additional_notes": null,
-      "created_at": "2026-09-18T15:10:00.000000Z"
-    }
-  }
-}
-```
-
-`data` is the same lesson-detail object as `GET /students/{student}/lessons/{lesson}`. The lesson is **not** signed off by this call — only the log is saved.
-
-**Error Response (not authorised):** `403 Forbidden`
-```json
-{
-  "message": "This action is unauthorized."
-}
-```
-
-**Error Response (validation):** `422 Unprocessable Entity`
-```json
-{
-  "message": "Please complete what was learned before saving the reflective log.",
-  "errors": {
-    "what_i_learned": [
-      "Please complete what was learned before saving the reflective log."
-    ]
-  }
-}
-```
+**Success:** `200` `{ "message": "Reflective log saved.", "data": <lesson detail> }`. Does **not** sign the lesson off.
 
 ---
 
@@ -4389,11 +4323,9 @@ A nested `reflective_log` object is also accepted, as are camelCase aliases (`wh
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Sign off a lesson as completed. The **summary and reflective log are persisted in this request**, and the lesson is marked `completed` before the response is returned. Stripe payout, activity logs, feedback email, weekly invoice, and AI recommendations still run on the background job.
+Sign off a lesson as completed. **Mirrors admin CRM:** the only write-up is `summary`. The four-prompt reflective log is **not** required and is ignored if sent. The summary is persisted and the lesson is marked `completed` before the response returns. Stripe payout, activity logs, feedback email, weekly invoice, and AI resource recommendations (from the summary) still run on the same background job as admin.
 
-A complete reflective log is required: send it on this request **or** save it first via `PUT .../reflective-log`. Without one, the API returns `422` (it does not queue a silent failure).
-
-Unpaid weekly lessons / unpaid upfront orders return `422`. Draft lessons return `422`. Already-completed lessons return `422` (not 404). Stripe Connect onboarding does **not** block completion — if payouts are not yet enabled, the lesson still signs off and the payout retries in the background.
+Unpaid weekly lessons / unpaid upfront orders return `422`. Draft lessons return `422`. Already-completed lessons return `422` (not 404). Stripe Connect onboarding does **not** block completion.
 
 **URL Parameters:**
 
@@ -4405,26 +4337,13 @@ Unpaid weekly lessons / unpaid upfront orders return `422`. Draft lessons return
 **Request Body:**
 ```json
 {
-  "summary": "Good progress today. Practiced roundabouts and dual carriageway driving.",
-  "reflective_log": {
-    "what_i_learned": "How to parallel park between two cars",
-    "what_went_well": "Managed to park first time in a tight space",
-    "what_to_improve": "Need to check mirrors more frequently",
-    "additional_notes": null
-  }
+  "summary": "Good progress today. Practiced roundabouts and dual carriageway driving."
 }
 ```
 
-Flattened prompt fields on the root object (`what_i_learned`, …) and camelCase aliases are also accepted.
-
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
-| `summary` | string | Yes | Lesson summary/completion notes (max 5000 characters) |
-| `reflective_log` | object | No* | Required unless a complete log is already stored for this lesson |
-| `reflective_log.what_i_learned` | string | If object sent | What the student learned (max 5000) |
-| `reflective_log.what_went_well` | string | If object sent | What went well (max 5000) |
-| `reflective_log.what_to_improve` | string | If object sent | Areas to improve (max 5000) |
-| `reflective_log.additional_notes` | string\|null | No | Optional extra notes (max 5000) |
+| `summary` | string | Yes | Lesson summary / what was covered (max 5000 characters). Used by AI to recommend learning resources — same field as admin Sign Off Lesson. |
 
 **Success Response:** `200 OK`
 ```json
@@ -4436,20 +4355,12 @@ Flattened prompt fields on the root object (`what_i_learned`, …) and camelCase
     "completed_at": "2026-09-18T15:12:00.000000Z",
     "card_status": "signed_off",
     "summary": "Good progress today. Practiced roundabouts and dual carriageway driving.",
-    "has_reflective_log": true,
-    "reflective_log": {
-      "id": 1,
-      "what_i_learned": "How to parallel park between two cars",
-      "what_went_well": "Managed to park first time in a tight space",
-      "what_to_improve": "Need to check mirrors more frequently",
-      "additional_notes": null,
-      "created_at": "2026-09-18T15:10:00.000000Z"
-    }
+    "has_reflective_log": false
   }
 }
 ```
 
-`data` is the same lesson-detail object as `GET /students/{student}/lessons/{lesson}`. Treat `status: "completed"` / `card_status: "signed_off"` / `has_reflective_log: true` as confirmation — do not wait for a second poll to clear Needs Sign Off.
+`data` is the same lesson-detail object as `GET /students/{student}/lessons/{lesson}`. Treat `status: "completed"` / `card_status: "signed_off"` as confirmation and clear Needs Sign Off. **Do not** wait for `has_reflective_log: true`.
 
 **Error Response (not authorised):** `403 Forbidden`
 ```json
@@ -4461,22 +4372,21 @@ Flattened prompt fields on the root object (`what_i_learned`, …) and camelCase
 **Error Response (validation / not ready):** `422 Unprocessable Entity`
 ```json
 {
-  "message": "Reflective log must be completed before sign-off.",
+  "message": "The summary field is required.",
   "errors": {
-    "reflective_log": [
-      "Reflective log must be completed before sign-off."
+    "summary": [
+      "The summary field is required."
     ]
   }
 }
 ```
 
-Other 422 messages include unpaid weekly/upfront payments, draft lessons, already completed, and missing summary.
+Other 422 messages include unpaid weekly/upfront payments, draft lessons, and already completed.
 
-> **Important:** The lesson must have `status = "pending"` and belong to the specified student. Completion is now confirmed in the `200` response (`completed_at` is set). The background job only finishes payout + notifications; a Stripe transfer failure will **not** roll back the signed-off lesson.
+> **Important:** The lesson must have `status = "pending"` and belong to the specified student. Completion is confirmed in the `200` response (`completed_at` is set). The background job only finishes payout + notifications + AI recommendations from `summary`; a Stripe transfer failure will **not** roll back the signed-off lesson.
 
 **Side Effects (this request):**
 - Saves `summary` on the lesson
-- Upserts the reflective log when provided
 - Marks the lesson as `completed` with `completed_at` timestamp
 - Updates associated calendar items
 - Marks the order completed when every lesson in it is done
@@ -4487,7 +4397,7 @@ Other 422 messages include unpaid weekly/upfront payments, draft lessons, alread
 - Sends feedback email to the student
 - Sends lesson-signed-off confirmation to the instructor
 - For weekly orders: immediately issues the next lesson's Stripe invoice + payment-link email — and queues a push notification on the student's user when a registered Expo push token exists
-- Generates AI resource recommendations
+- Generates AI resource recommendations from the lesson **summary** (same as admin)
 
 ---
 
@@ -6373,8 +6283,8 @@ The `role` field is always returned in user responses. Use it to determine which
 | DELETE | `/api/v1/students/{student}` | Yes | Both | Remove student (soft) |
 | GET | `/api/v1/students/{student}/lessons` | Yes | Both | List lessons |
 | GET | `/api/v1/students/{student}/lessons/{lesson}` | Yes | Both | Lesson detail |
-| PUT | `/api/v1/students/{student}/lessons/{lesson}/reflective-log` | Yes | Instructor | Upsert reflective log (`POST` and `/reflective-logs` aliases) |
-| POST | `/api/v1/students/{student}/lessons/{lesson}/sign-off` | Yes | Instructor | Sign off lesson (persists log + summary, returns completed lesson) |
+| PUT | `/api/v1/students/{student}/lessons/{lesson}/reflective-log` | Yes | Instructor | Leftover four-prompt log upsert — **not** part of sign-off |
+| POST | `/api/v1/students/{student}/lessons/{lesson}/sign-off` | Yes | Instructor | Sign off lesson (summary only, same as admin; returns completed lesson) |
 | POST | `/api/v1/students/{student}/lessons/{lesson}/resources` | Yes | Instructor | Assign resources |
 | GET | `/api/v1/students/{student}/notes` | Yes | Both | List notes |
 | POST | `/api/v1/students/{student}/notes` | Yes | Both | Create note |
@@ -7592,7 +7502,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-09-04 | **Added `POST /api/v1/students/{student}/orders/{order}/resend-payment-link`** — re-send the upfront payment-link email for an order still awaiting payment (pending upfront order with draft lessons). Reuses the existing Stripe Checkout session while open, creates a fresh one when expired (old emailed link then stops working). Email goes to the booker (student or contact — same logic as the booking email); an additive push (`{ type: "payment_link_resent", order_id, checkout_url }`) is queued when the student owns the account and has an Expo push token, mirroring the weekly payment-reminder. 200 returns `{ "message": "Payment link re-sent to {email}" }`; 404 when the order isn't the student's (no-information-leak); 422 when the order is weekly/active/completed/cancelled or no link could be generated; 429 on the per-order 3-minute cooldown. Auth: student policy (assigned instructor or the student). | Orders (resend-payment-link — NEW) |
 | 2026-09-10 | **Admin-defined resource/folder display order.** Existing `resources.sort_order` and `resource_folders.sort_order` columns are now writable from Drive CRM (`POST /resources/folders/root/reorder`, `POST /resources/folders/{folder}/reorder`, `POST /resources/folders/{folder}/resources/reorder` — owner web, not mobile). Tree endpoints already queried `sort_order` then name/title; they now also **return** `sort_order` on every folder and resource. Flat `GET /api/v1/resources` is ordered by folder, then `sort_order`, then title (was title only). Lesson-attached resources follow the same library order. Render `folders` / `children` / `resources` in array order — do not re-sort by title. Until a folder is reordered in admin, existing rows may all be `0` and fall back to name/title. New uploads/imports append (`max + 1`). Resource-library cache is invalidated on admin writes. `my_resources` / suggested lists stay suggestion-order and have no `sort_order`. | Resources (index, show), Instructor Resource Tree, Student Resources (index, show), Lesson Detail (resources) |
 | 2026-09-10 | **Folder visibility for instructors and pupils.** New `resource_folders.visibility` (`student` \| `instructor` \| `both`, default `both`). Admin create/edit folder sheets set it. `GET /api/v1/student/resources` only returns folders visible to pupils and prunes empty folders (so instructor-only libraries such as VTS no longer appear as empty categories). `GET /api/v1/instructor/resources` only returns folders visible to instructors. Both tree folder objects now include `visibility`. Student show/watched 404 when the parent folder is instructor-only. `GET /api/v1/resources?audience=` also excludes resources whose parent folder is hidden from that audience. Student resource-summary study progress, recommended, stats, my_resources, and the Expert badge denominator all ignore instructor-only folders. | Resources (index), Student Resources (index, show, watched, summary), Instructor Resource Tree (tree) |
-| 2026-09-18 | **Reflective log write path + confirmed lesson sign-off.** There was no API to persist a reflective log, so the instructor app could fill it in and still see `has_reflective_log: false` / "Reflective log not completed". New `PUT`/`POST /students/{student}/lessons/{lesson}/reflective-log` (plus `/reflective-logs` alias) upserts the log and returns the lesson detail. `POST .../sign-off` now accepts a nested `reflective_log` (or flattened / camelCase aliases), requires a complete log, saves summary + log in the request, marks the lesson `completed` **before** responding, and returns the lesson detail (`message: "Lesson signed off."` + `data`). Stripe payout / emails stay on the background job and **cannot roll back** completion. Unpaid lessons, drafts, missing logs, and already-completed lessons return `422` instead of a silent queued failure. `has_reflective_log` now means the three prompts are filled, not merely that a row exists. | Student Lessons (reflective-log NEW, sign-off, index, show), Instructor Lessons (day `has_reflective_log`) |
+| 2026-09-18 | **Mobile lesson sign-off mirrors admin (summary only).** The four-prompt reflective log is leftover and is **not** required. `POST .../sign-off` accepts `{ "summary": "..." }` only (same body as admin CRM), persists the summary, marks the lesson `completed` in the request, and returns the lesson (`message: "Lesson signed off."` + `data` with `status: completed` / `card_status: signed_off`). AI resource emails still run from `summary` on the background job. Do **not** gate the UI on `has_reflective_log`. A leftover `PUT/POST .../reflective-log` upsert remains so old app builds do not 404; it is not part of sign-off. Payout failure cannot roll back completion. Unpaid / draft / already-completed return 422. | Student Lessons (sign-off), leftover reflective-log upsert |
 
 ---
 

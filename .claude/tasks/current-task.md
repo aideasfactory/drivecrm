@@ -98,11 +98,12 @@ I've updated api.md to reflect the new/changed endpoint.
 - [x] Document decisions and leftovers
 
 ### Reflection
-Leftover: the mobile app must call the new write path (or send
-`reflective_log` on sign-off). No mobile-repo change in this ticket.
-Admin CRM still does not collect a reflective log (summary only).
-Failed Stripe payouts now leave a `payouts.status = failed` row and
-retry on the next job attempt instead of rolling back the lesson.
+Product follow-up: the four-prompt reflective log is leftover. Mobile
+sign-off now mirrors admin — `{ "summary": "..." }` only; the log is not
+required. The leftover upsert endpoint remains so old app builds do not
+404. The app must stop gating on `has_reflective_log`. Failed Stripe
+payouts leave `payouts.status = failed` and retry instead of rolling
+back the lesson.
 
 No tests added, per HARD RULE. I understand I must not run tests or
 linting commands.

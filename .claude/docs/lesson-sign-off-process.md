@@ -9,18 +9,15 @@ The lesson sign-off flow allows instructors to mark a lesson as completed, trigg
 ## Flow
 
 ```
-Instructor completes the reflective log (optional separate save)
-  → PUT/POST /api/v1/students/{student}/lessons/{lesson}/reflective-log
-  → Upserts reflective_logs and returns the lesson (`has_reflective_log: true`)
-
-Instructor clicks "Sign Off" on a lesson
-  → Frontend opens Sheet slide-out with T&Cs (admin) or Complete Sign Off (app)
-  → Instructor confirms
-  → POST /students/{student}/lessons/{lesson}/sign-off
+Instructor clicks "Sign Off" on a lesson (admin sheet or app)
+  → Enters a single Lesson Summary (what was covered) — same field as admin
+  → Confirms
+  → POST .../sign-off with { "summary": "..." }
   → Controller validates (lesson belongs to student, lesson is pending, instructor assigned)
-  → Mobile API: saves summary + reflective log, requires a complete log, marks
-    the lesson completed in this request (calendar + order), returns the lesson
-  → Dispatches ProcessLessonSignOffJob (payout + emails + AI)
+  → Mobile API: saves summary, marks the lesson completed in this request
+    (calendar + order), returns the lesson. Four-prompt reflective log is NOT required.
+  → Admin web: still dispatches the job and returns "being processed"
+  → Dispatches ProcessLessonSignOffJob (payout + emails + AI from summary)
   → Job runs SignOffLessonAction (idempotent if already completed):
       1. MarkLessonCompletedAction (status=completed, completed_at=now) — skipped if done
       2. UpdateCalendarItemCompletedAction (calendar_item status=completed)
@@ -109,7 +106,7 @@ Instructor clicks "Sign Off" on a lesson
 
 **Mobile API success (200):**
 ```json
-{ "message": "Lesson signed off.", "data": { "status": "completed", "card_status": "signed_off", "has_reflective_log": true } }
+{ "message": "Lesson signed off.", "data": { "status": "completed", "card_status": "signed_off" } }
 ```
 
 **Error (422):**
@@ -119,10 +116,7 @@ Instructor clicks "Sign Off" on a lesson
 
 ### PUT /api/v1/students/{student}/lessons/{lesson}/reflective-log
 
-**Success (200):**
-```json
-{ "message": "Reflective log saved.", "data": { "has_reflective_log": true } }
-```
+Leftover four-prompt upsert. Not part of sign-off. Kept so old app builds do not 404.
 
 ---
 
@@ -138,9 +132,9 @@ The SignOffLessonAction validates:
 2. For weekly payment mode: LessonPayment must be `paid`
 3. For upfront mode: order must be `active`
 
-The mobile API additionally requires a complete reflective log before sign-off.
-Stripe Connect onboarding is checked when creating the payout, not when marking
-the lesson complete — a Connect delay must not prevent Needs Sign Off from clearing.
+The four-prompt reflective log is leftover and is not required for sign-off
+on admin or the mobile API. Stripe Connect onboarding is checked when creating
+the payout, not when marking the lesson complete.
 
 ---
 
