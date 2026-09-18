@@ -103,9 +103,12 @@ class SyncHmrcItsaObligations extends Command
         $count = 0;
         $now = now();
 
+        // HMRC (especially sandbox) leaves years of still-Open periods on file.
+        // Reminders are only for deadlines that have not already passed.
         $obligations = HmrcItsaObligation::query()
             ->where('user_id', $user->id)
             ->where('status', ItsaObligationStatus::Open)
+            ->whereDate('due_date', '>=', $now->toDateString())
             ->get();
 
         foreach ($obligations as $obligation) {
@@ -134,7 +137,7 @@ class SyncHmrcItsaObligations extends Command
             $push->queueAndSend(
                 $user,
                 'MTD ITSA — quarterly update due soon',
-                "Your quarterly update is due in {$days} day(s). Tap to open.",
+                $this->dueSoonPushBody('quarterly update', $days),
                 ['route' => '/hmrc/itsa'],
             );
 
@@ -153,6 +156,7 @@ class SyncHmrcItsaObligations extends Command
         $obligations = HmrcVatObligation::query()
             ->where('user_id', $user->id)
             ->where('status', ItsaObligationStatus::Open)
+            ->whereDate('due_date', '>=', $now->toDateString())
             ->get();
 
         foreach ($obligations as $obligation) {
@@ -181,7 +185,7 @@ class SyncHmrcItsaObligations extends Command
             $push->queueAndSend(
                 $user,
                 'MTD VAT — return due soon',
-                "Your VAT return is due in {$days} day(s). Tap to open.",
+                $this->dueSoonPushBody('VAT return', $days),
                 ['route' => '/hmrc/vat'],
             );
 
@@ -192,8 +196,18 @@ class SyncHmrcItsaObligations extends Command
         return $count;
     }
 
+    /**
+     * Tightest upcoming deadline window that still applies.
+     * Overdue / historical periods (negative days) are never "due soon".
+     *
+     * @return int|null  Matching threshold (1, 7, 14, or 30), or null to skip.
+     */
     private function thresholdHit(int $days): ?int
     {
+        if ($days < 0) {
+            return null;
+        }
+
         $thresholds = self::REMINDER_THRESHOLDS;
         sort($thresholds);
 
@@ -204,5 +218,14 @@ class SyncHmrcItsaObligations extends Command
         }
 
         return null;
+    }
+
+    private function dueSoonPushBody(string $subject, int $days): string
+    {
+        return match (true) {
+            $days <= 0 => "Your {$subject} is due today. Tap to open.",
+            $days === 1 => "Your {$subject} is due tomorrow. Tap to open.",
+            default => "Your {$subject} is due in {$days} day(s). Tap to open.",
+        };
     }
 }
