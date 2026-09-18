@@ -1982,7 +1982,7 @@ Cached open and recently-fulfilled quarterly obligations. Drives the deadline co
 | received_date | date | Yes | When HMRC marked the obligation fulfilled. |
 | status | string(16) | No | `Open` / `Fulfilled`. |
 | obligation_type | string(64) | No | Defaults to `Quarterly Update`. |
-| last_reminder_sent_at | timestamp | Yes | Used by the reminder cron to dedupe sends within a deadline window. |
+| last_reminder_sent_at | timestamp | Yes | Used by the reminder cron to dedupe sends within a 30/14/7/1-day upcoming window. Historical and overdue Open periods are not reminded. |
 | last_synced_at | timestamp | No | When this row was last refreshed from HMRC. |
 | created_at / updated_at | timestamp | Yes | |
 
@@ -2138,7 +2138,7 @@ Cached VAT obligations refreshed by the daily `SyncHmrcItsaObligations` cron (wh
 | due_date | date | No | |
 | received_date | date | Yes | Populated once HMRC marks the obligation `Fulfilled`. |
 | status | string(16) | No | `Open` or `Fulfilled`. |
-| last_reminder_sent_at | timestamp | Yes | Idempotency for the 30/14/7/1-day reminder cron. |
+| last_reminder_sent_at | timestamp | Yes | Idempotency for the 30/14/7/1-day upcoming reminder cron. Overdue/historical Open periods are skipped. |
 | last_synced_at | timestamp | No | Last sync from HMRC. |
 | created_at / updated_at | timestamp | Yes | |
 
