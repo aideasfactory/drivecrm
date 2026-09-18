@@ -1291,7 +1291,7 @@ Laravel Sanctum's API token storage. Each row is a single API token issued to a 
 
 ### 26. **reflective_logs**
 
-Student reflective logs for lessons. Each lesson can have at most one reflective log. A past lesson without a reflective log cannot be signed off (displays as "needs sign-off" / red card in the mobile app).
+Leftover four-prompt student reflection per lesson. **Not part of sign-off.** Instructors sign off with `lessons.summary` only (admin CRM and mobile API). `has_reflective_log` on lesson payloads must not gate Needs Sign Off.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|

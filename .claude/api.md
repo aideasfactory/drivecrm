@@ -1260,7 +1260,7 @@ Returns the authenticated instructor's lessons for a specific date, ordered by s
 | `payout_status` | string\|null | Instructor payout status: `pending`, `paid`, `failed`, or null |
 | `has_payout` | boolean | Whether a payout has been created for this lesson |
 | `calendar_item` | object\|null | Calendar item data (see Calendar Item Object below) |
-| `has_reflective_log` | boolean | Whether a reflective log exists for this lesson |
+| `has_reflective_log` | boolean | Leftover four-prompt log present and complete. **Do not** gate sign-off on this — use `status` / `card_status` / `summary` |
 | `resources_count` | integer | Number of resources attached to this lesson |
 
 **Nested Student Object Fields:**
@@ -4162,7 +4162,7 @@ Returns lessons for a given student across all their orders. Supports optional f
 | `status` | string | Lesson status: `pending`, `completed`, or `draft` (drafts only returned when `include_drafts=true`). **Cancelled lessons are never returned by this endpoint.** |
 | `completed_at` | string\|null | ISO 8601 timestamp when lesson was completed |
 | `card_status` | string | Computed UI card status (see Card Status Logic below) |
-| `has_reflective_log` | boolean | Whether a reflective log exists for this lesson |
+| `has_reflective_log` | boolean | Leftover four-prompt log present and complete. **Do not** gate sign-off on this — use `status` / `card_status` / `summary` |
 | `resources_count` | integer | Number of resources attached to this lesson |
 | `payment_status` | string\|null | Payment status: `paid`, `due`, `refunded`, or null |
 
@@ -4171,7 +4171,7 @@ Returns lessons for a given student across all their orders. Supports optional f
 | Value | Color | Condition |
 |-------|-------|-----------|
 | `signed_off` | Green | Past lesson that has been completed/signed off |
-| `needs_sign_off` | Red | Past lesson NOT signed off (reflective log missing) |
+| `needs_sign_off` | Red | Past lesson not yet signed off (`completed_at` is null). **Do not** gate this on `has_reflective_log` — that four-prompt log is leftover and is not part of sign-off. |
 | `current` | Orange | The next lesson (today or future) — the one to sign off next |
 | `upcoming` | Blue | Future lessons beyond the next one |
 | `draft` | Grey | Upfront booking awaiting payment. Only returned when `include_drafts=true`. Draft lessons never consume the `current` slot — the "next lesson to sign off" is still the next non-draft lesson. |
@@ -4269,7 +4269,7 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 | `has_payout` | boolean | Whether a payout has been created for this lesson |
 | `calendar_date` | string\|null | Calendar date for the lesson slot (YYYY-MM-DD) |
 | `card_status` | string | Computed UI card status: `signed_off`, `needs_sign_off`, `current`, `upcoming`, `draft`. Draft lessons never consume the `current` slot |
-| `has_reflective_log` | boolean | Whether a reflective log exists for this lesson |
+| `has_reflective_log` | boolean | Leftover four-prompt log present and complete. **Do not** gate sign-off on this — use `status` / `card_status` / `summary` |
 | `reflective_log` | object\|null | The reflective log data (see below) |
 | `resources` | array | List of resources attached to this lesson (see below) |
 
@@ -4306,9 +4306,13 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 
 #### `POST /api/v1/students/{student}/lessons/{lesson}/sign-off`
 
-**Auth required:** Yes (Bearer token — student or instructor)
+**Auth required:** Yes (Bearer token — instructor only)
 
-Sign off a lesson as completed. This is an asynchronous operation — a background job handles completion, calendar updates, Stripe payouts, activity logs, feedback emails, and AI resource recommendations.
+Sign off a lesson as completed. **Same contract and pipeline as admin CRM:** body is `{ "summary": "..." }` only. The four-prompt reflective log is leftover and is **not** required — do not collect it or gate on `has_reflective_log`.
+
+The mobile API runs the existing `LessonSignOffService` (the same code the admin job uses) **in this request**, then returns the lesson. Admin still queues `ProcessLessonSignOffJob`; that job and the payout/onboarding/payment guards are unchanged.
+
+Unpaid weekly lessons, unpaid upfront orders, and instructors who are not Stripe-onboarded return `422` with the service message. A non-pending lesson (draft / already completed) returns `404` from the pending-only lookup — same as before.
 
 **URL Parameters:**
 
@@ -4326,14 +4330,23 @@ Sign off a lesson as completed. This is an asynchronous operation — a backgrou
 
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
-| `summary` | string | Yes | Lesson summary/completion notes (max 5000 characters) |
+| `summary` | string | Yes | Lesson summary / what was covered (max 5000 characters). Used by AI to recommend learning resources — same field as admin Sign Off Lesson. |
 
 **Success Response:** `200 OK`
 ```json
 {
-  "message": "Lesson sign-off is being processed."
+  "message": "Lesson signed off.",
+  "data": {
+    "id": 2,
+    "status": "completed",
+    "completed_at": "2026-09-18T15:12:00.000000Z",
+    "card_status": "signed_off",
+    "summary": "Good progress today. Practiced roundabouts and dual carriageway driving."
+  }
 }
 ```
+
+`data` is the same lesson-detail object as `GET /students/{student}/lessons/{lesson}`. If `data.status === "completed"` or `data.card_status === "signed_off"`, apply that payload and clear Needs Sign Off. If a client still receives the old `{ "message": "Lesson sign-off is being processed." }` body, refetch the lesson.
 
 **Error Response (not authorised):** `403 Forbidden`
 ```json
@@ -4342,7 +4355,7 @@ Sign off a lesson as completed. This is an asynchronous operation — a backgrou
 }
 ```
 
-**Error Response (validation):** `422 Unprocessable Entity`
+**Error Response (validation / not ready):** `422 Unprocessable Entity`
 ```json
 {
   "message": "The summary field is required.",
@@ -4354,16 +4367,9 @@ Sign off a lesson as completed. This is an asynchronous operation — a backgrou
 }
 ```
 
-> **Important:** The lesson must have `status = "pending"` and belong to the specified student. The response is immediate (200), but the actual sign-off processing happens asynchronously in a background job. The lesson status will change to `completed` once the job finishes. Poll the lesson detail endpoint to check for completion.
+Other 422 messages are the existing pipeline messages (unpaid weekly/upfront, instructor not onboarded for payouts).
 
-**Side Effects (background job):**
-- Marks the lesson as `completed` with `completed_at` timestamp
-- Updates associated calendar items
-- Triggers Stripe payout processing (if applicable)
-- Creates activity log entries
-- Sends feedback email to the student
-- For weekly orders: immediately issues the next lesson's Stripe invoice + payment-link email — and queues a push notification on the student's user when a registered Expo push token exists
-- Generates AI resource recommendations
+> **Important:** The lesson must have `status = "pending"` and belong to the specified student. On this endpoint a `200` means the shared service has already completed the lesson (summary saved, `completed_at` set, payout attempted). AI recommendations still queue from `summary` as they do in admin.
 
 ---
 
@@ -6249,7 +6255,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | DELETE | `/api/v1/students/{student}` | Yes | Both | Remove student (soft) |
 | GET | `/api/v1/students/{student}/lessons` | Yes | Both | List lessons |
 | GET | `/api/v1/students/{student}/lessons/{lesson}` | Yes | Both | Lesson detail |
-| POST | `/api/v1/students/{student}/lessons/{lesson}/sign-off` | Yes | Both | Sign off lesson |
+| POST | `/api/v1/students/{student}/lessons/{lesson}/sign-off` | Yes | Instructor | Sign off lesson (summary only, same pipeline as admin; returns completed lesson) |
 | POST | `/api/v1/students/{student}/lessons/{lesson}/resources` | Yes | Instructor | Assign resources |
 | GET | `/api/v1/students/{student}/notes` | Yes | Both | List notes |
 | POST | `/api/v1/students/{student}/notes` | Yes | Both | Create note |
@@ -7467,6 +7473,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-09-04 | **Added `POST /api/v1/students/{student}/orders/{order}/resend-payment-link`** — re-send the upfront payment-link email for an order still awaiting payment (pending upfront order with draft lessons). Reuses the existing Stripe Checkout session while open, creates a fresh one when expired (old emailed link then stops working). Email goes to the booker (student or contact — same logic as the booking email); an additive push (`{ type: "payment_link_resent", order_id, checkout_url }`) is queued when the student owns the account and has an Expo push token, mirroring the weekly payment-reminder. 200 returns `{ "message": "Payment link re-sent to {email}" }`; 404 when the order isn't the student's (no-information-leak); 422 when the order is weekly/active/completed/cancelled or no link could be generated; 429 on the per-order 3-minute cooldown. Auth: student policy (assigned instructor or the student). | Orders (resend-payment-link — NEW) |
 | 2026-09-10 | **Admin-defined resource/folder display order.** Existing `resources.sort_order` and `resource_folders.sort_order` columns are now writable from Drive CRM (`POST /resources/folders/root/reorder`, `POST /resources/folders/{folder}/reorder`, `POST /resources/folders/{folder}/resources/reorder` — owner web, not mobile). Tree endpoints already queried `sort_order` then name/title; they now also **return** `sort_order` on every folder and resource. Flat `GET /api/v1/resources` is ordered by folder, then `sort_order`, then title (was title only). Lesson-attached resources follow the same library order. Render `folders` / `children` / `resources` in array order — do not re-sort by title. Until a folder is reordered in admin, existing rows may all be `0` and fall back to name/title. New uploads/imports append (`max + 1`). Resource-library cache is invalidated on admin writes. `my_resources` / suggested lists stay suggestion-order and have no `sort_order`. | Resources (index, show), Instructor Resource Tree, Student Resources (index, show), Lesson Detail (resources) |
 | 2026-09-10 | **Folder visibility for instructors and pupils.** New `resource_folders.visibility` (`student` \| `instructor` \| `both`, default `both`). Admin create/edit folder sheets set it. `GET /api/v1/student/resources` only returns folders visible to pupils and prunes empty folders (so instructor-only libraries such as VTS no longer appear as empty categories). `GET /api/v1/instructor/resources` only returns folders visible to instructors. Both tree folder objects now include `visibility`. Student show/watched 404 when the parent folder is instructor-only. `GET /api/v1/resources?audience=` also excludes resources whose parent folder is hidden from that audience. Student resource-summary study progress, recommended, stats, my_resources, and the Expert badge denominator all ignore instructor-only folders. | Resources (index), Student Resources (index, show, watched, summary), Instructor Resource Tree (tree) |
+| 2026-09-18 | **Mobile lesson sign-off returns the completed lesson.** Same body as admin (`{ "summary": "..." }` only). The four-prompt reflective log is leftover and is not required — do not gate on `has_reflective_log`. The endpoint now runs the existing `LessonSignOffService` in-request (admin still queues the same job) and returns `{ "message": "Lesson signed off.", "data": <lesson> }` with `status: completed` / `card_status: signed_off`. Shared payout / onboarding / payment guards are unchanged. | Student Lessons (sign-off) |
 
 ---
 
