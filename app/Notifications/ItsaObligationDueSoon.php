@@ -27,6 +27,10 @@ class ItsaObligationDueSoon extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
+        if ($this->daysUntilDue < 0) {
+            return [];
+        }
+
         return ['mail'];
     }
 
