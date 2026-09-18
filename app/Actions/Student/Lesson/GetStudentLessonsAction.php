@@ -50,7 +50,7 @@ class GetStudentLessonsAction
                         'calendarItem.calendar:id,date',
                         'lessonPayment:id,lesson_id,amount_pence,status,paid_at,stripe_invoice_id',
                         'payout:id,lesson_id,status,amount_pence,stripe_transfer_id,paid_at',
-                        'reflectiveLog:id,lesson_id,what_i_learned,what_went_well,what_to_improve',
+                        'reflectiveLog:id,lesson_id',
                         'resources:id,title,resource_type,video_url,file_path,file_name,file_size,mime_type,thumbnail_url',
                     ])
                     ->orderBy('date')
@@ -81,7 +81,7 @@ class GetStudentLessonsAction
                     'payout_status' => $lesson->payout?->status?->value,
                     'has_payout' => $lesson->payout !== null,
                     'calendar_date' => $lesson->calendarItem?->calendar?->date?->format('Y-m-d'),
-                    'has_reflective_log' => $lesson->hasCompleteReflectiveLog(),
+                    'has_reflective_log' => $lesson->reflectiveLog !== null,
                     'resources_count' => $lesson->resources->count(),
                     '_date_obj' => $lesson->date,
                     '_completed_at' => $lesson->completed_at,

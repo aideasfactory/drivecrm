@@ -22,14 +22,4 @@ class SignOffLessonRequest extends FormRequest
             'summary' => ['required', 'string', 'max:5000'],
         ];
     }
-
-    /**
-     * @return array<string, string>
-     */
-    public function messages(): array
-    {
-        return [
-            'summary.required' => 'The summary field is required.',
-        ];
-    }
 }

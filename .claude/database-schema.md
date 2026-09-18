@@ -1291,7 +1291,7 @@ Laravel Sanctum's API token storage. Each row is a single API token issued to a 
 
 ### 26. **reflective_logs**
 
-Leftover four-prompt student reflection per lesson (`what_i_learned`, `what_went_well`, `what_to_improve`, `additional_notes`). **Not part of the product sign-off flow.** Instructors sign off with a single `lessons.summary` (admin CRM and mobile API). `has_reflective_log` may still appear on lesson payloads if a row exists and the three prompts are filled; clients must not gate Needs Sign Off or Complete Sign Off on it. `card_status: needs_sign_off` is driven only by `completed_at`.
+Leftover four-prompt student reflection per lesson. **Not part of sign-off.** Instructors sign off with `lessons.summary` only (admin CRM and mobile API). `has_reflective_log` on lesson payloads must not gate Needs Sign Off.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -1982,7 +1982,7 @@ Cached open and recently-fulfilled quarterly obligations. Drives the deadline co
 | received_date | date | Yes | When HMRC marked the obligation fulfilled. |
 | status | string(16) | No | `Open` / `Fulfilled`. |
 | obligation_type | string(64) | No | Defaults to `Quarterly Update`. |
-| last_reminder_sent_at | timestamp | Yes | Used by the reminder cron to dedupe sends within a deadline window. |
+| last_reminder_sent_at | timestamp | Yes | Used by the reminder cron to dedupe sends within a 30/14/7/1-day upcoming window. Historical and overdue Open periods are not reminded. |
 | last_synced_at | timestamp | No | When this row was last refreshed from HMRC. |
 | created_at / updated_at | timestamp | Yes | |
 
@@ -2138,7 +2138,7 @@ Cached VAT obligations refreshed by the daily `SyncHmrcItsaObligations` cron (wh
 | due_date | date | No | |
 | received_date | date | Yes | Populated once HMRC marks the obligation `Fulfilled`. |
 | status | string(16) | No | `Open` or `Fulfilled`. |
-| last_reminder_sent_at | timestamp | Yes | Idempotency for the 30/14/7/1-day reminder cron. |
+| last_reminder_sent_at | timestamp | Yes | Idempotency for the 30/14/7/1-day upcoming reminder cron. Overdue/historical Open periods are skipped. |
 | last_synced_at | timestamp | No | Last sync from HMRC. |
 | created_at / updated_at | timestamp | Yes | |
 

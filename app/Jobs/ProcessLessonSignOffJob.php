@@ -45,7 +45,7 @@ class ProcessLessonSignOffJob implements ShouldQueue
             Log::info('Lesson sign-off processed successfully', [
                 'lesson_id' => $this->lesson->id,
                 'instructor_id' => $this->instructor->id,
-                'payout_id' => $result['payout']?->id,
+                'payout_id' => $result['payout']->id,
                 'order_completed' => $result['order_completed'],
             ]);
         } catch (\Exception $e) {

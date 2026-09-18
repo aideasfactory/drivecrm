@@ -157,12 +157,4 @@ class Lesson extends Model
     {
         return $this->payout !== null;
     }
-
-    /**
-     * Whether this lesson has a complete reflective log (all three prompts filled).
-     */
-    public function hasCompleteReflectiveLog(): bool
-    {
-        return $this->reflectiveLog?->isComplete() ?? false;
-    }
 }

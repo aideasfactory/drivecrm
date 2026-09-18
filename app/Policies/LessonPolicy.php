@@ -43,16 +43,6 @@ class LessonPolicy
     }
 
     /**
-     * Determine whether the user can write the reflective log for a student's lesson.
-     *
-     * Only the student's assigned instructor can complete the log (sign-off flow).
-     */
-    public function saveReflectiveLog(User $user, Student $student): bool
-    {
-        return $this->isStudentsInstructor($user, $student);
-    }
-
-    /**
      * Determine whether the user can assign resources to a lesson.
      *
      * Only the student's assigned instructor can assign resources.

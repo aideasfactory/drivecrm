@@ -63,7 +63,6 @@
     - [Lessons](#get-apiv1studentsstudentlessons)
     - [Lesson Detail](#get-apiv1studentsstudentlessonslesson)
     - [Lesson Sign-Off](#post-apiv1studentsstudentlessonslessonsign-off)
-    - [Reflective Log](#put-apiv1studentsstudentlessonslessonreflective-log)
     - [Lesson Resources](#post-apiv1studentsstudentlessonslessonresources)
     - [Notes](#get-apiv1studentsstudentnotes)
     - [Checklist Items](#get-apiv1studentsstudentchecklist-items)
@@ -4305,27 +4304,15 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 
 ---
 
-#### `PUT /api/v1/students/{student}/lessons/{lesson}/reflective-log`
-
-> **Leftover — do not use for sign-off.** The four-prompt reflective log (`what_i_learned` / `what_went_well` / `what_to_improve` / `additional_notes`) is earlier work. Instructors should **not** be asked to fill it. Sign-off mirrors admin CRM: a single **lesson summary** only. This upsert remains so an old app build does not 404 if it still calls it. `has_reflective_log` must **not** gate Complete Sign Off or Needs Sign Off.
-
-**Auth required:** Yes (Bearer token — instructor only)
-
-**Also accepted:** `POST` on the same path, and `PUT`/`POST` `.../reflective-logs`.
-
-**Request Body:** `{ "what_i_learned", "what_went_well", "what_to_improve", "additional_notes?" }` (all strings, first three required if this leftover endpoint is called).
-
-**Success:** `200` `{ "message": "Reflective log saved.", "data": <lesson detail> }`. Does **not** sign the lesson off.
-
----
-
 #### `POST /api/v1/students/{student}/lessons/{lesson}/sign-off`
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Sign off a lesson as completed. **Mirrors admin CRM:** the only write-up is `summary`. The four-prompt reflective log is **not** required and is ignored if sent. The summary is persisted and the lesson is marked `completed` before the response returns. Stripe payout, activity logs, feedback email, weekly invoice, and AI resource recommendations (from the summary) still run on the same background job as admin.
+Sign off a lesson as completed. **Same contract and pipeline as admin CRM:** body is `{ "summary": "..." }` only. The four-prompt reflective log is leftover and is **not** required — do not collect it or gate on `has_reflective_log`.
 
-Unpaid weekly lessons / unpaid upfront orders return `422`. Draft lessons return `422`. Already-completed lessons return `422` (not 404). Stripe Connect onboarding does **not** block completion.
+The mobile API runs the existing `LessonSignOffService` (the same code the admin job uses) **in this request**, then returns the lesson. Admin still queues `ProcessLessonSignOffJob`; that job and the payout/onboarding/payment guards are unchanged.
+
+Unpaid weekly lessons, unpaid upfront orders, and instructors who are not Stripe-onboarded return `422` with the service message. A non-pending lesson (draft / already completed) returns `404` from the pending-only lookup — same as before.
 
 **URL Parameters:**
 
@@ -4354,13 +4341,12 @@ Unpaid weekly lessons / unpaid upfront orders return `422`. Draft lessons return
     "status": "completed",
     "completed_at": "2026-09-18T15:12:00.000000Z",
     "card_status": "signed_off",
-    "summary": "Good progress today. Practiced roundabouts and dual carriageway driving.",
-    "has_reflective_log": false
+    "summary": "Good progress today. Practiced roundabouts and dual carriageway driving."
   }
 }
 ```
 
-`data` is the same lesson-detail object as `GET /students/{student}/lessons/{lesson}`. Treat `status: "completed"` / `card_status: "signed_off"` as confirmation and clear Needs Sign Off. **Do not** wait for `has_reflective_log: true`.
+`data` is the same lesson-detail object as `GET /students/{student}/lessons/{lesson}`. If `data.status === "completed"` or `data.card_status === "signed_off"`, apply that payload and clear Needs Sign Off. If a client still receives the old `{ "message": "Lesson sign-off is being processed." }` body, refetch the lesson.
 
 **Error Response (not authorised):** `403 Forbidden`
 ```json
@@ -4381,23 +4367,9 @@ Unpaid weekly lessons / unpaid upfront orders return `422`. Draft lessons return
 }
 ```
 
-Other 422 messages include unpaid weekly/upfront payments, draft lessons, and already completed.
+Other 422 messages are the existing pipeline messages (unpaid weekly/upfront, instructor not onboarded for payouts).
 
-> **Important:** The lesson must have `status = "pending"` and belong to the specified student. Completion is confirmed in the `200` response (`completed_at` is set). The background job only finishes payout + notifications + AI recommendations from `summary`; a Stripe transfer failure will **not** roll back the signed-off lesson.
-
-**Side Effects (this request):**
-- Saves `summary` on the lesson
-- Marks the lesson as `completed` with `completed_at` timestamp
-- Updates associated calendar items
-- Marks the order completed when every lesson in it is done
-
-**Side Effects (background job):**
-- Triggers Stripe payout processing (retried if a previous transfer failed)
-- Creates activity log entries
-- Sends feedback email to the student
-- Sends lesson-signed-off confirmation to the instructor
-- For weekly orders: immediately issues the next lesson's Stripe invoice + payment-link email — and queues a push notification on the student's user when a registered Expo push token exists
-- Generates AI resource recommendations from the lesson **summary** (same as admin)
+> **Important:** The lesson must have `status = "pending"` and belong to the specified student. On this endpoint a `200` means the shared service has already completed the lesson (summary saved, `completed_at` set, payout attempted). AI recommendations still queue from `summary` as they do in admin.
 
 ---
 
@@ -6283,8 +6255,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | DELETE | `/api/v1/students/{student}` | Yes | Both | Remove student (soft) |
 | GET | `/api/v1/students/{student}/lessons` | Yes | Both | List lessons |
 | GET | `/api/v1/students/{student}/lessons/{lesson}` | Yes | Both | Lesson detail |
-| PUT | `/api/v1/students/{student}/lessons/{lesson}/reflective-log` | Yes | Instructor | Leftover four-prompt log upsert — **not** part of sign-off |
-| POST | `/api/v1/students/{student}/lessons/{lesson}/sign-off` | Yes | Instructor | Sign off lesson (summary only, same as admin; returns completed lesson) |
+| POST | `/api/v1/students/{student}/lessons/{lesson}/sign-off` | Yes | Instructor | Sign off lesson (summary only, same pipeline as admin; returns completed lesson) |
 | POST | `/api/v1/students/{student}/lessons/{lesson}/resources` | Yes | Instructor | Assign resources |
 | GET | `/api/v1/students/{student}/notes` | Yes | Both | List notes |
 | POST | `/api/v1/students/{student}/notes` | Yes | Both | Create note |
@@ -7502,7 +7473,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-09-04 | **Added `POST /api/v1/students/{student}/orders/{order}/resend-payment-link`** — re-send the upfront payment-link email for an order still awaiting payment (pending upfront order with draft lessons). Reuses the existing Stripe Checkout session while open, creates a fresh one when expired (old emailed link then stops working). Email goes to the booker (student or contact — same logic as the booking email); an additive push (`{ type: "payment_link_resent", order_id, checkout_url }`) is queued when the student owns the account and has an Expo push token, mirroring the weekly payment-reminder. 200 returns `{ "message": "Payment link re-sent to {email}" }`; 404 when the order isn't the student's (no-information-leak); 422 when the order is weekly/active/completed/cancelled or no link could be generated; 429 on the per-order 3-minute cooldown. Auth: student policy (assigned instructor or the student). | Orders (resend-payment-link — NEW) |
 | 2026-09-10 | **Admin-defined resource/folder display order.** Existing `resources.sort_order` and `resource_folders.sort_order` columns are now writable from Drive CRM (`POST /resources/folders/root/reorder`, `POST /resources/folders/{folder}/reorder`, `POST /resources/folders/{folder}/resources/reorder` — owner web, not mobile). Tree endpoints already queried `sort_order` then name/title; they now also **return** `sort_order` on every folder and resource. Flat `GET /api/v1/resources` is ordered by folder, then `sort_order`, then title (was title only). Lesson-attached resources follow the same library order. Render `folders` / `children` / `resources` in array order — do not re-sort by title. Until a folder is reordered in admin, existing rows may all be `0` and fall back to name/title. New uploads/imports append (`max + 1`). Resource-library cache is invalidated on admin writes. `my_resources` / suggested lists stay suggestion-order and have no `sort_order`. | Resources (index, show), Instructor Resource Tree, Student Resources (index, show), Lesson Detail (resources) |
 | 2026-09-10 | **Folder visibility for instructors and pupils.** New `resource_folders.visibility` (`student` \| `instructor` \| `both`, default `both`). Admin create/edit folder sheets set it. `GET /api/v1/student/resources` only returns folders visible to pupils and prunes empty folders (so instructor-only libraries such as VTS no longer appear as empty categories). `GET /api/v1/instructor/resources` only returns folders visible to instructors. Both tree folder objects now include `visibility`. Student show/watched 404 when the parent folder is instructor-only. `GET /api/v1/resources?audience=` also excludes resources whose parent folder is hidden from that audience. Student resource-summary study progress, recommended, stats, my_resources, and the Expert badge denominator all ignore instructor-only folders. | Resources (index), Student Resources (index, show, watched, summary), Instructor Resource Tree (tree) |
-| 2026-09-18 | **Mobile lesson sign-off mirrors admin (summary only).** The four-prompt reflective log is leftover and is **not** required. `POST .../sign-off` accepts `{ "summary": "..." }` only (same body as admin CRM), persists the summary, marks the lesson `completed` in the request, and returns the lesson (`message: "Lesson signed off."` + `data` with `status: completed` / `card_status: signed_off`). AI resource emails still run from `summary` on the background job. Do **not** gate the UI on `has_reflective_log`. A leftover `PUT/POST .../reflective-log` upsert remains so old app builds do not 404; it is not part of sign-off. Payout failure cannot roll back completion. Unpaid / draft / already-completed return 422. | Student Lessons (sign-off), leftover reflective-log upsert |
+| 2026-09-18 | **Mobile lesson sign-off returns the completed lesson.** Same body as admin (`{ "summary": "..." }` only). The four-prompt reflective log is leftover and is not required — do not gate on `has_reflective_log`. The endpoint now runs the existing `LessonSignOffService` in-request (admin still queues the same job) and returns `{ "message": "Lesson signed off.", "data": <lesson> }` with `status: completed` / `card_status: signed_off`. Shared payout / onboarding / payment guards are unchanged. | Student Lessons (sign-off) |
 
 ---
 

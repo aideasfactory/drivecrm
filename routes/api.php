@@ -14,7 +14,6 @@ use App\Http\Controllers\Api\V1\InstructorStripeController;
 use App\Http\Controllers\Api\V1\InstructorStudentController;
 use App\Http\Controllers\Api\V1\InstructorStudentProgressController;
 use App\Http\Controllers\Api\V1\InstructorVehicleController;
-use App\Http\Controllers\Api\V1\LessonReflectiveLogController;
 use App\Http\Controllers\Api\V1\LessonResourceController;
 use App\Http\Controllers\Api\V1\LessonSignOffController;
 use App\Http\Controllers\Api\V1\MessageController;
@@ -172,8 +171,6 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('students/{student}/pickup-points/{pickupPoint}', [StudentPickupPointController::class, 'destroy']);
         Route::patch('students/{student}/pickup-points/{pickupPoint}/default', [StudentPickupPointController::class, 'setDefault']);
         Route::post('students/{student}/lessons/{lesson}/resources', [LessonResourceController::class, 'store']);
-        Route::match(['post', 'put'], 'students/{student}/lessons/{lesson}/reflective-log', [LessonReflectiveLogController::class, 'upsert']);
-        Route::match(['post', 'put'], 'students/{student}/lessons/{lesson}/reflective-logs', [LessonReflectiveLogController::class, 'upsert']);
         Route::post('students/{student}/lessons/{lesson}/sign-off', [LessonSignOffController::class, 'store']);
         // Resources
         Route::get('resources', [ResourceController::class, 'index']);
