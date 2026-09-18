@@ -1291,7 +1291,7 @@ Laravel Sanctum's API token storage. Each row is a single API token issued to a 
 
 ### 26. **reflective_logs**
 
-Student reflective logs for lessons. Each lesson can have at most one reflective log. A past lesson without a reflective log cannot be signed off (displays as "needs sign-off" / red card in the mobile app).
+Student reflective logs for lessons. Each lesson can have at most one reflective log. The mobile API treats a log as complete only when `what_i_learned`, `what_went_well`, and `what_to_improve` are all filled (`has_reflective_log`). Instructors upsert the log via `PUT/POST /api/v1/students/{student}/lessons/{lesson}/reflective-log` or as part of `POST .../sign-off`. A past lesson without a complete log cannot be signed off via the mobile API (422). `card_status: needs_sign_off` is still driven by `completed_at` (past + not signed off), not by the log row alone.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|

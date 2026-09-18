@@ -35,8 +35,12 @@ class CreateLessonPayoutAction
      */
     public function __invoke(Lesson $lesson, Instructor $instructor): Payout
     {
-        // Guard: payout already exists
-        if ($lesson->hasPayoutProcessed()) {
+        $lesson->loadMissing('payout');
+        $payout = $lesson->payout;
+
+        // A paid transfer must not be retried. Failed / pending rows are reused
+        // so a later job attempt can finish the Stripe transfer.
+        if ($payout?->status === PayoutStatus::PAID) {
             throw new PayoutAlreadyProcessedException;
         }
 
@@ -47,13 +51,19 @@ class CreateLessonPayoutAction
             throw new InstructorNotOnboardedException;
         }
 
-        // Create payout record with pending status
-        $payout = Payout::create([
-            'lesson_id' => $lesson->id,
-            'instructor_id' => $instructor->id,
-            'amount_pence' => $lesson->amount_pence,
-            'status' => PayoutStatus::PENDING,
-        ]);
+        if ($payout === null) {
+            $payout = Payout::create([
+                'lesson_id' => $lesson->id,
+                'instructor_id' => $instructor->id,
+                'amount_pence' => $lesson->amount_pence,
+                'status' => PayoutStatus::PENDING,
+            ]);
+        } else {
+            $payout->instructor_id = $instructor->id;
+            $payout->amount_pence = $lesson->amount_pence;
+            $payout->status = PayoutStatus::PENDING;
+            $payout->save();
+        }
 
         // Resolve the funding charge so the transfer is tied to it via source_transaction.
         // May be null for legacy data that cannot be resolved — see resolveSourceTransaction.

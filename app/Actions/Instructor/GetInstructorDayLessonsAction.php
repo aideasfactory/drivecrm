@@ -39,7 +39,7 @@ class GetInstructorDayLessonsAction
                 'calendarItem.calendar:id,instructor_id,date',
                 'lessonPayment:id,lesson_id,amount_pence,status,paid_at',
                 'payout:id,lesson_id,status,amount_pence,paid_at',
-                'reflectiveLog:id,lesson_id',
+                'reflectiveLog:id,lesson_id,what_i_learned,what_went_well,what_to_improve',
                 'resources:id,title,resource_type',
             ])
             ->orderBy('start_time')

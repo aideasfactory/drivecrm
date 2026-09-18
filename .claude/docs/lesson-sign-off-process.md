@@ -9,17 +9,24 @@ The lesson sign-off flow allows instructors to mark a lesson as completed, trigg
 ## Flow
 
 ```
+Instructor completes the reflective log (optional separate save)
+  → PUT/POST /api/v1/students/{student}/lessons/{lesson}/reflective-log
+  → Upserts reflective_logs and returns the lesson (`has_reflective_log: true`)
+
 Instructor clicks "Sign Off" on a lesson
-  → Frontend opens Sheet slide-out with T&Cs
+  → Frontend opens Sheet slide-out with T&Cs (admin) or Complete Sign Off (app)
   → Instructor confirms
   → POST /students/{student}/lessons/{lesson}/sign-off
   → Controller validates (lesson belongs to student, lesson is pending, instructor assigned)
-  → Dispatches ProcessLessonSignOffJob
-  → Job runs SignOffLessonAction inside DB transaction:
-      1. MarkLessonCompletedAction (status=completed, completed_at=now)
+  → Mobile API: saves summary + reflective log, requires a complete log, marks
+    the lesson completed in this request (calendar + order), returns the lesson
+  → Dispatches ProcessLessonSignOffJob (payout + emails + AI)
+  → Job runs SignOffLessonAction (idempotent if already completed):
+      1. MarkLessonCompletedAction (status=completed, completed_at=now) — skipped if done
       2. UpdateCalendarItemCompletedAction (calendar_item status=completed)
-      3. CreateLessonPayoutAction (Payout record + Stripe Transfer)
-      4. CheckOrderCompletionAction (if all lessons done → order completed)
+      3. CheckOrderCompletionAction (if all lessons done → order completed)
+      4. CreateLessonPayoutAction OUTSIDE the completion transaction
+         (Stripe failure does not roll back signed-off status)
   → LessonSignOffService also:
       5. Logs activity for student AND instructor
       6. Sends LessonFeedbackRequest email to student
@@ -34,10 +41,13 @@ Instructor clicks "Sign Off" on a lesson
 | File | Purpose |
 |------|---------|
 | `app/Http/Controllers/PupilController.php` | `lessons()` and `signOffLesson()` endpoints |
+| `app/Http/Controllers/Api/V1/LessonSignOffController.php` | Mobile API sign-off (persist + complete + return lesson) |
+| `app/Http/Controllers/Api/V1/LessonReflectiveLogController.php` | Mobile API reflective-log upsert |
 | `app/Services/LessonSignOffService.php` | Orchestrates actions + activity log + email |
 | `app/Jobs/ProcessLessonSignOffJob.php` | Queued job (3 retries, 30s backoff) |
 | `app/Actions/Student/Lesson/GetStudentLessonsAction.php` | Fetches lessons with all relations |
-| `app/Actions/Student/Lesson/SignOffLessonAction.php` | DB transaction orchestrating the 4 sub-actions |
+| `app/Actions/Student/Lesson/SaveReflectiveLogAction.php` | Upserts `reflective_logs` for a lesson |
+| `app/Actions/Student/Lesson/SignOffLessonAction.php` | Completes the lesson, then payout (not in the same transaction) |
 | `app/Actions/Student/Lesson/MarkLessonCompletedAction.php` | Sets lesson status=completed |
 | `app/Actions/Student/Lesson/UpdateCalendarItemCompletedAction.php` | Sets calendar_item status=completed |
 | `app/Actions/Student/Lesson/CreateLessonPayoutAction.php` | Creates Payout + Stripe Transfer |
@@ -57,6 +67,7 @@ Instructor clicks "Sign Off" on a lesson
 |--------|-----|------|
 | GET | `/students/{student}/lessons` | `students.lessons` |
 | POST | `/students/{student}/lessons/{lesson}/sign-off` | `students.lessons.sign-off` |
+| PUT/POST | `/api/v1/students/{student}/lessons/{lesson}/reflective-log` | (API only) |
 
 ---
 
@@ -91,14 +102,26 @@ Instructor clicks "Sign Off" on a lesson
 
 ### POST /students/{student}/lessons/{lesson}/sign-off
 
-**Success (200):**
+**Admin web success (200):**
 ```json
 { "message": "Lesson sign-off is being processed." }
+```
+
+**Mobile API success (200):**
+```json
+{ "message": "Lesson signed off.", "data": { "status": "completed", "card_status": "signed_off", "has_reflective_log": true } }
 ```
 
 **Error (422):**
 ```json
 { "message": "This lesson has already been completed." }
+```
+
+### PUT /api/v1/students/{student}/lessons/{lesson}/reflective-log
+
+**Success (200):**
+```json
+{ "message": "Reflective log saved.", "data": { "has_reflective_log": true } }
 ```
 
 ---
@@ -111,9 +134,13 @@ The controller validates:
 3. Instructor is assigned to the lesson
 
 The SignOffLessonAction validates:
-1. Lesson is not already completed (LessonAlreadyCompletedException)
-2. Instructor has Stripe onboarding complete (InstructorNotOnboardedException)
-3. For weekly payment mode: LessonPayment must be `paid`
+1. Lesson is pending (or already completed — job is then payout-only)
+2. For weekly payment mode: LessonPayment must be `paid`
+3. For upfront mode: order must be `active`
+
+The mobile API additionally requires a complete reflective log before sign-off.
+Stripe Connect onboarding is checked when creating the payout, not when marking
+the lesson complete — a Connect delay must not prevent Needs Sign Off from clearing.
 
 ---
 

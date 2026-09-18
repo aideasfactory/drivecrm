@@ -54,7 +54,7 @@ class InstructorDayLessonResource extends JsonResource
                 'item_type' => $this->calendarItem->item_type?->value,
                 'notes' => $this->calendarItem->notes,
             ] : null,
-            'has_reflective_log' => $this->reflectiveLog !== null,
+            'has_reflective_log' => $this->hasCompleteReflectiveLog(),
             'resources_count' => $this->resources->count(),
         ];
     }

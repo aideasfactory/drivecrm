@@ -9,12 +9,14 @@ use App\Actions\Student\Lesson\ComputeLessonCardStatusAction;
 use App\Actions\Student\Lesson\GetStudentLessonDetailAction;
 use App\Actions\Student\Lesson\GetStudentLessonsAction;
 use App\Actions\Student\Lesson\SaveLessonSummaryAction;
+use App\Actions\Student\Lesson\SaveReflectiveLogAction;
 use App\Actions\Student\Lesson\SignOffLessonAction;
 use App\Jobs\ProcessResourceRecommendationsJob;
 use App\Mail\LessonFeedbackRequest;
 use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Payout;
+use App\Models\ReflectiveLog;
 use App\Models\Student;
 use App\Notifications\LessonSignedOffNotification;
 use Illuminate\Support\Collection;
@@ -30,6 +32,7 @@ class LessonSignOffService extends BaseService
         protected ComputeLessonCardStatusAction $computeCardStatus,
         protected SignOffLessonAction $signOffLesson,
         protected SaveLessonSummaryAction $saveLessonSummary,
+        protected SaveReflectiveLogAction $saveReflectiveLog,
         protected LogActivityAction $logActivity,
         protected OrderService $orderService
     ) {}
@@ -57,9 +60,43 @@ class LessonSignOffService extends BaseService
     }
 
     /**
+     * Persist the instructor's lesson summary.
+     */
+    public function saveLessonSummary(Lesson $lesson, string $summary): Lesson
+    {
+        return ($this->saveLessonSummary)($lesson, $summary);
+    }
+
+    /**
+     * Upsert the reflective log for a lesson.
+     *
+     * @param  array{what_i_learned: ?string, what_went_well: ?string, what_to_improve: ?string, additional_notes?: ?string}  $fields
+     */
+    public function saveReflectiveLog(Lesson $lesson, array $fields): ReflectiveLog
+    {
+        $log = ($this->saveReflectiveLog)($lesson, $fields);
+        $lesson->setRelation('reflectiveLog', $log);
+
+        return $log;
+    }
+
+    /**
+     * Mark the lesson completed (calendar + order) without waiting on Stripe.
+     */
+    public function completeLesson(Lesson $lesson): Lesson
+    {
+        $lesson->loadMissing(['order.student']);
+
+        return $this->signOffLesson->completeWithoutPayout($lesson);
+    }
+
+    /**
      * Sign off a lesson: save summary, complete it, process payout, log activity, send emails, dispatch resource recommendations.
      *
-     * @return array{lesson: Lesson, payout: Payout, order_completed: bool}
+     * Safe to call again after the lesson is already completed (API path marks
+     * complete first, then this job finishes payout + notifications).
+     *
+     * @return array{lesson: Lesson, payout: Payout|null, order_completed: bool}
      */
     public function signOffLesson(Lesson $lesson, Instructor $instructor, string $summary = ''): array
     {
@@ -70,7 +107,7 @@ class LessonSignOffService extends BaseService
             ($this->saveLessonSummary)($lesson, $summary);
         }
 
-        // Execute the sign-off pipeline (mark complete, calendar update, payout, order check)
+        // Execute the sign-off pipeline (mark complete if still pending, then payout)
         $result = ($this->signOffLesson)($lesson, $instructor);
 
         $student = $lesson->order->student;
@@ -85,7 +122,7 @@ class LessonSignOffService extends BaseService
             [
                 'lesson_id' => $lesson->id,
                 'instructor_id' => $instructor->id,
-                'payout_amount_pence' => $result['payout']->amount_pence,
+                'payout_amount_pence' => $result['payout']?->amount_pence,
             ]
         );
 
@@ -96,7 +133,7 @@ class LessonSignOffService extends BaseService
             [
                 'lesson_id' => $lesson->id,
                 'student_id' => $student->id,
-                'payout_amount_pence' => $result['payout']->amount_pence,
+                'payout_amount_pence' => $result['payout']?->amount_pence,
             ]
         );
 
