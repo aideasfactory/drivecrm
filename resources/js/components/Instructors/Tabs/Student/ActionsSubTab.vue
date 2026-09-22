@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { router } from '@inertiajs/vue3'
+import { useRole } from '@/composables/useRole'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import EmergencyContactManager from '@/components/Shared/EmergencyContactManager.vue'
@@ -17,6 +18,8 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+const { isOwner } = useRole()
 
 const student = ref<{
     name: string
@@ -126,7 +129,7 @@ const handleStatusUpdated = (
             </CardContent>
         </Card>
 
-        <Card class="md:col-span-2">
+        <Card v-if="isOwner" class="md:col-span-2">
             <CardContent class="p-6">
                 <div v-if="isLoadingStudent" class="space-y-4">
                     <Skeleton class="h-5 w-40" />

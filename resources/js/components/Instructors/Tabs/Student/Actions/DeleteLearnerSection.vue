@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import axios from 'axios'
+import { useRole } from '@/composables/useRole'
 import { Button } from '@/components/ui/button'
 import {
     Dialog,
@@ -28,6 +29,8 @@ const emit = defineEmits<{
     deleted: []
 }>()
 
+const { isOwner } = useRole()
+
 const isDialogOpen = ref(false)
 const isDeleting = ref(false)
 
@@ -51,7 +54,7 @@ const handleDelete = async () => {
 </script>
 
 <template>
-    <div>
+    <div v-if="isOwner">
         <template v-if="!compact">
             <div class="mb-6 flex items-center gap-2">
                 <h3 class="flex items-center gap-2 text-lg font-semibold">

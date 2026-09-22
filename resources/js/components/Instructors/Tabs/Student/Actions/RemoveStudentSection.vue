@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import axios from 'axios'
+import { useRole } from '@/composables/useRole'
 import { Button } from '@/components/ui/button'
 import {
     Dialog,
@@ -18,6 +19,8 @@ const props = defineProps<{
     hasInstructor: boolean
 }>()
 
+const { isInstructor } = useRole()
+
 const isDialogOpen = ref(false)
 const isRemoving = ref(false)
 
@@ -25,7 +28,11 @@ const handleRemove = async () => {
     isRemoving.value = true
     try {
         await axios.delete(`/students/${props.studentId}/remove`)
-        toast({ title: 'Student has been removed from the instructor' })
+        toast({
+            title: isInstructor.value
+                ? 'Student has been removed from your active pupil list'
+                : 'Student has been removed from the instructor',
+        })
         isDialogOpen.value = false
         router.visit('/pupils')
     } catch (error: any) {
@@ -43,14 +50,23 @@ const handleRemove = async () => {
         <div class="mb-6 flex items-center gap-2">
             <h3 class="flex items-center gap-2 text-lg font-semibold">
                 <UserMinus class="h-5 w-5" />
-                Remove Student
+                {{
+                    isInstructor ? 'Remove from your pupils' : 'Remove Student'
+                }}
             </h3>
         </div>
 
         <p class="mb-4 text-sm text-muted-foreground">
-            Remove this student from their instructor. This does not
-            delete the student record — it only detaches them from the
-            instructor's account.
+            <template v-if="isInstructor">
+                Remove this student from your active pupil's list. This
+                keeps the student record — it only detaches them from
+                your account.
+            </template>
+            <template v-else>
+                Remove this student from their instructor. This does not
+                delete the student record — it only detaches them from the
+                instructor's account.
+            </template>
         </p>
 
         <Button
@@ -60,9 +76,11 @@ const handleRemove = async () => {
         >
             <UserMinus class="mr-2 h-4 w-4" />
             {{
-                hasInstructor
-                    ? 'Remove Student'
-                    : 'No Instructor Assigned'
+                !hasInstructor
+                    ? 'No Instructor Assigned'
+                    : isInstructor
+                      ? 'Remove from my list'
+                      : 'Remove Student'
             }}
         </Button>
 
@@ -74,15 +92,26 @@ const handleRemove = async () => {
                         <AlertTriangle
                             class="h-5 w-5 text-destructive"
                         />
-                        Remove Student?
+                        {{
+                            isInstructor
+                                ? 'Remove from your pupil list?'
+                                : 'Remove Student?'
+                        }}
                     </DialogTitle>
                 </DialogHeader>
                 <div class="py-4">
                     <p class="text-sm text-muted-foreground">
-                        This will remove the student from their
-                        instructor's account. The student record will
-                        remain in the system but will no longer be
-                        assigned to any instructor.
+                        <template v-if="isInstructor">
+                            This will remove the student from your active
+                            pupil's list. The student record is kept and
+                            they are only detached from your account.
+                        </template>
+                        <template v-else>
+                            This will remove the student from their
+                            instructor's account. The student record will
+                            remain in the system but will no longer be
+                            assigned to any instructor.
+                        </template>
                     </p>
                     <p class="mt-3 text-sm font-medium text-destructive">
                         This action cannot be easily undone.
