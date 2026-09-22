@@ -58,20 +58,12 @@ class StudentPolicy
     /**
      * Determine whether staff can delete the learner profile (soft delete).
      *
-     * Owners can delete any profile, including unassigned duplicates.
-     * Instructors can delete only pupils assigned to them.
+     * Admin (owner) only. Instructors may detach a pupil from their own
+     * list, but they cannot delete the learner profile.
      */
     public function deleteProfile(User $user, Student $student): bool
     {
-        if ($user->isOwner()) {
-            return true;
-        }
-
-        if ($user->isInstructor() && $student->instructor_id === $user->instructor?->id) {
-            return true;
-        }
-
-        return false;
+        return $user->isOwner();
     }
 
     /**
