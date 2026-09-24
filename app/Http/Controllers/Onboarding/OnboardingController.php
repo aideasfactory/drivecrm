@@ -17,6 +17,8 @@ class OnboardingController extends Controller
      *   ?discount=<uuid>
      *   ?first_name=<string>&last_name=<string>&email=<string> — prefill step 1
      *   ?instructor_id=<int> — prefill step 2 (bypass instructor selection)
+     *   ?staff_booking=1 — admin/bookings team booking on a student's behalf
+     *                      (only honoured for signed-in owner users)
      */
     public function start(Request $request)
     {
@@ -75,6 +77,13 @@ class OnboardingController extends Controller
             ];
         }
 
+        if ($request->boolean('staff_booking') && $request->user()?->isOwner()) {
+            $data['staff_booking'] = [
+                'user_id' => $request->user()->id,
+                'name' => $request->user()->name,
+            ];
+        }
+
         $maxStep = 1;
 
         // If instructor_id is prefilled, auto-populate step 2 data and advance
@@ -108,8 +117,14 @@ class OnboardingController extends Controller
             ]);
         }
 
+        $step6 = $enquiry->getStepData(6) ?? [];
+
         return Inertia::render('Onboarding/Complete', [
             'enquiry' => $enquiry,
+            'staffBooking' => $enquiry->isStaffBooking() ? [
+                'payment_mode' => $step6['payment_mode'] ?? null,
+                'payment_link_sent_to' => $step6['payment_link_sent_to'] ?? null,
+            ] : null,
         ]);
     }
 }

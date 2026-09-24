@@ -30,6 +30,11 @@ const searchQuery = ref('')
 const isAddSheetOpen = ref(false)
 const isCsvImportOpen = ref(false)
 
+// Instructor CSV import is hidden for now: it emails every new instructor
+// immediately and doesn't record them as imported. Use Data Import instead.
+// Set to true to bring the CSV Template / Upload CSV buttons back.
+const SHOW_INSTRUCTOR_CSV_IMPORT = false
+
 const handleCsvImported = () => {
     router.reload()
 }
@@ -90,11 +95,11 @@ const breadcrumbs = [{ title: 'Instructors' }]
                     />
                 </div>
                 <div class="flex items-center gap-2">
-                    <Button variant="outline" as="a" href="/instructors/csv-template">
+                    <Button v-if="SHOW_INSTRUCTOR_CSV_IMPORT" variant="outline" as="a" href="/instructors/csv-template">
                         <Download class="mr-2 h-4 w-4" />
                         CSV Template
                     </Button>
-                    <Button variant="outline" @click="isCsvImportOpen = true">
+                    <Button v-if="SHOW_INSTRUCTOR_CSV_IMPORT" variant="outline" @click="isCsvImportOpen = true">
                         <FileUp class="mr-2 h-4 w-4" />
                         Upload CSV
                     </Button>

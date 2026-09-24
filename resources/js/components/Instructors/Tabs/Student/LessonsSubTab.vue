@@ -62,7 +62,7 @@ interface Lesson {
     lesson_payment_id: number | null
     payment_status: 'due' | 'paid' | 'refunded' | null
     has_stripe_invoice: boolean
-    payment_mode: 'upfront' | 'weekly'
+    payment_mode: 'upfront' | 'weekly' | 'imported'
     payout_status: 'pending' | 'paid' | 'failed' | null
     has_payout: boolean
     calendar_date: string | null
@@ -111,6 +111,7 @@ const purchaseLessonsUrl = computed(() => {
     if (props.studentLastName) params.set('last_name', props.studentLastName)
     if (props.studentEmail) params.set('email', props.studentEmail)
     if (props.instructorId) params.set('instructor_id', String(props.instructorId))
+    params.set('staff_booking', '1')
     return `/onboarding?${params.toString()}`
 })
 

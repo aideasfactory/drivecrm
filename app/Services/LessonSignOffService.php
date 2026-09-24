@@ -59,7 +59,11 @@ class LessonSignOffService extends BaseService
     /**
      * Sign off a lesson: save summary, complete it, process payout, log activity, send emails, dispatch resource recommendations.
      *
-     * @return array{lesson: Lesson, payout: Payout, order_completed: bool}
+     * Imported lessons (settled outside the platform) get no payout, no student
+     * feedback email, no next-invoice and no resource recommendations — only the
+     * completion, activity log and the instructor's confirmation.
+     *
+     * @return array{lesson: Lesson, payout: Payout|null, order_completed: bool}
      */
     public function signOffLesson(Lesson $lesson, Instructor $instructor, string $summary = ''): array
     {
@@ -74,6 +78,8 @@ class LessonSignOffService extends BaseService
         $result = ($this->signOffLesson)($lesson, $instructor);
 
         $student = $lesson->order->student;
+        $isImported = $lesson->order->isImported();
+        $payoutAmountPence = $result['payout']?->amount_pence;
         $instructorName = $instructor->user?->name ?? 'Instructor';
         $lessonDate = $lesson->date?->format('d M Y') ?? 'N/A';
 
@@ -85,7 +91,7 @@ class LessonSignOffService extends BaseService
             [
                 'lesson_id' => $lesson->id,
                 'instructor_id' => $instructor->id,
-                'payout_amount_pence' => $result['payout']->amount_pence,
+                'payout_amount_pence' => $payoutAmountPence,
             ]
         );
 
@@ -96,12 +102,16 @@ class LessonSignOffService extends BaseService
             [
                 'lesson_id' => $lesson->id,
                 'student_id' => $student->id,
-                'payout_amount_pence' => $result['payout']->amount_pence,
+                'payout_amount_pence' => $payoutAmountPence,
             ]
         );
 
         // Send lesson signed off confirmation to the instructor
         $this->sendLessonSignedOffNotification($lesson, $student, $instructor);
+
+        if ($isImported) {
+            return $result;
+        }
 
         // Send feedback request email to student
         $this->sendFeedbackEmail($lesson, $student, $instructor);

@@ -27,8 +27,9 @@ import {
 } from '@/components/ui/sheet'
 import DeleteLearnerSection from '@/components/Instructors/Tabs/Student/Actions/DeleteLearnerSection.vue'
 import TestPassGuaranteeBadge from '@/components/Shared/TestPassGuaranteeBadge.vue'
-import { Search, GraduationCap } from 'lucide-vue-next'
+import { Search, GraduationCap, CalendarPlus } from 'lucide-vue-next'
 import { show as instructorsShow } from '@/routes/instructors'
+import { start as onboardingStart } from '@/routes/onboarding'
 import { toast } from '@/components/ui/sonner'
 import type { PupilListing } from '@/types/pupil'
 
@@ -167,6 +168,8 @@ const submitAssignment = async () => {
 
 const breadcrumbs = [{ title: 'Students' }]
 
+const staffBookingUrl = onboardingStart.url({ query: { staff_booking: 1 } })
+
 const onLearnerDeleted = () => {
     sheetOpen.value = false
     router.reload({ only: ['pupils'] })
@@ -179,12 +182,24 @@ const onLearnerDeleted = () => {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex flex-col gap-6 p-6">
             <!-- Page Header -->
-            <div class="flex flex-col gap-2">
-                <h2 class="text-3xl font-bold">Students</h2>
-                <p class="text-muted-foreground">
-                    Manage your learner drivers and view their assigned
-                    instructors
-                </p>
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div class="flex flex-col gap-2">
+                    <h2 class="text-3xl font-bold">Students</h2>
+                    <p class="text-muted-foreground">
+                        Manage your learner drivers and view their assigned
+                        instructors
+                    </p>
+                </div>
+                <Button as-child>
+                    <a
+                        :href="staffBookingUrl"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        <CalendarPlus class="mr-2 h-4 w-4" />
+                        Book lessons for a student
+                    </a>
+                </Button>
             </div>
 
             <!-- Search + filter -->

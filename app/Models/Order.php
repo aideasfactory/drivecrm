@@ -135,6 +135,25 @@ class Order extends Model
     }
 
     /**
+     * Check if the order holds lessons imported from another system.
+     * Imported orders have no Stripe payment and never create payouts.
+     */
+    public function isImported(): bool
+    {
+        return $this->payment_mode === PaymentMode::IMPORTED;
+    }
+
+    /**
+     * Whether lessons on this order count as paid without a per-lesson
+     * payment row: a confirmed upfront order, or an imported order (settled
+     * outside the platform).
+     */
+    public function isPrepaid(): bool
+    {
+        return ($this->isUpfront() && $this->isActive()) || $this->isImported();
+    }
+
+    /**
      * Get formatted total price from snapshot (e.g., "£500.00").
      */
     public function getFormattedPackageTotalPriceAttribute(): string

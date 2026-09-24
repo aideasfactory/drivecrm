@@ -25,6 +25,7 @@ use App\Actions\Instructor\GetGroupedStudentsAction;
 use App\Actions\Instructor\GetInstructorCalendarAction;
 use App\Actions\Instructor\GetInstructorDayLessonsAction;
 use App\Actions\Instructor\GetInstructorFinancesAction;
+use App\Actions\Instructor\GetInstructorLessonsInRangeAction;
 use App\Actions\Instructor\GetInstructorLocationsAction;
 use App\Actions\Instructor\GetInstructorPackagesAction;
 use App\Actions\Instructor\GetInstructorPayoutsAction;
@@ -98,6 +99,7 @@ class InstructorService extends BaseService
         protected CreatePupilAction $createPupil,
         protected GetInstructorPayoutsAction $getInstructorPayouts,
         protected GetInstructorDayLessonsAction $getInstructorDayLessons,
+        protected GetInstructorLessonsInRangeAction $getInstructorLessonsInRange,
         protected GetGroupedStudentsAction $getGroupedStudents,
         protected GetInstructorPupilsAction $getInstructorPupils,
         protected SendBroadcastMessageAction $sendBroadcastMessage,
@@ -720,6 +722,16 @@ class InstructorService extends BaseService
     public function getDayLessons(Instructor $instructor, string $date): Collection
     {
         return ($this->getInstructorDayLessons)($instructor, $date);
+    }
+
+    /**
+     * Get the instructor's lessons between two dates (inclusive), ordered by date then start time.
+     *
+     * @return Collection Lessons with student, calendar item, and payment data
+     */
+    public function getLessonsInRange(Instructor $instructor, string $from, string $to): Collection
+    {
+        return ($this->getInstructorLessonsInRange)($instructor, $from, $to);
     }
 
     /**

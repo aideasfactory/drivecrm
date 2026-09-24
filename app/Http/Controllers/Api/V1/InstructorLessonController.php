@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\GetInstructorLessonsRangeRequest;
 use App\Http\Resources\V1\InstructorDayLessonCollection;
 use App\Models\Lesson;
 use App\Services\InstructorService;
@@ -32,6 +33,23 @@ class InstructorLessonController extends Controller
         $instructor = $request->user()->instructor;
 
         $lessons = $this->instructorService->getDayLessons($instructor, $date);
+
+        return new InstructorDayLessonCollection($lessons);
+    }
+
+    /**
+     * Return the authenticated instructor's lessons across an inclusive
+     * ?from=&to= range (week view, max 31 days).
+     */
+    public function range(GetInstructorLessonsRangeRequest $request): InstructorDayLessonCollection
+    {
+        $instructor = $request->user()->instructor;
+
+        $lessons = $this->instructorService->getLessonsInRange(
+            $instructor,
+            $request->validated('from'),
+            $request->validated('to')
+        );
 
         return new InstructorDayLessonCollection($lessons);
     }

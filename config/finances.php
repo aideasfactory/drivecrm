@@ -17,6 +17,7 @@ declare(strict_types=1);
 return [
     'expense_categories' => [
         'none' => 'None',
+        'imported' => 'Imported (legacy)',
         'our_account' => 'Our Account',
         'advertising' => 'Advertising',
         'association' => 'Association',
@@ -32,6 +33,7 @@ return [
 
     'payment_categories' => [
         'none' => 'None',
+        'imported' => 'Imported (legacy)',
         'franchise_payout' => 'Franchise Payout',
         'hmrc_tax' => 'HMRC Tax',
         'insurance' => 'Insurance',

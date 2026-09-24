@@ -13,9 +13,11 @@ use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Onboarding\StepSixRequest;
+use App\Models\Enquiry;
 use App\Models\Instructor;
 use App\Models\Order;
 use App\Models\Package;
+use App\Models\Student;
 use App\Services\OrderService;
 use App\Services\PriceUpliftService;
 use App\Services\StripeService;
@@ -150,6 +152,12 @@ class StepSixController extends Controller
 
             // Discount code data
             'discount' => $discount,
+
+            // Payment emails always go to the step 1 contact (the learner
+            // themselves, or the person booking on the learner's behalf).
+            'staffBooking' => $enquiry->isStaffBooking() ? [
+                'recipient_email' => $step1['email'] ?? null,
+            ] : null,
         ]);
     }
 
@@ -160,6 +168,7 @@ class StepSixController extends Controller
 
     /**
      * Process Step 6: Create user/student/order and redirect to Stripe.
+     * Staff bookings email the upfront payment link to the student instead.
      */
     public function store(StepSixRequest $request): RedirectResponse|HttpResponse
     {
@@ -279,7 +288,14 @@ class StepSixController extends Controller
                 'enquiry_id' => $enquiry->id,
             ]);
 
-            if ($paymentMode === PaymentMode::UPFRONT) {
+            if ($paymentMode === PaymentMode::UPFRONT && $enquiry->isStaffBooking()) {
+                Log::info('Handling staff upfront booking - emailing payment link to student', [
+                    'order_id' => $order->id,
+                    'enquiry_id' => $enquiry->id,
+                    'staff_booking' => $enquiry->getStaffBooking(),
+                ]);
+                $sessionResult = $this->handleStaffUpfrontPayment($enquiry, $order, $student);
+            } elseif ($paymentMode === PaymentMode::UPFRONT) {
                 // UPFRONT PAYMENT: Redirect to Stripe Checkout
                 Log::info('Handling upfront payment - creating Stripe session', [
                     'order_id' => $order->id,
@@ -441,6 +457,31 @@ class StepSixController extends Controller
         ]);
 
         return $result;
+    }
+
+    /**
+     * Handle an upfront booking made by the admin/bookings team: email the
+     * Stripe Checkout link to the student instead of redirecting the staff
+     * member's browser. The order stays pending (calendar items stay draft)
+     * until the student pays, at which point the checkout webhook activates it.
+     *
+     * @return array{success: bool, session_id: null, url: string}
+     */
+    protected function handleStaffUpfrontPayment(Enquiry $enquiry, Order $order, Student $student): array
+    {
+        $result = $this->orderService->sendPaymentLink($order, $student, 'staff_onboarding', true);
+
+        $enquiry->setStepData(6, array_merge($enquiry->getStepData(6) ?? [], [
+            'payment_status' => 'awaiting_payment',
+            'payment_link_sent_to' => $result['email'],
+        ]));
+        $enquiry->save();
+
+        return [
+            'success' => true,
+            'session_id' => null,
+            'url' => route('onboarding.complete', ['uuid' => $enquiry->id]),
+        ];
     }
 
     /**

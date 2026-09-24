@@ -120,8 +120,10 @@ class CalendarItemResource extends JsonResource
 
         // Weekly: per-lesson payment status. Upfront: paid once the order is
         // confirmed — a draft is upfront-but-awaiting-payment, so never paid.
+        // Imported: settled outside the platform, always paid.
         return $lesson->lessonPayment?->isPaid()
-            ?? ($lesson->order?->isUpfront() === true && ! $lesson->isDraft());
+            ?? ($lesson->order?->isImported() === true
+                || ($lesson->order?->isUpfront() === true && ! $lesson->isDraft()));
     }
 
     /**

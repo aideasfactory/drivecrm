@@ -75,7 +75,7 @@ class GetStudentLessonsAction
                     'completed_at' => $lesson->completed_at?->toISOString(),
                     'summary' => $lesson->summary,
                     'lesson_payment_id' => $lesson->lessonPayment?->id,
-                    'payment_status' => $lesson->lessonPayment?->status?->value ?? ($order->isUpfront() && $order->isActive() ? 'paid' : null),
+                    'payment_status' => $lesson->lessonPayment?->status?->value ?? ($order->isPrepaid() ? 'paid' : null),
                     'has_stripe_invoice' => $lesson->lessonPayment?->stripe_invoice_id !== null,
                     'payment_mode' => $order->payment_mode->value,
                     'payout_status' => $lesson->payout?->status?->value,

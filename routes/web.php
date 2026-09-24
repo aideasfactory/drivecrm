@@ -19,6 +19,7 @@ use App\Http\Controllers\Hmrc\Itsa\FinalDeclarationController;
 use App\Http\Controllers\Hmrc\Itsa\ItsaController;
 use App\Http\Controllers\Hmrc\Vat\VatController;
 use App\Http\Controllers\Hmrc\Vehicles\VehicleController;
+use App\Http\Controllers\ImportController;
 use App\Http\Controllers\InstructorController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\MobileStripeOnboardingController;
@@ -50,14 +51,25 @@ use App\Http\Middleware\ValidateBookingStepAccess;
 use App\Http\Middleware\ValidateEnquiryUuid;
 use App\Http\Middleware\ValidateStepAccess;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-// Temporary: send visitors straight into the booking flow instead of the
-// coming-soon page. Query params (e.g. ?gclid=…) are forwarded so ad tracking
-// still reaches BookingController@start. Restore the Welcome render to revert.
+// Site root enters a public flow by hostname. app.drive-plus.co.uk (and any
+// host in config/onboarding.php entry_hosts) always starts /onboarding.
+// Every other host, including app.just-drive.co.uk, starts /booking.
+// Query params (e.g. ?gclid=…) are forwarded so ad tracking still arrives.
 Route::get('/', function (Request $request) {
-    return redirect()->route('booking.start', $request->query());
+    $entryHosts = array_map(
+        static fn (mixed $host): string => strtolower(trim((string) $host)),
+        Arr::wrap(config('onboarding.entry_hosts', [])),
+    );
+
+    $routeName = in_array(strtolower($request->getHost()), $entryHosts, true)
+        ? 'onboarding.start'
+        : 'booking.start';
+
+    return redirect()->route($routeName, $request->query());
 })->name('home');
 
 Route::get('/no-access', fn () => Inertia::render('NoAccess'))
@@ -425,6 +437,18 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
             ->name('student-transfers.search-instructors');
         Route::post('/student-transfers', [StudentTransferController::class, 'store'])
             ->name('student-transfers.store');
+    });
+
+    // Data Import — legacy-system bundles (Owner Only)
+    Route::middleware([EnsureOwner::class])->group(function () {
+        Route::get('/imports', [ImportController::class, 'index'])
+            ->name('imports.index');
+        Route::get('/imports/template', [ImportController::class, 'template'])
+            ->name('imports.template');
+        Route::post('/imports/check', [ImportController::class, 'check'])
+            ->name('imports.check');
+        Route::post('/imports', [ImportController::class, 'store'])
+            ->name('imports.store');
     });
 
     Route::get('/integrations', [IntegrationController::class, 'index'])

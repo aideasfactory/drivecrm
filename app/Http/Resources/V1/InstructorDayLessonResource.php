@@ -42,7 +42,7 @@ class InstructorDayLessonResource extends JsonResource
                 'status' => $student->status,
             ] : null,
             'package_name' => $order?->package_name,
-            'payment_status' => $this->lessonPayment?->status?->value ?? ($order?->isUpfront() && $order?->isActive() ? 'paid' : null),
+            'payment_status' => $this->lessonPayment?->status?->value ?? ($order?->isPrepaid() ? 'paid' : null),
             'payment_mode' => $order?->payment_mode->value,
             'payout_status' => $this->payout?->status?->value,
             'has_payout' => $this->payout !== null,
