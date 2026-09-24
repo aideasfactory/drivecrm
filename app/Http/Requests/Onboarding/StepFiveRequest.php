@@ -22,7 +22,6 @@ class StepFiveRequest extends FormRequest
             'pickup_postcode' => ['nullable', 'string', 'max:20'],
             'promo_code' => ['nullable', 'string', 'max:50'],
             'booking_for_someone_else' => ['nullable', 'boolean'],
-            'test_pass_guarantee' => ['nullable', 'boolean'],
             'auto_save' => ['nullable', 'boolean'],
             'learner_first_name' => ['nullable', 'string', 'max:100'],
             'learner_last_name' => ['nullable', 'string', 'max:100'],
@@ -50,7 +49,6 @@ class StepFiveRequest extends FormRequest
             'learner_email.required' => 'Learner email is required.',
             'learner_email.email' => 'Please provide a valid email address.',
             'learner_phone.required' => 'Learner phone number is required.',
-            'test_pass_guarantee.boolean' => 'Please choose whether to add Pass Your Test Guarantee.',
         ];
     }
 }

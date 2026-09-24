@@ -7,7 +7,7 @@ declare(strict_types=1);
  *
  * Bookings of `free_minimum_hours` or more that are paid in full get the
  * guarantee free. Anyone else (weekly payers, smaller packages) can opt in on
- * the booking summary step for `price`.
+ * the payment step for `price`.
  *
  * Always read these values through `App\Support\TestPassGuarantee`.
  */

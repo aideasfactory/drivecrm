@@ -108,13 +108,13 @@ final class TestPassGuarantee
     }
 
     /**
-     * Whether the learner ticked the add-on on the booking summary step.
+     * Whether the learner ticked the add-on on the payment step.
      */
     public static function optedInForEnquiry(Enquiry $enquiry): bool
     {
-        $step5 = $enquiry->getStepData(5) ?? [];
+        $step6 = $enquiry->getStepData(6) ?? [];
 
-        return (bool) ($step5['test_pass_guarantee'] ?? false);
+        return (bool) ($step6['test_pass_guarantee'] ?? false);
     }
 
     /**

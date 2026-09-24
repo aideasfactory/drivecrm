@@ -466,7 +466,7 @@ Student enrollments/purchases of lesson packages.
 - Weekly payment: Recurring subscription for each lesson
 - Order becomes active after successful payment
 - Lessons are created after order activation
-- **Pass Your Test Guarantee (booking form only):** free when booked hours (lessons × slot length from step 4) ≥ `config('test_pass_guarantee.free_minimum_hours')` (10) and `payment_mode = upfront`. Otherwise the learner can opt in on the summary step for `config('test_pass_guarantee.price')` (£50). Upfront: charged as a separate Stripe Checkout line item. Weekly: added in full to the first `lesson_payments` row (see `lesson_payments.test_pass_guarantee_pence`); the rest of the total is spread evenly as usual. Rules live in `App\Support\TestPassGuarantee`.
+- **Pass Your Test Guarantee (booking form only):** free when booked hours (lessons × slot length from step 4) ≥ `config('test_pass_guarantee.free_minimum_hours')` (10) and `payment_mode = upfront`. Otherwise the learner can opt in on the payment step (step 6) for `config('test_pass_guarantee.price')` (£50). Upfront: charged as a separate Stripe Checkout line item. Weekly: added in full to the first `lesson_payments` row (see `lesson_payments.test_pass_guarantee_pence`); the rest of the total is spread evenly as usual. Rules live in `App\Support\TestPassGuarantee`.
 - **Price snapshot:** `package_name`, `package_total_price_pence`, `package_lesson_price_pence`, and `package_lessons_count` are copied from the package at order creation time. Always use these snapshot columns for pricing/display — never read live from `packages` table via the `package` relationship for pricing data.
 
 ---
@@ -1501,7 +1501,7 @@ In-app account deletion with a 30-day grace period (App Store Guideline 5.1.1(v)
 
 ### 2a. Pass Your Test Guarantee (Booking Form)
 
-1. Step 5 (summary) shows the add-on. The learner's tick is stored in the enquiry as `steps.step5.test_pass_guarantee`.
+1. Step 6 (payment) shows the add-on next to the payment mode choice. The learner's tick is posted with the payment form (`test_pass_guarantee`) and stored in the enquiry as `steps.step6.test_pass_guarantee` before the order is built. Step 5 (summary) only notes that it's free when paid in full.
 2. Step 6 `CreateOrderFromEnquiryAction` resolves it with `TestPassGuarantee::resolveForEnquiry()`:
    - 10+ booked hours and paid in full → `includes_test_pass_guarantee = true`, `test_pass_guarantee_pence = 0` (free, tick ignored)
    - Otherwise, ticked → `includes_test_pass_guarantee = true`, `test_pass_guarantee_pence = 5000`, added to `total_price_pence`

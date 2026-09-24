@@ -130,15 +130,19 @@ class StepSixController extends Controller
             ],
 
             // Pricing for both payment modes
+            // Base totals exclude the guarantee; the page adds it once the
+            // learner picks a payment mode and whether to opt in.
             'pricing' => [
+                'package_total_with_fees_pence' => $packageTotalWithFeesPence,
+                'weekly_payment_pence' => $weeklyPaymentPence,
                 'upfront' => [
-                    'total' => $this->formatPence($packageTotalWithFeesPence + $testPassGuarantee['upfront']['charge_pence']),
+                    'total' => $this->formatPence($packageTotalWithFeesPence),
                     'per_lesson' => $lessonPrice,
                 ],
                 'weekly' => [
                     'per_lesson' => $lessonPrice,
-                    'first_payment' => $this->formatPence($weeklyPaymentPence + $testPassGuarantee['weekly']['charge_pence']),
-                    'total_over_time' => $this->formatPence($packageTotalWithFeesPence + $testPassGuarantee['weekly']['charge_pence']),
+                    'first_payment' => $this->formatPence($weeklyPaymentPence),
+                    'total_over_time' => $this->formatPence($packageTotalWithFeesPence),
                 ],
             ],
 
@@ -169,6 +173,13 @@ class StepSixController extends Controller
         ]);
 
         $paymentMode = PaymentMode::from($validated['payment_mode']);
+        $testPassGuaranteeOptedIn = (bool) ($validated['test_pass_guarantee'] ?? false);
+
+        // Record the add-on choice before the order is built, as the order
+        // action reads it from the enquiry's step 6 data.
+        $enquiry->setStepData(6, array_merge($enquiry->getStepData(6) ?? [], [
+            'test_pass_guarantee' => $testPassGuaranteeOptedIn,
+        ]));
 
         Log::info('Payment mode determined', [
             'payment_mode' => $paymentMode->value,
@@ -251,6 +262,7 @@ class StepSixController extends Controller
             // Save order details to enquiry
             $enquiry->setStepData(6, [
                 'payment_mode' => $paymentMode->value,
+                'test_pass_guarantee' => $testPassGuaranteeOptedIn,
                 'user_id' => $user->id,
                 'student_id' => $student->id,
                 'order_id' => $order->id,
