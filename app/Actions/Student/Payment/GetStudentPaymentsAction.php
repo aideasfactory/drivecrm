@@ -65,13 +65,19 @@ class GetStudentPaymentsAction
 
         foreach ($upfrontOrders as $order) {
             $lessons = $order->lessons()
-                ->whereDoesntHave('lessonPayment')
+                ->withExists('lessonPayment')
+                ->orderBy('date')
+                ->orderBy('start_time')
                 ->get();
 
-            foreach ($lessons as $lesson) {
+            foreach ($lessons->values() as $index => $lesson) {
+                if ($lesson->lesson_payment_exists) {
+                    continue;
+                }
+
                 LessonPayment::create([
                     'lesson_id' => $lesson->id,
-                    'amount_pence' => $lesson->amount_pence,
+                    'amount_pence' => LessonPayment::orderShareForLesson($order, $lesson, $index, $lessons->count()),
                     'status' => PaymentStatus::PAID,
                     'due_date' => $lesson->date,
                     'paid_at' => $order->updated_at,

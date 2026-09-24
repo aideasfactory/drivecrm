@@ -114,10 +114,11 @@ final class EmailTemplateCatalog
                 'package_name' => 'Package name',
                 'lessons_count' => 'Number of lessons',
                 'instructor_name' => 'Instructor name',
-                'total' => 'Formatted total',
+                'cost_breakdown' => 'Lessons, booking fee and digital fee lines (blank when there are no fees)',
+                'total' => 'Formatted total, including fees',
                 'first_lesson_line' => 'First lesson date, if booked',
                 'booked_for_line' => 'Shown when a contact booked on behalf of a learner',
-            ], 'Complete Your Payment for Driving Lessons', 'Hello {{recipient_name}}!', "{{intro}}\n\n**Booking Details:**\nPackage: {{package_name}}\nNumber of lessons: {{lessons_count}}\nInstructor: {{instructor_name}}\nTotal: {{total}}\n{{first_lesson_line}}\n\nPlease complete your payment using the link below to confirm your lessons.\n\n{{action_button}}\n\nThis payment link will expire after 24 hours.\n{{booked_for_line}}", "Safe driving,\nThe Driving School Team", 'Pay Now'),
+            ], 'Complete Your Payment for Driving Lessons', 'Hello {{recipient_name}}!', "{{intro}}\n\n**Booking Details:**\nPackage: {{package_name}}\nNumber of lessons: {{lessons_count}}\nInstructor: {{instructor_name}}\n{{cost_breakdown}}\nTotal: {{total}}\n{{first_lesson_line}}\n\nPlease complete your payment using the link below to confirm your lessons.\n\n{{action_button}}\n\nThis payment link will expire after 24 hours.\n{{booked_for_line}}", "Safe driving,\nThe Driving School Team", 'Pay Now'),
 
             self::entry(EmailTemplateKey::LearnerPaymentDueSoon, 'Payment due soon (48 hours)', $audience, 'Reminder that a weekly lesson payment is due in under 48 hours.', [
                 'recipient_name' => 'Greeting name (learner or contact)',
@@ -125,8 +126,9 @@ final class EmailTemplateCatalog
                 'package_name' => 'Package name',
                 'lesson_date' => 'Lesson date',
                 'lesson_time' => 'Lesson time',
+                'cost_breakdown' => 'Optional fee breakdown',
                 'amount' => 'Amount due',
-            ], 'Payment Due Soon: Your Driving Lesson on {{lesson_date}}', 'Hello {{recipient_name}}!', "{{intro}}\n\n**Lesson Details:**\nPackage: {{package_name}}\nDate: {{lesson_date}}\nTime: {{lesson_time}}\nAmount due: {{amount}}\n\nYour lesson is in less than 48 hours. Please complete your payment using the link below to secure it.\n\n{{action_button}}\n\nIf you have already paid, please disregard this email.", "Safe driving,\nThe Driving School Team", 'Pay Now'),
+            ], 'Payment Due Soon: Your Driving Lesson on {{lesson_date}}', 'Hello {{recipient_name}}!', "{{intro}}\n\n**Lesson Details:**\nPackage: {{package_name}}\nDate: {{lesson_date}}\nTime: {{lesson_time}}\n{{cost_breakdown}}\nAmount due: {{amount}}\n\nYour lesson is in less than 48 hours. Please complete your payment using the link below to secure it.\n\n{{action_button}}\n\nIf you have already paid, please disregard this email.", "Safe driving,\nThe Driving School Team", 'Pay Now'),
 
             self::entry(EmailTemplateKey::LearnerBookingCancelled, 'Booking cancelled', $audience, 'Sent to the learner when lessons are cancelled.', [
                 'recipient_name' => 'Learner first name',
@@ -185,8 +187,9 @@ final class EmailTemplateCatalog
                 'lesson_date' => 'Lesson date',
                 'lesson_time' => 'Lesson time',
                 'instructor_name' => 'Instructor name',
+                'cost_breakdown' => 'Optional fee breakdown',
                 'amount' => 'Amount paid',
-            ], 'Payment Confirmed: Your Driving Lesson on {{lesson_date}}', 'Hello {{recipient_name}}!', "{{intro}}\n\n**Lesson Details:**\nPackage: {{package_name}}\nDate: {{lesson_date}}\nTime: {{lesson_time}}\nInstructor: {{instructor_name}}\nAmount paid: {{amount}}\n\nYour lesson is confirmed. Please arrive 5 minutes early.\nIf you need to make any changes, please contact us as soon as possible.", "Safe driving,\nThe Driving School Team", null),
+            ], 'Payment Confirmed: Your Driving Lesson on {{lesson_date}}', 'Hello {{recipient_name}}!', "{{intro}}\n\n**Lesson Details:**\nPackage: {{package_name}}\nDate: {{lesson_date}}\nTime: {{lesson_time}}\nInstructor: {{instructor_name}}\n{{cost_breakdown}}\nAmount paid: {{amount}}\n\nYour lesson is confirmed. Please arrive 5 minutes early.\nIf you need to make any changes, please contact us as soon as possible.", "Safe driving,\nThe Driving School Team", null),
 
             self::entry(EmailTemplateKey::LearnerInstructorOnWay, 'Instructor on the way', $audience, 'Sent when the instructor taps “on my way” for a lesson.', [
                 'recipient_name' => 'Booker first name',

@@ -91,25 +91,23 @@ class OrderConfirmationNotification extends Notification implements ShouldQueue
         $order = $this->order;
 
         if ($order->isUpfront()) {
-            $lines = [
+            return implode("\n", [
                 '**Payment — paid in full:**',
-                "Lessons: {$order->formatted_package_total_price}",
-            ];
-
-            if ($order->booking_fee_pence > 0) {
-                $lines[] = "Booking fee: {$order->formatted_booking_fee}";
-            }
-
-            if ($order->digital_fee_pence > 0) {
-                $lines[] = "Digital fee: {$order->formatted_digital_fee}";
-            }
-
-            $lines[] = "**Total paid: {$order->formatted_amount_paid}**";
-
-            return implode("\n", $lines);
+                ...$order->costBreakdownLines(),
+                "**Total paid: {$order->formatted_amount_paid}**",
+            ]);
         }
 
-        return 'Payment: Weekly (£'.number_format($order->package_lesson_price_pence / 100, 2).' per lesson)';
+        if (! $order->hasFees()) {
+            return "Payment: Weekly ({$order->formatted_weekly_instalment} per lesson)";
+        }
+
+        return implode("\n", [
+            '**Payment — weekly:**',
+            ...$order->costBreakdownLines(),
+            "**Total: {$order->formatted_amount_paid}**",
+            "Paid in {$order->package_lessons_count} weekly instalments of {$order->formatted_weekly_instalment}",
+        ]);
     }
 
     /**

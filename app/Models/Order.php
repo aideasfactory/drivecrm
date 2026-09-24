@@ -186,6 +186,49 @@ class Order extends Model
     }
 
     /**
+     * Whether the order carries a booking or digital fee on top of the lessons.
+     */
+    public function hasFees(): bool
+    {
+        return ($this->booking_fee_pence ?? 0) > 0 || ($this->digital_fee_pence ?? 0) > 0;
+    }
+
+    /**
+     * Get the first weekly instalment the student pays, including their share of
+     * the booking and digital fees (e.g., "£65.99"). Later instalments match this
+     * figure except the last, which absorbs any rounding remainder.
+     */
+    public function getFormattedWeeklyInstalmentAttribute(): string
+    {
+        $lessonsCount = (int) ($this->package_lessons_count ?? 0);
+        $totalPence = (int) ($this->total_price_pence ?? $this->package_total_price_pence ?? 0);
+
+        return '£'.number_format(LessonPayment::weeklyAmountForIndex($totalPence, $lessonsCount, 0) / 100, 2);
+    }
+
+    /**
+     * Lines itemising the order cost for student-facing emails: the lessons
+     * followed by each non-zero fee. The fee-inclusive total is left to the
+     * caller so each email can label it ("Total", "Total paid").
+     *
+     * @return list<string>
+     */
+    public function costBreakdownLines(): array
+    {
+        $lines = ["Lessons: {$this->formatted_package_total_price}"];
+
+        if ($this->booking_fee_pence > 0) {
+            $lines[] = "Booking fee: {$this->formatted_booking_fee}";
+        }
+
+        if ($this->digital_fee_pence > 0) {
+            $lines[] = "Digital fee: {$this->formatted_digital_fee}";
+        }
+
+        return $lines;
+    }
+
+    /**
      * Get formatted lesson price from snapshot (e.g., "£50.00").
      */
     public function getFormattedPackageLessonPriceAttribute(): string

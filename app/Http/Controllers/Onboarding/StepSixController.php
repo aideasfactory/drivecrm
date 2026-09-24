@@ -16,6 +16,7 @@ use App\Models\Instructor;
 use App\Models\Order;
 use App\Models\Package;
 use App\Services\OrderService;
+use App\Services\PackageService;
 use App\Services\PriceUpliftService;
 use App\Services\StripeService;
 use Illuminate\Http\RedirectResponse;
@@ -35,7 +36,8 @@ class StepSixController extends Controller
         protected CreateOrderFromEnquiryAction $createOrderAction,
         protected SendOrderConfirmationEmailAction $sendEmailAction,
         protected OrderService $orderService,
-        protected PriceUpliftService $priceUpliftService
+        protected PriceUpliftService $priceUpliftService,
+        protected PackageService $packageService,
     ) {}
 
     /**
@@ -77,12 +79,11 @@ class StepSixController extends Controller
             $this->priceUpliftService->upliftForEnquiry($enquiry),
         );
 
-        // Calculate pricing (in pounds for display)
-        $packagePrice = $package->total_price;
-        $lessonPrice = $package->weekly_payment;
-
-        // Get discount data
         $discount = $enquiry->getDiscountData();
+        $pricing = $this->packageService->calculateEnquiryPricing($package, $discount);
+
+        $packagePrice = '£'.number_format($pricing['total'], 2);
+        $lessonPrice = '£'.number_format($pricing['weekly_payment'], 2);
 
         return Inertia::render('Onboarding/Step6', [
             'uuid' => $enquiry->id,
@@ -106,8 +107,8 @@ class StepSixController extends Controller
                 'formatted_lesson_price' => $package->formatted_lesson_price,
                 'booking_fee' => $package->booking_fee,
                 'digital_fee' => $package->digital_fee,
-                'total_price' => $package->total_price,
-                'weekly_payment' => $package->weekly_payment,
+                'total_price' => $packagePrice,
+                'weekly_payment' => $lessonPrice,
                 'lesson_price' => $lessonPrice,
             ],
 

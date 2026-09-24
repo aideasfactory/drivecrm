@@ -79,8 +79,8 @@
                         <p class="text-sm text-muted-foreground">{{ package?.lessons_count || '0' }} lessons</p>
                       </div>
                       <div class="text-right">
-                        <div class="text-xl font-bold">{{ package?.formatted_total_price || '0' }}</div>
-                        <div class="text-sm text-muted-foreground">{{ package?.formatted_lesson_price || '0' }}/lesson</div>
+                        <div class="text-xl font-bold">£{{ pricing?.total ?? '0.00' }}</div>
+                        <div class="text-sm text-muted-foreground">incl. booking &amp; digital fees</div>
                       </div>
                     </div>
                   </CardContent>
@@ -255,15 +255,15 @@
                     <div class="space-y-3 mt-4 w-full">
                       <div class="flex items-center justify-between">
                         <span>{{ package?.name }} ({{ package?.lessons_count }} lessons)</span>
-                        <span class="font-medium">{{ package?.formatted_total_price || '0.00' }}</span>
+                        <span class="font-medium">£{{ pricing?.package_price ?? '0.00' }}</span>
                       </div>
                       <div class="flex items-center justify-between">
                         <span>Booking fee</span>
                         <span class="font-medium">£{{ pricing?.booking_fee ?? '0.00' }}</span>
                       </div>
                       <div class="flex items-center justify-between">
-                        <span>Digital Fee</span>
-                        <span class="font-medium">{{ package?.digital_fee ?? '£0.00' }}</span>
+                        <span>Digital fee ({{ package?.lessons_count }} lessons)</span>
+                        <span class="font-medium">£{{ pricing?.digital_fee ?? '0.00' }}</span>
                       </div>
                       <div v-if="promoDiscount" class="flex items-center justify-between text-green-600">
                         <span>Promo discount</span>
@@ -276,10 +276,10 @@
                       <Separator />
                       <div class="flex items-center justify-between">
                         <span class="text-lg font-semibold">Total</span>
-                        <span class="text-xl font-bold">{{ package?.total_price || '0.00' }}</span>
+                        <span class="text-xl font-bold">£{{ pricing?.total ?? '0.00' }}</span>
                       </div>
                       <div class="text-sm text-muted-foreground">
-                        Or pay <span class="font-semibold">{{ package?.weekly_payment || '0.00' }} weekly</span>
+                        Or pay <span class="font-semibold">£{{ pricing?.weekly_payment ?? '0.00' }} weekly</span>
                       </div>
                     </div>
                   </AlertDescription>

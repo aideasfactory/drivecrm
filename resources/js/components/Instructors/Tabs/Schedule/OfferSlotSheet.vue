@@ -23,6 +23,7 @@ interface PackageOption {
     lessons_count: number
     formatted_total_price: string
     formatted_lesson_price: string
+    total_price: string
     active: boolean
     is_one_off?: boolean
 }
@@ -202,7 +203,7 @@ const handleSubmit = async () => {
                     >
                         <option :value="null">Select a package...</option>
                         <option v-for="pkg in packages" :key="pkg.id" :value="pkg.id">
-                            {{ pkg.name }} — {{ pkg.formatted_total_price }}
+                            {{ pkg.name }} — {{ pkg.total_price }} incl. fees
                             {{ pkg.is_one_off ? '(one-off)' : '' }}
                         </option>
                     </select>
@@ -230,7 +231,8 @@ const handleSubmit = async () => {
                         :disabled="isSubmitting || !!selectedPackageId"
                     />
                     <p class="text-xs text-muted-foreground">
-                        Creates a reusable One-Off Package at this price for future offers.
+                        Creates a reusable One-Off Package at this price for future offers. The pupil pays the
+                        booking and digital fees on top of this price.
                     </p>
                     <p v-if="errors.one_off_price_pence" class="text-sm text-destructive">
                         {{ errors.one_off_price_pence }}

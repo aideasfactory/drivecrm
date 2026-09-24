@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/sheet'
 import { CalendarPlus, Clock, Loader2, Send } from 'lucide-vue-next'
 import { toast } from '@/components/ui/toast'
+import PackagePriceBreakdown from '@/components/Instructors/PackagePriceBreakdown.vue'
 
 interface PackageOption {
     id: number
@@ -22,6 +23,10 @@ interface PackageOption {
     lesson_price_pence: number
     formatted_total_price: string
     formatted_lesson_price: string
+    booking_fee: string
+    digital_fee: string
+    total_price: string
+    weekly_payment: string
     active: boolean
 }
 
@@ -194,7 +199,7 @@ const handleSubmit = async () => {
                             {{ isLoadingPackages ? 'Loading packages...' : 'Select a package...' }}
                         </option>
                         <option v-for="pkg in packages" :key="pkg.id" :value="pkg.id">
-                            {{ pkg.name }} — {{ pkg.formatted_total_price }} ({{ pkg.lessons_count }} lessons)
+                            {{ pkg.name }} — {{ pkg.total_price }} incl. fees ({{ pkg.lessons_count }} lessons)
                         </option>
                     </select>
                     <p v-if="errors.package_id" class="text-sm text-destructive">{{ errors.package_id }}</p>
@@ -203,11 +208,7 @@ const handleSubmit = async () => {
                         <p v-if="selectedPackage.description" class="mt-1 text-muted-foreground">
                             {{ selectedPackage.description }}
                         </p>
-                        <div class="mt-2 flex gap-4 text-muted-foreground">
-                            <span>{{ selectedPackage.lessons_count }} lessons</span>
-                            <span>{{ selectedPackage.formatted_lesson_price }}/lesson</span>
-                            <span class="font-medium text-foreground">{{ selectedPackage.formatted_total_price }} total</span>
-                        </div>
+                        <PackagePriceBreakdown :pkg="selectedPackage" />
                     </div>
                 </div>
 
