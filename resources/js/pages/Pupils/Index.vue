@@ -26,6 +26,7 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet'
 import DeleteLearnerSection from '@/components/Instructors/Tabs/Student/Actions/DeleteLearnerSection.vue'
+import TestPassGuaranteeBadge from '@/components/Shared/TestPassGuaranteeBadge.vue'
 import { Search, GraduationCap } from 'lucide-vue-next'
 import { show as instructorsShow } from '@/routes/instructors'
 import { toast } from '@/components/ui/sonner'
@@ -248,8 +249,12 @@ const onLearnerDeleted = () => {
                                             </AvatarFallback>
                                         </Avatar>
                                         <div>
-                                            <div class="font-semibold">
+                                            <div class="flex items-center gap-2 font-semibold">
                                                 {{ pupil.name }}
+                                                <TestPassGuaranteeBadge
+                                                    v-if="pupil.has_test_pass_guarantee"
+                                                    short
+                                                />
                                             </div>
                                             <div
                                                 v-if="pupil.email"

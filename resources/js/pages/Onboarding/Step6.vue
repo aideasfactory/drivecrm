@@ -32,10 +32,14 @@
                     <span class="text-muted-foreground">Time:</span>
                     <span class="font-medium">{{ formatTime(schedule?.start_time) }}</span>
                   </div>
+                  <div v-if="selectedGuarantee?.included" class="flex justify-between">
+                    <span class="text-muted-foreground">Pass Guarantee:</span>
+                    <span class="font-medium">{{ selectedGuarantee.is_free ? 'Free' : `£${testPassGuarantee.price}` }}</span>
+                  </div>
                   <Separator class="my-3" />
                   <div class="flex justify-between font-semibold">
                     <span>Total:</span>
-                    <span>{{ pricing?.upfront?.total || '0.00' }}</span>
+                    <span>{{ form.payment_mode === 'weekly' ? (pricing?.weekly?.total_over_time || '0.00') : (pricing?.upfront?.total || '0.00') }}</span>
                   </div>
                 </div>
               </div>
@@ -81,7 +85,7 @@
                               <div class="font-medium">Pay in full</div>
                               <div class="text-sm text-muted-foreground">Complete payment now via Stripe</div>
                             </div>
-                            <div class="text-xl font-bold">{{ package?.total_price || '0.00' }}</div>
+                            <div class="text-xl font-bold">{{ pricing?.upfront?.total || package?.total_price || '0.00' }}</div>
                           </div>
                         </div>
                         <div class="ml-4">
@@ -125,9 +129,34 @@
                         <p class="mb-2">You will receive {{ package?.lessons_count || 0 }} invoices via email, one for each lesson 24 hours before it's scheduled.</p>
                         <p class="text-xs">First lesson: {{ formatDate(schedule?.date) }}</p>
                         <p class="text-xs">Payment per lesson: {{ pricing?.weekly?.per_lesson || '0.00' }}</p>
+                        <p v-if="testPassGuarantee?.weekly?.included" class="text-xs">
+                          First payment (includes £{{ testPassGuarantee.price }} Pass Your Test Guarantee): {{ pricing?.weekly?.first_payment }}
+                        </p>
                       </AlertDescription>
                     </Alert>
                   </div>
+
+                  <!-- Pass Your Test Guarantee -->
+                  <Alert v-if="testPassGuarantee && (selectedGuarantee?.included || testPassGuarantee.free_when_paid_in_full)">
+                    <ShieldCheck class="h-4 w-4" />
+                    <AlertTitle>Pass Your Test Guarantee</AlertTitle>
+                    <AlertDescription>
+                      <p v-if="selectedGuarantee?.is_free">
+                        Included free because you're paying in full for {{ testPassGuarantee.booked_hours }} hours of lessons.
+                      </p>
+                      <p v-else-if="selectedGuarantee?.included && form.payment_mode === 'weekly'">
+                        £{{ testPassGuarantee.price }} is added to your first weekly payment.
+                        <span v-if="testPassGuarantee.free_when_paid_in_full">Pay in full instead and it's free.</span>
+                      </p>
+                      <p v-else-if="selectedGuarantee?.included">
+                        £{{ testPassGuarantee.price }} is included in your total.
+                      </p>
+                      <p v-else>
+                        The guarantee is only free when you pay in full. To add it to weekly payments for £{{ testPassGuarantee.price }},
+                        <Link :href="step5({ uuid: uuid }).url" class="font-medium text-foreground underline underline-offset-4">go back to the summary</Link>.
+                      </p>
+                    </AlertDescription>
+                  </Alert>
 
                   <!-- Secure Payment Info -->
                   <Alert>
@@ -221,6 +250,10 @@ const props = defineProps({
   discount: {
     type: [Object, null],
     default: null
+  },
+  testPassGuarantee: {
+    type: [Object, null],
+    default: null
   }
 })
 
@@ -240,6 +273,8 @@ watch(termsAccepted, (newValue) => {
 })
 
 const uuid = computed(() => props.uuid || page.props.enquiry?.id)
+
+const selectedGuarantee = computed(() => props.testPassGuarantee?.[form.payment_mode] ?? null)
 
 const paymentButtonText = computed(() => {
   if (form.payment_mode === 'weekly') {

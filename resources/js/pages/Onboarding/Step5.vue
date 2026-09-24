@@ -232,6 +232,57 @@
                   </CardContent>
                 </Card>
 
+                <!-- Pass Your Test Guarantee -->
+                <Card v-if="testPassGuarantee">
+                  <CardHeader>
+                    <div class="flex items-center justify-between gap-4">
+                      <CardTitle class="flex items-center gap-2">
+                        <ShieldCheck class="h-5 w-5 text-primary" />
+                        Pass Your Test Guarantee
+                      </CardTitle>
+                      <Badge v-if="testPassGuarantee.free_when_paid_in_full">Free when paid in full</Badge>
+                      <Badge v-else variant="secondary">£{{ testPassGuarantee.price }}</Badge>
+                    </div>
+                    <CardDescription>
+                      <template v-if="testPassGuarantee.free_when_paid_in_full">
+                        Your booking is {{ formatHours(testPassGuarantee.booked_hours) }} hours, so the guarantee is included
+                        free when you pay in full on the next step. Paying weekly? Tick below to add it for
+                        £{{ testPassGuarantee.price }}.
+                      </template>
+                      <template v-else>
+                        Add the guarantee to your booking for £{{ testPassGuarantee.price }}. It's included free on
+                        bookings of {{ formatHours(testPassGuarantee.free_minimum_hours) }}+ hours paid in full.
+                      </template>
+                      <a
+                        :href="testPassGuarantee.terms_url"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="font-medium text-foreground underline underline-offset-4 hover:text-primary"
+                      >Terms apply</a>.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div class="flex items-start gap-3">
+                      <Checkbox
+                        id="test-pass-guarantee"
+                        v-model="includeTestPassGuarantee"
+                        class="mt-0.5 cursor-pointer"
+                      />
+                      <Label for="test-pass-guarantee" class="cursor-pointer font-medium leading-snug">
+                        <template v-if="testPassGuarantee.free_when_paid_in_full">
+                          Add Pass Your Test Guarantee for £{{ testPassGuarantee.price }} if I pay weekly
+                        </template>
+                        <template v-else>
+                          Include Pass Your Test Guarantee (+£{{ testPassGuarantee.price }})
+                        </template>
+                      </Label>
+                    </div>
+                    <p v-if="form.errors.test_pass_guarantee" class="text-sm text-destructive mt-2">
+                      {{ form.errors.test_pass_guarantee }}
+                    </p>
+                  </CardContent>
+                </Card>
+
                 <!-- Promo Code -->
                 <div class="flex items-center space-x-4 pt-6 border-t">
                   <Input
@@ -273,13 +324,24 @@
                         <span>Discount ({{ pricing?.uuid_discount_percentage }}% off — {{ pricing?.uuid_discount_label }})</span>
                         <span class="font-medium">-£{{ pricing?.uuid_discount }}</span>
                       </div>
+                      <div v-if="testPassGuarantee?.free_when_paid_in_full" class="flex items-center justify-between">
+                        <span>Pass Your Test Guarantee</span>
+                        <span class="font-medium">Free if paid in full</span>
+                      </div>
+                      <div v-else-if="includeTestPassGuarantee" class="flex items-center justify-between">
+                        <span>Pass Your Test Guarantee</span>
+                        <span class="font-medium">£{{ testPassGuarantee?.price }}</span>
+                      </div>
                       <Separator />
                       <div class="flex items-center justify-between">
                         <span class="text-lg font-semibold">Total</span>
-                        <span class="text-xl font-bold">{{ package?.total_price || '0.00' }}</span>
+                        <span class="text-xl font-bold">{{ upfrontTotal }}</span>
                       </div>
                       <div class="text-sm text-muted-foreground">
                         Or pay <span class="font-semibold">{{ package?.weekly_payment || '0.00' }} weekly</span>
+                        <template v-if="includeTestPassGuarantee">
+                          (first payment includes the £{{ testPassGuarantee?.price }} guarantee)
+                        </template>
                       </div>
                     </div>
                   </AlertDescription>
@@ -323,6 +385,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
@@ -332,7 +395,7 @@ import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 import { step1, step2, step3, step4 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step5'
-import { ArrowLeft, ArrowRight, Car, MapPin, Star } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, Car, MapPin, ShieldCheck, Star } from 'lucide-vue-next'
 
 const props = defineProps({
   uuid: String,
@@ -355,6 +418,10 @@ const props = defineProps({
   pickup_city: String,
   pickup_postcode: String,
   postcode: String,
+  testPassGuarantee: {
+    type: [Object, null],
+    default: null
+  },
   maxStepReached: { type: Number, default: 5 }
 })
 
@@ -371,7 +438,8 @@ const form = useForm({
   learner_phone: props.stepData?.learner_phone || '',
   learner_email: props.stepData?.learner_email || '',
   learner_dob: props.stepData?.learner_dob || '',
-  promo_code: props.stepData?.promo_code || ''
+  promo_code: props.stepData?.promo_code || '',
+  test_pass_guarantee: props.testPassGuarantee?.opted_in ?? false
 })
 
 const editingAddress = ref(false)
@@ -385,6 +453,36 @@ const isBookingForSomeoneElse = ref(form.booking_for_someone_else)
 // Watch and sync the local ref with the form
 watch(isBookingForSomeoneElse, (newValue) => {
   form.booking_for_someone_else = newValue
+})
+
+const includeTestPassGuarantee = ref(form.test_pass_guarantee)
+
+watch(includeTestPassGuarantee, (newValue) => {
+  form.test_pass_guarantee = newValue
+  autoSave()
+})
+
+function formatPence(pence) {
+  return `£${((pence || 0) / 100).toFixed(2)}`
+}
+
+function formatHours(hours) {
+  return Number.isInteger(hours) ? hours : Number(hours).toFixed(1)
+}
+
+// Pay-in-full total: the guarantee is only added when it isn't already free
+const upfrontTotal = computed(() => {
+  const baseTotalPence = props.pricing?.package_total_with_fees_pence
+  if (baseTotalPence === undefined || baseTotalPence === null) {
+    return props.package?.total_price || '0.00'
+  }
+
+  const guarantee = props.testPassGuarantee
+  const guaranteePence = guarantee && includeTestPassGuarantee.value && !guarantee.free_when_paid_in_full
+    ? guarantee.price_pence
+    : 0
+
+  return formatPence(baseTotalPence + guaranteePence)
 })
 
 const uuid = computed(() => props.uuid || page.props.enquiry?.id)
