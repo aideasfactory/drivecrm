@@ -34,4 +34,14 @@ class StudentFactory extends Factory
             'status' => 'active',
         ];
     }
+
+    /**
+     * Student who has Pass Your Test Guarantee.
+     */
+    public function withTestPassGuarantee(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'test_pass_guarantee_at' => now(),
+        ]);
+    }
 }

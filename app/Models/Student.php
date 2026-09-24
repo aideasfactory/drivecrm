@@ -38,6 +38,8 @@ class Student extends Model
         'status',
         'inactive_reason',
         'profile_picture_path',
+        'test_pass_guarantee_at',
+        'test_pass_guarantee_order_id',
     ];
 
     protected $appends = [
@@ -51,6 +53,7 @@ class Student extends Model
         'contact_communications' => 'boolean',
         'owns_account' => 'boolean',
         'app_last_active_at' => 'datetime',
+        'test_pass_guarantee_at' => 'datetime',
     ];
 
     /**
@@ -134,6 +137,22 @@ class Student extends Model
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    /**
+     * Get the booking-form order that gave this student Pass Your Test Guarantee.
+     */
+    public function testPassGuaranteeOrder(): BelongsTo
+    {
+        return $this->belongsTo(Order::class, 'test_pass_guarantee_order_id');
+    }
+
+    /**
+     * Check if the student has paid for (or been given) Pass Your Test Guarantee.
+     */
+    public function hasTestPassGuarantee(): bool
+    {
+        return $this->test_pass_guarantee_at !== null;
     }
 
     /**

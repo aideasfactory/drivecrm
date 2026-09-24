@@ -32,6 +32,8 @@ class Order extends Model
         'stripe_subscription_id',
         'discount_code_id',
         'discount_percentage',
+        'includes_test_pass_guarantee',
+        'test_pass_guarantee_pence',
     ];
 
     protected function casts(): array
@@ -47,6 +49,8 @@ class Order extends Model
             'digital_fee_pence' => 'integer',
             'total_price_pence' => 'integer',
             'discount_percentage' => 'integer',
+            'includes_test_pass_guarantee' => 'boolean',
+            'test_pass_guarantee_pence' => 'integer',
         ];
     }
 
@@ -164,6 +168,14 @@ class Order extends Model
     public function getFormattedDigitalFeeAttribute(): string
     {
         return '£'.number_format(($this->digital_fee_pence ?? 0) / 100, 2);
+    }
+
+    /**
+     * Get the formatted Pass Your Test Guarantee charge (e.g., "£50.00").
+     */
+    public function getFormattedTestPassGuaranteeAttribute(): string
+    {
+        return '£'.number_format(($this->test_pass_guarantee_pence ?? 0) / 100, 2);
     }
 
     /**
