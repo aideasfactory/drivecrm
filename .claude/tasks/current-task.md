@@ -37,4 +37,4 @@ Add inclusive `from` / `to` reads beside the existing instructor day diary route
 - [x] Day routes unchanged
 - [x] Week view can switch to two GETs once this is deployed
 
-**Reflection:** SQLite test migrations needed small driver guards so the new feature tests can migrate. MySQL enum alters are unchanged.
+**Reflection:** No schema change. The week view reads the same calendar items and lessons the day view already stores.
