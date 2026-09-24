@@ -69,8 +69,10 @@ class GetInstructorCalendarAction
                         if ($lesson) {
                             // Weekly: per-lesson payment status. Upfront: paid once confirmed —
                             // a draft is upfront-but-awaiting-payment, so never paid.
+                            // Imported: settled outside the platform, always paid.
                             $isPaid = $lesson->lessonPayment?->isPaid()
-                                ?? ($lesson->order?->isUpfront() === true && ! $lesson->isDraft());
+                                ?? ($lesson->order?->isImported() === true
+                                    || ($lesson->order?->isUpfront() === true && ! $lesson->isDraft()));
                         }
                     }
 

@@ -53,7 +53,7 @@ class SendInstructorWelcomeEmailAction
                 'email' => $user->email,
             ]);
 
-            $expiresInMinutes = (int) config('auth.passwords.users.expire', 60);
+            $expiresInMinutes = (int) config('auth.passwords.users.expire', 60 * 24);
 
             Mail::to($user->email)->queue(new InstructorWelcomeMail(
                 user: $user,

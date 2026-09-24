@@ -280,6 +280,15 @@ function calcEndTime(startTime: string): string {
     return minutesToTime(minutes + SLOT_DURATION_HOURS * 60)
 }
 
+// Length of the item open in the edit sheet. New slots default to 2 hours, but an
+// existing item (e.g. an imported 1-hour lesson) keeps its own length when moved.
+const editDurationMinutes = ref(SLOT_DURATION_HOURS * 60)
+
+/** End time for the edited item: start + its own length, capped at the diary day end */
+function calcEditEndTime(startTime: string): string {
+    return minutesToTime(Math.min(timeToMinutes(startTime) + editDurationMinutes.value, DIARY_MAX_END_MINUTES))
+}
+
 /** Snap a time string to the nearest valid 15-minute start time */
 function snapToStartOption(time: string): string {
     const minutes = timeToMinutes(time)
@@ -330,7 +339,7 @@ watch(selectedStudentId, (studentId) => {
 
 watch(() => editForm.value.start_time, (newStart) => {
     if (newStart) {
-        editForm.value.end_time = calcEndTime(newStart)
+        editForm.value.end_time = calcEditEndTime(newStart)
     }
 })
 
@@ -703,11 +712,14 @@ function populateEditForm(item: CalendarItemResponse) {
         ? normaliseTime(item.start_time)
         : snapToStartOption(normaliseTime(item.start_time))
 
+    const itemDuration = timeToMinutes(normaliseTime(item.end_time)) - timeToMinutes(normaliseTime(item.start_time))
+    editDurationMinutes.value = itemDuration > 0 ? itemDuration : SLOT_DURATION_HOURS * 60
+
     editForm.value = {
         id: item.id,
         date: item.date,
         start_time: startTime,
-        end_time: isSpecialType ? normaliseTime(item.end_time) : calcEndTime(startTime),
+        end_time: isSpecialType ? normaliseTime(item.end_time) : calcEditEndTime(startTime),
         is_available: item.is_available,
         notes: item.notes ?? '',
         unavailability_reason: item.unavailability_reason ?? '',

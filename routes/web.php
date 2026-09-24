@@ -19,6 +19,7 @@ use App\Http\Controllers\Hmrc\Itsa\FinalDeclarationController;
 use App\Http\Controllers\Hmrc\Itsa\ItsaController;
 use App\Http\Controllers\Hmrc\Vat\VatController;
 use App\Http\Controllers\Hmrc\Vehicles\VehicleController;
+use App\Http\Controllers\ImportController;
 use App\Http\Controllers\InstructorController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\MobileStripeOnboardingController;
@@ -425,6 +426,18 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
             ->name('student-transfers.search-instructors');
         Route::post('/student-transfers', [StudentTransferController::class, 'store'])
             ->name('student-transfers.store');
+    });
+
+    // Data Import — legacy-system bundles (Owner Only)
+    Route::middleware([EnsureOwner::class])->group(function () {
+        Route::get('/imports', [ImportController::class, 'index'])
+            ->name('imports.index');
+        Route::get('/imports/template', [ImportController::class, 'template'])
+            ->name('imports.template');
+        Route::post('/imports/check', [ImportController::class, 'check'])
+            ->name('imports.check');
+        Route::post('/imports', [ImportController::class, 'store'])
+            ->name('imports.store');
     });
 
     Route::get('/integrations', [IntegrationController::class, 'index'])

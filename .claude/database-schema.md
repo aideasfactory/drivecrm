@@ -247,6 +247,7 @@ Core user table storing all users in the system (owners, instructors, and studen
 | `password` | varchar(255) | NOT NULL | Hashed password |
 | `password_change_required` | boolean | DEFAULT false | Forces password reset on next login (set when a temp password is issued) |
 | `welcome_email_pending` | boolean | DEFAULT false | True between new-user creation and the welcome email being dispatched. Cleared by `SendOrderConfirmationEmailAction` (web onboarding) or `SendInstructorWelcomeEmailAction` (instructor invite). Stays `true` if sending fails so admins can resend. |
+| `imported_at` | timestamp | NULLABLE, INDEXED | Set when the account was created by the legacy importer (Data Import page). No emails go out at import; `import:send-welcome-emails` sends the welcome email to every imported user still `welcome_email_pending = true`. |
 | `role` | enum('owner', 'instructor', 'student') | DEFAULT 'student' | User role in the system |
 | `stripe_customer_id` | varchar(255) | NULLABLE, INDEXED | Stripe customer ID |
 | `current_team_id` | bigint unsigned | NULLABLE, FK → teams.id (ON DELETE SET NULL) | Current team assignment |
@@ -430,7 +431,7 @@ Student enrollments/purchases of lesson packages.
 | `booking_fee_pence` | integer unsigned | DEFAULT 0 | Booking fee in pence (e.g., £19.99 = 1999) |
 | `digital_fee_pence` | integer unsigned | DEFAULT 0 | Total digital fee in pence (£3.99 × lessons) |
 | `total_price_pence` | integer unsigned | NULLABLE | Total charge amount in pence (package + booking fee + digital fees - discounts). Sent to Stripe. |
-| `payment_mode` | enum('upfront', 'weekly') | DEFAULT 'upfront' | Payment method chosen |
+| `payment_mode` | enum('upfront', 'weekly', 'imported') | DEFAULT 'upfront' | Payment method chosen. `imported` = lessons brought in from another system by the legacy importer — settled outside the platform, no Stripe IDs, no lesson_payments, never paid out. |
 | `status` | enum('pending', 'active', 'completed', 'cancelled') | DEFAULT 'pending' | Order status |
 | `stripe_payment_intent_id` | varchar(255) | NULLABLE | Stripe Payment Intent ID (for upfront payments) |
 | `stripe_charge_id` | varchar(255) | NULLABLE | Stripe Charge ID that funded this upfront order (the PaymentIntent's `latest_charge`). Persisted at payment time (`checkout.session.completed` / `payment_intent.succeeded` webhooks) so per-lesson payout Transfers can cite it as `source_transaction`, letting Stripe draw against that specific charge instead of the general available balance. Nullable for legacy orders created before this column existed. |
@@ -451,7 +452,7 @@ Student enrollments/purchases of lesson packages.
 - Has many `LessonPayments` (through Lessons)
 
 **Enums:**
-- Payment Mode: `upfront`, `weekly`
+- Payment Mode: `upfront`, `weekly`, `imported`
 - Status: `pending`, `active`, `completed`, `cancelled`
 
 **Business Logic:**
@@ -459,6 +460,7 @@ Student enrollments/purchases of lesson packages.
 - Weekly payment: Recurring subscription for each lesson
 - Order becomes active after successful payment
 - Lessons are created after order activation
+- **Imported orders** (`payment_mode = imported`): one per imported student, on a hidden (`active = false`) per-instructor "Imported lessons" package with £0 totals. Lessons on them report `payment_status = paid` / `is_paid = true` so they can be signed off in the app and CRM. `SignOffLessonAction` skips the Stripe onboarding + payment guards and creates **no Payout**; `LessonSignOffService` also skips the student feedback email, next-invoice and resource recommendations. `Order::isImported()`, `Order::isPrepaid()` (confirmed upfront or imported).
 - **Price snapshot:** `package_name`, `package_total_price_pence`, `package_lesson_price_pence`, and `package_lessons_count` are copied from the package at order creation time. Always use these snapshot columns for pricing/display — never read live from `packages` table via the `package` relationship for pricing data.
 
 ---
@@ -1143,6 +1145,7 @@ Tracks payments received and expenses incurred by instructors. Supports recurrin
 - Category slugs are config-backed (`config/finances.php`), not enum'd in the DB — lists can grow without migration. Validation at controller level gates the slug by `type`.
 - Receipts live on the private S3 disk. The `receipt_url` accessor returns a time-limited signed URL (TTL from `config('finances.receipt.signed_url_ttl_minutes')`).
 - Existing pre-migration rows were backfilled to `category = 'none'`.
+- `imported` ("Imported (legacy)") is the catch-all for rows brought in by the legacy importer — present in both category lists, tax-treated like `none` (`outside_scope`, not claimable, no ITSA bucket) and hidden from the picker (`selectable_in_picker = false`).
 - **Recurring series are materialised upfront at creation** (`CreateInstructorFinanceAction`): a recurring create generates `recurrence_iterations` records (first on `date`, subsequent dates stepped by frequency using no-overflow month/year arithmetic), all sharing a `recurrence_group_id`. Updates/deletes affect single records only — no series regeneration. Receipts attach to individual records (typically the first).
 
 ---
@@ -1466,6 +1469,46 @@ In-app account deletion with a 30-day grace period (App Store Guideline 5.1.1(v)
 - Daily scheduled command `account:process-deletion-requests` (01:00) processes rows where `status = pending` and `scheduled_for <= now`.
 - Processing **anonymises** rather than deletes (users.id cascades would destroy lesson/payment history other parties need): scrubs user name/email/password/push token, revokes all Sanctum tokens, scrubs profile PII (student contact fields; instructor bio/phone/address/pin/nino/utr/vrn etc.), detaches an instructor's students (`students.instructor_id = null`), then sets `status = completed`.
 - Distinct from **staff learner-profile delete** (`DeleteStudentAction`): that soft-deletes the `students` row and locks the login so duplicates disappear from CRM lists, but it does not scrub historical student names on invoices.
+
+---
+
+### 32. **import_runs**
+
+One execution of the legacy importer (a Data Import page upload).
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Run ID |
+| `user_id` | bigint unsigned | NULLABLE, FK → users.id (NULL ON DELETE) | Owner who uploaded it |
+| `source` | varchar(16) | NOT NULL | `upload` (Data Import page — currently the only source) |
+| `file_name` | varchar(255) | NULLABLE | Original zip file name |
+| `status` | varchar(16) | DEFAULT 'running' | `running`, `completed`, `failed` |
+| `totals` | json | NULLABLE | Counts created: instructors_created, instructors_linked, locations, students, lessons, diary_blocks, finances, receipts |
+| `error` | text | NULLABLE | Exception message when `failed` (instructors before the failure stay imported) |
+| `completed_at` | timestamp | NULLABLE | When the run finished (either outcome) |
+| `created_at` / `updated_at` | timestamp | - | Timestamps |
+
+**Relationships:** belongs to `User`; has many `ImportMapping`.
+
+---
+
+### 33. **import_mappings**
+
+The permanent record of everything the importer brought in. Links a legacy system's reference to the row created for it and the run that created it. Makes re-runs idempotent: a ref already mapped is skipped, not duplicated. "Was this row imported?" → `ImportMapping::wasImported($entity, $id)` (a mapping with `action = created`).
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Mapping ID |
+| `import_run_id` | bigint unsigned | NULLABLE, FK → import_runs.id (NULL ON DELETE) | Run that created/linked the row |
+| `entity` | varchar(32) | NOT NULL | `instructor` (→ instructors.id), `location` (→ locations.id, ref `{instructor_ref}:{sector}`), `student` (→ students.id), `diary` (→ calendar_items.id), `lesson` (→ lessons.id, ref = diary_ref), `finance` (→ instructor_finances.id) |
+| `source_ref` | varchar(191) | NOT NULL | The legacy system's own ID for the row |
+| `model_id` | bigint unsigned | NOT NULL | ID of the row (no FK — polymorphic by `entity`) |
+| `action` | varchar(16) | DEFAULT 'created' | `created` by the import, or `linked` (an existing instructor matched by email — not created, not changed) |
+| `created_at` / `updated_at` | timestamp | - | Timestamps |
+
+**Indexes:** unique `(entity, source_ref)`, index `(entity, model_id)`
+
+**Other imported markers:** `users.imported_at` (accounts), `orders.payment_mode = imported` (imported lessons' orders), `instructor_finances.category = imported` (finance rows with no category given). Imported receipts are stored exactly like manual uploads (`instructors/{id}/finance-receipts/{financeId}/…` on s3).
 
 ---
 

@@ -138,7 +138,7 @@
             </p>
 
             <div class="notice">
-                For your security, this setup link will expire in {{ $expiresInMinutes }} minutes. If it expires before you've finished, just visit <a href="{{ $loginUrl }}">{{ $loginUrl }}</a> and choose <strong>Forgot password</strong> — we'll send a fresh link.
+                For your security, this setup link will expire in 24 hours. If it expires before you've finished, just visit <a href="{{ $loginUrl }}">{{ $loginUrl }}</a> and choose <strong>Forgot password</strong> — we'll send a fresh link.
             </div>
 
             <p style="margin-top: 24px; font-size: 13px; color: #6b7280;">
