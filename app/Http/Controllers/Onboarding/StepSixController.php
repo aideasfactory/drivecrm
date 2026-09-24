@@ -8,6 +8,7 @@ use App\Actions\Calendar\ConfirmCalendarItemsAction;
 use App\Actions\Onboarding\CreateOrderFromEnquiryAction;
 use App\Actions\Onboarding\CreateUserAndStudentFromEnquiryAction;
 use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
+use App\Actions\Student\GrantTestPassGuaranteeAction;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use App\Http\Controllers\Controller;
@@ -20,6 +21,8 @@ use App\Models\Student;
 use App\Services\OrderService;
 use App\Services\PriceUpliftService;
 use App\Services\StripeService;
+use App\Support\Fees;
+use App\Support\TestPassGuarantee;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
@@ -37,7 +40,8 @@ class StepSixController extends Controller
         protected CreateOrderFromEnquiryAction $createOrderAction,
         protected SendOrderConfirmationEmailAction $sendEmailAction,
         protected OrderService $orderService,
-        protected PriceUpliftService $priceUpliftService
+        protected PriceUpliftService $priceUpliftService,
+        protected GrantTestPassGuaranteeAction $grantTestPassGuarantee,
     ) {}
 
     /**
@@ -80,11 +84,18 @@ class StepSixController extends Controller
         );
 
         // Calculate pricing (in pounds for display)
-        $packagePrice = $package->total_price;
         $lessonPrice = $package->weekly_payment;
 
         // Get discount data
         $discount = $enquiry->getDiscountData();
+
+        $testPassGuarantee = TestPassGuarantee::bookingFormData($enquiry, $package);
+        $packageTotalWithFeesPence = (int) $package->total_price_pence
+            + Fees::bookingFeePence()
+            + Fees::digitalFeeTotalPence((int) $package->lessons_count);
+        $weeklyPaymentPence = $package->lessons_count > 0
+            ? (int) round($packageTotalWithFeesPence / $package->lessons_count)
+            : 0;
 
         return Inertia::render('Onboarding/Step6', [
             'uuid' => $enquiry->id,
@@ -121,16 +132,23 @@ class StepSixController extends Controller
             ],
 
             // Pricing for both payment modes
+            // Base totals exclude the guarantee; the page adds it once the
+            // learner picks a payment mode and whether to opt in.
             'pricing' => [
+                'package_total_with_fees_pence' => $packageTotalWithFeesPence,
+                'weekly_payment_pence' => $weeklyPaymentPence,
                 'upfront' => [
-                    'total' => $packagePrice,
+                    'total' => $this->formatPence($packageTotalWithFeesPence),
                     'per_lesson' => $lessonPrice,
                 ],
                 'weekly' => [
                     'per_lesson' => $lessonPrice,
-                    'total_over_time' => $packagePrice,
+                    'first_payment' => $this->formatPence($weeklyPaymentPence),
+                    'total_over_time' => $this->formatPence($packageTotalWithFeesPence),
                 ],
             ],
+
+            'testPassGuarantee' => $testPassGuarantee,
 
             // Discount code data
             'discount' => $discount,
@@ -141,6 +159,11 @@ class StepSixController extends Controller
                 'recipient_email' => $step1['email'] ?? null,
             ] : null,
         ]);
+    }
+
+    protected function formatPence(int $pence): string
+    {
+        return '£'.number_format($pence / 100, 2);
     }
 
     /**
@@ -159,6 +182,13 @@ class StepSixController extends Controller
         ]);
 
         $paymentMode = PaymentMode::from($validated['payment_mode']);
+        $testPassGuaranteeOptedIn = (bool) ($validated['test_pass_guarantee'] ?? false);
+
+        // Record the add-on choice before the order is built, as the order
+        // action reads it from the enquiry's step 6 data.
+        $enquiry->setStepData(6, array_merge($enquiry->getStepData(6) ?? [], [
+            'test_pass_guarantee' => $testPassGuaranteeOptedIn,
+        ]));
 
         Log::info('Payment mode determined', [
             'payment_mode' => $paymentMode->value,
@@ -241,6 +271,7 @@ class StepSixController extends Controller
             // Save order details to enquiry
             $enquiry->setStepData(6, [
                 'payment_mode' => $paymentMode->value,
+                'test_pass_guarantee' => $testPassGuaranteeOptedIn,
                 'user_id' => $user->id,
                 'student_id' => $student->id,
                 'order_id' => $order->id,
@@ -550,6 +581,8 @@ class StepSixController extends Controller
                     // Transition calendar items from DRAFT to BOOKED now that payment is confirmed
                     app(ConfirmCalendarItemsAction::class)($order);
                 }
+
+                ($this->grantTestPassGuarantee)($order);
 
                 // Send confirmation email
                 $this->sendEmailAction->execute($order, $order->student);

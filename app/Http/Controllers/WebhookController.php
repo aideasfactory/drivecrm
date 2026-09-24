@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Calendar\ConfirmCalendarItemsAction;
 use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
 use App\Actions\Shared\LogActivityAction;
+use App\Actions\Student\GrantTestPassGuaranteeAction;
 use App\Enums\CalendarItemStatus;
 use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
@@ -176,6 +177,8 @@ class WebhookController extends Controller
 
                     DB::commit();
 
+                    app(GrantTestPassGuaranteeAction::class)($order);
+
                     // Log activity for booking confirmation
                     $this->logBookingConfirmedActivity($order);
 
@@ -241,6 +244,8 @@ class WebhookController extends Controller
                 app(ConfirmCalendarItemsAction::class)($order);
 
                 DB::commit();
+
+                app(GrantTestPassGuaranteeAction::class)($order);
 
                 Log::info('Webhook: Order activated via payment intent', [
                     'order_id' => $order->id,
@@ -413,6 +418,10 @@ class WebhookController extends Controller
                     'status' => $previousStatus,
                 ]);
             }
+        }
+
+        if ($order && $lessonPayment->test_pass_guarantee_pence > 0) {
+            app(GrantTestPassGuaranteeAction::class)($order);
         }
 
         // Log activity for the student

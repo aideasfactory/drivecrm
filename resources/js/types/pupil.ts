@@ -11,6 +11,7 @@ export interface Pupil {
     next_lesson_time: string | null
     revenue_pence: number
     has_app: boolean
+    has_test_pass_guarantee: boolean
     status: 'active' | 'pending' | 'completed' | 'cancelled'
 }
 
@@ -19,6 +20,7 @@ export interface PupilListing {
     name: string
     email: string | null
     status: string
+    has_test_pass_guarantee: boolean
     instructor_id: number | null
     instructor_name: string | null
 }

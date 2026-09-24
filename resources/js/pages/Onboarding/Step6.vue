@@ -32,10 +32,14 @@
                     <span class="text-muted-foreground">Time:</span>
                     <span class="font-medium">{{ formatTime(schedule?.start_time) }}</span>
                   </div>
+                  <div v-if="selectedGuarantee?.included" class="flex justify-between">
+                    <span class="text-muted-foreground">Pass Guarantee:</span>
+                    <span class="font-medium">{{ selectedGuarantee.is_free ? 'Free' : `£${testPassGuarantee.price}` }}</span>
+                  </div>
                   <Separator class="my-3" />
                   <div class="flex justify-between font-semibold">
                     <span>Total:</span>
-                    <span>{{ pricing?.upfront?.total || '0.00' }}</span>
+                    <span>{{ form.payment_mode === 'weekly' ? weeklyTotal : upfrontTotal }}</span>
                   </div>
                 </div>
               </div>
@@ -91,7 +95,7 @@
                               <div class="font-medium">Pay in full</div>
                               <div class="text-sm text-muted-foreground">{{ staffBooking ? 'Stripe payment link emailed to the student' : 'Complete payment now via Stripe' }}</div>
                             </div>
-                            <div class="text-xl font-bold">{{ package?.total_price || '0.00' }}</div>
+                            <div class="text-xl font-bold">{{ upfrontTotal }}</div>
                           </div>
                         </div>
                         <div class="ml-4">
@@ -135,9 +139,80 @@
                         <p class="mb-2">You will receive {{ package?.lessons_count || 0 }} invoices via email, one for each lesson 24 hours before it's scheduled.</p>
                         <p class="text-xs">First lesson: {{ formatDate(schedule?.date) }}</p>
                         <p class="text-xs">Payment per lesson: {{ pricing?.weekly?.per_lesson || '0.00' }}</p>
+                        <p v-if="guaranteeFor('weekly').included" class="text-xs">
+                          First payment (includes £{{ testPassGuarantee.price }} Pass Your Test Guarantee): {{ weeklyFirstPayment }}
+                        </p>
                       </AlertDescription>
                     </Alert>
                   </div>
+
+                  <!-- Pass Your Test Guarantee -->
+                  <Card
+                    v-if="testPassGuarantee"
+                    class="transition-colors"
+                    :class="selectedGuarantee.is_free ? 'border-green-500 bg-green-50 dark:border-green-600 dark:bg-green-950/30' : ''"
+                  >
+                    <CardHeader>
+                      <div class="flex items-center justify-between gap-4">
+                        <CardTitle class="flex items-center gap-2 text-lg">
+                          <ShieldCheck
+                            class="h-5 w-5"
+                            :class="selectedGuarantee.is_free ? 'text-green-600 dark:text-green-500' : 'text-primary'"
+                          />
+                          Pass Your Test Guarantee
+                        </CardTitle>
+                        <Badge v-if="selectedGuarantee.is_free" class="bg-green-600 text-white hover:bg-green-600">Included free</Badge>
+                        <Badge v-else variant="secondary">£{{ testPassGuarantee.price }}</Badge>
+                      </div>
+                      <CardDescription>
+                        <template v-if="selectedGuarantee.is_free">
+                          Included free because you're paying in full for {{ formatHours(testPassGuarantee.booked_hours) }} hours of lessons.
+                        </template>
+                        <template v-else-if="testPassGuarantee.free_when_paid_in_full">
+                          Pay in full and it's included free, or add it to your weekly payments for £{{ testPassGuarantee.price }}.
+                        </template>
+                        <template v-else>
+                          Add the guarantee to your booking for £{{ testPassGuarantee.price }}. It's included free on
+                          bookings of {{ formatHours(testPassGuarantee.free_minimum_hours) }}+ hours paid in full.
+                        </template>
+                        <a
+                          :href="testPassGuarantee.terms_url"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="font-medium text-foreground underline underline-offset-4 hover:text-primary"
+                        >Terms apply</a>.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div class="flex items-start gap-3">
+                        <Checkbox
+                          id="test-pass-guarantee"
+                          v-model="guaranteeChecked"
+                          :disabled="selectedGuarantee.is_free"
+                          class="mt-0.5 cursor-pointer"
+                          :class="selectedGuarantee.is_free ? 'disabled:opacity-100 data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600' : ''"
+                        />
+                        <label
+                          for="test-pass-guarantee"
+                          class="text-sm font-medium leading-snug"
+                          :class="selectedGuarantee.is_free ? 'cursor-not-allowed' : 'cursor-pointer'"
+                        >
+                          <template v-if="selectedGuarantee.is_free">
+                            Pass Your Test Guarantee included (free)
+                          </template>
+                          <template v-else>
+                            Include Pass Your Test Guarantee (+£{{ testPassGuarantee.price }})
+                          </template>
+                          <span v-if="!selectedGuarantee.is_free && form.payment_mode === 'weekly'" class="font-normal text-muted-foreground">
+                            — added to your first weekly payment
+                          </span>
+                        </label>
+                      </div>
+                      <p v-if="form.errors.test_pass_guarantee" class="text-sm text-destructive mt-2">
+                        {{ form.errors.test_pass_guarantee }}
+                      </p>
+                    </CardContent>
+                  </Card>
 
                   <!-- Secure Payment Info -->
                   <Alert>
@@ -236,6 +311,10 @@ const props = defineProps({
     type: [Object, null],
     default: null
   },
+  testPassGuarantee: {
+    type: [Object, null],
+    default: null
+  },
   staffBooking: {
     type: [Object, null],
     default: null
@@ -246,7 +325,8 @@ const page = usePage()
 
 const form = useForm({
   payment_mode: 'upfront',  // 'upfront' or 'weekly'
-  terms_accepted: false
+  terms_accepted: false,
+  test_pass_guarantee: props.testPassGuarantee?.opted_in ?? false
 })
 
 // Local ref for checkbox to handle reactivity
@@ -257,16 +337,72 @@ watch(termsAccepted, (newValue) => {
   form.terms_accepted = newValue
 })
 
+const includeTestPassGuarantee = ref(form.test_pass_guarantee)
+
+watch(includeTestPassGuarantee, (newValue) => {
+  form.test_pass_guarantee = newValue
+})
+
 const uuid = computed(() => props.uuid || page.props.enquiry?.id)
+
+// Mirrors TestPassGuarantee::resolve() — free when paid in full on a large
+// enough booking, otherwise charged only if the learner opts in.
+function guaranteeFor(paymentMode) {
+  const guarantee = props.testPassGuarantee
+  if (!guarantee) {
+    return { included: false, charge_pence: 0, is_free: false }
+  }
+
+  if (paymentMode === 'upfront' && guarantee.free_when_paid_in_full) {
+    return { included: true, charge_pence: 0, is_free: true }
+  }
+
+  return includeTestPassGuarantee.value
+    ? { included: true, charge_pence: guarantee.price_pence, is_free: false }
+    : { included: false, charge_pence: 0, is_free: false }
+}
+
+const selectedGuarantee = computed(() => guaranteeFor(form.payment_mode))
+
+// Locked on when it's free; otherwise reflects the learner's own choice, which
+// is kept so switching back to weekly restores it.
+const guaranteeChecked = computed({
+  get: () => selectedGuarantee.value.is_free || includeTestPassGuarantee.value,
+  set: (value) => {
+    if (!selectedGuarantee.value.is_free) {
+      includeTestPassGuarantee.value = value
+    }
+  }
+})
+
+function formatPence(pence) {
+  return `£${((pence || 0) / 100).toFixed(2)}`
+}
+
+function formatHours(hours) {
+  return Number.isInteger(hours) ? hours : Number(hours).toFixed(1)
+}
+
+const upfrontTotal = computed(() =>
+  formatPence((props.pricing?.package_total_with_fees_pence ?? 0) + guaranteeFor('upfront').charge_pence)
+)
+
+const weeklyTotal = computed(() =>
+  formatPence((props.pricing?.package_total_with_fees_pence ?? 0) + guaranteeFor('weekly').charge_pence)
+)
+
+const weeklyFirstPayment = computed(() =>
+  formatPence((props.pricing?.weekly_payment_pence ?? 0) + guaranteeFor('weekly').charge_pence)
+)
 
 const paymentButtonText = computed(() => {
   if (form.payment_mode === 'weekly') {
     return 'Confirm Booking (Weekly Payments)'
   }
   if (props.staffBooking) {
-    return `Book & Email Payment Link - ${props.pricing?.upfront?.total || '0.00'}`
+    return `Book & Email Payment Link - ${upfrontTotal.value}`
   }
-  return `Proceed to Payment - ${props.pricing?.upfront?.total || '0.00'}`
+  return `Proceed to Payment - ${upfrontTotal.value}`
 })
 
 function formatDate(dateString) {
@@ -288,7 +424,8 @@ function processPayment() {
   console.log('=== STEP 6: Processing Payment ===')
   console.log('Form data:', {
     payment_mode: form.payment_mode,
-    terms_accepted: form.terms_accepted
+    terms_accepted: form.terms_accepted,
+    test_pass_guarantee: form.test_pass_guarantee
   })
   console.log('UUID:', uuid.value)
   console.log('Route:', store({ uuid: uuid.value }).url)

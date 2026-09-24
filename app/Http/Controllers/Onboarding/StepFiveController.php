@@ -12,6 +12,7 @@ use App\Models\Location;
 use App\Models\Package;
 use App\Services\PriceUpliftService;
 use App\Support\Fees;
+use App\Support\TestPassGuarantee;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -91,6 +92,13 @@ class StepFiveController extends Controller
 
         $totalPrice = $packagePrice + $bookingFee - $promoDiscount - $uuidDiscount;
 
+        $packageTotalWithFeesPence = $package
+            ? (int) $package->total_price_pence + Fees::bookingFeePence() + Fees::digitalFeeTotalPence((int) $package->lessons_count)
+            : 0;
+        $weeklyPaymentPence = $package && $package->lessons_count > 0
+            ? (int) round($packageTotalWithFeesPence / $package->lessons_count)
+            : 0;
+
         return Inertia::render('Onboarding/Step5', [
             'uuid' => $enquiry->id,
             'currentStep' => 5,
@@ -164,7 +172,13 @@ class StepFiveController extends Controller
                 'uuid_discount_percentage' => $discount ? $discount['percentage'] : null,
                 'uuid_discount_label' => $discount ? $discount['label'] : null,
                 'total' => number_format($totalPrice, 2),
+                'package_total_with_fees_pence' => $packageTotalWithFeesPence,
+                'weekly_payment_pence' => $weeklyPaymentPence,
             ],
+
+            'testPassGuarantee' => $package
+                ? TestPassGuarantee::bookingFormData($enquiry, $package)
+                : null,
 
             // Available promo codes (for demo)
             'available_promos' => ['SAVE10', 'SAVE20'],

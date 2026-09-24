@@ -70,6 +70,8 @@ Users (1) ──┬── (1) Instructors ──┬── (Many) Packages
                       └─────────────┐
                                     │
                           Instructors (Many)
+
+Students (Many) ──── (0..1) Orders   [students.test_pass_guarantee_order_id]
 ```
 
 ---
@@ -351,6 +353,8 @@ Extended profile for users with student role.
 | `owns_account` | boolean | DEFAULT true | Learner owns this account |
 | `status` | varchar(50) | DEFAULT 'active' | Student status (active, inactive, on_hold, passed, failed, completed) |
 | `inactive_reason` | text | NULLABLE | Reason for status change (e.g., why student was made inactive) |
+| `test_pass_guarantee_at` | timestamp | NULLABLE | When the student got Pass Your Test Guarantee (free or paid). NULL = no guarantee. Set by `GrantTestPassGuaranteeAction` only after the covering payment is confirmed. Drives the "Pass Your Test Guarantee" badge in the admin pupil views. |
+| `test_pass_guarantee_order_id` | bigint unsigned | FOREIGN KEY (orders.id), NULLABLE, ON DELETE SET NULL | Booking-form order that gave the guarantee |
 | `app_last_active_at` | timestamp | NULLABLE | Last time the student made an authenticated mobile-app API request. NULL means they have never used the app. Drives the "App" / has_app indicator on the instructor pupils view. Stamped (throttled to every 15 min) by the `ResolveApiProfile` middleware. |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
@@ -363,6 +367,7 @@ Extended profile for users with student role.
 - Belongs to one `User`
 - Belongs to one `Instructor` (optional - assigned instructor)
 - Has many `Orders`
+- Belongs to one `Order` via `test_pass_guarantee_order_id` (optional - `testPassGuaranteeOrder`)
 - Has many `StudentPickupPoints`
 - Has many `StudentChecklistItems`
 
@@ -430,6 +435,10 @@ Student enrollments/purchases of lesson packages.
 | `package_lessons_count` | integer | NULLABLE | Snapshot: number of lessons at time of order |
 | `booking_fee_pence` | integer unsigned | DEFAULT 0 | Booking fee in pence (e.g., £19.99 = 1999) |
 | `digital_fee_pence` | integer unsigned | DEFAULT 0 | Total digital fee in pence (£3.99 × lessons) |
+| `total_price_pence` | integer unsigned | NULLABLE | Total charge amount in pence (package + booking fee + digital fees - discounts + paid `test_pass_guarantee_pence`). Sent to Stripe. |
+| `includes_test_pass_guarantee` | boolean | DEFAULT false | Order includes Pass Your Test Guarantee (free or paid). Booking form only. |
+| `test_pass_guarantee_pence` | integer unsigned | DEFAULT 0 | Amount charged for the guarantee add-on. 0 when not included or when it was free (10+ booked hours paid in full). Included in `total_price_pence`. |
+| `payment_mode` | enum('upfront', 'weekly') | DEFAULT 'upfront' | Payment method chosen |
 | `total_price_pence` | integer unsigned | NULLABLE | Total charge amount in pence (package + booking fee + digital fees - discounts). Sent to Stripe. |
 | `payment_mode` | enum('upfront', 'weekly', 'imported') | DEFAULT 'upfront' | Payment method chosen. `imported` = lessons brought in from another system by the legacy importer — settled outside the platform, no Stripe IDs, no lesson_payments, never paid out. |
 | `status` | enum('pending', 'active', 'completed', 'cancelled') | DEFAULT 'pending' | Order status |
@@ -460,6 +469,7 @@ Student enrollments/purchases of lesson packages.
 - Weekly payment: Recurring subscription for each lesson
 - Order becomes active after successful payment
 - Lessons are created after order activation
+- **Pass Your Test Guarantee (booking form only):** free when booked hours (lessons × slot length from step 4) ≥ `config('test_pass_guarantee.free_minimum_hours')` (10) and `payment_mode = upfront`. Otherwise the learner can opt in on the payment step (step 6) for `config('test_pass_guarantee.price')` (£50). Upfront: charged as a separate Stripe Checkout line item. Weekly: added in full to the first `lesson_payments` row (see `lesson_payments.test_pass_guarantee_pence`); the rest of the total is spread evenly as usual. Rules live in `App\Support\TestPassGuarantee`.
 - **Imported orders** (`payment_mode = imported`): one per imported student, on a hidden (`active = false`) per-instructor "Imported lessons" package with £0 totals. Lessons on them report `payment_status = paid` / `is_paid = true` so they can be signed off in the app and CRM. `SignOffLessonAction` skips the Stripe onboarding + payment guards and creates **no Payout**; `LessonSignOffService` also skips the student feedback email, next-invoice and resource recommendations. `Order::isImported()`, `Order::isPrepaid()` (confirmed upfront or imported).
 - **Price snapshot:** `package_name`, `package_total_price_pence`, `package_lesson_price_pence`, and `package_lessons_count` are copied from the package at order creation time. Always use these snapshot columns for pricing/display — never read live from `packages` table via the `package` relationship for pricing data.
 
@@ -529,6 +539,7 @@ Tracks payment status for individual lessons (used in weekly payment mode).
 | `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique payment identifier |
 | `lesson_id` | bigint unsigned | FOREIGN KEY (lessons.id), ON DELETE CASCADE | Associated lesson |
 | `amount_pence` | integer | NOT NULL | Payment amount in pence |
+| `test_pass_guarantee_pence` | integer unsigned | DEFAULT 0 | Portion of `amount_pence` that pays for Pass Your Test Guarantee. Only ever set on the first weekly payment of a booking-form order that opted in. Itemised separately on the Stripe invoice; when this payment's `invoice.paid` webhook lands the student is flagged. |
 | `status` | enum('due', 'paid', 'refunded') | DEFAULT 'due' | Payment status |
 | `due_date` | date | NULLABLE | When payment is due |
 | `paid_at` | datetime | NULLABLE | When payment was received |
@@ -1532,6 +1543,18 @@ The permanent record of everything the importer brought in. Links a legacy syste
 5. Creates N lessons with corresponding `LessonPayment` records
 6. Each week, Stripe charges the student and fires `invoice.paid` webhook
 7. Webhook updates `LessonPayment.status = 'paid'`
+
+### 2a. Pass Your Test Guarantee (Booking Form)
+
+1. Step 6 (payment) shows the add-on next to the payment mode choice. The learner's tick is posted with the payment form (`test_pass_guarantee`) and stored in the enquiry as `steps.step6.test_pass_guarantee` before the order is built. Step 5 (summary) only notes that it's free when paid in full.
+2. Step 6 `CreateOrderFromEnquiryAction` resolves it with `TestPassGuarantee::resolveForEnquiry()`:
+   - 10+ booked hours and paid in full → `includes_test_pass_guarantee = true`, `test_pass_guarantee_pence = 0` (free, tick ignored)
+   - Otherwise, ticked → `includes_test_pass_guarantee = true`, `test_pass_guarantee_pence = 5000`, added to `total_price_pence`
+   - Otherwise → not included
+3. The student is flagged (`students.test_pass_guarantee_at`, `test_pass_guarantee_order_id`) by `GrantTestPassGuaranteeAction` once payment is confirmed:
+   - Upfront: `checkout.session.completed` / `payment_intent.succeeded` webhooks, and the onboarding checkout success redirect
+   - Weekly: `invoice.paid` for the lesson payment with `test_pass_guarantee_pence > 0`
+4. The grant is idempotent: the first one wins.
 
 ### 3. Lesson Completion & Payout Flow
 

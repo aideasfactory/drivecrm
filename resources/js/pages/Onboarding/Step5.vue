@@ -232,8 +232,8 @@
                   </CardContent>
                 </Card>
 
-                <!-- Promo Code -->
-                <div class="flex items-center space-x-4 pt-6 border-t">
+                <!-- Promo Code (hidden for now) -->
+                <div v-if="showPromoCode" class="flex items-center space-x-4 pt-6 border-t">
                   <Input
                     v-model="promoCode"
                     type="text"
@@ -273,10 +273,14 @@
                         <span>Discount ({{ pricing?.uuid_discount_percentage }}% off — {{ pricing?.uuid_discount_label }})</span>
                         <span class="font-medium">-£{{ pricing?.uuid_discount }}</span>
                       </div>
+                      <div v-if="testPassGuarantee?.free_when_paid_in_full" class="flex items-center justify-between">
+                        <span>Pass Your Test Guarantee</span>
+                        <span class="font-medium">Free if paid in full</span>
+                      </div>
                       <Separator />
                       <div class="flex items-center justify-between">
                         <span class="text-lg font-semibold">Total</span>
-                        <span class="text-xl font-bold">{{ package?.total_price || '0.00' }}</span>
+                        <span class="text-xl font-bold">{{ upfrontTotal }}</span>
                       </div>
                       <div class="text-sm text-muted-foreground">
                         Or pay <span class="font-semibold">{{ package?.weekly_payment || '0.00' }} weekly</span>
@@ -355,6 +359,10 @@ const props = defineProps({
   pickup_city: String,
   pickup_postcode: String,
   postcode: String,
+  testPassGuarantee: {
+    type: [Object, null],
+    default: null
+  },
   maxStepReached: { type: Number, default: 5 }
 })
 
@@ -375,6 +383,7 @@ const form = useForm({
 })
 
 const editingAddress = ref(false)
+const showPromoCode = false
 const promoCode = ref('')
 const promoDiscount = ref(0)
 const bookingFee = 5
@@ -385,6 +394,20 @@ const isBookingForSomeoneElse = ref(form.booking_for_someone_else)
 // Watch and sync the local ref with the form
 watch(isBookingForSomeoneElse, (newValue) => {
   form.booking_for_someone_else = newValue
+})
+
+function formatPence(pence) {
+  return `£${((pence || 0) / 100).toFixed(2)}`
+}
+
+// Pay-in-full total; the optional guarantee add-on is chosen at the payment step
+const upfrontTotal = computed(() => {
+  const baseTotalPence = props.pricing?.package_total_with_fees_pence
+  if (baseTotalPence === undefined || baseTotalPence === null) {
+    return props.package?.total_price || '0.00'
+  }
+
+  return formatPence(baseTotalPence)
 })
 
 const uuid = computed(() => props.uuid || page.props.enquiry?.id)

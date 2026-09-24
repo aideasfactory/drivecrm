@@ -75,6 +75,7 @@ class PupilController extends Controller
                 'name' => trim($student->first_name.' '.$student->surname),
                 'email' => $student->email,
                 'status' => $student->status,
+                'has_test_pass_guarantee' => $student->hasTestPassGuarantee(),
                 'instructor_id' => $student->instructor_id,
                 'instructor_name' => $student->instructor?->user?->name,
             ]),

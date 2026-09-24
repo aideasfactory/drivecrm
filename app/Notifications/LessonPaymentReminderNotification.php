@@ -19,7 +19,7 @@ class LessonPaymentReminderNotification extends Notification implements ShouldQu
     use RendersTemplatedMail;
 
     /**
-     * @param  array{lesson: int, booking_fee: int, digital_fee: int}|null  $breakdown
+     * @param  array{lesson: int, booking_fee: int, digital_fee: int, test_pass_guarantee?: int}|null  $breakdown
      */
     public function __construct(
         public LessonPayment $lessonPayment,
@@ -79,8 +79,9 @@ class LessonPaymentReminderNotification extends Notification implements ShouldQu
         $lesson = (int) ($this->breakdown['lesson'] ?? 0);
         $bookingFee = (int) ($this->breakdown['booking_fee'] ?? 0);
         $digitalFee = (int) ($this->breakdown['digital_fee'] ?? 0);
+        $testPassGuarantee = (int) ($this->breakdown['test_pass_guarantee'] ?? 0);
 
-        if ($bookingFee <= 0 && $digitalFee <= 0) {
+        if ($bookingFee <= 0 && $digitalFee <= 0 && $testPassGuarantee <= 0) {
             return [];
         }
 
@@ -96,6 +97,10 @@ class LessonPaymentReminderNotification extends Notification implements ShouldQu
 
         if ($digitalFee > 0) {
             $lines[] = 'Digital services fee (weekly instalment): '.$this->formatPence($digitalFee);
+        }
+
+        if ($testPassGuarantee > 0) {
+            $lines[] = 'Pass Your Test Guarantee: '.$this->formatPence($testPassGuarantee);
         }
 
         $lines[] = '';
