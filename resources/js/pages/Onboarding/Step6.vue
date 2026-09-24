@@ -79,7 +79,7 @@
                           <div class="flex items-center justify-between">
                             <div>
                               <div class="font-medium">Pay in full</div>
-                              <div class="text-sm text-muted-foreground">Complete payment now via Stripe</div>
+                              <div class="text-sm text-muted-foreground">Complete payment now via Stripe (incl. booking &amp; digital fees)</div>
                             </div>
                             <div class="text-xl font-bold">{{ package?.total_price || '0.00' }}</div>
                           </div>
@@ -101,7 +101,7 @@
                           <div class="flex items-center justify-between">
                             <div>
                               <div class="font-medium">Pay weekly</div>
-                              <div class="text-sm text-muted-foreground">{{ package?.lessons_count || 0 }} weekly invoices</div>
+                              <div class="text-sm text-muted-foreground">{{ package?.lessons_count || 0 }} weekly invoices (incl. booking &amp; digital fees)</div>
                             </div>
                             <div class="text-xl font-bold">
                               {{ package?.weekly_payment || '0.00' }}<span class="text-sm font-normal text-muted-foreground">/lesson</span>

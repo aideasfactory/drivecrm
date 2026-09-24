@@ -92,6 +92,9 @@ class PaymentLinkCheckoutController extends Controller
                 ? $order->status->value
                 : (string) $order->status,
             'total_price_pence' => $order->total_price_pence ?? $order->package_total_price_pence,
+            'package_total_price_pence' => $order->package_total_price_pence,
+            'booking_fee_pence' => $order->booking_fee_pence,
+            'digital_fee_pence' => $order->digital_fee_pence,
             'package' => $order->package ? [
                 'name' => $order->package->name,
                 'lessons_count' => $order->package->lessons_count,

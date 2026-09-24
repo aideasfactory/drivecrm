@@ -106,18 +106,18 @@
                         <CardContent class="text-center">
                           <div class="mb-4">
                             <template v-if="discount">
-                              <div class="text-sm text-muted-foreground line-through">{{ pkg.formatted_total_price }}</div>
-                              <div class="text-3xl font-bold text-green-600 dark:text-green-400">{{ getDiscountedPrice(pkg.formatted_total_price) }}</div>
-                              <div class="text-xs text-muted-foreground mt-1">
-                                {{ getDiscountedPrice(pkg.formatted_lesson_price) }} per lesson
-                              </div>
+                              <div class="text-sm text-muted-foreground line-through">{{ pkg.total_price }}</div>
+                              <div class="text-3xl font-bold text-green-600 dark:text-green-400">{{ pkg.total_with_fees }}</div>
                             </template>
-                            <template v-else>
-                              <div class="text-3xl font-bold">{{ pkg.formatted_total_price }}</div>
-                              <div class="text-xs text-muted-foreground mt-1">
-                                {{ pkg.formatted_lesson_price }} per lesson
-                              </div>
-                            </template>
+                            <div v-else class="text-3xl font-bold">{{ pkg.total_with_fees }}</div>
+                            <div class="text-xs text-muted-foreground mt-1">
+                              or {{ pkg.weekly_payment }} per lesson if paid weekly
+                            </div>
+                            <div class="text-xs text-muted-foreground mt-2">
+                              Lessons {{ discount ? getDiscountedPrice(pkg.formatted_total_price) : pkg.formatted_total_price }}
+                              + booking fee {{ pkg.booking_fee }}
+                              + digital fee {{ pkg.digital_fee }}
+                            </div>
                           </div>
                           <p class="text-xs text-muted-foreground leading-relaxed">{{ pkg.description }}</p>
                         </CardContent>
