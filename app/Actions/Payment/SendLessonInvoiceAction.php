@@ -45,7 +45,7 @@ class SendLessonInvoiceAction
         }
 
         $amountPence = (int) $lessonPayment->amount_pence;
-        $breakdown = LessonPayment::weeklyBreakdown($order, $amountPence);
+        $breakdown = LessonPayment::weeklyBreakdown($order, $amountPence, (int) $lessonPayment->test_pass_guarantee_pence);
 
         // Create Stripe invoice using LessonPayment amount and the breakdown
         // so the hosted invoice itemises lesson cost, booking fee and digital
@@ -83,7 +83,7 @@ class SendLessonInvoiceAction
     /**
      * Send the payment reminder notification email.
      *
-     * @param  array{lesson: int, booking_fee: int, digital_fee: int}|null  $breakdown
+     * @param  array{lesson: int, booking_fee: int, digital_fee: int, test_pass_guarantee?: int}|null  $breakdown
      */
     protected function sendReminderNotification(LessonPayment $lessonPayment, Student $student, string $hostedInvoiceUrl, ?array $breakdown = null): void
     {

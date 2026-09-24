@@ -104,12 +104,24 @@ class OrderConfirmationNotification extends Notification implements ShouldQueue
                 $lines[] = "Digital fee: {$order->formatted_digital_fee}";
             }
 
+            if ($order->includes_test_pass_guarantee) {
+                $lines[] = $order->test_pass_guarantee_pence > 0
+                    ? "Pass Your Test Guarantee: {$order->formatted_test_pass_guarantee}"
+                    : 'Pass Your Test Guarantee: Included free';
+            }
+
             $lines[] = "**Total paid: {$order->formatted_amount_paid}**";
 
             return implode("\n", $lines);
         }
 
-        return 'Payment: Weekly (£'.number_format($order->package_lesson_price_pence / 100, 2).' per lesson)';
+        $weeklyLine = 'Payment: Weekly (£'.number_format($order->package_lesson_price_pence / 100, 2).' per lesson)';
+
+        if ($order->includes_test_pass_guarantee && $order->test_pass_guarantee_pence > 0) {
+            $weeklyLine .= "\nPass Your Test Guarantee: {$order->formatted_test_pass_guarantee}, added to your first weekly payment";
+        }
+
+        return $weeklyLine;
     }
 
     /**

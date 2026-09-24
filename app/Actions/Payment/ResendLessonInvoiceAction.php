@@ -45,7 +45,7 @@ class ResendLessonInvoiceAction
                 return ['success' => false, 'error' => 'Invoice does not have a payment URL'];
             }
 
-            $breakdown = LessonPayment::weeklyBreakdown($order, (int) $lessonPayment->amount_pence);
+            $breakdown = LessonPayment::weeklyBreakdown($order, (int) $lessonPayment->amount_pence, (int) $lessonPayment->test_pass_guarantee_pence);
 
             $this->sendReminderNotification($lessonPayment, $student, $hostedInvoiceUrl, $breakdown);
 
@@ -69,7 +69,7 @@ class ResendLessonInvoiceAction
     }
 
     /**
-     * @param  array{lesson: int, booking_fee: int, digital_fee: int}|null  $breakdown
+     * @param  array{lesson: int, booking_fee: int, digital_fee: int, test_pass_guarantee?: int}|null  $breakdown
      */
     protected function sendReminderNotification(LessonPayment $lessonPayment, Student $student, string $hostedInvoiceUrl, ?array $breakdown = null): void
     {

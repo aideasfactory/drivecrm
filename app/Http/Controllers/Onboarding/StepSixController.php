@@ -8,6 +8,7 @@ use App\Actions\Calendar\ConfirmCalendarItemsAction;
 use App\Actions\Onboarding\CreateOrderFromEnquiryAction;
 use App\Actions\Onboarding\CreateUserAndStudentFromEnquiryAction;
 use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
+use App\Actions\Student\GrantTestPassGuaranteeAction;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use App\Http\Controllers\Controller;
@@ -18,6 +19,8 @@ use App\Models\Package;
 use App\Services\OrderService;
 use App\Services\PriceUpliftService;
 use App\Services\StripeService;
+use App\Support\Fees;
+use App\Support\TestPassGuarantee;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
@@ -35,7 +38,8 @@ class StepSixController extends Controller
         protected CreateOrderFromEnquiryAction $createOrderAction,
         protected SendOrderConfirmationEmailAction $sendEmailAction,
         protected OrderService $orderService,
-        protected PriceUpliftService $priceUpliftService
+        protected PriceUpliftService $priceUpliftService,
+        protected GrantTestPassGuaranteeAction $grantTestPassGuarantee,
     ) {}
 
     /**
@@ -78,11 +82,18 @@ class StepSixController extends Controller
         );
 
         // Calculate pricing (in pounds for display)
-        $packagePrice = $package->total_price;
         $lessonPrice = $package->weekly_payment;
 
         // Get discount data
         $discount = $enquiry->getDiscountData();
+
+        $testPassGuarantee = TestPassGuarantee::bookingFormData($enquiry, $package);
+        $packageTotalWithFeesPence = (int) $package->total_price_pence
+            + Fees::bookingFeePence()
+            + Fees::digitalFeeTotalPence((int) $package->lessons_count);
+        $weeklyPaymentPence = $package->lessons_count > 0
+            ? (int) round($packageTotalWithFeesPence / $package->lessons_count)
+            : 0;
 
         return Inertia::render('Onboarding/Step6', [
             'uuid' => $enquiry->id,
@@ -121,18 +132,26 @@ class StepSixController extends Controller
             // Pricing for both payment modes
             'pricing' => [
                 'upfront' => [
-                    'total' => $packagePrice,
+                    'total' => $this->formatPence($packageTotalWithFeesPence + $testPassGuarantee['upfront']['charge_pence']),
                     'per_lesson' => $lessonPrice,
                 ],
                 'weekly' => [
                     'per_lesson' => $lessonPrice,
-                    'total_over_time' => $packagePrice,
+                    'first_payment' => $this->formatPence($weeklyPaymentPence + $testPassGuarantee['weekly']['charge_pence']),
+                    'total_over_time' => $this->formatPence($packageTotalWithFeesPence + $testPassGuarantee['weekly']['charge_pence']),
                 ],
             ],
+
+            'testPassGuarantee' => $testPassGuarantee,
 
             // Discount code data
             'discount' => $discount,
         ]);
+    }
+
+    protected function formatPence(int $pence): string
+    {
+        return '£'.number_format($pence / 100, 2);
     }
 
     /**
@@ -509,6 +528,8 @@ class StepSixController extends Controller
                     // Transition calendar items from DRAFT to BOOKED now that payment is confirmed
                     app(ConfirmCalendarItemsAction::class)($order);
                 }
+
+                ($this->grantTestPassGuarantee)($order);
 
                 // Send confirmation email
                 $this->sendEmailAction->execute($order, $order->student);
