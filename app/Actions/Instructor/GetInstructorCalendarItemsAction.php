@@ -23,15 +23,41 @@ class GetInstructorCalendarItemsAction
      */
     public function __invoke(Instructor $instructor, string $date, bool $availableOnly = true, bool $excludeDrafts = true): Collection
     {
-        $calendar = Calendar::query()
-            ->where('instructor_id', $instructor->id)
-            ->where('date', $date)
-            ->first();
+        return $this->between($instructor, $date, $date, $availableOnly, $excludeDrafts);
+    }
 
-        if (! $calendar) {
-            return new Collection;
+    /**
+     * Calendar items for an inclusive date range, ordered by date then start time.
+     *
+     * Days with no items are omitted. Filters match the single-day query.
+     *
+     * @return Collection<int, CalendarItem>
+     */
+    public function between(Instructor $instructor, string $from, string $to, bool $availableOnly = true, bool $excludeDrafts = true): Collection
+    {
+        $calendars = Calendar::query()
+            ->where('instructor_id', $instructor->id)
+            ->whereDate('date', '>=', $from)
+            ->whereDate('date', '<=', $to)
+            ->orderBy('date')
+            ->get();
+
+        $items = new Collection;
+
+        foreach ($calendars as $calendar) {
+            foreach ($this->itemsForCalendar($calendar, $availableOnly, $excludeDrafts) as $item) {
+                $items->push($item);
+            }
         }
 
+        return $items;
+    }
+
+    /**
+     * @return Collection<int, CalendarItem>
+     */
+    private function itemsForCalendar(Calendar $calendar, bool $availableOnly, bool $excludeDrafts): Collection
+    {
         $query = CalendarItem::query()
             ->where('calendar_id', $calendar->id);
 

@@ -723,6 +723,14 @@ class InstructorService extends BaseService
     }
 
     /**
+     * Lessons across an inclusive date range, same set as the day view for each date.
+     */
+    public function getLessonsInRange(Instructor $instructor, string $from, string $to): Collection
+    {
+        return $this->getInstructorDayLessons->between($instructor, $from, $to);
+    }
+
+    /**
      * Invalidate cached student data for an instructor.
      */
     public function invalidateStudentCache(Instructor $instructor): void

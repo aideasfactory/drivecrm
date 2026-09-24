@@ -19,15 +19,26 @@ return new class extends Migration
             $table->integer('package_lessons_count')->nullable()->after('package_lesson_price_pence');
         });
 
-        // Backfill existing orders from their related package
+        // Backfill existing orders from their related package.
+        // A join update is not valid on SQLite (the test database).
         DB::table('orders')
-            ->join('packages', 'orders.package_id', '=', 'packages.id')
-            ->update([
-                'orders.package_name' => DB::raw('packages.name'),
-                'orders.package_total_price_pence' => DB::raw('packages.total_price_pence'),
-                'orders.package_lesson_price_pence' => DB::raw('packages.lesson_price_pence'),
-                'orders.package_lessons_count' => DB::raw('packages.lessons_count'),
-            ]);
+            ->whereNotNull('package_id')
+            ->orderBy('id')
+            ->lazy()
+            ->each(function (object $order): void {
+                $package = DB::table('packages')->where('id', $order->package_id)->first();
+
+                if ($package === null) {
+                    return;
+                }
+
+                DB::table('orders')->where('id', $order->id)->update([
+                    'package_name' => $package->name,
+                    'package_total_price_pence' => $package->total_price_pence,
+                    'package_lesson_price_pence' => $package->lesson_price_pence,
+                    'package_lessons_count' => $package->lessons_count,
+                ]);
+            });
     }
 
     /**

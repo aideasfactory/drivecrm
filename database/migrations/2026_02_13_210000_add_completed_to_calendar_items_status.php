@@ -10,6 +10,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         DB::statement("ALTER TABLE calendar_items MODIFY COLUMN status ENUM('draft', 'reserved', 'booked', 'completed') NULL");
     }
 
@@ -18,6 +22,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         DB::statement("ALTER TABLE calendar_items MODIFY COLUMN status ENUM('draft', 'reserved', 'booked') NULL");
     }
 };

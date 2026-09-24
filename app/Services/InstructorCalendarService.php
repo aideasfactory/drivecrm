@@ -38,6 +38,18 @@ class InstructorCalendarService extends BaseService
     }
 
     /**
+     * Calendar items across an inclusive date range.
+     *
+     * Not cached: invalidation is per day, and a range key would go stale after a booking.
+     *
+     * @return Collection<int, CalendarItem>
+     */
+    public function getCalendarItemsInRange(Instructor $instructor, string $from, string $to, bool $availableOnly = true, bool $excludeDrafts = true): Collection
+    {
+        return $this->getCalendarItems->between($instructor, $from, $to, $availableOnly, $excludeDrafts);
+    }
+
+    /**
      * Invalidate cached calendar items for a specific instructor and date.
      *
      * Should be called whenever calendar items are booked, reserved, or otherwise modified.

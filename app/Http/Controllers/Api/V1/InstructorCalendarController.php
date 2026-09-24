@@ -9,7 +9,7 @@ use App\Enums\RecurrencePattern;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\DeleteCalendarItemRequest;
 use App\Http\Requests\Api\V1\FillAvailableSlotsRequest;
-use App\Http\Requests\Api\V1\GetCalendarItemsRequest;
+use App\Http\Requests\Api\V1\GetInstructorCalendarItemsRequest;
 use App\Http\Requests\Api\V1\StoreCalendarItemRequest;
 use App\Http\Requests\Api\V1\StoreSlotOfferRequest;
 use App\Http\Requests\Api\V1\UpdateCalendarItemRequest;
@@ -33,23 +33,34 @@ class InstructorCalendarController extends Controller
     ) {}
 
     /**
-     * Return calendar items for the authenticated instructor on a given date.
+     * Return calendar items for the authenticated instructor.
      *
-     * Supports ?available_only=true (default) to return only available slots,
-     * or ?available_only=false to return all items for the day.
+     * A `date` query returns that day. `from` and `to` return an inclusive
+     * range of at most 31 days, and are ignored when `date` is present.
+     * `available_only=true` (default) returns only available slots.
      */
-    public function index(GetCalendarItemsRequest $request): AnonymousResourceCollection
+    public function index(GetInstructorCalendarItemsRequest $request): AnonymousResourceCollection
     {
         $instructor = $request->user()->instructor;
         $availableOnly = $request->boolean('available_only', true);
         $excludeDrafts = $request->boolean('exclude_drafts', true);
 
-        $items = $this->calendarService->getCalendarItems(
-            $instructor,
-            $request->validated('date'),
-            $availableOnly,
-            $excludeDrafts
-        );
+        if ($request->filled('date')) {
+            $items = $this->calendarService->getCalendarItems(
+                $instructor,
+                $request->validated('date'),
+                $availableOnly,
+                $excludeDrafts
+            );
+        } else {
+            $items = $this->calendarService->getCalendarItemsInRange(
+                $instructor,
+                $request->validated('from'),
+                $request->validated('to'),
+                $availableOnly,
+                $excludeDrafts
+            );
+        }
 
         // Eager-load the booking context the resource exposes (student name, paid
         // status, future-sibling count) so the app can drive the status-dependent

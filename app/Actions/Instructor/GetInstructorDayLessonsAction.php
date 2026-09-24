@@ -6,6 +6,8 @@ namespace App\Actions\Instructor;
 
 use App\Enums\LessonStatus;
 use App\Models\Instructor;
+use App\Models\Lesson;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
 
 class GetInstructorDayLessonsAction
@@ -19,8 +21,34 @@ class GetInstructorDayLessonsAction
      */
     public function __invoke(Instructor $instructor, string $date): Collection
     {
-        return $instructor->lessons()
+        return $this->lessonsQuery($instructor)
             ->whereDate('date', $date)
+            ->orderBy('start_time')
+            ->orderBy('date')
+            ->get();
+    }
+
+    /**
+     * Lessons across an inclusive date range, ordered by date then start time.
+     *
+     * Same set as the single-day query for each date. Null dates are omitted.
+     */
+    public function between(Instructor $instructor, string $from, string $to): Collection
+    {
+        return $this->lessonsQuery($instructor)
+            ->whereDate('date', '>=', $from)
+            ->whereDate('date', '<=', $to)
+            ->orderBy('date')
+            ->orderBy('start_time')
+            ->get();
+    }
+
+    /**
+     * @return HasMany<Lesson, Instructor>
+     */
+    private function lessonsQuery(Instructor $instructor): HasMany
+    {
+        return $instructor->lessons()
             // Exclude drafts (awaiting payment) and cancelled lessons — a cancelled
             // lesson has had its calendar slot freed, so it must not appear in the
             // instructor's day view (mirrors the admin diary, which never shows it).
@@ -41,9 +69,6 @@ class GetInstructorDayLessonsAction
                 'payout:id,lesson_id,status,amount_pence,paid_at',
                 'reflectiveLog:id,lesson_id',
                 'resources:id,title,resource_type',
-            ])
-            ->orderBy('start_time')
-            ->orderBy('date')
-            ->get();
+            ]);
     }
 }

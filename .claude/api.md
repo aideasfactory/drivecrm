@@ -1303,6 +1303,38 @@ Returns the authenticated instructor's lessons for a specific date, ordered by s
 
 ---
 
+#### `GET /api/v1/instructor/lessons`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Returns the same lesson objects as `GET /api/v1/instructor/lessons/{date}`, for every date in an inclusive range. The day route is unchanged. Register this collection route so it does not collide with `{date}`.
+
+**Query Parameters:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `from` | string | **Yes** | Inclusive start, `Y-m-d` |
+| `to` | string | **Yes** | Inclusive end, `Y-m-d`. Must be on or after `from`. Span at most 31 days |
+
+**Example:** `GET /api/v1/instructor/lessons?from=2026-09-21&to=2026-09-27`
+
+**Success Response:** `200 OK` — same envelope and lesson object as the day route. For a range, `date` is a non-null `Y-m-d` on every lesson. Ordered by `date`, then `start_time`. Days with no lessons are omitted. No pagination inside the cap. Draft and cancelled lessons stay excluded, matching the day route.
+
+**Error Response:** `422` when only one of `from` / `to` is sent, a value is not `Y-m-d`, `to` is before `from`, or the span is longer than 31 days.
+
+```json
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "to": ["The to date must be on or after from."]
+  }
+}
+```
+
+A single-day `GET /api/v1/instructor/lessons/{date}` does not require `from` or `to`.
+
+---
+
 #### `POST /api/v1/instructor/lessons/{lesson}/notify-on-way`
 
 **Auth required:** Yes (Bearer token — instructor only)
@@ -2313,16 +2345,23 @@ Returns the full pricing breakdown for a package, including booking fee, digital
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Returns the authenticated instructor's calendar items for a specific date. By default, returns only available slots (excluding travel and practical test items). Set `available_only=false` to return all items for the day.
+Returns the authenticated instructor's calendar items for a specific date, or for an inclusive date range. By default, returns only available slots (excluding travel and practical test items). Set `available_only=false` (or `0`) to return all items. The week diary sends `available_only=0` and `exclude_drafts=0`.
 
 **Query Parameters:**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `date` | string | **Yes** | Date in `Y-m-d` format (e.g., `2026-03-24`) |
-| `available_only` | boolean | No | `true` (default) = available slots only; `false` = all items for the day |
+| `date` | string | Yes, unless `from` and `to` are sent | Single day in `Y-m-d` format (e.g., `2026-03-24`). When present, `from` / `to` are ignored and the response is that day only |
+| `from` | string | With `to` | Inclusive range start, `Y-m-d`. Send both `from` and `to`, or neither |
+| `to` | string | With `from` | Inclusive range end, `Y-m-d`. Must be on or after `from`. Span at most 31 days (`to - from` <= 30) |
+| `available_only` | boolean | No | `true` (default) = available slots only; `false` / `0` = all items |
+| `exclude_drafts` | boolean | No | `true` (default) hides `draft` items. `false` / `0` keeps drafts |
 
-**Example:** `GET /api/v1/instructor/calendar/items?date=2026-03-24&available_only=false`
+**Example (day):** `GET /api/v1/instructor/calendar/items?date=2026-03-24&available_only=false`
+
+**Example (week):** `GET /api/v1/instructor/calendar/items?from=2026-09-21&to=2026-09-27&available_only=0&exclude_drafts=0`
+
+Items are ordered by `date` ascending, then `start_time` ascending. Days with no items are omitted. There is no pagination inside the 31-day cap. `date` is present on every item.
 
 **Response (200):**
 ```json
@@ -6222,12 +6261,13 @@ The `role` field is always returned in user responses. Use it to determine which
 | POST | `/api/v1/instructor/profile/picture` | Yes | Instructor | Upload profile picture |
 | DELETE | `/api/v1/instructor/profile/picture` | Yes | Instructor | Delete profile picture |
 | GET | `/api/v1/instructor/students` | Yes | Instructor | List students (grouped) |
+| GET | `/api/v1/instructor/lessons` | Yes | Instructor | Lessons for an inclusive date range (max 31 days) |
 | GET | `/api/v1/instructor/lessons/{date}` | Yes | Instructor | Day view lessons |
 | PATCH | `/api/v1/instructor/lessons/{lesson}/mileage` | Yes | Instructor | Update lesson mileage |
 | GET | `/api/v1/instructor/packages` | Yes | Instructor | List packages |
 | POST | `/api/v1/instructor/packages` | Yes | Instructor | Create package |
 | PUT | `/api/v1/instructor/packages/{package}` | Yes | Instructor | Update package |
-| GET | `/api/v1/instructor/calendar/items` | Yes | Instructor | List calendar items for a date |
+| GET | `/api/v1/instructor/calendar/items` | Yes | Instructor | List calendar items for a date or an inclusive range (max 31 days) |
 | POST | `/api/v1/instructor/calendar/items` | Yes | Instructor | Create calendar item |
 | POST | `/api/v1/instructor/calendar/fill-slots` | Yes | Instructor | Bulk-fill diary with available slots (skips clashes) |
 | PUT | `/api/v1/instructor/calendar/items/{calendarItem}` | Yes | Instructor | Update / move / reschedule calendar item (single or bulk) |
@@ -7474,6 +7514,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-09-10 | **Admin-defined resource/folder display order.** Existing `resources.sort_order` and `resource_folders.sort_order` columns are now writable from Drive CRM (`POST /resources/folders/root/reorder`, `POST /resources/folders/{folder}/reorder`, `POST /resources/folders/{folder}/resources/reorder` — owner web, not mobile). Tree endpoints already queried `sort_order` then name/title; they now also **return** `sort_order` on every folder and resource. Flat `GET /api/v1/resources` is ordered by folder, then `sort_order`, then title (was title only). Lesson-attached resources follow the same library order. Render `folders` / `children` / `resources` in array order — do not re-sort by title. Until a folder is reordered in admin, existing rows may all be `0` and fall back to name/title. New uploads/imports append (`max + 1`). Resource-library cache is invalidated on admin writes. `my_resources` / suggested lists stay suggestion-order and have no `sort_order`. | Resources (index, show), Instructor Resource Tree, Student Resources (index, show), Lesson Detail (resources) |
 | 2026-09-10 | **Folder visibility for instructors and pupils.** New `resource_folders.visibility` (`student` \| `instructor` \| `both`, default `both`). Admin create/edit folder sheets set it. `GET /api/v1/student/resources` only returns folders visible to pupils and prunes empty folders (so instructor-only libraries such as VTS no longer appear as empty categories). `GET /api/v1/instructor/resources` only returns folders visible to instructors. Both tree folder objects now include `visibility`. Student show/watched 404 when the parent folder is instructor-only. `GET /api/v1/resources?audience=` also excludes resources whose parent folder is hidden from that audience. Student resource-summary study progress, recommended, stats, my_resources, and the Expert badge denominator all ignore instructor-only folders. | Resources (index), Student Resources (index, show, watched, summary), Instructor Resource Tree (tree) |
 | 2026-09-18 | **Mobile lesson sign-off returns the completed lesson.** Same body as admin (`{ "summary": "..." }` only). The four-prompt reflective log is leftover and is not required — do not gate on `has_reflective_log`. The endpoint now runs the existing `LessonSignOffService` in-request (admin still queues the same job) and returns `{ "message": "Lesson signed off.", "data": <lesson> }` with `status: completed` / `card_status: signed_off`. Shared payout / onboarding / payment guards are unchanged. | Student Lessons (sign-off) |
+| 2026-09-24 | **Instructor diary week range.** `GET /api/v1/instructor/calendar/items` accepts an inclusive `from` + `to` pair (max 31 days) beside the existing `date` query. When `date` is present the range is ignored. `available_only` and `exclude_drafts` keep their meaning (`0` includes drafts, bookings, open slots, blocked time, travel, and practical tests). New `GET /api/v1/instructor/lessons?from=&to=` returns the same lesson objects as the day route, with a non-null `date` on every row, ordered by date then start time. Single-day routes are unchanged. 422 when the pair is incomplete, not `Y-m-d`, reversed, or longer than 31 days. | Instructor Calendar (index), Instructor Lessons (range — NEW) |
 | 2026-09-23 | **Imported lessons (legacy data importer).** Lessons brought in from another system by the Data Import page sit on orders with the new `payment_mode: "imported"` (lesson list/show, instructor day lessons, orders). They are settled outside the platform: `payment_status` is `"paid"` and calendar items report `is_paid: true`, so the existing Sign Off button shows with no app change. `POST /students/{student}/lessons/{lesson}/sign-off` on an imported lesson skips the Stripe onboarding + payment guards and creates **no payout** (no transfer, no next-invoice, no student feedback email, no resource recommendations); the lesson and its calendar item still go to `completed` and the response is unchanged. Treat `"imported"` as a display-only payment mode — never offer it when booking (order create / slot-offer accept still accept only `upfront` / `weekly`). No new endpoints. | Student Lessons (index, show, sign-off), Instructor Day Lessons, Calendar Items (`is_paid`), Orders (`payment_mode`) |
 
 ---
