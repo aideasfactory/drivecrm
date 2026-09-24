@@ -93,6 +93,81 @@ class LessonPayment extends Model
     }
 
     /**
+     * The share of an order's fee-inclusive total attributable to the lesson at
+     * `$index` (in date order). Used for upfront orders so each paid lesson
+     * record reflects what the student actually paid, matching weekly orders.
+     * Legacy orders without a stored total fall back to the lesson price.
+     */
+    public static function orderShareForLesson(Order $order, Lesson $lesson, int $index, int $lessonsCount): int
+    {
+        if ($order->total_price_pence === null) {
+            return (int) $lesson->amount_pence;
+        }
+
+        return self::weeklyAmountForIndex((int) $order->total_price_pence, $lessonsCount, $index);
+    }
+
+    /**
+     * Markdown lines itemising this payment (lesson cost, booking fee share,
+     * digital fee share) for student-facing emails. Returns an empty array when
+     * the order carries no fees.
+     *
+     * @return list<string>
+     */
+    public function costBreakdownLines(): array
+    {
+        $order = $this->lesson?->order;
+
+        if (! $order) {
+            return [];
+        }
+
+        return self::breakdownLines(self::weeklyBreakdown($order, (int) $this->amount_pence));
+    }
+
+    /**
+     * Format a payment breakdown as markdown lines, ending with a blank line so
+     * the amount line that follows in the template stays separated. Returns an
+     * empty array when there are no fee components.
+     *
+     * @param  array{lesson?: int, booking_fee?: int, digital_fee?: int}  $breakdown
+     * @return list<string>
+     */
+    public static function breakdownLines(array $breakdown): array
+    {
+        $lesson = (int) ($breakdown['lesson'] ?? 0);
+        $bookingFee = (int) ($breakdown['booking_fee'] ?? 0);
+        $digitalFee = (int) ($breakdown['digital_fee'] ?? 0);
+
+        if ($bookingFee <= 0 && $digitalFee <= 0) {
+            return [];
+        }
+
+        $lines = ['**Cost breakdown:**'];
+
+        if ($lesson > 0) {
+            $lines[] = 'Lesson cost: '.self::formatPence($lesson);
+        }
+
+        if ($bookingFee > 0) {
+            $lines[] = 'Booking fee (weekly instalment): '.self::formatPence($bookingFee);
+        }
+
+        if ($digitalFee > 0) {
+            $lines[] = 'Digital services fee (weekly instalment): '.self::formatPence($digitalFee);
+        }
+
+        $lines[] = '';
+
+        return $lines;
+    }
+
+    protected static function formatPence(int $pence): string
+    {
+        return '£'.number_format($pence / 100, 2);
+    }
+
+    /**
      * Decompose a single weekly payment amount into its constituent cost
      * components — the lesson portion, the booking fee portion, and the
      * digital fee portion — based on the ratios stored on the order.

@@ -585,9 +585,9 @@ class WebhookController extends Controller
      */
     protected function createUpfrontLessonPayments(Order $order): void
     {
-        $lessons = $order->lessons()->orderBy('date')->get();
+        $lessons = $order->lessons()->orderBy('date')->orderBy('start_time')->get();
 
-        foreach ($lessons as $lesson) {
+        foreach ($lessons->values() as $index => $lesson) {
             // Skip if a payment record already exists for this lesson
             if (LessonPayment::where('lesson_id', $lesson->id)->exists()) {
                 continue;
@@ -595,7 +595,7 @@ class WebhookController extends Controller
 
             LessonPayment::create([
                 'lesson_id' => $lesson->id,
-                'amount_pence' => $lesson->amount_pence,
+                'amount_pence' => LessonPayment::orderShareForLesson($order, $lesson, $index, $lessons->count()),
                 'status' => PaymentStatus::PAID,
                 'due_date' => $lesson->date,
                 'paid_at' => now(),

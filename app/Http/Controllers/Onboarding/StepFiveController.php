@@ -10,8 +10,8 @@ use App\Models\CalendarItem;
 use App\Models\Instructor;
 use App\Models\Location;
 use App\Models\Package;
+use App\Services\PackageService;
 use App\Services\PriceUpliftService;
-use App\Support\Fees;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -20,6 +20,7 @@ class StepFiveController extends Controller
 {
     public function __construct(
         protected PriceUpliftService $priceUpliftService,
+        protected PackageService $packageService,
     ) {}
 
     public function show(Request $request)
@@ -66,30 +67,8 @@ class StepFiveController extends Controller
             $pickupLocation = Location::find($step3['pickup_location_id']);
         }
 
-        // Calculate pricing (booking fee comes from config/fees.php so
-        // FEES_OVERRIDE_TO_ZERO takes effect wherever it's read).
-        $packagePrice = $package ? (float) $package->price : 0;
-        $bookingFee = Fees::bookingFee();
-        $promoDiscount = 0;
-
-        // Apply promo code if exists
-        if (! empty($step5['promo_code'])) {
-            $promoCode = strtolower($step5['promo_code']);
-            if ($promoCode === 'save10') {
-                $promoDiscount = $packagePrice * 0.10;
-            } elseif ($promoCode === 'save20') {
-                $promoDiscount = $packagePrice * 0.20;
-            }
-        }
-
-        // Apply UUID discount code if present
         $discount = $enquiry->getDiscountData();
-        $uuidDiscount = 0;
-        if ($discount && $package) {
-            $uuidDiscount = ($package->total_price_pence / 100) * ($discount['percentage'] / 100);
-        }
-
-        $totalPrice = $packagePrice + $bookingFee - $promoDiscount - $uuidDiscount;
+        $pricing = $package ? $this->packageService->calculateEnquiryPricing($package, $discount) : null;
 
         return Inertia::render('Onboarding/Step5', [
             'uuid' => $enquiry->id,
@@ -155,16 +134,16 @@ class StepFiveController extends Controller
                 'dob' => $step5['learner_dob'] ?? null,
             ],
 
-            // Pricing summary
-            'pricing' => [
-                'package_price' => number_format($packagePrice, 2),
-                'booking_fee' => number_format($bookingFee, 2),
-                'promo_discount' => $promoDiscount > 0 ? number_format($promoDiscount, 2) : null,
-                'uuid_discount' => $uuidDiscount > 0 ? number_format($uuidDiscount, 2) : null,
+            'pricing' => $pricing ? [
+                'package_price' => number_format($pricing['package_price'], 2),
+                'booking_fee' => number_format($pricing['booking_fee'], 2),
+                'digital_fee' => number_format($pricing['digital_fee_total'], 2),
+                'uuid_discount' => $pricing['promo_discount'] > 0 ? number_format($pricing['promo_discount'], 2) : null,
                 'uuid_discount_percentage' => $discount ? $discount['percentage'] : null,
                 'uuid_discount_label' => $discount ? $discount['label'] : null,
-                'total' => number_format($totalPrice, 2),
-            ],
+                'total' => number_format($pricing['total'], 2),
+                'weekly_payment' => number_format($pricing['weekly_payment'], 2),
+            ] : null,
 
             // Available promo codes (for demo)
             'available_promos' => ['SAVE10', 'SAVE20'],

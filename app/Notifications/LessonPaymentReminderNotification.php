@@ -62,50 +62,11 @@ class LessonPaymentReminderNotification extends Notification implements ShouldQu
 
     protected function costBreakdown(): string
     {
-        $lines = $this->breakdownLines();
-
-        return $lines === [] ? '' : implode("\n", $lines);
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    protected function breakdownLines(): array
-    {
         if (! is_array($this->breakdown)) {
-            return [];
+            return '';
         }
 
-        $lesson = (int) ($this->breakdown['lesson'] ?? 0);
-        $bookingFee = (int) ($this->breakdown['booking_fee'] ?? 0);
-        $digitalFee = (int) ($this->breakdown['digital_fee'] ?? 0);
-
-        if ($bookingFee <= 0 && $digitalFee <= 0) {
-            return [];
-        }
-
-        $lines = ['**Cost breakdown:**'];
-
-        if ($lesson > 0) {
-            $lines[] = 'Lesson cost: '.$this->formatPence($lesson);
-        }
-
-        if ($bookingFee > 0) {
-            $lines[] = 'Booking fee (weekly instalment): '.$this->formatPence($bookingFee);
-        }
-
-        if ($digitalFee > 0) {
-            $lines[] = 'Digital services fee (weekly instalment): '.$this->formatPence($digitalFee);
-        }
-
-        $lines[] = '';
-
-        return $lines;
-    }
-
-    protected function formatPence(int $pence): string
-    {
-        return '£'.number_format($pence / 100, 2);
+        return implode("\n", LessonPayment::breakdownLines($this->breakdown));
     }
 
     protected function recipientName(): string

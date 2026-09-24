@@ -66,4 +66,22 @@ class PackageService extends BaseService
     {
         return ($this->calculatePricing)($package, $promoDiscount);
     }
+
+    /**
+     * Pricing breakdown for an onboarding enquiry, applying the enquiry's
+     * discount code the same way order creation does (to the package price
+     * only, never to the fees). The package should already carry any
+     * instructor price uplift.
+     *
+     * @param  array{id?: string, label?: string, percentage?: int|float}|null  $discount
+     * @return array<string, mixed>
+     */
+    public function calculateEnquiryPricing(Package $package, ?array $discount = null): array
+    {
+        $promoDiscount = isset($discount['percentage'])
+            ? ['code' => $discount['label'] ?? null, 'percentage' => $discount['percentage']]
+            : null;
+
+        return $this->calculatePricing($package, $promoDiscount);
+    }
 }
