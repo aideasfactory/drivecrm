@@ -51,14 +51,25 @@ use App\Http\Middleware\ValidateBookingStepAccess;
 use App\Http\Middleware\ValidateEnquiryUuid;
 use App\Http\Middleware\ValidateStepAccess;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-// Temporary: send visitors straight into the booking flow instead of the
-// coming-soon page. Query params (e.g. ?gclid=…) are forwarded so ad tracking
-// still reaches BookingController@start. Restore the Welcome render to revert.
+// Site root enters a public flow by hostname. app.drive-plus.co.uk (and any
+// host in config/onboarding.php entry_hosts) always starts /onboarding.
+// Every other host, including app.just-drive.co.uk, starts /booking.
+// Query params (e.g. ?gclid=…) are forwarded so ad tracking still arrives.
 Route::get('/', function (Request $request) {
-    return redirect()->route('booking.start', $request->query());
+    $entryHosts = array_map(
+        static fn (mixed $host): string => strtolower(trim((string) $host)),
+        Arr::wrap(config('onboarding.entry_hosts', [])),
+    );
+
+    $routeName = in_array(strtolower($request->getHost()), $entryHosts, true)
+        ? 'onboarding.start'
+        : 'booking.start';
+
+    return redirect()->route($routeName, $request->query());
 })->name('home');
 
 Route::get('/no-access', fn () => Inertia::render('NoAccess'))
