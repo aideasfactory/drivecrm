@@ -26,9 +26,12 @@ class FindInstructorsByPostcodeSectorAction
 
         $excludedIds = $this->excludedInstructorIds();
 
-        // Find instructors who cover this postcode sector
+        // Find instructors who cover this postcode sector and can be paid —
+        // no Stripe account with payouts enabled means not selectable by students.
         $instructors = Instructor::query()
             ->active()
+            ->where('payouts_enabled', true)
+            ->whereNotNull('stripe_account_id')
             ->when($excludedIds !== [], function ($query) use ($excludedIds) {
                 $query->whereNotIn('id', $excludedIds);
             })

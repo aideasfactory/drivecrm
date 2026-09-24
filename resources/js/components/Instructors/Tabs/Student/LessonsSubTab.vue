@@ -62,7 +62,7 @@ interface Lesson {
     lesson_payment_id: number | null
     payment_status: 'due' | 'paid' | 'refunded' | null
     has_stripe_invoice: boolean
-    payment_mode: 'upfront' | 'weekly'
+    payment_mode: 'upfront' | 'weekly' | 'imported'
     payout_status: 'pending' | 'paid' | 'failed' | null
     has_payout: boolean
     calendar_date: string | null

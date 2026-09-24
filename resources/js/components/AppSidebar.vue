@@ -4,6 +4,7 @@ import {
     ArrowRightLeft,
     Bell,
     BookOpen,
+    DatabaseZap,
     Mail,
     FileText,
     GraduationCap,
@@ -44,6 +45,7 @@ import { index as reportsIndex } from '@/routes/reports';
 import { index as pushNotificationsIndex } from '@/routes/push-notifications';
 import { index as emailTemplatesIndex } from '@/routes/email-templates';
 import { index as hazardPerceptionIndex } from '@/routes/hazard-perception';
+import { index as importsIndex } from '@/routes/imports';
 import { index as resourcesIndex } from '@/routes/resources';
 import { index as studentTransfersIndex } from '@/routes/student-transfers';
 import { index as supportMessagesIndex } from '@/routes/support-messages';
@@ -76,6 +78,12 @@ const allNavItems: NavItem[] = [
         title: 'Transfer Student',
         href: studentTransfersIndex(),
         icon: ArrowRightLeft,
+        roles: ['owner'],
+    },
+    {
+        title: 'Data Import',
+        href: importsIndex(),
+        icon: DatabaseZap,
         roles: ['owner'],
     },
     {
