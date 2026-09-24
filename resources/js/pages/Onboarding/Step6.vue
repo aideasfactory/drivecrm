@@ -63,13 +63,13 @@
                 <AlertDescription>{{ page.props.flash.error }}</AlertDescription>
               </Alert>
 
-              <Alert v-if="staffBooking" class="mb-6">
+              <Alert v-if="staffBooking" class="mb-6 border-green-200 bg-green-50 text-green-900 dark:border-green-900 dark:bg-green-950 dark:text-green-100 [&>svg]:text-green-600">
                 <UserCog class="h-4 w-4" />
                 <AlertTitle>Booking on behalf of a student</AlertTitle>
-                <AlertDescription>
+                <AlertDescription class="text-green-800 dark:text-green-200">
                   You won't be taken to Stripe. The lessons will be booked and the payment
                   {{ form.payment_mode === 'upfront' ? 'link' : 'invoices' }} will be emailed to
-                  <span class="font-medium text-foreground">{{ staffBooking.recipient_email || 'the student' }}</span>.
+                  <span class="font-medium text-green-900 dark:text-green-100">{{ staffBooking.recipient_email || 'the student' }}</span>.
                 </AlertDescription>
               </Alert>
 
