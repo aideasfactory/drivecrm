@@ -31,6 +31,7 @@ class User extends Authenticatable
         'password',
         'password_change_required',
         'welcome_email_pending',
+        'imported_at',
         'role',
         'stripe_customer_id',
         'expo_push_token',
@@ -59,6 +60,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'password_change_required' => 'boolean',
             'welcome_email_pending' => 'boolean',
+            'imported_at' => 'datetime',
             'role' => UserRole::class,
         ];
     }

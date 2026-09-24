@@ -200,7 +200,7 @@ class SyncHmrcItsaObligations extends Command
      * Tightest upcoming deadline window that still applies.
      * Overdue / historical periods (negative days) are never "due soon".
      *
-     * @return int|null  Matching threshold (1, 7, 14, or 30), or null to skip.
+     * @return int|null Matching threshold (1, 7, 14, or 30), or null to skip.
      */
     private function thresholdHit(int $days): ?int
     {

@@ -281,10 +281,12 @@ function handlePointerUp(_e: PointerEvent) {
     const drag = dragging.value
     const event = drag.event
 
-    // Calculate new time from snapped position (15-min increments, 2-hour duration)
+    // Calculate new time from snapped position (15-min increments). The item keeps
+    // its own length — imported 1-hour lessons must not stretch to 2 hours on a move.
     const snapBlocks = Math.round(drag.ghostTop / SNAP_PX)
     const newStartMinutes = DAY_START_HOUR * 60 + snapBlocks * SNAP_MINUTES
-    const newEndMinutes = newStartMinutes + SLOT_DURATION_HOURS * 60
+    const durationMinutes = timeToMinutes(event.endTime) - timeToMinutes(event.startTime)
+    const newEndMinutes = newStartMinutes + (durationMinutes > 0 ? durationMinutes : SLOT_DURATION_HOURS * 60)
 
     // Clamp within day boundaries (end must fit inside HH:MM-storable range)
     if (newStartMinutes < DAY_START_HOUR * 60 || newEndMinutes > DIARY_MAX_END_MINUTES) {

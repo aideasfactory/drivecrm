@@ -33,7 +33,7 @@ class LessonDetailResource extends JsonResource
             'status' => $this->status->value,
             'completed_at' => $this->completed_at?->toISOString(),
             'summary' => $this->summary,
-            'payment_status' => $this->lessonPayment?->status?->value ?? ($this->order?->isUpfront() && $this->order?->isActive() ? 'paid' : null),
+            'payment_status' => $this->lessonPayment?->status?->value ?? ($this->order?->isPrepaid() ? 'paid' : null),
             'payment_mode' => $this->order?->payment_mode->value,
             'payout_status' => $this->payout?->status?->value,
             'has_payout' => $this->payout !== null,
