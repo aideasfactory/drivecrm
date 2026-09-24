@@ -2,7 +2,43 @@
   <div class="min-h-screen flex flex-col">
     <OnboardingHeader :current-step="6" :total-steps="6" :max-step-reached="6" />
 
-    <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex-1">
+    <main v-if="staffBooking" class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex-1">
+      <div class="text-center mb-8">
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-full mb-4 bg-primary/10">
+          <CheckCircle class="h-12 w-12 text-primary" />
+        </div>
+        <h1 class="text-3xl font-bold mb-2">Lessons Booked</h1>
+        <p class="text-lg text-muted-foreground">The booking has been created on the student's behalf.</p>
+      </div>
+
+      <Card class="mb-6">
+        <CardContent class="p-8 space-y-6">
+          <Alert v-if="staffBooking.payment_mode === 'upfront'" variant="default">
+            <Mail class="h-4 w-4" />
+            <AlertTitle>Payment link emailed</AlertTitle>
+            <AlertDescription>
+              A Stripe payment link has been sent to
+              <span class="font-medium text-foreground">{{ staffBooking.payment_link_sent_to }}</span>.
+              The lessons stay pending until the payment is completed, then the student
+              receives their booking confirmation automatically.
+            </AlertDescription>
+          </Alert>
+
+          <Alert v-else variant="default">
+            <Mail class="h-4 w-4" />
+            <AlertTitle>Weekly payments set up</AlertTitle>
+            <AlertDescription>
+              The booking is confirmed. The student has been emailed their booking confirmation
+              and the invoice for their first lesson; later invoices are emailed ahead of each lesson.
+            </AlertDescription>
+          </Alert>
+
+          <p class="text-sm text-muted-foreground">You can close this tab and return to the admin area.</p>
+        </CardContent>
+      </Card>
+    </main>
+
+    <main v-else class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex-1">
       <!-- Success Icon -->
       <div class="text-center mb-8">
         <div class="inline-flex items-center justify-center w-20 h-20 rounded-full mb-4 bg-primary/10">
@@ -96,6 +132,10 @@ import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 import { CheckCircle, CircleCheck, Mail, Phone, Calendar, Info } from 'lucide-vue-next'
 
 defineProps({
-  enquiry: Object
+  enquiry: Object,
+  staffBooking: {
+    type: [Object, null],
+    default: null
+  }
 })
 </script>

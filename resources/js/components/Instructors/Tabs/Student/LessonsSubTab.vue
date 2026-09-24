@@ -111,6 +111,7 @@ const purchaseLessonsUrl = computed(() => {
     if (props.studentLastName) params.set('last_name', props.studentLastName)
     if (props.studentEmail) params.set('email', props.studentEmail)
     if (props.instructorId) params.set('instructor_id', String(props.instructorId))
+    params.set('staff_booking', '1')
     return `/onboarding?${params.toString()}`
 })
 

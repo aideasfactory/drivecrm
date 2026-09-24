@@ -63,6 +63,16 @@
                 <AlertDescription>{{ page.props.flash.error }}</AlertDescription>
               </Alert>
 
+              <Alert v-if="staffBooking" class="mb-6 border-green-200 bg-green-50 text-green-900 dark:border-green-900 dark:bg-green-950 dark:text-green-100 [&>svg]:text-green-600">
+                <UserCog class="h-4 w-4" />
+                <AlertTitle>Booking on behalf of a student</AlertTitle>
+                <AlertDescription class="text-green-800 dark:text-green-200">
+                  You won't be taken to Stripe. The lessons will be booked and the payment
+                  {{ form.payment_mode === 'upfront' ? 'link' : 'invoices' }} will be emailed to
+                  <span class="font-medium text-green-900 dark:text-green-100">{{ staffBooking.recipient_email || 'the student' }}</span>.
+                </AlertDescription>
+              </Alert>
+
               <form @submit.prevent="processPayment">
                 <div class="space-y-8">
                   <!-- Payment Options -->
@@ -79,7 +89,7 @@
                           <div class="flex items-center justify-between">
                             <div>
                               <div class="font-medium">Pay in full</div>
-                              <div class="text-sm text-muted-foreground">Complete payment now via Stripe</div>
+                              <div class="text-sm text-muted-foreground">{{ staffBooking ? 'Stripe payment link emailed to the student' : 'Complete payment now via Stripe' }}</div>
                             </div>
                             <div class="text-xl font-bold">{{ package?.total_price || '0.00' }}</div>
                           </div>
@@ -134,7 +144,11 @@
                     <ShieldCheck class="h-4 w-4" />
                     <AlertTitle>Secure Payment via Stripe</AlertTitle>
                     <AlertDescription>
-                      <p v-if="form.payment_mode === 'upfront'">
+                      <p v-if="form.payment_mode === 'upfront' && staffBooking">
+                        The student will receive a secure Stripe payment link by email. The lessons are
+                        held as pending and confirmed as soon as they pay.
+                      </p>
+                      <p v-else-if="form.payment_mode === 'upfront'">
                         You'll be redirected to Stripe's secure checkout page to complete your payment.
                         We accept all major credit and debit cards, Apple Pay, and Google Pay.
                       </p>
@@ -206,7 +220,7 @@ import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 import { step5 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step6'
-import { ArrowLeft, Lock, Calendar, ShieldCheck } from 'lucide-vue-next'
+import { ArrowLeft, Lock, Calendar, ShieldCheck, UserCog } from 'lucide-vue-next'
 
 const props = defineProps({
   uuid: String,
@@ -219,6 +233,10 @@ const props = defineProps({
   stepData: Object,
   maxStepReached: { type: Number, default: 6 },
   discount: {
+    type: [Object, null],
+    default: null
+  },
+  staffBooking: {
     type: [Object, null],
     default: null
   }
@@ -244,6 +262,9 @@ const uuid = computed(() => props.uuid || page.props.enquiry?.id)
 const paymentButtonText = computed(() => {
   if (form.payment_mode === 'weekly') {
     return 'Confirm Booking (Weekly Payments)'
+  }
+  if (props.staffBooking) {
+    return `Book & Email Payment Link - ${props.pricing?.upfront?.total || '0.00'}`
   }
   return `Proceed to Payment - ${props.pricing?.upfront?.total || '0.00'}`
 })

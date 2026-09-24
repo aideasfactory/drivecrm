@@ -23,7 +23,8 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
         public Order $order,
         public Student $student,
         public string $checkoutUrl,
-        public bool $isBookedByContact
+        public bool $isBookedByContact,
+        public bool $isBookedByStaff = false
     ) {}
 
     /**
@@ -79,6 +80,14 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
     protected function introLine(): string
     {
         $instructorName = $this->order->instructor->user->name;
+
+        if ($this->isBookedByStaff) {
+            $bookedFor = $this->isBookedByContact
+                ? '**'.$this->student->first_name.' '.$this->student->surname.'**'
+                : 'you';
+
+            return "Our bookings team has booked driving lessons for {$bookedFor} with **{$instructorName}**. Please complete the payment to confirm the booking.";
+        }
 
         if ($this->isBookedByContact) {
             $learnerName = $this->student->first_name.' '.$this->student->surname;
