@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Actions\Instructor\GetInstructorCalendarItemsAction;
+use App\Actions\Instructor\GetInstructorCalendarItemsInRangeAction;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
 use Illuminate\Database\Eloquent\Collection;
@@ -12,7 +13,8 @@ use Illuminate\Database\Eloquent\Collection;
 class InstructorCalendarService extends BaseService
 {
     public function __construct(
-        protected GetInstructorCalendarItemsAction $getCalendarItems
+        protected GetInstructorCalendarItemsAction $getCalendarItems,
+        protected GetInstructorCalendarItemsInRangeAction $getCalendarItemsInRange
     ) {}
 
     /**
@@ -35,6 +37,19 @@ class InstructorCalendarService extends BaseService
         $key = $this->cacheKey('instructor', $instructor->id, $suffix);
 
         return $this->remember($key, fn () => ($this->getCalendarItems)($instructor, $date, $availableOnly, $excludeDrafts));
+    }
+
+    /**
+     * Get calendar items for an instructor between two dates (inclusive).
+     *
+     * Not cached: invalidation is keyed per date, so a cached range could go
+     * stale when any day inside it changes.
+     *
+     * @return Collection<int, CalendarItem>
+     */
+    public function getCalendarItemsInRange(Instructor $instructor, string $from, string $to, bool $availableOnly = true, bool $excludeDrafts = true): Collection
+    {
+        return ($this->getCalendarItemsInRange)($instructor, $from, $to, $availableOnly, $excludeDrafts);
     }
 
     /**
