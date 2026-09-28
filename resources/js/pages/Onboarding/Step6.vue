@@ -5,7 +5,7 @@
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1">
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <!-- Left Sidebar -->
-        <div class="lg:col-span-1 order-2 lg:order-1">
+        <div class="min-w-0 lg:col-span-1 order-2 lg:order-1">
           <OnboardingLeftSidebar>
             <template #extra-content>
               <Separator class="my-6" />
@@ -18,7 +18,7 @@
                   </div>
                   <div class="flex justify-between">
                     <span class="text-muted-foreground">Lessons:</span>
-                    <span class="font-medium">{{ package?.lessons_count || '0' }} lessons</span>
+                    <span class="font-medium">{{ lessonLabel(package?.lessons_count) }}</span>
                   </div>
                   <div class="flex justify-between">
                     <span class="text-muted-foreground">Instructor:</span>
@@ -48,9 +48,9 @@
         </div>
 
         <!-- Payment Form -->
-        <div class="lg:col-span-2 order-1 lg:order-2">
-          <Card>
-            <CardHeader>
+        <div class="min-w-0 lg:col-span-2 order-1 lg:order-2">
+          <Card class="min-w-0">
+            <CardHeader class="px-4 sm:px-6">
               <CardTitle class="text-2xl">Complete your booking</CardTitle>
               <CardDescription>
                 Choose your preferred payment method to secure your driving lesson booking.
@@ -60,7 +60,7 @@
               </Badge>
             </CardHeader>
 
-            <CardContent>
+            <CardContent class="px-4 sm:px-6">
               <!-- Flash error message -->
               <Alert v-if="page.props.flash?.error" variant="destructive" class="mb-6">
                 <AlertTitle>Error</AlertTitle>
@@ -89,13 +89,13 @@
                         :class="form.payment_mode === 'upfront' ? 'border-primary bg-primary/5' : 'hover:border-primary hover:bg-primary/5'"
                       >
                         <input type="radio" v-model="form.payment_mode" value="upfront" class="sr-only">
-                        <div class="flex-1">
-                          <div class="flex items-center justify-between">
-                            <div>
+                        <div class="min-w-0 flex-1">
+                          <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
                               <div class="font-medium">Pay in full</div>
                               <div class="text-sm text-muted-foreground">{{ staffBooking ? 'Stripe payment link emailed to the student' : 'Complete payment now via Stripe' }}</div>
                             </div>
-                            <div class="text-xl font-bold">{{ upfrontTotal }}</div>
+                            <div class="shrink-0 text-xl font-bold">{{ upfrontTotal }}</div>
                           </div>
                         </div>
                         <div class="ml-4">
@@ -111,13 +111,13 @@
                         :class="form.payment_mode === 'weekly' ? 'border-primary bg-primary/5' : 'hover:border-primary hover:bg-primary/5'"
                       >
                         <input type="radio" v-model="form.payment_mode" value="weekly" class="sr-only">
-                        <div class="flex-1">
-                          <div class="flex items-center justify-between">
-                            <div>
+                        <div class="min-w-0 flex-1">
+                          <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
                               <div class="font-medium">Pay weekly</div>
-                              <div class="text-sm text-muted-foreground">{{ package?.lessons_count || 0 }} weekly invoices</div>
+                              <div class="text-sm text-muted-foreground">{{ weeklyInvoiceLabel(package?.lessons_count) }}</div>
                             </div>
-                            <div class="text-xl font-bold">
+                            <div class="shrink-0 text-right text-xl font-bold">
                               {{ package?.weekly_payment || '0.00' }}<span class="text-sm font-normal text-muted-foreground">/lesson</span>
                             </div>
                           </div>
@@ -136,7 +136,7 @@
                       <Calendar class="h-4 w-4" />
                       <AlertTitle>Weekly Payment Schedule</AlertTitle>
                       <AlertDescription>
-                        <p class="mb-2">You will receive {{ package?.lessons_count || 0 }} invoices via email, one for each lesson 24 hours before it's scheduled.</p>
+                        <p class="mb-2">You will receive {{ weeklyInvoiceLabel(package?.lessons_count) }} via email, one for each lesson 24 hours before it's scheduled.</p>
                         <p class="text-xs">First lesson: {{ formatDate(schedule?.date) }}</p>
                         <p class="text-xs">Payment per lesson: {{ pricing?.weekly?.per_lesson || '0.00' }}</p>
                         <p v-if="guaranteeFor('weekly').included" class="text-xs">
@@ -253,15 +253,19 @@
                   </Card>
 
                   <!-- Actions -->
-                  <div class="flex items-center justify-between pt-6 border-t">
-                    <Link :href="step5({ uuid: uuid }).url">
-                      <Button variant="outline" class="cursor-pointer">
+                  <div class="flex w-full min-w-0 flex-col gap-3 border-t pt-6 sm:flex-row sm:items-center sm:justify-between">
+                    <Link :href="step5({ uuid: uuid }).url" class="w-full sm:w-auto">
+                      <Button variant="outline" class="w-full cursor-pointer sm:w-auto">
                         <ArrowLeft class="mr-2 h-4 w-4" />
                         Back
                       </Button>
                     </Link>
 
-                    <Button type="submit" :disabled="!termsAccepted || form.processing" class="cursor-pointer">
+                    <Button
+                      type="submit"
+                      :disabled="!termsAccepted || form.processing"
+                      class="h-auto w-full max-w-full cursor-pointer whitespace-normal px-4 py-2 text-center sm:h-9 sm:w-auto sm:whitespace-nowrap"
+                    >
                       <Spinner v-if="form.processing" class="mr-2 h-4 w-4 animate-spin" />
                       <Lock v-if="!form.processing" class="mr-2 h-4 w-4" />
                       {{ paymentButtonText }}
@@ -381,6 +385,20 @@ function formatPence(pence) {
 
 function formatHours(hours) {
   return Number.isInteger(hours) ? hours : Number(hours).toFixed(1)
+}
+
+function lessonLabel(count) {
+  const lessons = Number(count ?? 0)
+  const safeCount = Number.isFinite(lessons) ? lessons : 0
+
+  return `${safeCount} ${safeCount === 1 ? 'lesson' : 'lessons'}`
+}
+
+function weeklyInvoiceLabel(count) {
+  const invoices = Number(count ?? 0)
+  const safeCount = Number.isFinite(invoices) ? invoices : 0
+
+  return `${safeCount} weekly ${safeCount === 1 ? 'invoice' : 'invoices'}`
 }
 
 const upfrontTotal = computed(() =>

@@ -384,7 +384,7 @@ class Instructor extends Model
     protected function reviews(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->meta['reviews'] ?? null
+            get: fn () => data_get($this->meta, 'reviews')
         );
     }
 
