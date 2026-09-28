@@ -17,8 +17,8 @@ Signed-off scenarios:
 
 | Who books | How the learner pays | Hold |
 |---|---|---|
-| Learner, website booking form | Checkout straight away | 15 minutes |
-| Learner, mobile app | Checkout in the in-app browser | 15 minutes |
+| Learner, website booking form | Checkout straight away | 10 minutes, starting when they press Pay |
+| Learner, mobile app | Checkout in the in-app browser | 10 minutes |
 | Instructor (mobile app / admin diary) | Payment link emailed | Until 48h before the first lesson (min 15 minutes) |
 | Bookings team (staff booking form) | Payment link emailed | Until midnight UK time (min 15 minutes) |
 
@@ -93,3 +93,18 @@ Signed-off scenarios:
 - DB-customised `learner.payment_link` templates keep the old "expires after 24 hours" text until edited. New placeholders are `{{amount_label}}` and `{{pay_by_line}}`.
 - The 48h "payment due soon" reminder now fires around the due time. Consider moving it earlier.
 - Nothing was run (no PHP on the VM). Run the migration before deploying the scheduler change.
+
+---
+
+## 🎯 FOLLOW-UP: Client feedback on step 4 holds
+
+**Status:** ✅ Complete
+
+Feedback: picking a time at step 4 and going back made that time unavailable
+(even to the same learner), and 15 minutes was too long a hold.
+
+- [x] Step 4 no longer writes to the diary. It checks the slot is still free and remembers the choice on the enquiry only.
+- [x] The hold starts at step 6 when the learner presses Pay. `CreateOrderFromEnquiryAction` uses the same `CreateDraftCalendarItemsAction` as the mobile app, which locks the chosen slot, so if two learners pay for the same time only the first gets it. The other is sent back to step 4 with "no longer available".
+- [x] Learner hold cut from 15 to 10 minutes (`BOOKING_LEARNER_HOLD_MINUTES`). The 15-minute minimum now only applies to emailed-link holds.
+- [x] Old step 4 holds (`calendar_item_ids` on the enquiry) are released when the learner revisits step 4 or pays (`ReleaseLegacyStepFourHoldsAction`), so learners mid-flow at deploy aren't blocked by their own hold.
+- [x] Step 4 copy updated and it now shows the "please choose another time" error.
