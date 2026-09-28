@@ -34,6 +34,7 @@ class Order extends Model
         'discount_percentage',
         'includes_test_pass_guarantee',
         'test_pass_guarantee_pence',
+        'payment_hold_expires_at',
     ];
 
     protected function casts(): array
@@ -51,6 +52,7 @@ class Order extends Model
             'discount_percentage' => 'integer',
             'includes_test_pass_guarantee' => 'boolean',
             'test_pass_guarantee_pence' => 'integer',
+            'payment_hold_expires_at' => 'datetime',
         ];
     }
 
@@ -103,6 +105,21 @@ class Order extends Model
     }
 
     /**
+     * The payment for the earliest lesson on a weekly order — the one taken at booking.
+     */
+    public function firstLessonPayment(): ?LessonPayment
+    {
+        return LessonPayment::query()
+            ->join('lessons', 'lessons.id', '=', 'lesson_payments.lesson_id')
+            ->where('lessons.order_id', $this->id)
+            ->orderBy('lessons.date')
+            ->orderBy('lessons.start_time')
+            ->orderBy('lesson_payments.id')
+            ->select('lesson_payments.*')
+            ->first();
+    }
+
+    /**
      * Check if order is active.
      */
     public function isActive(): bool
@@ -116,6 +133,25 @@ class Order extends Model
     public function isPending(): bool
     {
         return $this->status === OrderStatus::PENDING;
+    }
+
+    /**
+     * Whether the order is still waiting for its first payment and its slot
+     * hold has not yet run out.
+     */
+    public function isAwaitingFirstPayment(): bool
+    {
+        return $this->isPending()
+            && ! $this->isImported()
+            && ! $this->hasPaymentHoldExpired();
+    }
+
+    /**
+     * Whether the order had a slot hold that has now passed.
+     */
+    public function hasPaymentHoldExpired(): bool
+    {
+        return $this->payment_hold_expires_at !== null && $this->payment_hold_expires_at->isPast();
     }
 
     /**
