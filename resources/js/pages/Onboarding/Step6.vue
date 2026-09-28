@@ -71,9 +71,10 @@
                 <UserCog class="h-4 w-4" />
                 <AlertTitle>Booking on behalf of a student</AlertTitle>
                 <AlertDescription class="text-green-800 dark:text-green-200">
-                  You won't be taken to Stripe. The lessons will be booked and the payment
-                  {{ form.payment_mode === 'upfront' ? 'link' : 'invoices' }} will be emailed to
+                  You won't be taken to Stripe. A payment link for
+                  {{ form.payment_mode === 'upfront' ? 'the full amount' : 'the first week' }} will be emailed to
                   <span class="font-medium text-green-900 dark:text-green-100">{{ staffBooking.recipient_email || 'the student' }}</span>.
+                  The lessons are held until {{ staffBooking.hold_deadline || 'midnight' }} and released if they haven't paid by then.
                 </AlertDescription>
               </Alert>
 
@@ -115,7 +116,9 @@
                           <div class="flex items-center justify-between">
                             <div>
                               <div class="font-medium">Pay weekly</div>
-                              <div class="text-sm text-muted-foreground">{{ package?.lessons_count || 0 }} weekly invoices</div>
+                              <div class="text-sm text-muted-foreground">
+                                {{ staffBooking ? 'First week paid via emailed link' : 'Pay the first week now' }}, then {{ package?.lessons_count || 0 }} weekly invoices
+                              </div>
                             </div>
                             <div class="text-xl font-bold">
                               {{ package?.weekly_payment || '0.00' }}<span class="text-sm font-normal text-muted-foreground">/lesson</span>
@@ -136,11 +139,14 @@
                       <Calendar class="h-4 w-4" />
                       <AlertTitle>Weekly Payment Schedule</AlertTitle>
                       <AlertDescription>
-                        <p class="mb-2">You will receive {{ package?.lessons_count || 0 }} invoices via email, one for each lesson 24 hours before it's scheduled.</p>
+                        <p class="mb-2">
+                          The first week is paid {{ staffBooking ? 'through the emailed payment link' : 'now' }} to confirm the booking.
+                          Each following lesson is invoiced by email and due {{ weeklyPaymentDueHours }} hours before it's scheduled.
+                        </p>
                         <p class="text-xs">First lesson: {{ formatDate(schedule?.date) }}</p>
                         <p class="text-xs">Payment per lesson: {{ pricing?.weekly?.per_lesson || '0.00' }}</p>
-                        <p v-if="guaranteeFor('weekly').included" class="text-xs">
-                          First payment (includes £{{ testPassGuarantee.price }} Pass Your Test Guarantee): {{ weeklyFirstPayment }}
+                        <p class="text-xs">
+                          First payment<template v-if="guaranteeFor('weekly').included"> (includes £{{ testPassGuarantee.price }} Pass Your Test Guarantee)</template>: {{ weeklyFirstPayment }}
                         </p>
                       </AlertDescription>
                     </Alert>
@@ -219,16 +225,15 @@
                     <ShieldCheck class="h-4 w-4" />
                     <AlertTitle>Secure Payment via Stripe</AlertTitle>
                     <AlertDescription>
-                      <p v-if="form.payment_mode === 'upfront' && staffBooking">
+                      <p v-if="staffBooking">
                         The student will receive a secure Stripe payment link by email. The lessons are
-                        held as pending and confirmed as soon as they pay.
-                      </p>
-                      <p v-else-if="form.payment_mode === 'upfront'">
-                        You'll be redirected to Stripe's secure checkout page to complete your payment.
-                        We accept all major credit and debit cards, Apple Pay, and Google Pay.
+                        held and only confirmed once they pay.
                       </p>
                       <p v-else>
-                        Your order will be activated immediately. You'll receive invoice emails 24 hours before each lesson.
+                        You'll be redirected to Stripe's secure checkout page to pay
+                        {{ form.payment_mode === 'upfront' ? 'in full' : 'for your first week' }}.
+                        Your lessons are held for {{ holdMinutes }} minutes while you pay and confirmed as soon as payment goes through.
+                        We accept all major credit and debit cards, Apple Pay, and Google Pay.
                       </p>
                     </AlertDescription>
                   </Alert>
@@ -318,7 +323,9 @@ const props = defineProps({
   staffBooking: {
     type: [Object, null],
     default: null
-  }
+  },
+  holdMinutes: { type: Number, default: 15 },
+  weeklyPaymentDueHours: { type: Number, default: 48 }
 })
 
 const page = usePage()
@@ -397,7 +404,9 @@ const weeklyFirstPayment = computed(() =>
 
 const paymentButtonText = computed(() => {
   if (form.payment_mode === 'weekly') {
-    return 'Confirm Booking (Weekly Payments)'
+    return props.staffBooking
+      ? `Book & Email Payment Link - ${weeklyFirstPayment.value}`
+      : `Pay First Week - ${weeklyFirstPayment.value}`
   }
   if (props.staffBooking) {
     return `Book & Email Payment Link - ${upfrontTotal.value}`

@@ -37,9 +37,11 @@
                 <span class="text-sm text-muted-foreground">Instructor</span>
                 <span class="text-sm font-medium text-right">{{ order.instructor.name }}</span>
               </div>
-              <div v-if="order.total_price_pence" class="flex items-start justify-between gap-4">
-                <span class="text-sm text-muted-foreground">Amount paid</span>
-                <span class="text-sm font-medium text-right">{{ formatPrice(order.total_price_pence) }}</span>
+              <div v-if="order.amount_paid_pence" class="flex items-start justify-between gap-4">
+                <span class="text-sm text-muted-foreground">
+                  {{ isWeekly ? 'First week paid' : 'Amount paid' }}
+                </span>
+                <span class="text-sm font-medium text-right">{{ formatPrice(order.amount_paid_pence) }}</span>
               </div>
             </div>
 
@@ -49,6 +51,9 @@
               <AlertDescription>
                 <ul class="list-disc list-inside space-y-1 mt-2">
                   <li>Check your email for the confirmation and lesson schedule.</li>
+                  <li v-if="isWeekly">
+                    Each following week is invoiced by email and due {{ weeklyPaymentDueHours }} hours before the lesson.
+                  </li>
                   <li>Your instructor will be in touch to confirm the first lesson details.</li>
                   <li>You can reschedule lessons up to 24 hours in advance from the Drive app.</li>
                 </ul>
@@ -89,21 +94,29 @@
 <script setup lang="ts">
 import { Card, CardContent } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { computed } from 'vue'
 import { CheckCircle, CircleCheck, Info, Clock } from 'lucide-vue-next'
 
 interface OrderSummary {
   id: number
   status: string
+  payment_mode: 'upfront' | 'weekly' | 'imported' | null
   total_price_pence: number | null
+  amount_paid_pence: number | null
   package: { name: string; lessons_count: number | null } | null
   instructor: { name: string } | null
 }
 
-defineProps<{
+const props = withDefaults(defineProps<{
   verified: boolean
   message?: string
   order: OrderSummary | null
-}>()
+  weeklyPaymentDueHours?: number
+}>(), {
+  weeklyPaymentDueHours: 48,
+})
+
+const isWeekly = computed((): boolean => props.order?.payment_mode === 'weekly')
 
 const formatPrice = (pence: number): string => {
   return new Intl.NumberFormat('en-GB', {

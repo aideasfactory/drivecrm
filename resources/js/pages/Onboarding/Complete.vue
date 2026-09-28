@@ -13,23 +13,17 @@
 
       <Card class="mb-6">
         <CardContent class="p-8 space-y-6">
-          <Alert v-if="staffBooking.payment_mode === 'upfront'" variant="default">
+          <Alert variant="default">
             <Mail class="h-4 w-4" />
             <AlertTitle>Payment link emailed</AlertTitle>
             <AlertDescription>
-              A Stripe payment link has been sent to
+              A Stripe payment link for
+              {{ staffBooking.payment_mode === 'weekly' ? 'the first week' : 'the full amount' }} has been sent to
               <span class="font-medium text-foreground">{{ staffBooking.payment_link_sent_to }}</span>.
-              The lessons stay pending until the payment is completed, then the student
-              receives their booking confirmation automatically.
-            </AlertDescription>
-          </Alert>
-
-          <Alert v-else variant="default">
-            <Mail class="h-4 w-4" />
-            <AlertTitle>Weekly payments set up</AlertTitle>
-            <AlertDescription>
-              The booking is confirmed. The student has been emailed their booking confirmation
-              and the invoice for their first lesson; later invoices are emailed ahead of each lesson.
+              The lessons are held until
+              {{ staffBooking.hold_deadline || 'midnight' }} and released if unpaid. Once paid, the student
+              receives their booking confirmation automatically<template v-if="staffBooking.payment_mode === 'weekly'">,
+              and later weeks are invoiced by email</template>.
             </AlertDescription>
           </Alert>
 
