@@ -34,10 +34,16 @@ class StepFiveController extends Controller
         $step4 = $enquiry->getStepData(4) ?? [];
         $step5 = $enquiry->getStepData(5) ?? [];
 
-        // Load instructor with user relationship
+        // Load instructor with user relationship. Reviews live in meta and
+        // are not appended by default, so the review step would render an
+        // empty "( reviews)" label without this.
         $instructor = null;
         if (! empty($step2['instructor_id'])) {
             $instructor = Instructor::with('user')->find($step2['instructor_id']);
+
+            if ($instructor) {
+                $instructor->append('reviews');
+            }
         }
 
         // Load package (instructor uplift applied in-memory so all price
