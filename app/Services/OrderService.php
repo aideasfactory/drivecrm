@@ -9,8 +9,11 @@ use App\Actions\Calendar\DetectCalendarClashesAction;
 use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
 use App\Actions\Payment\SendLessonInvoiceAction;
 use App\Actions\Shared\LogActivityAction;
+use App\Actions\Student\GrantTestPassGuaranteeAction;
+use App\Actions\Student\Order\ConfirmWeeklyFirstPaymentAction;
 use App\Actions\Student\Order\CreateDraftCalendarItemsAction;
 use App\Actions\Student\Order\CreateOrderFromApiAction;
+use App\Actions\Student\Order\ReleaseUnpaidOrderAction;
 use App\Actions\Student\Order\SendPaymentLinkEmailAction;
 use App\Actions\Student\Order\VerifyCheckoutAction;
 use App\Enums\LessonStatus;
@@ -24,8 +27,10 @@ use App\Models\Order;
 use App\Models\Package;
 use App\Models\Student;
 use App\Notifications\CalendarClashDetectedNotification;
+use App\Support\BookingPayments;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 use Stripe\Checkout\Session;
 
@@ -43,16 +48,23 @@ class OrderService extends BaseService
         protected InstructorService $instructorService,
         protected SendLessonInvoiceAction $sendLessonInvoice,
         protected CloseOpenSlotOffersForItemsAction $closeOpenSlotOffersForItems,
-        protected PushNotificationService $pushNotificationService
+        protected PushNotificationService $pushNotificationService,
+        protected ConfirmWeeklyFirstPaymentAction $confirmWeeklyFirstPaymentAction,
+        protected ReleaseUnpaidOrderAction $releaseUnpaidOrderAction,
+        protected GrantTestPassGuaranteeAction $grantTestPassGuarantee,
     ) {}
 
     /**
-     * Book lessons: create calendar items, order, lessons, and handle payment.
+     * Book lessons: create draft calendar items, order and lessons, then take the
+     * first payment. Nothing is confirmed until that payment lands.
      *
      * When $returnCheckoutUrl is true (student-initiated mobile bookings), the Stripe
-     * checkout URL is returned in the response instead of being emailed to the student.
-     * The mobile app is expected to load this URL in an in-app browser. When false
-     * (instructor-initiated bookings), the URL is emailed to the student.
+     * checkout URL is returned so the app can open it in an in-app browser, and the
+     * slots are held for the short learner window. When false (instructor or admin
+     * diary bookings), a payment link is emailed and the slots are held until the
+     * first payment is due (48 hours before the first lesson).
+     *
+     * Pay in full charges the whole order; pay weekly charges the first week.
      *
      * @return array{order: Order, checkout_url?: string|null}
      */
@@ -87,28 +99,18 @@ class OrderService extends BaseService
             $calendarItemIds
         );
 
+        $order->update([
+            'payment_hold_expires_at' => $returnCheckoutUrl
+                ? BookingPayments::learnerHoldExpiresAt()
+                : BookingPayments::instructorHoldExpiresAt($firstLessonDate, $startTime),
+        ]);
+
         $checkoutUrl = null;
 
-        if ($paymentMode === PaymentMode::UPFRONT) {
-            $checkoutUrl = $this->createCheckoutSession(
-                $order,
-                $package,
-                $student,
-                $returnCheckoutUrl ? 'mobile_app' : 'instructor_booking'
-            );
-
-            if ($checkoutUrl && ! $returnCheckoutUrl) {
-                $this->sendPaymentLinkEmail->execute($order, $student, $checkoutUrl);
-            }
-        }
-
-        // Send confirmation email for weekly orders (activated immediately) and
-        // immediately raise the first Stripe invoice so the student receives their
-        // payment email at booking time instead of waiting for the old 48h cron.
-        if ($paymentMode === PaymentMode::WEEKLY) {
-            $this->ensureStripeCustomerExists($student);
-            $this->sendConfirmationEmail->execute($order, $student);
-            $this->sendNextDueInvoice($order);
+        if ($returnCheckoutUrl) {
+            $checkoutUrl = $this->createCheckoutSession($order, $package, $student, 'mobile_app');
+        } else {
+            $this->sendPaymentLinkEmail->execute($order, $student, $this->paymentLinkUrl($order, 'instructor_booking'));
         }
 
         // Invalidate grouped students cache so the instructor sees the new booking immediately
@@ -165,7 +167,8 @@ class OrderService extends BaseService
     }
 
     /**
-     * Create a Stripe Checkout session for upfront payment.
+     * Create a Stripe Checkout session for the order's first payment (the full
+     * amount, or the first week for weekly orders).
      */
     protected function createCheckoutSession(Order $order, Package $package, Student $student, string $bookingSource): ?string
     {
@@ -262,16 +265,15 @@ class OrderService extends BaseService
     }
 
     /**
-     * Re-send the payment-link email for an upfront order still awaiting payment.
+     * Re-send the payment-link email for an order still awaiting its first payment.
      *
-     * Reuses the order's existing Stripe Checkout session when it is still open,
-     * otherwise creates a fresh session. Also queues an additive push to the
-     * learner, mirroring the weekly payment-reminder behaviour (only when the
-     * learner owns their account and has an Expo push token).
+     * The hold is not extended. Also queues an additive push to the learner,
+     * mirroring the weekly payment-reminder behaviour (only when the learner
+     * owns their account and has an Expo push token).
      *
      * @return array{email: string}
      *
-     * @throws ValidationException When the order is not awaiting upfront payment or no link can be sent.
+     * @throws ValidationException When the order is not awaiting payment or no link can be sent.
      */
     public function resendPaymentLink(Order $order, Student $student): array
     {
@@ -279,33 +281,28 @@ class OrderService extends BaseService
     }
 
     /**
-     * Email the Stripe Checkout payment link for an upfront order still awaiting
-     * payment, reusing the order's open checkout session when there is one.
+     * Email the payment link for an order still awaiting its first payment
+     * (the full amount, or the first week for weekly orders).
+     *
+     * The email links to our own signed page, which opens a Stripe Checkout
+     * session when clicked. That lets the link outlive Stripe's 24-hour session
+     * limit and stop working the moment the hold runs out.
      *
      * @return array{email: string}
      *
-     * @throws ValidationException When the order is not awaiting upfront payment or no link can be sent.
+     * @throws ValidationException When the order is not awaiting payment or no link can be sent.
      */
     public function sendPaymentLink(Order $order, Student $student, string $bookingSource, bool $isBookedByStaff = false): array
     {
-        $this->ensureOrderAwaitingUpfrontPayment($order);
+        $this->ensureOrderAwaitingPayment($order);
 
-        $package = $order->package;
-
-        if (! $package) {
+        if (! $order->package) {
             throw ValidationException::withMessages([
                 'order' => 'The package for this order is no longer available, so a payment link cannot be generated.',
             ]);
         }
 
-        $checkoutUrl = $this->resolveOpenCheckoutUrl($order)
-            ?? $this->createCheckoutSession($order, $package, $student, $bookingSource);
-
-        if (! $checkoutUrl) {
-            throw ValidationException::withMessages([
-                'order' => 'Unable to generate a payment link right now. Please try again shortly.',
-            ]);
-        }
+        $checkoutUrl = $this->paymentLinkUrl($order, $bookingSource);
 
         $recipientEmail = $this->sendPaymentLinkEmail->execute($order, $student, $checkoutUrl, $isBookedByStaff);
 
@@ -332,26 +329,82 @@ class OrderService extends BaseService
     }
 
     /**
-     * Reject orders that are not upfront orders still awaiting their checkout payment.
+     * Open the Stripe Checkout page behind an emailed payment link.
+     *
+     * Reuses the order's open session when there is one, otherwise creates a
+     * fresh one that expires no later than the hold.
+     *
+     * @return array{status: 'checkout', url: string}|array{status: 'paid'|'unavailable'|'error', message: string}
+     */
+    public function openPaymentLinkCheckout(Order $order, string $bookingSource): array
+    {
+        if ($order->isActive() || $order->status === OrderStatus::COMPLETED) {
+            return ['status' => 'paid', 'message' => 'This booking has already been paid for.'];
+        }
+
+        if (! $order->isAwaitingFirstPayment()) {
+            return ['status' => 'unavailable', 'message' => 'The time to pay for this booking has passed, so the lessons have been released.'];
+        }
+
+        $package = $order->package;
+        $student = $order->student;
+
+        if (! $package || ! $student) {
+            return ['status' => 'unavailable', 'message' => 'This booking can no longer be paid for.'];
+        }
+
+        $checkoutUrl = $this->resolveOpenCheckoutUrl($order)
+            ?? $this->createCheckoutSession($order, $package, $student, $bookingSource);
+
+        if (! $checkoutUrl) {
+            return ['status' => 'error', 'message' => "We couldn't open the payment page just now. Please try the link again in a moment."];
+        }
+
+        return ['status' => 'checkout', 'url' => $checkoutUrl];
+    }
+
+    /**
+     * Signed link to our payment-link page for an order. It stops working when
+     * the order's hold runs out.
+     */
+    public function paymentLinkUrl(Order $order, string $bookingSource): string
+    {
+        return URL::temporarySignedRoute(
+            'payment-link.pay',
+            $order->payment_hold_expires_at ?? now()->addDay(),
+            ['order' => $order->id, 'source' => $bookingSource],
+        );
+    }
+
+    /**
+     * Reject orders that are not still awaiting their first payment.
      *
      * @throws ValidationException
      */
-    protected function ensureOrderAwaitingUpfrontPayment(Order $order): void
+    protected function ensureOrderAwaitingPayment(Order $order): void
     {
-        if (! $order->isUpfront()) {
+        if ($order->isImported()) {
             throw ValidationException::withMessages([
-                'order' => 'Payment links only apply to upfront orders. This order is paid weekly per lesson.',
+                'order' => 'Payment links do not apply to imported orders.',
             ]);
         }
 
         if (! $order->isPending()) {
             $message = match ($order->status) {
-                OrderStatus::ACTIVE, OrderStatus::COMPLETED => 'This order has already been paid.',
+                OrderStatus::ACTIVE, OrderStatus::COMPLETED => $order->isWeekly()
+                    ? 'This booking is already confirmed. Weekly lesson invoices are sent separately.'
+                    : 'This order has already been paid.',
                 OrderStatus::CANCELLED => 'This order has been cancelled.',
                 default => 'This order is not awaiting payment.',
             };
 
             throw ValidationException::withMessages(['order' => $message]);
+        }
+
+        if ($order->hasPaymentHoldExpired()) {
+            throw ValidationException::withMessages([
+                'order' => 'The time to pay for this booking has passed, so the lessons are being released. Please book again.',
+            ]);
         }
     }
 
@@ -389,6 +442,10 @@ class OrderService extends BaseService
      */
     public function verifyCheckout(Order $order, string $sessionId): array
     {
+        if ($order->isWeekly()) {
+            return $this->verifyWeeklyCheckout($order, $sessionId);
+        }
+
         $result = ($this->verifyCheckout)($order, $sessionId);
 
         // Send confirmation email when upfront payment is verified
@@ -403,30 +460,172 @@ class OrderService extends BaseService
     }
 
     /**
-     * Ensure the student's user has a Stripe customer ID (required for weekly invoice sending).
+     * Verify the Checkout session that took a weekly order's first payment.
+     *
+     * @return array{verified: bool, order: Order, message: string}
      */
-    protected function ensureStripeCustomerExists(Student $student): void
+    protected function verifyWeeklyCheckout(Order $order, string $sessionId): array
     {
-        $user = $student->user;
-
-        if ($user->stripe_customer_id) {
-            return;
+        if ($order->stripe_checkout_session_id !== $sessionId) {
+            return ['verified' => false, 'order' => $order, 'message' => 'Session ID mismatch.'];
         }
 
-        $customerResult = $this->stripeService->createOrGetCustomer($user);
-
-        if (! $customerResult['success']) {
-            Log::warning('Failed to create Stripe customer for weekly order', [
-                'user_id' => $user->id,
-                'student_id' => $student->id,
-                'error' => $customerResult['error'] ?? 'Unknown',
+        try {
+            $session = Session::retrieve($sessionId);
+        } catch (\Exception $e) {
+            Log::error('Weekly checkout verification failed', [
+                'order_id' => $order->id,
+                'session_id' => $sessionId,
+                'error' => $e->getMessage(),
             ]);
 
-            return;
+            return ['verified' => false, 'order' => $order, 'message' => 'Failed to verify payment.'];
         }
 
-        $user->stripe_customer_id = $customerResult['customer_id'];
-        $user->save();
+        if ($session->payment_status !== 'paid') {
+            return ['verified' => false, 'order' => $order, 'message' => 'Payment is still processing. Please check back shortly.'];
+        }
+
+        $this->confirmWeeklyFirstPayment($order, $session->payment_intent ?: null);
+
+        $order->refresh();
+
+        return $order->isActive()
+            ? ['verified' => true, 'order' => $order, 'message' => 'Payment verified. Order is active.']
+            : ['verified' => false, 'order' => $order, 'message' => 'This booking could not be confirmed. Please contact us.'];
+    }
+
+    /**
+     * Record a weekly order's first payment and confirm the booking. Safe to call
+     * from both the webhook and the success page — the confirmation email and
+     * follow-ups only go out once.
+     */
+    public function confirmWeeklyFirstPayment(Order $order, ?string $paymentIntentId): bool
+    {
+        $chargeId = $paymentIntentId
+            ? $this->stripeService->getChargeIdForPaymentIntent($paymentIntentId)
+            : null;
+
+        if (! ($this->confirmWeeklyFirstPaymentAction)($order, $chargeId)) {
+            return false;
+        }
+
+        $order->loadMissing(['student', 'instructor']);
+
+        if ($order->student) {
+            $this->sendConfirmationEmail->execute($order, $order->student);
+        }
+
+        ($this->grantTestPassGuarantee)($order);
+
+        $this->logBookingConfirmed($order);
+        $this->invalidateStudentCacheForBooking($order->instructor_id);
+
+        return true;
+    }
+
+    /**
+     * Release an unpaid order: close its Stripe Checkout session so it can no
+     * longer be paid, then free the slots. When Stripe reports the session was
+     * already paid (or cannot be reached) the order is kept for the payment
+     * webhook to confirm.
+     */
+    public function releaseUnpaidOrder(Order $order, string $reason): bool
+    {
+        if (! $order->isPending()) {
+            return false;
+        }
+
+        if ($order->stripe_checkout_session_id) {
+            $expiry = $this->stripeService->expireCheckoutSession($order->stripe_checkout_session_id);
+
+            if (! $expiry['released']) {
+                Log::warning('Kept unpaid order: its checkout session could not be closed', [
+                    'order_id' => $order->id,
+                    'session_id' => $order->stripe_checkout_session_id,
+                    'session_status' => $expiry['status'],
+                ]);
+
+                return false;
+            }
+        }
+
+        $released = ($this->releaseUnpaidOrderAction)($order, $reason);
+
+        if ($released) {
+            $this->invalidateStudentCacheForBooking($order->instructor_id);
+        }
+
+        return $released;
+    }
+
+    /**
+     * Release every unpaid order whose hold has run out.
+     *
+     * @return array{released: int, kept: int}
+     */
+    public function releaseExpiredHolds(): array
+    {
+        $released = 0;
+        $kept = 0;
+
+        Order::query()
+            ->where('status', OrderStatus::PENDING)
+            ->whereIn('payment_mode', [PaymentMode::UPFRONT, PaymentMode::WEEKLY])
+            ->whereNotNull('payment_hold_expires_at')
+            ->where('payment_hold_expires_at', '<=', now())
+            ->orderBy('payment_hold_expires_at')
+            ->each(function (Order $order) use (&$released, &$kept): void {
+                try {
+                    $this->releaseUnpaidOrder($order, 'payment_window_expired') ? $released++ : $kept++;
+                } catch (\Exception $e) {
+                    $kept++;
+
+                    Log::error('Failed to release expired order hold', [
+                        'order_id' => $order->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            });
+
+        return ['released' => $released, 'kept' => $kept];
+    }
+
+    protected function logBookingConfirmed(Order $order): void
+    {
+        $metadata = [
+            'order_id' => $order->id,
+            'package_name' => $order->package_name,
+            'lessons_count' => $order->package_lessons_count,
+            'payment_mode' => $order->payment_mode->value,
+        ];
+
+        try {
+            if ($order->student) {
+                ($this->logActivity)(
+                    $order->student,
+                    "Booking confirmed: {$order->package_name} ({$order->package_lessons_count} lessons)",
+                    'booking',
+                    $metadata
+                );
+            }
+
+            if ($order->instructor) {
+                $studentName = trim(($order->student?->first_name ?? '').' '.($order->student?->surname ?? ''));
+
+                ($this->logActivity)(
+                    $order->instructor,
+                    "New booking confirmed: {$studentName} — {$order->package_name} ({$order->package_lessons_count} lessons)",
+                    'booking',
+                    $metadata
+                );
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to log booking confirmed activity', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

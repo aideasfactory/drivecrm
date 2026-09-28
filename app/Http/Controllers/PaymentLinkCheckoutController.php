@@ -7,26 +7,58 @@ namespace App\Http\Controllers;
 use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Services\OrderService;
+use App\Support\BookingPayments;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\URL;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Handles the post-payment return from Stripe for payment links that the
- * instructor emails to the student (via SendPaymentLinkEmailAction).
+ * Handles payment links emailed to the student (via SendPaymentLinkEmailAction)
+ * and the post-payment return from Stripe.
  *
  * These routes are intentionally unauthenticated: the student is clicking
- * through from their email client and has no app session. Security comes
- * from matching the Stripe session ID against the order's stored
- * stripe_checkout_session_id — the same capability-by-session-id trust
- * model used by the onboarding checkout return (StepSixController).
+ * through from their email client and has no app session. The emailed link is
+ * a signed URL; the Stripe return pages match the Stripe session ID against the
+ * order's stored stripe_checkout_session_id — the same capability-by-session-id
+ * trust model used by the onboarding checkout return (StepSixController).
  */
 class PaymentLinkCheckoutController extends Controller
 {
     public function __construct(
         protected OrderService $orderService
     ) {}
+
+    /**
+     * Emailed payment link. Opens Stripe Checkout while the booking's hold is
+     * live, otherwise explains why it can't be paid. The signature is checked
+     * without its expiry so a late click gets a friendly page, not a 403.
+     */
+    public function pay(Request $request, Order $order): RedirectResponse|Response
+    {
+        abort_unless(URL::hasCorrectSignature($request), 403);
+
+        $source = $request->query('source');
+        $result = $this->orderService->openPaymentLinkCheckout($order, is_string($source) ? $source : 'payment_link');
+
+        if ($result['status'] === 'checkout') {
+            return redirect()->away($result['url']);
+        }
+
+        Log::info('Payment link opened but the booking cannot be paid', [
+            'order_id' => $order->id,
+            'order_status' => $order->status,
+            'result' => $result['status'],
+        ]);
+
+        return Inertia::render('PaymentLink/Unavailable', [
+            'reason' => $result['status'],
+            'message' => $result['message'],
+            'order' => $this->formatOrder($order->loadMissing(['package', 'instructor.user'])),
+        ]);
+    }
 
     /**
      * Stripe success_url target. Verifies the checkout session and renders
@@ -54,6 +86,7 @@ class PaymentLinkCheckoutController extends Controller
         return Inertia::render('PaymentLink/Success', [
             'verified' => $result['verified'],
             'message' => $result['message'],
+            'weeklyPaymentDueHours' => BookingPayments::weeklyPaymentDueHoursBeforeLesson(),
             'order' => $this->formatOrder(
                 $result['order']->loadMissing(['package', 'instructor.user', 'student'])
             ),
@@ -62,8 +95,7 @@ class PaymentLinkCheckoutController extends Controller
 
     /**
      * Stripe cancel_url target. Renders a friendly cancel page so the student
-     * knows the payment wasn't taken and that they can ask the instructor to
-     * resend the link.
+     * knows the payment wasn't taken and how long they have to try again.
      */
     public function cancel(Request $request, Order $order): Response
     {
@@ -91,7 +123,12 @@ class PaymentLinkCheckoutController extends Controller
             'status' => $order->status instanceof OrderStatus
                 ? $order->status->value
                 : (string) $order->status,
+            'payment_mode' => $order->payment_mode?->value,
             'total_price_pence' => $order->total_price_pence ?? $order->package_total_price_pence,
+            'amount_paid_pence' => $this->amountPaidPence($order),
+            'pay_by' => $order->isAwaitingFirstPayment() && $order->payment_hold_expires_at
+                ? BookingPayments::formatDeadline($order->payment_hold_expires_at)
+                : null,
             'package' => $order->package ? [
                 'name' => $order->package->name,
                 'lessons_count' => $order->package->lessons_count,
@@ -100,5 +137,20 @@ class PaymentLinkCheckoutController extends Controller
                 'name' => $order->instructor->user->name,
             ] : null,
         ];
+    }
+
+    protected function amountPaidPence(Order $order): ?int
+    {
+        if (! $order->isActive() && $order->status !== OrderStatus::COMPLETED) {
+            return null;
+        }
+
+        if ($order->isWeekly()) {
+            $firstPayment = $order->firstLessonPayment();
+
+            return $firstPayment?->isPaid() ? (int) $firstPayment->amount_pence : null;
+        }
+
+        return $order->total_price_pence ?? $order->package_total_price_pence;
     }
 }

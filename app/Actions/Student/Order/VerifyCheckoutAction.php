@@ -32,6 +32,21 @@ class VerifyCheckoutAction
         try {
             $session = Session::retrieve($sessionId);
 
+            if ($order->status === OrderStatus::CANCELLED) {
+                if ($session->payment_status === 'paid') {
+                    Log::critical('Checkout paid after the booking was released - refund required', [
+                        'order_id' => $order->id,
+                        'session_id' => $sessionId,
+                    ]);
+                }
+
+                return [
+                    'verified' => false,
+                    'order' => $order,
+                    'message' => 'The time to pay for this booking ran out and the lessons were released. Any payment taken will be refunded.',
+                ];
+            }
+
             if ($session->payment_status === 'paid') {
                 if ($order->status === OrderStatus::PENDING) {
                     $order->status = OrderStatus::ACTIVE;

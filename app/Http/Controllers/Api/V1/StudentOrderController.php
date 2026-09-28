@@ -29,12 +29,13 @@ class StudentOrderController extends Controller
     /**
      * Book lessons: create order, calendar items, lessons, and handle payment.
      *
-     * Upfront payment behaviour depends on who initiates the booking:
+     * Nothing is confirmed until the first payment (full amount, or the first
+     * week for weekly orders) is made. Behaviour depends on who initiates it:
      *   - Student (mobile app): the Stripe checkout URL is returned in the response
-     *     so the mobile app can load it in an in-app browser.
-     *   - Instructor: a payment link is emailed to the student.
-     *
-     * Weekly payment: order is activated immediately and a confirmation email is sent.
+     *     so the mobile app can load it in an in-app browser. The lessons are
+     *     held for a short window and released if unpaid.
+     *   - Instructor: a payment link is emailed to the student and the lessons
+     *     are held until the first payment falls due.
      */
     public function store(CreateOrderRequest $request, Student $student): JsonResponse
     {
@@ -74,20 +75,16 @@ class StudentOrderController extends Controller
             );
         }
 
-        if ($paymentMode === PaymentMode::WEEKLY) {
-            $message = 'Order created and activated. Lesson invoices will be sent before each lesson.';
-        } elseif ($isStudentInitiated) {
-            $message = 'Order created. Open the checkout URL to complete payment.';
-        } else {
-            $message = 'Order created. A payment link has been emailed to the student.';
-        }
+        $message = $isStudentInitiated
+            ? 'Order created. Open the checkout URL to complete payment.'
+            : 'Order created. A payment link has been emailed to the student.';
 
         $response = [
             'message' => $message,
             'data' => new OrderResource($result['order']),
         ];
 
-        if ($isStudentInitiated && $paymentMode === PaymentMode::UPFRONT) {
+        if ($isStudentInitiated) {
             $response['checkout_url'] = $result['checkout_url'] ?? null;
         }
 
@@ -95,7 +92,8 @@ class StudentOrderController extends Controller
     }
 
     /**
-     * Re-send the upfront payment-link email for an order awaiting payment.
+     * Re-send the payment-link email for an order awaiting its first payment.
+     * The hold deadline is not extended.
      *
      * Rate limited to one send per order every 3 minutes so a double-tap
      * in the app never sends duplicate emails.

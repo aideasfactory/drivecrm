@@ -10,6 +10,7 @@ use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use App\Enums\PaymentStatus;
+use App\Exceptions\SlotNoLongerAvailableException;
 use App\Models\Calendar;
 use App\Models\CalendarItem;
 use App\Models\Enquiry;
@@ -21,6 +22,7 @@ use App\Models\Package;
 use App\Models\Student;
 use App\Services\InstructorCalendarService;
 use App\Services\InstructorService;
+use App\Support\BookingPayments;
 use App\Support\Fees;
 use App\Support\TestPassGuarantee;
 use Carbon\Carbon;
@@ -235,12 +237,9 @@ class CreateOrderFromEnquiryAction
             'payment_mode' => $paymentMode->value,
         ]);
 
-        // Determine calendar item status based on payment mode
-        // UPFRONT: Keep as DRAFT until Stripe confirms payment (ConfirmCalendarItemsAction handles transition)
-        // WEEKLY: Transition to RESERVED immediately (no Stripe checkout needed)
-        $calendarItemStatus = $paymentMode === PaymentMode::UPFRONT
-            ? CalendarItemStatus::DRAFT
-            : CalendarItemStatus::RESERVED;
+        // Both payment modes stay DRAFT until the first payment is confirmed
+        // (ConfirmCalendarItemsAction handles the transition).
+        $calendarItemStatus = CalendarItemStatus::DRAFT;
 
         Log::info('Calendar items will be updated to status', [
             'status' => $calendarItemStatus,
@@ -281,7 +280,11 @@ class CreateOrderFromEnquiryAction
                 throw new \Exception("Calendar item not found: {$calendarItemId}");
             }
 
-            // Update calendar item status (from draft to booked/reserved)
+            if (! $this->isStillHoldable($calendarItem)) {
+                throw new SlotNoLongerAvailableException("Calendar item {$calendarItemId} is no longer available");
+            }
+
+            // Update calendar item status (draft until the first payment lands)
             $calendarItem->update([
                 'status' => $calendarItemStatus,
                 'is_available' => false, // Keep unavailable
@@ -296,13 +299,9 @@ class CreateOrderFromEnquiryAction
                 'order_id' => $order->id,
             ]);
 
-            // Create lesson linked to the calendar item
-            // Use the order's snapshot price (which may be discounted)
-            // UPFRONT: Lessons start as DRAFT until Stripe confirms payment
-            // WEEKLY: Lessons start as PENDING immediately
-            $lessonStatus = $paymentMode === PaymentMode::UPFRONT
-                ? LessonStatus::DRAFT
-                : LessonStatus::PENDING;
+            // Use the order's snapshot price (which may be discounted). Lessons
+            // stay DRAFT until the first payment is confirmed.
+            $lessonStatus = LessonStatus::DRAFT;
 
             $lessonData = [
                 'order_id' => $order->id,
@@ -341,6 +340,21 @@ class CreateOrderFromEnquiryAction
     }
 
     /**
+     * Step 4 drafts the slots; by step 6 they may have been released (hold
+     * expired, nightly cleanup) and taken by someone else. A slot is still ours
+     * to hold when it has no lessons and is either still a draft or open again.
+     */
+    protected function isStillHoldable(CalendarItem $calendarItem): bool
+    {
+        if ($calendarItem->lessons()->exists()) {
+            return false;
+        }
+
+        return $calendarItem->status === CalendarItemStatus::DRAFT
+            || $calendarItem->isEmptyAvailability();
+    }
+
+    /**
      * Create lesson payment records for weekly payment mode.
      */
     protected function createLessonPayments(Order $order): void
@@ -351,8 +365,6 @@ class CreateOrderFromEnquiryAction
         $spreadTotalPence = $order->total_price_pence - $testPassGuaranteePence;
 
         foreach ($lessons->values() as $index => $lesson) {
-            $lessonDate = Carbon::parse($lesson->date);
-
             // The guarantee add-on is charged in full on the first weekly
             // payment, which is invoiced straight away at booking.
             $guaranteeForPayment = $index === 0 ? $testPassGuaranteePence : 0;
@@ -366,7 +378,7 @@ class CreateOrderFromEnquiryAction
                 'amount_pence' => LessonPayment::weeklyAmountForIndex($spreadTotalPence, $lessonsCount, $index) + $guaranteeForPayment,
                 'test_pass_guarantee_pence' => $guaranteeForPayment,
                 'status' => PaymentStatus::DUE,
-                'due_date' => $lessonDate->copy()->subHours(24), // Due 24h before lesson
+                'due_date' => BookingPayments::weeklyPaymentDueDate($lesson->date->toDateString(), $lesson->start_time?->format('H:i')),
             ]);
         }
 

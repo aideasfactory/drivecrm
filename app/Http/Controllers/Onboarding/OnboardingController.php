@@ -124,6 +124,7 @@ class OnboardingController extends Controller
             'staffBooking' => $enquiry->isStaffBooking() ? [
                 'payment_mode' => $step6['payment_mode'] ?? null,
                 'payment_link_sent_to' => $step6['payment_link_sent_to'] ?? null,
+                'hold_deadline' => $step6['hold_deadline'] ?? null,
             ] : null,
         ]);
     }

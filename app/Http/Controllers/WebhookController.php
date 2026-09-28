@@ -18,6 +18,7 @@ use App\Models\Student;
 use App\Models\WebhookEvent;
 use App\Notifications\InstructorLessonPaymentReceivedNotification;
 use App\Notifications\LessonPaymentReceivedNotification;
+use App\Services\OrderService;
 use App\Services\StripeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -141,6 +142,24 @@ class WebhookController extends Controller
             return;
         }
 
+        if ($order->status === OrderStatus::CANCELLED) {
+            Log::critical('Webhook: Checkout paid for a released order — refund required', [
+                'order_id' => $order->id,
+                'session_id' => $session->id,
+                'payment_intent' => $session->payment_intent ?? null,
+            ]);
+
+            return;
+        }
+
+        if ($order->isWeekly()) {
+            if ($session->payment_status === 'paid') {
+                app(OrderService::class)->confirmWeeklyFirstPayment($order, $session->payment_intent ?? null);
+            }
+
+            return;
+        }
+
         if ($order->isUpfront()) {
             // UPFRONT PAYMENT MODE: Process payment completion
             if ($session->payment_status === 'paid') {
@@ -197,8 +216,6 @@ class WebhookController extends Controller
                 }
             }
         }
-        // Weekly payment mode is now handled via invoice.paid webhook
-        // No setup session needed
     }
 
     /**

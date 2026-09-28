@@ -6,23 +6,32 @@ namespace App\Actions\Calendar;
 
 use App\Enums\CalendarItemStatus;
 use App\Enums\LessonStatus;
+use App\Enums\PaymentStatus;
 use App\Models\CalendarItem;
 use App\Models\Order;
 use App\Services\InstructorCalendarService;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
 class ConfirmCalendarItemsAction
 {
     /**
-     * Transition calendar items from DRAFT to BOOKED for a confirmed upfront payment order.
+     * Transition an order's draft calendar items once its first payment is confirmed.
      *
-     * Called after Stripe confirms successful payment (via webhook, success callback, or API verification).
+     * Upfront orders: every item becomes BOOKED. Weekly orders: items for paid
+     * lessons become BOOKED and the rest RESERVED — each later week turns BOOKED
+     * when its invoice is paid.
+     *
+     * Called after Stripe confirms payment (via webhook, success callback, or API verification).
      */
     public function __invoke(Order $order): int
     {
-        $calendarItemIds = $order->lessons()
+        $lessons = $order->lessons()
             ->whereNotNull('calendar_item_id')
-            ->pluck('calendar_item_id');
+            ->with('lessonPayment:id,lesson_id,status')
+            ->get(['id', 'calendar_item_id']);
+
+        $calendarItemIds = $lessons->pluck('calendar_item_id');
 
         if ($calendarItemIds->isEmpty()) {
             Log::info('ConfirmCalendarItems: No calendar items to confirm', [
@@ -32,33 +41,31 @@ class ConfirmCalendarItemsAction
             return 0;
         }
 
-        $updated = CalendarItem::whereIn('id', $calendarItemIds)
-            ->where('status', CalendarItemStatus::DRAFT)
-            ->update([
-                'status' => CalendarItemStatus::BOOKED,
-                'is_available' => false,
-            ]);
+        if ($order->isWeekly()) {
+            $bookedIds = $lessons
+                ->filter(fn ($lesson) => $lesson->lessonPayment?->status === PaymentStatus::PAID)
+                ->pluck('calendar_item_id');
+            $reservedIds = $calendarItemIds->diff($bookedIds);
+        } else {
+            $bookedIds = $calendarItemIds;
+            $reservedIds = collect();
+        }
 
-        // Mirror booked status to travel items
-        CalendarItem::whereIn('parent_item_id', $calendarItemIds)
-            ->where('status', CalendarItemStatus::DRAFT)
-            ->update([
-                'status' => CalendarItemStatus::BOOKED,
-            ]);
+        $updated = $this->transitionDraftItems($bookedIds, CalendarItemStatus::BOOKED)
+            + $this->transitionDraftItems($reservedIds, CalendarItemStatus::RESERVED);
 
-        // Transition draft lessons to pending now that payment is confirmed
         $lessonsUpdated = $order->lessons()
             ->where('status', LessonStatus::DRAFT)
             ->update(['status' => LessonStatus::PENDING]);
 
-        Log::info('ConfirmCalendarItems: Calendar items confirmed as booked', [
+        Log::info('ConfirmCalendarItems: Calendar items confirmed', [
             'order_id' => $order->id,
             'calendar_items_updated' => $updated,
             'lessons_activated' => $lessonsUpdated,
-            'calendar_item_ids' => $calendarItemIds->toArray(),
+            'booked_calendar_item_ids' => $bookedIds->values()->toArray(),
+            'reserved_calendar_item_ids' => $reservedIds->values()->toArray(),
         ]);
 
-        // Invalidate calendar cache for affected dates
         if ($updated > 0 && $order->instructor_id) {
             $dates = CalendarItem::whereIn('calendar_items.id', $calendarItemIds)
                 ->join('calendars', 'calendar_items.calendar_id', '=', 'calendars.id')
@@ -71,6 +78,31 @@ class ConfirmCalendarItemsAction
                 $calendarService->invalidateCalendarCache($order->instructor_id, $date);
             }
         }
+
+        return $updated;
+    }
+
+    /**
+     * Move draft items (and their draft travel blocks) to the given status.
+     *
+     * @param  Collection<int, int>  $calendarItemIds
+     */
+    protected function transitionDraftItems(Collection $calendarItemIds, CalendarItemStatus $status): int
+    {
+        if ($calendarItemIds->isEmpty()) {
+            return 0;
+        }
+
+        $updated = CalendarItem::whereIn('id', $calendarItemIds)
+            ->where('status', CalendarItemStatus::DRAFT)
+            ->update([
+                'status' => $status,
+                'is_available' => false,
+            ]);
+
+        CalendarItem::whereIn('parent_item_id', $calendarItemIds)
+            ->where('status', CalendarItemStatus::DRAFT)
+            ->update(['status' => $status]);
 
         return $updated;
     }
