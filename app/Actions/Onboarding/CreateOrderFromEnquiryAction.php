@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace App\Actions\Onboarding;
 
 use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
+use App\Actions\Student\Order\CreateDraftCalendarItemsAction;
 use App\Enums\CalendarItemStatus;
 use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use App\Enums\PaymentStatus;
 use App\Exceptions\SlotNoLongerAvailableException;
-use App\Models\Calendar;
 use App\Models\CalendarItem;
 use App\Models\Enquiry;
 use App\Models\Instructor;
@@ -28,11 +28,14 @@ use App\Support\TestPassGuarantee;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class CreateOrderFromEnquiryAction
 {
     public function __construct(
         protected ResolveEnquiryPriceUpliftAction $resolveEnquiryPriceUplift,
+        protected CreateDraftCalendarItemsAction $createDraftCalendarItems,
+        protected ReleaseLegacyStepFourHoldsAction $releaseLegacyStepFourHolds,
     ) {}
 
     /**
@@ -49,6 +52,8 @@ class CreateOrderFromEnquiryAction
         PaymentMode $paymentMode,
         ?array $discount = null
     ): Order {
+        ($this->releaseLegacyStepFourHolds)($enquiry);
+
         try {
             DB::beginTransaction();
 
@@ -150,12 +155,23 @@ class CreateOrderFromEnquiryAction
                 ]);
             }
 
-            // Get time details and calendar items from Step 4
             $startTime = $step4['start_time'] ?? null;
             $endTime = $step4['end_time'] ?? null;
-            $calendarItemIds = $step4['calendar_item_ids'] ?? [];
 
-            Log::info('Retrieved calendar items from Step 4', [
+            if (! $startTime || ! $endTime) {
+                throw new \Exception('Lesson start and end time are required from Step 4');
+            }
+
+            $calendarItemIds = $this->holdCalendarItems(
+                (int) $instructorId,
+                $firstLessonDate->toDateString(),
+                $startTime,
+                $endTime,
+                (int) $package->lessons_count,
+                isset($step4['calendar_item_id']) ? (int) $step4['calendar_item_id'] : null,
+            );
+
+            Log::info('Held calendar items for the booking', [
                 'calendar_item_ids' => $calendarItemIds,
                 'calendar_items_count' => count($calendarItemIds),
                 'order_id' => $order->id,
@@ -280,25 +296,6 @@ class CreateOrderFromEnquiryAction
                 throw new \Exception("Calendar item not found: {$calendarItemId}");
             }
 
-            if (! $this->isStillHoldable($calendarItem)) {
-                throw new SlotNoLongerAvailableException("Calendar item {$calendarItemId} is no longer available");
-            }
-
-            // Update calendar item status (draft until the first payment lands)
-            $calendarItem->update([
-                'status' => $calendarItemStatus,
-                'is_available' => false, // Keep unavailable
-            ]);
-
-            Log::info('Updated calendar item status', [
-                'calendar_item_id' => $calendarItem->id,
-                'old_status' => 'draft',
-                'new_status' => $calendarItemStatus,
-                'is_available' => false,
-                'lesson_number' => $i + 1,
-                'order_id' => $order->id,
-            ]);
-
             // Use the order's snapshot price (which may be discounted). Lessons
             // stay DRAFT until the first payment is confirmed.
             $lessonStatus = LessonStatus::DRAFT;
@@ -340,18 +337,29 @@ class CreateOrderFromEnquiryAction
     }
 
     /**
-     * Step 4 drafts the slots; by step 6 they may have been released (hold
-     * expired, nightly cleanup) and taken by someone else. A slot is still ours
-     * to hold when it has no lessons and is either still a draft or open again.
+     * Hold the diary slots now that the learner is going to payment. Step 4 only
+     * remembers the chosen slot, so it may have been taken since; the chosen
+     * slot is locked, so when two learners pay for the same time only the
+     * first gets it. Same path as mobile bookings.
+     *
+     * @return array<int, int>
+     *
+     * @throws SlotNoLongerAvailableException
      */
-    protected function isStillHoldable(CalendarItem $calendarItem): bool
+    protected function holdCalendarItems(int $instructorId, string $firstLessonDate, string $startTime, string $endTime, int $lessonsCount, ?int $chosenCalendarItemId): array
     {
-        if ($calendarItem->lessons()->exists()) {
-            return false;
+        try {
+            return ($this->createDraftCalendarItems)(
+                $instructorId,
+                $firstLessonDate,
+                $startTime,
+                $endTime,
+                $lessonsCount,
+                $chosenCalendarItemId,
+            );
+        } catch (ValidationException $e) {
+            throw new SlotNoLongerAvailableException($e->getMessage(), previous: $e);
         }
-
-        return $calendarItem->status === CalendarItemStatus::DRAFT
-            || $calendarItem->isEmptyAvailability();
     }
 
     /**

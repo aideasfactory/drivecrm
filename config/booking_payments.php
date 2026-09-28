@@ -7,17 +7,18 @@ declare(strict_types=1);
  * payments fall due.
  *
  * - Learners booking themselves (booking form or mobile app) pay there and
- *   then; slots are held for `learner_hold_minutes`.
+ *   then; slots are held for `learner_hold_minutes` from the moment they go
+ *   to payment. Choosing a time on the booking form holds nothing.
  * - Instructor bookings email a payment link; slots are held until
  *   `instructor_hold_hours_before_lesson` before the first lesson.
  * - Bookings-team (staff) bookings email a payment link; slots are held until
  *   midnight in `timezone`.
- * - No hold is ever shorter than `minimum_hold_minutes`.
+ * - Emailed-link holds are never shorter than `minimum_hold_minutes`.
  *
  * Always read these values through `App\Support\BookingPayments`.
  */
 return [
-    'learner_hold_minutes' => (int) env('BOOKING_LEARNER_HOLD_MINUTES', 15),
+    'learner_hold_minutes' => (int) env('BOOKING_LEARNER_HOLD_MINUTES', 10),
 
     'minimum_hold_minutes' => (int) env('BOOKING_MINIMUM_HOLD_MINUTES', 15),
 

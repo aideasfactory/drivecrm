@@ -25,11 +25,13 @@ final class BookingPayments
     private const STRIPE_MAX_SESSION_MINUTES = 23 * 60 + 50;
 
     /**
-     * Hold for a learner booking and paying there and then (booking form or mobile app).
+     * Hold for a learner booking and paying there and then (booking form or
+     * mobile app). The learner is already at checkout, so the emailed-link
+     * minimum does not apply.
      */
     public static function learnerHoldExpiresAt(): CarbonImmutable
     {
-        return self::atLeastMinimum(self::now()->addMinutes(self::learnerHoldMinutes()));
+        return self::now()->addMinutes(self::learnerHoldMinutes());
     }
 
     /**
@@ -104,7 +106,7 @@ final class BookingPayments
 
     public static function learnerHoldMinutes(): int
     {
-        return (int) config('booking_payments.learner_hold_minutes', 15);
+        return (int) config('booking_payments.learner_hold_minutes', 10);
     }
 
     public static function weeklyPaymentDueHoursBeforeLesson(): int

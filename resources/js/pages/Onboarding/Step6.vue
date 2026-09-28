@@ -324,7 +324,7 @@ const props = defineProps({
     type: [Object, null],
     default: null
   },
-  holdMinutes: { type: Number, default: 15 },
+  holdMinutes: { type: Number, default: 10 },
   weeklyPaymentDueHours: { type: Number, default: 48 }
 })
 
