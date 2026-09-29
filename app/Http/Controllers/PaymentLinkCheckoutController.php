@@ -105,6 +105,8 @@ class PaymentLinkCheckoutController extends Controller
         ]);
 
         return Inertia::render('PaymentLink/Cancelled', [
+            // Learners paying in the app have no emailed link to go back to
+            'fromApp' => $request->query('source') === 'mobile_app',
             'order' => $this->formatOrder($order->loadMissing(['package', 'instructor.user'])),
         ]);
     }

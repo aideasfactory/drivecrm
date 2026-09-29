@@ -204,7 +204,7 @@ class OrderService extends BaseService
         // protected. The mobile in-app browser can still detect these URLs by
         // path to close the webview after payment if needed.
         $successUrl = route('payment-link.checkout.success', ['order' => $order->id]).'?session_id={CHECKOUT_SESSION_ID}';
-        $cancelUrl = route('payment-link.checkout.cancel', ['order' => $order->id]);
+        $cancelUrl = route('payment-link.checkout.cancel', ['order' => $order->id, 'source' => $bookingSource]);
 
         $result = $this->stripeService->createCheckoutSession(
             $order,
@@ -652,6 +652,19 @@ class OrderService extends BaseService
      */
     public function reportPaymentForReleasedOrder(Order $order, ?string $checkoutSessionId, ?string $paymentReference): void
     {
+        // A released booking has had its lessons deleted. One that still has
+        // lessons was confirmed and later cancelled — its refund is handled by
+        // the cancellation (RefundRequiredNotification), so don't report it here.
+        if ($order->lessons()->exists()) {
+            Log::warning('Payment reported for a cancelled booking that was not released unpaid — no alert sent', [
+                'order_id' => $order->id,
+                'checkout_session_id' => $checkoutSessionId,
+                'payment_reference' => $paymentReference,
+            ]);
+
+            return;
+        }
+
         $dedupeKey = 'released-order-paid:'.$order->id.':'.($checkoutSessionId ?? $paymentReference ?? 'unknown');
 
         if (! Cache::add($dedupeKey, true, now()->addDays(30))) {
@@ -698,6 +711,18 @@ class OrderService extends BaseService
 
         if ($order->stripe_checkout_session_id) {
             $expiry = $this->stripeService->expireCheckoutSession($order->stripe_checkout_session_id);
+
+            if ($expiry['status'] === 'complete' && $expiry['payment_status'] === 'paid') {
+                // Paid but not yet confirmed (e.g. the webhook failed): confirm it now.
+                Log::warning('Hold expired on a paid checkout session — confirming the booking', [
+                    'order_id' => $order->id,
+                    'session_id' => $order->stripe_checkout_session_id,
+                ]);
+
+                $this->confirmPaidCheckoutSession($order, $order->stripe_checkout_session_id, $expiry['payment_intent']);
+
+                return false;
+            }
 
             if (! $expiry['released']) {
                 Log::warning('Kept unpaid order: its checkout session could not be closed', [

@@ -485,9 +485,10 @@ class StripeService
      * Returns `released: true` when nothing can be paid on it any more (it was
      * open and is now expired, or had already expired). Returns `released:
      * false` when it has already been paid, or Stripe could not be reached —
-     * the caller must then keep the booking.
+     * the caller must then keep the booking. `payment_status` and
+     * `payment_intent` let the caller confirm a session that was paid.
      *
-     * @return array{released: bool, status: string|null}
+     * @return array{released: bool, status: string|null, payment_status: string|null, payment_intent: string|null}
      */
     public function expireCheckoutSession(string $sessionId): array
     {
@@ -501,6 +502,8 @@ class StripeService
             return [
                 'released' => $session->status === 'expired',
                 'status' => $session->status,
+                'payment_status' => $session->payment_status ?? null,
+                'payment_intent' => $session->payment_intent ?: null,
             ];
         } catch (ApiErrorException $e) {
             Log::error('StripeService: Failed to expire checkout session', [
@@ -508,7 +511,7 @@ class StripeService
                 'error' => $e->getMessage(),
             ]);
 
-            return ['released' => false, 'status' => null];
+            return ['released' => false, 'status' => null, 'payment_status' => null, 'payment_intent' => null];
         }
     }
 
