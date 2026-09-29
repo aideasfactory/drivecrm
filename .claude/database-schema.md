@@ -174,6 +174,7 @@ Owner-only CRM screen at `/email-templates`. Staff can change wording only — r
 **Data migrations:** Copy changes to catalog defaults do not reach rows that already exist, so they ship as data-only migrations that patch the stored `body` only where the default wording is still intact:
 - `2026_09_23_150837_update_instructor_welcome_link_expiry_copy` — instructor welcome link expiry wording.
 - `2026_09_24_150000_add_cost_breakdown_to_payment_email_templates` — inserts `{{cost_breakdown}}` into `learner.payment_link`, `learner.payment_due_soon` and `learner.lesson_payment_received` so learners see the lesson / booking fee / digital fee split. No schema change.
+- `2026_09_29_100000_update_payment_link_template_for_pay_at_booking` — `learner.payment_link` gets `{{amount_label}}: {{total}}` ("First week" for weekly orders) and `{{pay_by_line}}` (the hold deadline) in place of "This payment link will expire after 24 hours." No schema change.
 
 ### Relationship Summary
 

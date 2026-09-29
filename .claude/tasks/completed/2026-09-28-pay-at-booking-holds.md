@@ -1,7 +1,7 @@
 # Task: Pay at booking with short slot holds
 
 **Created:** 2026-09-28
-**Last Updated:** 2026-09-28
+**Last Updated:** 2026-09-29
 **Status:** Complete
 
 ---
@@ -90,7 +90,7 @@ Signed-off scenarios:
 - Existing tests that expect weekly instructor bookings to be `RESERVED` now get `DRAFT`: `InstructorDiarySlotTest` (~line 138) and `DiarySlotOfferTest` (~line 98).
 - Late payment on a released order is logged `critical` for a manual refund. There is no auto-refund.
 - The first weekly payment has no Stripe invoice (a Checkout payment), so `has_stripe_invoice` is false for it.
-- DB-customised `learner.payment_link` templates keep the old "expires after 24 hours" text until edited. New placeholders are `{{amount_label}}` and `{{pay_by_line}}`.
+- Stored `learner.payment_link` templates are patched by `2026_09_29_100000_update_payment_link_template_for_pay_at_booking` where the default wording is intact. Staff-edited copy keeps its own text until edited. New placeholders are `{{amount_label}}` and `{{pay_by_line}}`.
 - The 48h "payment due soon" reminder now fires around the due time. Consider moving it earlier.
 - Nothing was run (no PHP on the VM). Run the migration before deploying the scheduler change.
 
