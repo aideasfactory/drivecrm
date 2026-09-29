@@ -41,101 +41,97 @@
 
             <CardContent class="pt-6">
               <form @submit.prevent="submit">
-                <div v-if="packages && packages.length > 0" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                  <div
+                <div
+                  v-if="packages && packages.length > 0"
+                  class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
+                  role="radiogroup"
+                  aria-label="Lesson packages"
+                >
+                  <Card
                     v-for="pkg in packages"
                     :key="pkg.id"
-                    class="relative"
+                    role="radio"
+                    :aria-checked="isPackageSelected(pkg.id)"
+                    tabindex="0"
+                    :class="[
+                      'relative transition-all duration-200 h-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                      isPackageSelected(pkg.id)
+                        ? 'ring-2 ring-primary border-primary'
+                        : 'hover:border-muted-foreground/30',
+                      pkg.promoted
+                        ? 'bg-gradient-to-b from-red-400/5 via-red-500/10 to-red-600/20'
+                        : ''
+                    ]"
+                    @click="selectPackage(pkg.id)"
+                    @keydown.enter.prevent="selectPackage(pkg.id)"
+                    @keydown.space.prevent="selectPackage(pkg.id)"
                   >
-                    <input
-                      type="radio"
-                      :id="`package-${pkg.id}`"
-                      v-model="form.package_id"
-                      :value="pkg.id"
-                      class="sr-only peer"
+                    <!-- Promoted ribbon -->
+                    <div
+                      v-if="pkg.promoted"
+                      class="absolute top-0 right-0 z-10"
                     >
-                    <label
-                      :for="`package-${pkg.id}`"
-                      class="block cursor-pointer h-full"
-                    >
-                      <Card
-                        :class="[
-                          'relative transition-all duration-200 h-full',
-                          form.package_id === pkg.id
-                            ? 'ring-2 ring-primary border-primary'
-                            : 'hover:border-muted-foreground/30',
-                          pkg.promoted
-                            ? 'bg-gradient-to-b from-red-400/5 via-red-500/10 to-red-600/20'
-                            : ''
-                        ]"
-                      >
-                        <!-- Promoted ribbon -->
-                        <div
-                          v-if="pkg.promoted"
-                          class="absolute top-0 right-0 z-10"
-                        >
-                          <div class="bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg rounded-tr-xl flex items-center gap-1 shadow-md">
-                            <Flame class="h-3 w-3" />
-                            Popular
+                      <div class="bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg rounded-tr-xl flex items-center gap-1 shadow-md">
+                        <Flame class="h-3 w-3" />
+                        Popular
+                      </div>
+                    </div>
+
+                    <CardHeader>
+                      <div class="text-center pt-2">
+                        <div class="mb-3 flex justify-center">
+                          <div :class="[
+                            'rounded-full p-3',
+                            pkg.promoted ? 'bg-red-500/10' : 'bg-muted'
+                          ]">
+                            <component
+                              :is="getPackageIcon(pkg)"
+                              :class="[
+                                'h-8 w-8',
+                                pkg.promoted ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'
+                              ]"
+                            />
                           </div>
                         </div>
+                        <CardTitle class="text-lg">{{ pkg.name }}</CardTitle>
+                        <CardDescription class="text-sm mt-1">
+                          {{ pkg.lessons_count }} lessons
+                        </CardDescription>
+                      </div>
+                    </CardHeader>
 
-                        <CardHeader>
-                          <div class="text-center pt-2">
-                            <div class="mb-3 flex justify-center">
-                              <div :class="[
-                                'rounded-full p-3',
-                                pkg.promoted ? 'bg-red-500/10' : 'bg-muted'
-                              ]">
-                                <component
-                                  :is="getPackageIcon(pkg)"
-                                  :class="[
-                                    'h-8 w-8',
-                                    pkg.promoted ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'
-                                  ]"
-                                />
-                              </div>
-                            </div>
-                            <CardTitle class="text-lg">{{ pkg.name }}</CardTitle>
-                            <CardDescription class="text-sm mt-1">
-                              {{ pkg.lessons_count }} lessons
-                            </CardDescription>
-                          </div>
-                        </CardHeader>
+                    <CardContent class="text-center">
+                      <div class="mb-4">
+                        <template v-if="discount">
+                          <div class="text-sm text-muted-foreground line-through">{{ pkg.total_price }}</div>
+                          <div class="text-3xl font-bold text-green-600 dark:text-green-400">{{ pkg.total_with_fees }}</div>
+                        </template>
+                        <div v-else class="text-3xl font-bold">{{ pkg.total_with_fees }}</div>
+                        <div class="text-xs text-muted-foreground mt-1">
+                          or {{ pkg.weekly_payment }} per lesson if paid weekly
+                        </div>
+                        <div class="text-xs text-muted-foreground mt-2">
+                          Lessons {{ discount ? getDiscountedPrice(pkg.formatted_total_price) : pkg.formatted_total_price }}
+                          <template v-if="pkg.booking_fee !== '£0.00'">+ booking fee {{ pkg.booking_fee }}</template>
+                          <template v-if="pkg.digital_fee !== '£0.00'">+ digital fee {{ pkg.digital_fee }}</template>
+                        </div>
+                      </div>
+                      <p class="text-xs text-muted-foreground leading-relaxed">{{ pkg.description }}</p>
+                    </CardContent>
 
-                        <CardContent class="text-center">
-                          <div class="mb-4">
-                            <template v-if="discount">
-                              <div class="text-sm text-muted-foreground line-through">{{ pkg.formatted_total_price }}</div>
-                              <div class="text-3xl font-bold text-green-600 dark:text-green-400">{{ getDiscountedPrice(pkg.formatted_total_price) }}</div>
-                              <div class="text-xs text-muted-foreground mt-1">
-                                {{ getDiscountedPrice(pkg.formatted_lesson_price) }} per lesson
-                              </div>
-                            </template>
-                            <template v-else>
-                              <div class="text-3xl font-bold">{{ pkg.formatted_total_price }}</div>
-                              <div class="text-xs text-muted-foreground mt-1">
-                                {{ pkg.formatted_lesson_price }} per lesson
-                              </div>
-                            </template>
-                          </div>
-                          <p class="text-xs text-muted-foreground leading-relaxed">{{ pkg.description }}</p>
-                        </CardContent>
-
-                        <CardFooter class="justify-center">
-                          <Button
-                            type="button"
-                            :variant="form.package_id === pkg.id ? 'default' : 'outline'"
-                            class="w-full"
-                            size="sm"
-                          >
-                            <Check v-if="form.package_id === pkg.id" class="mr-1 h-4 w-4" />
-                            {{ form.package_id === pkg.id ? 'Selected' : 'Select Package' }}
-                          </Button>
-                        </CardFooter>
-                      </Card>
-                    </label>
-                  </div>
+                    <CardFooter class="justify-center">
+                      <Button
+                        type="button"
+                        :variant="isPackageSelected(pkg.id) ? 'default' : 'outline'"
+                        class="w-full cursor-pointer"
+                        size="sm"
+                        @click.stop.prevent="selectPackage(pkg.id)"
+                      >
+                        <Check v-if="isPackageSelected(pkg.id)" class="mr-1 h-4 w-4" />
+                        {{ isPackageSelected(pkg.id) ? 'Selected' : 'Select Package' }}
+                      </Button>
+                    </CardFooter>
+                  </Card>
                 </div>
 
                 <div v-else class="text-center py-12 mb-8">
@@ -168,7 +164,7 @@
                     <Button
                       v-if="packages && packages.length > 0"
                       type="submit"
-                      :disabled="!form.package_id || form.processing"
+                      :disabled="selectedPackageId === null || form.processing"
                       class="cursor-pointer"
                     >
                       Next
@@ -192,7 +188,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { usePage, useForm, Link } from '@inertiajs/vue3'
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -225,8 +221,20 @@ const props = defineProps({
 
 const page = usePage()
 
+function normalizePackageId(packageId: unknown): number | null {
+  if (packageId === null || packageId === undefined || packageId === '') {
+    return null
+  }
+
+  const normalized = Number(packageId)
+
+  return Number.isFinite(normalized) ? normalized : null
+}
+
+const selectedPackageId = ref<number | null>(normalizePackageId(props.stepData?.package_id))
+
 const form = useForm({
-  package_id: props.stepData?.package_id || null
+  package_id: selectedPackageId.value,
 })
 
 const postcode = computed(() => {
@@ -253,8 +261,23 @@ function getPackageIcon(pkg: any) {
   return Rocket
 }
 
+function isPackageSelected(packageId: number | string): boolean {
+  return selectedPackageId.value !== null && selectedPackageId.value === Number(packageId)
+}
+
+function selectPackage(packageId: number | string): void {
+  const normalized = normalizePackageId(packageId)
+
+  if (normalized === null) {
+    return
+  }
+
+  selectedPackageId.value = normalized
+  form.package_id = normalized
+}
+
 // Show toast when package is selected
-watch(() => form.package_id, (newValue) => {
+watch(selectedPackageId, (newValue) => {
   if (newValue) {
     toast({ title: 'Package selected', description: 'Your package has been saved' })
   }

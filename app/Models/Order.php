@@ -234,6 +234,61 @@ class Order extends Model
     }
 
     /**
+     * Whether the order carries anything on top of the lessons: a booking fee,
+     * a digital fee or the Pass Your Test Guarantee (paid or included free).
+     */
+    public function hasFees(): bool
+    {
+        return ($this->booking_fee_pence ?? 0) > 0
+            || ($this->digital_fee_pence ?? 0) > 0
+            || (bool) $this->includes_test_pass_guarantee;
+    }
+
+    /**
+     * Get the regular weekly instalment the student pays, including their share
+     * of the booking and digital fees (e.g., "£65.99"). Any paid Pass Your Test
+     * Guarantee is charged on top of the first instalment only, so it is left
+     * out here. The last instalment absorbs any rounding remainder.
+     */
+    public function getFormattedWeeklyInstalmentAttribute(): string
+    {
+        $lessonsCount = (int) ($this->package_lessons_count ?? 0);
+        $totalPence = (int) ($this->total_price_pence ?? $this->package_total_price_pence ?? 0)
+            - (int) ($this->test_pass_guarantee_pence ?? 0);
+
+        return '£'.number_format(LessonPayment::weeklyAmountForIndex($totalPence, $lessonsCount, 0) / 100, 2);
+    }
+
+    /**
+     * Lines itemising the order cost for student-facing emails: the lessons,
+     * each non-zero fee and the Pass Your Test Guarantee when included. The
+     * total is left to the caller so each email can label it ("Total",
+     * "Total paid").
+     *
+     * @return list<string>
+     */
+    public function costBreakdownLines(): array
+    {
+        $lines = ["Lessons: {$this->formatted_package_total_price}"];
+
+        if ($this->booking_fee_pence > 0) {
+            $lines[] = "Booking fee: {$this->formatted_booking_fee}";
+        }
+
+        if ($this->digital_fee_pence > 0) {
+            $lines[] = "Digital fee: {$this->formatted_digital_fee}";
+        }
+
+        if ($this->includes_test_pass_guarantee) {
+            $lines[] = $this->test_pass_guarantee_pence > 0
+                ? "Pass Your Test Guarantee: {$this->formatted_test_pass_guarantee}"
+                : 'Pass Your Test Guarantee: Included free';
+        }
+
+        return $lines;
+    }
+
+    /**
      * Get formatted lesson price from snapshot (e.g., "£50.00").
      */
     public function getFormattedPackageLessonPriceAttribute(): string

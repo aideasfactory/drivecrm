@@ -30,6 +30,8 @@ class GetInstructorLessonsInRangeAction
                 'order' => fn ($query) => $query->select([
                     'id', 'student_id', 'instructor_id', 'package_id',
                     'package_name', 'package_lesson_price_pence', 'payment_mode', 'status',
+                    'package_lessons_count', 'package_total_price_pence', 'booking_fee_pence',
+                    'digital_fee_pence', 'total_price_pence', 'test_pass_guarantee_pence',
                 ]),
                 'order.student:id,user_id,first_name,surname,email,phone,status',
                 'order.student.user:id,name,email',
@@ -38,7 +40,7 @@ class GetInstructorLessonsInRangeAction
                     'is_available', 'status', 'item_type', 'notes',
                 ]),
                 'calendarItem.calendar:id,instructor_id,date',
-                'lessonPayment:id,lesson_id,amount_pence,status,paid_at',
+                'lessonPayment:id,lesson_id,amount_pence,test_pass_guarantee_pence,status,paid_at',
                 'payout:id,lesson_id,status,amount_pence,paid_at',
                 'reflectiveLog:id,lesson_id',
                 'resources:id,title,resource_type',

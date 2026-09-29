@@ -57,14 +57,31 @@ class RefundRequiredNotification extends Notification implements ShouldQueue
             ->line('')
             ->line('**Paid lessons to refund:**');
 
-        $total = 0;
+        $totals = ['paid' => 0, 'lesson' => 0, 'booking_fee' => 0, 'digital_fee' => 0, 'test_pass_guarantee' => 0];
         foreach ($this->paidLessons as $lesson) {
-            $total += (int) $lesson->amount_pence;
-            $message->line('• '.$this->formatLesson($lesson));
+            $breakdown = $this->paidBreakdown($lesson);
+
+            foreach ($totals as $key => $value) {
+                $totals[$key] = $value + $breakdown[$key];
+            }
+
+            $message->line('• '.$this->formatLesson($lesson, $breakdown));
+        }
+
+        $refundPence = $totals['lesson'] + $totals['booking_fee'];
+
+        $message->line('')
+            ->line('**Total paid for cancelled lessons:** '.$this->formatPence($totals['paid']))
+            ->line('Lessons: '.$this->formatPence($totals['lesson']))
+            ->line('Booking fee: '.$this->formatPence($totals['booking_fee']))
+            ->line('Digital fee (retained, not refunded): '.$this->formatPence($totals['digital_fee']));
+
+        if ($totals['test_pass_guarantee'] > 0) {
+            $message->line('Pass Your Test Guarantee (retained, not refunded): '.$this->formatPence($totals['test_pass_guarantee']));
         }
 
         $message->line('')
-            ->line('**Total paid for cancelled lessons:** £'.number_format($total / 100, 2))
+            ->line('**Amount to refund:** '.$this->formatPence($refundPence))
             ->line('')
             ->line('**Cancellation reason:**')
             ->line($this->reason)
@@ -76,17 +93,61 @@ class RefundRequiredNotification extends Notification implements ShouldQueue
     }
 
     /**
-     * Format a single paid lesson with its date and amount.
+     * What the student paid for a lesson, keyed for totalling.
+     *
+     * @return array{paid: int, lesson: int, booking_fee: int, digital_fee: int, test_pass_guarantee: int}
      */
-    protected function formatLesson(Lesson $lesson): string
+    protected function paidBreakdown(Lesson $lesson): array
+    {
+        if ($this->order && ! $lesson->relationLoaded('order')) {
+            $lesson->setRelation('order', $this->order);
+        }
+
+        $breakdown = $lesson->paymentBreakdown();
+
+        return [
+            'paid' => $breakdown['total_pence'],
+            'lesson' => $breakdown['lesson_pence'],
+            'booking_fee' => $breakdown['booking_fee_pence'],
+            'digital_fee' => $breakdown['digital_fee_pence'],
+            'test_pass_guarantee' => $breakdown['test_pass_guarantee_pence'],
+        ];
+    }
+
+    /**
+     * Format a single paid lesson with its date, amount paid and fee split.
+     *
+     * @param  array{paid: int, lesson: int, booking_fee: int, digital_fee: int, test_pass_guarantee: int}  $breakdown
+     */
+    protected function formatLesson(Lesson $lesson, array $breakdown): string
     {
         $date = $lesson->date?->format('l, j F Y') ?? 'Date unknown';
         $time = ($lesson->start_time && $lesson->end_time)
             ? ' at '.$lesson->start_time->format('H:i').' - '.$lesson->end_time->format('H:i')
             : '';
-        $amount = '£'.number_format(((int) $lesson->amount_pence) / 100, 2);
 
-        return "{$date}{$time} — {$amount}";
+        $line = "{$date}{$time} — paid ".$this->formatPence($breakdown['paid']);
+
+        if ($breakdown['booking_fee'] > 0 || $breakdown['digital_fee'] > 0 || $breakdown['test_pass_guarantee'] > 0) {
+            $parts = [
+                'lesson '.$this->formatPence($breakdown['lesson']),
+                'booking fee '.$this->formatPence($breakdown['booking_fee']),
+                'digital fee '.$this->formatPence($breakdown['digital_fee']),
+            ];
+
+            if ($breakdown['test_pass_guarantee'] > 0) {
+                $parts[] = 'Pass Your Test Guarantee '.$this->formatPence($breakdown['test_pass_guarantee']);
+            }
+
+            $line .= ' ('.implode(', ', $parts).')';
+        }
+
+        return $line;
+    }
+
+    protected function formatPence(int $pence): string
+    {
+        return '£'.number_format($pence / 100, 2);
     }
 
     /**

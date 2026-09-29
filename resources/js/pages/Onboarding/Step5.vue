@@ -5,26 +5,26 @@
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <!-- Left Sidebar -->
-        <div class="lg:col-span-1 order-2 lg:order-1">
+        <div class="min-w-0 lg:col-span-1 order-2 lg:order-1">
           <OnboardingLeftSidebar />
         </div>
 
         <!-- Main Content -->
-        <div class="lg:col-span-2 order-1 lg:order-2">
-          <Card>
-            <CardHeader>
+        <div class="min-w-0 lg:col-span-2 order-1 lg:order-2">
+          <Card class="min-w-0">
+            <CardHeader class="px-4 sm:px-6">
               <CardTitle class="text-3xl">Review your booking</CardTitle>
               <CardDescription class="text-lg">
                 Please review all details before proceeding to payment. You can edit any section if needed.
               </CardDescription>
             </CardHeader>
 
-            <CardContent>
+            <CardContent class="px-4 sm:px-6">
               <form @submit.prevent="submit" class="space-y-6">
                 <!-- Instructor Summary -->
                 <Card>
-                  <CardHeader>
-                    <div class="flex items-center justify-between">
+                  <CardHeader class="px-4 sm:px-6">
+                    <div class="flex items-center justify-between gap-2">
                       <CardTitle>Your Instructor</CardTitle>
                       <Link :href="step2({ uuid: uuid }).url">
                         <Button variant="link" size="sm">
@@ -33,26 +33,26 @@
                       </Link>
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <div class="flex items-center space-x-4">
-                      <Avatar class="h-16 w-16">
+                  <CardContent class="px-4 sm:px-6">
+                    <div class="flex items-start gap-4">
+                      <Avatar class="h-16 w-16 shrink-0">
                         <AvatarImage v-if="instructor?.avatar" :src="instructor.avatar" :alt="instructor.name" />
                         <AvatarFallback class="text-lg font-semibold bg-primary text-primary-foreground">{{ getInitials(instructor?.name) }}</AvatarFallback>
                       </Avatar>
-                      <div class="flex-1">
+                      <div class="min-w-0 flex-1">
                         <h4 class="font-semibold">{{ instructor?.name || 'No instructor selected' }}</h4>
-                        <div class="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
-                          <span class="flex items-center">
-                            <Car class="mr-1 h-4 w-4" />
-                            {{ instructor?.transmission || 'Manual' }}
+                        <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                          <span class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
+                            <Car class="h-4 w-4 shrink-0" />
+                            {{ transmissionLabel }}
                           </span>
-                          <span class="flex items-center">
-                            <MapPin class="mr-1 h-4 w-4" />
+                          <span class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
+                            <MapPin class="h-4 w-4 shrink-0" />
                             {{ postcode || 'Area not set' }}
                           </span>
-                          <span class="flex items-center">
-                            <Star class="mr-1 h-4 w-4 fill-yellow-400 text-yellow-400" />
-                            {{ instructor?.rating }} ({{ instructor?.reviews }} reviews)
+                          <span class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
+                            <Star class="h-4 w-4 shrink-0 fill-yellow-400 text-yellow-400" />
+                            {{ ratingLabel }}
                           </span>
                         </div>
                       </div>
@@ -62,8 +62,8 @@
 
                 <!-- Package Summary -->
                 <Card>
-                  <CardHeader>
-                    <div class="flex items-center justify-between">
+                  <CardHeader class="px-4 sm:px-6">
+                    <div class="flex items-center justify-between gap-2">
                       <CardTitle>Package Details</CardTitle>
                       <Link :href="step3({ uuid: uuid }).url">
                         <Button variant="link" size="sm">
@@ -72,15 +72,15 @@
                       </Link>
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <div class="flex items-center justify-between">
-                      <div>
+                  <CardContent class="px-4 sm:px-6">
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="min-w-0">
                         <h4 class="font-semibold">{{ package?.name || 'No package selected' }}</h4>
-                        <p class="text-sm text-muted-foreground">{{ package?.lessons_count || '0' }} lessons</p>
+                        <p class="text-sm text-muted-foreground">{{ lessonLabel(package?.lessons_count) }}</p>
                       </div>
-                      <div class="text-right">
-                        <div class="text-xl font-bold">{{ package?.formatted_total_price || '0' }}</div>
-                        <div class="text-sm text-muted-foreground">{{ package?.formatted_lesson_price || '0' }}/lesson</div>
+                      <div class="shrink-0 text-right">
+                        <div class="text-xl font-bold">{{ upfrontTotal }}</div>
+                        <div class="text-sm text-muted-foreground">incl. booking &amp; digital fees</div>
                       </div>
                     </div>
                   </CardContent>
@@ -88,8 +88,8 @@
 
                 <!-- Schedule Summary -->
                 <Card>
-                  <CardHeader>
-                    <div class="flex items-center justify-between">
+                  <CardHeader class="px-4 sm:px-6">
+                    <div class="flex items-center justify-between gap-2">
                       <CardTitle>Start Date & Time</CardTitle>
                       <Link :href="step4({ uuid: uuid }).url">
                         <Button variant="link" size="sm">
@@ -98,12 +98,12 @@
                       </Link>
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <div class="flex items-center space-x-4">
-                      <div class="w-12 h-12 bg-primary text-primary-foreground rounded-lg flex items-center justify-center font-semibold">
+                  <CardContent class="px-4 sm:px-6">
+                    <div class="flex items-center gap-4">
+                      <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary font-semibold text-primary-foreground">
                         {{ selectedDay }}
                       </div>
-                      <div>
+                      <div class="min-w-0">
                         <h4 class="font-semibold">{{ formatDate(schedule?.date) }}</h4>
                         <p class="text-sm text-muted-foreground">{{ formatTimeSlot(schedule?.start_time, schedule?.end_time) }}</p>
                       </div>
@@ -113,8 +113,8 @@
 
                 <!-- Contact Details -->
                 <Card>
-                  <CardHeader>
-                    <div class="flex items-center justify-between">
+                  <CardHeader class="px-4 sm:px-6">
+                    <div class="flex items-center justify-between gap-2">
                       <CardTitle>Contact Details</CardTitle>
                       <Link :href="step1({ uuid: uuid }).url">
                         <Button variant="link" size="sm">
@@ -123,7 +123,7 @@
                       </Link>
                     </div>
                   </CardHeader>
-                  <CardContent class="space-y-6">
+                  <CardContent class="space-y-6 px-4 sm:px-6">
                     <div class="grid grid-cols-2 gap-4">
                       <div>
                         <p class="text-sm text-muted-foreground mb-1">Name</p>
@@ -253,52 +253,56 @@
                   <AlertTitle class="text-lg">Pricing Summary</AlertTitle>
                   <AlertDescription>
                     <div class="space-y-3 mt-4 w-full">
-                      <div class="flex items-center justify-between">
-                        <span>{{ package?.name }} ({{ package?.lessons_count }} lessons)</span>
-                        <span class="font-medium">{{ package?.formatted_total_price || '0.00' }}</span>
+                      <div class="flex items-start justify-between gap-3">
+                        <span class="min-w-0">{{ package?.name }} ({{ lessonLabel(package?.lessons_count) }})</span>
+                        <span class="shrink-0 font-medium">£{{ pricing?.package_price ?? '0.00' }}</span>
                       </div>
-                      <div class="flex items-center justify-between">
-                        <span>Booking fee</span>
-                        <span class="font-medium">£{{ pricing?.booking_fee ?? '0.00' }}</span>
+                      <div class="flex items-start justify-between gap-3">
+                        <span class="min-w-0">Booking fee</span>
+                        <span class="shrink-0 font-medium">£{{ pricing?.booking_fee ?? '0.00' }}</span>
                       </div>
-                      <div class="flex items-center justify-between">
-                        <span>Digital Fee</span>
-                        <span class="font-medium">{{ package?.digital_fee ?? '£0.00' }}</span>
+                      <div class="flex items-start justify-between gap-3">
+                        <span class="min-w-0">Digital fee ({{ lessonLabel(package?.lessons_count) }})</span>
+                        <span class="shrink-0 font-medium">£{{ pricing?.digital_fee ?? '0.00' }}</span>
                       </div>
-                      <div v-if="promoDiscount" class="flex items-center justify-between text-green-600">
-                        <span>Promo discount</span>
-                        <span class="font-medium">-£{{ promoDiscount }}.00</span>
+                      <div v-if="promoDiscount" class="flex items-start justify-between gap-3 text-green-600">
+                        <span class="min-w-0">Promo discount</span>
+                        <span class="shrink-0 font-medium">-£{{ promoDiscount }}.00</span>
                       </div>
-                      <div v-if="pricing?.uuid_discount" class="flex items-center justify-between text-green-600">
-                        <span>Discount ({{ pricing?.uuid_discount_percentage }}% off — {{ pricing?.uuid_discount_label }})</span>
-                        <span class="font-medium">-£{{ pricing?.uuid_discount }}</span>
+                      <div v-if="pricing?.uuid_discount" class="flex items-start justify-between gap-3 text-green-600">
+                        <span class="min-w-0">Discount ({{ pricing?.uuid_discount_percentage }}% off — {{ pricing?.uuid_discount_label }})</span>
+                        <span class="shrink-0 font-medium">-£{{ pricing?.uuid_discount }}</span>
                       </div>
-                      <div v-if="testPassGuarantee?.free_when_paid_in_full" class="flex items-center justify-between">
-                        <span>Pass Your Test Guarantee</span>
-                        <span class="font-medium">Free if paid in full</span>
+                      <div v-if="testPassGuarantee?.free_when_paid_in_full" class="flex items-start justify-between gap-3">
+                        <span class="min-w-0">Pass Your Test Guarantee</span>
+                        <span class="shrink-0 font-medium">Free if paid in full</span>
                       </div>
                       <Separator />
-                      <div class="flex items-center justify-between">
-                        <span class="text-lg font-semibold">Total</span>
-                        <span class="text-xl font-bold">{{ upfrontTotal }}</span>
+                      <div class="flex items-start justify-between gap-3">
+                        <span class="min-w-0 text-lg font-semibold">Total</span>
+                        <span class="shrink-0 text-xl font-bold">{{ upfrontTotal }}</span>
                       </div>
                       <div class="text-sm text-muted-foreground">
-                        Or pay <span class="font-semibold">{{ package?.weekly_payment || '0.00' }} weekly</span>
+                        Or pay <span class="font-semibold">£{{ pricing?.weekly_payment ?? '0.00' }} weekly</span>
                       </div>
                     </div>
                   </AlertDescription>
                 </Alert>
 
                 <!-- Form Actions -->
-                <div class="flex items-center justify-between pt-6 border-t">
-                  <Link :href="step4({ uuid: uuid }).url">
-                    <Button variant="outline" class="cursor-pointer">
+                <div class="flex w-full min-w-0 flex-col gap-3 border-t pt-6 sm:flex-row sm:items-center sm:justify-between">
+                  <Link :href="step4({ uuid: uuid }).url" class="w-full sm:w-auto">
+                    <Button variant="outline" class="w-full cursor-pointer sm:w-auto">
                       <ArrowLeft class="mr-2 h-4 w-4" />
                       Back
                     </Button>
                   </Link>
 
-                  <Button type="submit" :disabled="form.processing" class="cursor-pointer">
+                  <Button
+                    type="submit"
+                    :disabled="form.processing"
+                    class="h-auto w-full max-w-full cursor-pointer whitespace-normal px-4 py-2 text-center sm:h-9 sm:w-auto sm:whitespace-nowrap"
+                  >
                     <Spinner v-if="form.processing" class="mr-2 h-4 w-4 animate-spin" />
                     Confirm & Continue to Payment
                     <ArrowRight v-if="!form.processing" class="ml-2 h-4 w-4" />
@@ -411,6 +415,58 @@ const upfrontTotal = computed(() => {
 })
 
 const uuid = computed(() => props.uuid || page.props.enquiry?.id)
+
+const transmissionLabel = computed(() => {
+  const type = props.instructor?.transmission_type || props.instructor?.transmission
+
+  if (type === 'automatic') {
+    return 'Automatic'
+  }
+
+  if (type === 'both') {
+    return 'Manual & Auto'
+  }
+
+  return 'Manual'
+})
+
+const ratingLabel = computed(() => {
+  const instructor = props.instructor
+
+  if (!instructor) {
+    return 'No reviews'
+  }
+
+  const rating = instructor.rating
+  const hasRating = rating !== null && rating !== undefined && rating !== ''
+  const reviews = instructor.reviews
+  const reviewCount = Number(reviews)
+  const hasReviews = reviews !== null && reviews !== undefined && reviews !== '' && !Number.isNaN(reviewCount)
+  const reviewText = hasReviews
+    ? `${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}`
+    : null
+
+  if (hasRating && reviewText) {
+    return `${rating} (${reviewText})`
+  }
+
+  if (hasRating) {
+    return String(rating)
+  }
+
+  if (reviewText) {
+    return reviewText
+  }
+
+  return 'No reviews'
+})
+
+function lessonLabel(count) {
+  const lessons = Number(count ?? 0)
+  const safeCount = Number.isFinite(lessons) ? lessons : 0
+
+  return `${safeCount} ${safeCount === 1 ? 'lesson' : 'lessons'}`
+}
 
 function getInitials(name) {
   if (!name) return ''

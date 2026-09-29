@@ -1232,6 +1232,13 @@ Returns the authenticated instructor's lessons for a specific date, ordered by s
       "completed_at": null,
       "summary": null,
       "amount_pence": 3500,
+      "payment_breakdown": {
+        "total_pence": 4099,
+        "lesson_pence": 3500,
+        "booking_fee_pence": 200,
+        "digital_fee_pence": 399,
+        "test_pass_guarantee_pence": 0
+      },
       "student": {
         "id": 1,
         "first_name": "Jane",
@@ -1273,7 +1280,8 @@ Returns the authenticated instructor's lessons for a specific date, ordered by s
 | `status` | string | Lesson status: `pending`, `completed`, or `cancelled` |
 | `completed_at` | string\|null | ISO 8601 timestamp when lesson was completed |
 | `summary` | string\|null | Instructor lesson summary/notes |
-| `amount_pence` | integer\|null | Lesson cost in pence (e.g., 3500 = £35.00) |
+| `amount_pence` | integer\|null | Lesson price in pence, **before fees** (e.g., 3500 = £35.00). This is not what the pupil paid — use `payment_breakdown` for that |
+| `payment_breakdown` | object | What the pupil pays for this lesson, itemised. See **Payment Breakdown Object** under `GET /students/{student}/lessons` |
 | `student` | object\|null | Student details (see Student Object below) |
 | `package_name` | string\|null | Name of the package the lesson is part of |
 | `payment_status` | string\|null | Payment status: `paid`, `due`, `refunded`, or null |
@@ -1477,10 +1485,10 @@ Returns all active packages for the authenticated instructor.
       "lesson_price_pence": 3500,
       "formatted_total_price": "£350.00",
       "formatted_lesson_price": "£35.00",
-      "booking_fee": "10.00",
-      "digital_fee": "5.00",
-      "total_price": "350.00",
-      "weekly_payment": "35.00",
+      "booking_fee": "£19.99",
+      "digital_fee": "£39.90",
+      "total_price": "£409.89",
+      "weekly_payment": "£40.99",
       "active": true,
       "is_one_off": false,
       "has_stripe_price": true
@@ -1496,20 +1504,22 @@ Returns all active packages for the authenticated instructor.
 | `id` | integer | Package record ID |
 | `name` | string | Package name |
 | `description` | string\|null | Package description |
-| `total_price_pence` | integer | Total price in pence (e.g., 35000 = £350.00) |
+| `total_price_pence` | integer | Base package price in pence, **before fees** (e.g., 35000 = £350.00) |
 | `lessons_count` | integer | Number of lessons in the package |
-| `lesson_price_pence` | integer | Price per lesson in pence |
-| `formatted_total_price` | string | Human-readable total price (e.g., "£350.00") |
-| `formatted_lesson_price` | string | Human-readable per-lesson price (e.g., "£35.00") |
-| `booking_fee` | string | Booking fee amount as decimal string |
-| `digital_fee` | string | Digital fee amount as decimal string |
-| `total_price` | string | Total price as decimal string |
-| `weekly_payment` | string | Weekly payment amount as decimal string |
+| `lesson_price_pence` | integer | Base price per lesson in pence, before fees |
+| `formatted_total_price` | string | Base package price, **before fees** (e.g., "£350.00") — instructor-facing only |
+| `formatted_lesson_price` | string | Base per-lesson price, before fees (e.g., "£35.00") |
+| `booking_fee` | string | One-off booking fee per order, formatted (e.g., "£19.99") |
+| `digital_fee` | string | Digital fee for the whole package (£3.99 × lessons), formatted (e.g., "£39.90") |
+| `total_price` | string | **What the pupil pays**: package + booking fee + digital fee, formatted (e.g., "£409.89") |
+| `weekly_payment` | string | Per-lesson amount when paying weekly, fees included (`total_price ÷ lessons_count`), formatted |
 | `active` | boolean | Whether the package is active |
 | `is_one_off` | boolean | `true` for reusable short-notice "One-Off Package" rows created from Offer Slot |
 | `has_stripe_price` | boolean | Whether a Stripe price is configured for this package |
 
 > **Note:** Only active packages are returned. Packages without a Stripe price (`has_stripe_price: false`) cannot be used for upfront payments.
+
+> **Pricing shown to pupils:** Any screen a pupil (or an instructor booking on a pupil's behalf) uses to choose a package must show `total_price` / `weekly_payment` and itemise `booking_fee` + `digital_fee` — never `formatted_total_price` alone, which excludes the fees the pupil is charged. Use `GET /api/v1/packages/{package}/pricing` for raw numeric values.
 
 ---
 
@@ -1550,10 +1560,10 @@ Creates a new bespoke package for the authenticated instructor. The instructor m
     "lesson_price_pence": 3500,
     "formatted_total_price": "£175.00",
     "formatted_lesson_price": "£35.00",
-    "booking_fee": "10.00",
-    "digital_fee": "5.00",
-    "total_price": "175.00",
-    "weekly_payment": "35.00",
+    "booking_fee": "£19.99",
+    "digital_fee": "£19.95",
+    "total_price": "£214.94",
+    "weekly_payment": "£42.99",
     "active": true,
     "has_stripe_price": true
   }
@@ -1624,10 +1634,10 @@ Updates an existing package owned by the authenticated instructor. Returns `403`
     "lesson_price_pence": 3200,
     "formatted_total_price": "£160.00",
     "formatted_lesson_price": "£32.00",
-    "booking_fee": "10.00",
-    "digital_fee": "5.00",
-    "total_price": "160.00",
-    "weekly_payment": "32.00",
+    "booking_fee": "£19.99",
+    "digital_fee": "£19.95",
+    "total_price": "£199.94",
+    "weekly_payment": "£39.99",
     "active": true,
     "has_stripe_price": true
   }
@@ -2404,7 +2414,8 @@ Returns the authenticated instructor's calendar items for a specific date, **or*
 | `order_id` | integer\|null | The order the lesson belongs to |
 | `student_name` | string\|null | Full name of the student the slot is for |
 | `is_paid` | boolean\|null | `true` when the lesson is paid (weekly per-lesson payment settled, or a confirmed upfront order). **A `draft` is upfront-but-awaiting-payment, so it returns `false`.** Use this to show a paid/refund hint on cancel. |
-| `amount_pence` | integer\|null | Lesson cost in pence |
+| `amount_pence` | integer\|null | Lesson price in pence, **before fees** (e.g., 3500 = £35.00). This is not what the pupil paid — use `payment_breakdown` for that |
+| `payment_breakdown` | object\|null | What the pupil pays for the lesson, itemised (see **Payment Breakdown Object** under `GET /students/{student}/lessons`). `null` for availability slots |
 | `mileage` | integer\|null | Recorded mileage (completed lessons) |
 | `future_siblings_count` | integer | Number of future un-signed-off lessons in the same booking. When `> 0`, prompt "just this one / this and all future lessons" before a move (`apply_to_future_in_order` on PUT) or a cancel (`scope=future` on DELETE). |
 | `has_open_offer` | boolean | `true` when this empty availability slot has an active short-notice offer (`GET /student/slot-offers`). `false` for booked items and slots with no offer. |
@@ -2973,7 +2984,7 @@ These endpoints expose the authenticated student's **attached instructor's** pac
 
 **Auth required:** Yes (Bearer token — student only)
 
-Returns the active packages belonging to the authenticated student's attached instructor. Response shape matches `GET /api/v1/instructor/packages`.
+Returns the active packages belonging to the authenticated student's attached instructor. Response shape matches `GET /api/v1/instructor/packages` exactly (same resource) — see the field table there. `total_price_pence` / `formatted_total_price` are the base price **before fees**. Show the pupil `total_price` (fee-inclusive) with `booking_fee` and `digital_fee` itemised, and `weekly_payment` for weekly.
 
 **Example:** `GET /api/v1/student/packages`
 
@@ -2984,11 +2995,19 @@ Returns the active packages belonging to the authenticated student's attached in
     {
       "id": 1,
       "name": "10 Hour Package",
+      "description": null,
+      "total_price_pence": 35000,
       "lessons_count": 10,
-      "price_pence": 35000,
       "lesson_price_pence": 3500,
-      "payment_mode": "upfront",
-      "active": true
+      "formatted_total_price": "£350.00",
+      "formatted_lesson_price": "£35.00",
+      "booking_fee": "£19.99",
+      "digital_fee": "£39.90",
+      "total_price": "£409.89",
+      "weekly_payment": "£40.99",
+      "active": true,
+      "is_one_off": false,
+      "has_stripe_price": true
     }
   ]
 }
@@ -4153,7 +4172,15 @@ Returns lessons for a given student across all their orders. Supports optional f
       "card_status": "current",
       "has_reflective_log": false,
       "resources_count": 0,
-      "payment_status": "paid"
+      "payment_status": "paid",
+      "payment_mode": "weekly",
+      "payment_breakdown": {
+        "total_pence": 4099,
+        "lesson_pence": 3500,
+        "booking_fee_pence": 200,
+        "digital_fee_pence": 399,
+        "test_pass_guarantee_pence": 0
+      }
     },
     {
       "id": 2,
@@ -4170,7 +4197,15 @@ Returns lessons for a given student across all their orders. Supports optional f
       "card_status": "signed_off",
       "has_reflective_log": true,
       "resources_count": 2,
-      "payment_status": "paid"
+      "payment_status": "paid",
+      "payment_mode": "weekly",
+      "payment_breakdown": {
+        "total_pence": 4099,
+        "lesson_pence": 3500,
+        "booking_fee_pence": 200,
+        "digital_fee_pence": 399,
+        "test_pass_guarantee_pence": 0
+      }
     }
   ]
 }
@@ -4195,6 +4230,22 @@ Returns lessons for a given student across all their orders. Supports optional f
 | `has_reflective_log` | boolean | Leftover four-prompt log present and complete. **Do not** gate sign-off on this — use `status` / `card_status` / `summary` |
 | `resources_count` | integer | Number of resources attached to this lesson |
 | `payment_status` | string\|null | Payment status: `paid`, `due`, `refunded`, or null |
+| `payment_mode` | string\|null | `upfront`, `weekly` or `imported` |
+| `payment_breakdown` | object | What the pupil pays for this lesson, itemised (see below) |
+
+**Payment Breakdown Object** (`payment_breakdown`, also returned on lesson detail, instructor day lessons and instructor calendar items):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `total_pence` | integer | What the pupil pays for this lesson, **fees included**. Weekly: the lesson's instalment. Upfront: the lesson's equal share of the order total paid at checkout |
+| `lesson_pence` | integer | Lesson cost portion |
+| `booking_fee_pence` | integer | This lesson's share of the one-off booking fee |
+| `digital_fee_pence` | integer | This lesson's share of the digital fee |
+| `test_pass_guarantee_pence` | integer | Pass Your Test Guarantee charged with this lesson. Only the **first** lesson of a web-onboarding order that bought the guarantee carries it (weekly: added to the first instalment; upfront: attributed to the first lesson); `0` otherwise. Non-refundable |
+
+The parts always add up to `total_pence`. They are pro-rated from the order's stored totals, so they can differ from `amount_pence` by a penny or two. Upfront lessons paid before fees were split per lesson are recalculated from the order, so older and newer lessons are consistent. Imported and legacy orders with no stored total return the lesson price with zero fees.
+
+> **Rule — never hide a fee from the pupil.** Any pupil-facing screen that shows what a lesson, package or order costs must show the **full breakdown** (lesson/package cost, booking fee, digital fee, and the Pass Your Test Guarantee when included) alongside the fee-inclusive total. Never show a base price on its own. Use `payment_breakdown` for lessons, `total_price` + `booking_fee` + `digital_fee` for packages, and `package_total_price_pence` + `booking_fee_pence` + `digital_fee_pence` + `total_price_pence` for orders.
 
 **Card Status Logic:**
 
@@ -4236,6 +4287,13 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
     "instructor_name": "John Smith",
     "package_name": "10 Hour Package",
     "amount_pence": 3500,
+    "payment_breakdown": {
+      "total_pence": 4099,
+      "lesson_pence": 3500,
+      "booking_fee_pence": 200,
+      "digital_fee_pence": 399,
+      "test_pass_guarantee_pence": 0
+    },
     "date": "2026-03-18",
     "start_time": "14:00",
     "end_time": "15:00",
@@ -4286,7 +4344,8 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 | `instructor_id` | integer | The instructor's record ID |
 | `instructor_name` | string\|null | Instructor's full name |
 | `package_name` | string\|null | Name of the package the lesson is part of |
-| `amount_pence` | integer\|null | Lesson cost in pence (e.g., 3500 = £35.00) |
+| `amount_pence` | integer\|null | Lesson price in pence, **before fees** (e.g., 3500 = £35.00). This is not what the pupil paid — use `payment_breakdown` for that |
+| `payment_breakdown` | object | What the pupil pays for this lesson, itemised. See **Payment Breakdown Object** under `GET /students/{student}/lessons` |
 | `date` | string\|null | Lesson date (YYYY-MM-DD) |
 | `start_time` | string\|null | Start time (HH:MM) |
 | `end_time` | string\|null | End time (HH:MM) |
@@ -7492,8 +7551,10 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-09-18 | **Mobile lesson sign-off returns the completed lesson.** Same body as admin (`{ "summary": "..." }` only). The four-prompt reflective log is leftover and is not required — do not gate on `has_reflective_log`. The endpoint now runs the existing `LessonSignOffService` in-request (admin still queues the same job) and returns `{ "message": "Lesson signed off.", "data": <lesson> }` with `status: completed` / `card_status: signed_off`. Shared payout / onboarding / payment guards are unchanged. | Student Lessons (sign-off) |
 | 2026-09-23 | **Imported lessons (legacy data importer).** Lessons brought in from another system by the Data Import page sit on orders with the new `payment_mode: "imported"` (lesson list/show, instructor day lessons, orders). They are settled outside the platform: `payment_status` is `"paid"` and calendar items report `is_paid: true`, so the existing Sign Off button shows with no app change. `POST /students/{student}/lessons/{lesson}/sign-off` on an imported lesson skips the Stripe onboarding + payment guards and creates **no payout** (no transfer, no next-invoice, no student feedback email, no resource recommendations); the lesson and its calendar item still go to `completed` and the response is unchanged. Treat `"imported"` as a display-only payment mode — never offer it when booking (order create / slot-offer accept still accept only `upfront` / `weekly`). No new endpoints. | Student Lessons (index, show, sign-off), Instructor Day Lessons, Calendar Items (`is_paid`), Orders (`payment_mode`) |
 | 2026-09-24 | **Instructor diary weekly view — range queries.** `GET /instructor/calendar/items` now also accepts an inclusive `from` + `to` pair (max 31 days) instead of `date`; `date` still works unchanged and takes precedence. New `GET /instructor/lessons?from=&to=` returns the same lessons as the day route across a range. Both return the unchanged item/lesson objects ordered by `date` then `start_time`, omitting empty days. Replaces the app's 14-request week fan-out with 2. | Instructor Calendar (index), Instructor Lessons (new range) |
+| 2026-09-24 | **Booking + digital fees shown wherever pupils see prices.** No request/response shape changes. Docs fix: the instructor package examples previously showed `total_price` equal to the base price — it has always been the fee-inclusive `£` string (package + booking fee + digital fee), and `booking_fee` / `digital_fee` / `weekly_payment` are `£`-formatted strings. Package pickers in the app must show `total_price` and itemise the fees (see note under `GET /instructor/packages`). The Stripe Checkout page opened from `checkout_url` (`POST /students/{student}/orders`, upfront) now itemises the package, booking fee and digital fee as separate line items (same total). Payment-link, weekly booking-confirmation, payment-due-soon and payment-confirmed emails now include the fee breakdown. Short-notice offer acceptance (`POST /student/slot-offers/{slotOffer}/accept`, upfront) uses the same itemised checkout. Weekly Stripe hosted invoices already itemise lesson cost, booking fee and digital fee. The upfront order confirmation email itemises lessons, booking fee and digital fee; the re-sent payment link uses the same template as the payment-link email. Internal only (not exposed by the API): upfront `lesson_payments` rows now store each lesson's fee-inclusive share. Lesson `amount_pence` in API responses is unchanged (lesson price before fees). | Instructor Packages (docs), Orders (store — checkout page), Slot Offers (accept — checkout page) |
 | 2026-09-28 | **Pay at booking — nothing confirmed until the first payment.** Weekly orders are no longer activated at booking: both modes create a `pending` order with `draft` lessons/slots and take the first payment (full amount, or first week + guarantee) through Stripe Checkout. **Breaking for the app:** student-initiated `weekly` bookings (orders store and slot-offer accept) now return `checkout_url` and must open it exactly like upfront; the old "Order created and activated" message is gone. Unpaid bookings are held for 10 minutes (student), until 48 hours before the first lesson (instructor, min. 15 minutes) or until UK midnight (bookings team, min. 15 minutes), then released by `orders:release-expired-holds` (lessons deleted, slots freed, order `cancelled`). Orders expose the new `payment_hold_expires_at`. Emailed payment links now point to a signed `/orders/{order}/payment-link/pay` page. Resend works for weekly orders too and never extends the hold. Later weekly invoices are due 48 hours before each lesson (was 24). | Orders (store, resend-payment-link, order object), Student Slot Offers (accept) |
 | 2026-09-28 | **Shorter learner hold.** Student-initiated bookings (orders store, slot-offer accept) are now held for **10 minutes** (was 15). The 15-minute minimum only applies to emailed-link holds. No request/response shape changes. (Web booking form: step 4 no longer holds the chosen time; the hold starts when the learner goes to payment.) | Orders (store), Student Slot Offers (accept) |
+| 2026-09-29 | **Per-lesson fee breakdown (additive).** New `payment_breakdown` object (`total_pence`, `lesson_pence`, `booking_fee_pence`, `digital_fee_pence`, `test_pass_guarantee_pence`) on `GET /students/{student}/lessons`, `GET /students/{student}/lessons/{lesson}`, `POST /students/{student}/lessons/{lesson}/sign-off`, `GET /instructor/lessons/{date}`, `GET /instructor/lessons?from=&to=` and `GET /instructor/calendar/items` (plus the other calendar item responses). The lesson list also gains `payment_mode`. `amount_pence` is unchanged and documented as the lesson price **before fees**. Docs fix: the `GET /student/packages` example now shows the real response (same as instructor packages, with fee fields). `test_pass_guarantee_pence` is the Pass Your Test Guarantee charged with that lesson — only ever the first lesson of an order, and `0` everywhere else. New rule: pupil-facing price displays must itemise every fee (see the **Payment Breakdown Object** note). | Student Lessons (index, show, sign-off), Instructor Day Lessons, Instructor Calendar Items, Student Packages (docs) |
 
 ---
 

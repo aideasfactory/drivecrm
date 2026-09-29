@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Onboarding\StepThreeRequest;
 use App\Models\Instructor;
 use App\Models\Package;
+use App\Services\PackageService;
 use App\Services\PriceUpliftService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -14,6 +15,7 @@ class StepThreeController extends Controller
 {
     public function __construct(
         protected PriceUpliftService $priceUpliftService,
+        protected PackageService $packageService,
     ) {}
 
     public function show(Request $request)
@@ -52,6 +54,7 @@ class StepThreeController extends Controller
         // carry a per-lesson uplift, applied in-memory so every price
         // accessor reflects the uplifted price.
         $uplift = $this->priceUpliftService->upliftForEnquiry($enquiry);
+        $discount = $enquiry->getDiscountData();
 
         // Only Drive packages (no instructor_id) are offered during onboarding —
         // instructor-owned packages must never appear here, even when an
@@ -62,8 +65,9 @@ class StepThreeController extends Controller
             ->sortByDesc('is_intro_offer')
             ->sortBy('hours_total')
             ->values()
-            ->map(function ($package) use ($uplift) {
+            ->map(function ($package) use ($uplift, $discount) {
                 $this->priceUpliftService->applyUpliftToPackage($package, $uplift);
+                $pricing = $this->packageService->calculateEnquiryPricing($package, $discount);
 
                 return [
                     'id' => $package->id,
@@ -72,14 +76,16 @@ class StepThreeController extends Controller
                     'promoted' => $package->promoted,
                     'formatted_total_price' => $package->formatted_total_price,
                     'formatted_lesson_price' => $package->formatted_lesson_price,
+                    'booking_fee' => $package->booking_fee,
+                    'digital_fee' => $package->digital_fee,
+                    'total_price' => $package->total_price,
+                    'total_with_fees' => '£'.number_format($pricing['total'], 2),
+                    'weekly_payment' => '£'.number_format($pricing['weekly_payment'], 2),
                     'lessons_count' => $package->lessons_count,
                     'isIntroOffer' => $package->is_intro_offer,
                     'pricePerHour' => $package->less_price_pence,
                 ];
             });
-
-        // Get discount data if present
-        $discount = $enquiry->getDiscountData();
 
         return Inertia::render('Onboarding/Step3', [
             'uuid' => $enquiry->id,

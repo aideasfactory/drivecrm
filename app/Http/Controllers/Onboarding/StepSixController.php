@@ -20,10 +20,10 @@ use App\Models\Order;
 use App\Models\Package;
 use App\Models\Student;
 use App\Services\OrderService;
+use App\Services\PackageService;
 use App\Services\PriceUpliftService;
 use App\Services\StripeService;
 use App\Support\BookingPayments;
-use App\Support\Fees;
 use App\Support\TestPassGuarantee;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -43,6 +43,7 @@ class StepSixController extends Controller
         protected SendOrderConfirmationEmailAction $sendEmailAction,
         protected OrderService $orderService,
         protected PriceUpliftService $priceUpliftService,
+        protected PackageService $packageService,
         protected GrantTestPassGuaranteeAction $grantTestPassGuarantee,
     ) {}
 
@@ -85,16 +86,15 @@ class StepSixController extends Controller
             $this->priceUpliftService->upliftForEnquiry($enquiry),
         );
 
-        // Calculate pricing (in pounds for display)
-        $lessonPrice = $package->weekly_payment;
-
-        // Get discount data
         $discount = $enquiry->getDiscountData();
+        $pricing = $this->packageService->calculateEnquiryPricing($package, $discount);
+
+        $packagePrice = '£'.number_format($pricing['total'], 2);
+        $lessonPrice = '£'.number_format($pricing['weekly_payment'], 2);
 
         $testPassGuarantee = TestPassGuarantee::bookingFormData($enquiry, $package);
-        $packageTotalWithFeesPence = (int) $package->total_price_pence
-            + Fees::bookingFeePence()
-            + Fees::digitalFeeTotalPence((int) $package->lessons_count);
+        // Fee-inclusive, discount-aware total before any guarantee add-on
+        $packageTotalWithFeesPence = (int) $pricing['total_pence'];
         $weeklyPaymentPence = $package->lessons_count > 0
             ? (int) round($packageTotalWithFeesPence / $package->lessons_count)
             : 0;
@@ -121,8 +121,8 @@ class StepSixController extends Controller
                 'formatted_lesson_price' => $package->formatted_lesson_price,
                 'booking_fee' => $package->booking_fee,
                 'digital_fee' => $package->digital_fee,
-                'total_price' => $package->total_price,
-                'weekly_payment' => $package->weekly_payment,
+                'total_price' => $packagePrice,
+                'weekly_payment' => $lessonPrice,
                 'lesson_price' => $lessonPrice,
             ],
 
@@ -147,6 +147,12 @@ class StepSixController extends Controller
                     'per_lesson' => $lessonPrice,
                     'first_payment' => $this->formatPence($weeklyPaymentPence),
                     'total_over_time' => $this->formatPence($packageTotalWithFeesPence),
+                ],
+                'breakdown' => [
+                    'lessons' => '£'.number_format($pricing['package_price'], 2),
+                    'booking_fee' => '£'.number_format($pricing['booking_fee'], 2),
+                    'digital_fee' => '£'.number_format($pricing['digital_fee_total'], 2),
+                    'discount' => $pricing['promo_discount'] > 0 ? '-£'.number_format($pricing['promo_discount'], 2) : null,
                 ],
             ],
 

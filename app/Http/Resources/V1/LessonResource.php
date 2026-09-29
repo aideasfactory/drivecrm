@@ -34,6 +34,8 @@ class LessonResource extends JsonResource
             'has_reflective_log' => $this['has_reflective_log'],
             'resources_count' => $this['resources_count'],
             'payment_status' => $this['payment_status'],
+            'payment_mode' => $this['payment_mode'],
+            'payment_breakdown' => $this['payment_breakdown'],
         ];
     }
 }

@@ -80,6 +80,7 @@ const selectedFile = ref<File | null>(null)
 const checking = ref(false)
 const importing = ref(false)
 const checkResult = ref<CheckResult | null>(null)
+const checkError = ref<string | null>(null)
 const importTotals = ref<Record<string, number> | null>(null)
 const confirmOpen = ref(false)
 
@@ -91,68 +92,176 @@ const handleFileSelect = (event: Event) => {
     const target = event.target as HTMLInputElement
     selectedFile.value = target.files?.[0] ?? null
     checkResult.value = null
+    checkError.value = null
     importTotals.value = null
 }
 
-const buildFormData = (): FormData => {
+const chosenFile = (): File | null => selectedFile.value ?? fileInput.value?.files?.[0] ?? null
+
+const buildFormData = (file: File): FormData => {
     const formData = new FormData()
-    formData.append('file', selectedFile.value as File)
+    formData.append('file', file)
     return formData
 }
 
-const errorMessage = (error: any, fallback: string): string => {
-    const errors = error.response?.data?.errors
-    if (errors && !Array.isArray(errors)) {
-        return (Object.values(errors).flat()[0] as string) ?? fallback
+const errorMessage = (error: unknown, fallback: string): string => {
+    const response = (error as { response?: { status?: number; data?: unknown } }).response
+    const data = response?.data
+
+    if (response?.status === 419) {
+        return 'The page session expired. Refresh the page and try the check again.'
     }
-    return error.response?.data?.message ?? fallback
+
+    if (data && typeof data === 'object') {
+        const body = data as { message?: unknown; errors?: unknown }
+        const errors = body.errors
+
+        if (errors && !Array.isArray(errors) && typeof errors === 'object') {
+            const first = Object.values(errors as Record<string, unknown>).flat()[0]
+            if (typeof first === 'string' && first !== '') {
+                return first
+            }
+        }
+
+        if (typeof body.message === 'string' && body.message !== '') {
+            return body.message
+        }
+    }
+
+    return fallback
+}
+
+const asCheckResult = (data: unknown): CheckResult | null => {
+    if (!data || typeof data !== 'object') {
+        return null
+    }
+
+    const body = data as { valid?: unknown; row_counts?: unknown; errors?: unknown }
+
+    if (typeof body.valid !== 'boolean') {
+        return null
+    }
+
+    return {
+        valid: body.valid,
+        row_counts:
+            body.row_counts && typeof body.row_counts === 'object'
+                ? (body.row_counts as Record<string, number>)
+                : {},
+        errors: Array.isArray(body.errors) ? (body.errors as BundleError[]) : [],
+    }
 }
 
 const handleCheck = async () => {
-    if (!selectedFile.value) return
+    const file = chosenFile()
 
+    if (!file) {
+        checkError.value = 'Please choose a zip file to upload.'
+        toast.error(checkError.value)
+        return
+    }
+
+    selectedFile.value = file
     checking.value = true
     checkResult.value = null
+    checkError.value = null
     importTotals.value = null
 
     try {
-        const response = await axios.post(check.url(), buildFormData())
-        checkResult.value = response.data
+        const response = await axios.post(check.url(), buildFormData(file), {
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            withXSRFToken: true,
+        })
 
-        if (response.data.valid) {
-            toast.success('File checked — ready to import.')
-        } else {
-            toast.error(`Found ${response.data.errors.length} problem(s). Nothing has been imported.`)
+        const result = asCheckResult(response.data)
+
+        if (!result) {
+            checkError.value = 'The check finished, but the response could not be read.'
+            toast.error(checkError.value)
+            return
         }
-    } catch (error: any) {
-        toast.error(errorMessage(error, 'Could not check the file.'))
+
+        checkResult.value = result
+
+        if (result.valid) {
+            toast.success('File checked — ready to import.')
+            return
+        }
+
+        const count = result.errors.length
+        const message =
+            count > 0
+                ? `Found ${count} problem(s). Nothing has been imported.`
+                : 'The file has problems. Nothing has been imported.'
+
+        if (count === 0) {
+            checkError.value = message
+        }
+
+        toast.error(message)
+    } catch (error: unknown) {
+        const message = errorMessage(error, 'Could not check the file.')
+        const responseData = (error as { response?: { data?: unknown } }).response?.data
+        const rowErrors = asCheckResult(
+            responseData && typeof responseData === 'object'
+                ? { valid: false, ...(responseData as object) }
+                : null,
+        )
+
+        checkError.value = message
+
+        if (rowErrors && rowErrors.errors.length > 0) {
+            checkResult.value = rowErrors
+        }
+
+        toast.error(message)
     } finally {
         checking.value = false
     }
 }
 
 const handleImport = async () => {
-    if (!selectedFile.value) return
+    const file = chosenFile()
+
+    if (!file) {
+        checkError.value = 'Please choose a zip file to upload.'
+        toast.error(checkError.value)
+        return
+    }
 
     importing.value = true
+    checkError.value = null
 
     try {
-        const response = await axios.post(store.url(), buildFormData())
+        const response = await axios.post(store.url(), buildFormData(file), {
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            withXSRFToken: true,
+        })
         importTotals.value = response.data.totals
         confirmOpen.value = false
         toast.success(response.data.message)
-    } catch (error: any) {
+    } catch (error: unknown) {
         confirmOpen.value = false
 
-        if (Array.isArray(error.response?.data?.errors)) {
+        const responseData = (error as { response?: { data?: { errors?: unknown; row_counts?: Record<string, number> } } }).response?.data
+
+        if (Array.isArray(responseData?.errors)) {
             checkResult.value = {
                 valid: false,
-                row_counts: error.response.data.row_counts ?? {},
-                errors: error.response.data.errors,
+                row_counts: responseData.row_counts ?? {},
+                errors: responseData.errors,
             }
         }
 
-        toast.error(errorMessage(error, 'The import failed. Nothing was imported.'))
+        const message = errorMessage(error, 'The import failed. Nothing was imported.')
+        checkError.value = message
+        toast.error(message)
     } finally {
         importing.value = false
     }
@@ -161,6 +270,7 @@ const handleImport = async () => {
 const resetUpload = () => {
     selectedFile.value = null
     checkResult.value = null
+    checkError.value = null
     importTotals.value = null
     if (fileInput.value) {
         fileInput.value.value = ''
@@ -234,7 +344,8 @@ const breadcrumbs = [{ title: 'Data Import' }]
 
                     <div class="flex flex-wrap gap-2">
                         <Button
-                            :disabled="!selectedFile || checking || importing"
+                            type="button"
+                            :disabled="checking || importing"
                             class="min-w-[140px]"
                             @click="handleCheck"
                         >
@@ -244,6 +355,7 @@ const breadcrumbs = [{ title: 'Data Import' }]
                         </Button>
                         <Button
                             v-if="checkResult?.valid"
+                            type="button"
                             :disabled="!canImport"
                             class="min-w-[140px]"
                             @click="confirmOpen = true"
@@ -252,6 +364,16 @@ const breadcrumbs = [{ title: 'Data Import' }]
                             Import
                         </Button>
                     </div>
+
+                    <p v-if="checking" class="text-sm text-muted-foreground" role="status">
+                        Checking the zip…
+                    </p>
+
+                    <Alert v-if="checkError" variant="destructive">
+                        <AlertCircle class="h-4 w-4" />
+                        <AlertTitle>This file was not accepted</AlertTitle>
+                        <AlertDescription>{{ checkError }}</AlertDescription>
+                    </Alert>
 
                     <!-- Row counts -->
                     <div v-if="checkResult" class="rounded-lg border">
@@ -377,11 +499,11 @@ const breadcrumbs = [{ title: 'Data Import' }]
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
-                    <Button variant="outline" :disabled="importing" @click="confirmOpen = false">
+                    <Button type="button" variant="outline" :disabled="importing" @click="confirmOpen = false">
                         <X class="mr-2 h-4 w-4" />
                         Cancel
                     </Button>
-                    <Button :disabled="importing" class="min-w-[140px]" @click="handleImport">
+                    <Button type="button" :disabled="importing" class="min-w-[140px]" @click="handleImport">
                         <Loader2 v-if="importing" class="mr-2 h-4 w-4 animate-spin" />
                         <Upload v-else class="mr-2 h-4 w-4" />
                         {{ importing ? 'Importing...' : 'Import' }}

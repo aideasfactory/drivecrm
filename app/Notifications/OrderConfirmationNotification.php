@@ -91,37 +91,26 @@ class OrderConfirmationNotification extends Notification implements ShouldQueue
         $order = $this->order;
 
         if ($order->isUpfront()) {
-            $lines = [
+            return implode("\n", [
                 '**Payment — paid in full:**',
-                "Lessons: {$order->formatted_package_total_price}",
-            ];
-
-            if ($order->booking_fee_pence > 0) {
-                $lines[] = "Booking fee: {$order->formatted_booking_fee}";
-            }
-
-            if ($order->digital_fee_pence > 0) {
-                $lines[] = "Digital fee: {$order->formatted_digital_fee}";
-            }
-
-            if ($order->includes_test_pass_guarantee) {
-                $lines[] = $order->test_pass_guarantee_pence > 0
-                    ? "Pass Your Test Guarantee: {$order->formatted_test_pass_guarantee}"
-                    : 'Pass Your Test Guarantee: Included free';
-            }
-
-            $lines[] = "**Total paid: {$order->formatted_amount_paid}**";
-
-            return implode("\n", $lines);
+                ...$order->costBreakdownLines(),
+                "**Total paid: {$order->formatted_amount_paid}**",
+            ]);
         }
 
-        $weeklyLine = 'Payment: Weekly (£'.number_format($order->package_lesson_price_pence / 100, 2).' per lesson)';
-
-        if ($order->includes_test_pass_guarantee && $order->test_pass_guarantee_pence > 0) {
-            $weeklyLine .= "\nPass Your Test Guarantee: {$order->formatted_test_pass_guarantee}, added to your first weekly payment";
+        if (! $order->hasFees()) {
+            return "Payment: Weekly ({$order->formatted_weekly_instalment} per lesson)";
         }
 
-        return $weeklyLine;
+        $hasPaidGuarantee = $order->includes_test_pass_guarantee && $order->test_pass_guarantee_pence > 0;
+
+        return implode("\n", array_filter([
+            '**Payment — weekly:**',
+            ...$order->costBreakdownLines(),
+            "**Total: {$order->formatted_amount_paid}**",
+            "Paid in {$order->package_lessons_count} weekly instalments of {$order->formatted_weekly_instalment}",
+            $hasPaidGuarantee ? '(Pass Your Test Guarantee added to your first weekly payment)' : null,
+        ]));
     }
 
     /**

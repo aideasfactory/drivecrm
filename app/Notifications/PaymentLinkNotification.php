@@ -42,8 +42,14 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
         $instructor = $order->instructor;
         $firstLesson = $order->lessons()->orderBy('date')->first();
         $firstWeeklyPayment = $order->isWeekly() ? $order->firstLessonPayment() : null;
-        $amountPence = $firstWeeklyPayment ? $firstWeeklyPayment->amount_pence : $order->total_price_pence;
-        $totalFormatted = '£'.number_format($amountPence / 100, 2);
+        $totalFormatted = $firstWeeklyPayment
+            ? '£'.number_format($firstWeeklyPayment->amount_pence / 100, 2)
+            : $order->formatted_amount_paid;
+        $costBreakdown = match (true) {
+            $firstWeeklyPayment !== null => implode("\n", $firstWeeklyPayment->costBreakdownLines()),
+            $order->hasFees() => implode("\n", $order->costBreakdownLines()),
+            default => '',
+        };
 
         $firstLessonLine = $firstLesson
             ? 'First lesson: '.Carbon::parse($firstLesson->date)->format('l, F j, Y')
@@ -64,6 +70,7 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
                 'lessons_count' => $order->package_lessons_count,
                 'instructor_name' => $instructor->user->name,
                 'amount_label' => $firstWeeklyPayment ? 'First week' : 'Total',
+                'cost_breakdown' => $costBreakdown,
                 'total' => $totalFormatted,
                 'first_lesson_line' => $firstLessonLine,
                 'pay_by_line' => $this->payByLine($firstWeeklyPayment !== null),

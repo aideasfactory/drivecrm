@@ -278,31 +278,12 @@ class StripeService
             ]);
 
             // Always use price_data when fees are included or a discount is applied,
-            // since the pre-created Stripe Price only reflects the base package price
-            if ($hasFeesOrDiscount) {
-                $priceData = [
-                    'currency' => 'gbp',
-                    'unit_amount' => $chargeAmountPence - $testPassGuaranteePence,
-                ];
-
-                if ($package->stripe_product_id) {
-                    $priceData['product'] = $package->stripe_product_id;
-                } else {
-                    $priceData['product_data'] = ['name' => $package->name];
-                }
-
-                $lineItem = [
-                    'price_data' => $priceData,
-                    'quantity' => 1,
-                ];
-            } else {
-                $lineItem = [
-                    'price' => $package->stripe_price_id,
-                    'quantity' => 1,
-                ];
-            }
-
-            $lineItems = [$lineItem];
+            // since the pre-created Stripe Price only reflects the base package price.
+            // The guarantee add-on gets its own line below, so the package and fee
+            // lines are built from the charge without it.
+            $lineItems = $hasFeesOrDiscount
+                ? $this->buildCheckoutLineItems($order, $package, $chargeAmountPence - $testPassGuaranteePence)
+                : [['price' => $package->stripe_price_id, 'quantity' => 1]];
 
             if ($testPassGuaranteePence > 0) {
                 $lineItems[] = [
@@ -529,6 +510,64 @@ class StripeService
 
             return ['released' => false, 'status' => null];
         }
+     * Build the Checkout line items for an order: the (possibly discounted or
+     * uplifted) package price, then the booking fee and digital fee as their
+     * own lines so the student sees the breakdown on the Stripe payment page
+     * and receipt. Falls back to a single line for the full charge when the
+     * stored components do not add up to it (e.g. legacy orders).
+     *
+     * @return list<array<string, mixed>>
+     */
+    protected function buildCheckoutLineItems(Order $order, Package $package, int $chargeAmountPence): array
+    {
+        $packagePence = (int) ($order->package_total_price_pence ?? 0);
+        $bookingFeePence = (int) ($order->booking_fee_pence ?? 0);
+        $digitalFeePence = (int) ($order->digital_fee_pence ?? 0);
+
+        $packageProduct = $package->stripe_product_id
+            ? ['product' => $package->stripe_product_id]
+            : ['product_data' => ['name' => $package->name]];
+
+        $isItemised = ($bookingFeePence > 0 || $digitalFeePence > 0)
+            && $packagePence > 0
+            && ($packagePence + $bookingFeePence + $digitalFeePence) === $chargeAmountPence;
+
+        if (! $isItemised) {
+            return [$this->checkoutLineItem($chargeAmountPence, $packageProduct)];
+        }
+
+        $lessonsCount = (int) ($order->package_lessons_count ?? $package->lessons_count);
+
+        $lineItems = [$this->checkoutLineItem($packagePence, $packageProduct)];
+
+        if ($bookingFeePence > 0) {
+            $lineItems[] = $this->checkoutLineItem($bookingFeePence, ['product_data' => ['name' => 'Booking fee']]);
+        }
+
+        if ($digitalFeePence > 0) {
+            $lineItems[] = $this->checkoutLineItem($digitalFeePence, ['product_data' => [
+                'name' => 'Digital fee',
+                'description' => "Digital services fee for {$lessonsCount} ".($lessonsCount === 1 ? 'lesson' : 'lessons'),
+            ]]);
+        }
+
+        return $lineItems;
+    }
+
+    /**
+     * @param  array<string, mixed>  $product  Either ['product' => id] or ['product_data' => [...]]
+     * @return array<string, mixed>
+     */
+    protected function checkoutLineItem(int $amountPence, array $product): array
+    {
+        return [
+            'price_data' => [
+                'currency' => 'gbp',
+                'unit_amount' => $amountPence,
+                ...$product,
+            ],
+            'quantity' => 1,
+        ];
     }
 
     /**

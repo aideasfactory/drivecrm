@@ -48,7 +48,7 @@ class GetStudentLessonsAction
                         'instructor.user:id,name',
                         'instructor:id,user_id,profile_picture_path',
                         'calendarItem.calendar:id,date',
-                        'lessonPayment:id,lesson_id,amount_pence,status,paid_at,stripe_invoice_id',
+                        'lessonPayment:id,lesson_id,amount_pence,test_pass_guarantee_pence,status,paid_at,stripe_invoice_id',
                         'payout:id,lesson_id,status,amount_pence,stripe_transfer_id,paid_at',
                         'reflectiveLog:id,lesson_id',
                         'resources:id,title,resource_type,video_url,file_path,file_name,file_size,mime_type,thumbnail_url',
@@ -59,6 +59,8 @@ class GetStudentLessonsAction
             ])
             ->get()
             ->flatMap(fn ($order) => $order->lessons->map(function ($lesson) use ($order) {
+                $lesson->setRelation('order', $order);
+
                 return [
                     'id' => $lesson->id,
                     'student_lesson_number' => $lesson->student_lesson_number,
@@ -68,6 +70,7 @@ class GetStudentLessonsAction
                     'instructor_avatar' => $lesson->instructor?->profile_picture_url,
                     'package_name' => $order->package_name ?? $order->package?->name,
                     'amount_pence' => $lesson->amount_pence,
+                    'payment_breakdown' => $lesson->paymentBreakdown(),
                     'date' => $lesson->date?->format('Y-m-d'),
                     'start_time' => $lesson->start_time?->format('H:i'),
                     'end_time' => $lesson->end_time?->format('H:i'),

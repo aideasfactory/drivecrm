@@ -95,6 +95,104 @@ class LessonPayment extends Model
     }
 
     /**
+     * The share of an order's fee-inclusive total attributable to the lesson at
+     * `$index` (in date order). Used for upfront orders so each paid lesson
+     * record reflects what the student actually paid, matching weekly orders:
+     * the lessons and fees are spread evenly and any paid Pass Your Test
+     * Guarantee sits on the first lesson. Legacy orders without a stored total
+     * fall back to the lesson price.
+     */
+    public static function orderShareForLesson(Order $order, Lesson $lesson, int $index, int $lessonsCount): int
+    {
+        if ($order->total_price_pence === null) {
+            return (int) $lesson->amount_pence;
+        }
+
+        $guaranteePence = self::guaranteeShareForLesson($order, $index);
+        $spreadTotalPence = (int) $order->total_price_pence - (int) ($order->test_pass_guarantee_pence ?? 0);
+
+        return self::weeklyAmountForIndex($spreadTotalPence, $lessonsCount, $index) + $guaranteePence;
+    }
+
+    /**
+     * The Pass Your Test Guarantee charge carried by the lesson at `$index`:
+     * the full charge on the first lesson, nothing on the rest.
+     */
+    public static function guaranteeShareForLesson(Order $order, int $index): int
+    {
+        if ($order->total_price_pence === null || $index !== 0) {
+            return 0;
+        }
+
+        return (int) ($order->test_pass_guarantee_pence ?? 0);
+    }
+
+    /**
+     * Markdown lines itemising this payment (lesson cost, booking fee share,
+     * digital fee share) for student-facing emails. Returns an empty array when
+     * the order carries no fees.
+     *
+     * @return list<string>
+     */
+    public function costBreakdownLines(): array
+    {
+        $order = $this->lesson?->order;
+
+        if (! $order) {
+            return [];
+        }
+
+        return self::breakdownLines(self::weeklyBreakdown($order, (int) $this->amount_pence, (int) $this->test_pass_guarantee_pence));
+    }
+
+    /**
+     * Format a payment breakdown as markdown lines, ending with a blank line so
+     * the amount line that follows in the template stays separated. Returns an
+     * empty array when there are no fee components.
+     *
+     * @param  array{lesson?: int, booking_fee?: int, digital_fee?: int, test_pass_guarantee?: int}  $breakdown
+     * @return list<string>
+     */
+    public static function breakdownLines(array $breakdown): array
+    {
+        $lesson = (int) ($breakdown['lesson'] ?? 0);
+        $bookingFee = (int) ($breakdown['booking_fee'] ?? 0);
+        $digitalFee = (int) ($breakdown['digital_fee'] ?? 0);
+        $testPassGuarantee = (int) ($breakdown['test_pass_guarantee'] ?? 0);
+
+        if ($bookingFee <= 0 && $digitalFee <= 0 && $testPassGuarantee <= 0) {
+            return [];
+        }
+
+        $lines = ['**Cost breakdown:**'];
+
+        if ($lesson > 0) {
+            $lines[] = 'Lesson cost: '.self::formatPence($lesson);
+        }
+
+        if ($bookingFee > 0) {
+            $lines[] = 'Booking fee (weekly instalment): '.self::formatPence($bookingFee);
+        }
+
+        if ($digitalFee > 0) {
+            $lines[] = 'Digital services fee (weekly instalment): '.self::formatPence($digitalFee);
+        }
+
+        if ($testPassGuarantee > 0) {
+            $lines[] = 'Pass Your Test Guarantee: '.self::formatPence($testPassGuarantee);
+        }
+
+        $lines[] = '';
+
+        return $lines;
+    }
+
+    protected static function formatPence(int $pence): string
+    {
+        return '£'.number_format($pence / 100, 2);
+    }
+
+    /**
      * Decompose a single weekly payment amount into its constituent cost
      * components — the lesson portion, the booking fee portion, and the
      * digital fee portion — based on the ratios stored on the order.
