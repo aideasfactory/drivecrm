@@ -27,6 +27,7 @@ class LessonDetailResource extends JsonResource
             'instructor_name' => $this->instructor?->user?->name,
             'package_name' => $this->order?->package_name ?? $this->order?->package?->name,
             'amount_pence' => $this->amount_pence,
+            'payment_breakdown' => $this->resource->paymentBreakdown(),
             'date' => $this->date?->format('Y-m-d'),
             'start_time' => $this->start_time?->format('H:i'),
             'end_time' => $this->end_time?->format('H:i'),

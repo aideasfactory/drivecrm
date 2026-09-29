@@ -47,6 +47,7 @@ class CalendarItemResource extends JsonResource
             'student_name' => $this->studentName(),
             'is_paid' => $this->isPaid($lesson),
             'amount_pence' => $lesson?->amount_pence,
+            'payment_breakdown' => $lesson?->paymentBreakdown(),
             'mileage' => $lesson?->mileage,
             'future_siblings_count' => $this->futureSiblingsCount($lesson),
             'has_open_offer' => $this->hasOpenOffer(),

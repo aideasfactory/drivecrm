@@ -129,6 +129,12 @@ class StepSixController extends Controller
                     'per_lesson' => $lessonPrice,
                     'total_over_time' => $packagePrice,
                 ],
+                'breakdown' => [
+                    'lessons' => '£'.number_format($pricing['package_price'], 2),
+                    'booking_fee' => '£'.number_format($pricing['booking_fee'], 2),
+                    'digital_fee' => '£'.number_format($pricing['digital_fee_total'], 2),
+                    'discount' => $pricing['promo_discount'] > 0 ? '-£'.number_format($pricing['promo_discount'], 2) : null,
+                ],
             ],
 
             // Discount code data

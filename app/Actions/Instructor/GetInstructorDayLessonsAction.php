@@ -29,6 +29,8 @@ class GetInstructorDayLessonsAction
                 'order' => fn ($query) => $query->select([
                     'id', 'student_id', 'instructor_id', 'package_id',
                     'package_name', 'package_lesson_price_pence', 'payment_mode', 'status',
+                    'package_lessons_count', 'package_total_price_pence', 'booking_fee_pence',
+                    'digital_fee_pence', 'total_price_pence',
                 ]),
                 'order.student:id,user_id,first_name,surname,email,phone,status',
                 'order.student.user:id,name,email',

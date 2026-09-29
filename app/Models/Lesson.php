@@ -157,4 +157,60 @@ class Lesson extends Model
     {
         return $this->payout !== null;
     }
+
+    /**
+     * What the student pays for this lesson, itemised into the lesson cost,
+     * booking fee share and digital fee share. The parts always sum to
+     * `total_pence`. Expects `order` and `lessonPayment` to be loaded.
+     *
+     * @return array{total_pence: int, lesson_pence: int, booking_fee_pence: int, digital_fee_pence: int}
+     */
+    public function paymentBreakdown(): array
+    {
+        $totalPence = $this->studentPaysPence();
+
+        if (! $this->order) {
+            return [
+                'total_pence' => $totalPence,
+                'lesson_pence' => $totalPence,
+                'booking_fee_pence' => 0,
+                'digital_fee_pence' => 0,
+            ];
+        }
+
+        $split = LessonPayment::weeklyBreakdown($this->order, $totalPence);
+
+        return [
+            'total_pence' => $totalPence,
+            'lesson_pence' => $split['lesson'],
+            'booking_fee_pence' => $split['booking_fee'],
+            'digital_fee_pence' => $split['digital_fee'],
+        ];
+    }
+
+    /**
+     * The fee-inclusive amount the student pays for this lesson. Weekly lessons
+     * use their instalment. Upfront lessons use their share of the order total,
+     * since upfront payment records created before fees were apportioned hold
+     * the lesson price alone. Orders without a stored total (legacy, imported)
+     * fall back to the lesson price.
+     */
+    protected function studentPaysPence(): int
+    {
+        $order = $this->order;
+        $payment = $this->lessonPayment;
+
+        if ($payment && ($order?->isUpfront() !== true || (int) $payment->amount_pence > (int) $this->amount_pence)) {
+            return (int) $payment->amount_pence;
+        }
+
+        $orderTotalPence = (int) ($order?->total_price_pence ?? 0);
+        $lessonsCount = (int) ($order?->package_lessons_count ?? 0);
+
+        if ($orderTotalPence <= 0 || $lessonsCount < 1) {
+            return (int) $this->amount_pence;
+        }
+
+        return LessonPayment::weeklyAmountForIndex($orderTotalPence, $lessonsCount, 0);
+    }
 }

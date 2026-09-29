@@ -33,10 +33,31 @@
                     <span class="font-medium">{{ formatTime(schedule?.start_time) }}</span>
                   </div>
                   <Separator class="my-3" />
+                  <template v-if="pricing?.breakdown">
+                    <div class="flex justify-between">
+                      <span class="text-muted-foreground">Lessons:</span>
+                      <span class="font-medium">{{ pricing.breakdown.lessons }}</span>
+                    </div>
+                    <div v-if="pricing.breakdown.discount" class="flex justify-between text-green-600">
+                      <span>Discount:</span>
+                      <span class="font-medium">{{ pricing.breakdown.discount }}</span>
+                    </div>
+                    <div v-if="pricing.breakdown.booking_fee !== '£0.00'" class="flex justify-between">
+                      <span class="text-muted-foreground">Booking fee:</span>
+                      <span class="font-medium">{{ pricing.breakdown.booking_fee }}</span>
+                    </div>
+                    <div v-if="pricing.breakdown.digital_fee !== '£0.00'" class="flex justify-between">
+                      <span class="text-muted-foreground">Digital fee ({{ package?.lessons_count || 0 }} lessons):</span>
+                      <span class="font-medium">{{ pricing.breakdown.digital_fee }}</span>
+                    </div>
+                  </template>
                   <div class="flex justify-between font-semibold">
                     <span>Total:</span>
                     <span>{{ pricing?.upfront?.total || '0.00' }}</span>
                   </div>
+                  <p class="text-xs text-muted-foreground">
+                    Or {{ pricing?.weekly?.per_lesson || '0.00' }} per lesson if paid weekly (incl. fees)
+                  </p>
                 </div>
               </div>
             </template>

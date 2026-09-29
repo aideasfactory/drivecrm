@@ -33,6 +33,7 @@ class InstructorDayLessonResource extends JsonResource
             'completed_at' => $this->completed_at?->toISOString(),
             'summary' => $this->summary,
             'amount_pence' => $this->amount_pence,
+            'payment_breakdown' => $this->resource->paymentBreakdown(),
             'student' => $student ? [
                 'id' => $student->id,
                 'first_name' => $student->first_name,

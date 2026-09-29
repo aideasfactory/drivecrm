@@ -59,6 +59,8 @@ class GetStudentLessonsAction
             ])
             ->get()
             ->flatMap(fn ($order) => $order->lessons->map(function ($lesson) use ($order) {
+                $lesson->setRelation('order', $order);
+
                 return [
                     'id' => $lesson->id,
                     'student_lesson_number' => $lesson->student_lesson_number,
@@ -68,6 +70,7 @@ class GetStudentLessonsAction
                     'instructor_avatar' => $lesson->instructor?->profile_picture_url,
                     'package_name' => $order->package_name ?? $order->package?->name,
                     'amount_pence' => $lesson->amount_pence,
+                    'payment_breakdown' => $lesson->paymentBreakdown(),
                     'date' => $lesson->date?->format('Y-m-d'),
                     'start_time' => $lesson->start_time?->format('H:i'),
                     'end_time' => $lesson->end_time?->format('H:i'),
