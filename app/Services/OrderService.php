@@ -275,6 +275,19 @@ class OrderService extends BaseService
      */
     public function resendPaymentLink(Order $order, Student $student): array
     {
+        return $this->sendPaymentLink($order, $student, 'payment_link_resend');
+    }
+
+    /**
+     * Email the Stripe Checkout payment link for an upfront order still awaiting
+     * payment, reusing the order's open checkout session when there is one.
+     *
+     * @return array{email: string}
+     *
+     * @throws ValidationException When the order is not awaiting upfront payment or no link can be sent.
+     */
+    public function sendPaymentLink(Order $order, Student $student, string $bookingSource, bool $isBookedByStaff = false): array
+    {
         $this->ensureOrderAwaitingUpfrontPayment($order);
 
         $package = $order->package;
@@ -286,7 +299,7 @@ class OrderService extends BaseService
         }
 
         $checkoutUrl = $this->resolveOpenCheckoutUrl($order)
-            ?? $this->createCheckoutSession($order, $package, $student, 'payment_link_resend');
+            ?? $this->createCheckoutSession($order, $package, $student, $bookingSource);
 
         if (! $checkoutUrl) {
             throw ValidationException::withMessages([
@@ -294,7 +307,7 @@ class OrderService extends BaseService
             ]);
         }
 
-        $recipientEmail = $this->sendPaymentLinkEmail->execute($order, $student, $checkoutUrl);
+        $recipientEmail = $this->sendPaymentLinkEmail->execute($order, $student, $checkoutUrl, $isBookedByStaff);
 
         if (! $recipientEmail) {
             throw ValidationException::withMessages([
@@ -302,7 +315,7 @@ class OrderService extends BaseService
             ]);
         }
 
-        if ($student->owns_account && $student->user?->expo_push_token) {
+        if (! $isBookedByStaff && $student->owns_account && $student->user?->expo_push_token) {
             $this->pushNotificationService->queueIfHasToken(
                 $student->user,
                 'Payment link re-sent',

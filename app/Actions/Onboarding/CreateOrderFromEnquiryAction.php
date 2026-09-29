@@ -22,6 +22,7 @@ use App\Models\Student;
 use App\Services\InstructorCalendarService;
 use App\Services\InstructorService;
 use App\Support\Fees;
+use App\Support\TestPassGuarantee;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -76,8 +77,10 @@ class CreateOrderFromEnquiryAction
                 $lessonPricePence = (int) floor($packagePricePence / $package->lessons_count);
             }
 
-            // Total includes base package price + fees
-            $totalPricePence = $packagePricePence + $bookingFeePence + $digitalFeePence;
+            $testPassGuarantee = TestPassGuarantee::resolveForEnquiry($enquiry, $package, $paymentMode);
+
+            // Total includes base package price + fees + any paid guarantee add-on
+            $totalPricePence = $packagePricePence + $bookingFeePence + $digitalFeePence + $testPassGuarantee['charge_pence'];
 
             // Create Order record with package snapshot (using discounted prices)
             $order = Order::create([
@@ -96,6 +99,8 @@ class CreateOrderFromEnquiryAction
                 'payment_mode' => $paymentMode,
                 'discount_code_id' => $discount['id'] ?? null,
                 'discount_percentage' => $discount['percentage'] ?? null,
+                'includes_test_pass_guarantee' => $testPassGuarantee['included'],
+                'test_pass_guarantee_pence' => $testPassGuarantee['charge_pence'],
             ]);
 
             Log::info('Created order from onboarding', [
@@ -104,6 +109,8 @@ class CreateOrderFromEnquiryAction
                 'package_id' => $package->id,
                 'payment_mode' => $paymentMode->value,
                 'enquiry_id' => $enquiry->id,
+                'includes_test_pass_guarantee' => $testPassGuarantee['included'],
+                'test_pass_guarantee_pence' => $testPassGuarantee['charge_pence'],
             ]);
 
             // Get first lesson date and time from Step 4
@@ -340,9 +347,15 @@ class CreateOrderFromEnquiryAction
     {
         $lessons = $order->lessons()->orderBy('date')->get();
         $lessonsCount = $lessons->count();
+        $testPassGuaranteePence = (int) $order->test_pass_guarantee_pence;
+        $spreadTotalPence = $order->total_price_pence - $testPassGuaranteePence;
 
         foreach ($lessons->values() as $index => $lesson) {
             $lessonDate = Carbon::parse($lesson->date);
+
+            // The guarantee add-on is charged in full on the first weekly
+            // payment, which is invoiced straight away at booking.
+            $guaranteeForPayment = $index === 0 ? $testPassGuaranteePence : 0;
 
             LessonPayment::create([
                 'lesson_id' => $lesson->id,
@@ -350,7 +363,8 @@ class CreateOrderFromEnquiryAction
                 // fees (the order total spread evenly), matching the per-week
                 // figure the student agreed to at checkout — not just the base
                 // lesson price.
-                'amount_pence' => LessonPayment::weeklyAmountForIndex($order->total_price_pence, $lessonsCount, $index),
+                'amount_pence' => LessonPayment::weeklyAmountForIndex($spreadTotalPence, $lessonsCount, $index) + $guaranteeForPayment,
+                'test_pass_guarantee_pence' => $guaranteeForPayment,
                 'status' => PaymentStatus::DUE,
                 'due_date' => $lessonDate->copy()->subHours(24), // Due 24h before lesson
             ]);

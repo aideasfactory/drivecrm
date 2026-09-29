@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\SendPushNotificationRequest;
 use App\Models\User;
 use App\Services\PushNotificationService;
+use App\Support\PushNotificationCatalog;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -27,6 +28,7 @@ class PushNotificationController extends Controller
 
         return Inertia::render('PushNotifications/Index', [
             'users' => $usersWithTokens,
+            'automatedNotifications' => PushNotificationCatalog::definitions(),
         ]);
     }
 

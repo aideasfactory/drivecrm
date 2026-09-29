@@ -19,7 +19,7 @@ class LessonPaymentReminderNotification extends Notification implements ShouldQu
     use RendersTemplatedMail;
 
     /**
-     * @param  array{lesson: int, booking_fee: int, digital_fee: int}|null  $breakdown
+     * @param  array{lesson: int, booking_fee: int, digital_fee: int, test_pass_guarantee?: int}|null  $breakdown
      */
     public function __construct(
         public LessonPayment $lessonPayment,

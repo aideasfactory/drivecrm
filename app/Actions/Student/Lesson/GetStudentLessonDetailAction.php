@@ -27,10 +27,10 @@ class GetStudentLessonDetailAction
             ->where('status', '!=', LessonStatus::CANCELLED)
             ->with([
                 'instructor.user:id,name',
-                'order:id,package_name,package_id,payment_mode,status,package_lessons_count,package_total_price_pence,booking_fee_pence,digital_fee_pence,total_price_pence',
+                'order:id,package_name,package_id,payment_mode,status,package_lessons_count,package_total_price_pence,booking_fee_pence,digital_fee_pence,total_price_pence,test_pass_guarantee_pence',
                 'order.package:id,name',
                 'calendarItem.calendar:id,date',
-                'lessonPayment:id,lesson_id,amount_pence,status,paid_at',
+                'lessonPayment:id,lesson_id,amount_pence,test_pass_guarantee_pence,status,paid_at',
                 'payout:id,lesson_id,status,amount_pence,stripe_transfer_id,paid_at',
                 'reflectiveLog',
                 'resources',

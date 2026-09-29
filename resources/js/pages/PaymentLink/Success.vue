@@ -37,7 +37,7 @@
                 <span class="text-sm text-muted-foreground">Instructor</span>
                 <span class="text-sm font-medium text-right">{{ order.instructor.name }}</span>
               </div>
-              <template v-if="order.booking_fee_pence || order.digital_fee_pence">
+              <template v-if="order.booking_fee_pence || order.digital_fee_pence || order.test_pass_guarantee_pence !== null">
                 <div v-if="order.package_total_price_pence" class="flex items-start justify-between gap-4">
                   <span class="text-sm text-muted-foreground">Lessons</span>
                   <span class="text-sm font-medium text-right">{{ formatPrice(order.package_total_price_pence) }}</span>
@@ -49,6 +49,12 @@
                 <div v-if="order.digital_fee_pence" class="flex items-start justify-between gap-4">
                   <span class="text-sm text-muted-foreground">Digital fee</span>
                   <span class="text-sm font-medium text-right">{{ formatPrice(order.digital_fee_pence) }}</span>
+                </div>
+                <div v-if="order.test_pass_guarantee_pence !== null" class="flex items-start justify-between gap-4">
+                  <span class="text-sm text-muted-foreground">Pass Your Test Guarantee</span>
+                  <span class="text-sm font-medium text-right">
+                    {{ order.test_pass_guarantee_pence > 0 ? formatPrice(order.test_pass_guarantee_pence) : 'Included free' }}
+                  </span>
                 </div>
               </template>
               <div v-if="order.total_price_pence" class="flex items-start justify-between gap-4">
@@ -112,6 +118,7 @@ interface OrderSummary {
   package_total_price_pence: number | null
   booking_fee_pence: number | null
   digital_fee_pence: number | null
+  test_pass_guarantee_pence: number | null
   package: { name: string; lessons_count: number | null } | null
   instructor: { name: string } | null
 }

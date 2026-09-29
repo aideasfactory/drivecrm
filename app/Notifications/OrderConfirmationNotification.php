@@ -102,12 +102,15 @@ class OrderConfirmationNotification extends Notification implements ShouldQueue
             return "Payment: Weekly ({$order->formatted_weekly_instalment} per lesson)";
         }
 
-        return implode("\n", [
+        $hasPaidGuarantee = $order->includes_test_pass_guarantee && $order->test_pass_guarantee_pence > 0;
+
+        return implode("\n", array_filter([
             '**Payment — weekly:**',
             ...$order->costBreakdownLines(),
             "**Total: {$order->formatted_amount_paid}**",
             "Paid in {$order->package_lessons_count} weekly instalments of {$order->formatted_weekly_instalment}",
-        ]);
+            $hasPaidGuarantee ? '(Pass Your Test Guarantee added to your first weekly payment)' : null,
+        ]));
     }
 
     /**

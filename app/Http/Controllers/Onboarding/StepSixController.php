@@ -8,17 +8,21 @@ use App\Actions\Calendar\ConfirmCalendarItemsAction;
 use App\Actions\Onboarding\CreateOrderFromEnquiryAction;
 use App\Actions\Onboarding\CreateUserAndStudentFromEnquiryAction;
 use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
+use App\Actions\Student\GrantTestPassGuaranteeAction;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Onboarding\StepSixRequest;
+use App\Models\Enquiry;
 use App\Models\Instructor;
 use App\Models\Order;
 use App\Models\Package;
+use App\Models\Student;
 use App\Services\OrderService;
 use App\Services\PackageService;
 use App\Services\PriceUpliftService;
 use App\Services\StripeService;
+use App\Support\TestPassGuarantee;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
@@ -38,6 +42,7 @@ class StepSixController extends Controller
         protected OrderService $orderService,
         protected PriceUpliftService $priceUpliftService,
         protected PackageService $packageService,
+        protected GrantTestPassGuaranteeAction $grantTestPassGuarantee,
     ) {}
 
     /**
@@ -85,6 +90,13 @@ class StepSixController extends Controller
         $packagePrice = '£'.number_format($pricing['total'], 2);
         $lessonPrice = '£'.number_format($pricing['weekly_payment'], 2);
 
+        $testPassGuarantee = TestPassGuarantee::bookingFormData($enquiry, $package);
+        // Fee-inclusive, discount-aware total before any guarantee add-on
+        $packageTotalWithFeesPence = (int) $pricing['total_pence'];
+        $weeklyPaymentPence = $package->lessons_count > 0
+            ? (int) round($packageTotalWithFeesPence / $package->lessons_count)
+            : 0;
+
         return Inertia::render('Onboarding/Step6', [
             'uuid' => $enquiry->id,
             'currentStep' => 6,
@@ -120,14 +132,19 @@ class StepSixController extends Controller
             ],
 
             // Pricing for both payment modes
+            // Base totals exclude the guarantee; the page adds it once the
+            // learner picks a payment mode and whether to opt in.
             'pricing' => [
+                'package_total_with_fees_pence' => $packageTotalWithFeesPence,
+                'weekly_payment_pence' => $weeklyPaymentPence,
                 'upfront' => [
-                    'total' => $packagePrice,
+                    'total' => $this->formatPence($packageTotalWithFeesPence),
                     'per_lesson' => $lessonPrice,
                 ],
                 'weekly' => [
                     'per_lesson' => $lessonPrice,
-                    'total_over_time' => $packagePrice,
+                    'first_payment' => $this->formatPence($weeklyPaymentPence),
+                    'total_over_time' => $this->formatPence($packageTotalWithFeesPence),
                 ],
                 'breakdown' => [
                     'lessons' => '£'.number_format($pricing['package_price'], 2),
@@ -137,13 +154,27 @@ class StepSixController extends Controller
                 ],
             ],
 
+            'testPassGuarantee' => $testPassGuarantee,
+
             // Discount code data
             'discount' => $discount,
+
+            // Payment emails always go to the step 1 contact (the learner
+            // themselves, or the person booking on the learner's behalf).
+            'staffBooking' => $enquiry->isStaffBooking() ? [
+                'recipient_email' => $step1['email'] ?? null,
+            ] : null,
         ]);
+    }
+
+    protected function formatPence(int $pence): string
+    {
+        return '£'.number_format($pence / 100, 2);
     }
 
     /**
      * Process Step 6: Create user/student/order and redirect to Stripe.
+     * Staff bookings email the upfront payment link to the student instead.
      */
     public function store(StepSixRequest $request): RedirectResponse|HttpResponse
     {
@@ -157,6 +188,13 @@ class StepSixController extends Controller
         ]);
 
         $paymentMode = PaymentMode::from($validated['payment_mode']);
+        $testPassGuaranteeOptedIn = (bool) ($validated['test_pass_guarantee'] ?? false);
+
+        // Record the add-on choice before the order is built, as the order
+        // action reads it from the enquiry's step 6 data.
+        $enquiry->setStepData(6, array_merge($enquiry->getStepData(6) ?? [], [
+            'test_pass_guarantee' => $testPassGuaranteeOptedIn,
+        ]));
 
         Log::info('Payment mode determined', [
             'payment_mode' => $paymentMode->value,
@@ -239,6 +277,7 @@ class StepSixController extends Controller
             // Save order details to enquiry
             $enquiry->setStepData(6, [
                 'payment_mode' => $paymentMode->value,
+                'test_pass_guarantee' => $testPassGuaranteeOptedIn,
                 'user_id' => $user->id,
                 'student_id' => $student->id,
                 'order_id' => $order->id,
@@ -255,7 +294,14 @@ class StepSixController extends Controller
                 'enquiry_id' => $enquiry->id,
             ]);
 
-            if ($paymentMode === PaymentMode::UPFRONT) {
+            if ($paymentMode === PaymentMode::UPFRONT && $enquiry->isStaffBooking()) {
+                Log::info('Handling staff upfront booking - emailing payment link to student', [
+                    'order_id' => $order->id,
+                    'enquiry_id' => $enquiry->id,
+                    'staff_booking' => $enquiry->getStaffBooking(),
+                ]);
+                $sessionResult = $this->handleStaffUpfrontPayment($enquiry, $order, $student);
+            } elseif ($paymentMode === PaymentMode::UPFRONT) {
                 // UPFRONT PAYMENT: Redirect to Stripe Checkout
                 Log::info('Handling upfront payment - creating Stripe session', [
                     'order_id' => $order->id,
@@ -420,6 +466,31 @@ class StepSixController extends Controller
     }
 
     /**
+     * Handle an upfront booking made by the admin/bookings team: email the
+     * Stripe Checkout link to the student instead of redirecting the staff
+     * member's browser. The order stays pending (calendar items stay draft)
+     * until the student pays, at which point the checkout webhook activates it.
+     *
+     * @return array{success: bool, session_id: null, url: string}
+     */
+    protected function handleStaffUpfrontPayment(Enquiry $enquiry, Order $order, Student $student): array
+    {
+        $result = $this->orderService->sendPaymentLink($order, $student, 'staff_onboarding', true);
+
+        $enquiry->setStepData(6, array_merge($enquiry->getStepData(6) ?? [], [
+            'payment_status' => 'awaiting_payment',
+            'payment_link_sent_to' => $result['email'],
+        ]));
+        $enquiry->save();
+
+        return [
+            'success' => true,
+            'session_id' => null,
+            'url' => route('onboarding.complete', ['uuid' => $enquiry->id]),
+        ];
+    }
+
+    /**
      * Handle weekly payment (no Stripe checkout needed).
      */
     protected function handleWeeklyPayment($enquiry, Order $order): array
@@ -516,6 +587,8 @@ class StepSixController extends Controller
                     // Transition calendar items from DRAFT to BOOKED now that payment is confirmed
                     app(ConfirmCalendarItemsAction::class)($order);
                 }
+
+                ($this->grantTestPassGuarantee)($order);
 
                 // Send confirmation email
                 $this->sendEmailAction->execute($order, $order->student);

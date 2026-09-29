@@ -12,6 +12,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Throwable;
 
 /**
  * Owner-only Data Import page: download the template, check a bundle zip,
@@ -45,9 +46,15 @@ class ImportController extends Controller
     public function check(ImportBundleRequest $request): JsonResponse
     {
         try {
-            $result = $this->importService->checkBundle($request->file('file')->getRealPath());
+            $result = $this->importService->checkBundle($this->uploadedZipPath($request));
         } catch (RuntimeException $exception) {
-            return response()->json(['message' => $exception->getMessage()], 422);
+            return response()->json(['message' => $this->checkFailureMessage($exception)], 422);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'message' => 'Could not check the file. Try again, or use the template zip.',
+            ], 500);
         }
 
         return response()->json([
@@ -65,12 +72,17 @@ class ImportController extends Controller
     {
         set_time_limit(300);
 
-        $zipPath = $request->file('file')->getRealPath();
-
         try {
+            $zipPath = $this->uploadedZipPath($request);
             $result = $this->importService->checkBundle($zipPath);
         } catch (RuntimeException $exception) {
-            return response()->json(['message' => $exception->getMessage()], 422);
+            return response()->json(['message' => $this->checkFailureMessage($exception)], 422);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'message' => 'Could not check the file. Nothing was imported.',
+            ], 500);
         }
 
         if ($result['errors'] !== []) {
@@ -94,5 +106,47 @@ class ImportController extends Controller
             'import_run_id' => $import['run']->id,
             'totals' => $import['totals'],
         ]);
+    }
+
+    /**
+     * Filesystem path of the uploaded zip.
+     *
+     * realpath() returns false for a valid upload when the temp file cannot
+     * be resolved (open_basedir, or the path is not yet canonical). Passing
+     * that false into the checker throws before any result is returned.
+     *
+     * @throws RuntimeException
+     */
+    private function uploadedZipPath(ImportBundleRequest $request): string
+    {
+        $uploaded = $request->file('file');
+
+        if ($uploaded === null) {
+            throw new RuntimeException('Please choose a zip file to upload.');
+        }
+
+        $path = $uploaded->getRealPath();
+
+        if (! is_string($path) || $path === '') {
+            $path = $uploaded->getPathname();
+        }
+
+        if ($path === '') {
+            throw new RuntimeException('Could not read the uploaded zip.');
+        }
+
+        return $path;
+    }
+
+    /**
+     * Message safe to show on the Data Import page.
+     */
+    private function checkFailureMessage(RuntimeException $exception): string
+    {
+        if (str_starts_with($exception->getMessage(), 'Could not open zip:')) {
+            return 'Could not open the zip. Make sure it is a valid .zip of the import CSVs.';
+        }
+
+        return $exception->getMessage();
     }
 }

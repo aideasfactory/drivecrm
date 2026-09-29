@@ -48,6 +48,8 @@ class GetStudentDetailAction
             'status' => $student->status ?? 'active',
             'student_status' => $student->status ?? 'active',
             'inactive_reason' => $student->inactive_reason,
+            'has_test_pass_guarantee' => $student->hasTestPassGuarantee(),
+            'test_pass_guarantee_at' => $student->test_pass_guarantee_at?->toIso8601String(),
         ];
     }
 }

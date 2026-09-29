@@ -95,6 +95,7 @@ class PaymentLinkCheckoutController extends Controller
             'package_total_price_pence' => $order->package_total_price_pence,
             'booking_fee_pence' => $order->booking_fee_pence,
             'digital_fee_pence' => $order->digital_fee_pence,
+            'test_pass_guarantee_pence' => $order->includes_test_pass_guarantee ? (int) $order->test_pass_guarantee_pence : null,
             'package' => $order->package ? [
                 'name' => $order->package->name,
                 'lessons_count' => $order->package->lessons_count,

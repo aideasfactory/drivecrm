@@ -33,7 +33,8 @@ class InstructorCalendarController extends Controller
     ) {}
 
     /**
-     * Return calendar items for the authenticated instructor on a given date.
+     * Return calendar items for the authenticated instructor on a given date,
+     * or across an inclusive ?from=&to= range (week view, max 31 days).
      *
      * Supports ?available_only=true (default) to return only available slots,
      * or ?available_only=false to return all items for the day.
@@ -44,12 +45,20 @@ class InstructorCalendarController extends Controller
         $availableOnly = $request->boolean('available_only', true);
         $excludeDrafts = $request->boolean('exclude_drafts', true);
 
-        $items = $this->calendarService->getCalendarItems(
-            $instructor,
-            $request->validated('date'),
-            $availableOnly,
-            $excludeDrafts
-        );
+        $items = $request->isRange()
+            ? $this->calendarService->getCalendarItemsInRange(
+                $instructor,
+                $request->validated('from'),
+                $request->validated('to'),
+                $availableOnly,
+                $excludeDrafts
+            )
+            : $this->calendarService->getCalendarItems(
+                $instructor,
+                $request->validated('date'),
+                $availableOnly,
+                $excludeDrafts
+            );
 
         // Eager-load the booking context the resource exposes (student name, paid
         // status, future-sibling count) so the app can drive the status-dependent

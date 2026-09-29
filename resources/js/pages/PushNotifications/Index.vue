@@ -2,13 +2,27 @@
 import { ref, computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import AppLayout from '@/layouts/AppLayout.vue'
-import { Card, CardContent } from '@/components/ui/card'
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card'
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { toast } from '@/components/ui/sonner'
-import { Bell, Send, Loader2 } from 'lucide-vue-next'
+import { Bell, Send, Loader2, Zap } from 'lucide-vue-next'
 
 interface UserWithToken {
     id: number
@@ -17,11 +31,27 @@ interface UserWithToken {
     role: string
 }
 
+interface AutomatedNotification {
+    key: string
+    name: string
+    audience: 'learner' | 'instructor' | 'any'
+    title: string
+    body: string
+    trigger: string
+}
+
 interface Props {
     users: UserWithToken[]
+    automatedNotifications: AutomatedNotification[]
 }
 
 const props = defineProps<Props>()
+
+const audienceLabels: Record<AutomatedNotification['audience'], string> = {
+    learner: 'Learner',
+    instructor: 'Instructor',
+    any: 'Learner & instructor',
+}
 
 const selectedUserId = ref<number | ''>('')
 const title = ref('')
@@ -204,6 +234,63 @@ const breadcrumbs = [{ title: 'Push Notifications' }]
                     registered for push notifications
                 </span>
             </div>
+
+            <!-- Automated notifications (read-only) -->
+            <Card>
+                <CardHeader>
+                    <CardTitle class="flex items-center gap-2">
+                        <Zap class="h-5 w-5" />
+                        Automatic notifications
+                    </CardTitle>
+                    <CardDescription>
+                        Push notifications the system sends on its own. Values
+                        in {braces} are filled in when the notification is
+                        sent. These can't be edited here.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Notification</TableHead>
+                                <TableHead>Sent to</TableHead>
+                                <TableHead>Message</TableHead>
+                                <TableHead>When it's sent</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            <TableRow
+                                v-for="notification in props.automatedNotifications"
+                                :key="notification.key"
+                            >
+                                <TableCell class="align-top font-medium">
+                                    {{ notification.name }}
+                                </TableCell>
+                                <TableCell class="align-top">
+                                    <Badge variant="secondary">
+                                        {{ audienceLabels[notification.audience] }}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell
+                                    class="max-w-sm align-top whitespace-normal"
+                                >
+                                    <p class="font-medium">
+                                        {{ notification.title }}
+                                    </p>
+                                    <p class="text-muted-foreground">
+                                        {{ notification.body }}
+                                    </p>
+                                </TableCell>
+                                <TableCell
+                                    class="max-w-sm align-top whitespace-normal text-muted-foreground"
+                                >
+                                    {{ notification.trigger }}
+                                </TableCell>
+                            </TableRow>
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
         </div>
     </AppLayout>
 </template>

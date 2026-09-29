@@ -78,6 +78,7 @@ class GetStudentPaymentsAction
                 LessonPayment::create([
                     'lesson_id' => $lesson->id,
                     'amount_pence' => LessonPayment::orderShareForLesson($order, $lesson, $index, $lessons->count()),
+                    'test_pass_guarantee_pence' => LessonPayment::guaranteeShareForLesson($order, $index),
                     'status' => PaymentStatus::PAID,
                     'due_date' => $lesson->date,
                     'paid_at' => $order->updated_at,

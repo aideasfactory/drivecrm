@@ -1182,6 +1182,27 @@ Returns the authenticated instructor's students grouped by status, plus a recent
 
 ---
 
+#### `GET /api/v1/instructor/lessons`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Range version of `GET /instructor/lessons/{date}` for the weekly diary. Returns exactly the lesson set the day route returns for each date in the range (drafts and cancelled lessons excluded), with the same lesson object.
+
+**Query Parameters:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `from` | string | **Yes** | Range start, `Y-m-d`, inclusive |
+| `to` | string | **Yes** | Range end, `Y-m-d`, inclusive, `>= from`. Span at most **31 days**. |
+
+**Example:** `GET /api/v1/instructor/lessons?from=2026-09-21&to=2026-09-27`
+
+**Success Response:** `200 OK` — same envelope and lesson object as `GET /instructor/lessons/{date}` (see below). Ordered by `date`, then `start_time`. `date` is always a non-null `Y-m-d`. Days with no lessons are absent. No pagination.
+
+**Error Responses:** `422` when `from` or `to` is missing, not `Y-m-d`, `to` is before `from` (`"The to date must be on or after from."`), or the span exceeds 31 days (`"The range may not be longer than 31 days."`).
+
+---
+
 #### `GET /api/v1/instructor/lessons/{date}`
 
 **Auth required:** Yes (Bearer token — instructor only)
@@ -1215,7 +1236,8 @@ Returns the authenticated instructor's lessons for a specific date, ordered by s
         "total_pence": 4099,
         "lesson_pence": 3500,
         "booking_fee_pence": 200,
-        "digital_fee_pence": 399
+        "digital_fee_pence": 399,
+        "test_pass_guarantee_pence": 0
       },
       "student": {
         "id": 1,
@@ -2322,16 +2344,25 @@ Returns the full pricing breakdown for a package, including booking fee, digital
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Returns the authenticated instructor's calendar items for a specific date. By default, returns only available slots (excluding travel and practical test items). Set `available_only=false` to return all items for the day.
+Returns the authenticated instructor's calendar items for a specific date, **or** across an inclusive date range (week view). By default, returns only available slots (excluding travel and practical test items). Set `available_only=false` to return all items for the day.
 
 **Query Parameters:**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `date` | string | **Yes** | Date in `Y-m-d` format (e.g., `2026-03-24`) |
-| `available_only` | boolean | No | `true` (default) = available slots only; `false` = all items for the day |
+| `date` | string | **Yes, unless `from`/`to` sent** | Single day, `Y-m-d` (e.g., `2026-03-24`). When present, `from`/`to` are ignored. |
+| `from` | string | With `to` | Range start, `Y-m-d`, inclusive |
+| `to` | string | With `from` | Range end, `Y-m-d`, inclusive, `>= from`. Span at most **31 days** (`to - from <= 30`). |
+| `available_only` | boolean | No | `true` (default) = available slots only; `false` = all items |
+| `exclude_drafts` | boolean | No | `true` (default) = hide `draft` items; `false` = include them |
 
-**Example:** `GET /api/v1/instructor/calendar/items?date=2026-03-24&available_only=false`
+**Example (day):** `GET /api/v1/instructor/calendar/items?date=2026-03-24&available_only=false`
+
+**Example (week):** `GET /api/v1/instructor/calendar/items?from=2026-09-21&to=2026-09-27&available_only=0&exclude_drafts=0`
+
+**Range behaviour:** same envelope and item object as the single-day call, with the same filtering applied per day. Items are ordered by `date`, then `start_time`; `date` is always set; days with no items are simply absent (`data: []` is valid). No pagination. Range results are not cached (single-day results are).
+
+**Range validation (422):** only one of `from`/`to` sent; either not `Y-m-d`; `to` before `from` (`"The to date must be on or after from."`); span longer than 31 days (`"The range may not be longer than 31 days."`, on `to`). A request with `date` never 422s on `from`/`to`.
 
 **Response (200):**
 ```json
@@ -4147,7 +4178,8 @@ Returns lessons for a given student across all their orders. Supports optional f
         "total_pence": 4099,
         "lesson_pence": 3500,
         "booking_fee_pence": 200,
-        "digital_fee_pence": 399
+        "digital_fee_pence": 399,
+        "test_pass_guarantee_pence": 0
       }
     },
     {
@@ -4171,7 +4203,8 @@ Returns lessons for a given student across all their orders. Supports optional f
         "total_pence": 4099,
         "lesson_pence": 3500,
         "booking_fee_pence": 200,
-        "digital_fee_pence": 399
+        "digital_fee_pence": 399,
+        "test_pass_guarantee_pence": 0
       }
     }
   ]
@@ -4208,10 +4241,11 @@ Returns lessons for a given student across all their orders. Supports optional f
 | `lesson_pence` | integer | Lesson cost portion |
 | `booking_fee_pence` | integer | This lesson's share of the one-off booking fee |
 | `digital_fee_pence` | integer | This lesson's share of the digital fee |
+| `test_pass_guarantee_pence` | integer | Pass Your Test Guarantee charged with this lesson. Only the **first** lesson of a web-onboarding order that bought the guarantee carries it (weekly: added to the first instalment; upfront: attributed to the first lesson); `0` otherwise. Non-refundable |
 
-The three parts always add up to `total_pence`. They are pro-rated from the order's stored totals, so they can differ from `amount_pence` by a penny or two. Upfront lessons paid before fees were split per lesson are recalculated from the order, so older and newer lessons are consistent. Imported and legacy orders with no stored total return the lesson price with zero fees.
+The parts always add up to `total_pence`. They are pro-rated from the order's stored totals, so they can differ from `amount_pence` by a penny or two. Upfront lessons paid before fees were split per lesson are recalculated from the order, so older and newer lessons are consistent. Imported and legacy orders with no stored total return the lesson price with zero fees.
 
-> **Rule — never hide a fee from the pupil.** Any pupil-facing screen that shows what a lesson, package or order costs must show the **full breakdown** (lesson/package cost, booking fee, digital fee) alongside the fee-inclusive total. Never show a base price on its own. Use `payment_breakdown` for lessons, `total_price` + `booking_fee` + `digital_fee` for packages, and `package_total_price_pence` + `booking_fee_pence` + `digital_fee_pence` + `total_price_pence` for orders.
+> **Rule — never hide a fee from the pupil.** Any pupil-facing screen that shows what a lesson, package or order costs must show the **full breakdown** (lesson/package cost, booking fee, digital fee, and the Pass Your Test Guarantee when included) alongside the fee-inclusive total. Never show a base price on its own. Use `payment_breakdown` for lessons, `total_price` + `booking_fee` + `digital_fee` for packages, and `package_total_price_pence` + `booking_fee_pence` + `digital_fee_pence` + `total_price_pence` for orders.
 
 **Card Status Logic:**
 
@@ -4257,7 +4291,8 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
       "total_pence": 4099,
       "lesson_pence": 3500,
       "booking_fee_pence": 200,
-      "digital_fee_pence": 399
+      "digital_fee_pence": 399,
+      "test_pass_guarantee_pence": 0
     },
     "date": "2026-03-18",
     "start_time": "14:00",
@@ -6276,12 +6311,13 @@ The `role` field is always returned in user responses. Use it to determine which
 | POST | `/api/v1/instructor/profile/picture` | Yes | Instructor | Upload profile picture |
 | DELETE | `/api/v1/instructor/profile/picture` | Yes | Instructor | Delete profile picture |
 | GET | `/api/v1/instructor/students` | Yes | Instructor | List students (grouped) |
+| GET | `/api/v1/instructor/lessons?from=&to=` | Yes | Instructor | Week view lessons (range, max 31 days) |
 | GET | `/api/v1/instructor/lessons/{date}` | Yes | Instructor | Day view lessons |
 | PATCH | `/api/v1/instructor/lessons/{lesson}/mileage` | Yes | Instructor | Update lesson mileage |
 | GET | `/api/v1/instructor/packages` | Yes | Instructor | List packages |
 | POST | `/api/v1/instructor/packages` | Yes | Instructor | Create package |
 | PUT | `/api/v1/instructor/packages/{package}` | Yes | Instructor | Update package |
-| GET | `/api/v1/instructor/calendar/items` | Yes | Instructor | List calendar items for a date |
+| GET | `/api/v1/instructor/calendar/items` | Yes | Instructor | List calendar items for a date, or a `from`/`to` range (max 31 days) |
 | POST | `/api/v1/instructor/calendar/items` | Yes | Instructor | Create calendar item |
 | POST | `/api/v1/instructor/calendar/fill-slots` | Yes | Instructor | Bulk-fill diary with available slots (skips clashes) |
 | PUT | `/api/v1/instructor/calendar/items/{calendarItem}` | Yes | Instructor | Update / move / reschedule calendar item (single or bulk) |
@@ -7529,8 +7565,9 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-09-10 | **Folder visibility for instructors and pupils.** New `resource_folders.visibility` (`student` \| `instructor` \| `both`, default `both`). Admin create/edit folder sheets set it. `GET /api/v1/student/resources` only returns folders visible to pupils and prunes empty folders (so instructor-only libraries such as VTS no longer appear as empty categories). `GET /api/v1/instructor/resources` only returns folders visible to instructors. Both tree folder objects now include `visibility`. Student show/watched 404 when the parent folder is instructor-only. `GET /api/v1/resources?audience=` also excludes resources whose parent folder is hidden from that audience. Student resource-summary study progress, recommended, stats, my_resources, and the Expert badge denominator all ignore instructor-only folders. | Resources (index), Student Resources (index, show, watched, summary), Instructor Resource Tree (tree) |
 | 2026-09-18 | **Mobile lesson sign-off returns the completed lesson.** Same body as admin (`{ "summary": "..." }` only). The four-prompt reflective log is leftover and is not required — do not gate on `has_reflective_log`. The endpoint now runs the existing `LessonSignOffService` in-request (admin still queues the same job) and returns `{ "message": "Lesson signed off.", "data": <lesson> }` with `status: completed` / `card_status: signed_off`. Shared payout / onboarding / payment guards are unchanged. | Student Lessons (sign-off) |
 | 2026-09-23 | **Imported lessons (legacy data importer).** Lessons brought in from another system by the Data Import page sit on orders with the new `payment_mode: "imported"` (lesson list/show, instructor day lessons, orders). They are settled outside the platform: `payment_status` is `"paid"` and calendar items report `is_paid: true`, so the existing Sign Off button shows with no app change. `POST /students/{student}/lessons/{lesson}/sign-off` on an imported lesson skips the Stripe onboarding + payment guards and creates **no payout** (no transfer, no next-invoice, no student feedback email, no resource recommendations); the lesson and its calendar item still go to `completed` and the response is unchanged. Treat `"imported"` as a display-only payment mode — never offer it when booking (order create / slot-offer accept still accept only `upfront` / `weekly`). No new endpoints. | Student Lessons (index, show, sign-off), Instructor Day Lessons, Calendar Items (`is_paid`), Orders (`payment_mode`) |
+| 2026-09-24 | **Instructor diary weekly view — range queries.** `GET /instructor/calendar/items` now also accepts an inclusive `from` + `to` pair (max 31 days) instead of `date`; `date` still works unchanged and takes precedence. New `GET /instructor/lessons?from=&to=` returns the same lessons as the day route across a range. Both return the unchanged item/lesson objects ordered by `date` then `start_time`, omitting empty days. Replaces the app's 14-request week fan-out with 2. | Instructor Calendar (index), Instructor Lessons (new range) |
 | 2026-09-24 | **Booking + digital fees shown wherever pupils see prices.** No request/response shape changes. Docs fix: the instructor package examples previously showed `total_price` equal to the base price — it has always been the fee-inclusive `£` string (package + booking fee + digital fee), and `booking_fee` / `digital_fee` / `weekly_payment` are `£`-formatted strings. Package pickers in the app must show `total_price` and itemise the fees (see note under `GET /instructor/packages`). The Stripe Checkout page opened from `checkout_url` (`POST /students/{student}/orders`, upfront) now itemises the package, booking fee and digital fee as separate line items (same total). Payment-link, weekly booking-confirmation, payment-due-soon and payment-confirmed emails now include the fee breakdown. Short-notice offer acceptance (`POST /student/slot-offers/{slotOffer}/accept`, upfront) uses the same itemised checkout. Weekly Stripe hosted invoices already itemise lesson cost, booking fee and digital fee. The upfront order confirmation email itemises lessons, booking fee and digital fee; the re-sent payment link uses the same template as the payment-link email. Internal only (not exposed by the API): upfront `lesson_payments` rows now store each lesson's fee-inclusive share. Lesson `amount_pence` in API responses is unchanged (lesson price before fees). | Instructor Packages (docs), Orders (store — checkout page), Slot Offers (accept — checkout page) |
-| 2026-09-29 | **Per-lesson fee breakdown (additive).** New `payment_breakdown` object (`total_pence`, `lesson_pence`, `booking_fee_pence`, `digital_fee_pence`) on `GET /students/{student}/lessons`, `GET /students/{student}/lessons/{lesson}`, `POST /students/{student}/lessons/{lesson}/sign-off`, `GET /instructor/lessons/{date}` and `GET /instructor/calendar/items` (plus the other calendar item responses). The lesson list also gains `payment_mode`. `amount_pence` is unchanged and documented as the lesson price **before fees**. Docs fix: the `GET /student/packages` example now shows the real response (same as instructor packages, with fee fields). New rule: pupil-facing price displays must itemise every fee (see the **Payment Breakdown Object** note). | Student Lessons (index, show, sign-off), Instructor Day Lessons, Instructor Calendar Items, Student Packages (docs) |
+| 2026-09-29 | **Per-lesson fee breakdown (additive).** New `payment_breakdown` object (`total_pence`, `lesson_pence`, `booking_fee_pence`, `digital_fee_pence`, `test_pass_guarantee_pence`) on `GET /students/{student}/lessons`, `GET /students/{student}/lessons/{lesson}`, `POST /students/{student}/lessons/{lesson}/sign-off`, `GET /instructor/lessons/{date}`, `GET /instructor/lessons?from=&to=` and `GET /instructor/calendar/items` (plus the other calendar item responses). The lesson list also gains `payment_mode`. `amount_pence` is unchanged and documented as the lesson price **before fees**. Docs fix: the `GET /student/packages` example now shows the real response (same as instructor packages, with fee fields). `test_pass_guarantee_pence` is the Pass Your Test Guarantee charged with that lesson — only ever the first lesson of an order, and `0` everywhere else. New rule: pupil-facing price displays must itemise every fee (see the **Payment Breakdown Object** note). | Student Lessons (index, show, sign-off), Instructor Day Lessons, Instructor Calendar Items, Student Packages (docs) |
 
 ---
 

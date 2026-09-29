@@ -69,4 +69,21 @@ class Enquiry extends Model
     {
         return $this->data['tracking'] ?? null;
     }
+
+    /**
+     * Get the admin/bookings team member who started this enquiry on a
+     * student's behalf. Staff bookings email the Stripe payment link to the
+     * student instead of redirecting the browser to Stripe Checkout.
+     *
+     * @return array{user_id: int, name: string}|null
+     */
+    public function getStaffBooking(): ?array
+    {
+        return $this->data['staff_booking'] ?? null;
+    }
+
+    public function isStaffBooking(): bool
+    {
+        return $this->getStaffBooking() !== null;
+    }
 }

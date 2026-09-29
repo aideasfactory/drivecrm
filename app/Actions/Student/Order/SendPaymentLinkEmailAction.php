@@ -23,7 +23,7 @@ class SendPaymentLinkEmailAction
      * Returns the recipient email address, or null when no email could
      * be resolved (or sending failed).
      */
-    public function execute(Order $order, Student $student, string $checkoutUrl): ?string
+    public function execute(Order $order, Student $student, string $checkoutUrl, bool $isBookedByStaff = false): ?string
     {
         try {
             $isBookedByContact = ! $student->owns_account;
@@ -47,7 +47,7 @@ class SendPaymentLinkEmailAction
             }
 
             Notification::route('mail', $recipientEmail)
-                ->notify(new PaymentLinkNotification($order, $student, $checkoutUrl, $isBookedByContact));
+                ->notify(new PaymentLinkNotification($order, $student, $checkoutUrl, $isBookedByContact, $isBookedByStaff));
 
             Log::info('Payment link email queued', [
                 'order_id' => $order->id,

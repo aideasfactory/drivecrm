@@ -21,12 +21,17 @@ class ImportBundleRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
+     * The zip is checked by its filename extension, not `mimes:zip`. PHP's
+     * fileinfo often sniffs a zip of CSVs as application/octet-stream or
+     * text/plain, which fails `mimes:zip` before the bundle is read. ZipArchive
+     * still rejects anything that is not a real zip.
+     *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
         return [
-            'file' => ['required', 'file', 'mimes:zip', 'max:102400'],
+            'file' => ['required', 'file', 'extensions:zip', 'max:102400'],
         ];
     }
 
@@ -39,7 +44,7 @@ class ImportBundleRequest extends FormRequest
     {
         return [
             'file.required' => 'Please choose a zip file to upload.',
-            'file.mimes' => 'The file must be a .zip of the import CSVs.',
+            'file.extensions' => 'The file must be a .zip of the import CSVs.',
             'file.max' => 'The zip must not be larger than 100MB.',
         ];
     }

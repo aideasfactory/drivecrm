@@ -19,6 +19,7 @@ import MessagesSubTab from './Student/MessagesSubTab.vue'
 import ActionsSubTab from './Student/ActionsSubTab.vue'
 import LogSubTab from './Student/LogSubTab.vue'
 import BookLessonSection from './Student/Actions/BookLessonSection.vue'
+import TestPassGuaranteeBadge from '@/components/Shared/TestPassGuaranteeBadge.vue'
 
 interface StudentDetail {
     id: number
@@ -35,6 +36,8 @@ interface StudentDetail {
     lessons_total: number
     revenue_pence: number
     status: string
+    has_test_pass_guarantee: boolean
+    test_pass_guarantee_at: string | null
 }
 
 interface Props {
@@ -161,6 +164,7 @@ onMounted(() => {
                                 <Badge v-if="student.status" variant="outline">
                                     {{ student.status.charAt(0).toUpperCase() + student.status.slice(1) }}
                                 </Badge>
+                                <TestPassGuaranteeBadge v-if="student.has_test_pass_guarantee" />
                             </div>
 
                             <!-- Contact Info Row -->

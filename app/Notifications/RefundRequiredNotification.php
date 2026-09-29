@@ -57,7 +57,7 @@ class RefundRequiredNotification extends Notification implements ShouldQueue
             ->line('')
             ->line('**Paid lessons to refund:**');
 
-        $totals = ['paid' => 0, 'lesson' => 0, 'booking_fee' => 0, 'digital_fee' => 0];
+        $totals = ['paid' => 0, 'lesson' => 0, 'booking_fee' => 0, 'digital_fee' => 0, 'test_pass_guarantee' => 0];
         foreach ($this->paidLessons as $lesson) {
             $breakdown = $this->paidBreakdown($lesson);
 
@@ -74,8 +74,13 @@ class RefundRequiredNotification extends Notification implements ShouldQueue
             ->line('**Total paid for cancelled lessons:** '.$this->formatPence($totals['paid']))
             ->line('Lessons: '.$this->formatPence($totals['lesson']))
             ->line('Booking fee: '.$this->formatPence($totals['booking_fee']))
-            ->line('Digital fee (retained, not refunded): '.$this->formatPence($totals['digital_fee']))
-            ->line('')
+            ->line('Digital fee (retained, not refunded): '.$this->formatPence($totals['digital_fee']));
+
+        if ($totals['test_pass_guarantee'] > 0) {
+            $message->line('Pass Your Test Guarantee (retained, not refunded): '.$this->formatPence($totals['test_pass_guarantee']));
+        }
+
+        $message->line('')
             ->line('**Amount to refund:** '.$this->formatPence($refundPence))
             ->line('')
             ->line('**Cancellation reason:**')
@@ -90,7 +95,7 @@ class RefundRequiredNotification extends Notification implements ShouldQueue
     /**
      * What the student paid for a lesson, keyed for totalling.
      *
-     * @return array{paid: int, lesson: int, booking_fee: int, digital_fee: int}
+     * @return array{paid: int, lesson: int, booking_fee: int, digital_fee: int, test_pass_guarantee: int}
      */
     protected function paidBreakdown(Lesson $lesson): array
     {
@@ -105,13 +110,14 @@ class RefundRequiredNotification extends Notification implements ShouldQueue
             'lesson' => $breakdown['lesson_pence'],
             'booking_fee' => $breakdown['booking_fee_pence'],
             'digital_fee' => $breakdown['digital_fee_pence'],
+            'test_pass_guarantee' => $breakdown['test_pass_guarantee_pence'],
         ];
     }
 
     /**
      * Format a single paid lesson with its date, amount paid and fee split.
      *
-     * @param  array{paid: int, lesson: int, booking_fee: int, digital_fee: int}  $breakdown
+     * @param  array{paid: int, lesson: int, booking_fee: int, digital_fee: int, test_pass_guarantee: int}  $breakdown
      */
     protected function formatLesson(Lesson $lesson, array $breakdown): string
     {
@@ -122,10 +128,18 @@ class RefundRequiredNotification extends Notification implements ShouldQueue
 
         $line = "{$date}{$time} — paid ".$this->formatPence($breakdown['paid']);
 
-        if ($breakdown['booking_fee'] > 0 || $breakdown['digital_fee'] > 0) {
-            $line .= ' (lesson '.$this->formatPence($breakdown['lesson'])
-                .', booking fee '.$this->formatPence($breakdown['booking_fee'])
-                .', digital fee '.$this->formatPence($breakdown['digital_fee']).')';
+        if ($breakdown['booking_fee'] > 0 || $breakdown['digital_fee'] > 0 || $breakdown['test_pass_guarantee'] > 0) {
+            $parts = [
+                'lesson '.$this->formatPence($breakdown['lesson']),
+                'booking fee '.$this->formatPence($breakdown['booking_fee']),
+                'digital fee '.$this->formatPence($breakdown['digital_fee']),
+            ];
+
+            if ($breakdown['test_pass_guarantee'] > 0) {
+                $parts[] = 'Pass Your Test Guarantee '.$this->formatPence($breakdown['test_pass_guarantee']);
+            }
+
+            $line .= ' ('.implode(', ', $parts).')';
         }
 
         return $line;

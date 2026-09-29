@@ -83,6 +83,7 @@ class GetInstructorPupilsAction
                 'next_lesson_time' => $nextLesson?->start_time?->format('H:i'),
                 'revenue_pence' => $student->total_revenue_pence,
                 'has_app' => $student->app_last_active_at !== null,
+                'has_test_pass_guarantee' => $student->hasTestPassGuarantee(),
                 'status' => $student->status ?? 'active',
             ];
         });

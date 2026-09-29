@@ -32,6 +32,19 @@ class GetInstructorCalendarItemsAction
             return new Collection;
         }
 
+        return $this->forCalendar($calendar, $availableOnly, $excludeDrafts);
+    }
+
+    /**
+     * Get the filtered, time-ordered items for a single calendar day.
+     *
+     * Shared with GetInstructorCalendarItemsInRangeAction so the day and week
+     * views apply identical filtering.
+     *
+     * @return Collection<int, CalendarItem>
+     */
+    public function forCalendar(Calendar $calendar, bool $availableOnly = true, bool $excludeDrafts = true): Collection
+    {
         $query = CalendarItem::query()
             ->where('calendar_id', $calendar->id);
 

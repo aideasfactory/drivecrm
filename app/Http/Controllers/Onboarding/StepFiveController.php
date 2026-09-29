@@ -12,6 +12,7 @@ use App\Models\Location;
 use App\Models\Package;
 use App\Services\PackageService;
 use App\Services\PriceUpliftService;
+use App\Support\TestPassGuarantee;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -34,10 +35,16 @@ class StepFiveController extends Controller
         $step4 = $enquiry->getStepData(4) ?? [];
         $step5 = $enquiry->getStepData(5) ?? [];
 
-        // Load instructor with user relationship
+        // Load instructor with user relationship. Reviews live in meta and
+        // are not appended by default, so the review step would render an
+        // empty "( reviews)" label without this.
         $instructor = null;
         if (! empty($step2['instructor_id'])) {
             $instructor = Instructor::with('user')->find($step2['instructor_id']);
+
+            if ($instructor) {
+                $instructor->append('reviews');
+            }
         }
 
         // Load package (instructor uplift applied in-memory so all price
@@ -69,6 +76,13 @@ class StepFiveController extends Controller
 
         $discount = $enquiry->getDiscountData();
         $pricing = $package ? $this->packageService->calculateEnquiryPricing($package, $discount) : null;
+
+        // Fee-inclusive (and discount-aware) figures before any guarantee add-on,
+        // which the page adds on top when the learner opts in.
+        $packageTotalWithFeesPence = $pricing ? (int) $pricing['total_pence'] : 0;
+        $weeklyPaymentPence = $package && $package->lessons_count > 0
+            ? (int) round($packageTotalWithFeesPence / $package->lessons_count)
+            : 0;
 
         return Inertia::render('Onboarding/Step5', [
             'uuid' => $enquiry->id,
@@ -143,7 +157,13 @@ class StepFiveController extends Controller
                 'uuid_discount_label' => $discount ? $discount['label'] : null,
                 'total' => number_format($pricing['total'], 2),
                 'weekly_payment' => number_format($pricing['weekly_payment'], 2),
+                'package_total_with_fees_pence' => $packageTotalWithFeesPence,
+                'weekly_payment_pence' => $weeklyPaymentPence,
             ] : null,
+
+            'testPassGuarantee' => $package
+                ? TestPassGuarantee::bookingFormData($enquiry, $package)
+                : null,
 
             // Available promo codes (for demo)
             'available_promos' => ['SAVE10', 'SAVE20'],

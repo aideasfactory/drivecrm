@@ -14,6 +14,7 @@ class LessonPayment extends Model
     protected $fillable = [
         'lesson_id',
         'amount_pence',
+        'test_pass_guarantee_pence',
         'status',
         'due_date',
         'paid_at',
@@ -25,6 +26,7 @@ class LessonPayment extends Model
     {
         return [
             'amount_pence' => 'integer',
+            'test_pass_guarantee_pence' => 'integer',
             'status' => PaymentStatus::class,
             'due_date' => 'date',
             'paid_at' => 'datetime',
@@ -95,8 +97,10 @@ class LessonPayment extends Model
     /**
      * The share of an order's fee-inclusive total attributable to the lesson at
      * `$index` (in date order). Used for upfront orders so each paid lesson
-     * record reflects what the student actually paid, matching weekly orders.
-     * Legacy orders without a stored total fall back to the lesson price.
+     * record reflects what the student actually paid, matching weekly orders:
+     * the lessons and fees are spread evenly and any paid Pass Your Test
+     * Guarantee sits on the first lesson. Legacy orders without a stored total
+     * fall back to the lesson price.
      */
     public static function orderShareForLesson(Order $order, Lesson $lesson, int $index, int $lessonsCount): int
     {
@@ -104,7 +108,23 @@ class LessonPayment extends Model
             return (int) $lesson->amount_pence;
         }
 
-        return self::weeklyAmountForIndex((int) $order->total_price_pence, $lessonsCount, $index);
+        $guaranteePence = self::guaranteeShareForLesson($order, $index);
+        $spreadTotalPence = (int) $order->total_price_pence - (int) ($order->test_pass_guarantee_pence ?? 0);
+
+        return self::weeklyAmountForIndex($spreadTotalPence, $lessonsCount, $index) + $guaranteePence;
+    }
+
+    /**
+     * The Pass Your Test Guarantee charge carried by the lesson at `$index`:
+     * the full charge on the first lesson, nothing on the rest.
+     */
+    public static function guaranteeShareForLesson(Order $order, int $index): int
+    {
+        if ($order->total_price_pence === null || $index !== 0) {
+            return 0;
+        }
+
+        return (int) ($order->test_pass_guarantee_pence ?? 0);
     }
 
     /**
@@ -122,7 +142,7 @@ class LessonPayment extends Model
             return [];
         }
 
-        return self::breakdownLines(self::weeklyBreakdown($order, (int) $this->amount_pence));
+        return self::breakdownLines(self::weeklyBreakdown($order, (int) $this->amount_pence, (int) $this->test_pass_guarantee_pence));
     }
 
     /**
@@ -130,7 +150,7 @@ class LessonPayment extends Model
      * the amount line that follows in the template stays separated. Returns an
      * empty array when there are no fee components.
      *
-     * @param  array{lesson?: int, booking_fee?: int, digital_fee?: int}  $breakdown
+     * @param  array{lesson?: int, booking_fee?: int, digital_fee?: int, test_pass_guarantee?: int}  $breakdown
      * @return list<string>
      */
     public static function breakdownLines(array $breakdown): array
@@ -138,8 +158,9 @@ class LessonPayment extends Model
         $lesson = (int) ($breakdown['lesson'] ?? 0);
         $bookingFee = (int) ($breakdown['booking_fee'] ?? 0);
         $digitalFee = (int) ($breakdown['digital_fee'] ?? 0);
+        $testPassGuarantee = (int) ($breakdown['test_pass_guarantee'] ?? 0);
 
-        if ($bookingFee <= 0 && $digitalFee <= 0) {
+        if ($bookingFee <= 0 && $digitalFee <= 0 && $testPassGuarantee <= 0) {
             return [];
         }
 
@@ -155,6 +176,10 @@ class LessonPayment extends Model
 
         if ($digitalFee > 0) {
             $lines[] = 'Digital services fee (weekly instalment): '.self::formatPence($digitalFee);
+        }
+
+        if ($testPassGuarantee > 0) {
+            $lines[] = 'Pass Your Test Guarantee: '.self::formatPence($testPassGuarantee);
         }
 
         $lines[] = '';
@@ -178,31 +203,45 @@ class LessonPayment extends Model
      * (legacy / zero-value), the entire amount is treated as the lesson
      * component.
      *
-     * @return array{lesson: int, booking_fee: int, digital_fee: int}
+     * When the payment carries the Pass Your Test Guarantee add-on
+     * ($testPassGuaranteePence), that amount is split out first and returned
+     * under `test_pass_guarantee`; the rest is split as above.
+     *
+     * @return array{lesson: int, booking_fee: int, digital_fee: int, test_pass_guarantee?: int}
      */
-    public static function weeklyBreakdown(Order $order, int $amountPence): array
+    public static function weeklyBreakdown(Order $order, int $amountPence, int $testPassGuaranteePence = 0): array
     {
+        $testPassGuaranteePence = max(0, min($testPassGuaranteePence, $amountPence));
+        $spreadAmountPence = $amountPence - $testPassGuaranteePence;
+
         $packagePence = (int) ($order->package_total_price_pence ?? 0);
         $bookingPence = (int) ($order->booking_fee_pence ?? 0);
         $digitalPence = (int) ($order->digital_fee_pence ?? 0);
-        $orderTotal = (int) ($order->total_price_pence ?? ($packagePence + $bookingPence + $digitalPence));
+        $orderTotal = (int) ($order->total_price_pence ?? ($packagePence + $bookingPence + $digitalPence))
+            - (int) ($order->test_pass_guarantee_pence ?? 0);
 
-        if ($orderTotal <= 0 || $amountPence <= 0) {
-            return [
-                'lesson' => $amountPence,
+        if ($orderTotal <= 0 || $spreadAmountPence <= 0) {
+            $breakdown = [
+                'lesson' => $spreadAmountPence,
                 'booking_fee' => 0,
                 'digital_fee' => 0,
             ];
+        } else {
+            $lessonComponent = (int) round($spreadAmountPence * ($packagePence / $orderTotal));
+            $bookingComponent = (int) round($spreadAmountPence * ($bookingPence / $orderTotal));
+            $digitalComponent = $spreadAmountPence - $lessonComponent - $bookingComponent;
+
+            $breakdown = [
+                'lesson' => $lessonComponent,
+                'booking_fee' => $bookingComponent,
+                'digital_fee' => $digitalComponent,
+            ];
         }
 
-        $lessonComponent = (int) round($amountPence * ($packagePence / $orderTotal));
-        $bookingComponent = (int) round($amountPence * ($bookingPence / $orderTotal));
-        $digitalComponent = $amountPence - $lessonComponent - $bookingComponent;
+        if ($testPassGuaranteePence > 0) {
+            $breakdown['test_pass_guarantee'] = $testPassGuaranteePence;
+        }
 
-        return [
-            'lesson' => $lessonComponent,
-            'booking_fee' => $bookingComponent,
-            'digital_fee' => $digitalComponent,
-        ];
+        return $breakdown;
     }
 }

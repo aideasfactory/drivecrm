@@ -26,6 +26,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from '@/components/ui/sonner'
+import TestPassGuaranteeBadge from '@/components/Shared/TestPassGuaranteeBadge.vue'
 import {
     Search,
     Plus,
@@ -393,8 +394,12 @@ const handleCreatePupil = async () => {
                                         </AvatarFallback>
                                     </Avatar>
                                     <div>
-                                        <div class="font-semibold">
+                                        <div class="flex items-center gap-2 font-semibold">
                                             {{ pupil.name }}
+                                            <TestPassGuaranteeBadge
+                                                v-if="pupil.has_test_pass_guarantee"
+                                                short
+                                            />
                                         </div>
                                         <div
                                             class="text-sm text-muted-foreground"

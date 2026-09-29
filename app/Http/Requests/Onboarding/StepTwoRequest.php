@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Onboarding;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StepTwoRequest extends FormRequest
 {
@@ -14,7 +15,15 @@ class StepTwoRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'instructor_id' => ['required', 'exists:instructors,id'],
+            // Only instructors who can be paid (Stripe account + payouts enabled),
+            // matching the instructor list shown on this step.
+            'instructor_id' => [
+                'required',
+                Rule::exists('instructors', 'id')
+                    ->where('status', 'active')
+                    ->where('payouts_enabled', true)
+                    ->whereNotNull('stripe_account_id'),
+            ],
         ];
     }
 

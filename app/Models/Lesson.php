@@ -160,14 +160,15 @@ class Lesson extends Model
 
     /**
      * What the student pays for this lesson, itemised into the lesson cost,
-     * booking fee share and digital fee share. The parts always sum to
-     * `total_pence`. Expects `order` and `lessonPayment` to be loaded.
+     * booking fee share, digital fee share and any Pass Your Test Guarantee
+     * charged with it (only ever on an order's first lesson). The parts always
+     * sum to `total_pence`. Expects `order` and `lessonPayment` to be loaded.
      *
-     * @return array{total_pence: int, lesson_pence: int, booking_fee_pence: int, digital_fee_pence: int}
+     * @return array{total_pence: int, lesson_pence: int, booking_fee_pence: int, digital_fee_pence: int, test_pass_guarantee_pence: int}
      */
     public function paymentBreakdown(): array
     {
-        $totalPence = $this->studentPaysPence();
+        [$totalPence, $guaranteePence] = $this->studentPays();
 
         if (! $this->order) {
             return [
@@ -175,42 +176,49 @@ class Lesson extends Model
                 'lesson_pence' => $totalPence,
                 'booking_fee_pence' => 0,
                 'digital_fee_pence' => 0,
+                'test_pass_guarantee_pence' => 0,
             ];
         }
 
-        $split = LessonPayment::weeklyBreakdown($this->order, $totalPence);
+        $split = LessonPayment::weeklyBreakdown($this->order, $totalPence, $guaranteePence);
 
         return [
             'total_pence' => $totalPence,
             'lesson_pence' => $split['lesson'],
             'booking_fee_pence' => $split['booking_fee'],
             'digital_fee_pence' => $split['digital_fee'],
+            'test_pass_guarantee_pence' => $split['test_pass_guarantee'] ?? 0,
         ];
     }
 
     /**
-     * The fee-inclusive amount the student pays for this lesson. Weekly lessons
-     * use their instalment. Upfront lessons use their share of the order total,
-     * since upfront payment records created before fees were apportioned hold
-     * the lesson price alone. Orders without a stored total (legacy, imported)
+     * The fee-inclusive amount the student pays for this lesson, and the part
+     * of it that is the Pass Your Test Guarantee. Weekly lessons use their
+     * instalment. Upfront lessons use their share of the order total, since
+     * upfront payment records created before fees were apportioned hold the
+     * lesson price alone. Orders without a stored total (legacy, imported)
      * fall back to the lesson price.
+     *
+     * @return array{0: int, 1: int}
      */
-    protected function studentPaysPence(): int
+    protected function studentPays(): array
     {
         $order = $this->order;
         $payment = $this->lessonPayment;
 
         if ($payment && ($order?->isUpfront() !== true || (int) $payment->amount_pence > (int) $this->amount_pence)) {
-            return (int) $payment->amount_pence;
+            return [(int) $payment->amount_pence, (int) $payment->test_pass_guarantee_pence];
         }
 
-        $orderTotalPence = (int) ($order?->total_price_pence ?? 0);
+        $spreadTotalPence = (int) ($order?->total_price_pence ?? 0) - (int) ($order?->test_pass_guarantee_pence ?? 0);
         $lessonsCount = (int) ($order?->package_lessons_count ?? 0);
 
-        if ($orderTotalPence <= 0 || $lessonsCount < 1) {
-            return (int) $this->amount_pence;
+        if ($spreadTotalPence <= 0 || $lessonsCount < 1) {
+            return [(int) $this->amount_pence, 0];
         }
 
-        return LessonPayment::weeklyAmountForIndex($orderTotalPence, $lessonsCount, 0);
+        // Legacy upfront record: the lesson's index is unknown here, so the
+        // even share is used and any guarantee stays on the order itself.
+        return [LessonPayment::weeklyAmountForIndex($spreadTotalPence, $lessonsCount, 0), 0];
     }
 }

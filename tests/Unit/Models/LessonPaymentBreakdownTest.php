@@ -101,3 +101,45 @@ it('has a zero digital fee component when the order has no digital fee', functio
     expect($breakdown['digital_fee'])->toBe(0);
     expect($breakdown['lesson'] + $breakdown['booking_fee'])->toBe($amountPence);
 });
+
+it('splits out the pass your test guarantee before apportioning fees', function () {
+    $order = new Order([
+        'package_total_price_pence' => 60000,
+        'booking_fee_pence' => 1999,
+        'digital_fee_pence' => 3990,
+        'total_price_pence' => 70989, // includes the £50 guarantee
+        'test_pass_guarantee_pence' => 5000,
+    ]);
+
+    $spreadPence = (int) round(65989 / 10);
+    $amountPence = $spreadPence + 5000;
+
+    $breakdown = LessonPayment::weeklyBreakdown($order, $amountPence, 5000);
+
+    expect($breakdown['test_pass_guarantee'])->toBe(5000);
+    expect($breakdown['lesson'] + $breakdown['booking_fee'] + $breakdown['digital_fee'])->toBe($spreadPence);
+    expect($breakdown)->toBe(array_merge(
+        LessonPayment::weeklyBreakdown(new Order([
+            'package_total_price_pence' => 60000,
+            'booking_fee_pence' => 1999,
+            'digital_fee_pence' => 3990,
+            'total_price_pence' => 65989,
+        ]), $spreadPence),
+        ['test_pass_guarantee' => 5000],
+    ));
+});
+
+it('omits the guarantee component for payments without it', function () {
+    $order = new Order([
+        'package_total_price_pence' => 60000,
+        'booking_fee_pence' => 1999,
+        'digital_fee_pence' => 3990,
+        'total_price_pence' => 70989,
+        'test_pass_guarantee_pence' => 5000,
+    ]);
+
+    $breakdown = LessonPayment::weeklyBreakdown($order, 6599);
+
+    expect($breakdown)->not->toHaveKey('test_pass_guarantee');
+    expect($breakdown['lesson'] + $breakdown['booking_fee'] + $breakdown['digital_fee'])->toBe(6599);
+});

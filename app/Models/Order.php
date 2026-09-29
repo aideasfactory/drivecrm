@@ -32,6 +32,8 @@ class Order extends Model
         'stripe_subscription_id',
         'discount_code_id',
         'discount_percentage',
+        'includes_test_pass_guarantee',
+        'test_pass_guarantee_pence',
     ];
 
     protected function casts(): array
@@ -47,6 +49,8 @@ class Order extends Model
             'digital_fee_pence' => 'integer',
             'total_price_pence' => 'integer',
             'discount_percentage' => 'integer',
+            'includes_test_pass_guarantee' => 'boolean',
+            'test_pass_guarantee_pence' => 'integer',
         ];
     }
 
@@ -186,30 +190,44 @@ class Order extends Model
     }
 
     /**
-     * Whether the order carries a booking or digital fee on top of the lessons.
+     * Get the formatted Pass Your Test Guarantee charge (e.g., "£50.00").
      */
-    public function hasFees(): bool
+    public function getFormattedTestPassGuaranteeAttribute(): string
     {
-        return ($this->booking_fee_pence ?? 0) > 0 || ($this->digital_fee_pence ?? 0) > 0;
+        return '£'.number_format(($this->test_pass_guarantee_pence ?? 0) / 100, 2);
     }
 
     /**
-     * Get the first weekly instalment the student pays, including their share of
-     * the booking and digital fees (e.g., "£65.99"). Later instalments match this
-     * figure except the last, which absorbs any rounding remainder.
+     * Whether the order carries anything on top of the lessons: a booking fee,
+     * a digital fee or the Pass Your Test Guarantee (paid or included free).
+     */
+    public function hasFees(): bool
+    {
+        return ($this->booking_fee_pence ?? 0) > 0
+            || ($this->digital_fee_pence ?? 0) > 0
+            || (bool) $this->includes_test_pass_guarantee;
+    }
+
+    /**
+     * Get the regular weekly instalment the student pays, including their share
+     * of the booking and digital fees (e.g., "£65.99"). Any paid Pass Your Test
+     * Guarantee is charged on top of the first instalment only, so it is left
+     * out here. The last instalment absorbs any rounding remainder.
      */
     public function getFormattedWeeklyInstalmentAttribute(): string
     {
         $lessonsCount = (int) ($this->package_lessons_count ?? 0);
-        $totalPence = (int) ($this->total_price_pence ?? $this->package_total_price_pence ?? 0);
+        $totalPence = (int) ($this->total_price_pence ?? $this->package_total_price_pence ?? 0)
+            - (int) ($this->test_pass_guarantee_pence ?? 0);
 
         return '£'.number_format(LessonPayment::weeklyAmountForIndex($totalPence, $lessonsCount, 0) / 100, 2);
     }
 
     /**
-     * Lines itemising the order cost for student-facing emails: the lessons
-     * followed by each non-zero fee. The fee-inclusive total is left to the
-     * caller so each email can label it ("Total", "Total paid").
+     * Lines itemising the order cost for student-facing emails: the lessons,
+     * each non-zero fee and the Pass Your Test Guarantee when included. The
+     * total is left to the caller so each email can label it ("Total",
+     * "Total paid").
      *
      * @return list<string>
      */
@@ -223,6 +241,12 @@ class Order extends Model
 
         if ($this->digital_fee_pence > 0) {
             $lines[] = "Digital fee: {$this->formatted_digital_fee}";
+        }
+
+        if ($this->includes_test_pass_guarantee) {
+            $lines[] = $this->test_pass_guarantee_pence > 0
+                ? "Pass Your Test Guarantee: {$this->formatted_test_pass_guarantee}"
+                : 'Pass Your Test Guarantee: Included free';
         }
 
         return $lines;

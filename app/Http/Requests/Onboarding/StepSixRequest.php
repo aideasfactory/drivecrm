@@ -15,6 +15,14 @@ class StepSixRequest extends FormRequest
     {
         return [
             'payment_mode' => ['required', 'string', 'in:upfront,weekly'],
+            'test_pass_guarantee' => ['nullable', 'boolean'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'test_pass_guarantee.boolean' => 'Please choose whether to add Pass Your Test Guarantee.',
         ];
     }
 }

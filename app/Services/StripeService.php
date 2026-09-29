@@ -248,6 +248,7 @@ class StripeService
             // Use total_price_pence (package + booking fee + digital fees) when available,
             // otherwise fall back to package_total_price_pence for legacy orders
             $chargeAmountPence = $order->total_price_pence ?? $order->package_total_price_pence;
+            $testPassGuaranteePence = $order->total_price_pence !== null ? (int) $order->test_pass_guarantee_pence : 0;
 
             $hasDiscount = $order->discount_percentage !== null && $order->discount_percentage > 0;
             $hasFeesOrDiscount = $order->total_price_pence !== null || $hasDiscount;
@@ -269,10 +270,23 @@ class StripeService
             ]);
 
             // Always use price_data when fees are included or a discount is applied,
-            // since the pre-created Stripe Price only reflects the base package price
+            // since the pre-created Stripe Price only reflects the base package price.
+            // The guarantee add-on gets its own line below, so the package and fee
+            // lines are built from the charge without it.
             $lineItems = $hasFeesOrDiscount
-                ? $this->buildCheckoutLineItems($order, $package, $chargeAmountPence)
+                ? $this->buildCheckoutLineItems($order, $package, $chargeAmountPence - $testPassGuaranteePence)
                 : [['price' => $package->stripe_price_id, 'quantity' => 1]];
+
+            if ($testPassGuaranteePence > 0) {
+                $lineItems[] = [
+                    'price_data' => [
+                        'currency' => 'gbp',
+                        'unit_amount' => $testPassGuaranteePence,
+                        'product_data' => ['name' => 'Pass Your Test Guarantee'],
+                    ],
+                    'quantity' => 1,
+                ];
+            }
 
             // Shared between the session and its PaymentIntent. Session metadata is
             // NOT propagated to the PaymentIntent/Charge by Stripe, and the Dashboard
@@ -293,6 +307,8 @@ class StripeService
                 'digital_fee_pence' => $order->digital_fee_pence,
                 'discount_code_id' => $order->discount_code_id,
                 'discount_percentage' => $order->discount_percentage,
+                'includes_test_pass_guarantee' => $order->includes_test_pass_guarantee ? 'yes' : 'no',
+                'test_pass_guarantee_pence' => $testPassGuaranteePence,
                 'environment' => config('app.env'),
             ];
 
@@ -706,7 +722,7 @@ class StripeService
      * If the breakdown is missing or has no fee components, a single
      * "lesson payment" line item is returned.
      *
-     * @param  array{lesson: int, booking_fee: int, digital_fee: int}|null  $breakdown
+     * @param  array{lesson: int, booking_fee: int, digital_fee: int, test_pass_guarantee?: int}|null  $breakdown
      * @return list<array{amount: int, description: string, component: string}>
      */
     protected function buildInvoiceLineItems(int $amountPence, ?array $breakdown, string $packageName, string $lessonDateLabel): array
@@ -714,10 +730,11 @@ class StripeService
         $lessonComponent = (int) ($breakdown['lesson'] ?? 0);
         $bookingComponent = (int) ($breakdown['booking_fee'] ?? 0);
         $digitalComponent = (int) ($breakdown['digital_fee'] ?? 0);
+        $guaranteeComponent = (int) ($breakdown['test_pass_guarantee'] ?? 0);
 
         $hasBreakdown = $breakdown !== null
-            && ($bookingComponent > 0 || $digitalComponent > 0)
-            && ($lessonComponent + $bookingComponent + $digitalComponent) === $amountPence;
+            && ($bookingComponent > 0 || $digitalComponent > 0 || $guaranteeComponent > 0)
+            && ($lessonComponent + $bookingComponent + $digitalComponent + $guaranteeComponent) === $amountPence;
 
         if (! $hasBreakdown) {
             return [[
@@ -750,6 +767,14 @@ class StripeService
                 'amount' => $digitalComponent,
                 'description' => 'Digital services fee (weekly instalment)',
                 'component' => 'digital_fee',
+            ];
+        }
+
+        if ($guaranteeComponent > 0) {
+            $items[] = [
+                'amount' => $guaranteeComponent,
+                'description' => 'Pass Your Test Guarantee',
+                'component' => 'test_pass_guarantee',
             ];
         }
 
