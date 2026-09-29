@@ -3206,24 +3206,14 @@ Payment behaviour matches a student-initiated `POST /api/v1/students/{student}/o
     "total_price_pence": 6898,
     "payment_mode": "upfront",
     "status": "pending",
+    "payment_hold_expires_at": "2026-09-02T14:15:00+00:00",
     "lessons_count": 1,
     "created_at": "2026-09-02T14:05:00.000000Z"
   }
 }
 ```
 
-**Response — weekly (201):**
-```json
-{
-  "message": "Lesson booked. Lesson invoices will be sent before each lesson.",
-  "data": {
-    "id": 92,
-    "payment_mode": "weekly",
-    "status": "active",
-    "lessons_count": 1
-  }
-}
-```
+A `weekly` accept returns the same shape, with `payment_mode: "weekly"` and `status: "pending"`; the `checkout_url` takes the first week.
 
 **Error — already taken / no longer open (422):**
 ```json
@@ -4145,7 +4135,7 @@ Returns lessons for a given student across all their orders. Supports optional f
 | `from_date` | string | — | Only return lessons on or after this date (YYYY-MM-DD) |
 | `sort` | string | `desc` | Sort direction by date/time: `asc` or `desc` |
 | `limit` | integer | — | Maximum number of results to return |
-| `include_drafts` | boolean | `false` | When `true`, include **draft** (upfront booking awaiting payment) lessons in the response. Off by default so student-facing views are unaffected — the instructor's pupil view passes this. Draft lessons are returned with `card_status: "draft"` and `status: "draft"`. |
+| `include_drafts` | boolean | `false` | When `true`, include **draft** (upfront or weekly booking awaiting its first payment) lessons in the response. Off by default so student-facing views are unaffected — the instructor's pupil view passes this. Draft lessons are returned with `card_status: "draft"` and `status: "draft"`. |
 
 **Request Body:** None
 
@@ -4255,7 +4245,7 @@ The parts always add up to `total_pence`. They are pro-rated from the order's st
 | `needs_sign_off` | Red | Past lesson not yet signed off (`completed_at` is null). **Do not** gate this on `has_reflective_log` — that four-prompt log is leftover and is not part of sign-off. |
 | `current` | Orange | The next lesson (today or future) — the one to sign off next |
 | `upcoming` | Blue | Future lessons beyond the next one |
-| `draft` | Grey | Upfront booking awaiting payment. Only returned when `include_drafts=true`. Draft lessons never consume the `current` slot — the "next lesson to sign off" is still the next non-draft lesson. |
+| `draft` | Grey | Booking (upfront or weekly) awaiting its first payment. Only returned when `include_drafts=true`. Draft lessons never consume the `current` slot — the "next lesson to sign off" is still the next non-draft lesson. |
 
 ---
 
@@ -4265,7 +4255,7 @@ The parts always add up to `total_pence`. They are pro-rated from the order's st
 
 Returns full detail for a single lesson belonging to a student. The lesson must belong to the student via one of their orders — otherwise a 404 is returned.
 
-**Draft lessons ARE returned by this endpoint** (unlike the index, which requires `include_drafts=true`). Tapping a draft card from the instructor's pupil view therefore resolves. Cancelled lessons still return 404. A draft lesson comes back with `status: "draft"`, `card_status: "draft"`, `payment_mode: "upfront"`, and `payment_status: null` (no payment record exists until Stripe Checkout completes — same as the index). Sign-off remains impossible for drafts: `POST .../sign-off` only accepts `pending` lessons and returns 404 for a draft.
+**Draft lessons ARE returned by this endpoint** (unlike the index, which requires `include_drafts=true`). Tapping a draft card from the instructor's pupil view therefore resolves. Cancelled lessons still return 404. A draft lesson comes back with `status: "draft"` and `card_status: "draft"`. For `payment_mode: "upfront"`, `payment_status` is `null` (no payment record exists until Stripe Checkout completes — same as the index). For `payment_mode: "weekly"`, `payment_status` is `"due"` (the weekly payment rows are created at booking). Sign-off remains impossible for drafts: `POST .../sign-off` only accepts `pending` lessons and returns 404 for a draft.
 
 **URL Parameters:**
 
