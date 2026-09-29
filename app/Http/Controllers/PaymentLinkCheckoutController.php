@@ -133,6 +133,9 @@ class PaymentLinkCheckoutController extends Controller
             'booking_fee_pence' => $order->booking_fee_pence,
             'digital_fee_pence' => $order->digital_fee_pence,
             'test_pass_guarantee_pence' => $order->includes_test_pass_guarantee ? (int) $order->test_pass_guarantee_pence : null,
+            // What the first payment covered: the full amount for pay in full, week 1 for weekly
+            'first_payment' => $order->firstPaymentBreakdown(),
+            'weekly_instalment' => $order->isWeekly() ? $order->formatted_weekly_instalment : null,
             'package' => $order->package ? [
                 'name' => $order->package->name,
                 'lessons_count' => $order->package->lessons_count,

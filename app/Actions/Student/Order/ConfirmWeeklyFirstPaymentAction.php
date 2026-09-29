@@ -29,14 +29,8 @@ class ConfirmWeeklyFirstPaymentAction
         $confirmed = DB::transaction(function () use ($order, $chargeId): bool {
             $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->first();
 
+            // A released (cancelled) order is reported to Head Office by the caller.
             if (! $lockedOrder || ! $lockedOrder->isWeekly() || ! $lockedOrder->isPending()) {
-                if ($lockedOrder?->status === OrderStatus::CANCELLED) {
-                    Log::critical('First weekly payment received for a released order — refund required', [
-                        'order_id' => $order->id,
-                        'stripe_charge_id' => $chargeId,
-                    ]);
-                }
-
                 return false;
             }
 

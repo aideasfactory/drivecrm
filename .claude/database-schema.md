@@ -846,6 +846,7 @@ Defines time slots within a calendar date.
 | `recurrence_pattern` | varchar(20) | DEFAULT 'none' | Recurrence pattern: none, weekly, biweekly, monthly |
 | `recurrence_end_date` | date | NULLABLE | End date for the recurrence series |
 | `recurrence_group_id` | uuid | NULLABLE, INDEXED | Groups all instances of a recurring slot together |
+| `created_by_hold` | boolean | NULLABLE | Set when a booking holds the slot: `true` = the hold created it (no availability existed), `false` = it took over an existing availability slot. `null` for items not held by a booking, or held before this column existed |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
@@ -864,6 +865,8 @@ Defines time slots within a calendar date.
 - Practical-test slots store the assigned `student_id`. Creating one carries the test date onto that student's `book_practical_test` checklist item (date set, item checked); deleting one clears that checklist date (date nulled, item unchecked)
 - `status` tracks the booking lifecycle: `draft` → `reserved`/`booked` → `completed`
 - Draft items are cleaned up by `calendar:cleanup-drafts` command if abandoned
+- Releasing a draft (unpaid hold released or cleaned up) **deletes** items with `created_by_hold = true` (and their travel blocks) and puts all other drafts back on offer (`is_available = true`, `status` and `created_by_hold` cleared). An unpaid booking therefore never leaves availability the instructor did not offer
+- A booking is refused if any week's lesson time overlaps another lesson (`draft`/`reserved`/`booked`/`completed`), a blocked-out slot (`is_available = false`) or a practical test on the same calendar. Travel blocks are not clashes
 - Recurring slots: materialized instances pattern — each occurrence is a separate row linked by `recurrence_group_id`
 - Individual occurrences can be modified/deleted without affecting the rest of the series
 - Deleting "this and all future" removes all items in the group from the selected date forward (excluding those with lessons)

@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Onboarding;
 
-use App\Actions\Calendar\ConfirmCalendarItemsAction;
 use App\Actions\Onboarding\CreateOrderFromEnquiryAction;
 use App\Actions\Onboarding\CreateUserAndStudentFromEnquiryAction;
-use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
-use App\Actions\Student\GrantTestPassGuaranteeAction;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use App\Exceptions\SlotNoLongerAvailableException;
@@ -32,7 +29,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
-use Stripe\Checkout\Session;
 
 class StepSixController extends Controller
 {
@@ -40,11 +36,9 @@ class StepSixController extends Controller
         protected StripeService $stripeService,
         protected CreateUserAndStudentFromEnquiryAction $createUserAndStudentAction,
         protected CreateOrderFromEnquiryAction $createOrderAction,
-        protected SendOrderConfirmationEmailAction $sendEmailAction,
         protected OrderService $orderService,
         protected PriceUpliftService $priceUpliftService,
         protected PackageService $packageService,
-        protected GrantTestPassGuaranteeAction $grantTestPassGuarantee,
     ) {}
 
     /**
@@ -576,91 +570,30 @@ class StepSixController extends Controller
                 ->with('error', 'Invalid checkout session.');
         }
 
-        // Weekly: the first week was paid at checkout. Confirmation (and the
-        // confirmation email) happens once, whether here or via the webhook.
-        if ($order->isWeekly()) {
-            $result = $this->orderService->verifyCheckout($order, $sessionId);
+        // Confirms the order once (whether here, via the webhook or on a page
+        // refresh) and sends the confirmation email only on that first time.
+        $result = $this->orderService->verifyCheckout($order, $sessionId);
 
-            if (! $result['verified']) {
-                return redirect()
-                    ->route('onboarding.step6', ['uuid' => $enquiry->id])
-                    ->with('warning', $result['message']);
-            }
-
-            $enquiry->setStepData(6, array_merge($step6, [
-                'payment_status' => 'completed',
-                'stripe_session_id' => $sessionId,
-            ]));
-            $enquiry->save();
-
-            return redirect()
-                ->route('onboarding.complete', ['uuid' => $enquiry->id]);
-        }
-
-        try {
-            // Retrieve the checkout session from Stripe
-            $session = Session::retrieve($sessionId);
-
-            // Verify the session matches the order
-            if ($session->id !== $order->stripe_checkout_session_id) {
-                throw new \Exception('Session ID mismatch.');
-            }
-
-            if ($order->status === OrderStatus::CANCELLED) {
-                Log::critical('Onboarding checkout paid after the booking was released - refund required', [
-                    'order_id' => $order->id,
-                    'session_id' => $sessionId,
-                    'payment_status' => $session->payment_status,
-                ]);
-
+        if (! $result['verified']) {
+            if ($result['order']->status === OrderStatus::CANCELLED) {
                 return redirect()
                     ->route('onboarding.step4', ['uuid' => $enquiry->id])
                     ->with('error', 'Sorry, the time to pay for these lessons ran out and they were released. Any payment taken will be refunded - please choose a new time.');
             }
 
-            // Check payment status
-            if ($session->payment_status === 'paid') {
-                // Update order if still pending (webhook might have already processed it)
-                if ($order->status === OrderStatus::PENDING) {
-                    $order->status = OrderStatus::ACTIVE;
-                    $order->stripe_payment_intent_id = $session->payment_intent;
-                    $order->save();
-
-                    // Transition calendar items from DRAFT to BOOKED now that payment is confirmed
-                    app(ConfirmCalendarItemsAction::class)($order);
-                }
-
-                ($this->grantTestPassGuarantee)($order);
-
-                // Send confirmation email
-                $this->sendEmailAction->execute($order, $order->student);
-
-                // Update enquiry
-                $enquiry->setStepData(6, array_merge($step6, [
-                    'payment_status' => 'completed',
-                    'stripe_session_id' => $sessionId,
-                ]));
-                $enquiry->save();
-
-                return redirect()
-                    ->route('onboarding.complete', ['uuid' => $enquiry->id]);
-            }
-
             return redirect()
                 ->route('onboarding.step6', ['uuid' => $enquiry->id])
-                ->with('warning', 'Payment is being processed. Please check back shortly.');
-
-        } catch (\Exception $e) {
-            Log::error('Failed to verify onboarding payment', [
-                'enquiry_id' => $enquiry->id,
-                'order_id' => $order->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return redirect()
-                ->route('onboarding.step6', ['uuid' => $enquiry->id])
-                ->with('error', 'Failed to verify payment: '.$e->getMessage());
+                ->with('warning', $result['message']);
         }
+
+        $enquiry->setStepData(6, array_merge($step6, [
+            'payment_status' => 'completed',
+            'stripe_session_id' => $sessionId,
+        ]));
+        $enquiry->save();
+
+        return redirect()
+            ->route('onboarding.complete', ['uuid' => $enquiry->id]);
     }
 
     /**

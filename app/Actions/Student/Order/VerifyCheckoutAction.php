@@ -4,79 +4,39 @@ declare(strict_types=1);
 
 namespace App\Actions\Student\Order;
 
-use App\Actions\Calendar\ConfirmCalendarItemsAction;
 use App\Enums\OrderStatus;
-use App\Models\Instructor;
 use App\Models\Order;
-use App\Services\InstructorService;
 use Illuminate\Support\Facades\Log;
 use Stripe\Checkout\Session;
 
 class VerifyCheckoutAction
 {
     /**
-     * Verify a Stripe Checkout session and activate the order if paid.
+     * Check a Stripe Checkout session against its order. Does not confirm the
+     * order — the caller does that through OrderService so the confirmation
+     * and its emails happen exactly once.
      *
-     * @return array{verified: bool, order: Order, message: string}
+     * `paid` is true when the session belongs to the order and has been paid.
+     * `paid_after_release` is true when it was paid but the booking had already
+     * been released.
+     *
+     * @return array{paid: bool, paid_after_release: bool, payment_intent: string|null, message: string}
      */
     public function __invoke(Order $order, string $sessionId): array
     {
+        $result = [
+            'paid' => false,
+            'paid_after_release' => false,
+            'payment_intent' => null,
+            'message' => 'Payment is still processing. Please check back shortly.',
+        ];
+
         if ($order->stripe_checkout_session_id !== $sessionId) {
-            return [
-                'verified' => false,
-                'order' => $order,
-                'message' => 'Session ID mismatch.',
-            ];
+            return ['message' => 'Session ID mismatch.'] + $result;
         }
 
         try {
             $session = Session::retrieve($sessionId);
-
-            if ($order->status === OrderStatus::CANCELLED) {
-                if ($session->payment_status === 'paid') {
-                    Log::critical('Checkout paid after the booking was released - refund required', [
-                        'order_id' => $order->id,
-                        'session_id' => $sessionId,
-                    ]);
-                }
-
-                return [
-                    'verified' => false,
-                    'order' => $order,
-                    'message' => 'The time to pay for this booking ran out and the lessons were released. Any payment taken will be refunded.',
-                ];
-            }
-
-            if ($session->payment_status === 'paid') {
-                if ($order->status === OrderStatus::PENDING) {
-                    $order->status = OrderStatus::ACTIVE;
-                    $order->stripe_payment_intent_id = $session->payment_intent;
-                    $order->save();
-
-                    // Transition calendar items from DRAFT to BOOKED now that payment is confirmed
-                    app(ConfirmCalendarItemsAction::class)($order);
-
-                    // Invalidate grouped students cache so the instructor sees the confirmed booking
-                    $this->invalidateStudentCache($order->instructor_id);
-
-                    Log::info('Order activated via API checkout verification', [
-                        'order_id' => $order->id,
-                        'session_id' => $sessionId,
-                    ]);
-                }
-
-                return [
-                    'verified' => true,
-                    'order' => $order->fresh(),
-                    'message' => 'Payment verified. Order is active.',
-                ];
-            }
-
-            return [
-                'verified' => false,
-                'order' => $order,
-                'message' => 'Payment is still processing. Please check back shortly.',
-            ];
         } catch (\Exception $e) {
             Log::error('Checkout verification failed', [
                 'order_id' => $order->id,
@@ -84,24 +44,26 @@ class VerifyCheckoutAction
                 'error' => $e->getMessage(),
             ]);
 
+            return ['message' => 'Failed to verify payment.'] + $result;
+        }
+
+        $isPaid = $session->payment_status === 'paid';
+        $paymentIntent = $session->payment_intent ?: null;
+
+        if ($order->status === OrderStatus::CANCELLED) {
             return [
-                'verified' => false,
-                'order' => $order,
-                'message' => 'Failed to verify payment.',
+                'paid' => false,
+                'paid_after_release' => $isPaid,
+                'payment_intent' => $paymentIntent,
+                'message' => 'The time to pay for this booking ran out and the lessons were released. Any payment taken will be refunded.',
             ];
         }
-    }
 
-    protected function invalidateStudentCache(?int $instructorId): void
-    {
-        if (! $instructorId) {
-            return;
-        }
-
-        $instructor = Instructor::find($instructorId);
-
-        if ($instructor) {
-            app(InstructorService::class)->invalidateStudentCache($instructor);
-        }
+        return [
+            'paid' => $isPaid,
+            'paid_after_release' => false,
+            'payment_intent' => $paymentIntent,
+            'message' => $isPaid ? 'Payment verified.' : $result['message'],
+        ];
     }
 }

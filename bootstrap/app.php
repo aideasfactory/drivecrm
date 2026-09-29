@@ -20,6 +20,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('orders:release-expired-holds')->everyMinute()->withoutOverlapping();
         $schedule->command('push:send-queued')->everyMinute();
         $schedule->command('reminders:send')->everyFiveMinutes()->withoutOverlapping();
+        // Backup for weekly invoices, which are normally sent when the previous lesson is signed off
+        $schedule->command('lessons:send-invoices')->hourly()->withoutOverlapping();
         $schedule->command('hmrc:monitor-token-expiry')->dailyAt('07:00');
         $schedule->command('hmrc:sync-itsa-obligations')->dailyAt('07:15');
         $schedule->command('hmrc:check-refresh-health')->hourly();

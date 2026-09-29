@@ -120,6 +120,59 @@ class Order extends Model
     }
 
     /**
+     * The first payment the student makes, worked out from the order snapshot so
+     * it is available even after a released booking's payment records are gone:
+     * the full total for upfront orders, or the first weekly instalment plus any
+     * Pass Your Test Guarantee for weekly orders.
+     */
+    public function firstPaymentPence(): int
+    {
+        $totalPence = (int) ($this->total_price_pence ?? $this->package_total_price_pence ?? 0);
+
+        if (! $this->isWeekly()) {
+            return $totalPence;
+        }
+
+        $guaranteePence = $this->firstPaymentGuaranteePence();
+
+        return LessonPayment::weeklyAmountForIndex($totalPence - $guaranteePence, (int) $this->package_lessons_count, 0)
+            + $guaranteePence;
+    }
+
+    /**
+     * The first payment itemised into lessons, booking fee, digital fee and any
+     * Pass Your Test Guarantee. Uses the stored first weekly payment when there
+     * is one, otherwise the order snapshot. The parts sum to `total_pence`.
+     *
+     * @return array{total_pence: int, lesson_pence: int, booking_fee_pence: int, digital_fee_pence: int, test_pass_guarantee_pence: int}
+     */
+    public function firstPaymentBreakdown(): array
+    {
+        $payment = $this->isWeekly() ? $this->firstLessonPayment() : null;
+
+        $totalPence = $payment ? (int) $payment->amount_pence : $this->firstPaymentPence();
+        $guaranteePence = $payment ? (int) $payment->test_pass_guarantee_pence : $this->firstPaymentGuaranteePence();
+
+        $split = LessonPayment::weeklyBreakdown($this, $totalPence, $guaranteePence);
+
+        return [
+            'total_pence' => $totalPence,
+            'lesson_pence' => $split['lesson'],
+            'booking_fee_pence' => $split['booking_fee'],
+            'digital_fee_pence' => $split['digital_fee'],
+            'test_pass_guarantee_pence' => $split['test_pass_guarantee'] ?? 0,
+        ];
+    }
+
+    /**
+     * The Pass Your Test Guarantee charge included in the first payment.
+     */
+    public function firstPaymentGuaranteePence(): int
+    {
+        return $this->total_price_pence === null ? 0 : (int) ($this->test_pass_guarantee_pence ?? 0);
+    }
+
+    /**
      * Check if order is active.
      */
     public function isActive(): bool

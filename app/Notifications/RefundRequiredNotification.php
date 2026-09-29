@@ -27,6 +27,7 @@ class RefundRequiredNotification extends Notification implements ShouldQueue
         public ?Order $order,
         public Collection $paidLessons,
         public string $reason,
+        public bool $guaranteeRemoved = false,
     ) {}
 
     /**
@@ -68,16 +69,23 @@ class RefundRequiredNotification extends Notification implements ShouldQueue
             $message->line('• '.$this->formatLesson($lesson, $breakdown));
         }
 
-        $refundPence = $totals['lesson'] + $totals['booking_fee'];
+        // Everything is refunded except the booking fee, which is kept.
+        $refundPence = $totals['paid'] - $totals['booking_fee'];
 
         $message->line('')
             ->line('**Total paid for cancelled lessons:** '.$this->formatPence($totals['paid']))
             ->line('Lessons: '.$this->formatPence($totals['lesson']))
-            ->line('Booking fee: '.$this->formatPence($totals['booking_fee']))
-            ->line('Digital fee (retained, not refunded): '.$this->formatPence($totals['digital_fee']));
+            ->line('Digital fee: '.$this->formatPence($totals['digital_fee']));
 
         if ($totals['test_pass_guarantee'] > 0) {
-            $message->line('Pass Your Test Guarantee (retained, not refunded): '.$this->formatPence($totals['test_pass_guarantee']));
+            $message->line('Pass Your Test Guarantee: '.$this->formatPence($totals['test_pass_guarantee']));
+        }
+
+        $message->line('Booking fee (retained, not refunded): '.$this->formatPence($totals['booking_fee']));
+
+        if ($this->guaranteeRemoved) {
+            $message->line('')
+                ->line("The Pass Your Test Guarantee has been removed from the pupil's account.");
         }
 
         $message->line('')

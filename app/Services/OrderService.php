@@ -8,8 +8,10 @@ use App\Actions\Calendar\CloseOpenSlotOffersForItemsAction;
 use App\Actions\Calendar\DetectCalendarClashesAction;
 use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
 use App\Actions\Payment\SendLessonInvoiceAction;
+use App\Actions\Payment\SendPaymentReceivedEmailsAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Student\GrantTestPassGuaranteeAction;
+use App\Actions\Student\Order\ConfirmUpfrontPaymentAction;
 use App\Actions\Student\Order\ConfirmWeeklyFirstPaymentAction;
 use App\Actions\Student\Order\CreateDraftCalendarItemsAction;
 use App\Actions\Student\Order\CreateOrderFromApiAction;
@@ -27,9 +29,12 @@ use App\Models\Order;
 use App\Models\Package;
 use App\Models\Student;
 use App\Notifications\CalendarClashDetectedNotification;
+use App\Notifications\ReleasedOrderPaidNotification;
 use App\Support\BookingPayments;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 use Stripe\Checkout\Session;
@@ -52,6 +57,8 @@ class OrderService extends BaseService
         protected ConfirmWeeklyFirstPaymentAction $confirmWeeklyFirstPaymentAction,
         protected ReleaseUnpaidOrderAction $releaseUnpaidOrderAction,
         protected GrantTestPassGuaranteeAction $grantTestPassGuarantee,
+        protected ConfirmUpfrontPaymentAction $confirmUpfrontPaymentAction,
+        protected SendPaymentReceivedEmailsAction $sendPaymentReceivedEmails,
     ) {}
 
     /**
@@ -353,8 +360,25 @@ class OrderService extends BaseService
             return ['status' => 'unavailable', 'message' => 'This booking can no longer be paid for.'];
         }
 
-        $checkoutUrl = $this->resolveOpenCheckoutUrl($order)
-            ?? $this->createCheckoutSession($order, $package, $student, $bookingSource);
+        $storedSession = $this->storedCheckoutSessionState($order);
+
+        if ($storedSession['state'] === 'paid') {
+            $this->confirmPaidCheckoutSession($order, $order->stripe_checkout_session_id, $storedSession['payment_intent']);
+
+            return ['status' => 'paid', 'message' => 'This booking has already been paid for.'];
+        }
+
+        if ($storedSession['state'] === 'processing') {
+            return ['status' => 'error', 'message' => 'Your payment is being processed. Please check your email for confirmation before trying again.'];
+        }
+
+        if ($storedSession['state'] === 'unknown') {
+            return ['status' => 'error', 'message' => "We couldn't open the payment page just now. Please try the link again in a moment."];
+        }
+
+        $checkoutUrl = $storedSession['state'] === 'open'
+            ? $storedSession['url']
+            : $this->createCheckoutSession($order, $package, $student, $bookingSource);
 
         if (! $checkoutUrl) {
             return ['status' => 'error', 'message' => "We couldn't open the payment page just now. Please try the link again in a moment."];
@@ -409,30 +433,43 @@ class OrderService extends BaseService
     }
 
     /**
-     * Return the order's existing Stripe Checkout session URL when the session
-     * is still open. Returns null when there is no stored session, it has
-     * completed or expired, or the lookup fails — the caller then creates a
-     * fresh session.
+     * The state of the order's stored Stripe Checkout session, so a payment
+     * link never opens a second session while the first can still be (or has
+     * already been) paid:
+     * - `none`: no stored session, or it has expired — a fresh one may be created
+     * - `open`: still payable — reuse `url`
+     * - `paid`: completed and paid — confirm instead of charging again
+     * - `processing`: completed but the payment has not settled yet
+     * - `unknown`: Stripe could not be reached — don't create another session
+     *
+     * @return array{state: 'none'|'open'|'paid'|'processing'|'unknown', url: string|null, payment_intent: string|null}
      */
-    protected function resolveOpenCheckoutUrl(Order $order): ?string
+    protected function storedCheckoutSessionState(Order $order): array
     {
+        $state = ['state' => 'none', 'url' => null, 'payment_intent' => null];
+
         if (! $order->stripe_checkout_session_id) {
-            return null;
+            return $state;
         }
 
         try {
             $session = Session::retrieve($order->stripe_checkout_session_id);
-
-            return $session->status === 'open' ? ($session->url ?: null) : null;
         } catch (\Exception $e) {
-            Log::warning('Failed to retrieve existing checkout session for payment-link resend', [
+            Log::warning('Failed to retrieve existing checkout session for payment link', [
                 'order_id' => $order->id,
                 'session_id' => $order->stripe_checkout_session_id,
                 'error' => $e->getMessage(),
             ]);
 
-            return null;
+            return ['state' => 'unknown'] + $state;
         }
+
+        return match (true) {
+            $session->status === 'open' && $session->url => ['state' => 'open', 'url' => $session->url] + $state,
+            $session->status === 'complete' && $session->payment_status === 'paid' => ['state' => 'paid', 'payment_intent' => $session->payment_intent ?: null] + $state,
+            $session->status === 'complete' => ['state' => 'processing'] + $state,
+            default => $state,
+        };
     }
 
     /**
@@ -446,17 +483,33 @@ class OrderService extends BaseService
             return $this->verifyWeeklyCheckout($order, $sessionId);
         }
 
-        $result = ($this->verifyCheckout)($order, $sessionId);
+        $check = ($this->verifyCheckout)($order, $sessionId);
 
-        // Send confirmation email when upfront payment is verified
-        if ($result['verified']) {
-            $this->sendConfirmationEmail->execute($result['order'], $result['order']->student);
+        if ($check['paid_after_release']) {
+            $this->reportPaymentForReleasedOrder($order, $sessionId, $check['payment_intent']);
 
-            // Invalidate grouped students cache after payment confirmation
-            $this->invalidateStudentCacheForBooking($order->instructor_id);
+            return ['verified' => false, 'order' => $order, 'message' => $check['message']];
         }
 
-        return $result;
+        if (! $check['paid']) {
+            return ['verified' => false, 'order' => $order, 'message' => $check['message']];
+        }
+
+        $this->confirmUpfrontPayment($order, $check['payment_intent'], null, $sessionId);
+
+        $order->refresh();
+
+        if ($order->status === OrderStatus::CANCELLED) {
+            return [
+                'verified' => false,
+                'order' => $order,
+                'message' => 'The time to pay for this booking ran out and the lessons were released. Any payment taken will be refunded.',
+            ];
+        }
+
+        return $order->isActive() || $order->status === OrderStatus::COMPLETED
+            ? ['verified' => true, 'order' => $order, 'message' => 'Payment verified. Order is active.']
+            : ['verified' => false, 'order' => $order, 'message' => 'This booking could not be confirmed. Please contact us.'];
     }
 
     /**
@@ -486,9 +539,17 @@ class OrderService extends BaseService
             return ['verified' => false, 'order' => $order, 'message' => 'Payment is still processing. Please check back shortly.'];
         }
 
-        $this->confirmWeeklyFirstPayment($order, $session->payment_intent ?: null);
+        $this->confirmWeeklyFirstPayment($order, $session->payment_intent ?: null, $sessionId);
 
         $order->refresh();
+
+        if ($order->status === OrderStatus::CANCELLED) {
+            return [
+                'verified' => false,
+                'order' => $order,
+                'message' => 'The time to pay for this booking ran out and the lessons were released. Any payment taken will be refunded.',
+            ];
+        }
 
         return $order->isActive()
             ? ['verified' => true, 'order' => $order, 'message' => 'Payment verified. Order is active.']
@@ -500,16 +561,77 @@ class OrderService extends BaseService
      * from both the webhook and the success page — the confirmation email and
      * follow-ups only go out once.
      */
-    public function confirmWeeklyFirstPayment(Order $order, ?string $paymentIntentId): bool
+    public function confirmWeeklyFirstPayment(Order $order, ?string $paymentIntentId, ?string $checkoutSessionId = null): bool
     {
         $chargeId = $paymentIntentId
             ? $this->stripeService->getChargeIdForPaymentIntent($paymentIntentId)
             : null;
 
         if (! ($this->confirmWeeklyFirstPaymentAction)($order, $chargeId)) {
+            if ($order->fresh()?->status === OrderStatus::CANCELLED) {
+                $this->reportPaymentForReleasedOrder($order, $checkoutSessionId, $paymentIntentId ?? $chargeId);
+            }
+
             return false;
         }
 
+        $this->runConfirmationFollowUps($order);
+
+        $firstPayment = $order->firstLessonPayment();
+
+        if ($firstPayment) {
+            ($this->sendPaymentReceivedEmails)($firstPayment, $order->student, $order->instructor);
+        }
+
+        return true;
+    }
+
+    /**
+     * Record a pay-in-full payment and confirm the booking. Safe to call from
+     * the webhook, the success pages and the app's verify call — only the call
+     * that confirms the order sends the confirmation email and follow-ups. A
+     * payment for an order that was already released alerts Head Office.
+     */
+    public function confirmUpfrontPayment(Order $order, ?string $paymentIntentId, ?string $chargeId = null, ?string $checkoutSessionId = null): bool
+    {
+        $chargeId ??= $paymentIntentId
+            ? $this->stripeService->getChargeIdForPaymentIntent($paymentIntentId)
+            : null;
+
+        if (! ($this->confirmUpfrontPaymentAction)($order, $paymentIntentId, $chargeId)) {
+            $order->refresh();
+
+            if ($order->status === OrderStatus::CANCELLED) {
+                $this->reportPaymentForReleasedOrder($order, $checkoutSessionId, $paymentIntentId ?? $chargeId);
+            } elseif ($chargeId && ! $order->stripe_charge_id) {
+                $order->update(['stripe_charge_id' => $chargeId]);
+            }
+
+            return false;
+        }
+
+        $this->runConfirmationFollowUps($order);
+
+        return true;
+    }
+
+    /**
+     * Confirm an order from a Stripe Checkout session that has been paid, in
+     * whichever payment mode it uses.
+     */
+    public function confirmPaidCheckoutSession(Order $order, string $checkoutSessionId, ?string $paymentIntentId): bool
+    {
+        return $order->isWeekly()
+            ? $this->confirmWeeklyFirstPayment($order, $paymentIntentId, $checkoutSessionId)
+            : $this->confirmUpfrontPayment($order, $paymentIntentId, null, $checkoutSessionId);
+    }
+
+    /**
+     * Everything that happens once, when a booking is confirmed by its first
+     * payment: confirmation email, guarantee, activity log and cache refresh.
+     */
+    protected function runConfirmationFollowUps(Order $order): void
+    {
         $order->loadMissing(['student', 'instructor']);
 
         if ($order->student) {
@@ -520,8 +642,46 @@ class OrderService extends BaseService
 
         $this->logBookingConfirmed($order);
         $this->invalidateStudentCacheForBooking($order->instructor_id);
+    }
 
-        return true;
+    /**
+     * A payment landed for a booking that had already been released. The booking
+     * is not re-confirmed (the time may have gone to someone else), so Head
+     * Office is emailed to refund it manually. Sent once per order and payment,
+     * however many of the webhook and success pages report it.
+     */
+    public function reportPaymentForReleasedOrder(Order $order, ?string $checkoutSessionId, ?string $paymentReference): void
+    {
+        $dedupeKey = 'released-order-paid:'.$order->id.':'.($checkoutSessionId ?? $paymentReference ?? 'unknown');
+
+        if (! Cache::add($dedupeKey, true, now()->addDays(30))) {
+            return;
+        }
+
+        Log::critical('Payment received for a released booking — refund required', [
+            'order_id' => $order->id,
+            'checkout_session_id' => $checkoutSessionId,
+            'payment_reference' => $paymentReference,
+            'amount_pence' => $order->firstPaymentPence(),
+        ]);
+
+        $headOffice = config('mail.head_office_address');
+
+        if (! $headOffice) {
+            return;
+        }
+
+        try {
+            $order->loadMissing(['student', 'instructor.user']);
+
+            Notification::route('mail', $headOffice)
+                ->notify(new ReleasedOrderPaidNotification($order, $checkoutSessionId, $paymentReference));
+        } catch (\Exception $e) {
+            Log::error('Failed to email Head Office about a payment on a released booking', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

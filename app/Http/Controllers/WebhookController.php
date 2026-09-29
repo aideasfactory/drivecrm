@@ -2,8 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Calendar\ConfirmCalendarItemsAction;
-use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
+use App\Actions\Payment\SendPaymentReceivedEmailsAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Student\GrantTestPassGuaranteeAction;
 use App\Enums\CalendarItemStatus;
@@ -16,15 +15,11 @@ use App\Models\LessonPayment;
 use App\Models\Order;
 use App\Models\Student;
 use App\Models\WebhookEvent;
-use App\Notifications\InstructorLessonPaymentReceivedNotification;
-use App\Notifications\LessonPaymentReceivedNotification;
 use App\Services\OrderService;
 use App\Services\StripeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Notification;
 
 class WebhookController extends Controller
 {
@@ -142,80 +137,32 @@ class WebhookController extends Controller
             return;
         }
 
-        if ($order->status === OrderStatus::CANCELLED) {
-            Log::critical('Webhook: Checkout paid for a released order — refund required', [
+        if ($session->payment_status !== 'paid') {
+            Log::info('Webhook: Checkout completed but not yet paid', [
                 'order_id' => $order->id,
                 'session_id' => $session->id,
-                'payment_intent' => $session->payment_intent ?? null,
             ]);
 
             return;
         }
 
-        if ($order->isWeekly()) {
-            if ($session->payment_status === 'paid') {
-                app(OrderService::class)->confirmWeeklyFirstPayment($order, $session->payment_intent ?? null);
-            }
+        $orderService = app(OrderService::class);
+
+        if ($order->status === OrderStatus::CANCELLED) {
+            $orderService->reportPaymentForReleasedOrder($order, $session->id, $session->payment_intent ?? null);
 
             return;
         }
 
-        if ($order->isUpfront()) {
-            // UPFRONT PAYMENT MODE: Process payment completion
-            if ($session->payment_status === 'paid') {
-                // Resolve the funding charge id from the payment intent before opening the
-                // transaction (keeps the external Stripe call out of the DB transaction).
-                // Stored so payouts can later cite it as the transfer's source_transaction.
-                $chargeId = $session->payment_intent
-                    ? app(StripeService::class)->getChargeIdForPaymentIntent($session->payment_intent)
-                    : null;
-
-                try {
-                    DB::beginTransaction();
-
-                    // Update order status, payment intent ID and funding charge ID
-                    $order->stripe_payment_intent_id = $session->payment_intent;
-                    $order->stripe_charge_id = $chargeId;
-                    $order->status = OrderStatus::ACTIVE;
-                    $order->save();
-
-                    // For authenticated student checkout, create lessons
-                    // For onboarding, lessons already created in StepSixController
-                    if ($order->lessons()->count() === 0) {
-                        $this->createLessonsForOrder($order);
-                    }
-
-                    // Send confirmation email (for onboarding orders)
-                    $this->sendOrderConfirmationEmail($order);
-
-                    // Create lesson payment records for upfront orders (marked as PAID immediately)
-                    $this->createUpfrontLessonPayments($order);
-
-                    // Transition calendar items from DRAFT to BOOKED now that payment is confirmed
-                    app(ConfirmCalendarItemsAction::class)($order);
-
-                    DB::commit();
-
-                    app(GrantTestPassGuaranteeAction::class)($order);
-
-                    // Log activity for booking confirmation
-                    $this->logBookingConfirmedActivity($order);
-
-                    Log::info('Webhook: Upfront order activated', [
-                        'order_id' => $order->id,
-                        'lessons_count' => $order->package_lessons_count,
-                    ]);
-
-                } catch (\Exception $e) {
-                    DB::rollBack();
-                    Log::error('Webhook: Failed to activate upfront order', [
-                        'order_id' => $order->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                    throw $e;
-                }
-            }
+        // Legacy authenticated-student checkouts created lessons only on payment.
+        // Every current booking creates its (draft) lessons when it is held.
+        if ($order->isUpfront() && $order->isPending() && $order->lessons()->count() === 0) {
+            $this->createLessonsForOrder($order);
         }
+
+        // Confirms once, whichever of the webhook, success page or app verify
+        // call arrives first; repeat deliveries do nothing.
+        $orderService->confirmPaidCheckoutSession($order, $session->id, $session->payment_intent ?? null);
     }
 
     /**
@@ -243,42 +190,21 @@ class WebhookController extends Controller
         // The payment_intent.succeeded payload carries the funding charge directly.
         $chargeId = $paymentIntent->latest_charge ?? null;
 
-        // Update order status if not already active
-        if ($order->status === OrderStatus::PENDING) {
-            try {
-                DB::beginTransaction();
+        if ($order->status === OrderStatus::CANCELLED) {
+            app(OrderService::class)->reportPaymentForReleasedOrder($order, $order->stripe_checkout_session_id, $paymentIntent->id);
 
-                $order->status = OrderStatus::ACTIVE;
-                $order->stripe_charge_id = $chargeId;
-                $order->save();
+            return;
+        }
 
-                // Create lessons if not already created
-                if ($order->lessons()->count() === 0) {
-                    $this->createLessonsForOrder($order);
-                }
+        if ($order->isUpfront()) {
+            // Confirms a still-pending order once, or backfills the charge id.
+            app(OrderService::class)->confirmUpfrontPayment($order, $paymentIntent->id, $chargeId, $order->stripe_checkout_session_id);
 
-                // Transition calendar items from DRAFT to BOOKED now that payment is confirmed
-                app(ConfirmCalendarItemsAction::class)($order);
+            return;
+        }
 
-                DB::commit();
-
-                app(GrantTestPassGuaranteeAction::class)($order);
-
-                Log::info('Webhook: Order activated via payment intent', [
-                    'order_id' => $order->id,
-                ]);
-
-            } catch (\Exception $e) {
-                DB::rollBack();
-                Log::error('Webhook: Failed to activate order via payment intent', [
-                    'order_id' => $order->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        } elseif ($chargeId && ! $order->stripe_charge_id) {
-            // Backstop: order already active but funding charge not yet stored.
-            $order->stripe_charge_id = $chargeId;
-            $order->save();
+        if ($chargeId && ! $order->stripe_charge_id) {
+            $order->update(['stripe_charge_id' => $chargeId]);
         }
     }
 
@@ -467,71 +393,13 @@ class WebhookController extends Controller
         }
 
         // Send payment confirmation email to student/contact
-        $this->sendPaymentReceivedEmails($lessonPayment, $student, $instructor);
+        app(SendPaymentReceivedEmailsAction::class)($lessonPayment, $student, $instructor);
 
         Log::info('Webhook [invoice.paid]: COMPLETE', [
             'lesson_payment_id' => $lessonPayment->id,
             'lesson_id' => $lessonPayment->lesson_id,
             'invoice_id' => $invoice->id,
         ]);
-    }
-
-    /**
-     * Send payment received confirmation emails to student and instructor.
-     */
-    protected function sendPaymentReceivedEmails(LessonPayment $lessonPayment, ?Student $student, ?Instructor $instructor): void
-    {
-        if (! $student) {
-            Log::warning('Webhook [invoice.paid]: No student found — skipping emails');
-
-            return;
-        }
-
-        $isBookedByContact = ! $student->owns_account;
-
-        // Email to student or contact
-        try {
-            $recipientEmail = $isBookedByContact
-                ? $student->contact_email
-                : $student->email;
-
-            if ($recipientEmail) {
-                Notification::route('mail', $recipientEmail)
-                    ->notify(new LessonPaymentReceivedNotification($lessonPayment, $student, $isBookedByContact));
-
-                Log::info('Webhook [invoice.paid]: Payment confirmation email queued for student', [
-                    'recipient_email' => $recipientEmail,
-                    'lesson_payment_id' => $lessonPayment->id,
-                ]);
-            } else {
-                Log::warning('Webhook [invoice.paid]: No student email — skipping student notification');
-            }
-        } catch (\Exception $e) {
-            Log::error('Webhook [invoice.paid]: Failed to send student payment confirmation', [
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        // Email to instructor
-        try {
-            $instructorEmail = $instructor?->user?->email;
-
-            if ($instructorEmail) {
-                Notification::route('mail', $instructorEmail)
-                    ->notify(new InstructorLessonPaymentReceivedNotification($lessonPayment, $student));
-
-                Log::info('Webhook [invoice.paid]: Payment notification email queued for instructor', [
-                    'instructor_email' => $instructorEmail,
-                    'lesson_payment_id' => $lessonPayment->id,
-                ]);
-            } else {
-                Log::warning('Webhook [invoice.paid]: No instructor email — skipping instructor notification');
-            }
-        } catch (\Exception $e) {
-            Log::error('Webhook [invoice.paid]: Failed to send instructor payment notification', [
-                'error' => $e->getMessage(),
-            ]);
-        }
     }
 
     /**
@@ -582,99 +450,5 @@ class WebhookController extends Controller
             'order_id' => $order->id,
             'lessons_count' => $package->lessons_count,
         ]);
-    }
-
-    /**
-     * Send order confirmation email (for onboarding orders).
-     */
-    protected function sendOrderConfirmationEmail(Order $order): void
-    {
-        try {
-            $sendEmailAction = app(SendOrderConfirmationEmailAction::class);
-            $sendEmailAction->execute($order, $order->student);
-
-            Log::info('Webhook: Order confirmation email queued', [
-                'order_id' => $order->id,
-                'student_id' => $order->student_id,
-            ]);
-        } catch (\Exception $e) {
-            // Log but don't throw - email failure shouldn't break webhook
-            Log::error('Webhook: Failed to send order confirmation email', [
-                'order_id' => $order->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    /**
-     * Create lesson payment records for upfront orders (marked as PAID immediately).
-     */
-    protected function createUpfrontLessonPayments(Order $order): void
-    {
-        $lessons = $order->lessons()->orderBy('date')->orderBy('start_time')->get();
-
-        foreach ($lessons->values() as $index => $lesson) {
-            // Skip if a payment record already exists for this lesson
-            if (LessonPayment::where('lesson_id', $lesson->id)->exists()) {
-                continue;
-            }
-
-            LessonPayment::create([
-                'lesson_id' => $lesson->id,
-                'amount_pence' => LessonPayment::orderShareForLesson($order, $lesson, $index, $lessons->count()),
-                'test_pass_guarantee_pence' => LessonPayment::guaranteeShareForLesson($order, $index),
-                'status' => PaymentStatus::PAID,
-                'due_date' => $lesson->date,
-                'paid_at' => now(),
-            ]);
-        }
-
-        Log::info('Webhook: Created upfront lesson payment records', [
-            'order_id' => $order->id,
-            'payments_count' => $lessons->count(),
-        ]);
-    }
-
-    /**
-     * Log activity for both student and instructor when a booking is confirmed.
-     */
-    protected function logBookingConfirmedActivity(Order $order): void
-    {
-        try {
-            $logActivity = app(LogActivityAction::class);
-            $metadata = [
-                'order_id' => $order->id,
-                'package_name' => $order->package_name,
-                'lessons_count' => $order->package_lessons_count,
-                'payment_mode' => $order->payment_mode->value,
-            ];
-
-            // Log for student
-            if ($order->student) {
-                $logActivity(
-                    $order->student,
-                    "Booking confirmed: {$order->package_name} ({$order->package_lessons_count} lessons)",
-                    'booking',
-                    $metadata
-                );
-            }
-
-            // Log for instructor
-            if ($order->instructor) {
-                $studentName = trim(($order->student->first_name ?? '').' '.($order->student->surname ?? ''));
-                $logActivity(
-                    $order->instructor,
-                    "New booking confirmed: {$studentName} — {$order->package_name} ({$order->package_lessons_count} lessons)",
-                    'booking',
-                    $metadata
-                );
-            }
-        } catch (\Exception $e) {
-            // Log but don't throw - activity logging failure shouldn't break webhook
-            Log::error('Webhook: Failed to log booking confirmed activity', [
-                'order_id' => $order->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
     }
 }

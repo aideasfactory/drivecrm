@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Calendar;
 
 use App\Actions\Instructor\DeleteCalendarItemAction;
+use App\Actions\Student\RevokeTestPassGuaranteeAction;
 use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
 use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
@@ -25,6 +26,7 @@ class CancelBookingAction
     public function __construct(
         protected DeleteCalendarItemAction $deleteCalendarItem,
         protected RecalculateStudentLessonNumbersAction $recalculateStudentLessonNumbers,
+        protected RevokeTestPassGuaranteeAction $revokeTestPassGuarantee,
     ) {}
 
     /**
@@ -90,6 +92,8 @@ class CancelBookingAction
 
         $orderCancelled = $this->cancelOrderIfFullyCancelled($order);
 
+        $guaranteeRemoved = $this->removeRefundedGuarantee($order, $paidLessons, $orderCancelled);
+
         // Cancelled lessons leave a gap in the student's sequence — renumber the
         // remaining open lessons so numbers stay contiguous and chronological.
         if ($order?->student_id) {
@@ -100,7 +104,7 @@ class CancelBookingAction
 
         $refundRequiredCount = $paidLessons->count();
 
-        $this->sendNotifications($cancelSet, $paidLessons, $order, $reason, $orderCancelled, $actor);
+        $this->sendNotifications($cancelSet, $paidLessons, $order, $reason, $orderCancelled, $actor, $guaranteeRemoved);
 
         return [
             'cancelled_count' => $cancelSet->count(),
@@ -202,6 +206,30 @@ class CancelBookingAction
     }
 
     /**
+     * A cancellation refunds the Pass Your Test Guarantee, so the pupil loses it
+     * when a cancelled paid lesson carried the guarantee charge, or when the
+     * whole order is now cancelled (this also covers a guarantee included free).
+     *
+     * @param  Collection<int, Lesson>  $paidLessons
+     */
+    protected function removeRefundedGuarantee(?Order $order, Collection $paidLessons, bool $orderCancelled): bool
+    {
+        if (! $order?->includes_test_pass_guarantee) {
+            return false;
+        }
+
+        $refundsGuaranteeCharge = $paidLessons->contains(
+            fn (Lesson $lesson): bool => $lesson->paymentBreakdown()['test_pass_guarantee_pence'] > 0
+        );
+
+        if (! $orderCancelled && ! $refundsGuaranteeCharge) {
+            return false;
+        }
+
+        return ($this->revokeTestPassGuarantee)($order);
+    }
+
+    /**
      * Always email the student. Email Head Office only when a paid lesson was
      * cancelled (a manual refund is required).
      *
@@ -215,6 +243,7 @@ class CancelBookingAction
         string $reason,
         bool $orderCancelled,
         User $actor,
+        bool $guaranteeRemoved = false,
     ): void {
         $student = $order?->student;
         $instructor = $order?->instructor;
@@ -251,6 +280,7 @@ class CancelBookingAction
                     $order,
                     $paidLessons,
                     $reason,
+                    $guaranteeRemoved,
                 ));
         }
     }

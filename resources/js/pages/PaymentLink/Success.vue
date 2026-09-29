@@ -37,6 +37,60 @@
                 <span class="text-sm text-muted-foreground">Instructor</span>
                 <span class="text-sm font-medium text-right">{{ order.instructor.name }}</span>
               </div>
+              <template v-if="order.first_payment && (order.first_payment.booking_fee_pence || order.first_payment.digital_fee_pence || order.test_pass_guarantee_pence !== null)">
+                <div class="flex items-start justify-between gap-4">
+                  <span class="text-sm text-muted-foreground">{{ isWeekly ? 'Week 1 lesson' : 'Lessons' }}</span>
+                  <span class="text-sm font-medium text-right">{{ formatPrice(order.first_payment.lesson_pence) }}</span>
+                </div>
+                <div v-if="order.first_payment.booking_fee_pence" class="flex items-start justify-between gap-4">
+                  <span class="text-sm text-muted-foreground">Booking fee</span>
+                  <span class="text-sm font-medium text-right">{{ formatPrice(order.first_payment.booking_fee_pence) }}</span>
+                </div>
+                <div v-if="order.first_payment.digital_fee_pence" class="flex items-start justify-between gap-4">
+                  <span class="text-sm text-muted-foreground">Digital fee</span>
+                  <span class="text-sm font-medium text-right">{{ formatPrice(order.first_payment.digital_fee_pence) }}</span>
+                </div>
+                <div v-if="order.test_pass_guarantee_pence !== null" class="flex items-start justify-between gap-4">
+                  <span class="text-sm text-muted-foreground">Pass Your Test Guarantee</span>
+                  <span class="text-sm font-medium text-right">
+                    {{ order.first_payment.test_pass_guarantee_pence > 0 ? formatPrice(order.first_payment.test_pass_guarantee_pence) : 'Included free' }}
+                  </span>
+                </div>
+              </template>
+              <div v-if="order.amount_paid_pence" class="flex items-start justify-between gap-4">
+                <span class="text-sm text-muted-foreground">
+                  {{ isWeekly ? 'First week paid' : 'Amount paid' }}
+                </span>
+                <span class="text-sm font-medium text-right">{{ formatPrice(order.amount_paid_pence) }}</span>
+              </div>
+              <div v-if="isWeekly && order.weekly_instalment" class="flex items-start justify-between gap-4">
+                <span class="text-sm text-muted-foreground">Each following week</span>
+                <span class="text-sm font-medium text-right">{{ order.weekly_instalment }}</span>
+              </div>
+            </div>
+
+            <Alert>
+              <CircleCheck class="h-4 w-4" />
+              <AlertTitle>Booking confirmed</AlertTitle>
+              <AlertDescription>
+                A confirmation email has been sent to you with the full details.
+              </AlertDescription>
+            </Alert>
+
+            <div v-if="order" class="space-y-3">
+              <div v-if="order.package" class="flex items-start justify-between gap-4">
+                <span class="text-sm text-muted-foreground">Package</span>
+                <span class="text-sm font-medium text-right">
+                  {{ order.package.name }}
+                  <span v-if="order.package.lessons_count" class="text-muted-foreground">
+                    · {{ order.package.lessons_count }} lessons
+                  </span>
+                </span>
+              </div>
+              <div v-if="order.instructor" class="flex items-start justify-between gap-4">
+                <span class="text-sm text-muted-foreground">Instructor</span>
+                <span class="text-sm font-medium text-right">{{ order.instructor.name }}</span>
+              </div>
               <template v-if="!isWeekly && (order.booking_fee_pence || order.digital_fee_pence || order.test_pass_guarantee_pence !== null)">
                 <div v-if="order.package_total_price_pence" class="flex items-start justify-between gap-4">
                   <span class="text-sm text-muted-foreground">Lessons</span>
@@ -127,6 +181,14 @@ interface OrderSummary {
   booking_fee_pence: number | null
   digital_fee_pence: number | null
   test_pass_guarantee_pence: number | null
+  first_payment: {
+    total_pence: number
+    lesson_pence: number
+    booking_fee_pence: number
+    digital_fee_pence: number
+    test_pass_guarantee_pence: number
+  } | null
+  weekly_instalment: string | null
   package: { name: string; lessons_count: number | null } | null
   instructor: { name: string } | null
 }

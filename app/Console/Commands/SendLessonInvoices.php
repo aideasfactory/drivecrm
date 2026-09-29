@@ -14,16 +14,16 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Manual catch-up command. Weekly invoices are now sent event-driven (at booking
- * time and on lesson sign-off) via OrderService::sendNextDueInvoice(). This command
- * is no longer scheduled — keep it as a fallback for sweeping any LessonPayments
- * that slipped through (e.g. an event-driven send failed).
+ * Catch-up for weekly invoices. They are normally sent event-driven (when the
+ * previous lesson is signed off) via OrderService::sendNextDueInvoice(). This
+ * runs hourly as a backup, so a lesson that is never signed off, or a failed
+ * send, doesn't leave the next week uninvoiced.
  */
 class SendLessonInvoices extends Command
 {
     protected $signature = 'lessons:send-invoices';
 
-    protected $description = 'Manual fallback: sweep weekly LessonPayments that have not been invoiced yet';
+    protected $description = 'Hourly fallback: invoice weekly LessonPayments due within 48 hours that have not been invoiced yet';
 
     public function handle(SendLessonInvoiceAction $sendInvoice): int
     {

@@ -54,6 +54,37 @@
             </AlertDescription>
           </Alert>
 
+          <!-- What was paid today -->
+          <div v-if="payment" class="rounded-lg border p-4 space-y-2 text-sm">
+            <h2 class="font-semibold mb-2">{{ isWeekly ? 'Paid today (week 1)' : 'Paid today' }}</h2>
+            <div class="flex items-start justify-between gap-4">
+              <span class="text-muted-foreground">{{ isWeekly ? 'Week 1 lesson' : 'Lessons' }}</span>
+              <span class="font-medium">{{ formatPence(payment.first_payment.lesson_pence) }}</span>
+            </div>
+            <div v-if="payment.first_payment.booking_fee_pence" class="flex items-start justify-between gap-4">
+              <span class="text-muted-foreground">Booking fee</span>
+              <span class="font-medium">{{ formatPence(payment.first_payment.booking_fee_pence) }}</span>
+            </div>
+            <div v-if="payment.first_payment.digital_fee_pence" class="flex items-start justify-between gap-4">
+              <span class="text-muted-foreground">Digital fee</span>
+              <span class="font-medium">{{ formatPence(payment.first_payment.digital_fee_pence) }}</span>
+            </div>
+            <div v-if="payment.includes_test_pass_guarantee" class="flex items-start justify-between gap-4">
+              <span class="text-muted-foreground">Pass Your Test Guarantee</span>
+              <span class="font-medium">
+                {{ payment.first_payment.test_pass_guarantee_pence > 0 ? formatPence(payment.first_payment.test_pass_guarantee_pence) : 'Included free' }}
+              </span>
+            </div>
+            <Separator />
+            <div class="flex items-start justify-between gap-4 font-semibold">
+              <span>Total paid</span>
+              <span>{{ formatPence(payment.first_payment.total_pence) }}</span>
+            </div>
+            <p v-if="isWeekly && payment.weekly_instalment" class="text-xs text-muted-foreground">
+              Each following week is {{ payment.weekly_instalment }}, invoiced by email before the lesson.
+            </p>
+          </div>
+
           <!-- Next Steps -->
           <div>
             <h2 class="text-xl font-semibold mb-4">What happens next?</h2>
@@ -121,15 +152,27 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 import { CheckCircle, CircleCheck, Mail, Phone, Calendar, Info } from 'lucide-vue-next'
+import { computed } from 'vue'
 
-defineProps({
+const props = defineProps({
   enquiry: Object,
   staffBooking: {
     type: [Object, null],
     default: null
+  },
+  payment: {
+    type: [Object, null],
+    default: null
   }
 })
+
+const isWeekly = computed(() => props.payment?.payment_mode === 'weekly')
+
+function formatPence(pence: number | null | undefined): string {
+  return `£${((pence || 0) / 100).toFixed(2)}`
+}
 </script>

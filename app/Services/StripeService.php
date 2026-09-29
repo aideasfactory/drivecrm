@@ -510,6 +510,9 @@ class StripeService
 
             return ['released' => false, 'status' => null];
         }
+    }
+
+    /**
      * Build the Checkout line items for an order: the (possibly discounted or
      * uplifted) package price, then the booking fee and digital fee as their
      * own lines so the student sees the breakdown on the Stripe payment page
