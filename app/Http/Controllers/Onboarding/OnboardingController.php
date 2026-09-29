@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Onboarding;
 
+use App\Enums\OrderStatus;
 use App\Http\Controllers\Controller;
 use App\Models\DiscountCode;
 use App\Models\Enquiry;
 use App\Models\Instructor;
+use App\Models\Order;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -119,11 +121,22 @@ class OnboardingController extends Controller
 
         $step6 = $enquiry->getStepData(6) ?? [];
 
+        $order = ! empty($step6['order_id']) ? Order::find($step6['order_id']) : null;
+        $isPaid = $order && ($order->isActive() || $order->status === OrderStatus::COMPLETED);
+
         return Inertia::render('Onboarding/Complete', [
             'enquiry' => $enquiry,
+            // What the learner paid today, itemised (full amount, or week 1 for weekly)
+            'payment' => $isPaid ? [
+                'payment_mode' => $order->payment_mode->value,
+                'includes_test_pass_guarantee' => (bool) $order->includes_test_pass_guarantee,
+                'first_payment' => $order->firstPaymentBreakdown(),
+                'weekly_instalment' => $order->isWeekly() ? $order->formatted_weekly_instalment : null,
+            ] : null,
             'staffBooking' => $enquiry->isStaffBooking() ? [
                 'payment_mode' => $step6['payment_mode'] ?? null,
                 'payment_link_sent_to' => $step6['payment_link_sent_to'] ?? null,
+                'hold_deadline' => $step6['hold_deadline'] ?? null,
             ] : null,
         ]);
     }

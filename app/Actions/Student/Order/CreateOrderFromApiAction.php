@@ -18,6 +18,7 @@ use App\Models\Order;
 use App\Models\Package;
 use App\Models\Student;
 use App\Services\InstructorCalendarService;
+use App\Support\BookingPayments;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -65,11 +66,9 @@ class CreateOrderFromApiAction
                 'payment_mode' => $paymentMode->value,
             ]);
 
-            // UPFRONT: Keep as DRAFT until Stripe confirms payment (ConfirmCalendarItemsAction handles transition)
-            // WEEKLY: Transition to RESERVED immediately (no Stripe checkout needed)
-            $calendarItemStatus = $paymentMode === PaymentMode::UPFRONT
-                ? CalendarItemStatus::DRAFT
-                : CalendarItemStatus::RESERVED;
+            // Both payment modes stay DRAFT until the first payment is confirmed
+            // (ConfirmCalendarItemsAction handles the transition).
+            $calendarItemStatus = CalendarItemStatus::DRAFT;
 
             $nextLessonNumber = (int) Lesson::whereHas('order', fn ($q) => $q->where('student_id', $student->id))
                 ->lockForUpdate()
@@ -87,17 +86,11 @@ class CreateOrderFromApiAction
                     ]);
                 }
 
-                // UPFRONT: Lessons start as DRAFT until Stripe confirms payment
-                // WEEKLY: Lessons start as PENDING immediately
-                $lessonStatus = $paymentMode === PaymentMode::UPFRONT
-                    ? LessonStatus::DRAFT
-                    : LessonStatus::PENDING;
-
                 $lesson = Lesson::create([
                     'order_id' => $order->id,
                     'instructor_id' => $instructorId,
                     'amount_pence' => $package->lesson_price_pence,
-                    'status' => $lessonStatus,
+                    'status' => LessonStatus::DRAFT,
                     'date' => $scheduledDate->toDateString(),
                     'start_time' => $startTime,
                     'end_time' => $endTime,
@@ -114,7 +107,7 @@ class CreateOrderFromApiAction
                         // lesson price.
                         'amount_pence' => LessonPayment::weeklyAmountForIndex($order->total_price_pence, $package->lessons_count, $i),
                         'status' => PaymentStatus::DUE,
-                        'due_date' => $scheduledDate->copy()->subHours(24),
+                        'due_date' => BookingPayments::weeklyPaymentDueDate($scheduledDate->toDateString(), $startTime),
                     ]);
                 }
             }
@@ -122,11 +115,6 @@ class CreateOrderFromApiAction
             // A one-off/block booked after an existing block may be dated before
             // it — renumber so student_lesson_number stays chronological.
             app(RecalculateStudentLessonNumbersAction::class)($student->id);
-
-            if ($paymentMode === PaymentMode::WEEKLY) {
-                $order->status = OrderStatus::ACTIVE;
-                $order->save();
-            }
 
             Log::info('Order creation complete', [
                 'order_id' => $order->id,

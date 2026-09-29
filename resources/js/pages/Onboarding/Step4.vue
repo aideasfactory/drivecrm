@@ -232,12 +232,17 @@
                   </div>
                 </div>
 
+                <Alert v-if="page.props.flash?.error" variant="destructive">
+                  <AlertTitle>Please choose another time</AlertTitle>
+                  <AlertDescription>{{ page.props.flash.error }}</AlertDescription>
+                </Alert>
+
                 <!-- Reservation Info -->
                 <Alert>
                   <Info class="h-4 w-4" />
-                  <AlertTitle>Lesson slots reserved</AlertTitle>
+                  <AlertTitle>How we hold your lessons</AlertTitle>
                   <AlertDescription>
-                    We'll hold your lesson slots untill midnight tonight while you complete payment.{{ selectedInstructor ? ' Your instructor ' + selectedInstructor.first_name + ' will coordinate exact times with you after booking confirmation.' : '' }}
+                    Your lesson times are reserved for {{ holdMinutes }} minutes once you go to payment, and confirmed as soon as you pay. Until then other learners can still book them.{{ selectedInstructor ? ' Your instructor ' + selectedInstructor.first_name + ' will coordinate exact times with you after booking confirmation.' : '' }}
                   </AlertDescription>
                 </Alert>
 
@@ -358,7 +363,8 @@ const props = defineProps({
   instructor: Object,
   availableInstructors: Array,
   disabledDates: Array,
-  maxStepReached: { type: Number, default: 4 }
+  maxStepReached: { type: Number, default: 4 },
+  holdMinutes: { type: Number, default: 10 }
 })
 
 const page = usePage()

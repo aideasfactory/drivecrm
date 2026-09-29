@@ -34,6 +34,7 @@ class Order extends Model
         'discount_percentage',
         'includes_test_pass_guarantee',
         'test_pass_guarantee_pence',
+        'payment_hold_expires_at',
     ];
 
     protected function casts(): array
@@ -51,6 +52,7 @@ class Order extends Model
             'discount_percentage' => 'integer',
             'includes_test_pass_guarantee' => 'boolean',
             'test_pass_guarantee_pence' => 'integer',
+            'payment_hold_expires_at' => 'datetime',
         ];
     }
 
@@ -103,6 +105,74 @@ class Order extends Model
     }
 
     /**
+     * The payment for the earliest lesson on a weekly order — the one taken at booking.
+     */
+    public function firstLessonPayment(): ?LessonPayment
+    {
+        return LessonPayment::query()
+            ->join('lessons', 'lessons.id', '=', 'lesson_payments.lesson_id')
+            ->where('lessons.order_id', $this->id)
+            ->orderBy('lessons.date')
+            ->orderBy('lessons.start_time')
+            ->orderBy('lesson_payments.id')
+            ->select('lesson_payments.*')
+            ->first();
+    }
+
+    /**
+     * The first payment the student makes, worked out from the order snapshot so
+     * it is available even after a released booking's payment records are gone:
+     * the full total for upfront orders, or the first weekly instalment plus any
+     * Pass Your Test Guarantee for weekly orders.
+     */
+    public function firstPaymentPence(): int
+    {
+        $totalPence = (int) ($this->total_price_pence ?? $this->package_total_price_pence ?? 0);
+
+        if (! $this->isWeekly()) {
+            return $totalPence;
+        }
+
+        $guaranteePence = $this->firstPaymentGuaranteePence();
+
+        return LessonPayment::weeklyAmountForIndex($totalPence - $guaranteePence, (int) $this->package_lessons_count, 0)
+            + $guaranteePence;
+    }
+
+    /**
+     * The first payment itemised into lessons, booking fee, digital fee and any
+     * Pass Your Test Guarantee. Uses the stored first weekly payment when there
+     * is one, otherwise the order snapshot. The parts sum to `total_pence`.
+     *
+     * @return array{total_pence: int, lesson_pence: int, booking_fee_pence: int, digital_fee_pence: int, test_pass_guarantee_pence: int}
+     */
+    public function firstPaymentBreakdown(): array
+    {
+        $payment = $this->isWeekly() ? $this->firstLessonPayment() : null;
+
+        $totalPence = $payment ? (int) $payment->amount_pence : $this->firstPaymentPence();
+        $guaranteePence = $payment ? (int) $payment->test_pass_guarantee_pence : $this->firstPaymentGuaranteePence();
+
+        $split = LessonPayment::weeklyBreakdown($this, $totalPence, $guaranteePence);
+
+        return [
+            'total_pence' => $totalPence,
+            'lesson_pence' => $split['lesson'],
+            'booking_fee_pence' => $split['booking_fee'],
+            'digital_fee_pence' => $split['digital_fee'],
+            'test_pass_guarantee_pence' => $split['test_pass_guarantee'] ?? 0,
+        ];
+    }
+
+    /**
+     * The Pass Your Test Guarantee charge included in the first payment.
+     */
+    public function firstPaymentGuaranteePence(): int
+    {
+        return $this->total_price_pence === null ? 0 : (int) ($this->test_pass_guarantee_pence ?? 0);
+    }
+
+    /**
      * Check if order is active.
      */
     public function isActive(): bool
@@ -116,6 +186,25 @@ class Order extends Model
     public function isPending(): bool
     {
         return $this->status === OrderStatus::PENDING;
+    }
+
+    /**
+     * Whether the order is still waiting for its first payment and its slot
+     * hold has not yet run out.
+     */
+    public function isAwaitingFirstPayment(): bool
+    {
+        return $this->isPending()
+            && ! $this->isImported()
+            && ! $this->hasPaymentHoldExpired();
+    }
+
+    /**
+     * Whether the order had a slot hold that has now passed.
+     */
+    public function hasPaymentHoldExpired(): bool
+    {
+        return $this->payment_hold_expires_at !== null && $this->payment_hold_expires_at->isPast();
     }
 
     /**

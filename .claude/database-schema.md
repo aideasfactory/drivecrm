@@ -174,6 +174,7 @@ Owner-only CRM screen at `/email-templates`. Staff can change wording only — r
 **Data migrations:** Copy changes to catalog defaults do not reach rows that already exist, so they ship as data-only migrations that patch the stored `body` only where the default wording is still intact:
 - `2026_09_23_150837_update_instructor_welcome_link_expiry_copy` — instructor welcome link expiry wording.
 - `2026_09_24_150000_add_cost_breakdown_to_payment_email_templates` — inserts `{{cost_breakdown}}` into `learner.payment_link`, `learner.payment_due_soon` and `learner.lesson_payment_received` so learners see the lesson / booking fee / digital fee split. No schema change.
+- `2026_09_29_100000_update_payment_link_template_for_pay_at_booking` — `learner.payment_link` gets `{{amount_label}}: {{total}}` ("First week" for weekly orders) and `{{pay_by_line}}` (the hold deadline) in place of "This payment link will expire after 24 hours." No schema change.
 
 ### Relationship Summary
 
@@ -449,13 +450,15 @@ Student enrollments/purchases of lesson packages.
 | `stripe_payment_intent_id` | varchar(255) | NULLABLE | Stripe Payment Intent ID (for upfront payments) |
 | `stripe_charge_id` | varchar(255) | NULLABLE | Stripe Charge ID that funded this upfront order (the PaymentIntent's `latest_charge`). Persisted at payment time (`checkout.session.completed` / `payment_intent.succeeded` webhooks) so per-lesson payout Transfers can cite it as `source_transaction`, letting Stripe draw against that specific charge instead of the general available balance. Nullable for legacy orders created before this column existed. |
 | `stripe_subscription_id` | varchar(255) | NULLABLE | Stripe Subscription ID (for weekly payments) |
-| `stripe_checkout_session_id` | varchar(255) | NULLABLE | Stripe Checkout Session ID |
+| `stripe_checkout_session_id` | varchar(255) | NULLABLE | Stripe Checkout Session ID. For weekly orders, the session that takes the first week's payment. |
+| `payment_hold_expires_at` | timestamp | NULLABLE | When an unpaid (`pending`) booking is released if its first payment hasn't been made. Set at booking: +10 min (learner via booking form or app; on the booking form this is when they press Pay at step 6, as step 4 only remembers the chosen slot and no longer drafts diary items), UK midnight (bookings team) or 48h before the first lesson (instructor/admin diary). Emailed-link holds are never less than 15 minutes. Not extended by a resend. `null` for legacy/imported orders. Rules in `App\Support\BookingPayments` / `config/booking_payments.php`. |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
 **Indexes:**
 - Composite index on `(student_id, status)`
 - Composite index on `(instructor_id, status)`
+- Composite index on `(status, payment_hold_expires_at)` (used by `orders:release-expired-holds`)
 
 **Relationships:**
 - Belongs to one `Student`
@@ -469,10 +472,10 @@ Student enrollments/purchases of lesson packages.
 - Status: `pending`, `active`, `completed`, `cancelled`
 
 **Business Logic:**
-- Upfront payment: Single payment via Payment Intent
-- Weekly payment: Recurring subscription for each lesson
-- Order becomes active after successful payment
-- Lessons are created after order activation
+- **Pay at booking:** every order is created `pending` with `draft` lessons and `draft` calendar items. Nothing is confirmed (no confirmation/welcome email) until the first payment lands.
+- Upfront payment: the full amount via Stripe Checkout. On payment, the order becomes `active` and all its calendar items `booked`.
+- Weekly payment: the first week (plus a paid guarantee) via Stripe Checkout, which marks the first `lesson_payments` row `paid`. On payment, the order becomes `active`, that week's item becomes `booked` and the rest `reserved`. Later weeks are invoiced by email when the previous lesson is signed off, due 48h before the lesson.
+- **Release:** `orders:release-expired-holds` (every minute) expires the Stripe session, then deletes the lessons (lesson_payments cascade), returns the slots to availability and marks the order `cancelled`. The order is kept if Stripe reports the session already paid. The midnight `calendar:cleanup-drafts` skips items belonging to pending orders with a hold.
 - **Pass Your Test Guarantee (booking form only):** free when booked hours (lessons × slot length from step 4) ≥ `config('test_pass_guarantee.free_minimum_hours')` (10) and `payment_mode = upfront`. Otherwise the learner can opt in on the payment step (step 6) for `config('test_pass_guarantee.price')` (£50). Upfront: charged as a separate Stripe Checkout line item. Weekly: added in full to the first `lesson_payments` row (see `lesson_payments.test_pass_guarantee_pence`); the rest of the total is spread evenly as usual. Rules live in `App\Support\TestPassGuarantee`.
 - **Imported orders** (`payment_mode = imported`): one per imported student, on a hidden (`active = false`) per-instructor "Imported lessons" package with £0 totals. Lessons on them report `payment_status = paid` / `is_paid = true` so they can be signed off in the app and CRM. `SignOffLessonAction` skips the Stripe onboarding + payment guards and creates **no Payout**; `LessonSignOffService` also skips the student feedback email, next-invoice and resource recommendations. `Order::isImported()`, `Order::isPrepaid()` (confirmed upfront or imported).
 - **Price snapshot:** `package_name`, `package_total_price_pence`, `package_lesson_price_pence`, and `package_lessons_count` are copied from the package at order creation time. Always use these snapshot columns for pricing/display — never read live from `packages` table via the `package` relationship for pricing data.
@@ -843,6 +846,7 @@ Defines time slots within a calendar date.
 | `recurrence_pattern` | varchar(20) | DEFAULT 'none' | Recurrence pattern: none, weekly, biweekly, monthly |
 | `recurrence_end_date` | date | NULLABLE | End date for the recurrence series |
 | `recurrence_group_id` | uuid | NULLABLE, INDEXED | Groups all instances of a recurring slot together |
+| `created_by_hold` | boolean | NULLABLE | Set when a booking holds the slot: `true` = the hold created it (no availability existed), `false` = it took over an existing availability slot. `null` for items not held by a booking, or held before this column existed |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
@@ -861,6 +865,8 @@ Defines time slots within a calendar date.
 - Practical-test slots store the assigned `student_id`. Creating one carries the test date onto that student's `book_practical_test` checklist item (date set, item checked); deleting one clears that checklist date (date nulled, item unchecked)
 - `status` tracks the booking lifecycle: `draft` → `reserved`/`booked` → `completed`
 - Draft items are cleaned up by `calendar:cleanup-drafts` command if abandoned
+- Releasing a draft (unpaid hold released or cleaned up) **deletes** items with `created_by_hold = true` (and their travel blocks) and puts all other drafts back on offer (`is_available = true`, `status` and `created_by_hold` cleared). An unpaid booking therefore never leaves availability the instructor did not offer
+- A booking is refused if any week's lesson time overlaps another lesson (`draft`/`reserved`/`booked`/`completed`), a blocked-out slot (`is_available = false`) or a practical test on the same calendar. Travel blocks are not clashes
 - Recurring slots: materialized instances pattern — each occurrence is a separate row linked by `recurrence_group_id`
 - Individual occurrences can be modified/deleted without affecting the rest of the series
 - Deleting "this and all future" removes all items in the group from the selected date forward (excluding those with lessons)

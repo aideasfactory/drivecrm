@@ -32,6 +32,7 @@ class CalendarItem extends Model
         'recurrence_pattern',
         'recurrence_end_date',
         'recurrence_group_id',
+        'created_by_hold',
     ];
 
     protected function casts(): array
@@ -43,6 +44,7 @@ class CalendarItem extends Model
             'travel_time_minutes' => 'integer',
             'recurrence_pattern' => RecurrencePattern::class,
             'recurrence_end_date' => 'date',
+            'created_by_hold' => 'boolean',
         ];
     }
 

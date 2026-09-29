@@ -659,6 +659,8 @@ Route::middleware('signed')->group(function (): void {
 // Unauthenticated — the student is clicking through from an email and has
 // no app session. Security comes from matching the Stripe session_id against
 // the order's stored stripe_checkout_session_id.
+Route::get('/orders/{order}/payment-link/pay', [PaymentLinkCheckoutController::class, 'pay'])
+    ->name('payment-link.pay');
 Route::get('/orders/{order}/payment-link/success', [PaymentLinkCheckoutController::class, 'success'])
     ->name('payment-link.checkout.success');
 Route::get('/orders/{order}/payment-link/cancel', [PaymentLinkCheckoutController::class, 'cancel'])

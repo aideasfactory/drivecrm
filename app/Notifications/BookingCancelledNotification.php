@@ -50,7 +50,7 @@ class BookingCancelledNotification extends Notification implements ShouldQueue
             ->implode("\n");
 
         $refundLine = $this->refundRequired
-            ? 'Any payments you have already made for these lessons will be refunded — our head office will be in touch about this shortly.'
+            ? 'You will be refunded what you paid for these lessons, including the digital fee and any Pass Your Test Guarantee. The booking fee is non-refundable. Our head office will be in touch about this shortly.'
             : 'There is nothing further you need to do, and you will not be charged for these lessons.';
 
         return $this->templatedMail(

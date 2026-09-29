@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Onboarding;
 
-use App\Actions\Calendar\ConfirmCalendarItemsAction;
 use App\Actions\Onboarding\CreateOrderFromEnquiryAction;
 use App\Actions\Onboarding\CreateUserAndStudentFromEnquiryAction;
-use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
-use App\Actions\Student\GrantTestPassGuaranteeAction;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
+use App\Exceptions\SlotNoLongerAvailableException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Onboarding\StepSixRequest;
 use App\Models\Enquiry;
@@ -22,6 +20,7 @@ use App\Services\OrderService;
 use App\Services\PackageService;
 use App\Services\PriceUpliftService;
 use App\Services\StripeService;
+use App\Support\BookingPayments;
 use App\Support\TestPassGuarantee;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -30,7 +29,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
-use Stripe\Checkout\Session;
 
 class StepSixController extends Controller
 {
@@ -38,11 +36,9 @@ class StepSixController extends Controller
         protected StripeService $stripeService,
         protected CreateUserAndStudentFromEnquiryAction $createUserAndStudentAction,
         protected CreateOrderFromEnquiryAction $createOrderAction,
-        protected SendOrderConfirmationEmailAction $sendEmailAction,
         protected OrderService $orderService,
         protected PriceUpliftService $priceUpliftService,
         protected PackageService $packageService,
-        protected GrantTestPassGuaranteeAction $grantTestPassGuarantee,
     ) {}
 
     /**
@@ -159,10 +155,14 @@ class StepSixController extends Controller
             // Discount code data
             'discount' => $discount,
 
+            'holdMinutes' => BookingPayments::learnerHoldMinutes(),
+            'weeklyPaymentDueHours' => BookingPayments::weeklyPaymentDueHoursBeforeLesson(),
+
             // Payment emails always go to the step 1 contact (the learner
             // themselves, or the person booking on the learner's behalf).
             'staffBooking' => $enquiry->isStaffBooking() ? [
                 'recipient_email' => $step1['email'] ?? null,
+                'hold_deadline' => BookingPayments::formatDeadline(BookingPayments::staffHoldExpiresAt()),
             ] : null,
         ]);
     }
@@ -200,6 +200,12 @@ class StepSixController extends Controller
             'payment_mode' => $paymentMode->value,
             'enquiry_id' => $enquiry->id,
         ]);
+
+        $previousAttempt = $this->releasePreviousAttempt($enquiry);
+
+        if ($previousAttempt !== null) {
+            return $previousAttempt;
+        }
 
         try {
             DB::beginTransaction();
@@ -267,10 +273,16 @@ class StepSixController extends Controller
                 $discount
             );
 
+            $order->payment_hold_expires_at = $enquiry->isStaffBooking()
+                ? BookingPayments::staffHoldExpiresAt()
+                : BookingPayments::learnerHoldExpiresAt();
+            $order->save();
+
             Log::info('Order created successfully', [
                 'order_id' => $order->id,
                 'status' => $order->status->value,
                 'lessons_count' => $order->lessons()->count(),
+                'payment_hold_expires_at' => $order->payment_hold_expires_at?->toIso8601String(),
                 'enquiry_id' => $enquiry->id,
             ]);
 
@@ -294,27 +306,22 @@ class StepSixController extends Controller
                 'enquiry_id' => $enquiry->id,
             ]);
 
-            if ($paymentMode === PaymentMode::UPFRONT && $enquiry->isStaffBooking()) {
-                Log::info('Handling staff upfront booking - emailing payment link to student', [
+            if ($enquiry->isStaffBooking()) {
+                Log::info('Handling staff booking - emailing payment link to student', [
                     'order_id' => $order->id,
+                    'payment_mode' => $paymentMode->value,
                     'enquiry_id' => $enquiry->id,
                     'staff_booking' => $enquiry->getStaffBooking(),
                 ]);
-                $sessionResult = $this->handleStaffUpfrontPayment($enquiry, $order, $student);
-            } elseif ($paymentMode === PaymentMode::UPFRONT) {
-                // UPFRONT PAYMENT: Redirect to Stripe Checkout
-                Log::info('Handling upfront payment - creating Stripe session', [
-                    'order_id' => $order->id,
-                    'enquiry_id' => $enquiry->id,
-                ]);
-                $sessionResult = $this->handleUpfrontPayment($enquiry, $order, $package, $user);
+                $sessionResult = $this->handleStaffPayment($enquiry, $order, $student);
             } else {
-                // WEEKLY PAYMENT: Activate immediately (invoices sent later)
-                Log::info('Handling weekly payment - activating order immediately', [
+                // Pay in full: the whole order. Pay weekly: the first week.
+                Log::info('Handling learner payment - creating Stripe session', [
                     'order_id' => $order->id,
+                    'payment_mode' => $paymentMode->value,
                     'enquiry_id' => $enquiry->id,
                 ]);
-                $sessionResult = $this->handleWeeklyPayment($enquiry, $order);
+                $sessionResult = $this->handleCheckoutPayment($enquiry, $order, $package, $user);
             }
 
             Log::info('Payment handling result', [
@@ -347,6 +354,17 @@ class StepSixController extends Controller
             // Return Inertia response with redirect URL for frontend to handle
             return Inertia::location($sessionResult['url']);
 
+        } catch (SlotNoLongerAvailableException $e) {
+            DB::rollBack();
+
+            Log::info('Onboarding checkout: selected slots are no longer available', [
+                'enquiry_id' => $enquiry->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return redirect()
+                ->route('onboarding.step4', ['uuid' => $enquiry->id])
+                ->with('error', 'Sorry, one or more of your lesson times are no longer available. Please choose a new time.');
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -363,9 +381,37 @@ class StepSixController extends Controller
     }
 
     /**
-     * Handle upfront payment checkout session creation.
+     * A learner coming back to step 6 (e.g. after cancelling Stripe Checkout)
+     * starts a new order. Release the previous unpaid one first so its slots
+     * can be held again; send them to the confirmation page if it was paid.
      */
-    protected function handleUpfrontPayment($enquiry, Order $order, Package $package, $user): array
+    protected function releasePreviousAttempt(Enquiry $enquiry): ?RedirectResponse
+    {
+        $previousOrderId = $enquiry->getStepData(6)['order_id'] ?? null;
+        $previousOrder = $previousOrderId ? Order::find($previousOrderId) : null;
+
+        if (! $previousOrder) {
+            return null;
+        }
+
+        if ($previousOrder->isActive() || $previousOrder->status === OrderStatus::COMPLETED) {
+            return redirect()->route('onboarding.complete', ['uuid' => $enquiry->id]);
+        }
+
+        if ($previousOrder->isPending() && ! $this->orderService->releaseUnpaidOrder($previousOrder, 'learner_restarted_checkout')) {
+            return redirect()
+                ->route('onboarding.step6', ['uuid' => $enquiry->id])
+                ->with('error', 'A payment for this booking is already being processed. Please check your email before trying again.');
+        }
+
+        return null;
+    }
+
+    /**
+     * Create the Stripe Checkout session the learner pays at: the whole order
+     * for pay in full, or the first week for pay weekly.
+     */
+    protected function handleCheckoutPayment($enquiry, Order $order, Package $package, $user): array
     {
         $instructor = $order->instructor;
 
@@ -417,10 +463,11 @@ class StepSixController extends Controller
             ]);
         }
 
-        // Check if package has required Stripe IDs
+        // Check if package has required Stripe IDs (weekly first payments are
+        // priced inline, so only pay-in-full checkouts need them)
         $hasDiscount = $order->discount_percentage !== null && $order->discount_percentage > 0;
 
-        if ($hasDiscount && ! $package->stripe_product_id) {
+        if ($order->isUpfront() && $hasDiscount && ! $package->stripe_product_id) {
             Log::error('Package missing Stripe product ID (required for discounted checkout)', [
                 'package_id' => $package->id,
                 'package_name' => $package->name,
@@ -432,7 +479,7 @@ class StepSixController extends Controller
             ];
         }
 
-        if (! $hasDiscount && ! $package->stripe_price_id) {
+        if ($order->isUpfront() && ! $hasDiscount && ! $package->stripe_price_id) {
             Log::error('Package missing Stripe price ID', [
                 'package_id' => $package->id,
                 'package_name' => $package->name,
@@ -466,20 +513,23 @@ class StepSixController extends Controller
     }
 
     /**
-     * Handle an upfront booking made by the admin/bookings team: email the
-     * Stripe Checkout link to the student instead of redirecting the staff
-     * member's browser. The order stays pending (calendar items stay draft)
-     * until the student pays, at which point the checkout webhook activates it.
+     * Handle a booking made by the admin/bookings team: email the payment link
+     * (full amount or first week) to the student instead of redirecting the
+     * staff member's browser. The order stays pending (calendar items stay
+     * draft) until the student pays or the hold runs out at midnight.
      *
      * @return array{success: bool, session_id: null, url: string}
      */
-    protected function handleStaffUpfrontPayment(Enquiry $enquiry, Order $order, Student $student): array
+    protected function handleStaffPayment(Enquiry $enquiry, Order $order, Student $student): array
     {
         $result = $this->orderService->sendPaymentLink($order, $student, 'staff_onboarding', true);
 
         $enquiry->setStepData(6, array_merge($enquiry->getStepData(6) ?? [], [
             'payment_status' => 'awaiting_payment',
             'payment_link_sent_to' => $result['email'],
+            'hold_deadline' => $order->payment_hold_expires_at
+                ? BookingPayments::formatDeadline($order->payment_hold_expires_at)
+                : null,
         ]));
         $enquiry->save();
 
@@ -487,37 +537,6 @@ class StepSixController extends Controller
             'success' => true,
             'session_id' => null,
             'url' => route('onboarding.complete', ['uuid' => $enquiry->id]),
-        ];
-    }
-
-    /**
-     * Handle weekly payment (no Stripe checkout needed).
-     */
-    protected function handleWeeklyPayment($enquiry, Order $order): array
-    {
-        // Activate order immediately for weekly payments
-        $order->status = OrderStatus::ACTIVE;
-        $order->save();
-
-        // Issue the first weekly invoice + payment-link email immediately. Wrapped
-        // in try/catch so a Stripe failure does not block the booking redirect.
-        try {
-            $this->orderService->sendNextDueInvoice($order);
-        } catch (\Exception $e) {
-            Log::error('Failed to send first weekly invoice at booking', [
-                'order_id' => $order->id,
-                'enquiry_id' => $enquiry->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        // Redirect to success page
-        $successUrl = route('onboarding.checkout.success', ['uuid' => $enquiry->id]);
-
-        return [
-            'success' => true,
-            'session_id' => null,
-            'url' => $successUrl,
         ];
     }
 
@@ -543,82 +562,38 @@ class StepSixController extends Controller
                 ->with('error', 'Order not found.');
         }
 
-        // For weekly payment, order is already active
-        if ($order->isWeekly()) {
-            // Send confirmation email
-            $this->sendEmailAction->execute($order, $order->student);
-
-            // Update enquiry
-            $enquiry->setStepData(6, array_merge($step6, [
-                'payment_status' => 'completed',
-            ]));
-            $enquiry->save();
-
-            return redirect()
-                ->route('onboarding.complete', ['uuid' => $enquiry->id]);
-        }
-
-        // For upfront payment, verify Stripe session
         $sessionId = $request->query('session_id');
 
-        if (! $sessionId) {
+        if (! $sessionId || ! is_string($sessionId)) {
             return redirect()
                 ->route('onboarding.start')
                 ->with('error', 'Invalid checkout session.');
         }
 
-        try {
-            // Retrieve the checkout session from Stripe
-            $session = Session::retrieve($sessionId);
+        // Confirms the order once (whether here, via the webhook or on a page
+        // refresh) and sends the confirmation email only on that first time.
+        $result = $this->orderService->verifyCheckout($order, $sessionId);
 
-            // Verify the session matches the order
-            if ($session->id !== $order->stripe_checkout_session_id) {
-                throw new \Exception('Session ID mismatch.');
-            }
-
-            // Check payment status
-            if ($session->payment_status === 'paid') {
-                // Update order if still pending (webhook might have already processed it)
-                if ($order->status === OrderStatus::PENDING) {
-                    $order->status = OrderStatus::ACTIVE;
-                    $order->stripe_payment_intent_id = $session->payment_intent;
-                    $order->save();
-
-                    // Transition calendar items from DRAFT to BOOKED now that payment is confirmed
-                    app(ConfirmCalendarItemsAction::class)($order);
-                }
-
-                ($this->grantTestPassGuarantee)($order);
-
-                // Send confirmation email
-                $this->sendEmailAction->execute($order, $order->student);
-
-                // Update enquiry
-                $enquiry->setStepData(6, array_merge($step6, [
-                    'payment_status' => 'completed',
-                    'stripe_session_id' => $sessionId,
-                ]));
-                $enquiry->save();
-
+        if (! $result['verified']) {
+            if ($result['order']->status === OrderStatus::CANCELLED) {
                 return redirect()
-                    ->route('onboarding.complete', ['uuid' => $enquiry->id]);
+                    ->route('onboarding.step4', ['uuid' => $enquiry->id])
+                    ->with('error', 'Sorry, the time to pay for these lessons ran out and they were released. Any payment taken will be refunded - please choose a new time.');
             }
 
             return redirect()
                 ->route('onboarding.step6', ['uuid' => $enquiry->id])
-                ->with('warning', 'Payment is being processed. Please check back shortly.');
-
-        } catch (\Exception $e) {
-            Log::error('Failed to verify onboarding payment', [
-                'enquiry_id' => $enquiry->id,
-                'order_id' => $order->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return redirect()
-                ->route('onboarding.step6', ['uuid' => $enquiry->id])
-                ->with('error', 'Failed to verify payment: '.$e->getMessage());
+                ->with('warning', $result['message']);
         }
+
+        $enquiry->setStepData(6, array_merge($step6, [
+            'payment_status' => 'completed',
+            'stripe_session_id' => $sessionId,
+        ]));
+        $enquiry->save();
+
+        return redirect()
+            ->route('onboarding.complete', ['uuid' => $enquiry->id]);
     }
 
     /**

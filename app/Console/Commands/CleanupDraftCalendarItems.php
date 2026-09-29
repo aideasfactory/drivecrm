@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Actions\CalendarItem\ResetDraftCalendarItemsAction;
 use App\Enums\CalendarItemStatus;
+use App\Enums\OrderStatus;
 use App\Models\CalendarItem;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -37,6 +38,9 @@ class CleanupDraftCalendarItems extends Command
             $count = CalendarItem::query()
                 ->where('status', CalendarItemStatus::DRAFT)
                 ->where('created_at', '<', $cutoff)
+                ->whereDoesntHave('lessons.order', fn ($query) => $query
+                    ->where('status', OrderStatus::PENDING)
+                    ->whereNotNull('payment_hold_expires_at'))
                 ->count();
 
             $this->info("Would reset {$count} draft calendar item(s) to available.");

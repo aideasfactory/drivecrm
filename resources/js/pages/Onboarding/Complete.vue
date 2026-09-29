@@ -13,23 +13,17 @@
 
       <Card class="mb-6">
         <CardContent class="p-8 space-y-6">
-          <Alert v-if="staffBooking.payment_mode === 'upfront'" variant="default">
+          <Alert variant="default">
             <Mail class="h-4 w-4" />
             <AlertTitle>Payment link emailed</AlertTitle>
             <AlertDescription>
-              A Stripe payment link has been sent to
+              A Stripe payment link for
+              {{ staffBooking.payment_mode === 'weekly' ? 'the first week' : 'the full amount' }} has been sent to
               <span class="font-medium text-foreground">{{ staffBooking.payment_link_sent_to }}</span>.
-              The lessons stay pending until the payment is completed, then the student
-              receives their booking confirmation automatically.
-            </AlertDescription>
-          </Alert>
-
-          <Alert v-else variant="default">
-            <Mail class="h-4 w-4" />
-            <AlertTitle>Weekly payments set up</AlertTitle>
-            <AlertDescription>
-              The booking is confirmed. The student has been emailed their booking confirmation
-              and the invoice for their first lesson; later invoices are emailed ahead of each lesson.
+              The lessons are held until
+              {{ staffBooking.hold_deadline || 'midnight' }} and released if unpaid. Once paid, the student
+              receives their booking confirmation automatically<template v-if="staffBooking.payment_mode === 'weekly'">,
+              and later weeks are invoiced by email</template>.
             </AlertDescription>
           </Alert>
 
@@ -59,6 +53,37 @@
               A confirmation email has been sent to your email address with all the details.
             </AlertDescription>
           </Alert>
+
+          <!-- What was paid today -->
+          <div v-if="payment" class="rounded-lg border p-4 space-y-2 text-sm">
+            <h2 class="font-semibold mb-2">{{ isWeekly ? 'Paid today (week 1)' : 'Paid today' }}</h2>
+            <div class="flex items-start justify-between gap-4">
+              <span class="text-muted-foreground">{{ isWeekly ? 'Week 1 lesson' : 'Lessons' }}</span>
+              <span class="font-medium">{{ formatPence(payment.first_payment.lesson_pence) }}</span>
+            </div>
+            <div v-if="payment.first_payment.booking_fee_pence" class="flex items-start justify-between gap-4">
+              <span class="text-muted-foreground">Booking fee</span>
+              <span class="font-medium">{{ formatPence(payment.first_payment.booking_fee_pence) }}</span>
+            </div>
+            <div v-if="payment.first_payment.digital_fee_pence" class="flex items-start justify-between gap-4">
+              <span class="text-muted-foreground">Digital fee</span>
+              <span class="font-medium">{{ formatPence(payment.first_payment.digital_fee_pence) }}</span>
+            </div>
+            <div v-if="payment.includes_test_pass_guarantee" class="flex items-start justify-between gap-4">
+              <span class="text-muted-foreground">Pass Your Test Guarantee</span>
+              <span class="font-medium">
+                {{ payment.first_payment.test_pass_guarantee_pence > 0 ? formatPence(payment.first_payment.test_pass_guarantee_pence) : 'Included free' }}
+              </span>
+            </div>
+            <Separator />
+            <div class="flex items-start justify-between gap-4 font-semibold">
+              <span>Total paid</span>
+              <span>{{ formatPence(payment.first_payment.total_pence) }}</span>
+            </div>
+            <p v-if="isWeekly && payment.weekly_instalment" class="text-xs text-muted-foreground">
+              Each following week is {{ payment.weekly_instalment }}, invoiced by email before the lesson.
+            </p>
+          </div>
 
           <!-- Next Steps -->
           <div>
@@ -127,15 +152,27 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 import { CheckCircle, CircleCheck, Mail, Phone, Calendar, Info } from 'lucide-vue-next'
+import { computed } from 'vue'
 
-defineProps({
+const props = defineProps({
   enquiry: Object,
   staffBooking: {
     type: [Object, null],
     default: null
+  },
+  payment: {
+    type: [Object, null],
+    default: null
   }
 })
+
+const isWeekly = computed(() => props.payment?.payment_mode === 'weekly')
+
+function formatPence(pence: number | null | undefined): string {
+  return `£${((pence || 0) / 100).toFixed(2)}`
+}
 </script>

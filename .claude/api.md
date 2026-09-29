@@ -3161,12 +3161,12 @@ Books the short-notice lesson for the authenticated student. Availability is dec
 
 Reuses `SlotOfferService::acceptOffer` → `AcceptSlotOfferAction` → `OrderService::bookLessonsFromCalendarItem` (the same booking path as admin Add Booking). Concurrent accepts are serialised with `lockForUpdate` on the diary slot and the offer row. The first successful booking wins; the second student receives **422**.
 
-The slot stops being available as soon as the order/lessons are created. If the student does not complete payment, the instructor can cancel the booking from the diary and offer the slot again.
+The slot is held (draft) as soon as the order/lessons are created, for the learner hold window (10 minutes). If the student does not pay in that time, `orders:release-expired-holds` releases the booking: the lessons are deleted, the order is cancelled and the diary slot becomes open availability again. The offer itself stays `booked` and is **not** re-published to other students.
 
-Payment behaviour matches `POST /api/v1/students/{student}/orders`:
+Payment behaviour matches a student-initiated `POST /api/v1/students/{student}/orders`. A Stripe Checkout URL is always returned as `checkout_url` for the in-app browser:
 
-- `upfront` (default): order is created and a Stripe Checkout URL is returned as `checkout_url` for the in-app browser. One-off packages without a Stripe product use Stripe `product_data` rather than a Connect product ID.
-- `weekly`: the order is activated immediately and lesson invoices are sent as for a normal weekly booking.
+- `upfront` (default): Checkout charges the full amount. One-off packages without a Stripe product use Stripe `product_data` rather than a Connect product ID.
+- `weekly`: Checkout charges the first week (plus the Pass Your Test Guarantee if included). Later weeks are invoiced by email, due 48 hours before each lesson.
 
 **Path Parameters:**
 
@@ -3187,10 +3187,10 @@ Payment behaviour matches `POST /api/v1/students/{student}/orders`:
 }
 ```
 
-**Response — upfront (201):**
+**Response — upfront or weekly (201):**
 ```json
 {
-  "message": "Lesson booked. Open the checkout URL to complete payment.",
+  "message": "Lesson held. Open the checkout URL to complete payment.",
   "checkout_url": "https://checkout.stripe.com/c/pay/cs_test_abc123...",
   "data": {
     "id": 91,
@@ -3206,24 +3206,14 @@ Payment behaviour matches `POST /api/v1/students/{student}/orders`:
     "total_price_pence": 6898,
     "payment_mode": "upfront",
     "status": "pending",
+    "payment_hold_expires_at": "2026-09-02T14:15:00+00:00",
     "lessons_count": 1,
     "created_at": "2026-09-02T14:05:00.000000Z"
   }
 }
 ```
 
-**Response — weekly (201):**
-```json
-{
-  "message": "Lesson booked. Lesson invoices will be sent before each lesson.",
-  "data": {
-    "id": 92,
-    "payment_mode": "weekly",
-    "status": "active",
-    "lessons_count": 1
-  }
-}
-```
+A `weekly` accept returns the same shape, with `payment_mode: "weekly"` and `status: "pending"`; the `checkout_url` takes the first week.
 
 **Error — already taken / no longer open (422):**
 ```json
@@ -4145,7 +4135,7 @@ Returns lessons for a given student across all their orders. Supports optional f
 | `from_date` | string | — | Only return lessons on or after this date (YYYY-MM-DD) |
 | `sort` | string | `desc` | Sort direction by date/time: `asc` or `desc` |
 | `limit` | integer | — | Maximum number of results to return |
-| `include_drafts` | boolean | `false` | When `true`, include **draft** (upfront booking awaiting payment) lessons in the response. Off by default so student-facing views are unaffected — the instructor's pupil view passes this. Draft lessons are returned with `card_status: "draft"` and `status: "draft"`. |
+| `include_drafts` | boolean | `false` | When `true`, include **draft** (upfront or weekly booking awaiting its first payment) lessons in the response. Off by default so student-facing views are unaffected — the instructor's pupil view passes this. Draft lessons are returned with `card_status: "draft"` and `status: "draft"`. |
 
 **Request Body:** None
 
@@ -4255,7 +4245,7 @@ The parts always add up to `total_pence`. They are pro-rated from the order's st
 | `needs_sign_off` | Red | Past lesson not yet signed off (`completed_at` is null). **Do not** gate this on `has_reflective_log` — that four-prompt log is leftover and is not part of sign-off. |
 | `current` | Orange | The next lesson (today or future) — the one to sign off next |
 | `upcoming` | Blue | Future lessons beyond the next one |
-| `draft` | Grey | Upfront booking awaiting payment. Only returned when `include_drafts=true`. Draft lessons never consume the `current` slot — the "next lesson to sign off" is still the next non-draft lesson. |
+| `draft` | Grey | Booking (upfront or weekly) awaiting its first payment. Only returned when `include_drafts=true`. Draft lessons never consume the `current` slot — the "next lesson to sign off" is still the next non-draft lesson. |
 
 ---
 
@@ -4265,7 +4255,7 @@ The parts always add up to `total_pence`. They are pro-rated from the order's st
 
 Returns full detail for a single lesson belonging to a student. The lesson must belong to the student via one of their orders — otherwise a 404 is returned.
 
-**Draft lessons ARE returned by this endpoint** (unlike the index, which requires `include_drafts=true`). Tapping a draft card from the instructor's pupil view therefore resolves. Cancelled lessons still return 404. A draft lesson comes back with `status: "draft"`, `card_status: "draft"`, `payment_mode: "upfront"`, and `payment_status: null` (no payment record exists until Stripe Checkout completes — same as the index). Sign-off remains impossible for drafts: `POST .../sign-off` only accepts `pending` lessons and returns 404 for a draft.
+**Draft lessons ARE returned by this endpoint** (unlike the index, which requires `include_drafts=true`). Tapping a draft card from the instructor's pupil view therefore resolves. Cancelled lessons still return 404. A draft lesson comes back with `status: "draft"` and `card_status: "draft"`. For `payment_mode: "upfront"`, `payment_status` is `null` (no payment record exists until Stripe Checkout completes — same as the index). For `payment_mode: "weekly"`, `payment_status` is `"due"` (the weekly payment rows are created at booking). Sign-off remains impossible for drafts: `POST .../sign-off` only accepts `pending` lessons and returns 404 for a draft.
 
 **URL Parameters:**
 
@@ -5146,11 +5136,13 @@ Book lessons — creates an order, calendar items, and lessons.
 
 The **same** `OrderService::bookLessons` / `bookLessonsFromCalendarItem` path is used by the admin diary **Add Booking** sheet and by this endpoint. Do not implement a separate mobile booking flow.
 
-For `upfront` payment the Stripe Checkout session is handled differently based on who is booking:
-- **Student (mobile app):** the Stripe Checkout URL is returned in the response as `checkout_url`. The mobile app should load this URL in an in-app browser so the student can complete payment.
-- **Instructor:** the payment link is emailed to the student (or their contact person). No `checkout_url` is returned.
+Nothing is confirmed until the first payment is made — the full amount for `upfront`, or the first week (plus the Pass Your Test Guarantee if included) for `weekly`. Until then the order is `pending`, the lessons and diary slots are `draft`, and no confirmation or welcome email is sent. The hold deadline is returned as `payment_hold_expires_at`; when it passes, `orders:release-expired-holds` (every minute) deletes the lessons, frees the slots, cancels the order and closes the payment link.
 
-For `weekly` payment the order is activated immediately and a confirmation email is sent.
+How the first payment is taken depends on who is booking (the same for both payment modes):
+- **Student (mobile app):** the Stripe Checkout URL is returned in the response as `checkout_url`. The mobile app should load this URL in an in-app browser. The lessons are held for **10 minutes**.
+- **Instructor (mobile app or admin diary Add Booking):** a payment link is emailed to the student (or their contact person). No `checkout_url` is returned. The lessons are held until **48 hours before the first lesson**, and never less than 15 minutes.
+
+For `weekly` orders, each later week is invoiced by email and due **48 hours before the lesson**.
 
 **Booking against a specific open diary slot:** send `calendar_item_id` instead of `first_lesson_date` / `start_time` / `end_time`. Date and time are taken from that slot. The slot must belong to the student's instructor and still be empty availability. The first lesson claims that slot (under a row lock); remaining lessons in a multi-lesson package are placed weekly at the same time, reusing matching empty slots where they exist. Any open short-notice offer on a claimed slot is closed.
 
@@ -5208,15 +5200,16 @@ For `weekly` payment the order is activated immediately and a confirmation email
     "total_price_pence": 40989,
     "payment_mode": "upfront",
     "status": "pending",
+    "payment_hold_expires_at": "2026-03-23T10:15:00+00:00",
     "lessons_count": 10,
     "created_at": "2026-03-23T10:00:00.000000Z"
   }
 }
 ```
 
-> The `checkout_url` field is only included when the request is authenticated as a **student**. If Stripe session creation fails, `checkout_url` will be `null` — the client should treat this as an error and not proceed to the in-app browser.
+> The `checkout_url` field is only included when the request is authenticated as a **student**, for both `upfront` and `weekly` orders. If Stripe session creation fails, `checkout_url` will be `null` — the client should treat this as an error and not proceed to the in-app browser.
 
-**Success Response (upfront payment — instructor-initiated):** `201 Created`
+**Success Response (upfront or weekly — instructor-initiated):** `201 Created`
 ```json
 {
   "message": "Order created. A payment link has been emailed to the student.",
@@ -5234,35 +5227,14 @@ For `weekly` payment the order is activated immediately and a confirmation email
     "total_price_pence": 40989,
     "payment_mode": "upfront",
     "status": "pending",
+    "payment_hold_expires_at": "2026-03-30T07:00:00+00:00",
     "lessons_count": 10,
     "created_at": "2026-03-23T10:00:00.000000Z"
   }
 }
 ```
 
-**Success Response (weekly payment):** `201 Created`
-```json
-{
-  "message": "Order created and activated. Lesson invoices will be sent before each lesson.",
-  "data": {
-    "id": 2,
-    "student_id": 1,
-    "instructor_id": 1,
-    "package_id": 1,
-    "package_name": "10 Hour Package",
-    "package_total_price_pence": 35000,
-    "package_lesson_price_pence": 3500,
-    "package_lessons_count": 10,
-    "booking_fee_pence": 1999,
-    "digital_fee_pence": 3990,
-    "total_price_pence": 40989,
-    "payment_mode": "weekly",
-    "status": "active",
-    "lessons_count": 10,
-    "created_at": "2026-03-23T10:00:00.000000Z"
-  }
-}
-```
+A student-initiated `weekly` booking returns the same shape as the student-initiated upfront example (`checkout_url` for the first week, `status: "pending"`, `payment_mode: "weekly"`).
 
 **Order Object Fields:**
 
@@ -5281,6 +5253,7 @@ For `weekly` payment the order is activated immediately and a confirmation email
 | `total_price_pence` | integer | Total charge amount sent to Stripe (package + booking fee + digital fees) |
 | `payment_mode` | string | `upfront` or `weekly` |
 | `status` | string | Order status: `pending`, `active`, `completed`, `cancelled` |
+| `payment_hold_expires_at` | string\|null | ISO 8601 time the unpaid booking is released if the first payment hasn't been made. `null` for legacy/imported orders |
 | `lessons_count` | integer\|null | Number of lessons created |
 | `created_at` | string\|null | ISO 8601 timestamp |
 
@@ -5314,24 +5287,38 @@ For `weekly` payment the order is activated immediately and a confirmation email
 
 The same `calendar_item_id` error is returned when the slot belongs to a different instructor. Concurrent bookings of the same slot are serialised with `lockForUpdate`; the loser receives this 422.
 
-> **Mobile App Flow (upfront payment — student booking via mobile app):**
+**Error Response (a lesson time is already taken):** `422 Unprocessable Entity`
+
+Every week of the booking is checked, not just the first. If any week's lesson time overlaps another lesson (held, reserved, booked or completed), a blocked-out period or a practical test on the instructor's diary, the **whole booking is refused** and nothing is held or charged. Back-to-back lessons are allowed; travel blocks don't count as clashes.
+
+```json
+{
+  "message": "This time is no longer available on Tuesday 13 October 2026. Please choose another time.",
+  "errors": {
+    "first_lesson_date": ["This time is no longer available on Tuesday 13 October 2026. Please choose another time."]
+  }
+}
+```
+
+The error key is `calendar_item_id` when the clash is in week 1 of a booking made from a chosen diary slot, and `first_lesson_date` otherwise. Show the message and ask the learner to pick another time.
+
+> **Mobile App Flow (student booking via mobile app — upfront or weekly):**
 > 1. POST to create order as an authenticated student → response includes `checkout_url`
-> 2. Open `checkout_url` in an in-app browser so the student can complete Stripe Checkout
-> 3. After payment, Stripe redirects to the verify endpoint which confirms payment server-side
-> 4. On success, the order becomes `active` and a confirmation email is sent
+> 2. Open `checkout_url` in an in-app browser so the student can complete Stripe Checkout (full amount, or the first week)
+> 3. After payment, Stripe redirects to `/orders/{order}/payment-link/success`, which confirms payment server-side (the `checkout.session.completed` webhook does the same)
+> 4. On success, the order becomes `active`, the slots are confirmed and a confirmation email is sent
+> 5. If not paid within 10 minutes, the booking is released
 >
-> **Mobile App Flow (upfront payment — instructor booking on behalf of a student):**
+> **Mobile App Flow (instructor booking on behalf of a student — upfront or weekly):**
 > 1. POST to create order as an authenticated instructor → no `checkout_url` returned
-> 2. A Stripe Checkout link is emailed to the student
-> 3. The student opens the email link and completes Stripe Checkout
-> 4. On success, the order becomes `active` and a confirmation email is sent
+> 2. A payment link to `/orders/{order}/payment-link/pay` (signed URL) is emailed to the student. Each click opens a Stripe Checkout session
+> 3. The student completes Stripe Checkout before the hold (48 hours before the first lesson) runs out
+> 4. On success, the order becomes `active` and a confirmation email is sent. After the hold, the link shows a "no longer available" page
 >
-> **Mobile App Flow (weekly payment):**
-> 1. POST to create order with `payment_mode: "weekly"` → order is immediately `active`
-> 2. A confirmation email is sent to the student (or contact if booked on their behalf)
-> 3. The first Stripe invoice + payment-link email is sent **immediately at booking time** for the earliest scheduled lesson
-> 4. Each subsequent invoice + payment-link email is sent **immediately when the previous lesson is signed off**, for the next earliest unpaid lesson
-> 5. Stripe webhooks (`invoice.paid`) automatically mark lesson payments as paid
+> **Weekly payments after the first week:**
+> 1. On confirmation, the paid week's slot becomes `booked` and the rest `reserved`
+> 2. Each subsequent invoice + payment-link email is sent **when the previous lesson is signed off**, for the next earliest unpaid lesson, due **48 hours before that lesson**
+> 3. Stripe webhooks (`invoice.paid`) automatically mark lesson payments as paid
 >
 > Whenever the payment-reminder email is sent, an **additive push notification** is also queued for the student's user — but only when an Expo push token is registered on that user. If the student does not own the account (parent/contact booked on their behalf) or has not registered a push token, the email still goes out and no push is queued. Push delivery is processed by the every-minute `push:send-queued` cron and uses payload `{ type: "lesson_payment", lesson_payment_id, lesson_id, hosted_invoice_url }`.
 >
@@ -5343,10 +5330,11 @@ The same `calendar_item_id` error is returned when the slot belongs to a differe
 
 **Auth required:** Yes (Bearer token — instructor or the student themselves; same student policy as the other student-management routes)
 
-Re-sends the upfront payment-link email for an order that is still awaiting payment (upfront order with `status: "pending"` and draft lessons attached). Use this when the student lost or never received the original payment-link email sent at booking time.
+Re-sends the payment-link email for an order that is still awaiting its first payment (upfront or weekly order with `status: "pending"` whose hold has not run out). Use this when the student lost or never received the original payment-link email sent at booking time.
 
 Behaviour:
-- The order's existing Stripe Checkout session is **reused when it is still open**; if it has expired (Stripe Checkout sessions expire after 24 hours) a **fresh session is created** and stored on the order — the old link in the original email stops working once a new session replaces it.
+- The email links to the signed `/orders/{order}/payment-link/pay` page, which reuses the order's open Stripe Checkout session or creates a fresh one on click. Earlier emailed links keep working until the hold runs out.
+- **The hold is not extended** — `payment_hold_expires_at` is unchanged.
 - The email goes to the **booker**: the student's own email when they own their account, otherwise the contact (parent/guardian) email — same recipient logic as the original booking email.
 - An **additive push notification** is queued for the student's user when the student owns their account and has a registered Expo push token (mirrors the weekly payment-reminder behaviour). Payload: `{ type: "payment_link_resent", order_id, checkout_url }`. No token / contact-owned account → email only, no push, still 200.
 - **Rate limited per order: one send every 3 minutes.** A second tap inside the cooldown returns `429` and sends nothing.
@@ -5373,7 +5361,7 @@ The recipient email is embedded in `message` so the app can surface it in a toas
 
 `404 Not Found` — the order does not exist **or belongs to a different student** (mirrors the lesson-show no-information-leak convention: never a 403 revealing the order exists).
 
-`422 Unprocessable Entity` — the order is not awaiting upfront payment:
+`422 Unprocessable Entity` — the order is not awaiting its first payment:
 ```json
 {
   "message": "This order has already been paid.",
@@ -5385,11 +5373,13 @@ The recipient email is embedded in `message` so the app can surface it in a toas
 
 | Condition | Message |
 |-----------|---------|
-| Weekly order | `Payment links only apply to upfront orders. This order is paid weekly per lesson.` |
-| Order `active` / `completed` | `This order has already been paid.` |
-| Order `cancelled` | `This order has been cancelled.` |
+| Imported order | `Payment links do not apply to imported orders.` |
+| Upfront order `active` / `completed` | `This order has already been paid.` |
+| Weekly order `active` / `completed` | `This booking is already confirmed. Weekly lesson invoices are sent separately.` |
+| Order `cancelled` (includes released unpaid bookings) | `This order has been cancelled.` |
+| Hold has run out (release pending) | `The time to pay for this booking has passed, so the lessons are being released. Please book again.` |
+| Package no longer available | `The package for this order is no longer available, so a payment link cannot be generated.` |
 | No email on file for the booker | `No email address is on file for this student, so the payment link could not be sent.` |
-| Stripe session could not be created | `Unable to generate a payment link right now. Please try again shortly.` |
 
 `429 Too Many Requests` — cooldown active (one send per order per 3 minutes):
 ```json
@@ -5404,7 +5394,7 @@ The recipient email is embedded in `message` so the app can surface it in a toas
 
 **Auth required:** Yes (Bearer token — student or instructor)
 
-Verify a Stripe Checkout payment and activate the order. Call this after the user completes payment in the Stripe Checkout flow. On successful verification, a confirmation email is sent to the student.
+Verify a Stripe Checkout payment and activate the order. Call this after the user completes payment in the Stripe Checkout flow. Works for both `upfront` and `weekly` (first week) orders. The booking is confirmed **once**, whichever of this call, the payment-link success page or the Stripe webhook arrives first, and only that first confirmation sends the confirmation email. Calling it again (or after the webhook) returns `verified: true` without sending anything. If the booking was released before the payment landed, it returns `verified: false` with a "time to pay ran out" message and Head Office is alerted to refund it.
 
 **URL Parameters:**
 
@@ -6359,7 +6349,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | DELETE | `/api/v1/students/{student}/pickup-points/{pickupPoint}` | Yes | Both | Delete pickup point |
 | PATCH | `/api/v1/students/{student}/pickup-points/{pickupPoint}/default` | Yes | Both | Set default pickup point |
 | POST | `/api/v1/students/{student}/orders` | Yes | Both | Create order/booking (optional `calendar_item_id` for a specific slot) |
-| POST | `/api/v1/students/{student}/orders/{order}/resend-payment-link` | Yes | Both | Re-send upfront payment-link email (pending upfront orders only; 3-min cooldown) |
+| POST | `/api/v1/students/{student}/orders/{order}/resend-payment-link` | Yes | Both | Re-send payment-link email (pending orders still inside their hold; hold not extended; 3-min cooldown) |
 | GET | `/api/v1/orders/{order}/checkout/verify` | Yes | Both | Verify payment |
 | GET | `/api/v1/packages/{package}/pricing` | Yes | Any | Package pricing breakdown |
 | GET | `/api/v1/resources` | Yes | Any | List resources |
@@ -7567,7 +7557,10 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-09-23 | **Imported lessons (legacy data importer).** Lessons brought in from another system by the Data Import page sit on orders with the new `payment_mode: "imported"` (lesson list/show, instructor day lessons, orders). They are settled outside the platform: `payment_status` is `"paid"` and calendar items report `is_paid: true`, so the existing Sign Off button shows with no app change. `POST /students/{student}/lessons/{lesson}/sign-off` on an imported lesson skips the Stripe onboarding + payment guards and creates **no payout** (no transfer, no next-invoice, no student feedback email, no resource recommendations); the lesson and its calendar item still go to `completed` and the response is unchanged. Treat `"imported"` as a display-only payment mode — never offer it when booking (order create / slot-offer accept still accept only `upfront` / `weekly`). No new endpoints. | Student Lessons (index, show, sign-off), Instructor Day Lessons, Calendar Items (`is_paid`), Orders (`payment_mode`) |
 | 2026-09-24 | **Instructor diary weekly view — range queries.** `GET /instructor/calendar/items` now also accepts an inclusive `from` + `to` pair (max 31 days) instead of `date`; `date` still works unchanged and takes precedence. New `GET /instructor/lessons?from=&to=` returns the same lessons as the day route across a range. Both return the unchanged item/lesson objects ordered by `date` then `start_time`, omitting empty days. Replaces the app's 14-request week fan-out with 2. | Instructor Calendar (index), Instructor Lessons (new range) |
 | 2026-09-24 | **Booking + digital fees shown wherever pupils see prices.** No request/response shape changes. Docs fix: the instructor package examples previously showed `total_price` equal to the base price — it has always been the fee-inclusive `£` string (package + booking fee + digital fee), and `booking_fee` / `digital_fee` / `weekly_payment` are `£`-formatted strings. Package pickers in the app must show `total_price` and itemise the fees (see note under `GET /instructor/packages`). The Stripe Checkout page opened from `checkout_url` (`POST /students/{student}/orders`, upfront) now itemises the package, booking fee and digital fee as separate line items (same total). Payment-link, weekly booking-confirmation, payment-due-soon and payment-confirmed emails now include the fee breakdown. Short-notice offer acceptance (`POST /student/slot-offers/{slotOffer}/accept`, upfront) uses the same itemised checkout. Weekly Stripe hosted invoices already itemise lesson cost, booking fee and digital fee. The upfront order confirmation email itemises lessons, booking fee and digital fee; the re-sent payment link uses the same template as the payment-link email. Internal only (not exposed by the API): upfront `lesson_payments` rows now store each lesson's fee-inclusive share. Lesson `amount_pence` in API responses is unchanged (lesson price before fees). | Instructor Packages (docs), Orders (store — checkout page), Slot Offers (accept — checkout page) |
+| 2026-09-28 | **Pay at booking — nothing confirmed until the first payment.** Weekly orders are no longer activated at booking: both modes create a `pending` order with `draft` lessons/slots and take the first payment (full amount, or first week + guarantee) through Stripe Checkout. **Breaking for the app:** student-initiated `weekly` bookings (orders store and slot-offer accept) now return `checkout_url` and must open it exactly like upfront; the old "Order created and activated" message is gone. Unpaid bookings are held for 10 minutes (student), until 48 hours before the first lesson (instructor, min. 15 minutes) or until UK midnight (bookings team, min. 15 minutes), then released by `orders:release-expired-holds` (lessons deleted, slots freed, order `cancelled`). Orders expose the new `payment_hold_expires_at`. Emailed payment links now point to a signed `/orders/{order}/payment-link/pay` page. Resend works for weekly orders too and never extends the hold. Later weekly invoices are due 48 hours before each lesson (was 24). | Orders (store, resend-payment-link, order object), Student Slot Offers (accept) |
+| 2026-09-28 | **Shorter learner hold.** Student-initiated bookings (orders store, slot-offer accept) are now held for **10 minutes** (was 15). The 15-minute minimum only applies to emailed-link holds. No request/response shape changes. (Web booking form: step 4 no longer holds the chosen time; the hold starts when the learner goes to payment.) | Orders (store), Student Slot Offers (accept) |
 | 2026-09-29 | **Per-lesson fee breakdown (additive).** New `payment_breakdown` object (`total_pence`, `lesson_pence`, `booking_fee_pence`, `digital_fee_pence`, `test_pass_guarantee_pence`) on `GET /students/{student}/lessons`, `GET /students/{student}/lessons/{lesson}`, `POST /students/{student}/lessons/{lesson}/sign-off`, `GET /instructor/lessons/{date}`, `GET /instructor/lessons?from=&to=` and `GET /instructor/calendar/items` (plus the other calendar item responses). The lesson list also gains `payment_mode`. `amount_pence` is unchanged and documented as the lesson price **before fees**. Docs fix: the `GET /student/packages` example now shows the real response (same as instructor packages, with fee fields). `test_pass_guarantee_pence` is the Pass Your Test Guarantee charged with that lesson — only ever the first lesson of an order, and `0` everywhere else. New rule: pupil-facing price displays must itemise every fee (see the **Payment Breakdown Object** note). | Student Lessons (index, show, sign-off), Instructor Day Lessons, Instructor Calendar Items, Student Packages (docs) |
+| 2026-09-29 | **Pay-at-booking hardening.** (1) **New 422 on `POST /students/{student}/orders` and slot-offer accept:** every week of a booking is now checked for clashes with other lessons (held/reserved/booked/completed), blocked-out periods and practical tests; any clash refuses the whole booking before anything is held or charged (`first_lesson_date` / `calendar_item_id`: "This time is no longer available on {date}. Please choose another time."). (2) Confirmation happens once: `GET /orders/{order}/checkout/verify`, the success pages and the webhook share one locked confirmation, so repeat verify calls no longer resend the confirmation email. (3) Weekly bookings paid at checkout now also send the week-1 "payment received" email (pupil) and "learner paid" email (instructor). (4) Released holds no longer turn slots the booking created into open availability. (5) Docs: a released slot-offer booking leaves the offer `booked`. No request or response fields changed. | Orders (store, verify), Student Slot Offers (accept) |
 
 ---
 

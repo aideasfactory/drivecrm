@@ -20,9 +20,18 @@ class CreateDraftCalendarItemsAction
      * For each week, looks for an existing available slot matching the time range
      * and updates it to draft status. Only creates a new item if no matching slot exists.
      * Travel-time blocks are created for newly generated slots when travel time is
-     * detected from the first slot in the booking.
+     * detected from the first slot in the booking. Each item records whether the
+     * hold created it, so releasing an unpaid hold never leaves availability the
+     * instructor did not offer.
+     *
+     * The whole booking is refused if any week clashes with another lesson (held,
+     * reserved, booked or completed), a blocked-out period or a practical test.
+     * Each day's calendar row is locked first, so two bookings for the same
+     * instructor and day are checked one after the other.
      *
      * @return array<int, int>
+     *
+     * @throws ValidationException
      */
     public function __invoke(
         int $instructorId,
@@ -43,6 +52,8 @@ class CreateDraftCalendarItemsAction
                     'instructor_id' => $instructorId,
                     'date' => $lessonDate->toDateString(),
                 ]);
+
+                Calendar::query()->whereKey($calendar->id)->lockForUpdate()->first();
 
                 $existingItem = null;
 
@@ -75,6 +86,8 @@ class CreateDraftCalendarItemsAction
                         ->first();
                 }
 
+                $this->ensureNoClash($calendar, $startTime, $endTime, $existingItem, $lessonDate, $i === 0 && $anchorCalendarItemId);
+
                 if ($existingItem) {
                     // Capture travel time from the first existing slot to propagate to new slots
                     if ($travelTimeMinutes === null && $existingItem->travel_time_minutes) {
@@ -84,6 +97,7 @@ class CreateDraftCalendarItemsAction
                     $existingItem->update([
                         'is_available' => false,
                         'status' => CalendarItemStatus::DRAFT,
+                        'created_by_hold' => false,
                     ]);
 
                     // Also mark the existing travel block as DRAFT so it gets confirmed with the lesson
@@ -102,6 +116,7 @@ class CreateDraftCalendarItemsAction
                         'status' => CalendarItemStatus::DRAFT,
                         'item_type' => CalendarItemType::Slot,
                         'travel_time_minutes' => $travelTimeMinutes,
+                        'created_by_hold' => true,
                     ]);
 
                     // Create travel-time block for newly generated slots
@@ -115,6 +130,51 @@ class CreateDraftCalendarItemsAction
 
             return $calendarItemIds;
         });
+    }
+
+    /**
+     * Refuse the booking when the lesson time overlaps anything on the day other
+     * than open availability: another lesson (held, reserved, booked or
+     * completed), a blocked-out period or a practical test. Travel blocks are
+     * not treated as clashes. The slot being taken over is ignored.
+     *
+     * @throws ValidationException
+     */
+    private function ensureNoClash(
+        Calendar $calendar,
+        string $startTime,
+        string $endTime,
+        ?CalendarItem $slotBeingTaken,
+        Carbon $lessonDate,
+        bool $isAnchorWeek
+    ): void {
+        $hasClash = CalendarItem::query()
+            ->where('calendar_id', $calendar->id)
+            ->when($slotBeingTaken, fn ($query) => $query->whereKeyNot($slotBeingTaken->id))
+            ->where('start_time', '<', $endTime)
+            ->where('end_time', '>', $startTime)
+            ->where(fn ($query) => $query
+                ->whereIn('status', [
+                    CalendarItemStatus::DRAFT,
+                    CalendarItemStatus::RESERVED,
+                    CalendarItemStatus::BOOKED,
+                    CalendarItemStatus::COMPLETED,
+                ])
+                ->orWhere('item_type', CalendarItemType::PracticalTest)
+                ->orWhere(fn ($query) => $query
+                    ->where('item_type', CalendarItemType::Slot)
+                    ->where('is_available', false)))
+            ->lockForUpdate()
+            ->exists();
+
+        if (! $hasClash) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            $isAnchorWeek ? 'calendar_item_id' : 'first_lesson_date' => 'This time is no longer available on '
+                .$lessonDate->format('l j F Y').'. Please choose another time.',
+        ]);
     }
 
     /**

@@ -16,9 +16,17 @@
           <Alert>
             <Info class="h-4 w-4" />
             <AlertTitle>Want to try again?</AlertTitle>
-            <AlertDescription>
-              Ask your instructor<span v-if="order?.instructor"> ({{ order.instructor.name }})</span>
-              to resend the payment link when you're ready to pay.
+            <AlertDescription v-if="order?.pay_by && fromApp">
+              Go back to the app to finish paying before {{ order.pay_by }}.
+              After that, these lesson times will be released for other learners.
+            </AlertDescription>
+            <AlertDescription v-else-if="order?.pay_by">
+              Use the same link in your email to pay before {{ order.pay_by }}.
+              After that, these lesson times will be released for other learners.
+            </AlertDescription>
+            <AlertDescription v-else>
+              Contact your instructor<span v-if="order?.instructor"> ({{ order.instructor.name }})</span>
+              to book again.
             </AlertDescription>
           </Alert>
 
@@ -39,11 +47,13 @@ import { XCircle, Info } from 'lucide-vue-next'
 
 interface OrderSummary {
   id: number
+  pay_by: string | null
   package: { name: string; lessons_count: number | null } | null
   instructor: { name: string } | null
 }
 
 defineProps<{
   order: OrderSummary | null
+  fromApp?: boolean
 }>()
 </script>

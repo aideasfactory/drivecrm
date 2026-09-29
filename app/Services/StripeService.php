@@ -4,13 +4,17 @@ namespace App\Services;
 
 use App\Models\Instructor;
 use App\Models\Lesson;
+use App\Models\LessonPayment;
 use App\Models\Order;
 use App\Models\Package;
 use App\Models\User;
+use App\Support\BookingPayments;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Exception;
 use Illuminate\Support\Facades\Log;
 use Stripe\Account;
+use Stripe\Checkout\Session;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Price;
 use Stripe\Product;
@@ -242,8 +246,12 @@ class StripeService
      * $bookingSource identifies which flow produced the payment
      * ('onboarding', 'mobile_app', 'instructor_booking') for Dashboard triage.
      */
-    public function createCheckoutSession(Order $order, Package $package, User $student, ?Instructor $instructor, string $successUrl, string $cancelUrl, string $bookingSource = 'web'): array
+    public function createCheckoutSession(Order $order, Package $package, User $student, ?Instructor $instructor, string $successUrl, string $cancelUrl, string $bookingSource = 'web', ?CarbonInterface $expiresAt = null): array
     {
+        if ($order->isWeekly()) {
+            return $this->createFirstWeeklyPaymentCheckoutSession($order, $package, $student, $instructor, $successUrl, $cancelUrl, $bookingSource, $expiresAt);
+        }
+
         try {
             // Use total_price_pence (package + booking fee + digital fees) when available,
             // otherwise fall back to package_total_price_pence for legacy orders
@@ -325,6 +333,7 @@ class StripeService
                     'transfer_group' => "order_{$order->id}",
                     'metadata' => $metadata,
                 ],
+                'expires_at' => BookingPayments::stripeCheckoutExpiresAt($expiresAt ?? $order->payment_hold_expires_at)->getTimestamp(),
             ];
 
             Log::info('StripeService: Session data prepared', [
@@ -372,6 +381,137 @@ class StripeService
                 'success' => false,
                 'error' => $e->getMessage(),
             ];
+        }
+    }
+
+    /**
+     * Create a Checkout session for the first payment of a weekly order (the
+     * earliest lesson's payment, including any Pass Your Test Guarantee). The
+     * line items mirror the weekly invoice breakdown.
+     *
+     * @return array{success: bool, session_id?: string, session?: Session, url?: string, error?: string}
+     */
+    protected function createFirstWeeklyPaymentCheckoutSession(Order $order, Package $package, User $student, ?Instructor $instructor, string $successUrl, string $cancelUrl, string $bookingSource, ?CarbonInterface $expiresAt): array
+    {
+        $lessonPayment = $order->firstLessonPayment();
+
+        if (! $lessonPayment || $lessonPayment->amount_pence <= 0) {
+            Log::error('StripeService: Weekly order has no first lesson payment to take at checkout', [
+                'order_id' => $order->id,
+            ]);
+
+            return ['success' => false, 'error' => 'This booking has no first payment to take.'];
+        }
+
+        $lesson = $lessonPayment->lesson;
+        $packageName = $order->package_name ?? $package->name;
+        $lessonDateLabel = trim(($lesson?->date?->format('d M Y') ?? '').' '.($lesson?->start_time?->format('H:i') ?? ''));
+        $amountPence = (int) $lessonPayment->amount_pence;
+        $breakdown = LessonPayment::weeklyBreakdown($order, $amountPence, (int) $lessonPayment->test_pass_guarantee_pence);
+
+        $lineItems = array_map(fn (array $item) => [
+            'price_data' => [
+                'currency' => 'gbp',
+                'unit_amount' => $item['amount'],
+                'product_data' => ['name' => $item['description']],
+            ],
+            'quantity' => 1,
+        ], $this->buildInvoiceLineItems($amountPence, $breakdown, $packageName, $lessonDateLabel));
+
+        $metadata = [
+            'order_id' => $order->id,
+            'lesson_id' => $lessonPayment->lesson_id,
+            'lesson_payment_id' => $lessonPayment->id,
+            'package_id' => $package->id,
+            'package_name' => $packageName,
+            'lessons_count' => $order->package_lessons_count,
+            'student_id' => $student->id,
+            'student_name' => $student->name,
+            'student_email' => $student->email,
+            'instructor_id' => $instructor?->id,
+            'instructor_name' => $instructor?->user?->name,
+            'payment_mode' => $order->payment_mode?->value,
+            'payment_kind' => 'first_weekly_payment',
+            'booking_source' => $bookingSource,
+            'includes_test_pass_guarantee' => $order->includes_test_pass_guarantee ? 'yes' : 'no',
+            'test_pass_guarantee_pence' => (int) $lessonPayment->test_pass_guarantee_pence,
+            'environment' => config('app.env'),
+        ];
+
+        try {
+            $session = $this->stripe->checkout->sessions->create([
+                'mode' => 'payment',
+                'customer' => $student->stripe_customer_id,
+                'client_reference_id' => (string) $order->id,
+                'line_items' => $lineItems,
+                'success_url' => $successUrl,
+                'cancel_url' => $cancelUrl,
+                'metadata' => $metadata,
+                'payment_intent_data' => [
+                    'description' => "Order #{$order->id} — {$packageName} — first weekly payment — {$student->name}",
+                    'transfer_group' => "order_{$order->id}",
+                    'metadata' => $metadata,
+                ],
+                'expires_at' => BookingPayments::stripeCheckoutExpiresAt($expiresAt ?? $order->payment_hold_expires_at)->getTimestamp(),
+            ]);
+
+            Log::info('StripeService: First weekly payment checkout session created', [
+                'order_id' => $order->id,
+                'lesson_payment_id' => $lessonPayment->id,
+                'session_id' => $session->id,
+                'amount_pence' => $amountPence,
+            ]);
+
+            return [
+                'success' => true,
+                'session_id' => $session->id,
+                'session' => $session,
+                'url' => $session->url,
+            ];
+        } catch (ApiErrorException $e) {
+            Log::error('StripeService: First weekly payment checkout session failed', [
+                'order_id' => $order->id,
+                'lesson_payment_id' => $lessonPayment->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Close a Checkout session so it can no longer be paid.
+     *
+     * Returns `released: true` when nothing can be paid on it any more (it was
+     * open and is now expired, or had already expired). Returns `released:
+     * false` when it has already been paid, or Stripe could not be reached —
+     * the caller must then keep the booking. `payment_status` and
+     * `payment_intent` let the caller confirm a session that was paid.
+     *
+     * @return array{released: bool, status: string|null, payment_status: string|null, payment_intent: string|null}
+     */
+    public function expireCheckoutSession(string $sessionId): array
+    {
+        try {
+            $session = $this->stripe->checkout->sessions->retrieve($sessionId);
+
+            if ($session->status === 'open') {
+                $session = $this->stripe->checkout->sessions->expire($sessionId);
+            }
+
+            return [
+                'released' => $session->status === 'expired',
+                'status' => $session->status,
+                'payment_status' => $session->payment_status ?? null,
+                'payment_intent' => $session->payment_intent ?: null,
+            ];
+        } catch (ApiErrorException $e) {
+            Log::error('StripeService: Failed to expire checkout session', [
+                'session_id' => $sessionId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ['released' => false, 'status' => null, 'payment_status' => null, 'payment_intent' => null];
         }
     }
 
@@ -628,15 +768,15 @@ class StripeService
             $packageName = $lesson->order->package_name ?? ($package->name ?? 'Driving lessons');
             $lessonDateLabel = $lesson->date->format('d M Y').' '.$lesson->start_time->format('H:i');
 
-            // Invoice is due 24 hours before the lesson starts (matching
-            // LessonPayment::due_date), so an invoice sent a week ahead is not
-            // marked overdue by Stripe after a day. Stripe rejects past due
-            // dates, so invoices created inside that window fall back to one
-            // hour from now.
-            $lessonStart = CarbonImmutable::parse(
-                $lesson->date->toDateString().' '.$lesson->start_time->format('H:i')
+            // Invoice is due the configured hours before the lesson starts
+            // (matching LessonPayment::due_date), so an invoice sent a week
+            // ahead is not marked overdue by Stripe after a day. Stripe rejects
+            // past due dates, so invoices created inside that window fall back
+            // to one hour from now.
+            $dueDate = BookingPayments::weeklyPaymentDueAt(
+                $lesson->date->toDateString(),
+                $lesson->start_time->format('H:i')
             );
-            $dueDate = $lessonStart->subHours(24);
 
             if ($dueDate->isPast()) {
                 $dueDate = CarbonImmutable::now()->addHour();

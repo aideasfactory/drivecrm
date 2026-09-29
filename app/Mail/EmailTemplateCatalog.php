@@ -115,10 +115,12 @@ final class EmailTemplateCatalog
                 'lessons_count' => 'Number of lessons',
                 'instructor_name' => 'Instructor name',
                 'cost_breakdown' => 'Lessons, booking fee and digital fee lines (blank when there are no fees)',
-                'total' => 'Formatted total, including fees',
+                'amount_label' => '"Total" when paying in full, "First week" for weekly payments',
+                'total' => 'Formatted amount to pay now, including fees',
                 'first_lesson_line' => 'First lesson date, if booked',
+                'pay_by_line' => 'When the lessons are released if unpaid',
                 'booked_for_line' => 'Shown when a contact booked on behalf of a learner',
-            ], 'Complete Your Payment for Driving Lessons', 'Hello {{recipient_name}}!', "{{intro}}\n\n**Booking Details:**\nPackage: {{package_name}}\nNumber of lessons: {{lessons_count}}\nInstructor: {{instructor_name}}\n{{cost_breakdown}}\nTotal: {{total}}\n{{first_lesson_line}}\n\nPlease complete your payment using the link below to confirm your lessons.\n\n{{action_button}}\n\nThis payment link will expire after 24 hours.\n{{booked_for_line}}", "Safe driving,\nThe Driving School Team", 'Pay Now'),
+            ], 'Complete Your Payment for Driving Lessons', 'Hello {{recipient_name}}!', "{{intro}}\n\n**Booking Details:**\nPackage: {{package_name}}\nNumber of lessons: {{lessons_count}}\nInstructor: {{instructor_name}}\n{{cost_breakdown}}\n{{amount_label}}: {{total}}\n{{first_lesson_line}}\n\nPlease complete your payment using the link below to confirm your lessons.\n\n{{action_button}}\n\n{{pay_by_line}}\n{{booked_for_line}}", "Safe driving,\nThe Driving School Team", 'Pay Now'),
 
             self::entry(EmailTemplateKey::LearnerPaymentDueSoon, 'Payment due soon (48 hours)', $audience, 'Reminder that a weekly lesson payment is due in under 48 hours.', [
                 'recipient_name' => 'Greeting name (learner or contact)',

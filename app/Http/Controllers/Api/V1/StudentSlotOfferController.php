@@ -62,17 +62,10 @@ class StudentSlotOfferController extends Controller
             returnCheckoutUrl: true,
         );
 
-        $response = [
-            'message' => $paymentMode === PaymentMode::WEEKLY
-                ? 'Lesson booked. Lesson invoices will be sent before each lesson.'
-                : 'Lesson booked. Open the checkout URL to complete payment.',
+        return response()->json([
+            'message' => 'Lesson held. Open the checkout URL to complete payment.',
             'data' => new OrderResource($result['order']),
-        ];
-
-        if ($paymentMode === PaymentMode::UPFRONT) {
-            $response['checkout_url'] = $result['checkout_url'] ?? null;
-        }
-
-        return response()->json($response, 201);
+            'checkout_url' => $result['checkout_url'] ?? null,
+        ], 201);
     }
 }

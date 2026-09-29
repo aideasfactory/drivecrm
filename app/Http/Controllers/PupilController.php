@@ -468,12 +468,8 @@ class PupilController extends Controller
             );
         }
 
-        $message = $paymentMode === PaymentMode::WEEKLY
-            ? 'Order created and activated. Lesson invoices will be sent before each lesson.'
-            : 'Order created. A payment link has been emailed to the student.';
-
         return response()->json([
-            'message' => $message,
+            'message' => 'Order created. A payment link has been emailed to the student.',
             'order' => $result['order'],
         ], 201);
     }

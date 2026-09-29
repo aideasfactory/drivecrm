@@ -6,15 +6,23 @@ namespace App\Actions\CalendarItem;
 
 use App\Enums\CalendarItemStatus;
 use App\Enums\LessonStatus;
+use App\Enums\OrderStatus;
 use App\Models\CalendarItem;
 use App\Models\Lesson;
 use Illuminate\Support\Facades\Log;
 
 class ResetDraftCalendarItemsAction
 {
+    public function __construct(
+        protected ReleaseDraftCalendarItemsAction $releaseDraftCalendarItems,
+    ) {}
+
     /**
      * Reset all draft calendar items created before the given cutoff back to available.
      * Also deletes any draft lessons linked to those calendar items.
+     *
+     * Drafts belonging to an unpaid order with a payment hold are skipped — the
+     * hold decides when they are released (see `orders:release-expired-holds`).
      *
      * @return int The number of calendar items reset
      */
@@ -23,13 +31,15 @@ class ResetDraftCalendarItemsAction
         $draftCalendarItemIds = CalendarItem::query()
             ->where('status', CalendarItemStatus::DRAFT)
             ->where('created_at', '<', $cutoff)
+            ->whereDoesntHave('lessons.order', fn ($query) => $query
+                ->where('status', OrderStatus::PENDING)
+                ->whereNotNull('payment_hold_expires_at'))
             ->pluck('id');
 
         if ($draftCalendarItemIds->isEmpty()) {
             return 0;
         }
 
-        // Delete draft lessons linked to these calendar items
         $lessonsDeleted = Lesson::query()
             ->whereIn('calendar_item_id', $draftCalendarItemIds)
             ->where('status', LessonStatus::DRAFT)
@@ -42,22 +52,6 @@ class ResetDraftCalendarItemsAction
             ]);
         }
 
-        // Reset travel items of these draft calendar items back to null status
-        CalendarItem::query()
-            ->whereIn('parent_item_id', $draftCalendarItemIds)
-            ->where('status', CalendarItemStatus::DRAFT)
-            ->update([
-                'status' => null,
-            ]);
-
-        // Reset the calendar items back to available
-        $updated = CalendarItem::query()
-            ->whereIn('id', $draftCalendarItemIds)
-            ->update([
-                'is_available' => true,
-                'status' => null,
-            ]);
-
-        return $updated;
+        return ($this->releaseDraftCalendarItems)($draftCalendarItemIds);
     }
 }

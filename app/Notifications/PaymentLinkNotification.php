@@ -8,6 +8,7 @@ use App\Enums\EmailTemplateKey;
 use App\Mail\RendersTemplatedMail;
 use App\Models\Order;
 use App\Models\Student;
+use App\Support\BookingPayments;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -40,7 +41,15 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
         $order = $this->order;
         $instructor = $order->instructor;
         $firstLesson = $order->lessons()->orderBy('date')->first();
-        $totalFormatted = $order->formatted_amount_paid;
+        $firstWeeklyPayment = $order->isWeekly() ? $order->firstLessonPayment() : null;
+        $totalFormatted = $firstWeeklyPayment
+            ? '£'.number_format($firstWeeklyPayment->amount_pence / 100, 2)
+            : $order->formatted_amount_paid;
+        $costBreakdown = match (true) {
+            $firstWeeklyPayment !== null => implode("\n", $firstWeeklyPayment->costBreakdownLines()),
+            $order->hasFees() => implode("\n", $order->costBreakdownLines()),
+            default => '',
+        };
 
         $firstLessonLine = $firstLesson
             ? 'First lesson: '.Carbon::parse($firstLesson->date)->format('l, F j, Y')
@@ -60,13 +69,28 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
                 'package_name' => $order->package_name,
                 'lessons_count' => $order->package_lessons_count,
                 'instructor_name' => $instructor->user->name,
-                'cost_breakdown' => $order->hasFees() ? implode("\n", $order->costBreakdownLines()) : '',
+                'amount_label' => $firstWeeklyPayment ? 'First week' : 'Total',
+                'cost_breakdown' => $costBreakdown,
                 'total' => $totalFormatted,
                 'first_lesson_line' => $firstLessonLine,
+                'pay_by_line' => $this->payByLine($firstWeeklyPayment !== null),
                 'booked_for_line' => $bookedForLine,
             ],
             $this->checkoutUrl,
         );
+    }
+
+    protected function payByLine(bool $isWeekly): string
+    {
+        $line = $this->order->payment_hold_expires_at
+            ? 'Please pay by **'.BookingPayments::formatDeadline($this->order->payment_hold_expires_at).'**. If payment isn\'t made by then, the lessons will be released and offered to other learners.'
+            : 'The lessons are held for you until payment is made.';
+
+        if ($isWeekly) {
+            $line .= "\n\nAfter the first week, each lesson is invoiced by email and due ".BookingPayments::weeklyPaymentDueHoursBeforeLesson().' hours before it takes place.';
+        }
+
+        return $line;
     }
 
     protected function recipientName(): string

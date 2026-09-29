@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace App\Actions\Onboarding;
 
 use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
+use App\Actions\Student\Order\CreateDraftCalendarItemsAction;
 use App\Enums\CalendarItemStatus;
 use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use App\Enums\PaymentStatus;
-use App\Models\Calendar;
+use App\Exceptions\SlotNoLongerAvailableException;
 use App\Models\CalendarItem;
 use App\Models\Enquiry;
 use App\Models\Instructor;
@@ -21,16 +22,20 @@ use App\Models\Package;
 use App\Models\Student;
 use App\Services\InstructorCalendarService;
 use App\Services\InstructorService;
+use App\Support\BookingPayments;
 use App\Support\Fees;
 use App\Support\TestPassGuarantee;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class CreateOrderFromEnquiryAction
 {
     public function __construct(
         protected ResolveEnquiryPriceUpliftAction $resolveEnquiryPriceUplift,
+        protected CreateDraftCalendarItemsAction $createDraftCalendarItems,
+        protected ReleaseLegacyStepFourHoldsAction $releaseLegacyStepFourHolds,
     ) {}
 
     /**
@@ -47,6 +52,8 @@ class CreateOrderFromEnquiryAction
         PaymentMode $paymentMode,
         ?array $discount = null
     ): Order {
+        ($this->releaseLegacyStepFourHolds)($enquiry);
+
         try {
             DB::beginTransaction();
 
@@ -148,12 +155,23 @@ class CreateOrderFromEnquiryAction
                 ]);
             }
 
-            // Get time details and calendar items from Step 4
             $startTime = $step4['start_time'] ?? null;
             $endTime = $step4['end_time'] ?? null;
-            $calendarItemIds = $step4['calendar_item_ids'] ?? [];
 
-            Log::info('Retrieved calendar items from Step 4', [
+            if (! $startTime || ! $endTime) {
+                throw new \Exception('Lesson start and end time are required from Step 4');
+            }
+
+            $calendarItemIds = $this->holdCalendarItems(
+                (int) $instructorId,
+                $firstLessonDate->toDateString(),
+                $startTime,
+                $endTime,
+                (int) $package->lessons_count,
+                isset($step4['calendar_item_id']) ? (int) $step4['calendar_item_id'] : null,
+            );
+
+            Log::info('Held calendar items for the booking', [
                 'calendar_item_ids' => $calendarItemIds,
                 'calendar_items_count' => count($calendarItemIds),
                 'order_id' => $order->id,
@@ -235,12 +253,9 @@ class CreateOrderFromEnquiryAction
             'payment_mode' => $paymentMode->value,
         ]);
 
-        // Determine calendar item status based on payment mode
-        // UPFRONT: Keep as DRAFT until Stripe confirms payment (ConfirmCalendarItemsAction handles transition)
-        // WEEKLY: Transition to RESERVED immediately (no Stripe checkout needed)
-        $calendarItemStatus = $paymentMode === PaymentMode::UPFRONT
-            ? CalendarItemStatus::DRAFT
-            : CalendarItemStatus::RESERVED;
+        // Both payment modes stay DRAFT until the first payment is confirmed
+        // (ConfirmCalendarItemsAction handles the transition).
+        $calendarItemStatus = CalendarItemStatus::DRAFT;
 
         Log::info('Calendar items will be updated to status', [
             'status' => $calendarItemStatus,
@@ -281,28 +296,9 @@ class CreateOrderFromEnquiryAction
                 throw new \Exception("Calendar item not found: {$calendarItemId}");
             }
 
-            // Update calendar item status (from draft to booked/reserved)
-            $calendarItem->update([
-                'status' => $calendarItemStatus,
-                'is_available' => false, // Keep unavailable
-            ]);
-
-            Log::info('Updated calendar item status', [
-                'calendar_item_id' => $calendarItem->id,
-                'old_status' => 'draft',
-                'new_status' => $calendarItemStatus,
-                'is_available' => false,
-                'lesson_number' => $i + 1,
-                'order_id' => $order->id,
-            ]);
-
-            // Create lesson linked to the calendar item
-            // Use the order's snapshot price (which may be discounted)
-            // UPFRONT: Lessons start as DRAFT until Stripe confirms payment
-            // WEEKLY: Lessons start as PENDING immediately
-            $lessonStatus = $paymentMode === PaymentMode::UPFRONT
-                ? LessonStatus::DRAFT
-                : LessonStatus::PENDING;
+            // Use the order's snapshot price (which may be discounted). Lessons
+            // stay DRAFT until the first payment is confirmed.
+            $lessonStatus = LessonStatus::DRAFT;
 
             $lessonData = [
                 'order_id' => $order->id,
@@ -341,6 +337,32 @@ class CreateOrderFromEnquiryAction
     }
 
     /**
+     * Hold the diary slots now that the learner is going to payment. Step 4 only
+     * remembers the chosen slot, so it may have been taken since; the chosen
+     * slot is locked, so when two learners pay for the same time only the
+     * first gets it. Same path as mobile bookings.
+     *
+     * @return array<int, int>
+     *
+     * @throws SlotNoLongerAvailableException
+     */
+    protected function holdCalendarItems(int $instructorId, string $firstLessonDate, string $startTime, string $endTime, int $lessonsCount, ?int $chosenCalendarItemId): array
+    {
+        try {
+            return ($this->createDraftCalendarItems)(
+                $instructorId,
+                $firstLessonDate,
+                $startTime,
+                $endTime,
+                $lessonsCount,
+                $chosenCalendarItemId,
+            );
+        } catch (ValidationException $e) {
+            throw new SlotNoLongerAvailableException($e->getMessage(), previous: $e);
+        }
+    }
+
+    /**
      * Create lesson payment records for weekly payment mode.
      */
     protected function createLessonPayments(Order $order): void
@@ -351,8 +373,6 @@ class CreateOrderFromEnquiryAction
         $spreadTotalPence = $order->total_price_pence - $testPassGuaranteePence;
 
         foreach ($lessons->values() as $index => $lesson) {
-            $lessonDate = Carbon::parse($lesson->date);
-
             // The guarantee add-on is charged in full on the first weekly
             // payment, which is invoiced straight away at booking.
             $guaranteeForPayment = $index === 0 ? $testPassGuaranteePence : 0;
@@ -366,7 +386,7 @@ class CreateOrderFromEnquiryAction
                 'amount_pence' => LessonPayment::weeklyAmountForIndex($spreadTotalPence, $lessonsCount, $index) + $guaranteeForPayment,
                 'test_pass_guarantee_pence' => $guaranteeForPayment,
                 'status' => PaymentStatus::DUE,
-                'due_date' => $lessonDate->copy()->subHours(24), // Due 24h before lesson
+                'due_date' => BookingPayments::weeklyPaymentDueDate($lesson->date->toDateString(), $lesson->start_time?->format('H:i')),
             ]);
         }
 

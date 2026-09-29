@@ -37,7 +37,61 @@
                 <span class="text-sm text-muted-foreground">Instructor</span>
                 <span class="text-sm font-medium text-right">{{ order.instructor.name }}</span>
               </div>
-              <template v-if="order.booking_fee_pence || order.digital_fee_pence || order.test_pass_guarantee_pence !== null">
+              <template v-if="order.first_payment && (order.first_payment.booking_fee_pence || order.first_payment.digital_fee_pence || order.test_pass_guarantee_pence !== null)">
+                <div class="flex items-start justify-between gap-4">
+                  <span class="text-sm text-muted-foreground">{{ isWeekly ? 'Week 1 lesson' : 'Lessons' }}</span>
+                  <span class="text-sm font-medium text-right">{{ formatPrice(order.first_payment.lesson_pence) }}</span>
+                </div>
+                <div v-if="order.first_payment.booking_fee_pence" class="flex items-start justify-between gap-4">
+                  <span class="text-sm text-muted-foreground">Booking fee</span>
+                  <span class="text-sm font-medium text-right">{{ formatPrice(order.first_payment.booking_fee_pence) }}</span>
+                </div>
+                <div v-if="order.first_payment.digital_fee_pence" class="flex items-start justify-between gap-4">
+                  <span class="text-sm text-muted-foreground">Digital fee</span>
+                  <span class="text-sm font-medium text-right">{{ formatPrice(order.first_payment.digital_fee_pence) }}</span>
+                </div>
+                <div v-if="order.test_pass_guarantee_pence !== null" class="flex items-start justify-between gap-4">
+                  <span class="text-sm text-muted-foreground">Pass Your Test Guarantee</span>
+                  <span class="text-sm font-medium text-right">
+                    {{ order.first_payment.test_pass_guarantee_pence > 0 ? formatPrice(order.first_payment.test_pass_guarantee_pence) : 'Included free' }}
+                  </span>
+                </div>
+              </template>
+              <div v-if="order.amount_paid_pence" class="flex items-start justify-between gap-4">
+                <span class="text-sm text-muted-foreground">
+                  {{ isWeekly ? 'First week paid' : 'Amount paid' }}
+                </span>
+                <span class="text-sm font-medium text-right">{{ formatPrice(order.amount_paid_pence) }}</span>
+              </div>
+              <div v-if="isWeekly && order.weekly_instalment" class="flex items-start justify-between gap-4">
+                <span class="text-sm text-muted-foreground">Each following week</span>
+                <span class="text-sm font-medium text-right">{{ order.weekly_instalment }}</span>
+              </div>
+            </div>
+
+            <Alert>
+              <CircleCheck class="h-4 w-4" />
+              <AlertTitle>Booking confirmed</AlertTitle>
+              <AlertDescription>
+                A confirmation email has been sent to you with the full details.
+              </AlertDescription>
+            </Alert>
+
+            <div v-if="order" class="space-y-3">
+              <div v-if="order.package" class="flex items-start justify-between gap-4">
+                <span class="text-sm text-muted-foreground">Package</span>
+                <span class="text-sm font-medium text-right">
+                  {{ order.package.name }}
+                  <span v-if="order.package.lessons_count" class="text-muted-foreground">
+                    · {{ order.package.lessons_count }} lessons
+                  </span>
+                </span>
+              </div>
+              <div v-if="order.instructor" class="flex items-start justify-between gap-4">
+                <span class="text-sm text-muted-foreground">Instructor</span>
+                <span class="text-sm font-medium text-right">{{ order.instructor.name }}</span>
+              </div>
+              <template v-if="!isWeekly && (order.booking_fee_pence || order.digital_fee_pence || order.test_pass_guarantee_pence !== null)">
                 <div v-if="order.package_total_price_pence" class="flex items-start justify-between gap-4">
                   <span class="text-sm text-muted-foreground">Lessons</span>
                   <span class="text-sm font-medium text-right">{{ formatPrice(order.package_total_price_pence) }}</span>
@@ -57,9 +111,11 @@
                   </span>
                 </div>
               </template>
-              <div v-if="order.total_price_pence" class="flex items-start justify-between gap-4">
-                <span class="text-sm text-muted-foreground">Amount paid</span>
-                <span class="text-sm font-medium text-right">{{ formatPrice(order.total_price_pence) }}</span>
+              <div v-if="order.amount_paid_pence" class="flex items-start justify-between gap-4">
+                <span class="text-sm text-muted-foreground">
+                  {{ isWeekly ? 'First week paid' : 'Amount paid' }}
+                </span>
+                <span class="text-sm font-medium text-right">{{ formatPrice(order.amount_paid_pence) }}</span>
               </div>
             </div>
 
@@ -69,6 +125,9 @@
               <AlertDescription>
                 <ul class="list-disc list-inside space-y-1 mt-2">
                   <li>Check your email for the confirmation and lesson schedule.</li>
+                  <li v-if="isWeekly">
+                    Each following week is invoiced by email and due {{ weeklyPaymentDueHours }} hours before the lesson.
+                  </li>
                   <li>Your instructor will be in touch to confirm the first lesson details.</li>
                   <li>You can reschedule lessons up to 24 hours in advance from the Drive app.</li>
                 </ul>
@@ -109,25 +168,41 @@
 <script setup lang="ts">
 import { Card, CardContent } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { computed } from 'vue'
 import { CheckCircle, CircleCheck, Info, Clock } from 'lucide-vue-next'
 
 interface OrderSummary {
   id: number
   status: string
+  payment_mode: 'upfront' | 'weekly' | 'imported' | null
   total_price_pence: number | null
+  amount_paid_pence: number | null
   package_total_price_pence: number | null
   booking_fee_pence: number | null
   digital_fee_pence: number | null
   test_pass_guarantee_pence: number | null
+  first_payment: {
+    total_pence: number
+    lesson_pence: number
+    booking_fee_pence: number
+    digital_fee_pence: number
+    test_pass_guarantee_pence: number
+  } | null
+  weekly_instalment: string | null
   package: { name: string; lessons_count: number | null } | null
   instructor: { name: string } | null
 }
 
-defineProps<{
+const props = withDefaults(defineProps<{
   verified: boolean
   message?: string
   order: OrderSummary | null
-}>()
+  weeklyPaymentDueHours?: number
+}>(), {
+  weeklyPaymentDueHours: 48,
+})
+
+const isWeekly = computed((): boolean => props.order?.payment_mode === 'weekly')
 
 const formatPrice = (pence: number): string => {
   return new Intl.NumberFormat('en-GB', {

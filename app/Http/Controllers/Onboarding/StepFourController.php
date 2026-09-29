@@ -2,16 +2,15 @@
 
 namespace App\Http\Controllers\Onboarding;
 
-use App\Enums\CalendarItemStatus;
-use App\Enums\CalendarItemType;
+use App\Actions\Onboarding\ReleaseLegacyStepFourHoldsAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Onboarding\StepFourRequest;
-use App\Models\Calendar;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
 use App\Models\Package;
 use App\Services\CalendarService;
 use App\Services\InstructorService;
+use App\Support\BookingPayments;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -21,12 +20,14 @@ class StepFourController extends Controller
 {
     public function __construct(
         private CalendarService $calendarService,
-        private InstructorService $instructorService
+        private InstructorService $instructorService,
+        private ReleaseLegacyStepFourHoldsAction $releaseLegacyStepFourHolds,
     ) {}
 
     public function show(Request $request)
     {
         $enquiry = $request->get('enquiry');
+        ($this->releaseLegacyStepFourHolds)($enquiry);
         $step2Data = $enquiry->getStepData(2);
         $step1Data = $enquiry->getStepData(1);
         $postcode = $step1Data['postcode'] ?? null;
@@ -61,6 +62,7 @@ class StepFourController extends Controller
             'instructor' => $instructor,
             'availableInstructors' => $availableInstructors,
             'availability' => $availability,
+            'holdMinutes' => BookingPayments::learnerHoldMinutes(),
             'disabledDates' => [
                 now()->format('Y-m-d'),           // Today
                 now()->addDay()->format('Y-m-d'), // Tomorrow
@@ -157,170 +159,42 @@ class StepFourController extends Controller
             'enquiry_id' => $enquiry->id,
         ]);
 
-        // Update the selected calendar item to draft status
-        $selectedCalendarItem = CalendarItem::find($validated['calendar_item_id']);
+        ($this->releaseLegacyStepFourHolds)($enquiry);
 
-        if (! $selectedCalendarItem) {
-            Log::error('Calendar item not found', [
+        $instructorId = $validated['instructor_id'] ?? $enquiry->getStepData(2)['instructor_id'] ?? null;
+        $selectedCalendarItem = CalendarItem::with('calendar')->find($validated['calendar_item_id']);
+
+        if (! $selectedCalendarItem
+            || $selectedCalendarItem->calendar?->instructor_id !== (int) $instructorId
+            || $selectedCalendarItem->calendar->date->toDateString() !== Carbon::parse($validated['date'])->toDateString()
+            || ! $selectedCalendarItem->isEmptyAvailability()) {
+            Log::info('Step 4: selected slot is no longer available', [
                 'calendar_item_id' => $validated['calendar_item_id'],
                 'enquiry_id' => $enquiry->id,
             ]);
 
-            return back()->with('error', 'Selected time slot is no longer available.');
-        }
-
-        // Update selected calendar item
-        $selectedCalendarItem->update([
-            'is_available' => false,
-            'status' => CalendarItemStatus::DRAFT,
-        ]);
-
-        // Mirror draft status to travel item
-        if ($selectedCalendarItem->travelItem) {
-            $selectedCalendarItem->travelItem->update([
-                'status' => CalendarItemStatus::DRAFT,
+            return back()->withErrors([
+                'calendar_item_id' => 'Sorry, that time has just been booked. Please choose another time.',
             ]);
         }
 
-        Log::info('Updated selected calendar item to draft', [
-            'calendar_item_id' => $selectedCalendarItem->id,
-            'status' => CalendarItemStatus::DRAFT,
-            'is_available' => false,
-            'enquiry_id' => $enquiry->id,
-        ]);
-
-        // Collect all calendar_item_ids (first one + additional ones)
-        $calendarItemIds = [$selectedCalendarItem->id];
-
-        // Create additional calendar items for remaining lessons (weekly intervals)
-        $lessonsToCreate = $package->lessons_count - 1; // -1 because we already have the first one
-        $firstLessonDate = Carbon::parse($validated['date']);
-        $instructorId = $validated['instructor_id'] ?? $enquiry->getStepData(2)['instructor_id'] ?? null;
-
-        Log::info('Creating additional draft calendar items', [
-            'lessons_to_create' => $lessonsToCreate,
-            'first_lesson_date' => $firstLessonDate->toDateString(),
-            'instructor_id' => $instructorId,
-            'enquiry_id' => $enquiry->id,
-        ]);
-
-        for ($i = 1; $i <= $lessonsToCreate; $i++) {
-            // Calculate next week's date
-            $nextLessonDate = $firstLessonDate->copy()->addWeeks($i);
-
-            // Get or create calendar for this date (UNIQUE per instructor per date)
-            $calendar = Calendar::firstOrCreate(
-                [
-                    'instructor_id' => $instructorId,
-                    'date' => $nextLessonDate->toDateString(),
-                ],
-                [
-                    'instructor_id' => $instructorId,
-                    'date' => $nextLessonDate->toDateString(),
-                ]
-            );
-
-            // Check if we reused an existing calendar or created a new one
-            $calendarAction = $calendar->wasRecentlyCreated ? 'created' : 'reused existing';
-
-            Log::info("Calendar record {$calendarAction} for instructor", [
-                'calendar_id' => $calendar->id,
-                'instructor_id' => $instructorId,
-                'date' => $nextLessonDate->toDateString(),
-                'was_recently_created' => $calendar->wasRecentlyCreated,
-                'action' => $calendarAction,
-                'enquiry_id' => $enquiry->id,
-            ]);
-
-            // Reuse an existing available slot if one matches, otherwise create new
-            $existingItem = CalendarItem::query()
-                ->where('calendar_id', $calendar->id)
-                ->where('start_time', $validated['start_time'])
-                ->where('end_time', $validated['end_time'])
-                ->where('is_available', true)
-                ->whereDoesntHave('lessons')
-                ->first();
-
-            if ($existingItem) {
-                $existingItem->update([
-                    'is_available' => false,
-                    'status' => CalendarItemStatus::DRAFT,
-                ]);
-
-                // Mirror draft status to travel item
-                if ($existingItem->travelItem) {
-                    $existingItem->travelItem->update([
-                        'status' => CalendarItemStatus::DRAFT,
-                    ]);
-                }
-
-                $calendarItem = $existingItem;
-            } else {
-                $calendarItem = CalendarItem::create([
-                    'calendar_id' => $calendar->id,
-                    'start_time' => $validated['start_time'],
-                    'end_time' => $validated['end_time'],
-                    'is_available' => false,
-                    'status' => CalendarItemStatus::DRAFT,
-                    'item_type' => $selectedCalendarItem->item_type,
-                    'travel_time_minutes' => $selectedCalendarItem->travel_time_minutes,
-                ]);
-
-                // Create travel block if the original calendar item has travel time
-                if ($selectedCalendarItem->travel_time_minutes && $selectedCalendarItem->travel_time_minutes > 0) {
-                    $travelStart = Carbon::parse($validated['end_time']);
-                    $travelEnd = $travelStart->copy()->addMinutes($selectedCalendarItem->travel_time_minutes);
-
-                    CalendarItem::create([
-                        'calendar_id' => $calendar->id,
-                        'start_time' => $travelStart->format('H:i'),
-                        'end_time' => $travelEnd->format('H:i'),
-                        'is_available' => false,
-                        'item_type' => CalendarItemType::Travel,
-                        'parent_item_id' => $calendarItem->id,
-                        'status' => CalendarItemStatus::DRAFT,
-                        'unavailability_reason' => 'Travel time',
-                    ]);
-                }
-            }
-
-            $calendarItemIds[] = $calendarItem->id;
-
-            Log::info('Draft calendar item reserved for future week', [
-                'calendar_item_id' => $calendarItem->id,
-                'calendar_id' => $calendar->id,
-                'calendar_action' => $calendarAction,
-                'reused_existing' => isset($existingItem),
-                'week_number' => $i + 1,
-                'date' => $nextLessonDate->toDateString(),
-                'start_time' => $validated['start_time'],
-                'end_time' => $validated['end_time'],
-                'enquiry_id' => $enquiry->id,
-            ]);
-        }
-
-        Log::info('All draft calendar items created', [
-            'total_items' => count($calendarItemIds),
-            'calendar_item_ids' => $calendarItemIds,
-            'enquiry_id' => $enquiry->id,
-        ]);
-
-        // Save to step 4 data
+        // The choice is only remembered on the enquiry; the diary is untouched
+        // until the learner goes to payment (CreateOrderFromEnquiryAction).
         $enquiry->setStepData(4, [
-            'date' => $validated['date'],
-            'calendar_item_id' => $validated['calendar_item_id'], // First calendar item ID
-            'calendar_item_ids' => $calendarItemIds, // All calendar item IDs
-            'start_time' => $validated['start_time'],
-            'end_time' => $validated['end_time'],
+            'date' => $selectedCalendarItem->calendar->date->toDateString(),
+            'calendar_item_id' => $selectedCalendarItem->id,
+            'start_time' => Carbon::parse($selectedCalendarItem->start_time)->format('H:i'),
+            'end_time' => Carbon::parse($selectedCalendarItem->end_time)->format('H:i'),
             'instructor_id' => $instructorId,
         ]);
         $enquiry->current_step = max($enquiry->current_step, 4);
         $enquiry->max_step_reached = max($enquiry->max_step_reached, 5);
         $enquiry->save();
 
-        Log::info('Step 4 data saved with draft calendar items', [
+        Log::info('Step 4 slot choice saved', [
             'enquiry_id' => $enquiry->id,
-            'calendar_items_count' => count($calendarItemIds),
+            'calendar_item_id' => $selectedCalendarItem->id,
+            'lessons_count' => $package->lessons_count,
         ]);
 
         return redirect()->route('onboarding.step5', ['uuid' => $enquiry->id]);
