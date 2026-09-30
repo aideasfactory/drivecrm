@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Actions\Calendar\CloseOpenSlotOffersForItemsAction;
 use App\Actions\Calendar\DetectCalendarClashesAction;
 use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
+use App\Actions\Payment\NotifyInstructorOfLessonPaidAction;
 use App\Actions\Payment\SendLessonInvoiceAction;
 use App\Actions\Payment\SendPaymentReceivedEmailsAction;
 use App\Actions\Shared\LogActivityAction;
@@ -59,6 +60,7 @@ class OrderService extends BaseService
         protected GrantTestPassGuaranteeAction $grantTestPassGuarantee,
         protected ConfirmUpfrontPaymentAction $confirmUpfrontPaymentAction,
         protected SendPaymentReceivedEmailsAction $sendPaymentReceivedEmails,
+        protected NotifyInstructorOfLessonPaidAction $notifyInstructorOfLessonPaid,
     ) {}
 
     /**
@@ -581,6 +583,7 @@ class OrderService extends BaseService
 
         if ($firstPayment) {
             ($this->sendPaymentReceivedEmails)($firstPayment, $order->student, $order->instructor);
+            ($this->notifyInstructorOfLessonPaid)(collect([$firstPayment]), $order->student, $order->instructor);
         }
 
         return true;
@@ -611,6 +614,15 @@ class OrderService extends BaseService
         }
 
         $this->runConfirmationFollowUps($order);
+
+        ($this->notifyInstructorOfLessonPaid)(
+            LessonPayment::query()
+                ->whereHas('lesson', fn ($query) => $query->where('order_id', $order->id))
+                ->with('lesson')
+                ->get(),
+            $order->student,
+            $order->instructor,
+        );
 
         return true;
     }

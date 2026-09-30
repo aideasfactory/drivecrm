@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Payment\NotifyInstructorOfLessonPaidAction;
 use App\Actions\Payment\SendPaymentReceivedEmailsAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Student\GrantTestPassGuaranteeAction;
@@ -394,6 +395,8 @@ class WebhookController extends Controller
 
         // Send payment confirmation email to student/contact
         app(SendPaymentReceivedEmailsAction::class)($lessonPayment, $student, $instructor);
+
+        app(NotifyInstructorOfLessonPaidAction::class)(collect([$lessonPayment]), $student, $instructor);
 
         Log::info('Webhook [invoice.paid]: COMPLETE', [
             'lesson_payment_id' => $lessonPayment->id,
