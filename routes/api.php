@@ -209,6 +209,7 @@ Route::prefix('v1')->group(function (): void {
 
         // Push notification routes
         Route::post('push-token', [PushNotificationController::class, 'storeToken']);
+        Route::delete('push-token', [PushNotificationController::class, 'destroyToken']);
 
     });
 

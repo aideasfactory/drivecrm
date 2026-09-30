@@ -28,4 +28,20 @@ class PushNotificationController extends Controller
             'message' => 'Push token stored successfully.',
         ]);
     }
+
+    /**
+     * Remove the device's push token. Always 200 (idempotent) — a token that
+     * doesn't match the stored one is left untouched.
+     */
+    public function destroyToken(StorePushTokenRequest $request): JsonResponse
+    {
+        $this->pushNotificationService->removeToken(
+            $request->user(),
+            $request->validated('expo_push_token'),
+        );
+
+        return response()->json([
+            'message' => 'Push token removed successfully.',
+        ]);
+    }
 }

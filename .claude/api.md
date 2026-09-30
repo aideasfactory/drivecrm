@@ -87,6 +87,7 @@
     - [Mark Single Message Read](#post-apiv1messagesmessageread)
   - [Push Notifications](#push-notifications)
     - [Store Push Token](#post-apiv1push-token)
+    - [Remove Push Token](#delete-apiv1push-token)
   - [Mock Tests](#mock-tests)
     - [Test History (List)](#get-apiv1studentmock-tests)
     - [Summary](#get-apiv1studentmock-testssummary)
@@ -341,6 +342,7 @@ Login and receive a Bearer token for subsequent API calls.
     "email": "instructor@example.com",
     "role": "instructor",
     "password_change_required": false,
+    "has_push_token": true,
     "email_verified_at": "2026-03-14T10:00:00.000000Z",
     "created_at": "2026-01-15T08:30:00.000000Z",
     "profile": {
@@ -365,6 +367,8 @@ Login and receive a Bearer token for subsequent API calls.
 
 > **Note:** The `profile` object contains role-specific data. For `instructor` users it returns instructor fields; for `student` users it returns student fields. See [Profile Object by Role](#profile-object-by-role) below.
 >
+> **Note:** `has_push_token` is `true` when an Expo push token is stored on the account. Only one token is stored per user (the last device to call `POST /push-token` wins), so the app can compare it with its local toggle — e.g. it becomes `false` after the user turns pushes off on another device.
+
 > **Note:** When `password_change_required` is `true`, the mobile app should force the user to change their password before proceeding. This is set when a temporary password is issued (e.g., instructor-created student accounts, admin resets). Use `POST /api/v1/auth/change-password` to update.
 **Error Response (bad credentials):** `422 Unprocessable Entity`
 ```json
@@ -482,6 +486,7 @@ Returns the authenticated user's profile with role-specific data.
     "email": "instructor@example.com",
     "role": "instructor",
     "password_change_required": false,
+    "has_push_token": true,
     "email_verified_at": "2026-03-14T10:00:00.000000Z",
     "created_at": "2026-01-15T08:30:00.000000Z",
     "profile": {
@@ -613,6 +618,7 @@ Register a new instructor account. Creates a base user record with the `instruct
     "email": "john@example.com",
     "role": "instructor",
     "password_change_required": false,
+    "has_push_token": true,
     "email_verified_at": null,
     "created_at": "2026-03-15T12:05:00.000000Z",
     "profile": {
@@ -6223,6 +6229,44 @@ Stores the user's Expo push token for receiving push notifications. If the user 
 - Call this endpoint after login and whenever the Expo push token changes (e.g., app reinstall, token refresh).
 - The token is stored directly on the user record (`expo_push_token` column).
 - Only one token per user is stored — the latest call wins.
+- When the in-app Push Notifications toggle is switched off, or on logout, call [`DELETE /api/v1/push-token`](#delete-apiv1push-token).
+
+#### `DELETE /api/v1/push-token`
+
+**Auth required:** Yes (Bearer token)
+
+Removes the user's stored Expo push token so no more push notifications are sent. Call it when the user switches the Push Notifications toggle off, and on logout **before** `POST /api/v1/auth/logout` (the Bearer token is still needed). Works for both instructors and students.
+
+**Request Body:**
+```json
+{
+  "expo_push_token": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]"
+}
+```
+
+| Field | Type | Required | Rules | Description |
+|-------|------|----------|-------|-------------|
+| `expo_push_token` | string | Yes | Must match format `ExponentPushToken[...]` | The token of the device turning notifications off |
+
+**Behaviour:**
+- The stored token is cleared **only if it matches** the token sent. Only one token is stored per user and the last device to register wins, so an old device cannot switch off pushes for the user's current one.
+- When the token matches, every **pending** (unsent) row in `push_notifications` for the user is marked `cancelled`, so nothing is delivered by the next `push:send-queued` run.
+- Idempotent: if the token doesn't match, or no token is stored, the call still returns `200` and nothing changes.
+
+**Success Response:** `200 OK` (returned whether or not the token matched)
+```json
+{
+  "message": "Push token removed successfully."
+}
+```
+
+**Error Responses:**
+- `401` — unauthenticated (`{ "message": "Unauthenticated." }`)
+- `422` — `expo_push_token` missing or not in `ExponentPushToken[...]` format (same messages as `POST /push-token`)
+
+**Mobile Integration Notes:**
+- To check the server's real state, read `has_push_token` from `GET /api/v1/auth/user`.
+- Turning the toggle back on is just `POST /api/v1/push-token` again.
 
 **Events that queue a push notification (additive — fires only when `expo_push_token` is set on the recipient):**
 
@@ -7561,6 +7605,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-09-28 | **Shorter learner hold.** Student-initiated bookings (orders store, slot-offer accept) are now held for **10 minutes** (was 15). The 15-minute minimum only applies to emailed-link holds. No request/response shape changes. (Web booking form: step 4 no longer holds the chosen time; the hold starts when the learner goes to payment.) | Orders (store), Student Slot Offers (accept) |
 | 2026-09-29 | **Per-lesson fee breakdown (additive).** New `payment_breakdown` object (`total_pence`, `lesson_pence`, `booking_fee_pence`, `digital_fee_pence`, `test_pass_guarantee_pence`) on `GET /students/{student}/lessons`, `GET /students/{student}/lessons/{lesson}`, `POST /students/{student}/lessons/{lesson}/sign-off`, `GET /instructor/lessons/{date}`, `GET /instructor/lessons?from=&to=` and `GET /instructor/calendar/items` (plus the other calendar item responses). The lesson list also gains `payment_mode`. `amount_pence` is unchanged and documented as the lesson price **before fees**. Docs fix: the `GET /student/packages` example now shows the real response (same as instructor packages, with fee fields). `test_pass_guarantee_pence` is the Pass Your Test Guarantee charged with that lesson — only ever the first lesson of an order, and `0` everywhere else. New rule: pupil-facing price displays must itemise every fee (see the **Payment Breakdown Object** note). | Student Lessons (index, show, sign-off), Instructor Day Lessons, Instructor Calendar Items, Student Packages (docs) |
 | 2026-09-29 | **Pay-at-booking hardening.** (1) **New 422 on `POST /students/{student}/orders` and slot-offer accept:** every week of a booking is now checked for clashes with other lessons (held/reserved/booked/completed), blocked-out periods and practical tests; any clash refuses the whole booking before anything is held or charged (`first_lesson_date` / `calendar_item_id`: "This time is no longer available on {date}. Please choose another time."). (2) Confirmation happens once: `GET /orders/{order}/checkout/verify`, the success pages and the webhook share one locked confirmation, so repeat verify calls no longer resend the confirmation email. (3) Weekly bookings paid at checkout now also send the week-1 "payment received" email (pupil) and "learner paid" email (instructor). (4) Released holds no longer turn slots the booking created into open availability. (5) Docs: a released slot-offer booking leaves the offer `booked`. No request or response fields changed. | Orders (store, verify), Student Slot Offers (accept) |
+| 2026-09-30 | **Added `DELETE /api/v1/push-token`**. It removes the user's Expo push token only when it matches the one sent, so an old device cannot switch off pushes on the current device. It always returns 200 (idempotent) and 422 on a missing or invalid token. When the token is removed, pending `push_notifications` rows for the user are marked `cancelled` so the next `push:send-queued` run sends nothing. **Added `has_push_token` (boolean) to every user object** (`GET /auth/user`, login, register), which is additive. Logout is unchanged: the app calls DELETE first, then logout. | Push Notifications (push-token — NEW DELETE), Auth (user, login, register) |
 
 ---
 

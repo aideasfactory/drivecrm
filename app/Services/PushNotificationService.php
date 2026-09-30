@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Actions\PushNotification\ProcessPendingNotificationsAction;
 use App\Actions\PushNotification\QueuePushNotificationAction;
+use App\Actions\PushNotification\RemovePushTokenAction;
 use App\Actions\PushNotification\SendPushNotificationAction;
 use App\Actions\PushNotification\StorePushTokenAction;
 use App\Models\PushNotification;
@@ -16,6 +17,7 @@ class PushNotificationService extends BaseService
 {
     public function __construct(
         protected StorePushTokenAction $storePushToken,
+        protected RemovePushTokenAction $removePushToken,
         protected QueuePushNotificationAction $queuePushNotification,
         protected SendPushNotificationAction $sendPushNotification,
         protected ProcessPendingNotificationsAction $processPendingNotifications,
@@ -24,6 +26,14 @@ class PushNotificationService extends BaseService
     public function storeToken(User $user, string $token): User
     {
         return ($this->storePushToken)($user, $token);
+    }
+
+    /**
+     * Remove the user's push token if it matches, cancelling pending notifications.
+     */
+    public function removeToken(User $user, string $token): bool
+    {
+        return ($this->removePushToken)($user, $token);
     }
 
     public function queue(User $user, string $title, string $body, ?array $data = null): PushNotification
