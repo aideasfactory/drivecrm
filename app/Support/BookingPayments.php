@@ -104,6 +104,23 @@ final class BookingPayments
         return $holdExpiresAt->greaterThan($latest) ? $latest : $holdExpiresAt;
     }
 
+    /**
+     * Whether cancelling a lesson now falls inside the late-cancellation window
+     * (fewer than `late_cancellation_hours` before it starts, or already started).
+     */
+    public static function isLateCancellation(string $lessonDate, ?string $lessonStartTime): bool
+    {
+        $cutoff = self::lessonStartsAt($lessonDate, $lessonStartTime)
+            ->subHours(self::lateCancellationHours());
+
+        return self::now()->greaterThanOrEqualTo($cutoff);
+    }
+
+    public static function lateCancellationHours(): int
+    {
+        return (int) config('booking_payments.late_cancellation_hours', 48);
+    }
+
     public static function learnerHoldMinutes(): int
     {
         return (int) config('booking_payments.learner_hold_minutes', 10);

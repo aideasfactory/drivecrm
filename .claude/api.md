@@ -2420,6 +2420,7 @@ Returns the authenticated instructor's calendar items for a specific date, **or*
 | `order_id` | integer\|null | The order the lesson belongs to |
 | `student_name` | string\|null | Full name of the student the slot is for |
 | `is_paid` | boolean\|null | `true` when the lesson is paid (weekly per-lesson payment settled, or a confirmed upfront order). **A `draft` is upfront-but-awaiting-payment, so it returns `false`.** Use this to show a paid/refund hint on cancel. |
+| `is_late_cancellation` | boolean\|null | `true` when cancelling now is **less than 48 hours** before the lesson starts (UK time). When `true` **and** `is_paid` is `true`, the cancel sheet shows a **Refund Lesson** tickbox (sent as `refund_lesson` on DELETE). `null` for availability slots and completed lessons |
 | `amount_pence` | integer\|null | Lesson price in pence, **before fees** (e.g., 3500 = £35.00). This is not what the pupil paid — use `payment_breakdown` for that |
 | `payment_breakdown` | object\|null | What the pupil pays for the lesson, itemised (see **Payment Breakdown Object** under `GET /students/{student}/lessons`). `null` for availability slots |
 | `mileage` | integer\|null | Recorded mileage (completed lessons) |
@@ -2739,7 +2740,18 @@ Updates a calendar item belonging to the authenticated instructor — used to **
 Deletes a calendar item belonging to the authenticated instructor. Behaviour depends on whether the item is a plain availability slot or an active booking:
 
 - **Availability slot (no lesson attached):** removed from the diary. For recurring items, `scope` controls single-occurrence vs all-future deletion.
-- **Booking slot (a draft / reserved / booked lesson is attached):** the booking is **cancelled** (the student has left / no longer wants lessons). A `reason` is **required**. `scope=single` cancels just this lesson; `scope=future` cancels this lesson and every future un-signed-off lesson in the same booking. The lesson rows are kept for history with `status = cancelled`, but their calendar slots (and travel blocks) are freed from the diary. Future weekly invoices stop automatically. **No Stripe refund is issued** — when a cancelled lesson had already been paid, Head Office is emailed to action a manual refund. The student is always emailed a cancellation confirmation.
+- **Booking slot (a draft / reserved / booked lesson is attached):** the booking is **cancelled** (the student has left / no longer wants lessons). A `reason` is **required**. `scope=single` cancels just this lesson; `scope=future` cancels this lesson and every future un-signed-off lesson in the same booking. The lesson rows are kept for history with `status = cancelled` and detached from the diary, but **the slot stays open**: it goes back to empty availability (`is_available: true`, no status — its travel block stays) so the instructor can offer it to other pupils. Future weekly invoices stop automatically. The student is always emailed a cancellation confirmation.
+
+  **What happens to the money (per paid lesson):**
+
+  | When cancelled | `refund_lesson` | Outcome | Instructor profile note |
+  |---|---|---|---|
+  | 48+ hours before the lesson | ignored | Head Office emailed that a refund is due (manual Stripe refund, booking fee retained) | `Cancelled/Refunded` |
+  | Under 48 hours | `true` | No payout to the instructor; Head Office emailed that a refund is due | `Cancelled/Refunded` |
+  | Under 48 hours | `false` / omitted | Lesson paid out to the instructor (Stripe transfer + `payouts` row, as at sign-off). No refund | `Cancelled/Paid` |
+  | Lesson not paid | ignored | Nothing to refund or pay out | `Cancelled/Unpaid` |
+
+  Notes are added to the instructor's profile notes (one per cancelled lesson). Imported bookings never create a Stripe transfer (settled outside the platform).
 
 **Path Parameters:**
 
@@ -2753,6 +2765,7 @@ Deletes a calendar item belonging to the authenticated instructor. Behaviour dep
 |-------|------|----------|-------------|
 | `scope` | string | No | `single` (default) or `future`. For availability slots, `future` = this + all future items in the recurrence group. For bookings, `future` = this + all future lessons in the same booking. |
 | `reason` | string | **Yes for bookings** | Why the booking is being cancelled (max 1000 chars). Shown to the student in their cancellation email. Ignored for availability slots. |
+| `refund_lesson` | boolean | No | The **Refund Lesson** tickbox. Only affects paid lessons cancelled under 48 hours before they start: `true` refunds the pupil (no instructor payout), `false` (default) pays the instructor. Ignored otherwise. |
 
 > Send `scope` and `reason` in the JSON request body for booking cancellations (or `scope` as a query param for availability deletes). `reason` is only validated/required when the target item has a lesson attached.
 
@@ -2762,8 +2775,9 @@ Deletes a calendar item belonging to the authenticated instructor. Behaviour dep
 ```json
 DELETE /api/v1/instructor/calendar/items/42
 {
-  "scope": "future",
-  "reason": "Student has moved away and no longer needs lessons."
+  "scope": "single",
+  "reason": "Family emergency.",
+  "refund_lesson": true
 }
 ```
 
@@ -2787,14 +2801,16 @@ DELETE /api/v1/instructor/calendar/items/42
 {
   "message": "3 lesson(s) cancelled. The student has been notified.",
   "cancelled_count": 3,
-  "refund_required_count": 1
+  "refund_required_count": 1,
+  "payout_count": 0
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `cancelled_count` | integer | Number of lessons cancelled (1 for `scope=single`, more for `scope=future`). |
-| `refund_required_count` | integer | How many of the cancelled lessons had been paid and so need a manual Head Office refund. `0` when nothing was paid (e.g. reserved/draft only). |
+| `refund_required_count` | integer | How many of the cancelled lessons are being refunded (Head Office emailed). `0` when nothing was paid or every paid lesson was paid out. |
+| `payout_count` | integer | How many of the cancelled lessons were paid out to the instructor (late cancellation without `refund_lesson`). |
 
 **Error — Booking cancellation missing reason (422):**
 ```json
@@ -2815,7 +2831,14 @@ DELETE /api/v1/instructor/calendar/items/42
 
 > **Note:** Completed lessons and lessons that already have a payout (signed off) are never cancelled — they are excluded from the `scope=future` cascade. If every non-completed lesson in the order ends up cancelled, the order itself is marked cancelled.
 
-Empty availability deletes and booking cancellations both reuse the same `InstructorService` paths as the admin diary (`removeCalendarItem` / `cancelBooking` → `CancelBookingAction`). The instructor is **not** emailed on cancel. Head Office receives `RefundRequiredNotification` only when one or more cancelled lessons were already paid. Stripe refunds stay manual.
+Empty availability deletes and booking cancellations both reuse the same `InstructorService` paths as the admin diary (`removeCalendarItem` / `cancelBooking` → `CancelBookingAction`). The instructor is **not** emailed on cancel. Head Office receives `RefundRequiredNotification` only for lessons being refunded. Stripe refunds stay manual.
+
+**Error — late cancellation can't be paid out (400):** returned when a paid lesson is cancelled under 48 hours without `refund_lesson` and the instructor's Stripe account cannot receive payouts (or the Stripe transfer fails). Nothing is cancelled; resend with `refund_lesson: true` or fix the Stripe account.
+```json
+{
+  "message": "The instructor cannot receive payouts yet, so this late cancellation cannot be paid out. Tick \"Refund Lesson\" to refund the pupil instead."
+}
+```
 
 ---
 
@@ -7606,6 +7629,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-09-29 | **Per-lesson fee breakdown (additive).** New `payment_breakdown` object (`total_pence`, `lesson_pence`, `booking_fee_pence`, `digital_fee_pence`, `test_pass_guarantee_pence`) on `GET /students/{student}/lessons`, `GET /students/{student}/lessons/{lesson}`, `POST /students/{student}/lessons/{lesson}/sign-off`, `GET /instructor/lessons/{date}`, `GET /instructor/lessons?from=&to=` and `GET /instructor/calendar/items` (plus the other calendar item responses). The lesson list also gains `payment_mode`. `amount_pence` is unchanged and documented as the lesson price **before fees**. Docs fix: the `GET /student/packages` example now shows the real response (same as instructor packages, with fee fields). `test_pass_guarantee_pence` is the Pass Your Test Guarantee charged with that lesson — only ever the first lesson of an order, and `0` everywhere else. New rule: pupil-facing price displays must itemise every fee (see the **Payment Breakdown Object** note). | Student Lessons (index, show, sign-off), Instructor Day Lessons, Instructor Calendar Items, Student Packages (docs) |
 | 2026-09-29 | **Pay-at-booking hardening.** (1) **New 422 on `POST /students/{student}/orders` and slot-offer accept:** every week of a booking is now checked for clashes with other lessons (held/reserved/booked/completed), blocked-out periods and practical tests; any clash refuses the whole booking before anything is held or charged (`first_lesson_date` / `calendar_item_id`: "This time is no longer available on {date}. Please choose another time."). (2) Confirmation happens once: `GET /orders/{order}/checkout/verify`, the success pages and the webhook share one locked confirmation, so repeat verify calls no longer resend the confirmation email. (3) Weekly bookings paid at checkout now also send the week-1 "payment received" email (pupil) and "learner paid" email (instructor). (4) Released holds no longer turn slots the booking created into open availability. (5) Docs: a released slot-offer booking leaves the offer `booked`. No request or response fields changed. | Orders (store, verify), Student Slot Offers (accept) |
 | 2026-09-30 | **Added `DELETE /api/v1/push-token`**. It removes the user's Expo push token only when it matches the one sent, so an old device cannot switch off pushes on the current device. It always returns 200 (idempotent) and 422 on a missing or invalid token. When the token is removed, pending `push_notifications` rows for the user are marked `cancelled` so the next `push:send-queued` run sends nothing. **Added `has_push_token` (boolean) to every user object** (`GET /auth/user`, login, register), which is additive. Logout is unchanged: the app calls DELETE first, then logout. | Push Notifications (push-token — NEW DELETE), Auth (user, login, register) |
+| 2026-10-01 | **Lesson cancellation refunds (48-hour rule).** `DELETE /calendar/items/{calendarItem}` booking cancellations now **keep the slot open** (back to empty availability) instead of deleting it, accept optional `refund_lesson` (boolean), and return `payout_count`. Paid lessons cancelled 48+ hours out, or under 48 hours with `refund_lesson: true`, email Head Office that a refund is due; under 48 hours without it, the lesson is paid out to the instructor. Every cancelled lesson is noted on the instructor's profile (`Cancelled/Refunded`, `Cancelled/Paid` or `Cancelled/Unpaid`). Calendar items gain `is_late_cancellation` to drive the **Refund Lesson** tickbox. New 400 when a late cancellation can't be paid out. | `DELETE /api/v1/instructor/calendar/items/{calendarItem}`, `GET/PUT /api/v1/instructor/calendar/items` (resource field) |
 
 ---
 

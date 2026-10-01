@@ -500,17 +500,20 @@ class InstructorService extends BaseService
 
     /**
      * Cancel the booking on a calendar item — the student has left / no longer
-     * wants lessons. Marks the lesson(s) cancelled (kept for history), frees the
-     * diary slot(s), stops future weekly invoices and notifies the student (plus
-     * Head Office when a paid lesson needs a manual refund). Cache invalidation
-     * is handled inside the action.
+     * wants lessons. Marks the lesson(s) cancelled (kept for history), takes them
+     * out of the diary while leaving the slot(s) open, stops future weekly
+     * invoices and notifies the student. Paid lessons are refunded (Head Office
+     * emailed) unless cancelled inside 48 hours without "Refund Lesson" ticked,
+     * in which case they are paid out to the instructor. Cache invalidation is
+     * handled inside the action.
      *
      * @param  bool  $applyToFutureInOrder  Also cancel future un-signed-off lessons in the same order.
-     * @return array{cancelled_count: int, refund_required_count: int}
+     * @param  bool  $refundLesson  Refund lessons cancelled inside the 48-hour window instead of paying the instructor.
+     * @return array{cancelled_count: int, refund_required_count: int, payout_count: int}
      */
-    public function cancelBooking(CalendarItem $calendarItem, string $reason, bool $applyToFutureInOrder, User $actor): array
+    public function cancelBooking(CalendarItem $calendarItem, string $reason, bool $applyToFutureInOrder, User $actor, bool $refundLesson = false): array
     {
-        return ($this->cancelBooking)($calendarItem, $reason, $applyToFutureInOrder, $actor);
+        return ($this->cancelBooking)($calendarItem, $reason, $applyToFutureInOrder, $actor, $refundLesson);
     }
 
     /**

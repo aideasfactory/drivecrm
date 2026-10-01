@@ -530,7 +530,7 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 - Scheduling information (date, start_time, end_time) can be set when booking lesson
 - Links to calendar_item for slot availability tracking
 - Instructor gets paid after lesson is completed
-- A booking (draft/reserved/booked lesson) can be cancelled from the instructor schedule: `status` → `cancelled`, `cancellation_reason` + `cancelled_at` set, and `calendar_item_id` nulled so the lesson is retained for history while its calendar slot is freed. Cancellation never touches `completed` lessons or lessons with a `Payout`
+- A booking (draft/reserved/booked lesson) can be cancelled from the instructor schedule: `status` → `cancelled`, `cancellation_reason` + `cancelled_at` set, and `calendar_item_id` nulled so the lesson is retained for history while its calendar slot goes back to open availability (`is_available = true`, `status = NULL`) for re-booking. A paid lesson cancelled under 48 hours before it starts (`booking_payments.late_cancellation_hours`) without the instructor ticking "Refund Lesson" gets a `Payout` (paid out as at sign-off); otherwise paid lessons are reported to Head Office for a manual refund. Each cancelled lesson adds an instructor `notes` row starting `Cancelled/Refunded`, `Cancelled/Paid` or `Cancelled/Unpaid`. Cancellation never touches `completed` lessons or lessons with a `Payout`
 - `summary` is written by the instructor at sign-off time; used by AI (AWS Bedrock Nova) to match against resource tags and recommend relevant videos/PDFs to the student
 - `mileage` is recorded by the instructor after the lesson is completed, via the schedule view
 - `student_lesson_number` is assigned at lesson creation time inside the order's transaction. Computed as `MAX(student_lesson_number) + 1` over the student's existing lessons (across all orders), with `lockForUpdate()` on the existing rows to serialise concurrent same-student order creations. Numbers are immutable after assignment — a cancelled or cleaned-up draft lesson keeps its number, so gaps in the sequence are expected and intentional
@@ -870,7 +870,7 @@ Defines time slots within a calendar date.
 - Recurring slots: materialized instances pattern — each occurrence is a separate row linked by `recurrence_group_id`
 - Individual occurrences can be modified/deleted without affecting the rest of the series
 - Deleting "this and all future" removes all items in the group from the selected date forward (excluding those with lessons)
-- An empty available slot may have at most one `slot_offers` row. Open offers are cancelled when the slot is booked (Add Booking or a student accepting the offer). Deleting the slot cascades the offer away.
+- An empty available slot may have at most one `slot_offers` row. Open offers are cancelled when the slot is booked (Add Booking or a student accepting the offer). Deleting the slot cascades the offer away. When a booking in the slot is cancelled, a `booked` offer is set to `cancelled` so the reopened slot can be offered again.
 
 ---
 

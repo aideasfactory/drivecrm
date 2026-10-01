@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\LessonStatus;
+use App\Support\BookingPayments;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -148,6 +149,22 @@ class Lesson extends Model
     public function isPaid(): bool
     {
         return $this->lessonPayment && $this->lessonPayment->isPaid();
+    }
+
+    /**
+     * Whether cancelling this lesson now is a late cancellation, where the
+     * instructor chooses between refunding the pupil and being paid.
+     */
+    public function isLateCancellation(): bool
+    {
+        if (! $this->date) {
+            return false;
+        }
+
+        return BookingPayments::isLateCancellation(
+            $this->date->toDateString(),
+            $this->start_time?->format('H:i'),
+        );
     }
 
     /**

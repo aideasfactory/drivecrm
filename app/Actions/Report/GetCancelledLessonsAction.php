@@ -14,7 +14,7 @@ class GetCancelledLessonsAction
     /**
      * Get lessons cancelled when a booked diary slot was removed. Cancelled
      * lessons are kept in the database (status, reason, and timestamp are set
-     * by CancelBookingAction) even though the diary slot itself is deleted.
+     * by CancelBookingAction) after they are detached from their diary slot.
      *
      * @param  ?string  $cancelledFrom  Y-m-d — only lessons cancelled on/after this date
      * @param  ?string  $cancelledTo  Y-m-d — only lessons cancelled on/before this date

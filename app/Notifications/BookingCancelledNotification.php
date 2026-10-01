@@ -9,6 +9,7 @@ use App\Mail\RendersTemplatedMail;
 use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Student;
+use App\Support\BookingPayments;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -29,6 +30,7 @@ class BookingCancelledNotification extends Notification implements ShouldQueue
         public Collection $lessons,
         public string $reason,
         public bool $refundRequired,
+        public bool $lateCancellationCharged = false,
     ) {}
 
     /**
@@ -49,9 +51,14 @@ class BookingCancelledNotification extends Notification implements ShouldQueue
             ->map(fn (Lesson $lesson): string => '• '.$this->formatLesson($lesson))
             ->implode("\n");
 
-        $refundLine = $this->refundRequired
-            ? 'You will be refunded what you paid for these lessons, including the digital fee and any Pass Your Test Guarantee. The booking fee is non-refundable. Our head office will be in touch about this shortly.'
-            : 'There is nothing further you need to do, and you will not be charged for these lessons.';
+        $lateNoticeHours = BookingPayments::lateCancellationHours();
+
+        $refundLine = match (true) {
+            $this->refundRequired && $this->lateCancellationCharged => "Some of these lessons were cancelled less than {$lateNoticeHours} hours before they were due to start, so what you paid for those is not refundable. You will be refunded what you paid for the others, including the digital fee and any Pass Your Test Guarantee. The booking fee is non-refundable. Our head office will be in touch about this shortly.",
+            $this->refundRequired => 'You will be refunded what you paid for these lessons, including the digital fee and any Pass Your Test Guarantee. The booking fee is non-refundable. Our head office will be in touch about this shortly.',
+            $this->lateCancellationCharged => "This was cancelled less than {$lateNoticeHours} hours before the lesson was due to start, so what you paid is not refundable.",
+            default => 'There is nothing further you need to do, and you will not be charged for these lessons.',
+        };
 
         return $this->templatedMail(
             EmailTemplateKey::LearnerBookingCancelled,
@@ -90,6 +97,7 @@ class BookingCancelledNotification extends Notification implements ShouldQueue
             'lesson_ids' => $this->lessons->pluck('id')->all(),
             'reason' => $this->reason,
             'refund_required' => $this->refundRequired,
+            'late_cancellation_charged' => $this->lateCancellationCharged,
         ];
     }
 }
