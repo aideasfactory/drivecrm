@@ -30,6 +30,7 @@ interface Package {
     digital_fee: string
     total_price: string
     weekly_payment: string
+    allows_weekly_payment: boolean
     active: boolean
     is_platform_package: boolean
     is_bespoke_package: boolean
@@ -65,6 +66,14 @@ const selectedSlotId = ref<number | null>(null)
 const selectedPackage = computed(() =>
     packages.value.find((p) => p.id === selectedPackageId.value),
 )
+
+const weeklyAvailable = computed(() => selectedPackage.value?.allows_weekly_payment ?? true)
+
+watch(weeklyAvailable, (available) => {
+    if (!available) {
+        paymentMode.value = 'upfront'
+    }
+})
 
 const selectedSlot = computed(() =>
     slots.value.find((s) => s.id === selectedSlotId.value),
@@ -279,10 +288,13 @@ const handleSubmit = async () => {
                             <option value="upfront">
                                 Upfront — Student pays in full via Stripe link
                             </option>
-                            <option value="weekly">
+                            <option v-if="weeklyAvailable" value="weekly">
                                 Weekly — Invoices sent before each lesson
                             </option>
                         </select>
+                        <p v-if="!weeklyAvailable" class="text-xs text-muted-foreground">
+                            Single lesson bookings must be paid in full.
+                        </p>
                         <p
                             v-if="errors.payment_mode"
                             class="text-sm text-destructive"

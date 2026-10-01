@@ -111,6 +111,7 @@ class StepSixController extends Controller
                 'id' => $package->id,
                 'name' => $package->name,
                 'lessons_count' => $package->lessons_count,
+                'allows_weekly_payment' => $package->allowsWeeklyPayment(),
                 'formatted_total_price' => $package->formatted_total_price,
                 'formatted_lesson_price' => $package->formatted_lesson_price,
                 'booking_fee' => $package->booking_fee,

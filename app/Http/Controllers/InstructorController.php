@@ -1638,6 +1638,7 @@ class InstructorController extends Controller
             'digital_fee' => $package->digital_fee,
             'total_price' => $package->total_price,
             'weekly_payment' => $package->weekly_payment,
+            'allows_weekly_payment' => $package->allowsWeeklyPayment(),
             'active' => $package->active,
             'is_one_off' => (bool) $package->is_one_off,
             'is_platform_package' => $package->isPlatformPackage(),

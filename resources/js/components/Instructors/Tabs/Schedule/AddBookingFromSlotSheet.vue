@@ -27,6 +27,7 @@ interface PackageOption {
     digital_fee: string
     total_price: string
     weekly_payment: string
+    allows_weekly_payment: boolean
     active: boolean
 }
 
@@ -66,6 +67,14 @@ const paymentMode = ref('upfront')
 const selectedPackage = computed(() =>
     packages.value.find((pkg) => pkg.id === selectedPackageId.value),
 )
+
+const weeklyAvailable = computed(() => selectedPackage.value?.allows_weekly_payment ?? true)
+
+watch(weeklyAvailable, (available) => {
+    if (!available) {
+        paymentMode.value = 'upfront'
+    }
+})
 
 const isOpen = computed({
     get: () => props.open,
@@ -221,8 +230,11 @@ const handleSubmit = async () => {
                         class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
                         <option value="upfront">Pay all at once — student receives a Stripe payment link</option>
-                        <option value="weekly">Pay weekly — invoices sent before each lesson</option>
+                        <option v-if="weeklyAvailable" value="weekly">Pay weekly — invoices sent before each lesson</option>
                     </select>
+                    <p v-if="!weeklyAvailable" class="text-xs text-muted-foreground">
+                        Single lesson bookings must be paid in full.
+                    </p>
                     <p v-if="errors.payment_mode" class="text-sm text-destructive">{{ errors.payment_mode }}</p>
                 </div>
 
