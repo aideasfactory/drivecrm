@@ -328,12 +328,13 @@ class StripeService
                 'success_url' => $successUrl,
                 'cancel_url' => $cancelUrl,
                 'metadata' => $metadata,
-                'payment_intent_data' => [
-                    'description' => "Order #{$order->id} — {$package->name} — {$student->name}",
-                    'transfer_group' => "order_{$order->id}",
-                    'metadata' => $metadata,
-                ],
                 'expires_at' => BookingPayments::stripeCheckoutExpiresAt($expiresAt ?? $order->payment_hold_expires_at)->getTimestamp(),
+                ...$this->checkoutReceiptFields(
+                    $order,
+                    $student,
+                    "Order #{$order->id} — {$package->name} — {$student->name}",
+                    $metadata,
+                ),
             ];
 
             Log::info('StripeService: Session data prepared', [
@@ -447,12 +448,13 @@ class StripeService
                 'success_url' => $successUrl,
                 'cancel_url' => $cancelUrl,
                 'metadata' => $metadata,
-                'payment_intent_data' => [
-                    'description' => "Order #{$order->id} — {$packageName} — first weekly payment — {$student->name}",
-                    'transfer_group' => "order_{$order->id}",
-                    'metadata' => $metadata,
-                ],
                 'expires_at' => BookingPayments::stripeCheckoutExpiresAt($expiresAt ?? $order->payment_hold_expires_at)->getTimestamp(),
+                ...$this->checkoutReceiptFields(
+                    $order,
+                    $student,
+                    "Order #{$order->id} — {$packageName} — first weekly payment — {$student->name}",
+                    $metadata,
+                ),
             ]);
 
             Log::info('StripeService: First weekly payment checkout session created', [
@@ -484,9 +486,11 @@ class StripeService
      *
      * Returns `released: true` when nothing can be paid on it any more (it was
      * open and is now expired, or had already expired). Returns `released:
-     * false` when it has already been paid, or Stripe could not be reached —
-     * the caller must then keep the booking. `payment_status` and
-     * `payment_intent` let the caller confirm a session that was paid.
+     * false` with `status: open` when the session is still unpaid but Stripe
+     * would not close it — the customer can still have the page open, and
+     * Stripe will not accept an `expires_at` under 30 minutes. `status: null`
+     * means Stripe could not be reached. `payment_status` and `payment_intent`
+     * let the caller confirm a session that was paid.
      *
      * @return array{released: bool, status: string|null, payment_status: string|null, payment_intent: string|null}
      */
@@ -494,17 +498,6 @@ class StripeService
     {
         try {
             $session = $this->stripe->checkout->sessions->retrieve($sessionId);
-
-            if ($session->status === 'open') {
-                $session = $this->stripe->checkout->sessions->expire($sessionId);
-            }
-
-            return [
-                'released' => $session->status === 'expired',
-                'status' => $session->status,
-                'payment_status' => $session->payment_status ?? null,
-                'payment_intent' => $session->payment_intent ?: null,
-            ];
         } catch (ApiErrorException $e) {
             Log::error('StripeService: Failed to expire checkout session', [
                 'session_id' => $sessionId,
@@ -513,6 +506,101 @@ class StripeService
 
             return ['released' => false, 'status' => null, 'payment_status' => null, 'payment_intent' => null];
         }
+
+        if ($session->status === 'open') {
+            try {
+                $session = $this->stripe->checkout->sessions->expire($sessionId);
+            } catch (ApiErrorException $e) {
+                Log::warning('StripeService: Open checkout session could not be expired', [
+                    'session_id' => $sessionId,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return [
+                    'released' => false,
+                    'status' => 'open',
+                    'payment_status' => $session->payment_status ?? null,
+                    'payment_intent' => $this->checkoutPaymentIntentId($session),
+                ];
+            }
+        }
+
+        return [
+            'released' => $session->status === 'expired',
+            'status' => $session->status,
+            'payment_status' => $session->payment_status ?? null,
+            'payment_intent' => $this->checkoutPaymentIntentId($session),
+        ];
+    }
+
+    /**
+     * Checkout fields that make Stripe email the payer a paid invoice and a receipt
+     * once the session is paid. Invoice metadata deliberately has no lesson id:
+     * `invoice.paid` is for later weekly lesson invoices, and must not treat this
+     * checkout invoice as one of those.
+     *
+     * @param  array<string, mixed>  $metadata
+     * @return array{payment_intent_data: array<string, mixed>, invoice_creation: array<string, mixed>}
+     */
+    protected function checkoutReceiptFields(Order $order, User $student, string $description, array $metadata): array
+    {
+        $paymentIntent = [
+            'description' => $description,
+            'transfer_group' => "order_{$order->id}",
+            'metadata' => $metadata,
+        ];
+
+        $receiptEmail = $this->checkoutReceiptEmail($order, $student);
+
+        if ($receiptEmail !== null) {
+            $paymentIntent['receipt_email'] = $receiptEmail;
+        }
+
+        return [
+            'payment_intent_data' => $paymentIntent,
+            'invoice_creation' => [
+                'enabled' => true,
+                'invoice_data' => [
+                    'description' => $description,
+                    'metadata' => [
+                        'order_id' => (string) $order->id,
+                        'source' => 'checkout',
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Where Stripe should send the receipt: the contact who booked, otherwise the pupil.
+     */
+    protected function checkoutReceiptEmail(Order $order, User $student): ?string
+    {
+        $order->loadMissing('student');
+        $profile = $order->student;
+
+        $email = ($profile && ! $profile->owns_account && $profile->contact_email)
+            ? $profile->contact_email
+            : $student->email;
+
+        $email = is_string($email) ? trim($email) : '';
+
+        return $email !== '' ? $email : null;
+    }
+
+    protected function checkoutPaymentIntentId(Session $session): ?string
+    {
+        $paymentIntent = $session->payment_intent;
+
+        if (is_string($paymentIntent) && $paymentIntent !== '') {
+            return $paymentIntent;
+        }
+
+        if (is_object($paymentIntent) && isset($paymentIntent->id) && is_string($paymentIntent->id)) {
+            return $paymentIntent->id;
+        }
+
+        return null;
     }
 
     /**

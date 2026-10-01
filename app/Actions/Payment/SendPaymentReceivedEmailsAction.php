@@ -29,6 +29,9 @@ class SendPaymentReceivedEmailsAction
             return;
         }
 
+        $instructor?->loadMissing('user');
+        $lessonPayment->loadMissing('lesson');
+
         $isBookedByContact = ! $student->owns_account;
 
         try {
