@@ -45,6 +45,7 @@ use App\Models\Student;
 use App\Models\User;
 use App\Services\HmrcService;
 use App\Services\InstructorService;
+use App\Services\OrderService;
 use App\Services\PriceUpliftService;
 use App\Services\SlotOfferService;
 use App\Services\StripeService;
@@ -63,6 +64,7 @@ class InstructorController extends Controller
 {
     public function __construct(
         protected InstructorService $instructorService,
+        protected OrderService $orderService,
         protected StripeService $stripeService,
         protected HmrcService $hmrc,
         protected MoveLessonAndFutureSiblingsAction $moveLessonAndFutureSiblings,
@@ -568,6 +570,8 @@ class InstructorController extends Controller
      */
     public function calendar(Instructor $instructor): JsonResponse
     {
+        $this->orderService->releaseExpiredHolds();
+
         // Parse optional date range from query params
         $startDate = request()->query('start_date')
             ? Carbon::parse(request()->query('start_date'))

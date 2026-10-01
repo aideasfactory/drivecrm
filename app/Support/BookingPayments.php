@@ -82,8 +82,9 @@ final class BookingPayments
     /**
      * Expiry to send to Stripe for a Checkout session backing a hold. Stripe
      * cannot expire a session sooner than 30 minutes, so short holds are
-     * closed by `orders:release-expired-holds` instead; long holds get a
-     * fresh session each time the emailed link is opened.
+     * closed by `orders:release-expired-holds` instead — including while the
+     * Checkout page is still open. Long holds get a fresh session each time
+     * the emailed link is opened.
      */
     public static function stripeCheckoutExpiresAt(?CarbonInterface $holdExpiresAt): CarbonImmutable
     {
