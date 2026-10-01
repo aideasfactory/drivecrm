@@ -50,9 +50,10 @@ class GetInstructorCalendarAction
 
                     // Booked, completed, draft (upfront, awaiting payment) and reserved (weekly) all
                     // carry a linked lesson/order from creation. They form one "active booking" family:
-                    // each surfaces the student name AND the booking-context fields (lesson id, order id,
-                    // future-sibling count, payment) so the schedule's move / cancel "this one or all
-                    // forward?" prompt behaves identically across every booking status.
+                    // each surfaces the booking-context fields (lesson id, order id, future-sibling count,
+                    // payment) so the schedule's move / cancel "this one or all forward?" prompt behaves
+                    // identically across every booking status. The pupil name is withheld on a draft hold
+                    // until the first payment confirms the booking.
                     $bookingStatuses = [
                         CalendarItemStatus::BOOKED,
                         CalendarItemStatus::COMPLETED,
@@ -62,7 +63,7 @@ class GetInstructorCalendarAction
 
                     if (in_array($item->status, $bookingStatuses, true)) {
                         $lesson = $item->lessons->first();
-                        if ($lesson && $lesson->order && $lesson->order->student) {
+                        if ($item->status !== CalendarItemStatus::DRAFT && $lesson && $lesson->order && $lesson->order->student) {
                             $student = $lesson->order->student;
                             $studentName = trim($student->first_name.' '.$student->surname);
                         }

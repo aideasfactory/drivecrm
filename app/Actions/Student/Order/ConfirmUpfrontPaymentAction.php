@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Student\Order;
 
 use App\Actions\Calendar\ConfirmCalendarItemsAction;
+use App\Actions\Student\AssignStudentOnPaidBookingAction;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
 use App\Models\LessonPayment;
@@ -16,6 +17,7 @@ class ConfirmUpfrontPaymentAction
 {
     public function __construct(
         protected ConfirmCalendarItemsAction $confirmCalendarItems,
+        protected AssignStudentOnPaidBookingAction $assignStudentOnPaidBooking,
     ) {}
 
     /**
@@ -45,6 +47,8 @@ class ConfirmUpfrontPaymentAction
             $this->createLessonPayments($lockedOrder);
 
             ($this->confirmCalendarItems)($lockedOrder);
+
+            ($this->assignStudentOnPaidBooking)($lockedOrder);
 
             return true;
         });
