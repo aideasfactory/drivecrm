@@ -383,7 +383,8 @@ Extended profile for users with student role.
 
 **Business Logic:**
 - Students can be assigned to a specific instructor
-- Students inherit instructor assignments from their orders
+- A learner is added to an instructor's contact list (`students.instructor_id`) only after a booking's first payment is confirmed (`AssignStudentOnPaidBookingAction`). Website checkout creates the student and the unpaid hold without setting `instructor_id`. An existing assignment is left unchanged until that payment. Instructor-created pupils, admin assignment, and PIN attach still assign immediately.
+- Students inherit instructor assignments from their orders once those orders are paid
 - Status change to `inactive` should include a reason in `inactive_reason`
 - Removing a student from an instructor sets `instructor_id = null` (soft-remove). This does **not** delete the profile.
 - Staff delete (`DELETE /students/{student}`, owners or the assigned instructor) soft-deletes the student (`deleted_at`), detaches `instructor_id`, sets `status = inactive` / `inactive_reason = Profile deleted by staff`, removes the profile picture, and locks the linked `users` row (tokens revoked, sessions cleared, password randomised, email rewritten to `deleted-student-{student_id}@deleted.invalid`). Historical `belongsTo` student relations use `withTrashed()` so invoices and lessons still resolve. This is separate from user-requested GDPR deletion (`ProcessAccountDeletionAction`), which anonymises PII in place without setting `deleted_at`.
@@ -866,6 +867,7 @@ Defines time slots within a calendar date.
 - `item_type = 'practical_test'`: blocks a 2.5hr window (1hr prep + 1hr test + 30min buffer), always `is_available = false`
 - Practical-test slots store the assigned `student_id`. Creating one carries the test date onto that student's `book_practical_test` checklist item (date set, item checked); deleting one clears that checklist date (date nulled, item unchecked)
 - `status` tracks the booking lifecycle: `draft` → `reserved`/`booked` → `completed`
+- A `draft` hold (checkout reached, payment not taken) is shown without the pupil's name. The name is attached once the slot becomes `reserved` or `booked` after the first payment.
 - Draft items are cleaned up by `calendar:cleanup-drafts` command if abandoned
 - Releasing a draft (unpaid hold released or cleaned up) **deletes** items with `created_by_hold = true` (and their travel blocks) and puts all other drafts back on offer (`is_available = true`, `status` and `created_by_hold` cleared). An unpaid booking therefore never leaves availability the instructor did not offer
 - A booking is refused if any week's lesson time overlaps another lesson (`draft`/`reserved`/`booked`/`completed`), a blocked-out slot (`is_available = false`) or a practical test on the same calendar. Travel blocks are not clashes

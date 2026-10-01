@@ -154,7 +154,7 @@ const statusLabel = computed(() => {
     if (status === 'completed') return 'Completed'
     if (status === 'booked' && isPaid.value) return 'Booked & Paid'
     if (status === 'booked') return 'Booked (Unpaid)'
-    if (status === 'draft') return 'Draft — Awaiting Payment'
+    if (status === 'draft') return 'Held'
     if (status === 'reserved') return 'Booked — Paying Weekly'
 
     return props.event.isAvailable ? 'Available' : 'Unavailable'
@@ -232,7 +232,7 @@ function handlePointerDown(e: PointerEvent) {
         <div v-if="heightPx > 30" class="mt-0.5 opacity-75">
             {{ statusLabel }}
         </div>
-        <div v-if="event.studentName && heightPx > 50" class="mt-0.5 truncate font-medium">
+        <div v-if="event.studentName && event.status !== 'draft' && heightPx > 50" class="mt-0.5 truncate font-medium">
             {{ event.studentName }}
         </div>
         <!-- Notes indicator -->
