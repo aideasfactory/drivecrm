@@ -44,6 +44,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -102,6 +103,8 @@ const events = ref<CalendarEvent[]>([])
 const deleteScope = ref<'single' | 'future'>('single')
 /** Reason entered when cancelling a booking (required for booking slots). */
 const cancelReason = ref('')
+/** "Refund Lesson" choice for a paid booking cancelled inside the 48-hour window. */
+const refundLesson = ref(false)
 
 // Map of backend items by ID for quick lookup
 const itemsMap = ref<Map<number, CalendarItemResponse>>(new Map())
@@ -223,6 +226,13 @@ const BOOKING_STATUSES = ['booked', 'reserved', 'draft']
 const editItemIsBooking = computed(() => {
     const item = itemsMap.value.get(editForm.value.id)
     return item ? BOOKING_STATUSES.includes(item.status as string) : false
+})
+
+/** Whether the booking being cancelled is paid and starts within 48 hours —
+ *  the instructor chooses between refunding the pupil and being paid. */
+const editItemOffersRefundChoice = computed(() => {
+    const item = itemsMap.value.get(editForm.value.id)
+    return editItemIsBooking.value && item?.is_paid === true && item?.is_late_cancellation === true
 })
 
 /** Whether the edit form should be stripped down to reschedule-only (date/time
@@ -397,6 +407,7 @@ async function loadCalendarRange(startDate: string, endDate: string) {
                     unavailability_reason: item.unavailability_reason ?? null,
                     student_name: item.student_name ?? null,
                     is_paid: item.is_paid ?? null,
+                    is_late_cancellation: item.is_late_cancellation ?? null,
                     lesson_id: item.lesson_id ?? null,
                     order_id: item.order_id ?? null,
                     future_siblings_count: item.future_siblings_count ?? 0,
@@ -956,6 +967,7 @@ function openDeleteDialog() {
     isEditSheetOpen.value = false
     deleteScope.value = 'single'
     cancelReason.value = ''
+    refundLesson.value = false
     isDeleteDialogOpen.value = true
 }
 
@@ -978,7 +990,13 @@ async function handleDelete() {
             `/instructors/${props.instructorId}/calendar/items/${editForm.value.id}`,
             {
                 params: { scope: scopeParam },
-                data: isBooking ? { scope: scopeParam, reason: cancelReason.value.trim() } : undefined,
+                data: isBooking
+                    ? {
+                        scope: scopeParam,
+                        reason: cancelReason.value.trim(),
+                        refund_lesson: editItemOffersRefundChoice.value && refundLesson.value,
+                    }
+                    : undefined,
             },
         )
 
@@ -1880,8 +1898,9 @@ onMounted(() => {
                     <DialogTitle>{{ editItemIsBooking ? 'Cancel Booking' : 'Remove Time Slot' }}</DialogTitle>
                     <DialogDescription>
                         <template v-if="editItemIsBooking">
-                            This cancels the lesson and removes it from the diary. The student will be
-                            emailed to let them know. This action cannot be undone.
+                            This cancels the lesson and removes it from the diary, leaving the slot open
+                            to offer to other pupils. The student will be emailed to let them know. This
+                            action cannot be undone.
                         </template>
                         <template v-else>
                             Are you sure you want to remove this time slot? This action cannot be undone.
@@ -1920,6 +1939,20 @@ onMounted(() => {
                         />
                         <p class="text-xs text-muted-foreground">
                             {{ cancelReason.length }}/1000 characters
+                        </p>
+                    </div>
+
+                    <div v-if="editItemOffersRefundChoice" class="space-y-1">
+                        <div class="flex items-start gap-3">
+                            <Checkbox id="refund-lesson" v-model="refundLesson" class="mt-0.5 cursor-pointer" />
+                            <label for="refund-lesson" class="cursor-pointer text-sm font-medium leading-snug">
+                                Refund Lesson
+                            </label>
+                        </div>
+                        <p class="text-xs text-muted-foreground">
+                            This lesson starts within 48 hours.
+                            <template v-if="refundLesson">DRIVE will be notified to refund the pupil and the instructor will not be paid.</template>
+                            <template v-else>The instructor will be paid for this lesson and the pupil will not be refunded.</template>
                         </p>
                     </div>
 
