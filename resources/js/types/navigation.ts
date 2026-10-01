@@ -13,4 +13,6 @@ export type NavItem = {
     icon?: LucideIcon;
     isActive?: boolean;
     roles?: UserRoleType[];
+    /** Visible to owners with restricted access (hidden from them otherwise). */
+    restrictedOwnerVisible?: boolean;
 };

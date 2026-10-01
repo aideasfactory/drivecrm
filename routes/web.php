@@ -23,6 +23,7 @@ use App\Http\Controllers\ImportController;
 use App\Http\Controllers\InstructorController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\MobileStripeOnboardingController;
+use App\Http\Controllers\OwnerController;
 use App\Http\Controllers\Onboarding\OnboardingController;
 use App\Http\Controllers\Onboarding\StepFiveController;
 use App\Http\Controllers\Onboarding\StepFourController;
@@ -46,6 +47,7 @@ use App\Http\Middleware\EnsureInstructor;
 use App\Http\Middleware\EnsureMtdEnrolled;
 use App\Http\Middleware\EnsureOwner;
 use App\Http\Middleware\RestrictInstructor;
+use App\Http\Middleware\RestrictOwnerAccess;
 use App\Http\Middleware\ValidateBookingEnquiryUuid;
 use App\Http\Middleware\ValidateBookingStepAccess;
 use App\Http\Middleware\ValidateEnquiryUuid;
@@ -84,11 +86,11 @@ Route::get('/cookie-policy', fn () => Inertia::render('Legal/CookiePolicy'))
     ->name('legal.cookies');
 
 Route::get('dashboard', [DashboardController::class, 'index'])
-    ->middleware(['auth', 'verified', RestrictInstructor::class])
+    ->middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerAccess::class])
     ->name('dashboard');
 
 // Main Application Routes
-Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(function () {
+Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerAccess::class])->group(function () {
     Route::get('/instructors', [InstructorController::class, 'index'])
         ->name('instructors.index');
     Route::post('/instructors', [InstructorController::class, 'store'])
@@ -437,6 +439,15 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
             ->name('student-transfers.search-instructors');
         Route::post('/student-transfers', [StudentTransferController::class, 'store'])
             ->name('student-transfers.store');
+    });
+
+    // Owner Access — full-access owners toggle other owners between all/restricted.
+    // Restricted owners never reach these routes (RestrictOwnerAccess).
+    Route::middleware([EnsureOwner::class])->group(function () {
+        Route::get('/owners', [OwnerController::class, 'index'])
+            ->name('owners.index');
+        Route::patch('/owners/{user}/access', [OwnerController::class, 'updateAccess'])
+            ->name('owners.access.update');
     });
 
     // Data Import — legacy-system bundles (Owner Only)

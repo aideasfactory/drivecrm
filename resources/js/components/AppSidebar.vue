@@ -17,6 +17,7 @@ import {
     Settings,
     ShieldCheck,
     TrafficCone,
+    UserCog,
     Users,
     UsersRound,
 } from 'lucide-vue-next';
@@ -51,6 +52,7 @@ import { index as studentTransfersIndex } from '@/routes/student-transfers';
 import { index as supportMessagesIndex } from '@/routes/support-messages';
 import { index as teamsIndex } from '@/routes/teams';
 import { index as enquiriesIndex } from '@/routes/enquiries';
+import { index as ownersIndex } from '@/routes/owners';
 import { type NavItem } from '@/types';
 import AppLogo from './AppLogo.vue';
 
@@ -68,17 +70,20 @@ const allNavItems: NavItem[] = [
         href: instructorsIndex(),
         icon: GraduationCap,
         roles: ['owner'], // Only visible to owners
+        restrictedOwnerVisible: true,
     },
     {
         title: 'Students',
         href: pupilsIndex(),
         icon: Users,
+        restrictedOwnerVisible: true,
     },
     {
         title: 'Transfer Student',
         href: studentTransfersIndex(),
         icon: ArrowRightLeft,
         roles: ['owner'],
+        restrictedOwnerVisible: true,
     },
     {
         title: 'Data Import',
@@ -120,12 +125,14 @@ const allNavItems: NavItem[] = [
         href: supportMessagesIndex(),
         icon: MessageSquare,
         roles: ['owner'],
+        restrictedOwnerVisible: true,
     },
     {
         title: 'Enquiries',
         href: enquiriesIndex(),
         icon: Inbox,
         roles: ['owner'],
+        restrictedOwnerVisible: true,
     },
     {
         title: 'Resources',
@@ -146,9 +153,16 @@ const allNavItems: NavItem[] = [
         roles: ['instructor'],
     },
     {
+        title: 'Owner Access',
+        href: ownersIndex(),
+        icon: UserCog,
+        roles: ['owner'],
+    },
+    {
         title: 'Settings',
         href: profileEdit(),
         icon: Settings,
+        restrictedOwnerVisible: true,
     },
     {
         title: 'Integrations',
@@ -159,7 +173,7 @@ const allNavItems: NavItem[] = [
 
 // Filter nav items based on user role
 const mainNavItems = computed(() =>
-    allNavItems.filter((item) => canSeeNavItem(item.roles)),
+    allNavItems.filter((item) => canSeeNavItem(item.roles, item.restrictedOwnerVisible)),
 );
 
 const footerNavItems: NavItem[] = [];
