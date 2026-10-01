@@ -45,7 +45,6 @@ class StepThreeController extends Controller
                     'experience' => $meta['experience'] ?? null,
                     'rating' => $meta['rating'] ?? null,
                     'bio' => $instructor->bio,
-                    'address' => $instructor->address,
                 ];
             }
         }

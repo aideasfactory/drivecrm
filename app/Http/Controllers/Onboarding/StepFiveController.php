@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Onboarding;
 
+use App\Actions\Onboarding\BuildPublicInstructorProfileAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Onboarding\StepFiveRequest;
 use App\Models\CalendarItem;
@@ -22,6 +23,7 @@ class StepFiveController extends Controller
     public function __construct(
         protected PriceUpliftService $priceUpliftService,
         protected PackageService $packageService,
+        protected BuildPublicInstructorProfileAction $buildPublicInstructorProfile,
     ) {}
 
     public function show(Request $request)
@@ -35,16 +37,9 @@ class StepFiveController extends Controller
         $step4 = $enquiry->getStepData(4) ?? [];
         $step5 = $enquiry->getStepData(5) ?? [];
 
-        // Load instructor with user relationship. Reviews live in meta and
-        // are not appended by default, so the review step would render an
-        // empty "( reviews)" label without this.
         $instructor = null;
         if (! empty($step2['instructor_id'])) {
             $instructor = Instructor::with('user')->find($step2['instructor_id']);
-
-            if ($instructor) {
-                $instructor->append('reviews');
-            }
         }
 
         // Load package (instructor uplift applied in-memory so all price
@@ -92,7 +87,9 @@ class StepFiveController extends Controller
             'maxStepReached' => $enquiry->max_step_reached,
 
             // Instructor details
-            'instructor' => $instructor,
+            'instructor' => $instructor
+                ? [...($this->buildPublicInstructorProfile)($instructor), 'reviews' => $instructor->reviews]
+                : null,
 
             // Package details
             'package' => $package ? [
