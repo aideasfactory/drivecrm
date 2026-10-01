@@ -81,6 +81,15 @@ class Package extends Model
     }
 
     /**
+     * Weekly payments need at least one follow-on lesson to invoice, so
+     * single-lesson packages can only be paid in full.
+     */
+    public function allowsWeeklyPayment(): bool
+    {
+        return $this->lessons_count > 1;
+    }
+
+    /**
      * Get formatted total price (e.g., "£500.00").
      */
     public function getFormattedTotalPriceAttribute(): string
