@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Onboarding;
 
+use App\Actions\Onboarding\BuildPublicInstructorProfileAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Onboarding\StepTwoRequest;
 use App\Services\InstructorService;
@@ -11,7 +12,8 @@ use Inertia\Inertia;
 class StepTwoController extends Controller
 {
     public function __construct(
-        private InstructorService $instructorService
+        private InstructorService $instructorService,
+        private BuildPublicInstructorProfileAction $buildPublicInstructorProfile,
     ) {}
 
     public function show(Request $request)
@@ -28,9 +30,11 @@ class StepTwoController extends Controller
             ? $this->instructorService->findByPostcode($postcode)
             : collect();
 
-        $instructors->each(function ($instructor) {
+        $instructors = $instructors->map(function ($instructor) {
             $instructor->next_available = $this->instructorService->nextAvailableDate($instructor);
-        });
+
+            return ($this->buildPublicInstructorProfile)($instructor);
+        })->values();
 
         return Inertia::render('Onboarding/Step2', [
             'uuid' => $enquiry->id,

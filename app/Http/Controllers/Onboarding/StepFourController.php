@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Onboarding;
 
+use App\Actions\Onboarding\BuildPublicInstructorProfileAction;
 use App\Actions\Onboarding\ReleaseLegacyStepFourHoldsAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Onboarding\StepFourRequest;
@@ -22,6 +23,7 @@ class StepFourController extends Controller
         private CalendarService $calendarService,
         private InstructorService $instructorService,
         private ReleaseLegacyStepFourHoldsAction $releaseLegacyStepFourHolds,
+        private BuildPublicInstructorProfileAction $buildPublicInstructorProfile,
     ) {}
 
     public function show(Request $request)
@@ -46,6 +48,10 @@ class StepFourController extends Controller
             ? $this->instructorService->findByPostcode($postcode)
             : collect();
 
+        $availableInstructors = $availableInstructors
+            ->map(fn (Instructor $availableInstructor) => ($this->buildPublicInstructorProfile)($availableInstructor))
+            ->values();
+
         // Get available dates and time slots
         $availability = $instructorId ? $this->calendarService->getAvailability(
             instructorId: $instructorId,
@@ -59,7 +65,7 @@ class StepFourController extends Controller
             'totalSteps' => 6,
             'stepData' => $enquiry->getStepData(4),
             'maxStepReached' => $enquiry->max_step_reached,
-            'instructor' => $instructor,
+            'instructor' => $instructor ? ($this->buildPublicInstructorProfile)($instructor) : null,
             'availableInstructors' => $availableInstructors,
             'availability' => $availability,
             'holdMinutes' => BookingPayments::learnerHoldMinutes(),

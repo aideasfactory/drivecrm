@@ -158,7 +158,7 @@
                               <div class="space-y-1 text-sm">
                                 <div class="flex items-center">
                                   <MapPin class="mr-2 h-3 w-3" />
-                                  <span>{{ instructor.address }} • {{ instructor.postcode }}</span>
+                                  <span>Covers your area</span>
                                 </div>
                                 <div class="flex items-center font-medium">
                                   <Calendar class="mr-2 h-3 w-3" />
