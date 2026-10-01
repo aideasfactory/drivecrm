@@ -256,6 +256,7 @@ Core user table storing all users in the system (owners, instructors, and studen
 | `welcome_email_pending` | boolean | DEFAULT false | True between new-user creation and the welcome email being dispatched. Cleared by `SendOrderConfirmationEmailAction` (web onboarding) or `SendInstructorWelcomeEmailAction` (instructor invite). Stays `true` if sending fails so admins can resend. |
 | `imported_at` | timestamp | NULLABLE, INDEXED | Set when the account was created by the legacy importer (Data Import page). No emails go out at import; `import:send-welcome-emails` sends the welcome email to every imported user still `welcome_email_pending = true`. |
 | `role` | enum('owner', 'instructor', 'student') | DEFAULT 'student' | User role in the system |
+| `owner_access` | varchar(20) | DEFAULT 'all' | Admin-area access level (`OwnerAccess` enum), only meaningful when `role = owner`. `all` = entire admin area; `restricted` = Instructors, Students, Transfer Student, Support Messages, Enquiries and own Settings only (enforced by `RestrictOwnerAccess` middleware). Managed by full-access owners on the Owner Access page (`/owners`); owners cannot change their own value. Added 2026-10-01. |
 | `stripe_customer_id` | varchar(255) | NULLABLE, INDEXED | Stripe customer ID |
 | `current_team_id` | bigint unsigned | NULLABLE, FK → teams.id (ON DELETE SET NULL) | Current team assignment |
 | `remember_token` | varchar(100) | NULLABLE | Remember me token |
@@ -272,6 +273,7 @@ Core user table storing all users in the system (owners, instructors, and studen
 
 **Enums:**
 - Role: `owner`, `instructor`, `student`
+- Owner access: `all`, `restricted`
 
 ---
 
