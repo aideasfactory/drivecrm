@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Actions\Calendar;
 
-use App\Actions\Instructor\DeleteCalendarItemAction;
+use App\Actions\Shared\Note\CreateNoteAction;
+use App\Actions\Student\Lesson\CreateLessonPayoutAction;
 use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
 use App\Actions\Student\RevokeTestPassGuaranteeAction;
+use App\Enums\LessonCancellationOutcome;
 use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
 use App\Models\CalendarItem;
+use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Order;
 use App\Models\User;
@@ -24,27 +27,38 @@ use RuntimeException;
 class CancelBookingAction
 {
     public function __construct(
-        protected DeleteCalendarItemAction $deleteCalendarItem,
+        protected ReopenCancelledLessonSlotAction $reopenCancelledLessonSlot,
+        protected CreateLessonPayoutAction $createLessonPayout,
+        protected CreateNoteAction $createNote,
         protected RecalculateStudentLessonNumbersAction $recalculateStudentLessonNumbers,
         protected RevokeTestPassGuaranteeAction $revokeTestPassGuarantee,
     ) {}
 
     /**
-     * Cancel the booking attached to a calendar item. The student has left / no
-     * longer wants lessons, so the lesson(s) are marked cancelled (kept for
-     * history) and their calendar slots are freed from the diary. Future weekly
-     * invoices stop automatically because the invoice sender skips cancelled
-     * lessons. No Stripe void/refund happens here — paid lessons are reported to
-     * Head Office for a manual refund.
+     * Cancel the booking attached to a calendar item. The lesson(s) are marked
+     * cancelled (kept for history) and taken out of the diary, while their
+     * slots go back to open availability so the instructor can offer them to
+     * other pupils. Future weekly invoices stop automatically because the
+     * invoice sender skips cancelled lessons.
+     *
+     * Each paid lesson is either refunded or paid out to the instructor:
+     *  - more than 48 hours before it starts: refunded;
+     *  - inside 48 hours: refunded when `$refundLesson` is ticked, otherwise
+     *    paid out to the instructor (Stripe transfer, as at sign-off).
+     * No Stripe refund happens here — Head Office is emailed to refund manually.
+     * Every cancelled lesson is noted on the instructor's profile as
+     * Cancelled/Refunded, Cancelled/Paid or Cancelled/Unpaid.
      *
      * @param  bool  $applyToFutureInOrder  When true, also cancel every future un-signed-off lesson in the same order.
-     * @return array{cancelled_count: int, refund_required_count: int}
+     * @param  bool  $refundLesson  The instructor's "Refund Lesson" choice for lessons inside the 48-hour window.
+     * @return array{cancelled_count: int, refund_required_count: int, payout_count: int}
      */
     public function __invoke(
         CalendarItem $item,
         string $reason,
         bool $applyToFutureInOrder,
         User $actor,
+        bool $refundLesson = false,
     ): array {
         $item->loadMissing(['calendar', 'lessons.order.student.user', 'lessons.lessonPayment', 'lessons.payout']);
 
@@ -63,36 +77,50 @@ class CancelBookingAction
 
         $cancelSet = $this->buildCancelSet($anchorLesson, $applyToFutureInOrder);
 
+        /** @var Collection<int, LessonCancellationOutcome> $outcomes */
+        $outcomes = $cancelSet->mapWithKeys(fn (Lesson $lesson): array => [
+            $lesson->id => $this->outcomeFor($lesson, $refundLesson),
+        ]);
+
+        $refundLessons = $cancelSet->filter(fn (Lesson $lesson): bool => $outcomes[$lesson->id] === LessonCancellationOutcome::Refunded)->values();
+        $payoutLessons = $cancelSet->filter(fn (Lesson $lesson): bool => $outcomes[$lesson->id] === LessonCancellationOutcome::Paid)->values();
+        $transferLessons = $payoutLessons->reject(fn (Lesson $lesson): bool => $lesson->order?->isImported() === true)->values();
+
+        if ($transferLessons->isNotEmpty() && (! $instructor?->onboarding_complete || ! $instructor->payouts_enabled)) {
+            throw new RuntimeException('The instructor cannot receive payouts yet, so this late cancellation cannot be paid out. Tick "Refund Lesson" to refund the pupil instead.');
+        }
+
         $affectedDates = collect();
-        $paidLessons = collect();
 
-        DB::transaction(function () use ($cancelSet, $reason, $affectedDates, $paidLessons): void {
+        DB::transaction(function () use ($cancelSet, $reason, $affectedDates, $transferLessons, $instructor): void {
             foreach ($cancelSet as $lesson) {
-                if ($this->wasPaid($lesson)) {
-                    $paidLessons->push($lesson);
-                }
-
                 $lesson->status = LessonStatus::CANCELLED;
                 $lesson->cancellation_reason = $reason;
                 $lesson->cancelled_at = now();
 
                 $calendarItem = $lesson->calendarItem;
 
-                // Detach the lesson first so the slot can be removed while the
+                // Detach the lesson first so the slot can be reopened while the
                 // cancelled lesson is retained for history.
                 $lesson->calendar_item_id = null;
                 $lesson->save();
 
                 if ($calendarItem) {
                     $affectedDates->push($calendarItem->calendar?->date?->format('Y-m-d'));
-                    ($this->deleteCalendarItem)($calendarItem);
+                    ($this->reopenCancelledLessonSlot)($calendarItem);
                 }
+            }
+
+            // Stripe transfers last: a failure rolls the cancellation back, and
+            // nothing after them in the transaction can fail and orphan a transfer.
+            foreach ($transferLessons as $lesson) {
+                ($this->createLessonPayout)($lesson, $instructor);
             }
         });
 
         $orderCancelled = $this->cancelOrderIfFullyCancelled($order);
 
-        $guaranteeRemoved = $this->removeRefundedGuarantee($order, $paidLessons, $orderCancelled);
+        $guaranteeRemoved = $this->removeRefundedGuarantee($order, $refundLessons, $orderCancelled);
 
         // Cancelled lessons leave a gap in the student's sequence — renumber the
         // remaining open lessons so numbers stay contiguous and chronological.
@@ -102,14 +130,68 @@ class CancelBookingAction
 
         $this->invalidateCalendarCache($instructor?->id, $affectedDates);
 
-        $refundRequiredCount = $paidLessons->count();
+        $this->noteOutcomesOnInstructor($instructor, $cancelSet, $outcomes, $order, $reason);
 
-        $this->sendNotifications($cancelSet, $paidLessons, $order, $reason, $orderCancelled, $actor, $guaranteeRemoved);
+        $this->sendNotifications($cancelSet, $refundLessons, $payoutLessons, $order, $reason, $orderCancelled, $actor, $guaranteeRemoved);
 
         return [
             'cancelled_count' => $cancelSet->count(),
-            'refund_required_count' => $refundRequiredCount,
+            'refund_required_count' => $refundLessons->count(),
+            'payout_count' => $payoutLessons->count(),
         ];
+    }
+
+    /**
+     * Decide whether a cancelled lesson is refunded or paid out. Unpaid lessons
+     * have nothing to refund or pay out. Paid lessons are refunded unless the
+     * cancellation is inside the 48-hour window and the instructor did not
+     * tick "Refund Lesson".
+     */
+    protected function outcomeFor(Lesson $lesson, bool $refundLesson): LessonCancellationOutcome
+    {
+        if (! $this->wasPaid($lesson)) {
+            return LessonCancellationOutcome::Unpaid;
+        }
+
+        if ($lesson->isLateCancellation() && ! $refundLesson) {
+            return LessonCancellationOutcome::Paid;
+        }
+
+        return LessonCancellationOutcome::Refunded;
+    }
+
+    /**
+     * Record each cancelled lesson on the instructor's profile as a note
+     * starting Cancelled/Refunded, Cancelled/Paid or Cancelled/Unpaid.
+     *
+     * @param  Collection<int, Lesson>  $cancelSet
+     * @param  Collection<int, LessonCancellationOutcome>  $outcomes
+     */
+    protected function noteOutcomesOnInstructor(
+        ?Instructor $instructor,
+        Collection $cancelSet,
+        Collection $outcomes,
+        ?Order $order,
+        string $reason,
+    ): void {
+        if (! $instructor) {
+            return;
+        }
+
+        $student = $order?->student;
+        $studentName = $student ? trim($student->first_name.' '.$student->surname) : 'Unknown pupil';
+
+        foreach ($cancelSet as $lesson) {
+            $date = $lesson->date?->format('D j M Y') ?? 'unknown date';
+            $time = ($lesson->start_time && $lesson->end_time)
+                ? ' '.$lesson->start_time->format('H:i').'–'.$lesson->end_time->format('H:i')
+                : '';
+
+            ($this->createNote)(
+                $instructor,
+                "{$outcomes[$lesson->id]->noteLabel()} — {$studentName}, {$date}{$time} (booking #{$order?->id}). Reason: {$reason}",
+            );
+        }
     }
 
     /**
@@ -153,7 +235,7 @@ class CancelBookingAction
     /**
      * Whether a lesson had been paid for — an upfront order that has been
      * confirmed (lesson is no longer a draft), or a weekly lesson whose
-     * per-lesson payment is marked paid. Paid lessons need a manual refund.
+     * per-lesson payment is marked paid.
      */
     protected function wasPaid(Lesson $lesson): bool
     {
@@ -207,18 +289,18 @@ class CancelBookingAction
 
     /**
      * A cancellation refunds the Pass Your Test Guarantee, so the pupil loses it
-     * when a cancelled paid lesson carried the guarantee charge, or when the
+     * when a refunded lesson carried the guarantee charge, or when the
      * whole order is now cancelled (this also covers a guarantee included free).
      *
-     * @param  Collection<int, Lesson>  $paidLessons
+     * @param  Collection<int, Lesson>  $refundLessons
      */
-    protected function removeRefundedGuarantee(?Order $order, Collection $paidLessons, bool $orderCancelled): bool
+    protected function removeRefundedGuarantee(?Order $order, Collection $refundLessons, bool $orderCancelled): bool
     {
         if (! $order?->includes_test_pass_guarantee) {
             return false;
         }
 
-        $refundsGuaranteeCharge = $paidLessons->contains(
+        $refundsGuaranteeCharge = $refundLessons->contains(
             fn (Lesson $lesson): bool => $lesson->paymentBreakdown()['test_pass_guarantee_pence'] > 0
         );
 
@@ -230,15 +312,17 @@ class CancelBookingAction
     }
 
     /**
-     * Always email the student. Email Head Office only when a paid lesson was
-     * cancelled (a manual refund is required).
+     * Always email the student. Email Head Office only when a lesson is being
+     * refunded (a manual refund is required).
      *
      * @param  Collection<int, Lesson>  $cancelSet
-     * @param  Collection<int, Lesson>  $paidLessons
+     * @param  Collection<int, Lesson>  $refundLessons
+     * @param  Collection<int, Lesson>  $payoutLessons
      */
     protected function sendNotifications(
         Collection $cancelSet,
-        Collection $paidLessons,
+        Collection $refundLessons,
+        Collection $payoutLessons,
         ?Order $order,
         string $reason,
         bool $orderCancelled,
@@ -247,7 +331,7 @@ class CancelBookingAction
     ): void {
         $student = $order?->student;
         $instructor = $order?->instructor;
-        $refundRequired = $paidLessons->isNotEmpty();
+        $refundRequired = $refundLessons->isNotEmpty();
 
         if ($student?->user) {
             $student->user->notify(new BookingCancelledNotification(
@@ -256,6 +340,7 @@ class CancelBookingAction
                 $cancelSet,
                 $reason,
                 $refundRequired,
+                $payoutLessons->isNotEmpty(),
             ));
 
             $student->logActivity(
@@ -265,6 +350,8 @@ class CancelBookingAction
                     'order_id' => $order?->id,
                     'cancelled_lesson_ids' => $cancelSet->pluck('id')->all(),
                     'refund_required' => $refundRequired,
+                    'refunded_lesson_ids' => $refundLessons->pluck('id')->all(),
+                    'paid_out_lesson_ids' => $payoutLessons->pluck('id')->all(),
                     'order_cancelled' => $orderCancelled,
                     'cancelled_by_user_id' => $actor->id,
                 ],
@@ -278,7 +365,7 @@ class CancelBookingAction
                     $student,
                     $instructor,
                     $order,
-                    $paidLessons,
+                    $refundLessons,
                     $reason,
                     $guaranteeRemoved,
                 ));

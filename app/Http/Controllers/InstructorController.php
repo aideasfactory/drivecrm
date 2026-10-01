@@ -752,12 +752,14 @@ class InstructorController extends Controller
                     $reason,
                     $deleteScope === 'future',
                     request()->user(),
+                    request()->boolean('refund_lesson'),
                 );
 
                 return response()->json([
                     'message' => "{$result['cancelled_count']} lesson(s) cancelled. The student has been notified.",
                     'cancelled_count' => $result['cancelled_count'],
                     'refund_required_count' => $result['refund_required_count'],
+                    'payout_count' => $result['payout_count'],
                 ]);
             }
 

@@ -123,6 +123,9 @@ class GetInstructorCalendarAction
                         'parent_item_id' => $item->parent_item_id,
                         'student_name' => $studentName,
                         'is_paid' => $isPaid,
+                        'is_late_cancellation' => $lesson && $lesson->status !== LessonStatus::COMPLETED
+                            ? $lesson->isLateCancellation()
+                            : null,
                         'lesson_id' => $lessonId,
                         'order_id' => $orderId,
                         'future_siblings_count' => $futureSiblingsCount,

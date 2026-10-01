@@ -46,6 +46,9 @@ class CalendarItemResource extends JsonResource
             'order_id' => $lesson?->order_id,
             'student_name' => $this->studentName(),
             'is_paid' => $this->isPaid($lesson),
+            // True when cancelling now is inside the 48-hour window, where the
+            // cancel sheet offers the "Refund Lesson" tickbox.
+            'is_late_cancellation' => $this->isLateCancellation($lesson),
             'amount_pence' => $lesson?->amount_pence,
             'payment_breakdown' => $lesson?->paymentBreakdown(),
             'mileage' => $lesson?->mileage,
@@ -125,6 +128,15 @@ class CalendarItemResource extends JsonResource
         return $lesson->lessonPayment?->isPaid()
             ?? ($lesson->order?->isImported() === true
                 || ($lesson->order?->isUpfront() === true && ! $lesson->isDraft()));
+    }
+
+    protected function isLateCancellation(?Lesson $lesson): ?bool
+    {
+        if (! $lesson || $lesson->status === LessonStatus::COMPLETED) {
+            return null;
+        }
+
+        return $lesson->isLateCancellation();
     }
 
     /**

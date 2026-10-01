@@ -34,6 +34,12 @@ class DeleteCalendarItemRequest extends FormRequest
                 'string',
                 'max:1000',
             ],
+            // "Refund Lesson" tickbox for a booking cancelled inside the
+            // 48-hour window; ignored otherwise.
+            'refund_lesson' => [
+                'sometimes',
+                'boolean',
+            ],
         ];
     }
 
@@ -56,6 +62,7 @@ class DeleteCalendarItemRequest extends FormRequest
             'reason.required' => 'A reason is required to cancel this booking.',
             'reason.max' => 'The reason cannot exceed 1000 characters.',
             'scope.in' => 'Scope must be either "single" or "future".',
+            'refund_lesson.boolean' => 'Refund lesson must be true or false.',
         ];
     }
 }
