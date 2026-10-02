@@ -30,6 +30,7 @@ use App\Actions\Instructor\GetInstructorLocationsAction;
 use App\Actions\Instructor\GetInstructorPackagesAction;
 use App\Actions\Instructor\GetInstructorPayoutsAction;
 use App\Actions\Instructor\GetInstructorPupilsAction;
+use App\Actions\Instructor\MarkAppOnboardingCompleteAction;
 use App\Actions\Instructor\Mileage\CreateMileageLogAction;
 use App\Actions\Instructor\Mileage\DeleteMileageLogAction;
 use App\Actions\Instructor\Mileage\GetMileageLogsAction;
@@ -106,6 +107,7 @@ class InstructorService extends BaseService
         protected LogActivityAction $logActivity,
         protected UpdateInstructorProfileAction $updateInstructorProfile,
         protected CompleteAppOnboardingStepAction $completeAppOnboardingStep,
+        protected MarkAppOnboardingCompleteAction $markAppOnboardingComplete,
         protected UploadInstructorProfilePictureAction $uploadProfilePicture,
         protected DeleteInstructorProfilePictureAction $deleteProfilePicture,
         protected DetectCalendarClashesAction $detectCalendarClashes,
@@ -827,6 +829,14 @@ class InstructorService extends BaseService
     public function completeAppOnboardingStep(Instructor $instructor, int $step): Instructor
     {
         return ($this->completeAppOnboardingStep)($instructor, $step);
+    }
+
+    /**
+     * Mark the mobile app onboarding slider finished (staff action).
+     */
+    public function markAppOnboardingComplete(Instructor $instructor, User $performedBy): Instructor
+    {
+        return ($this->markAppOnboardingComplete)($instructor, $performedBy);
     }
 
     /**

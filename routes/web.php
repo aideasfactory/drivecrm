@@ -187,6 +187,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
     Route::post('/instructors/{instructor}/resend-invite', [InstructorController::class, 'resendWelcomeEmail'])
         ->middleware(EnsureOwner::class)
         ->name('instructors.resend-invite');
+    Route::post('/instructors/{instructor}/app-onboarding/complete', [InstructorController::class, 'markAppOnboardingComplete'])
+        ->middleware(EnsureOwner::class)
+        ->name('instructors.app-onboarding.complete');
 
     // Instructor Progress Tracker (framework CRUD — axios-fed)
     Route::get('/instructors/{instructor}/progress-tracker/framework', [ProgressTrackerController::class, 'framework'])

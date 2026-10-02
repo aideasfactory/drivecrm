@@ -3,8 +3,17 @@ import { ref, computed } from 'vue'
 import axios from 'axios'
 import { Head, router } from '@inertiajs/vue3'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 import { toast } from '@/components/ui/toast'
-import { Loader2, MailWarning } from 'lucide-vue-next'
+import { Loader2, MailWarning, Smartphone } from 'lucide-vue-next'
 import { useRole } from '@/composables/useRole'
 import AppLayout from '@/layouts/AppLayout.vue'
 import InstructorHeader from '@/components/Instructors/InstructorHeader.vue'
@@ -92,6 +101,9 @@ const isEditSheetOpen = ref(false)
 const { isOwner } = useRole()
 const isResendingInvite = ref(false)
 const welcomeEmailPending = ref(Boolean(props.instructor.welcome_email_pending))
+const appOnboardingComplete = ref(Boolean(props.instructor.app_onboarding_complete))
+const isBypassDialogOpen = ref(false)
+const isMarkingOnboardingComplete = ref(false)
 
 const resendInvite = async () => {
     if (isResendingInvite.value) {
@@ -109,6 +121,29 @@ const resendInvite = async () => {
         toast({ title: message, variant: 'destructive' })
     } finally {
         isResendingInvite.value = false
+    }
+}
+
+const markAppOnboardingComplete = async () => {
+    if (isMarkingOnboardingComplete.value) {
+        return
+    }
+
+    isMarkingOnboardingComplete.value = true
+
+    try {
+        const { data } = await axios.post(
+            `/instructors/${props.instructor.id}/app-onboarding/complete`,
+        )
+        appOnboardingComplete.value = Boolean(data?.app_onboarding_complete)
+        isBypassDialogOpen.value = false
+        toast({ title: data?.message ?? 'In-app onboarding marked complete.' })
+    } catch (error: any) {
+        const message =
+            error?.response?.data?.message ?? 'Failed to mark in-app onboarding complete.'
+        toast({ title: message, variant: 'destructive' })
+    } finally {
+        isMarkingOnboardingComplete.value = false
     }
 }
 
@@ -180,6 +215,32 @@ const breadcrumbs = [
                     {{ isResendingInvite ? 'Resending…' : 'Resend welcome email' }}
                 </Button>
             </div>
+
+            <!-- In-app onboarding bypass — owners only, independent of Stripe -->
+            <Card v-if="isOwner && !appOnboardingComplete">
+                <CardContent class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="flex items-start gap-3">
+                        <Smartphone class="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+                        <div class="text-sm">
+                            <p class="font-medium">Mobile app onboarding is not finished</p>
+                            <p class="text-muted-foreground">
+                                The app still holds
+                                <strong>{{ instructor.name }}</strong>
+                                on the in-app onboarding steps. Mark them complete so the app lets them through.
+                                This does not change their Stripe setup.
+                            </p>
+                        </div>
+                    </div>
+                    <Button
+                        class="min-w-[240px]"
+                        :disabled="isMarkingOnboardingComplete"
+                        @click="isBypassDialogOpen = true"
+                    >
+                        <Smartphone class="mr-2 h-4 w-4" />
+                        Mark in-app onboarding complete
+                    </Button>
+                </CardContent>
+            </Card>
 
             <!-- Onboarding welcome (shown until Stripe is connected) -->
             <StripeOnboardingWelcome
@@ -255,6 +316,44 @@ const breadcrumbs = [
                 />
             </div>
         </div>
+
+        <Dialog v-model:open="isBypassDialogOpen">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle class="flex items-center gap-2">
+                        <Smartphone class="h-5 w-5" />
+                        Mark in-app onboarding complete?
+                    </DialogTitle>
+                    <DialogDescription>
+                        This tells the mobile app that
+                        <strong>{{ instructor.name }}</strong>
+                        has finished onboarding. They will no longer be stopped on that step.
+                        Their Stripe setup is left as it is.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button
+                        variant="outline"
+                        :disabled="isMarkingOnboardingComplete"
+                        @click="isBypassDialogOpen = false"
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        class="min-w-[160px]"
+                        :disabled="isMarkingOnboardingComplete"
+                        @click="markAppOnboardingComplete"
+                    >
+                        <Loader2
+                            v-if="isMarkingOnboardingComplete"
+                            class="mr-2 h-4 w-4 animate-spin"
+                        />
+                        <Smartphone v-else class="mr-2 h-4 w-4" />
+                        {{ isMarkingOnboardingComplete ? 'Saving…' : 'Mark complete' }}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
 
         <!-- Edit Instructor Sheet -->
         <AddInstructorSheet

@@ -261,6 +261,7 @@ class InstructorController extends Controller
                 'locations' => $locations,
                 'hmrc_connected' => $instructor->user->hmrcToken()->exists(),
                 'welcome_email_pending' => (bool) $instructor->user->welcome_email_pending,
+                'app_onboarding_complete' => $instructor->hasCompletedAppOnboarding(),
             ],
             'tab' => $tab,
             'subtab' => request()->query('subtab', 'summary'),
@@ -358,6 +359,31 @@ class InstructorController extends Controller
 
         return response()->json([
             'message' => 'Password has been reset successfully.',
+        ]);
+    }
+
+    /**
+     * Mark the instructor's mobile app onboarding slider as finished.
+     *
+     * Staff-only. The app treats `app_onboarding_complete === false` as
+     * unfinished; this stamps the timestamp the profile and onboarding
+     * endpoints already read.
+     */
+    public function markAppOnboardingComplete(Request $request, Instructor $instructor): JsonResponse
+    {
+        $staff = $request->user();
+
+        if (! $staff instanceof User) {
+            abort(403);
+        }
+
+        $instructor = $this->instructorService->markAppOnboardingComplete($instructor, $staff);
+
+        return response()->json([
+            'message' => 'In-app onboarding marked complete.',
+            'app_onboarding_complete' => $instructor->hasCompletedAppOnboarding(),
+            'app_onboarding_step' => $instructor->app_onboarding_step,
+            'app_onboarding_completed_at' => $instructor->app_onboarding_completed_at?->toIso8601String(),
         ]);
     }
 
