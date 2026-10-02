@@ -7,8 +7,9 @@ return [
     | Mobile App Store Links
     |--------------------------------------------------------------------------
     |
-    | Public store listing URLs for the instructor mobile app. Leave unset
-    | until the apps are published — the frontend shows a "coming soon"
+    | Public store listing URLs for the mobile app. Used by the instructor
+    | download buttons and the public /get-app page. Leave unset until
+    | the apps are published — the frontend shows a "coming soon"
     | message when a link is missing.
     |
     */

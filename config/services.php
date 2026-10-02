@@ -64,6 +64,12 @@ return [
         'max_tokens' => (int) env('OPENROUTER_MAX_TOKENS', 1024),
     ],
 
+    /*
+    | Fallback store URLs for the public /get-app page. Prefer
+    | APPLE_APP_LINK / ANDROID_APP_LINK in config/app_links.php.
+    | Leave unset until a real listing exists — the page shows
+    | "coming soon" when neither source has a URL.
+    */
     'mobile_app' => [
         'ios_url' => env('MOBILE_APP_IOS_URL'),
         'android_url' => env('MOBILE_APP_ANDROID_URL'),
