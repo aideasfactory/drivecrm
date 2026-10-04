@@ -23,7 +23,6 @@ use App\Http\Controllers\ImportController;
 use App\Http\Controllers\InstructorController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\MobileStripeOnboardingController;
-use App\Http\Controllers\OwnerController;
 use App\Http\Controllers\Onboarding\OnboardingController;
 use App\Http\Controllers\Onboarding\StepFiveController;
 use App\Http\Controllers\Onboarding\StepFourController;
@@ -31,6 +30,7 @@ use App\Http\Controllers\Onboarding\StepOneController;
 use App\Http\Controllers\Onboarding\StepSixController;
 use App\Http\Controllers\Onboarding\StepThreeController;
 use App\Http\Controllers\Onboarding\StepTwoController;
+use App\Http\Controllers\OwnerController;
 use App\Http\Controllers\PackageController;
 use App\Http\Controllers\PaymentLinkCheckoutController;
 use App\Http\Controllers\ProfileController;
@@ -187,6 +187,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
     Route::post('/instructors/{instructor}/resend-invite', [InstructorController::class, 'resendWelcomeEmail'])
         ->middleware(EnsureOwner::class)
         ->name('instructors.resend-invite');
+    Route::post('/instructors/{instructor}/app-onboarding/complete', [InstructorController::class, 'forceCompleteAppOnboarding'])
+        ->middleware(EnsureOwner::class)
+        ->name('instructors.app-onboarding.complete');
 
     // Instructor Progress Tracker (framework CRUD — axios-fed)
     Route::get('/instructors/{instructor}/progress-tracker/framework', [ProgressTrackerController::class, 'framework'])

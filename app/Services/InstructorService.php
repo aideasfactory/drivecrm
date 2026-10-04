@@ -21,6 +21,7 @@ use App\Actions\Instructor\DeleteInstructorLocationAction;
 use App\Actions\Instructor\DeleteInstructorProfilePictureAction;
 use App\Actions\Instructor\DeleteRecurringCalendarItemsAction;
 use App\Actions\Instructor\FillAvailableCalendarSlotsAction;
+use App\Actions\Instructor\ForceCompleteAppOnboardingAction;
 use App\Actions\Instructor\GetGroupedStudentsAction;
 use App\Actions\Instructor\GetInstructorCalendarAction;
 use App\Actions\Instructor\GetInstructorDayLessonsAction;
@@ -106,6 +107,7 @@ class InstructorService extends BaseService
         protected LogActivityAction $logActivity,
         protected UpdateInstructorProfileAction $updateInstructorProfile,
         protected CompleteAppOnboardingStepAction $completeAppOnboardingStep,
+        protected ForceCompleteAppOnboardingAction $forceCompleteAppOnboarding,
         protected UploadInstructorProfilePictureAction $uploadProfilePicture,
         protected DeleteInstructorProfilePictureAction $deleteProfilePicture,
         protected DetectCalendarClashesAction $detectCalendarClashes,
@@ -827,6 +829,30 @@ class InstructorService extends BaseService
     public function completeAppOnboardingStep(Instructor $instructor, int $step): Instructor
     {
         return ($this->completeAppOnboardingStep)($instructor, $step);
+    }
+
+    /**
+     * Admin override: mark the instructor's app onboarding as complete,
+     * skipping any remaining steps.
+     */
+    public function forceCompleteAppOnboarding(Instructor $instructor, User $admin): Instructor
+    {
+        $wasComplete = $instructor->hasCompletedAppOnboarding();
+        $previousStep = $instructor->app_onboarding_step;
+
+        $instructor = ($this->forceCompleteAppOnboarding)($instructor);
+
+        if (! $wasComplete) {
+            ($this->logActivity)(
+                $instructor,
+                "{$admin->name} manually marked app onboarding as complete (was on step {$previousStep} of ".Instructor::APP_ONBOARDING_TOTAL_STEPS.')',
+                'profile',
+                ['admin_user_id' => $admin->id, 'previous_step' => $previousStep],
+                'App onboarding marked complete by admin'
+            );
+        }
+
+        return $instructor;
     }
 
     /**

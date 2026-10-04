@@ -261,6 +261,8 @@ class InstructorController extends Controller
                 'locations' => $locations,
                 'hmrc_connected' => $instructor->user->hmrcToken()->exists(),
                 'welcome_email_pending' => (bool) $instructor->user->welcome_email_pending,
+                'app_onboarding_step' => $instructor->app_onboarding_step,
+                'app_onboarding_complete' => $instructor->hasCompletedAppOnboarding(),
             ],
             'tab' => $tab,
             'subtab' => request()->query('subtab', 'summary'),
@@ -379,6 +381,20 @@ class InstructorController extends Controller
         return response()->json([
             'message' => 'Welcome email has been resent.',
             'welcome_email_pending' => false,
+        ]);
+    }
+
+    /**
+     * Admin override: push the instructor past the mobile app onboarding slider.
+     */
+    public function forceCompleteAppOnboarding(Request $request, Instructor $instructor): JsonResponse
+    {
+        $instructor = $this->instructorService->forceCompleteAppOnboarding($instructor, $request->user());
+
+        return response()->json([
+            'message' => 'App onboarding marked as complete.',
+            'app_onboarding_step' => $instructor->app_onboarding_step,
+            'app_onboarding_complete' => $instructor->hasCompletedAppOnboarding(),
         ]);
     }
 

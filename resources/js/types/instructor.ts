@@ -26,6 +26,8 @@ export interface InstructorDetail {
   locations: Location[]
   hmrc_connected?: boolean
   welcome_email_pending?: boolean
+  app_onboarding_step?: number
+  app_onboarding_complete?: boolean
 }
 
 export interface InstructorStats {

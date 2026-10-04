@@ -4,7 +4,7 @@ import axios from 'axios'
 import { Head, router } from '@inertiajs/vue3'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
-import { Loader2, MailWarning } from 'lucide-vue-next'
+import { Loader2, MailWarning, SkipForward } from 'lucide-vue-next'
 import { useRole } from '@/composables/useRole'
 import AppLayout from '@/layouts/AppLayout.vue'
 import InstructorHeader from '@/components/Instructors/InstructorHeader.vue'
@@ -19,6 +19,7 @@ import HmrcTab from '@/components/Instructors/Tabs/HmrcTab.vue'
 import AddInstructorSheet from '@/components/Instructors/AddInstructorSheet.vue'
 import StripeOnboardingWelcome from '@/components/Instructors/StripeOnboardingWelcome.vue'
 import type { InstructorDetail, InstructorFormOptions } from '@/types/instructor'
+import { forceCompleteAppOnboarding } from '@/actions/App/Http/Controllers/InstructorController'
 
 interface ConnectionStatus {
     connected: boolean
@@ -112,6 +113,31 @@ const resendInvite = async () => {
     }
 }
 
+const APP_ONBOARDING_TOTAL_STEPS = 5
+const isCompletingAppOnboarding = ref(false)
+const appOnboardingComplete = ref(Boolean(props.instructor.app_onboarding_complete))
+const appOnboardingStep = ref(props.instructor.app_onboarding_step ?? 0)
+
+const completeAppOnboarding = async () => {
+    if (isCompletingAppOnboarding.value) {
+        return
+    }
+
+    isCompletingAppOnboarding.value = true
+
+    try {
+        const { data } = await axios.post(forceCompleteAppOnboarding.url(props.instructor.id))
+        appOnboardingComplete.value = Boolean(data?.app_onboarding_complete)
+        appOnboardingStep.value = data?.app_onboarding_step ?? APP_ONBOARDING_TOTAL_STEPS
+        toast({ title: data?.message ?? 'App onboarding marked as complete.' })
+    } catch (error: any) {
+        const message = error?.response?.data?.message ?? 'Failed to mark app onboarding as complete.'
+        toast({ title: message, variant: 'destructive' })
+    } finally {
+        isCompletingAppOnboarding.value = false
+    }
+}
+
 type TabType = 'schedule' | 'details' | 'active-pupils' | 'reports' | 'finances' | 'actions' | 'student' | 'hmrc'
 
 const tabs: { key: TabType; label: string }[] = [
@@ -178,6 +204,33 @@ const breadcrumbs = [
                 >
                     <Loader2 v-if="isResendingInvite" class="mr-2 h-4 w-4 animate-spin" />
                     {{ isResendingInvite ? 'Resending…' : 'Resend welcome email' }}
+                </Button>
+            </div>
+
+            <!-- App onboarding incomplete banner — owners only -->
+            <div
+                v-if="isOwner && !appOnboardingComplete"
+                class="flex flex-col gap-3 rounded-md border border-amber-200 bg-amber-50 p-4 text-amber-900 sm:flex-row sm:items-center sm:justify-between"
+            >
+                <div class="flex items-start gap-3">
+                    <SkipForward class="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                    <div class="text-sm">
+                        <p class="font-medium">App onboarding not finished</p>
+                        <p class="text-amber-800">
+                            {{ instructor.name }} has completed {{ appOnboardingStep }} of
+                            {{ APP_ONBOARDING_TOTAL_STEPS }} onboarding steps in the app. If they're stuck,
+                            you can push them past it.
+                        </p>
+                    </div>
+                </div>
+                <Button
+                    variant="outline"
+                    class="border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                    :disabled="isCompletingAppOnboarding"
+                    @click="completeAppOnboarding"
+                >
+                    <Loader2 v-if="isCompletingAppOnboarding" class="mr-2 h-4 w-4 animate-spin" />
+                    {{ isCompletingAppOnboarding ? 'Saving…' : 'Mark onboarding complete' }}
                 </Button>
             </div>
 
