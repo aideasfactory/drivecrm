@@ -25,7 +25,7 @@ interface Props {
 
 const props = defineProps<Props>()
 
-type AudienceFilter = 'all' | 'learner' | 'instructor' | 'both'
+type AudienceFilter = 'all' | 'learner' | 'instructor' | 'both' | 'admin'
 
 const searchQuery = ref('')
 const audienceFilter = ref<AudienceFilter>('all')
@@ -146,6 +146,17 @@ const breadcrumbs = [{ title: 'Email templates' }]
                         @click="audienceFilter = 'both'"
                     >
                         Both
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        class="cursor-pointer"
+                        :class="
+                            audienceFilter === 'admin' ? 'bg-accent' : undefined
+                        "
+                        @click="audienceFilter = 'admin'"
+                    >
+                        Admins
                     </Button>
                 </div>
             </div>

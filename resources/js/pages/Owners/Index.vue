@@ -15,7 +15,8 @@ import {
     TableRow,
 } from '@/components/ui/table'
 import { toast } from '@/components/ui/sonner'
-import { Search, ShieldCheck, Shield, Loader2, UserCog } from 'lucide-vue-next'
+import { Search, ShieldCheck, Shield, Loader2, UserCog, UserPlus } from 'lucide-vue-next'
+import AddAdminSheet from '@/components/Owners/AddAdminSheet.vue'
 import { useRole } from '@/composables/useRole'
 import { update as updateOwnerAccess } from '@/routes/owners/access'
 import type { OwnerAccessType } from '@/types'
@@ -41,6 +42,7 @@ const { user } = useRole()
 const owners = ref<OwnerItem[]>([...props.owners])
 const searchQuery = ref('')
 const savingId = ref<number | null>(null)
+const isAddSheetOpen = ref(false)
 
 const accessOptions: { value: OwnerAccessType; label: string; icon: typeof ShieldCheck }[] = [
     { value: 'all', label: 'All', icon: ShieldCheck },
@@ -85,6 +87,10 @@ const setAccess = async (owner: OwnerItem, access: OwnerAccessType) => {
     }
 }
 
+const handleOwnerCreated = (owner: OwnerItem) => {
+    owners.value = [...owners.value, owner].sort((a, b) => a.name.localeCompare(b.name))
+}
+
 const breadcrumbs = [{ title: 'Owner Access' }]
 </script>
 
@@ -102,17 +108,23 @@ const breadcrumbs = [{ title: 'Owner Access' }]
                 </p>
             </div>
 
-            <!-- Search -->
-            <div class="relative max-w-md">
-                <Search
-                    class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                />
-                <Input
-                    v-model="searchQuery"
-                    type="text"
-                    placeholder="Search owners..."
-                    class="pl-9"
-                />
+            <!-- Search + Add -->
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="relative w-full max-w-md">
+                    <Search
+                        class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                    />
+                    <Input
+                        v-model="searchQuery"
+                        type="text"
+                        placeholder="Search owners..."
+                        class="pl-9"
+                    />
+                </div>
+                <Button class="cursor-pointer" @click="isAddSheetOpen = true">
+                    <UserPlus class="mr-2 h-4 w-4" />
+                    Add admin
+                </Button>
             </div>
 
             <!-- Owners Table -->
@@ -186,5 +198,7 @@ const breadcrumbs = [{ title: 'Owner Access' }]
                 </CardContent>
             </Card>
         </div>
+
+        <AddAdminSheet v-model:open="isAddSheetOpen" @created="handleOwnerCreated" />
     </AppLayout>
 </template>

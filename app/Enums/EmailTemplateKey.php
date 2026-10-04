@@ -39,4 +39,5 @@ enum EmailTemplateKey: string
     case InstructorHmrcReconnect = 'instructor.hmrc_reconnect';
     case InstructorYearEndArchiveReady = 'instructor.year_end_archive_ready';
     case SharedNewMessage = 'shared.new_message';
+    case AdminWelcome = 'admin.welcome';
 }

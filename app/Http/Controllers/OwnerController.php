@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Enums\OwnerAccess;
+use App\Http\Requests\StoreOwnerRequest;
 use App\Http\Requests\UpdateOwnerAccessRequest;
 use App\Models\User;
 use App\Services\OwnerService;
@@ -26,6 +27,24 @@ class OwnerController extends Controller
         return Inertia::render('Owners/Index', [
             'owners' => $this->ownerService->getAll()->map(fn (User $owner) => $this->formatOwner($owner)),
         ]);
+    }
+
+    /**
+     * Add a new admin with a temporary password and email them their login details.
+     */
+    public function store(StoreOwnerRequest $request): JsonResponse
+    {
+        $owner = $this->ownerService->create(
+            $request->validated('name'),
+            $request->validated('email'),
+            $request->validated('password'),
+            $request->ownerAccess(),
+            $request->user(),
+        );
+
+        return response()->json([
+            'owner' => $this->formatOwner($owner),
+        ], 201);
     }
 
     /**

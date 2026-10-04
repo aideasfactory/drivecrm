@@ -57,6 +57,7 @@ final class EmailTemplateCatalog
             ...self::learnerDefinitions(),
             ...self::instructorDefinitions(),
             ...self::sharedDefinitions(),
+            ...self::adminDefinitions(),
         ] as $definition) {
             $definitions[$definition['key']] = $definition;
         }
@@ -393,6 +394,34 @@ final class EmailTemplateCatalog
                 'sender_name' => 'Sender name',
                 'message_excerpt' => 'Short excerpt of the message',
             ], 'New Message from {{sender_name}}', 'Hello {{recipient_name}}!', "{{sender_name}} has sent you a new message:\n\n\"{{message_excerpt}}\"\n\n{{action_button}}\n\nThank you for using our platform!", null, 'View Messages'),
+        ];
+    }
+
+    /**
+     * @return list<array{
+     *     key: string,
+     *     name: string,
+     *     audience: string,
+     *     description: string,
+     *     placeholders: array<string, string>,
+     *     subject: string,
+     *     greeting: string,
+     *     body: string,
+     *     salutation: string,
+     *     action_text: ?string
+     * }>
+     */
+    private static function adminDefinitions(): array
+    {
+        return [
+            self::entry(EmailTemplateKey::AdminWelcome, 'Admin welcome / login details', EmailTemplateAudience::Admin->value, 'Sent when an owner adds a new admin from Owner Access, with their temporary password.', [
+                'recipient_name' => 'Admin first name',
+                'app_name' => 'Application name',
+                'email' => 'Login email',
+                'temporary_password' => 'Temporary password',
+                'access_level' => 'Admin access level (All access / Restricted)',
+                'login_url' => 'Login URL',
+            ], 'Your {{app_name}} admin account', 'Hello {{recipient_name}},', "An admin account has been created for you on {{app_name}}.\n\n**Email:** {{email}}\n**Temporary password:** {{temporary_password}}\n**Access level:** {{access_level}}\n\n{{action_button}}\n\nPlease sign in and change this password straight away from Settings → Password.", 'Thanks, {{app_name}}', 'Sign in'),
         ];
     }
 

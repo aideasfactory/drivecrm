@@ -28,7 +28,7 @@ export interface EmailTemplatePlaceholder {
 export interface EmailTemplateItem {
     key: string
     name: string
-    audience: 'learner' | 'instructor' | 'both'
+    audience: 'learner' | 'instructor' | 'both' | 'admin'
     audience_label: string
     description: string
     placeholders: EmailTemplatePlaceholder[]

@@ -446,6 +446,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
     Route::middleware([EnsureOwner::class])->group(function () {
         Route::get('/owners', [OwnerController::class, 'index'])
             ->name('owners.index');
+        Route::post('/owners', [OwnerController::class, 'store'])
+            ->name('owners.store');
         Route::patch('/owners/{user}/access', [OwnerController::class, 'updateAccess'])
             ->name('owners.access.update');
     });
