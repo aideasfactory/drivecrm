@@ -60,8 +60,9 @@ class OnboardingController extends Controller
         if ($request->filled('email')) {
             $prefill['email'] = $request->query('email');
         }
-        if ($request->filled('instructor_id')) {
-            $instructor = Instructor::find($request->query('instructor_id'));
+        $instructorId = $request->query('instructor_id');
+        if (is_numeric($instructorId)) {
+            $instructor = Instructor::find((int) $instructorId);
             if ($instructor) {
                 $prefill['instructor_id'] = $instructor->id;
             }

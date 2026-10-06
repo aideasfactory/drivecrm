@@ -88,8 +88,8 @@ class InstructorController extends Controller
 
                 return [
                     'id' => $instructor->id,
-                    'name' => $instructor->user->name,
-                    'email' => $instructor->user->email,
+                    'name' => $instructor->user?->name ?? 'Instructor',
+                    'email' => $instructor->user?->email,
                     'connection_status' => $connectionStatus,
                     'pupils_count' => $pupilsCount,
                     'last_sync' => $instructor->updated_at->diffForHumans(),
@@ -241,8 +241,8 @@ class InstructorController extends Controller
         return Inertia::render('Instructors/Show', [
             'instructor' => [
                 'id' => $instructor->id,
-                'name' => $instructor->user->name,
-                'email' => $instructor->user->email,
+                'name' => $instructor->user?->name ?? 'Instructor',
+                'email' => $instructor->user?->email,
                 'pin' => $instructor->pin,
                 'onboarding_complete' => $displayOnboardingComplete,
                 'charges_enabled' => $instructor->charges_enabled,
@@ -259,8 +259,8 @@ class InstructorController extends Controller
                 'stats' => $stats,
                 'booking_hours' => $bookingHours,
                 'locations' => $locations,
-                'hmrc_connected' => $instructor->user->hmrcToken()->exists(),
-                'welcome_email_pending' => (bool) $instructor->user->welcome_email_pending,
+                'hmrc_connected' => $instructor->user?->hmrcToken()?->exists() ?? false,
+                'welcome_email_pending' => (bool) $instructor->user?->welcome_email_pending,
                 'app_onboarding_step' => $instructor->app_onboarding_step,
                 'app_onboarding_complete' => $instructor->hasCompletedAppOnboarding(),
             ],

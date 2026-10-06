@@ -83,7 +83,7 @@ class SendPaymentLinkEmailAction
             }
 
             return $recipientEmail;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Failed to send payment link email', [
                 'order_id' => $order->id,
                 'student_id' => $student->id,

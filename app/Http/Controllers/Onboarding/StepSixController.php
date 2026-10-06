@@ -44,7 +44,7 @@ class StepSixController extends Controller
     /**
      * Show Step 6: Payment page.
      */
-    public function show(Request $request): Response
+    public function show(Request $request): Response|RedirectResponse
     {
         $enquiry = $request->get('enquiry');
 
@@ -103,7 +103,7 @@ class StepSixController extends Controller
             // Instructor details
             'instructor' => $instructor ? [
                 'id' => $instructor->id,
-                'name' => $instructor->user->name,
+                'name' => $instructor->user?->name ?? 'Instructor',
             ] : null,
 
             // Package details
@@ -231,6 +231,8 @@ class StepSixController extends Controller
 
             // Verify package is active
             if (! $package->active) {
+                DB::rollBack();
+
                 return redirect()
                     ->route('onboarding.step3', ['uuid' => $enquiry->id])
                     ->with('error', 'This package is no longer available.');
@@ -366,7 +368,7 @@ class StepSixController extends Controller
             return redirect()
                 ->route('onboarding.step4', ['uuid' => $enquiry->id])
                 ->with('error', 'Sorry, one or more of your lesson times are no longer available. Please choose a new time.');
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
 
             Log::error('Onboarding checkout failed', [

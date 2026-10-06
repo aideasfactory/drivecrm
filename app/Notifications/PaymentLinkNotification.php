@@ -51,6 +51,8 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
             default => '',
         };
 
+        $instructorName = $instructor?->user?->name ?? 'your instructor';
+
         $firstLessonLine = $firstLesson
             ? 'First lesson: '.Carbon::parse($firstLesson->date)->format('l, F j, Y')
             : '';
@@ -68,7 +70,7 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
                 'intro' => $this->introLine(),
                 'package_name' => $order->package_name,
                 'lessons_count' => $order->package_lessons_count,
-                'instructor_name' => $instructor->user->name,
+                'instructor_name' => $instructorName,
                 'amount_label' => $firstWeeklyPayment ? 'First week' : 'Total',
                 'cost_breakdown' => $costBreakdown,
                 'total' => $totalFormatted,
@@ -104,7 +106,7 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
 
     protected function introLine(): string
     {
-        $instructorName = $this->order->instructor->user->name;
+        $instructorName = $this->order->instructor?->user?->name ?? 'your instructor';
 
         if ($this->isBookedByStaff) {
             $bookedFor = $this->isBookedByContact

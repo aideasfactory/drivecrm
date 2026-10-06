@@ -88,12 +88,12 @@ class OrderService extends BaseService
         ?int $anchorCalendarItemId = null
     ): array {
         $calendarItemIds = ($this->createDraftCalendarItems)(
-            $student->instructor_id,
+            (int) $student->instructor_id,
             $firstLessonDate,
             $startTime,
             $endTime,
-            $package->lessons_count,
-            $anchorCalendarItemId
+            (int) $package->lessons_count,
+            $anchorCalendarItemId !== null ? (int) $anchorCalendarItemId : null,
         );
 
         $this->checkDraftItemClashes($student->instructor_id, $calendarItemIds, $startTime, $endTime);
@@ -147,7 +147,7 @@ class OrderService extends BaseService
     ): array {
         $calendarItem->loadMissing('calendar');
 
-        if (! $student->instructor_id || $calendarItem->calendar->instructor_id !== $student->instructor_id) {
+        if (! $student->instructor_id || $calendarItem->calendar === null || (int) $calendarItem->calendar->instructor_id !== (int) $student->instructor_id) {
             throw ValidationException::withMessages([
                 'calendar_item_id' => 'This diary slot does not belong to the student\'s instructor.',
             ]);

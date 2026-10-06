@@ -40,7 +40,7 @@ class StepThreeController extends Controller
 
                 $selectedInstructor = [
                     'id' => $instructor->id,
-                    'name' => $instructor->user->name,
+                    'name' => $instructor->user?->name ?? 'Instructor',
                     'image' => $meta['avatar'] ?? null,
                     'experience' => $meta['experience'] ?? null,
                     'rating' => $meta['rating'] ?? null,

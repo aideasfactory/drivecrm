@@ -268,7 +268,11 @@ class Instructor extends Model
     protected function firstName(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->user->name ? explode(' ', $this->user->name)[0] : null,
+            get: function () {
+                $name = $this->user?->name;
+
+                return is_string($name) && $name !== '' ? explode(' ', $name)[0] : null;
+            },
         );
     }
 
@@ -278,14 +282,28 @@ class Instructor extends Model
     protected function lastName(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->user->name ? (explode(' ', $this->user->name)[1] ?? null) : null,
+            get: function () {
+                $name = $this->user?->name;
+
+                return is_string($name) && $name !== '' ? (explode(' ', $name)[1] ?? null) : null;
+            },
         );
     }
 
     protected function name(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->user->name ? trim(explode(' ', $this->user->name)[0].' '.(explode(' ', $this->user->name)[1] ?? '')) : null,
+            get: function () {
+                $name = $this->user?->name;
+
+                if (! is_string($name) || $name === '') {
+                    return null;
+                }
+
+                $parts = explode(' ', $name);
+
+                return trim($parts[0].' '.($parts[1] ?? ''));
+            },
         );
     }
 
