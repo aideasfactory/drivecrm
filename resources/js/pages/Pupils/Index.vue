@@ -29,7 +29,7 @@ import DeleteLearnerSection from '@/components/Instructors/Tabs/Student/Actions/
 import TestPassGuaranteeBadge from '@/components/Shared/TestPassGuaranteeBadge.vue'
 import { Search, GraduationCap, CalendarPlus } from 'lucide-vue-next'
 import { show as instructorsShow } from '@/routes/instructors'
-import { start as onboardingStart } from '@/routes/onboarding'
+import { staff as startStaffBooking } from '@/routes/onboarding'
 import { toast } from '@/components/ui/sonner'
 import type { PupilListing } from '@/types/pupil'
 
@@ -168,7 +168,7 @@ const submitAssignment = async () => {
 
 const breadcrumbs = [{ title: 'Students' }]
 
-const staffBookingUrl = onboardingStart.url({ query: { staff_booking: 1 } })
+const staffBookingUrl = startStaffBooking.url()
 
 const onLearnerDeleted = () => {
     sheetOpen.value = false

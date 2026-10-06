@@ -577,6 +577,13 @@ Route::get('/get-app', [GetAppController::class, 'index'])
 Route::get('/onboarding', [OnboardingController::class, 'start'])
     ->name('onboarding.start');
 
+// Bookings-team entry. Kept off RestrictOwnerAccess: restricted owners are
+// the bookings team and must be able to start a staff booking. Auth runs
+// first so the enquiry is flagged before the public step flow begins.
+Route::get('/onboarding/staff', [OnboardingController::class, 'startStaff'])
+    ->middleware(['auth', 'verified'])
+    ->name('onboarding.staff');
+
 // Step routes — protected by middleware
 Route::prefix('/onboarding/{uuid}')
     ->middleware([ValidateEnquiryUuid::class, ValidateStepAccess::class])

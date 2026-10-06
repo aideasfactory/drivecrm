@@ -44,6 +44,7 @@ import {
     ShoppingCart,
 } from 'lucide-vue-next'
 import { toast } from '@/components/ui/sonner'
+import { staff as startStaffBooking } from '@/routes/onboarding'
 
 interface Lesson {
     id: number
@@ -106,13 +107,14 @@ const canPurchaseLessons = computed(() => {
 })
 
 const purchaseLessonsUrl = computed(() => {
-    const params = new URLSearchParams()
-    if (props.studentFirstName) params.set('first_name', props.studentFirstName)
-    if (props.studentLastName) params.set('last_name', props.studentLastName)
-    if (props.studentEmail) params.set('email', props.studentEmail)
-    if (props.instructorId) params.set('instructor_id', String(props.instructorId))
-    params.set('staff_booking', '1')
-    return `/onboarding?${params.toString()}`
+    return startStaffBooking.url({
+        query: {
+            first_name: props.studentFirstName || undefined,
+            last_name: props.studentLastName || undefined,
+            email: props.studentEmail || undefined,
+            instructor_id: props.instructorId || undefined,
+        },
+    })
 })
 
 // Formatting helpers

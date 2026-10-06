@@ -8,6 +8,8 @@ use App\Models\DiscountCode;
 use App\Models\Enquiry;
 use App\Models\Instructor;
 use App\Models\Order;
+use App\Models\User;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -20,9 +22,10 @@ class OnboardingController extends Controller
      *   ?first_name=<string>&last_name=<string>&email=<string> — prefill step 1
      *   ?instructor_id=<int> — prefill step 2 (bypass instructor selection)
      *   ?staff_booking=1 — admin/bookings team booking on a student's behalf
-     *                      (only honoured for signed-in owner users)
+     *                      (only honoured for signed-in owner users, including
+     *                      owners with restricted admin access)
      */
-    public function start(Request $request)
+    public function start(Request $request): RedirectResponse
     {
         $data = [
             'current_step' => 1,
@@ -79,10 +82,12 @@ class OnboardingController extends Controller
             ];
         }
 
-        if ($request->boolean('staff_booking') && $request->user()?->isOwner()) {
+        $staffUser = $this->staffBookingUser($request);
+
+        if ($staffUser instanceof User) {
             $data['staff_booking'] = [
-                'user_id' => $request->user()->id,
-                'name' => $request->user()->name,
+                'user_id' => $staffUser->id,
+                'name' => $staffUser->name,
             ];
         }
 
@@ -103,6 +108,43 @@ class OnboardingController extends Controller
         ]);
 
         return redirect()->route('onboarding.step1', ['uuid' => $enquiry->id]);
+    }
+
+    /**
+     * Bookings-team entry. Auth runs before the enquiry exists, so a missing
+     * session cannot silently fall through to the learner payment page.
+     * Restricted owners are owners and follow the same invoice path.
+     */
+    public function startStaff(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $user instanceof User || ! $user->isOwner()) {
+            abort(403, 'Only admin accounts can book lessons on a student\'s behalf.');
+        }
+
+        $request->query->set('staff_booking', '1');
+
+        return $this->start($request);
+    }
+
+    /**
+     * The signed-in admin behind a bookings-team form, or null for a learner checkout.
+     * Full and restricted owners both qualify. Guests and other roles do not.
+     */
+    private function staffBookingUser(Request $request): ?User
+    {
+        if (! $request->boolean('staff_booking')) {
+            return null;
+        }
+
+        $user = $request->user();
+
+        if (! $user instanceof User || ! $user->isOwner()) {
+            return null;
+        }
+
+        return $user;
     }
 
     /**

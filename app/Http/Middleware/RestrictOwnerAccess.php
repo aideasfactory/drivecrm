@@ -20,6 +20,7 @@ class RestrictOwnerAccess
         'instructors/*',
         'pupils',
         'pupils/*',
+        'onboarding/staff',
         'students/*',
         'student-transfers',
         'student-transfers/*',
