@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\RedirectCanonicalAuthHost;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -36,7 +37,12 @@ return Application::configure(basePath: dirname(__DIR__))
             'webhook/stripe',
         ]);
 
-        $middleware->web(append: [
+        // Runs on the web stack, after trusted-proxy host resolution.
+        // Legacy hosts (app.just-drive.co.uk) send /login and /dashboard to
+        // the canonical app URL. Booking, webhooks, and the API stay put.
+        $middleware->web(prepend: [
+            RedirectCanonicalAuthHost::class,
+        ], append: [
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
