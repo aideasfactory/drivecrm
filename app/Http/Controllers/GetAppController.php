@@ -13,8 +13,8 @@ class GetAppController extends Controller
     {
         return Inertia::render('GetApp', [
             'appName' => config('app.name'),
-            'iosUrl' => config('services.mobile_app.ios_url'),
-            'androidUrl' => config('services.mobile_app.android_url'),
+            'iosUrl' => config('app_links.apple') ?: null,
+            'androidUrl' => config('app_links.android') ?: null,
         ]);
     }
 }
