@@ -65,8 +65,8 @@ return [
     ],
 
     'mobile_app' => [
-        'ios_url' => env('MOBILE_APP_IOS_URL'),
-        'android_url' => env('MOBILE_APP_ANDROID_URL'),
+        'ios_url' => env('MOBILE_APP_IOS_URL') ?: 'https://apps.apple.com/us/app/drive/id6791224771',
+        'android_url' => env('MOBILE_APP_ANDROID_URL') ?: 'https://play.google.com/store/apps/details?id=com.driveapp.driveapp',
     ],
 
     'bird' => [
