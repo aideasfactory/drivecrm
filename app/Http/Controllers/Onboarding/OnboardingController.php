@@ -20,10 +20,19 @@ class OnboardingController extends Controller
      *   ?first_name=<string>&last_name=<string>&email=<string> — prefill step 1
      *   ?instructor_id=<int> — prefill step 2 (bypass instructor selection)
      *   ?staff_booking=1 — admin/bookings team booking on a student's behalf
-     *                      (only honoured for signed-in owner users)
+     *                      (only honoured for signed-in owner users; guests
+     *                      are sent to log in and returned here afterwards)
      */
     public function start(Request $request)
     {
+        // Without this, a logged-out staff member silently gets the learner
+        // flow and is sent to Stripe Checkout instead of invoicing the student.
+        if ($request->boolean('staff_booking') && ! $request->user()) {
+            return redirect()
+                ->guest(route('login'))
+                ->with('status', 'Please log in to book lessons on a student\'s behalf.');
+        }
+
         $data = [
             'current_step' => 1,
             'steps' => [],

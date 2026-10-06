@@ -12,17 +12,20 @@ use Symfony\Component\HttpFoundation\Response;
 class RedirectCanonicalAuthHost
 {
     /**
-     * Send login and dashboard requests on a legacy host to the canonical app URL.
+     * Send login, dashboard and staff booking requests on a legacy host to the
+     * canonical app URL.
      *
      * The path and query string are preserved. Dashboard sub-paths are included.
      * This middleware is on the web group, so /api is never redirected. The
-     * path must also be exactly "login", or "dashboard" and anything beneath it.
+     * path must also be exactly "login", "dashboard" and anything beneath it,
+     * or "onboarding" with ?staff_booking=1 (staff log in on the canonical
+     * host, so the booking must start there to see their session).
      *
      * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $this->hostShouldRedirect($request) || ! $this->isLoginOrDashboard($request)) {
+        if (! $this->hostShouldRedirect($request) || ! $this->isAuthBoundPath($request)) {
             return $next($request);
         }
 
@@ -45,11 +48,15 @@ class RedirectCanonicalAuthHost
         return in_array(strtolower($request->getHost()), $hosts, true);
     }
 
-    private function isLoginOrDashboard(Request $request): bool
+    private function isAuthBoundPath(Request $request): bool
     {
         $path = strtolower(trim($request->getPathInfo(), '/'));
 
         if ($path === 'login') {
+            return true;
+        }
+
+        if ($path === 'onboarding' && $request->boolean('staff_booking')) {
             return true;
         }
 
