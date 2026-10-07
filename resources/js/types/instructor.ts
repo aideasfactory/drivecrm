@@ -172,6 +172,8 @@ export interface InstructorPayout {
   amount_pence: number
   formatted_amount: string
   status: 'pending' | 'paid' | 'failed'
+  failure_code: string | null
+  failure_message: string | null
   paid_at: string | null
   created_at: string
   stripe_transfer_id: string | null

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\PayoutStatus;
+use App\Support\StripeTransferFailure;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,6 +17,8 @@ class Payout extends Model
         'instructor_id',
         'amount_pence',
         'status',
+        'failure_code',
+        'failure_message',
         'stripe_transfer_id',
         'paid_at',
     ];
@@ -67,6 +70,19 @@ class Payout extends Model
     public function isFailed(): bool
     {
         return $this->status === PayoutStatus::FAILED;
+    }
+
+    /**
+     * Status instructors are allowed to see. A platform-balance shortfall is
+     * still unpaid, but it must not look like a failure on their side.
+     */
+    public function statusForInstructor(): PayoutStatus
+    {
+        if ($this->isFailed() && StripeTransferFailure::isPlatformBalanceShortfall($this->failure_code, $this->failure_message)) {
+            return PayoutStatus::PENDING;
+        }
+
+        return $this->status;
     }
 
     /**

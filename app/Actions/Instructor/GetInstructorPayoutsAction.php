@@ -38,6 +38,8 @@ class GetInstructorPayoutsAction
                     'amount_pence' => $payout->amount_pence,
                     'formatted_amount' => $payout->formatted_amount,
                     'status' => $payout->status->value,
+                    'failure_code' => $payout->failure_code,
+                    'failure_message' => $payout->failure_message,
                     'paid_at' => $payout->paid_at?->toIso8601String(),
                     'created_at' => $payout->created_at->toIso8601String(),
                     'stripe_transfer_id' => $payout->stripe_transfer_id,

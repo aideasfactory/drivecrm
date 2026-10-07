@@ -36,7 +36,7 @@ class LessonDetailResource extends JsonResource
             'summary' => $this->summary,
             'payment_status' => $this->lessonPayment?->status?->value ?? ($this->order?->isPrepaid() ? 'paid' : null),
             'payment_mode' => $this->order?->payment_mode->value,
-            'payout_status' => $this->payout?->status?->value,
+            'payout_status' => $this->payout?->statusForInstructor()->value,
             'has_payout' => $this->payout !== null,
             'calendar_date' => $this->calendarItem?->calendar?->date?->format('Y-m-d'),
             'card_status' => $this->getAttribute('card_status'),

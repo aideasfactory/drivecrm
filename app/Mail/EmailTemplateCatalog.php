@@ -324,13 +324,14 @@ final class EmailTemplateCatalog
                 'lesson_time' => 'Lesson time',
             ], 'Payment Received: {{student_name}} — Lesson on {{lesson_date}}', 'Hello!', "**{{student_name}}** has paid **{{amount}}** for their upcoming lesson.\n\n**Lesson Details:**\nDate: {{lesson_date}}\nTime: {{lesson_time}}\nAmount: {{amount}}\n\nThis lesson is now confirmed and paid.", "Best regards,\nThe Driving School Team", null),
 
-            self::entry(EmailTemplateKey::InstructorLessonSignedOff, 'Lesson signed off (instructor)', $audience, 'Sent to the instructor after they sign off a lesson and a payout is started.', [
+            self::entry(EmailTemplateKey::InstructorLessonSignedOff, 'Lesson signed off (instructor)', $audience, 'Sent to the instructor after they sign off a lesson.', [
                 'recipient_name' => 'Instructor name',
                 'student_name' => 'Learner name',
                 'lesson_date' => 'Lesson date',
                 'lesson_time_line' => 'Lesson time, if set',
+                'payout_line' => 'Payout sentence when the transfer was sent; blank otherwise',
                 'app_name' => 'Application name',
-            ], 'Lesson Signed Off — {{student_name}}', 'Hello {{recipient_name}}!', "You have signed off the lesson with **{{student_name}}** on **{{lesson_date}}**.\n{{lesson_time_line}}\nThe payout for this lesson has been initiated to your account.", "Thanks,\nThe {{app_name}} Team", null),
+            ], 'Lesson Signed Off — {{student_name}}', 'Hello {{recipient_name}}!', "You have signed off the lesson with **{{student_name}}** on **{{lesson_date}}**.\n{{lesson_time_line}}\n{{payout_line}}", "Thanks,\nThe {{app_name}} Team", null),
 
             self::entry(EmailTemplateKey::InstructorCalendarClash, 'Scheduling clash detected', $audience, 'Sent when a new calendar item overlaps existing items.', [
                 'recipient_name' => 'Instructor name',

@@ -48,6 +48,7 @@ use App\Services\InstructorService;
 use App\Services\PriceUpliftService;
 use App\Services\SlotOfferService;
 use App\Services\StripeService;
+use App\Support\StripeTransferFailure;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -1246,6 +1247,12 @@ class InstructorController extends Controller
     public function payouts(Instructor $instructor): JsonResponse
     {
         $payouts = $this->instructorService->getPayouts($instructor);
+
+        if (request()->user()?->isInstructor()) {
+            $payouts = $payouts->map(
+                fn (array $payout): array => StripeTransferFailure::concealFromInstructor($payout)
+            );
+        }
 
         return response()->json([
             'payouts' => $payouts,
