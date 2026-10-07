@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import axios from 'axios'
 import { Head, router } from '@inertiajs/vue3'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,10 +15,13 @@ import {
     TableRow,
 } from '@/components/ui/table'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Search, Plus, Download, FileUp } from 'lucide-vue-next'
+import { Search, Plus, Download, FileUp, Send, Loader2 } from 'lucide-vue-next'
+import { toast } from '@/components/ui/toast'
 import type { Instructor, InstructorFormOptions } from '@/types/instructor'
 import AddInstructorSheet from '@/components/Instructors/AddInstructorSheet.vue'
 import CsvImportSheet from '@/components/CsvImportSheet.vue'
+import { sendStripeSetupLinks } from '@/actions/App/Http/Controllers/InstructorController'
+import { useRole } from '@/composables/useRole'
 
 interface Props {
     instructors: Instructor[]
@@ -25,10 +29,44 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const { isOwner } = useRole()
 
 const searchQuery = ref('')
 const isAddSheetOpen = ref(false)
 const isCsvImportOpen = ref(false)
+const isSendingStripeLinks = ref(false)
+
+const notConnectedCount = computed(
+    () => props.instructors.filter((instructor) => instructor.connection_status !== 'connected').length,
+)
+
+const sendStripeLinks = async () => {
+    if (isSendingStripeLinks.value || notConnectedCount.value === 0) {
+        return
+    }
+
+    const noun = notConnectedCount.value === 1 ? 'instructor' : 'instructors'
+    const confirmed = window.confirm(
+        `Send Stripe setup links to ${notConnectedCount.value} ${noun} who are not connected?`,
+    )
+
+    if (!confirmed) {
+        return
+    }
+
+    isSendingStripeLinks.value = true
+
+    try {
+        const { data } = await axios.post(sendStripeSetupLinks.url())
+        toast({ title: data?.message ?? 'Stripe setup links sent.' })
+        router.reload()
+    } catch (error: any) {
+        const message = error?.response?.data?.message ?? 'Failed to send Stripe setup links.'
+        toast({ title: message, variant: 'destructive' })
+    } finally {
+        isSendingStripeLinks.value = false
+    }
+}
 
 // Instructor CSV import is hidden for now: it emails every new instructor
 // immediately and doesn't record them as imported. Use Data Import instead.
@@ -102,6 +140,17 @@ const breadcrumbs = [{ title: 'Instructors' }]
                     <Button v-if="SHOW_INSTRUCTOR_CSV_IMPORT" variant="outline" @click="isCsvImportOpen = true">
                         <FileUp class="mr-2 h-4 w-4" />
                         Upload CSV
+                    </Button>
+                    <Button
+                        v-if="isOwner && notConnectedCount > 0"
+                        variant="outline"
+                        class="cursor-pointer"
+                        :disabled="isSendingStripeLinks"
+                        @click="sendStripeLinks"
+                    >
+                        <Loader2 v-if="isSendingStripeLinks" class="mr-2 h-4 w-4 animate-spin" />
+                        <Send v-else class="mr-2 h-4 w-4" />
+                        Send Stripe setup links
                     </Button>
                     <Button @click="isAddSheetOpen = true" class="cursor-pointer">
                         <Plus class="mr-2 h-4 w-4" />

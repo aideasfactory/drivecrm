@@ -4,11 +4,11 @@ import axios from 'axios'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Mail, Phone, MapPin, Edit, CreditCard, Loader2, CheckCircle, LogOut, ShieldCheck, Copy } from 'lucide-vue-next'
+import { Mail, Phone, MapPin, Edit, CreditCard, Loader2, CheckCircle, LogOut, ShieldCheck, Copy, Send } from 'lucide-vue-next'
 import { router, usePage } from '@inertiajs/vue3'
 import { toast } from '@/components/ui/toast'
 import type { InstructorDetail } from '@/types/instructor'
-import { stripeStatus, startStripeOnboarding, refreshStripeOnboarding } from '@/actions/App/Http/Controllers/InstructorController'
+import { stripeStatus, startStripeOnboarding, refreshStripeOnboarding, sendStripeSetupLink } from '@/actions/App/Http/Controllers/InstructorController'
 import { logout } from '@/routes'
 import { useRole } from '@/composables/useRole'
 
@@ -38,6 +38,7 @@ const showMtdButton = computed<boolean>(
 )
 
 const loading = ref(false)
+const sendingLink = ref(false)
 const checkingStatus = ref(true)
 const status = ref<StripeStatus>({
     connected: false,
@@ -90,6 +91,28 @@ const checkStripeStatus = async () => {
     }
 }
 
+const needsStripeSetup = computed(() => {
+    return !status.value.connected || !status.value.onboarding_complete || !status.value.charges_enabled
+})
+
+const handleSendStripeSetupLink = async () => {
+    if (sendingLink.value) {
+        return
+    }
+
+    sendingLink.value = true
+
+    try {
+        const { data } = await axios.post(sendStripeSetupLink.url(props.instructor.id))
+        toast({ title: data?.message ?? 'Stripe setup link sent.' })
+    } catch (error: any) {
+        const message = error.response?.data?.message || 'Failed to send the Stripe setup link.'
+        toast({ title: message, variant: 'destructive' })
+    } finally {
+        sendingLink.value = false
+    }
+}
+
 const handleStripeConnect = async () => {
     loading.value = true
 
@@ -97,20 +120,19 @@ const handleStripeConnect = async () => {
         let response
 
         if (!status.value.connected) {
-            // Start new onboarding
             const url = startStripeOnboarding.url(props.instructor.id)
             response = await axios.post(url)
             toast({ title: 'Redirecting to Stripe...' })
-        } else if (!status.value.onboarding_complete) {
-            // Refresh incomplete onboarding
+        } else {
             const url = refreshStripeOnboarding.url(props.instructor.id)
             response = await axios.post(url)
             toast({ title: 'Redirecting to Stripe...' })
         }
 
         if (response?.data?.url) {
-            // Redirect to Stripe
             window.location.href = response.data.url
+        } else {
+            loading.value = false
         }
     } catch (error: any) {
         const message = error.response?.data?.message || 'Failed to start Stripe onboarding'
@@ -194,7 +216,7 @@ onMounted(() => {
                 <div v-if="!checkingStatus" class="flex items-center gap-2">
                     <!-- Fully Connected — visual label only -->
                     <Button
-                        v-if="status.connected && status.onboarding_complete && status.charges_enabled"
+                        v-if="!needsStripeSetup"
                         variant="outline"
                         class="min-w-[180px] border-green-600 text-green-600 py-2.5 cursor-default hover:bg-transparent hover:text-green-600"
                         tabindex="-1"
@@ -203,9 +225,22 @@ onMounted(() => {
                         Stripe Connected
                     </Button>
 
-                    <!-- Connect/Complete Button -->
+                    <!-- Staff email a setup link instead of opening Stripe themselves -->
                     <Button
-                        v-if="!status.connected || !status.onboarding_complete"
+                        v-else-if="isOwner"
+                        @click="handleSendStripeSetupLink"
+                        :disabled="sendingLink"
+                        variant="outline"
+                        class="min-w-[180px] border-red-600 text-red-600 py-2.5 hover:bg-red-50 hover:text-red-600 cursor-pointer"
+                    >
+                        <Loader2 v-if="sendingLink" class="mr-2 h-4 w-4 animate-spin" />
+                        <Send v-else class="mr-2 h-4 w-4" />
+                        Send Stripe setup link
+                    </Button>
+
+                    <!-- Instructor completes Stripe in this browser -->
+                    <Button
+                        v-else
                         @click="handleStripeConnect"
                         :disabled="loading"
                         variant="outline"

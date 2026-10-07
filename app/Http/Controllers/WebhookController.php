@@ -248,11 +248,11 @@ class WebhookController extends Controller
             return;
         }
 
-        // Update instructor status
-        $instructor->onboarding_complete = ($account->details_submitted ?? false);
-        $instructor->charges_enabled = ($account->charges_enabled ?? false);
-        $instructor->payouts_enabled = ($account->payouts_enabled ?? false);
-        $instructor->save();
+        $instructor->applyStripeConnectionState(
+            (bool) ($account->details_submitted ?? false),
+            (bool) ($account->charges_enabled ?? false),
+            (bool) ($account->payouts_enabled ?? false),
+        );
 
         Log::info('Webhook: Instructor account updated', [
             'instructor_id' => $instructor->id,

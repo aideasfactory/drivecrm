@@ -37,6 +37,7 @@ use App\Actions\Instructor\Mileage\GetMileageLogsAction;
 use App\Actions\Instructor\Mileage\UpdateMileageLogAction;
 use App\Actions\Instructor\ReplaceInstructorLocationsAction;
 use App\Actions\Instructor\SendInstructorWelcomeEmailAction;
+use App\Actions\Instructor\SendStripeSetupLinkAction;
 use App\Actions\Instructor\SetInstructorPackageActiveAction;
 use App\Actions\Instructor\StartStripeOnboardingAction;
 use App\Actions\Instructor\SyncStripeAccountStatusAction;
@@ -128,6 +129,7 @@ class InstructorService extends BaseService
         protected RecalculateStudentLessonNumbersAction $recalculateStudentLessonNumbers,
         protected StartStripeOnboardingAction $startStripeOnboarding,
         protected SyncStripeAccountStatusAction $syncStripeAccountStatus,
+        protected SendStripeSetupLinkAction $sendStripeSetupLink,
     ) {}
 
     /**
@@ -872,6 +874,45 @@ class InstructorService extends BaseService
     public function syncStripeAccountStatus(Instructor $instructor): Instructor
     {
         return ($this->syncStripeAccountStatus)($instructor);
+    }
+
+    /**
+     * Email one instructor a signed Stripe setup link, creating their Express
+     * account first when they do not have one.
+     */
+    public function sendStripeSetupLink(Instructor $instructor): bool
+    {
+        return ($this->sendStripeSetupLink)($instructor);
+    }
+
+    /**
+     * Email a setup link to every instructor who is not Stripe-connected.
+     *
+     * @return array{sent: int, failed: int}
+     */
+    public function sendStripeSetupLinksToUnconnected(): array
+    {
+        $sent = 0;
+        $failed = 0;
+
+        Instructor::query()
+            ->with('user')
+            ->notStripeConnected()
+            ->orderBy('id')
+            ->each(function (Instructor $instructor) use (&$sent, &$failed): void {
+                if (($this->sendStripeSetupLink)($instructor)) {
+                    $sent++;
+
+                    return;
+                }
+
+                $failed++;
+            });
+
+        return [
+            'sent' => $sent,
+            'failed' => $failed,
+        ];
     }
 
     /**

@@ -275,6 +275,13 @@ final class EmailTemplateCatalog
         $audience = EmailTemplateAudience::Instructor->value;
 
         return [
+            self::entry(EmailTemplateKey::InstructorStripeSetupLink, 'Stripe setup link', $audience, 'Sent when an admin emails an instructor a link to connect Stripe.', [
+                'recipient_name' => 'Instructor first name',
+                'app_name' => 'Application name',
+                'setup_url' => 'Stripe setup URL',
+                'expires_in_days' => 'Link expiry in days',
+            ], 'Connect Stripe to receive payouts', 'Hello {{recipient_name}},', "Your {{app_name}} account is not connected to Stripe yet, so payouts cannot be sent to you.\n\nUse the button below to finish Stripe setup. It only takes a few minutes. The link is unique to you and expires in {{expires_in_days}} days.\n\n{{action_button}}\n\nIf the button doesn't work, copy and paste this link into your browser:\n{{setup_url}}\n\nIf the link has expired, ask an administrator to send you a new one.", "Thanks,\nThe {{app_name}} Team", 'Set up Stripe'),
+
             self::entry(EmailTemplateKey::InstructorWelcome, 'Instructor welcome / password setup', $audience, 'Sent when an admin creates an instructor, with a link to set their password.', [
                 'recipient_name' => 'Instructor first name',
                 'app_name' => 'Application name',

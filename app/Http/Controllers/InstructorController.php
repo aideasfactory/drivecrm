@@ -399,6 +399,70 @@ class InstructorController extends Controller
     }
 
     /**
+     * Email this instructor a signed Stripe setup link. Creates their Express
+     * account first when they do not have one yet.
+     */
+    public function sendStripeSetupLink(Instructor $instructor): JsonResponse
+    {
+        if ($instructor->isStripeConnected()) {
+            return response()->json([
+                'message' => 'This instructor has already connected Stripe.',
+            ], 422);
+        }
+
+        $sent = $this->instructorService->sendStripeSetupLink($instructor);
+
+        if (! $sent) {
+            return response()->json([
+                'message' => 'We could not send the Stripe setup link. Please try again.',
+            ], 500);
+        }
+
+        $instructor->loadMissing('user');
+
+        return response()->json([
+            'message' => 'Stripe setup link sent to '.$instructor->user->email.'.',
+        ]);
+    }
+
+    /**
+     * Email a Stripe setup link to every instructor the list marks Not Connected.
+     */
+    public function sendStripeSetupLinks(): JsonResponse
+    {
+        $result = $this->instructorService->sendStripeSetupLinksToUnconnected();
+
+        if ($result['sent'] === 0 && $result['failed'] === 0) {
+            return response()->json([
+                'message' => 'Every instructor is already connected to Stripe.',
+                'sent' => 0,
+                'failed' => 0,
+            ]);
+        }
+
+        if ($result['sent'] === 0) {
+            return response()->json([
+                'message' => 'We could not send any Stripe setup links. Please try again.',
+                'sent' => 0,
+                'failed' => $result['failed'],
+            ], 500);
+        }
+
+        $instructorWord = $result['sent'] === 1 ? 'instructor' : 'instructors';
+        $message = "Stripe setup links sent to {$result['sent']} {$instructorWord}.";
+
+        if ($result['failed'] > 0) {
+            $message .= " {$result['failed']} could not be sent.";
+        }
+
+        return response()->json([
+            'message' => $message,
+            'sent' => $result['sent'],
+            'failed' => $result['failed'],
+        ]);
+    }
+
+    /**
      * Get instructor's packages (both platform and bespoke).
      */
     public function packages(Request $request, Instructor $instructor): JsonResponse
@@ -977,24 +1041,9 @@ class InstructorController extends Controller
         }
 
         try {
-            // Retrieve the Stripe account to check status
-            $accountResult = $this->stripeService->retrieveAccount($instructor->stripe_account_id);
+            $instructor = $this->instructorService->syncStripeAccountStatus($instructor);
 
-            if (! $accountResult['success']) {
-                return redirect()
-                    ->route('instructors.show', $instructor)
-                    ->with('error', 'Failed to verify Stripe account status.');
-            }
-
-            $account = $accountResult['account'];
-
-            // Update instructor record with current status
-            $instructor->onboarding_complete = $account->details_submitted ?? false;
-            $instructor->charges_enabled = $account->charges_enabled ?? false;
-            $instructor->payouts_enabled = $account->payouts_enabled ?? false;
-            $instructor->save();
-
-            if ($instructor->onboarding_complete && $instructor->charges_enabled) {
+            if ($instructor->isStripeConnected()) {
                 return redirect()
                     ->route('instructors.show', $instructor)
                     ->with('success', 'Stripe Connect onboarding completed successfully! Instructor can now create packages and receive payments.');

@@ -14,13 +14,16 @@ import {
     HelpCircle,
     Loader2,
     Lock,
+    Send,
     Smartphone,
 } from 'lucide-vue-next'
 import {
     stripeStatus,
     startStripeOnboarding,
     refreshStripeOnboarding,
+    sendStripeSetupLink,
 } from '@/actions/App/Http/Controllers/InstructorController'
+import { useRole } from '@/composables/useRole'
 import type { AppPageProps } from '@/types'
 import type { InstructorDetail } from '@/types/instructor'
 
@@ -37,6 +40,7 @@ interface StripeStatus {
 }
 
 const props = defineProps<Props>()
+const { isOwner } = useRole()
 
 const page = usePage<AppPageProps>()
 
@@ -46,6 +50,7 @@ const appStoreUrl = computed(() => page.props.appLinks?.apple ?? null)
 const playStoreUrl = computed(() => page.props.appLinks?.android ?? null)
 
 const loading = ref(false)
+const sendingLink = ref(false)
 const checkingStatus = ref(true)
 const status = ref<StripeStatus>({
     connected: false,
@@ -99,6 +104,28 @@ const checkStripeStatus = async () => {
     }
 }
 
+const needsStripeSetup = computed(() => {
+    return !status.value.connected || !status.value.onboarding_complete || !status.value.charges_enabled
+})
+
+const handleSendStripeSetupLink = async () => {
+    if (sendingLink.value) {
+        return
+    }
+
+    sendingLink.value = true
+
+    try {
+        const { data } = await axios.post(sendStripeSetupLink.url(props.instructor.id))
+        toast({ title: data?.message ?? 'Stripe setup link sent.' })
+    } catch (error: any) {
+        const message = error.response?.data?.message || 'Failed to send the Stripe setup link.'
+        toast({ title: message, variant: 'destructive' })
+    } finally {
+        sendingLink.value = false
+    }
+}
+
 const handleStripeConnect = async () => {
     loading.value = true
 
@@ -108,13 +135,15 @@ const handleStripeConnect = async () => {
         if (!status.value.connected) {
             response = await axios.post(startStripeOnboarding.url(props.instructor.id))
             toast({ title: 'Redirecting to Stripe...' })
-        } else if (!status.value.onboarding_complete) {
+        } else {
             response = await axios.post(refreshStripeOnboarding.url(props.instructor.id))
             toast({ title: 'Redirecting to Stripe...' })
         }
 
         if (response?.data?.url) {
             window.location.href = response.data.url
+        } else {
+            loading.value = false
         }
     } catch (error: any) {
         const message = error.response?.data?.message || 'Failed to start Stripe onboarding'
@@ -141,7 +170,14 @@ onMounted(() => {
         <!-- Welcome heading -->
         <div class="flex flex-col gap-2">
             <h1 class="text-3xl font-bold">Welcome, {{ firstName }}! 👋</h1>
-            <p class="text-muted-foreground">
+            <p v-if="isOwner && !checkingStatus && !needsStripeSetup" class="text-muted-foreground">
+                {{ instructor.name }} is connected to Stripe.
+            </p>
+            <p v-else-if="isOwner" class="text-muted-foreground">
+                {{ instructor.name }} is not connected to Stripe yet. Send a setup link
+                and their status updates here once they finish.
+            </p>
+            <p v-else class="text-muted-foreground">
                 Your dashboard unlocks once you
                 <span class="font-semibold text-foreground">connect your Stripe account</span>.
             </p>
@@ -156,18 +192,42 @@ onMounted(() => {
                         <CreditCard class="h-7 w-7 text-muted-foreground" />
                     </div>
 
-                    <h2 class="text-2xl font-semibold">Connect your Stripe account</h2>
+                    <h2 class="text-2xl font-semibold">
+                        {{ isOwner ? (needsStripeSetup ? 'Send a Stripe setup link' : 'Stripe is connected') : 'Connect your Stripe account' }}
+                    </h2>
 
                     <p class="max-w-sm text-muted-foreground">
-                        We use Stripe to securely handle payments and payouts.
-                        This only takes a few minutes.
+                        <template v-if="isOwner && needsStripeSetup">
+                            We'll email {{ instructor.email }} a link that opens Stripe.
+                            If they don't have an account yet, we create the same Express
+                            account app onboarding uses and save it on this profile.
+                        </template>
+                        <template v-else-if="isOwner">
+                            Payouts can be sent to this instructor.
+                        </template>
+                        <template v-else>
+                            We use Stripe to securely handle payments and payouts.
+                            This only takes a few minutes.
+                        </template>
                     </p>
 
                     <div v-if="checkingStatus" class="w-full max-w-sm">
                         <Skeleton class="h-11 w-full" />
                     </div>
                     <Button
-                        v-else
+                        v-else-if="isOwner && needsStripeSetup"
+                        size="lg"
+                        class="w-full max-w-sm"
+                        :disabled="sendingLink"
+                        @click="handleSendStripeSetupLink"
+                    >
+                        <Loader2 v-if="sendingLink" class="mr-2 h-4 w-4 animate-spin" />
+                        <Send v-else class="mr-2 h-4 w-4" />
+                        Send Stripe setup link
+                        <ArrowRight class="ml-2 h-4 w-4" />
+                    </Button>
+                    <Button
+                        v-else-if="needsStripeSetup"
                         size="lg"
                         class="w-full max-w-sm"
                         :disabled="loading"
@@ -178,6 +238,9 @@ onMounted(() => {
                         {{ !status.connected ? 'Connect Stripe' : 'Complete Onboarding' }}
                         <ArrowRight class="ml-2 h-4 w-4" />
                     </Button>
+                    <p v-else class="text-sm font-medium text-green-600">
+                        Stripe is connected.
+                    </p>
 
                     <p class="flex items-center gap-2 text-sm text-muted-foreground">
                         <Lock class="h-4 w-4" />

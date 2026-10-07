@@ -228,6 +228,55 @@ class Instructor extends Model
     }
 
     /**
+     * Stripe is connected when the Express account exists, onboarding has been
+     * submitted, and charges are enabled. This matches the "Stripe Connected"
+     * state on the instructor page.
+     */
+    public function isStripeConnected(): bool
+    {
+        return $this->stripe_account_id !== null
+            && $this->onboarding_complete
+            && $this->charges_enabled;
+    }
+
+    /**
+     * Instructors the list page labels "Not Connected": no Stripe account, or
+     * charges are not enabled yet.
+     */
+    public function scopeNotStripeConnected($query)
+    {
+        return $query->where(function ($query): void {
+            $query->whereNull('stripe_account_id')
+                ->orWhere('charges_enabled', false);
+        });
+    }
+
+    /**
+     * Persist live Stripe Connect flags and log the first time the instructor
+     * becomes connected.
+     */
+    public function applyStripeConnectionState(bool $onboardingComplete, bool $chargesEnabled, bool $payoutsEnabled): void
+    {
+        $wasConnected = $this->isStripeConnected();
+
+        $this->onboarding_complete = $onboardingComplete;
+        $this->charges_enabled = $chargesEnabled;
+        $this->payouts_enabled = $payoutsEnabled;
+        $this->save();
+
+        if ($wasConnected || ! $this->isStripeConnected()) {
+            return;
+        }
+
+        $this->logActivity(
+            'Stripe connected',
+            'payment',
+            ['stripe_account_id' => $this->stripe_account_id],
+            'Stripe connected',
+        );
+    }
+
+    /**
      * Check if instructor has completed the mobile app onboarding slider.
      */
     public function hasCompletedAppOnboarding(): bool

@@ -39,6 +39,7 @@ use App\Http\Controllers\PupilController;
 use App\Http\Controllers\PushNotificationController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ResourceController;
+use App\Http\Controllers\StripeSetupLinkController;
 use App\Http\Controllers\StudentTransferController;
 use App\Http\Controllers\SupportMessagesController;
 use App\Http\Controllers\TeamController;
@@ -93,6 +94,9 @@ Route::get('dashboard', [DashboardController::class, 'index'])
 Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerAccess::class])->group(function () {
     Route::get('/instructors', [InstructorController::class, 'index'])
         ->name('instructors.index');
+    Route::post('/instructors/stripe-setup-links', [InstructorController::class, 'sendStripeSetupLinks'])
+        ->middleware(EnsureOwner::class)
+        ->name('instructors.stripe-setup-links.send');
     Route::post('/instructors', [InstructorController::class, 'store'])
         ->name('instructors.store');
     Route::get('/instructors/csv-template', [InstructorController::class, 'downloadCsvTemplate'])
@@ -187,6 +191,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
     Route::post('/instructors/{instructor}/resend-invite', [InstructorController::class, 'resendWelcomeEmail'])
         ->middleware(EnsureOwner::class)
         ->name('instructors.resend-invite');
+    Route::post('/instructors/{instructor}/stripe/setup-link', [InstructorController::class, 'sendStripeSetupLink'])
+        ->middleware(EnsureOwner::class)
+        ->name('instructors.stripe.setup-link.send');
     Route::post('/instructors/{instructor}/app-onboarding/complete', [InstructorController::class, 'forceCompleteAppOnboarding'])
         ->middleware(EnsureOwner::class)
         ->name('instructors.app-onboarding.complete');
@@ -670,6 +677,19 @@ Route::middleware('signed')->group(function (): void {
     Route::get('/stripe/onboarding/mobile/{instructor}/refresh', [MobileStripeOnboardingController::class, 'handleRefresh'])
         ->name('stripe.mobile.refresh');
 });
+
+// Emailed Stripe setup link. Unauthenticated — the temporary signature is the
+// access control. Signature checks live in the controller so an expired link
+// can show a "request a new link" page instead of a generic 403.
+Route::get('/stripe/onboard/{instructor}', [StripeSetupLinkController::class, 'open'])
+    ->middleware('throttle:30,1')
+    ->name('stripe.setup');
+Route::get('/stripe/onboard/{instructor}/refresh', [StripeSetupLinkController::class, 'refresh'])
+    ->middleware('throttle:30,1')
+    ->name('stripe.setup.refresh');
+Route::get('/stripe/onboard/{instructor}/return', [StripeSetupLinkController::class, 'returned'])
+    ->middleware('throttle:30,1')
+    ->name('stripe.setup.return');
 
 // Payment-link checkout return (instructor-sent Stripe payment links).
 // Unauthenticated — the student is clicking through from an email and has
