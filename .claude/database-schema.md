@@ -585,8 +585,10 @@ Tracks instructor payouts for completed lessons.
 | `instructor_id` | bigint unsigned | FOREIGN KEY (instructors.id), ON DELETE CASCADE | Instructor receiving payout |
 | `amount_pence` | integer | NOT NULL | Payout amount in pence |
 | `status` | enum('pending', 'paid', 'failed') | DEFAULT 'pending' | Payout status |
-| `stripe_transfer_id` | varchar(255) | NULLABLE | Stripe Transfer ID |
-| `paid_at` | datetime | NULLABLE | When payout was sent |
+| `failure_code` | varchar(255) | NULLABLE | Stripe error code when the transfer failed (e.g. `balance_insufficient`). Kept after a manual mark-as-paid |
+| `failure_message` | text | NULLABLE | Stripe error message when the transfer failed. Owner-only; hidden from instructors for platform-balance shortfalls. Kept after a manual mark-as-paid |
+| `stripe_transfer_id` | varchar(255) | NULLABLE | Stripe Transfer ID. NULL on a payout paid manually outside the platform |
+| `paid_at` | datetime | NULLABLE | When payout was sent, or when an owner marked it as paid manually |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
@@ -604,6 +606,8 @@ Tracks instructor payouts for completed lessons.
 - Created after lesson is completed and payment received
 - Transferred to instructor's Stripe Connect account
 - One payout per lesson
+- **Platform-balance shortfall:** if the Stripe transfer fails because the platform balance is too low (`StripeTransferFailure::isPlatformBalanceShortfall`), the payout is saved as `failed` with `failure_code`/`failure_message`, the lesson sign-off still completes, and head office (`HEAD_OFFICE_EMAIL`) is emailed. Instructors see such a payout as `pending` (`Payout::statusForInstructor()`). Any other transfer failure rolls the sign-off back
+- **Manual payout:** an owner can mark a `failed` payout as paid (`MarkPayoutPaidManuallyAction`) after paying the instructor outside the platform. Sets `status = paid` and `paid_at = now()`; no Stripe call, `stripe_transfer_id` stays NULL and the failure details are kept. `Payout::wasPaidManually()` = paid + no transfer ID + failure message present
 
 ---
 

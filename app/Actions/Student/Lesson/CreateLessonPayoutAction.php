@@ -11,6 +11,7 @@ use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Payout;
 use App\Services\StripeService;
+use App\Support\StripeTransferFailure;
 use Exception;
 use Illuminate\Support\Facades\Log;
 
@@ -28,6 +29,10 @@ class CreateLessonPayoutAction
      * 2. Create Payout record (pending)
      * 3. Create Stripe Transfer to instructor's Connect account
      * 4. Update Payout with transfer ID and mark as paid
+     *
+     * A platform balance shortfall is recorded as a failed payout and returned
+     * so sign-off can finish. Staff are told separately. Other transfer
+     * failures still throw and roll the sign-off back.
      *
      * @throws InstructorNotOnboardedException
      * @throws PayoutAlreadyProcessedException
@@ -68,11 +73,27 @@ class CreateLessonPayoutAction
         );
 
         if (! $transferResult['success']) {
-            // Mark payout as failed
+            $error = (string) ($transferResult['error'] ?? 'Unknown Stripe error');
+            $errorCode = isset($transferResult['error_code']) ? (string) $transferResult['error_code'] : null;
+
             $payout->status = PayoutStatus::FAILED;
+            $payout->failure_code = $errorCode !== '' ? $errorCode : null;
+            $payout->failure_message = $error;
             $payout->save();
 
-            throw new Exception('Stripe transfer failed: '.$transferResult['error']);
+            if (StripeTransferFailure::isPlatformBalanceShortfall($errorCode, $error)) {
+                Log::warning('Lesson payout left unpaid — Stripe platform balance was insufficient', [
+                    'lesson_id' => $lesson->id,
+                    'instructor_id' => $instructor->id,
+                    'payout_id' => $payout->id,
+                    'error_code' => $errorCode,
+                    'error' => $error,
+                ]);
+
+                return $payout;
+            }
+
+            throw new Exception('Stripe transfer failed: '.$error);
         }
 
         // Update payout with Stripe transfer details

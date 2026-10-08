@@ -24,6 +24,8 @@ import {
     Banknote,
 } from 'lucide-vue-next'
 import { toast } from '@/components/ui/sonner'
+import { useRole } from '@/composables/useRole'
+import { markPayoutPaid } from '@/actions/App/Http/Controllers/InstructorController'
 import type { InstructorDetail, InstructorPayout } from '@/types/instructor'
 
 interface Props {
@@ -32,7 +34,9 @@ interface Props {
 
 const props = defineProps<Props>()
 
-type FilterType = 'all' | 'paid' | 'pending'
+const { isOwner } = useRole()
+
+type FilterType = 'all' | 'paid' | 'pending' | 'failed'
 
 const payouts = ref<InstructorPayout[]>([])
 const loading = ref(true)
@@ -43,13 +47,16 @@ const filteredPayouts = computed(() => {
     return payouts.value.filter((p) => p.status === activeFilter.value)
 })
 
+const failedPayouts = computed(() => payouts.value.filter((p) => p.status === 'failed'))
+
 const summaryCards = computed(() => {
     const filtered = filteredPayouts.value
     const totalAmountPence = filtered.reduce((sum, p) => sum + p.amount_pence, 0)
     const paidAmountPence = filtered.filter((p) => p.status === 'paid').reduce((sum, p) => sum + p.amount_pence, 0)
     const pendingAmountPence = filtered.filter((p) => p.status === 'pending').reduce((sum, p) => sum + p.amount_pence, 0)
+    const failedAmountPence = failedPayouts.value.reduce((sum, p) => sum + p.amount_pence, 0)
 
-    return [
+    const cards = [
         {
             title: 'Total Payouts',
             value: filtered.length.toString(),
@@ -71,6 +78,16 @@ const summaryCards = computed(() => {
             icon: Clock,
         },
     ]
+
+    if (isOwner.value) {
+        cards.push({
+            title: 'Needs payment',
+            value: formatCurrency(failedAmountPence),
+            icon: AlertTriangle,
+        })
+    }
+
+    return cards
 })
 
 const formatCurrency = (pence: number): string => {
@@ -146,6 +163,24 @@ const loadPayouts = async () => {
     }
 }
 
+const markingPayoutId = ref<number | null>(null)
+
+const markAsPaidManually = async (payout: InstructorPayout) => {
+    if (markingPayoutId.value !== null) return
+    if (!confirm(`Mark the ${payout.formatted_amount} payout as paid?\n\nThis does not send any money. Only do this once the instructor has been paid outside the platform.`)) return
+
+    markingPayoutId.value = payout.id
+    try {
+        const { data } = await axios.post(markPayoutPaid.url({ instructor: props.instructor.id, payout: payout.id }))
+        toast.success(data?.message ?? 'Payout marked as paid manually.')
+        await loadPayouts()
+    } catch (error: any) {
+        toast.error(error?.response?.data?.message ?? 'Failed to mark payout as paid.')
+    } finally {
+        markingPayoutId.value = null
+    }
+}
+
 const setFilter = (filter: FilterType) => {
     activeFilter.value = filter
 }
@@ -158,8 +193,8 @@ onMounted(() => {
 <template>
     <div class="flex flex-col gap-6">
         <!-- Summary Cards - Loading -->
-        <div v-if="loading" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Card v-for="n in 4" :key="n">
+        <div v-if="loading" class="grid grid-cols-1 gap-4 sm:grid-cols-2" :class="isOwner ? 'xl:grid-cols-5' : 'lg:grid-cols-4'">
+            <Card v-for="n in (isOwner ? 5 : 4)" :key="n">
                 <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
                     <Skeleton class="h-4 w-24" />
                     <Skeleton class="h-4 w-4" />
@@ -171,7 +206,7 @@ onMounted(() => {
         </div>
 
         <!-- Summary Cards -->
-        <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2" :class="isOwner ? 'xl:grid-cols-5' : 'lg:grid-cols-4'">
             <Card v-for="card in summaryCards" :key="card.title">
                 <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle class="text-sm font-medium text-muted-foreground">
@@ -219,10 +254,54 @@ onMounted(() => {
                             <Clock class="h-3.5 w-3.5" />
                             Pending
                         </Button>
+                        <Button
+                            v-if="isOwner"
+                            :variant="activeFilter === 'failed' ? 'default' : 'outline'"
+                            size="sm"
+                            @click="setFilter('failed')"
+                            class="gap-1"
+                        >
+                            <AlertTriangle class="h-3.5 w-3.5" />
+                            Needs payment
+                            <span v-if="failedPayouts.length > 0">({{ failedPayouts.length }})</span>
+                        </Button>
                     </div>
                 </div>
             </CardHeader>
             <CardContent>
+                <div
+                    v-if="isOwner && !loading && failedPayouts.length > 0"
+                    class="mb-4 flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
+                >
+                    <AlertTriangle class="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                    <div class="flex flex-col gap-2">
+                        <p class="font-medium">Stripe did not pay {{ failedPayouts.length === 1 ? 'this instructor' : 'these lessons' }}</p>
+                        <p>
+                            Sign-off still went through. The platform Stripe balance was too low. Pay the instructor manually, then mark the payout as paid here.
+                        </p>
+                        <ul class="list-disc space-y-1 pl-4">
+                            <li v-for="payout in failedPayouts" :key="payout.id">
+                                {{ payout.student_name || 'Unknown student' }}
+                                · {{ formatDate(payout.lesson_date) }}
+                                · {{ payout.formatted_amount }}
+                                <span v-if="payout.failure_message" class="block text-amber-800">
+                                    {{ payout.failure_message }}
+                                </span>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    class="mt-1 h-7 bg-white"
+                                    :disabled="markingPayoutId !== null"
+                                    @click="markAsPaidManually(payout)"
+                                >
+                                    <CheckCircle2 class="mr-1 h-3.5 w-3.5" />
+                                    {{ markingPayoutId === payout.id ? 'Marking…' : 'Mark as paid' }}
+                                </Button>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
                 <!-- Loading Skeleton -->
                 <div v-if="loading" class="space-y-3">
                     <Skeleton class="h-10 w-full" />
@@ -261,7 +340,11 @@ onMounted(() => {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        <TableRow v-for="payout in filteredPayouts" :key="payout.id">
+                        <TableRow
+                            v-for="payout in filteredPayouts"
+                            :key="payout.id"
+                            :class="isOwner && payout.status === 'failed' ? 'bg-amber-50' : ''"
+                        >
                             <TableCell class="font-medium">
                                 {{ payout.student_name || '—' }}
                             </TableCell>
@@ -278,10 +361,18 @@ onMounted(() => {
                                 {{ payout.formatted_amount }}
                             </TableCell>
                             <TableCell>
-                                <Badge :variant="statusBadgeVariant(payout.status)" class="gap-1">
-                                    <component :is="statusIcon(payout.status)" class="h-3 w-3" />
-                                    {{ payout.status.charAt(0).toUpperCase() + payout.status.slice(1) }}
-                                </Badge>
+                                <div class="flex flex-col items-start gap-1">
+                                    <Badge :variant="statusBadgeVariant(payout.status)" class="gap-1">
+                                        <component :is="statusIcon(payout.status)" class="h-3 w-3" />
+                                        {{ isOwner && payout.status === 'failed' ? 'Needs payment' : payout.status.charAt(0).toUpperCase() + payout.status.slice(1) }}
+                                    </Badge>
+                                    <p v-if="isOwner && payout.paid_manually" class="text-xs text-muted-foreground">
+                                        Paid manually
+                                    </p>
+                                    <p v-if="isOwner && payout.status === 'failed'" class="max-w-xs text-xs text-amber-800">
+                                        {{ payout.failure_message || 'Check the Stripe balance or pay the instructor manually.' }}
+                                    </p>
+                                </div>
                             </TableCell>
                             <TableCell>
                                 {{ formatDateTime(payout.paid_at) }}

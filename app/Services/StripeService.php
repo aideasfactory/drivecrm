@@ -628,11 +628,13 @@ class StripeService
                 'instructor_id' => $instructor->id,
                 'amount_pence' => $amountPence,
                 'error' => $e->getMessage(),
+                'error_code' => $e->getStripeCode(),
             ]);
 
             return [
                 'success' => false,
                 'error' => $e->getMessage(),
+                'error_code' => $e->getStripeCode(),
             ];
         }
     }

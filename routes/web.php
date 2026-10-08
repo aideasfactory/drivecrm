@@ -164,6 +164,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('instructors.activity-logs');
     Route::get('/instructors/{instructor}/payouts', [InstructorController::class, 'payouts'])
         ->name('instructors.payouts');
+    Route::post('/instructors/{instructor}/payouts/{payout}/mark-paid', [InstructorController::class, 'markPayoutPaid'])
+        ->middleware(EnsureOwner::class)
+        ->name('instructors.payouts.mark-paid');
     Route::get('/instructors/{instructor}/pupils', [InstructorController::class, 'pupils'])
         ->name('instructors.pupils');
     Route::post('/instructors/{instructor}/broadcast-message', [InstructorController::class, 'broadcastMessage'])

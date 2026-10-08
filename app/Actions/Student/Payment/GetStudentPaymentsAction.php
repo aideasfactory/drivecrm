@@ -26,7 +26,7 @@ class GetStudentPaymentsAction
             ->with([
                 'lesson:id,order_id,date,start_time,end_time',
                 'lesson.order:id,package_name,payment_mode',
-                'lesson.payout:id,lesson_id,status,paid_at',
+                'lesson.payout:id,lesson_id,instructor_id,status,failure_code,failure_message,stripe_transfer_id,paid_at',
             ])
             ->orderByDesc('created_at')
             ->get()
@@ -49,6 +49,12 @@ class GetStudentPaymentsAction
                     'created_at' => $payment->created_at?->toIso8601String(),
                     'transferred' => $payout !== null && $payout->status->value === 'paid',
                     'transferred_at' => $payout?->paid_at?->toIso8601String(),
+                    'payout_id' => $payout?->id,
+                    'payout_instructor_id' => $payout?->instructor_id,
+                    'payout_status' => $payout?->status?->value,
+                    'payout_paid_manually' => $payout?->wasPaidManually() ?? false,
+                    'payout_failure_message' => $payout?->isFailed() ? $payout->failure_message : null,
+                    'failure_code' => $payout?->failure_code,
                 ];
             });
     }

@@ -50,6 +50,7 @@ use App\Services\InstructorCalendarService;
 use App\Services\LessonSignOffService;
 use App\Services\OrderService;
 use App\Services\StudentService;
+use App\Support\StripeTransferFailure;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
@@ -396,6 +397,12 @@ class PupilController extends Controller
     public function payments(Student $student): JsonResponse
     {
         $payments = app(GetStudentPaymentsAction::class)($student);
+
+        if (request()->user()?->isInstructor()) {
+            $payments = $payments->map(
+                fn (array $payment): array => StripeTransferFailure::concealFromInstructor($payment, 'payout_status', 'payout_failure_message')
+            );
+        }
 
         return response()->json([
             'payments' => $payments,

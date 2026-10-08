@@ -41,7 +41,7 @@ class GetInstructorLessonsInRangeAction
                 ]),
                 'calendarItem.calendar:id,instructor_id,date',
                 'lessonPayment:id,lesson_id,amount_pence,test_pass_guarantee_pence,status,paid_at',
-                'payout:id,lesson_id,status,amount_pence,paid_at',
+                'payout:id,lesson_id,status,failure_code,failure_message,amount_pence,paid_at',
                 'reflectiveLog:id,lesson_id',
                 'resources:id,title,resource_type',
             ])
