@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
     Table,
@@ -29,6 +30,7 @@ import {
 } from 'lucide-vue-next'
 import { toast } from '@/components/ui/sonner'
 import { useRole } from '@/composables/useRole'
+import { markPayoutPaid } from '@/actions/App/Http/Controllers/InstructorController'
 
 interface Payment {
     id: number
@@ -44,7 +46,10 @@ interface Payment {
     created_at: string | null
     transferred: boolean
     transferred_at: string | null
+    payout_id: number | null
+    payout_instructor_id: number | null
     payout_status: 'pending' | 'paid' | 'failed' | null
+    payout_paid_manually: boolean
     payout_failure_message: string | null
 }
 
@@ -135,6 +140,24 @@ const loadPayments = async () => {
     }
 }
 
+const markingPayoutId = ref<number | null>(null)
+
+const markAsPaidManually = async (payment: Payment) => {
+    if (markingPayoutId.value !== null || payment.payout_id === null || payment.payout_instructor_id === null) return
+    if (!confirm(`Mark the instructor payout for the lesson on ${formatDate(payment.lesson_date)} as paid?\n\nThis does not send any money. Only do this once the instructor has been paid outside the platform.`)) return
+
+    markingPayoutId.value = payment.payout_id
+    try {
+        const { data } = await axios.post(markPayoutPaid.url({ instructor: payment.payout_instructor_id, payout: payment.payout_id }))
+        toast.success(data?.message ?? 'Payout marked as paid manually.')
+        await loadPayments()
+    } catch (error: any) {
+        toast.error(error?.response?.data?.message ?? 'Failed to mark payout as paid.')
+    } finally {
+        markingPayoutId.value = null
+    }
+}
+
 onMounted(() => {
     loadPayments()
 })
@@ -150,7 +173,7 @@ onMounted(() => {
             <div class="flex flex-col gap-2">
                 <p class="font-medium">Instructor payout needs checking</p>
                 <p>
-                    The lesson was signed off, but Stripe could not pay the instructor because the platform balance was too low. Top up the Stripe balance or pay them manually.
+                    The lesson was signed off, but Stripe could not pay the instructor because the platform balance was too low. Pay the instructor manually, then mark the payout as paid here.
                 </p>
                 <ul class="list-disc space-y-1 pl-4">
                     <li v-for="payment in unpaidInstructorPayouts" :key="payment.id">
@@ -158,6 +181,16 @@ onMounted(() => {
                         <span v-if="payment.payout_failure_message" class="block text-amber-800">
                             {{ payment.payout_failure_message }}
                         </span>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            class="mt-1 h-7 bg-white"
+                            :disabled="markingPayoutId !== null"
+                            @click="markAsPaidManually(payment)"
+                        >
+                            <CheckCircle2 class="mr-1 h-3.5 w-3.5" />
+                            {{ markingPayoutId === payment.payout_id ? 'Marking…' : 'Mark as paid' }}
+                        </Button>
                     </li>
                 </ul>
             </div>
@@ -309,7 +342,7 @@ onMounted(() => {
                                             <ArrowRightLeft class="mx-auto h-4 w-4 text-green-600" />
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                            <p>Transferred to instructor {{ payment.transferred_at ? formatDateTime(payment.transferred_at) : '' }}</p>
+                                            <p>{{ isOwner && payment.payout_paid_manually ? 'Paid to instructor manually' : 'Transferred to instructor' }} {{ payment.transferred_at ? formatDateTime(payment.transferred_at) : '' }}</p>
                                         </TooltipContent>
                                     </Tooltip>
                                 </TooltipProvider>

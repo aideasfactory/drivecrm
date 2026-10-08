@@ -58,7 +58,7 @@ class ManualInstructorPayoutRequiredNotification extends Notification implements
             ->line('**Stripe error:**')
             ->line($stripeError)
             ->line('')
-            ->line('Top up the Stripe balance, or pay the instructor manually. The payout is flagged under Payments in the admin panel.');
+            ->line('Top up the Stripe balance and pay the instructor manually, then click "Mark as paid" on the payout under Payments in the admin panel. Marking it as paid does not send any money.');
 
         $paymentsUrl = $this->paymentsUrl($instructor?->id, $student?->id);
 

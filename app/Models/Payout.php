@@ -73,6 +73,15 @@ class Payout extends Model
     }
 
     /**
+     * Paid by staff outside the platform after the Stripe transfer failed
+     * (see MarkPayoutPaidManuallyAction): paid, but with no transfer ID.
+     */
+    public function wasPaidManually(): bool
+    {
+        return $this->status === PayoutStatus::PAID && $this->stripe_transfer_id === null && $this->failure_message !== null;
+    }
+
+    /**
      * Status instructors are allowed to see. A platform-balance shortfall is
      * still unpaid, but it must not look like a failure on their side.
      */

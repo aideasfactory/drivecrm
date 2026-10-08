@@ -41,6 +41,7 @@ use App\Models\Lesson;
 use App\Models\Location;
 use App\Models\MileageLog;
 use App\Models\Package;
+use App\Models\Payout;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\HmrcService;
@@ -1256,6 +1257,25 @@ class InstructorController extends Controller
 
         return response()->json([
             'payouts' => $payouts,
+        ]);
+    }
+
+    /**
+     * Owner override: mark a failed payout as paid after the instructor was
+     * paid outside the platform. No money moves and Stripe is not called.
+     */
+    public function markPayoutPaid(Request $request, Instructor $instructor, Payout $payout): JsonResponse
+    {
+        $payout = $this->instructorService->markPayoutPaidManually($instructor, $payout, $request->user());
+
+        return response()->json([
+            'message' => 'Payout marked as paid manually.',
+            'payout' => [
+                'id' => $payout->id,
+                'status' => $payout->status->value,
+                'paid_at' => $payout->paid_at?->toIso8601String(),
+                'paid_manually' => $payout->wasPaidManually(),
+            ],
         ]);
     }
 
