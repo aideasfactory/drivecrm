@@ -37,6 +37,7 @@ use App\Actions\Instructor\Mileage\GetMileageLogsAction;
 use App\Actions\Instructor\Mileage\UpdateMileageLogAction;
 use App\Actions\Instructor\ReplaceInstructorLocationsAction;
 use App\Actions\Instructor\SendInstructorWelcomeEmailAction;
+use App\Actions\Instructor\SendStripeSetupLinkAction;
 use App\Actions\Instructor\SetInstructorPackageActiveAction;
 use App\Actions\Instructor\StartStripeOnboardingAction;
 use App\Actions\Instructor\SyncStripeAccountStatusAction;
@@ -108,6 +109,7 @@ class InstructorService extends BaseService
         protected UpdateInstructorProfileAction $updateInstructorProfile,
         protected CompleteAppOnboardingStepAction $completeAppOnboardingStep,
         protected ForceCompleteAppOnboardingAction $forceCompleteAppOnboarding,
+        protected SendStripeSetupLinkAction $sendStripeSetupLink,
         protected UploadInstructorProfilePictureAction $uploadProfilePicture,
         protected DeleteInstructorProfilePictureAction $deleteProfilePicture,
         protected DetectCalendarClashesAction $detectCalendarClashes,
@@ -864,6 +866,25 @@ class InstructorService extends BaseService
     public function startStripeOnboarding(Instructor $instructor, string $returnUrl, string $refreshUrl): array
     {
         return ($this->startStripeOnboarding)($instructor, $returnUrl, $refreshUrl);
+    }
+
+    /**
+     * Email the instructor a signed link to connect Stripe themselves, and
+     * log who sent it.
+     */
+    public function sendStripeSetupLink(Instructor $instructor, User $admin): string
+    {
+        $email = ($this->sendStripeSetupLink)($instructor);
+
+        ($this->logActivity)(
+            $instructor,
+            "{$admin->name} sent a Stripe setup link to {$email}",
+            'profile',
+            ['admin_user_id' => $admin->id, 'email' => $email],
+            'Stripe setup link sent'
+        );
+
+        return $email;
     }
 
     /**

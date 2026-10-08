@@ -4,13 +4,14 @@ import axios from 'axios'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Mail, Phone, MapPin, Edit, CreditCard, Loader2, CheckCircle, LogOut, ShieldCheck, Copy } from 'lucide-vue-next'
+import { Mail, Phone, MapPin, Edit, CreditCard, Loader2, CheckCircle, LogOut, ShieldCheck, Copy, Send } from 'lucide-vue-next'
 import { router, usePage } from '@inertiajs/vue3'
 import { toast } from '@/components/ui/toast'
 import type { InstructorDetail } from '@/types/instructor'
 import { stripeStatus, startStripeOnboarding, refreshStripeOnboarding } from '@/actions/App/Http/Controllers/InstructorController'
 import { logout } from '@/routes'
 import { useRole } from '@/composables/useRole'
+import { useStripeSetupLink } from '@/composables/useStripeSetupLink'
 
 interface Props {
     instructor: InstructorDetail
@@ -31,6 +32,7 @@ interface StripeStatus {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 const { isOwner, isInstructor } = useRole()
+const { sendingSetupLink, sendSetupLink } = useStripeSetupLink(() => props.instructor.id)
 
 const page = usePage()
 const showMtdButton = computed<boolean>(
@@ -203,9 +205,22 @@ onMounted(() => {
                         Stripe Connected
                     </Button>
 
+                    <!-- Owners email the instructor a setup link instead of onboarding on their behalf -->
+                    <Button
+                        v-if="isOwner && !checkingStatus && (!status.connected || !status.onboarding_complete)"
+                        @click="sendSetupLink"
+                        :disabled="sendingSetupLink"
+                        variant="outline"
+                        class="min-w-[180px] border-red-600 text-red-600 py-2.5 hover:bg-red-50 hover:text-red-600 cursor-pointer"
+                    >
+                        <Loader2 v-if="sendingSetupLink" class="mr-2 h-4 w-4 animate-spin" />
+                        <Send v-else class="mr-2 h-4 w-4" />
+                        Send Stripe link
+                    </Button>
+
                     <!-- Connect/Complete Button -->
                     <Button
-                        v-if="!status.connected || !status.onboarding_complete"
+                        v-else-if="!isOwner && (!status.connected || !status.onboarding_complete)"
                         @click="handleStripeConnect"
                         :disabled="loading"
                         variant="outline"

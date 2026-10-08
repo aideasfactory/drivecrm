@@ -14,6 +14,7 @@ import {
     HelpCircle,
     Loader2,
     Lock,
+    Send,
     Smartphone,
 } from 'lucide-vue-next'
 import {
@@ -21,6 +22,8 @@ import {
     startStripeOnboarding,
     refreshStripeOnboarding,
 } from '@/actions/App/Http/Controllers/InstructorController'
+import { useRole } from '@/composables/useRole'
+import { useStripeSetupLink } from '@/composables/useStripeSetupLink'
 import type { AppPageProps } from '@/types'
 import type { InstructorDetail } from '@/types/instructor'
 
@@ -37,6 +40,9 @@ interface StripeStatus {
 }
 
 const props = defineProps<Props>()
+
+const { isOwner } = useRole()
+const { sendingSetupLink, sendSetupLink } = useStripeSetupLink(() => props.instructor.id)
 
 const page = usePage<AppPageProps>()
 
@@ -166,6 +172,21 @@ onMounted(() => {
                     <div v-if="checkingStatus" class="w-full max-w-sm">
                         <Skeleton class="h-11 w-full" />
                     </div>
+                    <template v-else-if="isOwner">
+                        <Button
+                            size="lg"
+                            class="w-full max-w-sm"
+                            :disabled="sendingSetupLink"
+                            @click="sendSetupLink"
+                        >
+                            <Loader2 v-if="sendingSetupLink" class="mr-2 h-4 w-4 animate-spin" />
+                            <Send v-else class="mr-2 h-4 w-4" />
+                            Send Stripe setup link
+                        </Button>
+                        <p class="max-w-sm text-sm text-muted-foreground">
+                            Emails {{ firstName }} a secure link to connect Stripe themselves. The link lasts 7 days.
+                        </p>
+                    </template>
                     <Button
                         v-else
                         size="lg"

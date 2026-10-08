@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Instructor\ApplyStripeAccountStatusAction;
 use App\Actions\Payment\NotifyInstructorOfLessonPaidAction;
 use App\Actions\Payment\SendPaymentReceivedEmailsAction;
 use App\Actions\Shared\LogActivityAction;
@@ -248,11 +249,8 @@ class WebhookController extends Controller
             return;
         }
 
-        // Update instructor status
-        $instructor->onboarding_complete = ($account->details_submitted ?? false);
-        $instructor->charges_enabled = ($account->charges_enabled ?? false);
-        $instructor->payouts_enabled = ($account->payouts_enabled ?? false);
-        $instructor->save();
+        // Update instructor status (logs "Stripe connected" on first completion)
+        app(ApplyStripeAccountStatusAction::class)($instructor, $account);
 
         Log::info('Webhook: Instructor account updated', [
             'instructor_id' => $instructor->id,

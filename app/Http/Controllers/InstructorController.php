@@ -1253,6 +1253,19 @@ class InstructorController extends Controller
     }
 
     /**
+     * Owner action: email the instructor a link to connect Stripe themselves,
+     * instead of the owner going through Stripe onboarding on their behalf.
+     */
+    public function sendStripeSetupLink(Request $request, Instructor $instructor): JsonResponse
+    {
+        $email = $this->instructorService->sendStripeSetupLink($instructor, $request->user());
+
+        return response()->json([
+            'message' => "Stripe setup link sent to {$email}.",
+        ]);
+    }
+
+    /**
      * Download the instructor CSV import template.
      */
     public function downloadCsvTemplate(): StreamedResponse

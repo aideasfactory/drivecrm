@@ -39,6 +39,7 @@ use App\Http\Controllers\PupilController;
 use App\Http\Controllers\PushNotificationController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ResourceController;
+use App\Http\Controllers\StripeSetupLinkController;
 use App\Http\Controllers\StudentTransferController;
 use App\Http\Controllers\SupportMessagesController;
 use App\Http\Controllers\TeamController;
@@ -154,6 +155,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('instructors.stripe.onboarding.start');
     Route::post('/instructors/{instructor}/stripe/onboarding/refresh', [InstructorController::class, 'refreshStripeOnboarding'])
         ->name('instructors.stripe.onboarding.refresh');
+    Route::post('/instructors/{instructor}/stripe/setup-link', [InstructorController::class, 'sendStripeSetupLink'])
+        ->middleware(EnsureOwner::class)
+        ->name('instructors.stripe.setup-link');
     Route::get('/instructors/{instructor}/stripe/onboarding/return', [InstructorController::class, 'returnFromStripeOnboarding'])
         ->name('instructors.stripe.onboarding.return');
     Route::get('/instructors/{instructor}/stripe/status', [InstructorController::class, 'stripeStatus'])
@@ -670,6 +674,14 @@ Route::middleware('signed')->group(function (): void {
     Route::get('/stripe/onboarding/mobile/{instructor}/refresh', [MobileStripeOnboardingController::class, 'handleRefresh'])
         ->name('stripe.mobile.refresh');
 });
+
+// Emailed Stripe setup link (admin "Send link"). Unauthenticated — the
+// instructor clicks through from an email with no web session. The
+// controller checks the signature itself so expired links get a friendly page.
+Route::get('/stripe/setup/{instructor}', [StripeSetupLinkController::class, 'start'])
+    ->name('stripe.setup.start');
+Route::get('/stripe/setup/{instructor}/complete', [StripeSetupLinkController::class, 'complete'])
+    ->name('stripe.setup.complete');
 
 // Payment-link checkout return (instructor-sent Stripe payment links).
 // Unauthenticated — the student is clicking through from an email and has
