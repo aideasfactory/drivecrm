@@ -11,3 +11,8 @@ export enum UserRole {
  * Type alias for role string values
  */
 export type UserRoleType = 'owner' | 'instructor' | 'student';
+
+/**
+ * Owner admin-area access level matching backend OwnerAccess enum
+ */
+export type OwnerAccessType = 'all' | 'restricted';

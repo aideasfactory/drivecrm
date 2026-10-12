@@ -122,14 +122,9 @@ class FindInstructorsByPostcodeSectorAction
                 'bio' => $instructor->bio,
                 'isTopPick' => $instructor->priority,
                 'specialOffer' => $meta['special_offer'] ?? null,
-                'address' => $instructor->address,
-                'postcode' => $instructor->postcode,
-                'location' => $instructor->address,
                 'distance' => null, // No distance calculation for simple sector match
                 'nextAvailable' => $nextAvailable,
                 'priority' => $instructor->priority,
-                'latitude' => $instructor->latitude,
-                'longitude' => $instructor->longitude,
             ];
         });
     }

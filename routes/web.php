@@ -22,6 +22,7 @@ use App\Http\Controllers\Hmrc\Vehicles\VehicleController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\InstructorController;
 use App\Http\Controllers\IntegrationController;
+use App\Http\Controllers\LessonsBookedController;
 use App\Http\Controllers\MobileStripeOnboardingController;
 use App\Http\Controllers\Onboarding\OnboardingController;
 use App\Http\Controllers\Onboarding\StepFiveController;
@@ -30,6 +31,7 @@ use App\Http\Controllers\Onboarding\StepOneController;
 use App\Http\Controllers\Onboarding\StepSixController;
 use App\Http\Controllers\Onboarding\StepThreeController;
 use App\Http\Controllers\Onboarding\StepTwoController;
+use App\Http\Controllers\OwnerController;
 use App\Http\Controllers\PackageController;
 use App\Http\Controllers\PaymentLinkCheckoutController;
 use App\Http\Controllers\ProfileController;
@@ -38,6 +40,7 @@ use App\Http\Controllers\PupilController;
 use App\Http\Controllers\PushNotificationController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ResourceController;
+use App\Http\Controllers\StripeSetupLinkController;
 use App\Http\Controllers\StudentTransferController;
 use App\Http\Controllers\SupportMessagesController;
 use App\Http\Controllers\TeamController;
@@ -46,6 +49,7 @@ use App\Http\Middleware\EnsureInstructor;
 use App\Http\Middleware\EnsureMtdEnrolled;
 use App\Http\Middleware\EnsureOwner;
 use App\Http\Middleware\RestrictInstructor;
+use App\Http\Middleware\RestrictOwnerAccess;
 use App\Http\Middleware\ValidateBookingEnquiryUuid;
 use App\Http\Middleware\ValidateBookingStepAccess;
 use App\Http\Middleware\ValidateEnquiryUuid;
@@ -78,17 +82,19 @@ Route::get('/no-access', fn () => Inertia::render('NoAccess'))
 // Public legal pages (linked from onboarding, booking and outgoing emails).
 Route::get('/terms-of-service', fn () => Inertia::render('Legal/TermsOfService'))
     ->name('legal.terms');
+Route::get('/instructor-terms', fn () => Inertia::render('Legal/InstructorPlatformTerms'))
+    ->name('legal.instructor-terms');
 Route::get('/privacy-policy', fn () => Inertia::render('Legal/PrivacyPolicy'))
     ->name('legal.privacy');
 Route::get('/cookie-policy', fn () => Inertia::render('Legal/CookiePolicy'))
     ->name('legal.cookies');
 
 Route::get('dashboard', [DashboardController::class, 'index'])
-    ->middleware(['auth', 'verified', RestrictInstructor::class])
+    ->middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerAccess::class])
     ->name('dashboard');
 
 // Main Application Routes
-Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(function () {
+Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerAccess::class])->group(function () {
     Route::get('/instructors', [InstructorController::class, 'index'])
         ->name('instructors.index');
     Route::post('/instructors', [InstructorController::class, 'store'])
@@ -152,6 +158,12 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('instructors.stripe.onboarding.start');
     Route::post('/instructors/{instructor}/stripe/onboarding/refresh', [InstructorController::class, 'refreshStripeOnboarding'])
         ->name('instructors.stripe.onboarding.refresh');
+    Route::post('/instructors/{instructor}/stripe/setup-link', [InstructorController::class, 'sendStripeSetupLink'])
+        ->middleware(EnsureOwner::class)
+        ->name('instructors.stripe.setup-link');
+    Route::post('/instructors/{instructor}/stripe/reset', [InstructorController::class, 'resetStripe'])
+        ->middleware(EnsureOwner::class)
+        ->name('instructors.stripe.reset');
     Route::get('/instructors/{instructor}/stripe/onboarding/return', [InstructorController::class, 'returnFromStripeOnboarding'])
         ->name('instructors.stripe.onboarding.return');
     Route::get('/instructors/{instructor}/stripe/status', [InstructorController::class, 'stripeStatus'])
@@ -185,6 +197,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
     Route::post('/instructors/{instructor}/resend-invite', [InstructorController::class, 'resendWelcomeEmail'])
         ->middleware(EnsureOwner::class)
         ->name('instructors.resend-invite');
+    Route::post('/instructors/{instructor}/app-onboarding/complete', [InstructorController::class, 'forceCompleteAppOnboarding'])
+        ->middleware(EnsureOwner::class)
+        ->name('instructors.app-onboarding.complete');
 
     // Instructor Progress Tracker (framework CRUD — axios-fed)
     Route::get('/instructors/{instructor}/progress-tracker/framework', [ProgressTrackerController::class, 'framework'])
@@ -439,6 +454,17 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
             ->name('student-transfers.store');
     });
 
+    // Owner Access — full-access owners toggle other owners between all/restricted.
+    // Restricted owners never reach these routes (RestrictOwnerAccess).
+    Route::middleware([EnsureOwner::class])->group(function () {
+        Route::get('/owners', [OwnerController::class, 'index'])
+            ->name('owners.index');
+        Route::post('/owners', [OwnerController::class, 'store'])
+            ->name('owners.store');
+        Route::patch('/owners/{user}/access', [OwnerController::class, 'updateAccess'])
+            ->name('owners.access.update');
+    });
+
     // Data Import — legacy-system bundles (Owner Only)
     Route::middleware([EnsureOwner::class])->group(function () {
         Route::get('/imports', [ImportController::class, 'index'])
@@ -465,6 +491,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class])->group(functi
         ->name('integrations.bird.messages.all');
     Route::post('/integrations/bird/sync', [BirdConversationController::class, 'sync'])
         ->name('integrations.bird.sync');
+
+    Route::get('/lessons-booked', [LessonsBookedController::class, 'index'])
+        ->name('lessons-booked.index');
 
     Route::get('/enquiries', [EnquiryController::class, 'index'])
         ->name('enquiries.index');
@@ -654,6 +683,14 @@ Route::middleware('signed')->group(function (): void {
     Route::get('/stripe/onboarding/mobile/{instructor}/refresh', [MobileStripeOnboardingController::class, 'handleRefresh'])
         ->name('stripe.mobile.refresh');
 });
+
+// Emailed Stripe setup link (admin "Send link"). Unauthenticated — the
+// instructor clicks through from an email with no web session. The
+// controller checks the signature itself so expired links get a friendly page.
+Route::get('/stripe/setup/{instructor}', [StripeSetupLinkController::class, 'start'])
+    ->name('stripe.setup.start');
+Route::get('/stripe/setup/{instructor}/complete', [StripeSetupLinkController::class, 'complete'])
+    ->name('stripe.setup.complete');
 
 // Payment-link checkout return (instructor-sent Stripe payment links).
 // Unauthenticated — the student is clicking through from an email and has

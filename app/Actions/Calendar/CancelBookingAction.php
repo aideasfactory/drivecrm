@@ -261,7 +261,7 @@ class CancelBookingAction
             ->whereNotIn('status', [LessonStatus::CANCELLED, LessonStatus::COMPLETED])
             ->exists();
 
-        if ($hasOpenLessons || $order->status === OrderStatus::CANCELLED) {
+        if ($hasOpenLessons || $order->isClosed()) {
             return false;
         }
 

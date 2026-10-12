@@ -20,6 +20,7 @@ class StoreInstructorPackageRequest extends FormRequest
             'description' => ['nullable', 'string'],
             'total_price_pence' => ['required', 'integer', 'min:0'],
             'lessons_count' => ['required', 'integer', 'min:1'],
+            'visible_to_pupils' => ['sometimes', 'boolean'],
         ];
     }
 

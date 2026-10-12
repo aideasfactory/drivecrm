@@ -85,10 +85,10 @@ class CalendarItemResource extends JsonResource
     }
 
     /**
-     * The student's name for any slot backed by an order — booked, completed, draft
-     * (upfront, awaiting payment) or reserved (weekly). Unlike the booking-context
-     * fields, the name is surfaced for draft/reserved too so the app can label a
-     * pending slot with who it's held for. Only resolved when `lessons` is loaded.
+     * The student's name for a confirmed slot — booked, completed, or reserved
+     * (weekly, after the first payment). Draft holds awaiting that payment omit
+     * the name so an unpaid checkout does not look like a named booking. Only
+     * resolved when `lessons` is loaded.
      */
     protected function studentName(): ?string
     {
@@ -99,7 +99,6 @@ class CalendarItemResource extends JsonResource
         $namedStatuses = [
             CalendarItemStatus::BOOKED,
             CalendarItemStatus::COMPLETED,
-            CalendarItemStatus::DRAFT,
             CalendarItemStatus::RESERVED,
         ];
 

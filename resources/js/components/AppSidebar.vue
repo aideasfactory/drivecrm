@@ -4,6 +4,7 @@ import {
     ArrowRightLeft,
     Bell,
     BookOpen,
+    CalendarCheck,
     DatabaseZap,
     Mail,
     FileText,
@@ -17,6 +18,7 @@ import {
     Settings,
     ShieldCheck,
     TrafficCone,
+    UserCog,
     Users,
     UsersRound,
 } from 'lucide-vue-next';
@@ -40,6 +42,7 @@ import { index as instructorsIndex } from '@/routes/instructors';
 import { edit as profileEdit } from '@/routes/profile';
 import { index as discountCodesIndex } from '@/routes/discount-codes';
 import { index as packagesIndex } from '@/routes/packages';
+import { index as lessonsBookedIndex } from '@/routes/lessons-booked';
 import { index as pupilsIndex } from '@/routes/pupils';
 import { index as reportsIndex } from '@/routes/reports';
 import { index as pushNotificationsIndex } from '@/routes/push-notifications';
@@ -51,6 +54,7 @@ import { index as studentTransfersIndex } from '@/routes/student-transfers';
 import { index as supportMessagesIndex } from '@/routes/support-messages';
 import { index as teamsIndex } from '@/routes/teams';
 import { index as enquiriesIndex } from '@/routes/enquiries';
+import { index as ownersIndex } from '@/routes/owners';
 import { type NavItem } from '@/types';
 import AppLogo from './AppLogo.vue';
 
@@ -68,17 +72,27 @@ const allNavItems: NavItem[] = [
         href: instructorsIndex(),
         icon: GraduationCap,
         roles: ['owner'], // Only visible to owners
+        restrictedOwnerVisible: true,
     },
     {
         title: 'Students',
         href: pupilsIndex(),
         icon: Users,
+        restrictedOwnerVisible: true,
+    },
+    {
+        title: 'Lessons booked',
+        href: lessonsBookedIndex(),
+        icon: CalendarCheck,
+        roles: ['owner'],
+        restrictedOwnerVisible: true,
     },
     {
         title: 'Transfer Student',
         href: studentTransfersIndex(),
         icon: ArrowRightLeft,
         roles: ['owner'],
+        restrictedOwnerVisible: true,
     },
     {
         title: 'Data Import',
@@ -120,12 +134,14 @@ const allNavItems: NavItem[] = [
         href: supportMessagesIndex(),
         icon: MessageSquare,
         roles: ['owner'],
+        restrictedOwnerVisible: true,
     },
     {
         title: 'Enquiries',
         href: enquiriesIndex(),
         icon: Inbox,
         roles: ['owner'],
+        restrictedOwnerVisible: true,
     },
     {
         title: 'Resources',
@@ -146,9 +162,16 @@ const allNavItems: NavItem[] = [
         roles: ['instructor'],
     },
     {
+        title: 'Owner Access',
+        href: ownersIndex(),
+        icon: UserCog,
+        roles: ['owner'],
+    },
+    {
         title: 'Settings',
         href: profileEdit(),
         icon: Settings,
+        restrictedOwnerVisible: true,
     },
     {
         title: 'Integrations',
@@ -159,7 +182,7 @@ const allNavItems: NavItem[] = [
 
 // Filter nav items based on user role
 const mainNavItems = computed(() =>
-    allNavItems.filter((item) => canSeeNavItem(item.roles)),
+    allNavItems.filter((item) => canSeeNavItem(item.roles, item.restrictedOwnerVisible)),
 );
 
 const footerNavItems: NavItem[] = [];

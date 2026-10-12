@@ -5,6 +5,13 @@ export * from './ui';
 
 import type { Auth } from './auth';
 
+export type SchoolContact = {
+    name: string;
+    location: string;
+    phone: string;
+    email: string;
+};
+
 export type AppPageProps<
     T extends Record<string, unknown> = Record<string, unknown>,
 > = T & {
@@ -18,5 +25,6 @@ export type AppPageProps<
         apple: string | null;
         android: string | null;
     };
+    schoolContact: SchoolContact;
     [key: string]: unknown;
 };

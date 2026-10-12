@@ -21,6 +21,7 @@ use App\Actions\Instructor\DeleteInstructorLocationAction;
 use App\Actions\Instructor\DeleteInstructorProfilePictureAction;
 use App\Actions\Instructor\DeleteRecurringCalendarItemsAction;
 use App\Actions\Instructor\FillAvailableCalendarSlotsAction;
+use App\Actions\Instructor\ForceCompleteAppOnboardingAction;
 use App\Actions\Instructor\GetGroupedStudentsAction;
 use App\Actions\Instructor\GetInstructorCalendarAction;
 use App\Actions\Instructor\GetInstructorDayLessonsAction;
@@ -35,7 +36,9 @@ use App\Actions\Instructor\Mileage\DeleteMileageLogAction;
 use App\Actions\Instructor\Mileage\GetMileageLogsAction;
 use App\Actions\Instructor\Mileage\UpdateMileageLogAction;
 use App\Actions\Instructor\ReplaceInstructorLocationsAction;
+use App\Actions\Instructor\ResetInstructorStripeConnectionAction;
 use App\Actions\Instructor\SendInstructorWelcomeEmailAction;
+use App\Actions\Instructor\SendStripeSetupLinkAction;
 use App\Actions\Instructor\SetInstructorPackageActiveAction;
 use App\Actions\Instructor\StartStripeOnboardingAction;
 use App\Actions\Instructor\SyncStripeAccountStatusAction;
@@ -106,6 +109,8 @@ class InstructorService extends BaseService
         protected LogActivityAction $logActivity,
         protected UpdateInstructorProfileAction $updateInstructorProfile,
         protected CompleteAppOnboardingStepAction $completeAppOnboardingStep,
+        protected ForceCompleteAppOnboardingAction $forceCompleteAppOnboarding,
+        protected SendStripeSetupLinkAction $sendStripeSetupLink,
         protected UploadInstructorProfilePictureAction $uploadProfilePicture,
         protected DeleteInstructorProfilePictureAction $deleteProfilePicture,
         protected DetectCalendarClashesAction $detectCalendarClashes,
@@ -126,6 +131,7 @@ class InstructorService extends BaseService
         protected RecalculateStudentLessonNumbersAction $recalculateStudentLessonNumbers,
         protected StartStripeOnboardingAction $startStripeOnboarding,
         protected SyncStripeAccountStatusAction $syncStripeAccountStatus,
+        protected ResetInstructorStripeConnectionAction $resetStripeConnection,
     ) {}
 
     /**
@@ -833,6 +839,30 @@ class InstructorService extends BaseService
     }
 
     /**
+     * Admin override: mark the instructor's app onboarding as complete,
+     * skipping any remaining steps.
+     */
+    public function forceCompleteAppOnboarding(Instructor $instructor, User $admin): Instructor
+    {
+        $wasComplete = $instructor->hasCompletedAppOnboarding();
+        $previousStep = $instructor->app_onboarding_step;
+
+        $instructor = ($this->forceCompleteAppOnboarding)($instructor);
+
+        if (! $wasComplete) {
+            ($this->logActivity)(
+                $instructor,
+                "{$admin->name} manually marked app onboarding as complete (was on step {$previousStep} of ".Instructor::APP_ONBOARDING_TOTAL_STEPS.')',
+                'profile',
+                ['admin_user_id' => $admin->id, 'previous_step' => $previousStep],
+                'App onboarding marked complete by admin'
+            );
+        }
+
+        return $instructor;
+    }
+
+    /**
      * Create the instructor's Stripe Connect account (if needed) and mint a
      * fresh single-use onboarding Account Link.
      *
@@ -841,6 +871,51 @@ class InstructorService extends BaseService
     public function startStripeOnboarding(Instructor $instructor, string $returnUrl, string $refreshUrl): array
     {
         return ($this->startStripeOnboarding)($instructor, $returnUrl, $refreshUrl);
+    }
+
+    /**
+     * Email the instructor a signed link to connect Stripe themselves, and
+     * log who sent it.
+     */
+    public function sendStripeSetupLink(Instructor $instructor, User $admin): string
+    {
+        $email = ($this->sendStripeSetupLink)($instructor);
+
+        ($this->logActivity)(
+            $instructor,
+            "{$admin->name} sent a Stripe setup link to {$email}",
+            'profile',
+            ['admin_user_id' => $admin->id, 'email' => $email],
+            'Stripe setup link sent'
+        );
+
+        return $email;
+    }
+
+    /**
+     * Owner action: clear the stored Stripe Connect account and connection
+     * flags so the next connect creates a new account. Logs who reset it.
+     * Does not call Stripe.
+     */
+    public function resetStripeConnection(Instructor $instructor, User $owner): Instructor
+    {
+        $previousAccountId = $instructor->stripe_account_id;
+
+        $instructor = ($this->resetStripeConnection)($instructor);
+
+        ($this->logActivity)(
+            $instructor,
+            "{$owner->name} reset the Stripe connection (previous account: ".($previousAccountId ?? 'none').')',
+            'profile',
+            [
+                'admin_user_id' => $owner->id,
+                'previous_stripe_account_id' => $previousAccountId,
+                'reset_at' => now()->toIso8601String(),
+            ],
+            "Stripe connection reset by {$owner->name}"
+        );
+
+        return $instructor;
     }
 
     /**

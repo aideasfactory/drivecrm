@@ -27,6 +27,7 @@ enum EmailTemplateKey: string
     case LearnerLessonResourceRecommendations = 'learner.lesson_resource_recommendations';
     case LearnerLessonFeedbackRequest = 'learner.lesson_feedback_request';
     case InstructorWelcome = 'instructor.welcome';
+    case InstructorStripeSetupLink = 'instructor.stripe_setup_link';
     case InstructorStudentAssigned = 'instructor.student_assigned';
     case InstructorStudentGained = 'instructor.student_gained';
     case InstructorStudentLost = 'instructor.student_lost';
@@ -39,4 +40,5 @@ enum EmailTemplateKey: string
     case InstructorHmrcReconnect = 'instructor.hmrc_reconnect';
     case InstructorYearEndArchiveReady = 'instructor.year_end_archive_ready';
     case SharedNewMessage = 'shared.new_message';
+    case AdminWelcome = 'admin.welcome';
 }

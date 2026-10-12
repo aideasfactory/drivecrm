@@ -87,6 +87,8 @@ const TRANSMISSION_COLORS = {
 }
 const FALLBACK_PIN_COLOR = '#6b7280'
 const TOP_PICK_RING_COLOR = '#f59e0b'
+// Instructor pins are only accurate to ~1km, so never zoom in far enough to imply more
+const MAX_ZOOM = 13
 
 // lucide "flame" path (24x24 viewBox)
 const FLAME_PATH = 'M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z'
@@ -229,9 +231,9 @@ const geocodeAndAddUserMarker = async () => {
   }
 }
 
-// Instructors store latitude/longitude as decimal strings; geocoding is only
-// a fallback for records created before coordinates were captured
-const resolveInstructorPosition = async (instructor) => {
+// Coordinates arrive pre-rounded by the server so the pin is only approximate;
+// instructors without coordinates get no marker
+const resolveInstructorPosition = (instructor) => {
   const lat = parseFloat(instructor.latitude)
   const lng = parseFloat(instructor.longitude)
 
@@ -239,19 +241,7 @@ const resolveInstructorPosition = async (instructor) => {
     return { lat, lng }
   }
 
-  if (!instructor.postcode || !geocoder.value) return null
-
-  const result = await new Promise((resolve, reject) => {
-    geocoder.value.geocode({ address: instructor.postcode + ', UK' }, (results, status) => {
-      if (status === 'OK' && results[0]) {
-        resolve(results[0])
-      } else {
-        reject(new Error(`Geocoding failed for ${instructor.postcode}`))
-      }
-    })
-  })
-
-  return result.geometry.location
+  return null
 }
 
 const transmissionsFor = (instructor) => {
@@ -308,7 +298,7 @@ const buildInfoContent = (instructor) => {
           ${instructor.priority ? '<span class="inline-block px-2 py-0.5 bg-orange-500 text-white text-xs font-bold rounded-full">Top Pick</span>' : ''}
           <div class="mt-1 space-y-1">
             <p class="text-xs text-gray-600">
-              <i class="fa-solid fa-map-marker-alt mr-1"></i>${instructor.address ?? ''} ${instructor.postcode ? '• ' + instructor.postcode : ''}
+              <i class="fa-solid fa-map-marker-alt mr-1"></i>Approximate location
             </p>
             ${nextAvailableRow}
             <div class="flex space-x-1 mt-1">${transmissionBadges}</div>
@@ -394,8 +384,8 @@ const fitMapBounds = () => {
 
     // Don't zoom in too far
     const listener = google.maps.event.addListener(map.value, 'idle', () => {
-      if (map.value.getZoom() > 15) {
-        map.value.setZoom(15)
+      if (map.value.getZoom() > MAX_ZOOM) {
+        map.value.setZoom(MAX_ZOOM)
       }
       google.maps.event.removeListener(listener)
     })
@@ -432,7 +422,7 @@ watch(() => props.selectedInstructorId, (newId) => {
 
       // Pan to selected instructor
       map.value.panTo(marker.getPosition())
-      map.value.setZoom(14)
+      map.value.setZoom(MAX_ZOOM)
     } else {
       marker.setAnimation(null)
     }

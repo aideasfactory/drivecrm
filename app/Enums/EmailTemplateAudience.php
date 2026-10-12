@@ -9,6 +9,7 @@ enum EmailTemplateAudience: string
     case Learner = 'learner';
     case Instructor = 'instructor';
     case Both = 'both';
+    case Admin = 'admin';
 
     public function label(): string
     {
@@ -16,6 +17,7 @@ enum EmailTemplateAudience: string
             self::Learner => 'Learner',
             self::Instructor => 'Instructor',
             self::Both => 'Instructor & learner',
+            self::Admin => 'Admin',
         };
     }
 }

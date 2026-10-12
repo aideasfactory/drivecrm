@@ -40,6 +40,20 @@ export function useRole() {
     const isOwner = computed(() => role.value === UserRole.OWNER);
 
     /**
+     * Check if current user is an owner limited to the restricted admin sections
+     */
+    const isRestrictedOwner = computed(
+        () => isOwner.value && user.value?.owner_access === 'restricted',
+    );
+
+    /**
+     * Check if current user is an owner with access to the entire admin area
+     */
+    const hasFullOwnerAccess = computed(
+        () => isOwner.value && !isRestrictedOwner.value,
+    );
+
+    /**
      * Check if current user is an instructor
      */
     const isInstructor = computed(() => role.value === UserRole.INSTRUCTOR);
@@ -64,9 +78,14 @@ export function useRole() {
      * Check if a navigation item should be visible based on roles
      *
      * @param allowedRoles - Optional array of roles that can see the item. If undefined, visible to all.
+     * @param restrictedOwnerVisible - Whether owners with restricted access can see the item.
      * @returns true if item should be visible
      */
-    const canSeeNavItem = (allowedRoles?: UserRoleType[]): boolean => {
+    const canSeeNavItem = (
+        allowedRoles?: UserRoleType[],
+        restrictedOwnerVisible = false,
+    ): boolean => {
+        if (isRestrictedOwner.value && !restrictedOwnerVisible) return false;
         if (!allowedRoles || allowedRoles.length === 0) return true;
         return hasRole(allowedRoles);
     };
@@ -75,6 +94,8 @@ export function useRole() {
         user,
         role,
         isOwner,
+        isRestrictedOwner,
+        hasFullOwnerAccess,
         isInstructor,
         isStudent,
         hasRole,
