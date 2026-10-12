@@ -11,7 +11,7 @@
     <p>
       1.1 DRIVE Driving School ("DRIVE", "we", "us", "our") is the trading name of watch-learn-drive.com Ltd,
       a company registered in England and Wales (company number 08642764), registered office 1 The Courtyard,
-      Goldsmith Way, Eliot Business Park, Nuneaton, England, CV10 7RJ.
+      Goldsmith Way, Eliot Business Park, Nuneaton, England, CV10 7RJ. VAT number GB138625107.
     </p>
     <p>
       1.2 Contact us on <a href="tel:08003689215">0800 368 9215</a> or
