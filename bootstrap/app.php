@@ -8,6 +8,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
+use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -31,6 +32,25 @@ return Application::configure(basePath: dirname(__DIR__))
         // $schedule->command('bird:sync')->dailyAt('02:30');
     })
     ->withMiddleware(function (Middleware $middleware): void {
+        $trustedProxies = config('hmrc.trusted_proxies');
+
+        if (is_string($trustedProxies) && $trustedProxies !== '') {
+            $at = $trustedProxies === '*'
+                ? '*'
+                : array_values(array_filter(array_map(trim(...), explode(',', $trustedProxies))));
+
+            if ($at !== []) {
+                $middleware->trustProxies(
+                    at: $at,
+                    headers: Request::HEADER_X_FORWARDED_FOR
+                        | Request::HEADER_X_FORWARDED_HOST
+                        | Request::HEADER_X_FORWARDED_PORT
+                        | Request::HEADER_X_FORWARDED_PROTO
+                        | Request::HEADER_X_FORWARDED_AWS_ELB,
+                );
+            }
+        }
+
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
         $middleware->validateCsrfTokens(except: [

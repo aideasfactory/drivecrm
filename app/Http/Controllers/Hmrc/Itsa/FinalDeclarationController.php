@@ -15,6 +15,7 @@ use App\Models\HmrcItsaCalculation;
 use App\Models\HmrcItsaSupplementaryData;
 use App\Services\HmrcItsaFinalDeclarationService;
 use App\Services\HmrcItsaService;
+use App\Support\Hmrc\FraudRequestContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -232,15 +233,17 @@ class FinalDeclarationController extends Controller
     }
 
     /**
-     * @return array{ip: ?string, port: ?string, has_mfa: bool}
+     * @return array{
+     *     ip: ?string,
+     *     port: ?string,
+     *     ip_collected_at: \Illuminate\Support\Carbon,
+     *     has_mfa: bool,
+     *     mfa: ?array{type: string, timestamp: string, unique_reference: string},
+     * }
      */
     private function fraudContextFor(Request $request): array
     {
-        return [
-            'ip' => $request->ip(),
-            'port' => $request->server('REMOTE_PORT'),
-            'has_mfa' => (bool) $request->session()->get('two_factor_authenticated_at'),
-        ];
+        return FraudRequestContext::fromRequest($request);
     }
 
     private function matchesTaxYear(string $startDate, string $taxYear): bool

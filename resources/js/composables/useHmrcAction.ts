@@ -15,7 +15,7 @@ export const useHmrcAction = () => {
     const error = ref<string | null>(null);
 
     const refreshFingerprint = async (): Promise<void> => {
-        const payload = captureHmrcFingerprint();
+        const payload = await captureHmrcFingerprint();
         await axios.post('/hmrc/fingerprint', payload);
     };
 

@@ -138,13 +138,35 @@ return [
     'fraud_headers' => [
         'connection_method' => 'WEB_APP_VIA_SERVER',
         'vendor_product_name' => env('HMRC_VENDOR_PRODUCT_NAME', 'Drive CRM'),
+        'vendor_version_key' => env('HMRC_VENDOR_VERSION_KEY', env('HMRC_USER_ID_KEY', 'drivecrm')),
         'vendor_version' => env('HMRC_VENDOR_VERSION', '1.0.0'),
+        // Public IP of the TLS edge the browser connects to (WAF, load balancer,
+        // or the app server). Required for Gov-Vendor-Public-IP and Gov-Vendor-Forwarded.
         'vendor_public_ip' => env('HMRC_VENDOR_PUBLIC_IP'),
+        // When set, hashed into Gov-Vendor-License-IDs. Leave empty when the
+        // product has no license key on the originating device.
+        'vendor_license_key' => env('HMRC_VENDOR_LICENSE_KEY'),
         'user_id_key' => env('HMRC_USER_ID_KEY', 'drivecrm'),
+        // Request header a reverse proxy can set with the client's TCP source port.
+        // REMOTE_PORT is only used when the TCP peer is the client itself.
+        'client_public_port_header' => env('HMRC_CLIENT_PUBLIC_PORT_HEADER'),
         // Maximum age (minutes) for an HmrcClientFingerprint before an interactive
         // action must re-capture it. Keeps the device snapshot recent for HMRC.
         'fingerprint_max_age_minutes' => 30,
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Trusted proxies
+    |--------------------------------------------------------------------------
+    |
+    | Comma-separated proxy IPs, or "*". Required behind a load balancer so
+    | request()->ip() is the instructor's public address for Gov-Client-Public-IP.
+    | Applied from bootstrap/app.php. Leave empty when the app is reached directly.
+    |
+    */
+
+    'trusted_proxies' => env('TRUSTED_PROXIES'),
 
     /*
     |--------------------------------------------------------------------------

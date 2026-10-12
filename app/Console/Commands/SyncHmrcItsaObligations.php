@@ -11,32 +11,29 @@ use App\Models\HmrcVatObligation;
 use App\Models\User;
 use App\Notifications\ItsaObligationDueSoon;
 use App\Notifications\VatObligationDueSoon;
-use App\Services\HmrcItsaService;
-use App\Services\HmrcVatService;
 use App\Services\PushNotificationService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
-use Throwable;
 
 class SyncHmrcItsaObligations extends Command
 {
     protected $signature = 'hmrc:sync-itsa-obligations {--dry-run : Show what would be synced/notified without doing it}';
 
-    protected $description = 'Refresh ITSA + VAT obligations from HMRC for every connected instructor and queue deadline reminders.';
+    protected $description = 'Queue ITSA and VAT deadline reminders from stored obligations. Unattended HMRC pulls are skipped so WEB_APP_VIA_SERVER fraud headers are only sent from a browser session.';
 
     /**
      * Days-out thresholds at which we send reminder notifications.
      */
     private const REMINDER_THRESHOLDS = [30, 14, 7, 1];
 
-    public function handle(HmrcItsaService $itsa, HmrcVatService $vat, PushNotificationService $push): int
+    public function handle(PushNotificationService $push): int
     {
         $synced = 0;
         $notified = 0;
 
         HmrcToken::query()
             ->with('user.instructor')
-            ->chunkById(100, function ($tokens) use ($itsa, $vat, $push, &$synced, &$notified): void {
+            ->chunkById(100, function ($tokens) use ($push, &$synced, &$notified): void {
                 foreach ($tokens as $token) {
                     $user = $token->user;
                     $instructor = $user?->instructor;
@@ -52,34 +49,12 @@ class SyncHmrcItsaObligations extends Command
                     }
 
                     if ($itsaApplies) {
-                        if ($this->option('dry-run')) {
-                            $this->line("would-sync-itsa user_id={$user->id}");
-                        } else {
-                            try {
-                                $itsa->syncObligations($user);
-                            } catch (Throwable $exception) {
-                                Log::warning('ITSA sync failed for user', [
-                                    'user_id' => $user->id,
-                                    'error' => $exception->getMessage(),
-                                ]);
-                            }
-                        }
+                        $this->skipUnattendedPull('itsa', $user);
                         $notified += $this->dispatchItsaReminders($user, $push);
                     }
 
                     if ($vatApplies) {
-                        if ($this->option('dry-run')) {
-                            $this->line("would-sync-vat user_id={$user->id}");
-                        } else {
-                            try {
-                                $vat->syncObligations($user);
-                            } catch (Throwable $exception) {
-                                Log::warning('VAT sync failed for user', [
-                                    'user_id' => $user->id,
-                                    'error' => $exception->getMessage(),
-                                ]);
-                            }
-                        }
+                        $this->skipUnattendedPull('vat', $user);
                         $notified += $this->dispatchVatReminders($user, $push);
                     }
 
@@ -93,9 +68,30 @@ class SyncHmrcItsaObligations extends Command
             'dry_run' => (bool) $this->option('dry-run'),
         ]);
 
-        $this->info("Synced {$synced} instructor(s); queued {$notified} reminder(s).");
+        $this->info("Checked {$synced} instructor(s); queued {$notified} reminder(s). Remote HMRC pulls were skipped.");
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * A scheduled pull has no originating browser, so it cannot supply
+     * Gov-Client-Public-IP, port, or a fresh device fingerprint. Sending
+     * WEB_APP_VIA_SERVER headers from here would be the request HMRC records.
+     */
+    private function skipUnattendedPull(string $service, User $user): void
+    {
+        $message = "skip unattended {$service} pull user_id={$user->id}";
+
+        if ($this->option('dry-run')) {
+            $this->line($message);
+
+            return;
+        }
+
+        Log::info('Skipped unattended HMRC obligation pull. Refresh from the instructor session so fraud-prevention headers match WEB_APP_VIA_SERVER.', [
+            'service' => $service,
+            'user_id' => $user->id,
+        ]);
     }
 
     private function dispatchItsaReminders(User $user, PushNotificationService $push): int

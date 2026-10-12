@@ -56,10 +56,11 @@ Reviewer says: "we can't see API X subscribed in production."
 
 Reviewer reports specific header errors from their validator.
 
-**Fix:** Run our validator (`/hmrc/test/fraud-headers`) against production with a real connected user. The likely culprits:
-- `Gov-Vendor-Public-IP` not set (env var `HMRC_VENDOR_PUBLIC_IP` must be set in production with the egress IP from our hosting provider)
-- `Gov-Client-Public-IP` reading a private range — fix by configuring trusted proxies in `bootstrap/app.php` so `request()->ip()` returns the real client IP
-- Missing `Gov-Client-Multi-Factor` for users who DID complete MFA — wire up the session marker per HMRC's spec
+**Fix:** With `HMRC_ENVIRONMENT=sandbox`, run the diagnostics validator (`POST /hmrc/test/fraud-headers`) as a connected instructor. It calls `GET /test/fraud-prevention-headers/validate`. The likely culprits:
+- `Gov-Vendor-Public-IP` not set (env var `HMRC_VENDOR_PUBLIC_IP` must be the public IP of the TLS edge)
+- `Gov-Client-Public-IP` reading a private range — set `TRUSTED_PROXIES` so `request()->ip()` returns the real client IP
+- Missing `Gov-Client-Public-Port` behind a proxy — set `HMRC_CLIENT_PUBLIC_PORT_HEADER` to the header that carries the client source port
+- Missing `Gov-Client-Multi-Factor` — only sent after a Fortify two-factor login in that session (`hmrc.mfa`). Password-only sessions omit it, which matches HMRC's missing-data rule
 
 The header builder (`BuildFraudPreventionHeadersAction`) is the single place to adjust.
 
