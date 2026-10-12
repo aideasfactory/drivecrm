@@ -1,19 +1,19 @@
 <template>
   <Card class="lg:sticky lg:top-24">
     <CardHeader>
-      <CardTitle>DRIVE Driving School</CardTitle>
+      <CardTitle>{{ contact.name }}</CardTitle>
       <CardDescription class="space-y-2">
         <div class="flex items-center">
           <MapPin class="mr-2 h-4 w-4" />
-          <span>London & Surrounding Areas</span>
+          <span>{{ contact.location }}</span>
         </div>
         <div class="flex items-center">
           <Phone class="mr-2 h-4 w-4" />
-          <span>020 1234 5678</span>
+          <a :href="phoneHref" class="hover:text-primary hover:underline">{{ contact.phone }}</a>
         </div>
         <div class="flex items-center">
           <Mail class="mr-2 h-4 w-4" />
-          <span>hello@DRIVE.com</span>
+          <a :href="emailHref" class="hover:text-primary hover:underline">{{ contact.email }}</a>
         </div>
       </CardDescription>
     </CardHeader>
@@ -65,4 +65,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { MapPin, Phone, Mail, Shield, Lock, CircleCheck } from 'lucide-vue-next'
+import { useSchoolContact } from '@/composables/useSchoolContact'
+
+const { contact, phoneHref, emailHref } = useSchoolContact()
 </script>

@@ -11,13 +11,13 @@
               </span>
             </div>
             <div class="flex items-center gap-4 sm:gap-6 text-sm">
-              <a href="tel:08003689215" class="hidden md:flex items-center hover:text-primary">
+              <a :href="phoneHref" class="hidden md:flex items-center hover:text-primary">
                 <Phone class="mr-1.5 h-4 w-4" />
-                0800 368 9215
+                {{ contact.phone }}
               </a>
-              <a href="mailto:lessons@just-drive.co.uk" class="hidden md:flex items-center hover:text-primary">
+              <a :href="emailHref" class="hidden md:flex items-center hover:text-primary">
                 <Mail class="mr-1.5 h-4 w-4" />
-                lessons@just-drive.co.uk
+                {{ contact.email }}
               </a>
             </div>
           </div>
@@ -30,15 +30,15 @@
         <div class="lg:col-span-1 order-2 lg:order-1">
           <Card class="lg:sticky lg:top-24">
             <CardHeader>
-              <CardTitle>DRIVE Driving School</CardTitle>
+              <CardTitle>{{ contact.name }}</CardTitle>
               <CardDescription class="space-y-2">
                 <div class="flex items-center">
                   <Phone class="mr-2 h-4 w-4" />
-                  <span>0800 368 9215</span>
+                  <a :href="phoneHref" class="hover:text-primary hover:underline">{{ contact.phone }}</a>
                 </div>
                 <div class="flex items-center">
                   <Mail class="mr-2 h-4 w-4" />
-                  <span>lessons@just-drive.co.uk</span>
+                  <a :href="emailHref" class="hover:text-primary hover:underline">{{ contact.email }}</a>
                 </div>
               </CardDescription>
             </CardHeader>
@@ -317,6 +317,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Spinner } from '@/components/ui/spinner'
 import { Toaster } from '@/components/ui/toast'
 import AppLogoIcon from '@/components/AppLogoIcon.vue'
+import { useSchoolContact } from '@/composables/useSchoolContact'
 import {
   MapPin,
   Phone,
@@ -331,6 +332,7 @@ import {
 } from 'lucide-vue-next'
 
 const page = usePage()
+const { contact, phoneHref, emailHref } = useSchoolContact()
 
 const existingData = (page.props.enquiry as any)?.data?.steps?.step1 || {}
 
