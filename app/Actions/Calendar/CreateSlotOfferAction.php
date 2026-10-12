@@ -115,7 +115,7 @@ class CreateSlotOfferAction
             return $package;
         }
 
-        return ($this->findOrCreateOneOffPackage)($instructor, $package->lesson_price_pence);
+        return ($this->findOrCreateOneOffPackage)($instructor, $package->lesson_price_pence, $package->isVisibleToPupils());
     }
 
     private function notifyStudents(Instructor $instructor, SlotOffer $offer): int

@@ -28,6 +28,15 @@ class Package extends Model
     ];
 
     /**
+     * Match the column default so new instances read correctly before a refresh.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'visible_to_pupils' => true,
+    ];
+
+    /**
      * Attributes to append to the model's array form.
      */
     protected $appends = [
@@ -84,8 +93,7 @@ class Package extends Model
     }
 
     /**
-     * Packages a pupil may choose. Missing values follow the column default (visible)
-     * so rows created before the attribute is hydrated stay on the public list.
+     * Packages a pupil may choose.
      *
      * @param  Builder<Package>  $query
      * @return Builder<Package>
@@ -97,27 +105,7 @@ class Package extends Model
 
     public function isVisibleToPupils(): bool
     {
-        $visible = $this->getAttribute('visible_to_pupils');
-
-        if ($visible === null) {
-            return true;
-        }
-
-        return (bool) $visible;
-    }
-
-    /**
-     * Read the pupil-visibility flag from create/update input.
-     *
-     * @param  array<string, mixed>  $data
-     */
-    public static function visibilityFromInput(array $data, bool $default = true): bool
-    {
-        if (! array_key_exists('visible_to_pupils', $data) || $data['visible_to_pupils'] === null) {
-            return $default;
-        }
-
-        return filter_var($data['visible_to_pupils'], FILTER_VALIDATE_BOOLEAN);
+        return $this->visible_to_pupils;
     }
 
     /**

@@ -19,7 +19,7 @@ class UpdatePackageAction
         ];
 
         if (array_key_exists('visible_to_pupils', $data)) {
-            $attributes['visible_to_pupils'] = Package::visibilityFromInput($data);
+            $attributes['visible_to_pupils'] = $data['visible_to_pupils'];
         }
 
         $package->update($attributes);

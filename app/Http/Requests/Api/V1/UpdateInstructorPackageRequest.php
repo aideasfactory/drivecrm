@@ -24,15 +24,6 @@ class UpdateInstructorPackageRequest extends FormRequest
         ];
     }
 
-    protected function prepareForValidation(): void
-    {
-        if ($this->exists('visible_to_pupils')) {
-            $this->merge([
-                'visible_to_pupils' => $this->boolean('visible_to_pupils'),
-            ]);
-        }
-    }
-
     public function messages(): array
     {
         return [

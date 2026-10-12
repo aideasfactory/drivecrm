@@ -32,7 +32,7 @@ class CreateAdminPackageAction
                 'total_price_pence' => $data['total_price_pence'],
                 'lessons_count' => $data['lessons_count'],
                 'active' => true,
-                'visible_to_pupils' => Package::visibilityFromInput($data),
+                'visible_to_pupils' => $data['visible_to_pupils'] ?? true,
             ]);
 
             $productResult = $this->stripeService->createProduct($package);
