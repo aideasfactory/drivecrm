@@ -24,7 +24,7 @@ class ReleaseUnpaidOrderAction
 
     /**
      * Cancel an order that was never paid: delete its draft lessons (and their
-     * payment rows), put the diary slots back on offer and mark it cancelled.
+     * payment rows), put the diary slots back on offer and mark it expired.
      *
      * The caller must make sure nothing can still be paid (the Stripe session is
      * closed) before calling this. Returns false when the order is no longer
@@ -47,7 +47,7 @@ class ReleaseUnpaidOrderAction
 
             ($this->releaseDraftCalendarItems)($calendarItemIds);
 
-            $lockedOrder->update(['status' => OrderStatus::CANCELLED]);
+            $lockedOrder->update(['status' => OrderStatus::EXPIRED]);
 
             return $calendarItemIds;
         });

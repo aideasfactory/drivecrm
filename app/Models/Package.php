@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\Fees;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -23,6 +24,16 @@ class Package extends Model
         'stripe_price_id',
         'active',
         'is_one_off',
+        'visible_to_pupils',
+    ];
+
+    /**
+     * Match the column default so new instances read correctly before a refresh.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'visible_to_pupils' => true,
     ];
 
     /**
@@ -45,6 +56,7 @@ class Package extends Model
             'lesson_price_pence' => 'integer',
             'active' => 'boolean',
             'is_one_off' => 'boolean',
+            'visible_to_pupils' => 'boolean',
         ];
     }
 
@@ -78,6 +90,31 @@ class Package extends Model
     public function isBespokePackage(): bool
     {
         return $this->instructor_id !== null;
+    }
+
+    /**
+     * Packages a pupil may choose.
+     *
+     * @param  Builder<Package>  $query
+     * @return Builder<Package>
+     */
+    public function scopeVisibleToPupils(Builder $query): Builder
+    {
+        return $query->where('visible_to_pupils', true);
+    }
+
+    public function isVisibleToPupils(): bool
+    {
+        return $this->visible_to_pupils;
+    }
+
+    /**
+     * Weekly payments need at least one follow-on lesson to invoice, so
+     * single-lesson packages can only be paid in full.
+     */
+    public function allowsWeeklyPayment(): bool
+    {
+        return $this->lessons_count > 1;
     }
 
     /**

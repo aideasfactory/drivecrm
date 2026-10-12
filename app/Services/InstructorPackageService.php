@@ -32,6 +32,19 @@ class InstructorPackageService extends BaseService
     }
 
     /**
+     * Active packages a pupil is allowed to choose. Private packages stay on
+     * the instructor list and are omitted here.
+     *
+     * @return Collection<int, Package>
+     */
+    public function getPackagesVisibleToPupils(Instructor $instructor): Collection
+    {
+        return $this->getPackages($instructor)
+            ->filter(fn (Package $package): bool => $package->isVisibleToPupils())
+            ->values();
+    }
+
+    /**
      * Create a new bespoke package for an instructor.
      */
     public function createPackage(Instructor $instructor, array $data): Package

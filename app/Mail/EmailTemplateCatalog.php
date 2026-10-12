@@ -57,6 +57,7 @@ final class EmailTemplateCatalog
             ...self::learnerDefinitions(),
             ...self::instructorDefinitions(),
             ...self::sharedDefinitions(),
+            ...self::adminDefinitions(),
         ] as $definition) {
             $definitions[$definition['key']] = $definition;
         }
@@ -283,6 +284,13 @@ final class EmailTemplateCatalog
                 'login_url' => 'Login URL',
             ], 'Welcome to {{app_name}} — set up your instructor account', 'Welcome to {{app_name}}, {{recipient_name}}', "An administrator has just created an instructor account for you on {{app_name}}. To start managing your pupils, calendar and payouts, you'll need to set a password and sign in.\n\n**Here's what to do next:**\n1. Click the **Set up your account** button below.\n2. Choose a strong password on the page that opens.\n3. Sign in with your email and the password you just created.\n\n**Your sign-in email:** {{email}}\n\n{{action_button}}\n\nIf the button doesn't work, copy and paste this link into your browser:\n{{setup_url}}\n\nFor your security, this setup link will expire in 24 hours. If it expires before you've finished, just visit {{login_url}} and choose **Forgot password** — we'll send a fresh link.\n\nDidn't expect this email? You can safely ignore it — no account is active until the link above is used.", null, 'Set up your account'),
 
+            self::entry(EmailTemplateKey::InstructorStripeSetupLink, 'Stripe setup link', $audience, 'Sent when an admin emails an instructor a link to connect their Stripe account so they can be paid.', [
+                'recipient_name' => 'Instructor first name',
+                'app_name' => 'Application name',
+                'setup_url' => 'Stripe setup URL',
+                'expires_in_days' => 'Link expiry in days',
+            ], 'Connect Stripe to get paid on {{app_name}}', 'Hello {{recipient_name}},', "To receive payments for your lessons on {{app_name}}, you need to connect a Stripe account. It only takes a few minutes.\n\n**Here's what to do:**\n1. Click the **Connect Stripe** button below.\n2. Follow Stripe's steps to add your details and bank account.\n3. When you see **You're all sorted**, open the {{app_name}} app. It will show you as connected.\n\n{{action_button}}\n\nIf the button doesn't work, copy and paste this link into your browser:\n{{setup_url}}\n\nThis link expires in {{expires_in_days}} days. If it expires, ask us to send you a new one.", 'Thanks, {{app_name}}', 'Connect Stripe'),
+
             self::entry(EmailTemplateKey::InstructorStudentAssigned, 'New student assigned by admin', $audience, 'Sent when an admin assigns a learner to an instructor.', [
                 'recipient_name' => 'Instructor first name',
                 'student_name' => 'Learner name',
@@ -393,6 +401,34 @@ final class EmailTemplateCatalog
                 'sender_name' => 'Sender name',
                 'message_excerpt' => 'Short excerpt of the message',
             ], 'New Message from {{sender_name}}', 'Hello {{recipient_name}}!', "{{sender_name}} has sent you a new message:\n\n\"{{message_excerpt}}\"\n\n{{action_button}}\n\nThank you for using our platform!", null, 'View Messages'),
+        ];
+    }
+
+    /**
+     * @return list<array{
+     *     key: string,
+     *     name: string,
+     *     audience: string,
+     *     description: string,
+     *     placeholders: array<string, string>,
+     *     subject: string,
+     *     greeting: string,
+     *     body: string,
+     *     salutation: string,
+     *     action_text: ?string
+     * }>
+     */
+    private static function adminDefinitions(): array
+    {
+        return [
+            self::entry(EmailTemplateKey::AdminWelcome, 'Admin welcome / login details', EmailTemplateAudience::Admin->value, 'Sent when an owner adds a new admin from Owner Access, with their temporary password.', [
+                'recipient_name' => 'Admin first name',
+                'app_name' => 'Application name',
+                'email' => 'Login email',
+                'temporary_password' => 'Temporary password',
+                'access_level' => 'Admin access level (All access / Restricted)',
+                'login_url' => 'Login URL',
+            ], 'Your {{app_name}} admin account', 'Hello {{recipient_name}},', "An admin account has been created for you on {{app_name}}.\n\n**Email:** {{email}}\n**Temporary password:** {{temporary_password}}\n**Access level:** {{access_level}}\n\n{{action_button}}\n\nPlease sign in and change this password straight away from Settings → Password.", 'Thanks, {{app_name}}', 'Sign in'),
         ];
     }
 

@@ -68,7 +68,7 @@
       <strong>Where SmartDriving is the processor.</strong> Where an Instructor uses the Platform to manage their
       own Pupils, lessons and pupil communications, the Instructor is the controller of that Pupil data and
       SmartDriving processes that data on the Instructor's behalf. The terms of that processing are set out in
-      our <a href="/terms-of-service">Terms of Service</a>. Where you are a Pupil and wish to exercise data
+      our <a href="/instructor-terms">Instructor Platform Terms</a>. Where you are a Pupil and wish to exercise data
       subject rights against your Instructor, please contact your Instructor in the first instance.
     </p>
 

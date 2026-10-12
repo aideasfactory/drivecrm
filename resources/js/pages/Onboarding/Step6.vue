@@ -59,7 +59,7 @@
                     <span>Total:</span>
                     <span>{{ form.payment_mode === 'weekly' ? weeklyTotal : upfrontTotal }}</span>
                   </div>
-                  <p v-if="form.payment_mode !== 'weekly'" class="text-xs text-muted-foreground">
+                  <p v-if="weeklyAvailable && form.payment_mode !== 'weekly'" class="text-xs text-muted-foreground">
                     Or {{ pricing?.weekly?.per_lesson || '0.00' }} per lesson if paid weekly (incl. fees)
                   </p>
                 </div>
@@ -129,6 +129,7 @@
                       </label>
 
                       <label
+                        v-if="weeklyAvailable"
                         class="flex items-center p-4 border-2 rounded-lg cursor-pointer transition-colors"
                         :class="form.payment_mode === 'weekly' ? 'border-primary bg-primary/5' : 'hover:border-primary hover:bg-primary/5'"
                       >
@@ -154,6 +155,13 @@
                         </div>
                       </label>
                     </div>
+
+                    <p v-if="!weeklyAvailable" class="mt-2 text-sm text-muted-foreground">
+                      Single lesson bookings are paid in full. Weekly payments are available on packages of 2 or more lessons.
+                    </p>
+                    <p v-if="form.errors.payment_mode" class="mt-2 text-sm text-destructive">
+                      {{ form.errors.payment_mode }}
+                    </p>
 
                     <!-- Weekly Schedule Info -->
                     <Alert v-if="form.payment_mode === 'weekly'" class="mt-4" variant="default">
@@ -271,8 +279,8 @@
                         <label for="terms" class="cursor-pointer text-sm leading-relaxed text-muted-foreground">
                           I agree to the
                           <a href="/terms-of-service" target="_blank" rel="noopener noreferrer" class="font-medium text-foreground underline underline-offset-4 hover:text-primary">Terms of Service</a>,
-                          <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" class="font-medium text-foreground underline underline-offset-4 hover:text-primary">Privacy Policy</a>, and
-                          <a href="/cookie-policy" target="_blank" rel="noopener noreferrer" class="font-medium text-foreground underline underline-offset-4 hover:text-primary">Cookie Policy</a>. I understand the cancellation policy and payment terms.
+                          <a href="https://just-drive.co.uk/privacy-policy/" target="_blank" rel="noopener noreferrer" class="font-medium text-foreground underline underline-offset-4 hover:text-primary">Privacy Policy</a>, and
+                          <a href="https://just-drive.co.uk/cookies-policy/" target="_blank" rel="noopener noreferrer" class="font-medium text-foreground underline underline-offset-4 hover:text-primary">Cookie Policy</a>. I understand the cancellation policy and payment terms.
                         </label>
                       </div>
                     </CardContent>
@@ -376,6 +384,8 @@ watch(includeTestPassGuarantee, (newValue) => {
 })
 
 const uuid = computed(() => props.uuid || page.props.enquiry?.id)
+
+const weeklyAvailable = computed(() => props.package?.allows_weekly_payment ?? false)
 
 // Mirrors TestPassGuarantee::resolve() — free when paid in full on a large
 // enough booking, otherwise charged only if the learner opts in.

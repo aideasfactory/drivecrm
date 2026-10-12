@@ -158,7 +158,7 @@
                               <div class="space-y-1 text-sm">
                                 <div class="flex items-center">
                                   <MapPin class="mr-2 h-3 w-3" />
-                                  <span>{{ instructor.address }} • {{ instructor.postcode }}</span>
+                                  <span>Covers your area</span>
                                 </div>
                                 <div class="flex items-center font-medium">
                                   <Calendar class="mr-2 h-3 w-3" />
@@ -194,10 +194,10 @@
                             <ArrowLeft class="mr-2 h-4 w-4" />
                             Change postcode
                           </Button>
-                          <a href="mailto:lessons@just-drive.co.uk" class="block w-full">
+                          <a :href="emailHref" class="block w-full">
                             <Button type="button" class="w-full">
                               <Mail class="mr-2 h-4 w-4" />
-                              Email lessons@just-drive.co.uk
+                              Email {{ contact.email }}
                             </Button>
                           </a>
                         </div>
@@ -378,6 +378,7 @@ import InstructorMap from '@/components/Onboarding/InstructorMap.vue'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
+import { useSchoolContact } from '@/composables/useSchoolContact'
 import {
   ArrowLeft,
   ArrowRight,
@@ -411,6 +412,7 @@ const props = defineProps({
 })
 
 const page = usePage()
+const { contact, emailHref } = useSchoolContact()
 
 const INITIAL_VISIBLE_COUNT = 5
 

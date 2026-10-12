@@ -11,7 +11,8 @@ use RuntimeException;
 class SyncStripeAccountStatusAction
 {
     public function __construct(
-        protected StripeService $stripeService
+        protected StripeService $stripeService,
+        protected ApplyStripeAccountStatusAction $applyStripeAccountStatus
     ) {}
 
     /**
@@ -32,13 +33,6 @@ class SyncStripeAccountStatusAction
             throw new RuntimeException('Failed to retrieve Stripe account: '.$accountResult['error']);
         }
 
-        $account = $accountResult['account'];
-
-        $instructor->onboarding_complete = $account->details_submitted ?? false;
-        $instructor->charges_enabled = $account->charges_enabled ?? false;
-        $instructor->payouts_enabled = $account->payouts_enabled ?? false;
-        $instructor->save();
-
-        return $instructor;
+        return ($this->applyStripeAccountStatus)($instructor, $accountResult['account']);
     }
 }

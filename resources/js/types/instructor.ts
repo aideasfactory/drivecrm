@@ -26,6 +26,8 @@ export interface InstructorDetail {
   locations: Location[]
   hmrc_connected?: boolean
   welcome_email_pending?: boolean
+  app_onboarding_step?: number
+  app_onboarding_complete?: boolean
 }
 
 export interface InstructorStats {
@@ -88,6 +90,7 @@ export interface Package {
   formatted_lesson_price: string
   active: boolean
   is_one_off?: boolean
+  visible_to_pupils?: boolean
   is_platform_package: boolean
   is_bespoke_package: boolean
 }

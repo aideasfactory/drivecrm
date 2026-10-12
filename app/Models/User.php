@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\OwnerAccess;
 use App\Enums\UserRole;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -33,6 +34,7 @@ class User extends Authenticatable
         'welcome_email_pending',
         'imported_at',
         'role',
+        'owner_access',
         'stripe_customer_id',
         'expo_push_token',
         'current_team_id',
@@ -62,6 +64,7 @@ class User extends Authenticatable
             'welcome_email_pending' => 'boolean',
             'imported_at' => 'datetime',
             'role' => UserRole::class,
+            'owner_access' => OwnerAccess::class,
         ];
     }
 
@@ -163,6 +166,22 @@ class User extends Authenticatable
     public function isOwner(): bool
     {
         return $this->role === UserRole::OWNER;
+    }
+
+    /**
+     * Check if user is an owner limited to the restricted admin sections.
+     */
+    public function isRestrictedOwner(): bool
+    {
+        return $this->isOwner() && $this->owner_access === OwnerAccess::Restricted;
+    }
+
+    /**
+     * Check if user is an owner with access to the entire admin area.
+     */
+    public function hasFullOwnerAccess(): bool
+    {
+        return $this->isOwner() && ! $this->isRestrictedOwner();
     }
 
     /**

@@ -46,9 +46,9 @@ withDefaults(defineProps<Props>(), {
 const policyHrefs: Record<string, string> = {
   'Terms & Conditions': '/terms-of-service',
   'Terms of Service': '/terms-of-service',
-  'Privacy Policy': '/privacy-policy',
-  Cookies: '/cookie-policy',
-  'Cookie Policy': '/cookie-policy',
+  'Privacy Policy': 'https://just-drive.co.uk/privacy-policy/',
+  Cookies: 'https://just-drive.co.uk/cookies-policy/',
+  'Cookie Policy': 'https://just-drive.co.uk/cookies-policy/',
   'Contact Us': 'mailto:hello@just-drive.co.uk',
 }
 

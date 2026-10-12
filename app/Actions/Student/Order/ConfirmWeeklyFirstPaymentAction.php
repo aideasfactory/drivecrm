@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Student\Order;
 
 use App\Actions\Calendar\ConfirmCalendarItemsAction;
+use App\Actions\Student\AssignStudentOnPaidBookingAction;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
 use App\Models\Order;
@@ -15,6 +16,7 @@ class ConfirmWeeklyFirstPaymentAction
 {
     public function __construct(
         protected ConfirmCalendarItemsAction $confirmCalendarItems,
+        protected AssignStudentOnPaidBookingAction $assignStudentOnPaidBooking,
     ) {}
 
     /**
@@ -47,6 +49,8 @@ class ConfirmWeeklyFirstPaymentAction
             $lockedOrder->update(['status' => OrderStatus::ACTIVE]);
 
             ($this->confirmCalendarItems)($lockedOrder);
+
+            ($this->assignStudentOnPaidBooking)($lockedOrder);
 
             return true;
         });

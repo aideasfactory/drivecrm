@@ -48,6 +48,10 @@ class LoginResponse implements LoginResponseContract
             }
         }
 
+        if ($user->isRestrictedOwner()) {
+            return route('instructors.index');
+        }
+
         return config('fortify.home', '/dashboard');
     }
 }

@@ -74,6 +74,14 @@ final class PushNotificationCatalog
                 'trigger' => "The instructor offers a short-notice slot. Sent to all of the instructor's active pupils.",
             ],
             [
+                'key' => 'lesson_paid',
+                'name' => 'Lesson paid',
+                'audience' => 'instructor',
+                'title' => 'Lesson paid (or "Lessons paid" for a pay-in-full booking)',
+                'body' => '{pupil} has paid for their lesson on {date} at {time}. Pay in full: {pupil} has paid for {count} lessons, starting {date} at {time}.',
+                'trigger' => 'A lesson is marked as paid: a weekly lesson invoice or first weekly payment succeeds, or a pay-in-full booking is paid.',
+            ],
+            [
                 'key' => 'miles_start',
                 'name' => 'Mileage reminder (start)',
                 'audience' => 'instructor',

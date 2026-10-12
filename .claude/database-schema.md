@@ -256,6 +256,7 @@ Core user table storing all users in the system (owners, instructors, and studen
 | `welcome_email_pending` | boolean | DEFAULT false | True between new-user creation and the welcome email being dispatched. Cleared by `SendOrderConfirmationEmailAction` (web onboarding) or `SendInstructorWelcomeEmailAction` (instructor invite). Stays `true` if sending fails so admins can resend. |
 | `imported_at` | timestamp | NULLABLE, INDEXED | Set when the account was created by the legacy importer (Data Import page). No emails go out at import; `import:send-welcome-emails` sends the welcome email to every imported user still `welcome_email_pending = true`. |
 | `role` | enum('owner', 'instructor', 'student') | DEFAULT 'student' | User role in the system |
+| `owner_access` | varchar(20) | DEFAULT 'all' | Admin-area access level (`OwnerAccess` enum), only meaningful when `role = owner`. `all` = entire admin area; `restricted` = Instructors, Students, Transfer Student, Support Messages, Enquiries and own Settings only (enforced by `RestrictOwnerAccess` middleware). Managed by full-access owners on the Owner Access page (`/owners`); owners cannot change their own value. Added 2026-10-01. |
 | `stripe_customer_id` | varchar(255) | NULLABLE, INDEXED | Stripe customer ID |
 | `current_team_id` | bigint unsigned | NULLABLE, FK → teams.id (ON DELETE SET NULL) | Current team assignment |
 | `remember_token` | varchar(100) | NULLABLE | Remember me token |
@@ -272,6 +273,7 @@ Core user table storing all users in the system (owners, instructors, and studen
 
 **Enums:**
 - Role: `owner`, `instructor`, `student`
+- Owner access: `all`, `restricted`
 
 ---
 
@@ -381,7 +383,8 @@ Extended profile for users with student role.
 
 **Business Logic:**
 - Students can be assigned to a specific instructor
-- Students inherit instructor assignments from their orders
+- A learner is added to an instructor's contact list (`students.instructor_id`) only after a booking's first payment is confirmed (`AssignStudentOnPaidBookingAction`). Website checkout creates the student and the unpaid hold without setting `instructor_id`. An existing assignment is left unchanged until that payment. Instructor-created pupils, admin assignment, and PIN attach still assign immediately.
+- Students inherit instructor assignments from their orders once those orders are paid
 - Status change to `inactive` should include a reason in `inactive_reason`
 - Removing a student from an instructor sets `instructor_id = null` (soft-remove). This does **not** delete the profile.
 - Staff delete (`DELETE /students/{student}`, owners or the assigned instructor) soft-deletes the student (`deleted_at`), detaches `instructor_id`, sets `status = inactive` / `inactive_reason = Profile deleted by staff`, removes the profile picture, and locks the linked `users` row (tokens revoked, sessions cleared, password randomised, email rewritten to `deleted-student-{student_id}@deleted.invalid`). Historical `belongsTo` student relations use `withTrashed()` so invoices and lessons still resolve. This is separate from user-requested GDPR deletion (`ProcessAccountDeletionAction`), which anonymises PII in place without setting `deleted_at`.
@@ -404,6 +407,7 @@ Lesson packages (both platform defaults and instructor bespoke packages).
 | `stripe_price_id` | varchar(255) | NULLABLE | Stripe price ID |
 | `active` | boolean | DEFAULT true | Whether package is available for new bookings. Instructors hide packages from the CRM admin (Details → Packages) by setting this to false. The row is kept so `orders.package_id` and `slot_offers.package_id` stay valid. Mobile and booking UIs only list `active = true`. Do not hard-delete packages: those FKs are `ON DELETE CASCADE` and would wipe orders (and therefore lessons and payments). |
 | `is_one_off` | boolean | DEFAULT false | True for reusable short-notice "One-Off Package" rows created from Offer Slot |
+| `visible_to_pupils` | boolean | DEFAULT true, NOT NULL | Whether pupils can choose this package. `true` (the default, including every existing row) lists it in pupil package pickers. `false` keeps it private: hidden from website onboarding (unless staff are booking on a pupil's behalf), hidden from `GET /api/v1/student/packages`, and rejected when a pupil tries to book or price it. Instructors and admins still see it and can book it for a pupil. |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
@@ -420,6 +424,7 @@ Lesson packages (both platform defaults and instructor bespoke packages).
 - `lesson_price_pence` is automatically calculated on save: `total_price_pence / lessons_count`
 - Prices are stored in pence (GBP smallest unit)
 - `is_one_off` packages are 1-lesson instructor packages created when offering a slot at a custom price. The same instructor + price combination is reused on later offers.
+- `visible_to_pupils` defaults to true so existing packages stay on pupil lists. Set it false for a private price (for example friends and family). Private packages stay on instructor and admin package screens and can still be used when staff book on a pupil's behalf. Pupils cannot select them during onboarding or checkout, and the student package API omits them.
 - Instructor-created packages are hidden, not deleted: `DELETE /instructors/{id}/packages/{package}` sets `active = false`. `PATCH .../restore` sets `active = true`. Lessons and `lesson_payments` have no `package_id` — they belong to orders, which snapshot package name and prices.
 
 ---
@@ -446,12 +451,14 @@ Student enrollments/purchases of lesson packages.
 | `payment_mode` | enum('upfront', 'weekly') | DEFAULT 'upfront' | Payment method chosen |
 | `total_price_pence` | integer unsigned | NULLABLE | Total charge amount in pence (package + booking fee + digital fees - discounts). Sent to Stripe. |
 | `payment_mode` | enum('upfront', 'weekly', 'imported') | DEFAULT 'upfront' | Payment method chosen. `imported` = lessons brought in from another system by the legacy importer — settled outside the platform, no Stripe IDs, no lesson_payments, never paid out. |
-| `status` | enum('pending', 'active', 'completed', 'cancelled') | DEFAULT 'pending' | Order status |
+| `status` | enum('pending', 'active', 'completed', 'cancelled', 'expired') | DEFAULT 'pending' | Order status. `cancelled` = cancelled by instructor/admin (lessons kept as `cancelled`). `expired` = unpaid booking released when its hold ran out (lessons deleted). `Order::isExpired()`, `Order::isClosed()` (cancelled or expired). |
 | `stripe_payment_intent_id` | varchar(255) | NULLABLE | Stripe Payment Intent ID (for upfront payments) |
 | `stripe_charge_id` | varchar(255) | NULLABLE | Stripe Charge ID that funded this upfront order (the PaymentIntent's `latest_charge`). Persisted at payment time (`checkout.session.completed` / `payment_intent.succeeded` webhooks) so per-lesson payout Transfers can cite it as `source_transaction`, letting Stripe draw against that specific charge instead of the general available balance. Nullable for legacy orders created before this column existed. |
 | `stripe_subscription_id` | varchar(255) | NULLABLE | Stripe Subscription ID (for weekly payments) |
 | `stripe_checkout_session_id` | varchar(255) | NULLABLE | Stripe Checkout Session ID. For weekly orders, the session that takes the first week's payment. |
 | `payment_hold_expires_at` | timestamp | NULLABLE | When an unpaid (`pending`) booking is released if its first payment hasn't been made. Set at booking: +10 min (learner via booking form or app; on the booking form this is when they press Pay at step 6, as step 4 only remembers the chosen slot and no longer drafts diary items), UK midnight (bookings team) or 48h before the first lesson (instructor/admin diary). Emailed-link holds are never less than 15 minutes. Not extended by a resend. `null` for legacy/imported orders. Rules in `App\Support\BookingPayments` / `config/booking_payments.php`. |
+| `invoice_sent_at` | timestamp | NULLABLE, INDEX | When the bookings team's payment-link email was first sent for a staff booking. Set once by `OrderService::sendPaymentLink` (staff sends only); resends don't change it. Backfilled from `created_at` for existing staff bookings. |
+| `booked_by_user_id` | bigint unsigned | FOREIGN KEY (users.id), NULLABLE, ON DELETE SET NULL | Bookings-team user who booked this order on the student's behalf ("Book lessons for a student" form). Copied from the enquiry's `data.staff_booking.user_id` by `CreateOrderFromEnquiryAction`. `null` = booked by the learner, app or instructor. `Order::isStaffBooking()`. |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
@@ -464,20 +471,22 @@ Student enrollments/purchases of lesson packages.
 - Belongs to one `Student`
 - Belongs to one `Instructor`
 - Belongs to one `Package` (template reference — pricing should be read from snapshot columns)
+- Belongs to one `User` as `bookedBy` (nullable — bookings-team user for staff bookings)
 - Has many `Lessons`
 - Has many `LessonPayments` (through Lessons)
 
 **Enums:**
 - Payment Mode: `upfront`, `weekly`, `imported`
-- Status: `pending`, `active`, `completed`, `cancelled`
+- Status: `pending`, `active`, `completed`, `cancelled`, `expired`
 
 **Business Logic:**
 - **Pay at booking:** every order is created `pending` with `draft` lessons and `draft` calendar items. Nothing is confirmed (no confirmation/welcome email) until the first payment lands.
 - Upfront payment: the full amount via Stripe Checkout. On payment, the order becomes `active` and all its calendar items `booked`.
 - Weekly payment: the first week (plus a paid guarantee) via Stripe Checkout, which marks the first `lesson_payments` row `paid`. On payment, the order becomes `active`, that week's item becomes `booked` and the rest `reserved`. Later weeks are invoiced by email when the previous lesson is signed off, due 48h before the lesson.
-- **Release:** `orders:release-expired-holds` (every minute) expires the Stripe session, then deletes the lessons (lesson_payments cascade), returns the slots to availability and marks the order `cancelled`. The order is kept if Stripe reports the session already paid. The midnight `calendar:cleanup-drafts` skips items belonging to pending orders with a hold.
+- **Release:** `orders:release-expired-holds` (every minute) expires the Stripe session, then deletes the lessons (lesson_payments cascade), returns the slots to availability and marks the order `expired`. A payment landing on a closed (`cancelled`/`expired`) order alerts Head Office to refund it. The order is kept if Stripe reports the session already paid. The midnight `calendar:cleanup-drafts` skips items belonging to pending orders with a hold.
 - **Pass Your Test Guarantee (booking form only):** free when booked hours (lessons × slot length from step 4) ≥ `config('test_pass_guarantee.free_minimum_hours')` (10) and `payment_mode = upfront`. Otherwise the learner can opt in on the payment step (step 6) for `config('test_pass_guarantee.price')` (£50). Upfront: charged as a separate Stripe Checkout line item. Weekly: added in full to the first `lesson_payments` row (see `lesson_payments.test_pass_guarantee_pence`); the rest of the total is spread evenly as usual. Rules live in `App\Support\TestPassGuarantee`.
 - **Imported orders** (`payment_mode = imported`): one per imported student, on a hidden (`active = false`) per-instructor "Imported lessons" package with £0 totals. Lessons on them report `payment_status = paid` / `is_paid = true` so they can be signed off in the app and CRM. `SignOffLessonAction` skips the Stripe onboarding + payment guards and creates **no Payout**; `LessonSignOffService` also skips the student feedback email, next-invoice and resource recommendations. `Order::isImported()`, `Order::isPrepaid()` (confirmed upfront or imported).
+- **Staff bookings:** orders with `booked_by_user_id` set are listed on the admin "Lessons booked" page (`ListStaffBookedLessonsAction`) so unpaid ones can be chased.
 - **Price snapshot:** `package_name`, `package_total_price_pence`, `package_lesson_price_pence`, and `package_lessons_count` are copied from the package at order creation time. Always use these snapshot columns for pricing/display — never read live from `packages` table via the `package` relationship for pricing data.
 
 ---
@@ -864,6 +873,7 @@ Defines time slots within a calendar date.
 - `item_type = 'practical_test'`: blocks a 2.5hr window (1hr prep + 1hr test + 30min buffer), always `is_available = false`
 - Practical-test slots store the assigned `student_id`. Creating one carries the test date onto that student's `book_practical_test` checklist item (date set, item checked); deleting one clears that checklist date (date nulled, item unchecked)
 - `status` tracks the booking lifecycle: `draft` → `reserved`/`booked` → `completed`
+- A `draft` hold (checkout reached, payment not taken) is shown without the pupil's name. The name is attached once the slot becomes `reserved` or `booked` after the first payment.
 - Draft items are cleaned up by `calendar:cleanup-drafts` command if abandoned
 - Releasing a draft (unpaid hold released or cleaned up) **deletes** items with `created_by_hold = true` (and their travel blocks) and puts all other drafts back on offer (`is_available = true`, `status` and `created_by_hold` cleared). An unpaid booking therefore never leaves availability the instructor did not offer
 - A booking is refused if any week's lesson time overlaps another lesson (`draft`/`reserved`/`booked`/`completed`), a blocked-out slot (`is_available = false`) or a practical test on the same calendar. Travel blocks are not clashes

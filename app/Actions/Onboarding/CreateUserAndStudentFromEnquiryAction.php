@@ -33,7 +33,6 @@ class CreateUserAndStudentFromEnquiryAction
             DB::beginTransaction();
 
             $step1 = $enquiry->getStepData(1) ?? [];
-            $step2 = $enquiry->getStepData(2) ?? [];
             $step5 = $enquiry->getStepData(5) ?? [];
 
             // Determine email based on booking_for_someone_else flag
@@ -103,7 +102,7 @@ class CreateUserAndStudentFromEnquiryAction
 
             // Get or update student record — updateOrCreate ensures returning
             // users get their details refreshed with the latest onboarding data
-            $studentData = $this->getStudentData($enquiry, $step1, $step2, $step5, $bookingForSomeoneElse);
+            $studentData = $this->getStudentData($step1, $step5, $bookingForSomeoneElse);
             $student = Student::updateOrCreate(
                 ['user_id' => $user->id],
                 $studentData
@@ -148,15 +147,17 @@ class CreateUserAndStudentFromEnquiryAction
 
     /**
      * Build student data array based on booking context.
+     *
+     * Instructor assignment is intentionally omitted. The learner joins the
+     * instructor's contact list only after the booking's first payment
+     * (`AssignStudentOnPaidBookingAction`). An existing assignment is left
+     * untouched so a later unpaid checkout cannot move or add them early.
      */
-    protected function getStudentData(Enquiry $enquiry, array $step1, array $step2, array $step5, bool $bookingForSomeoneElse): array
+    protected function getStudentData(array $step1, array $step5, bool $bookingForSomeoneElse): array
     {
-        $instructorId = $step2['instructor_id'] ?? null;
-
         if ($bookingForSomeoneElse) {
             // Learner is the student, contact (from step1) is the booker
             return [
-                'instructor_id' => $instructorId,
                 'first_name' => $step5['learner_first_name'] ?? null,
                 'surname' => $step5['learner_last_name'] ?? null,
                 'email' => $step5['learner_email'] ?? null,
@@ -175,7 +176,6 @@ class CreateUserAndStudentFromEnquiryAction
 
         // Contact (from step1) is the student (booking for self)
         return [
-            'instructor_id' => $instructorId,
             'first_name' => $step1['first_name'] ?? null,
             'surname' => $step1['last_name'] ?? null,
             'email' => $step1['email'] ?? null,

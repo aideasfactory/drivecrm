@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Enums\PaymentMode;
+use App\Models\Package;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreOrderRequest extends FormRequest
 {
@@ -27,6 +29,26 @@ class StoreOrderRequest extends FormRequest
             'first_lesson_date' => ['required_without:calendar_item_id', 'nullable', 'date', 'date_format:Y-m-d', 'after_or_equal:today'],
             'start_time' => ['required_without:calendar_item_id', 'nullable', 'string', 'date_format:H:i'],
             'end_time' => ['required_without:calendar_item_id', 'nullable', 'string', 'date_format:H:i', 'after:start_time'],
+        ];
+    }
+
+    /**
+     * @return array<int, callable>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                if ($this->input('payment_mode') !== PaymentMode::WEEKLY->value) {
+                    return;
+                }
+
+                $package = Package::find($this->integer('package_id'));
+
+                if ($package && ! $package->allowsWeeklyPayment()) {
+                    $validator->errors()->add('payment_mode', 'Single lesson bookings must be paid in full.');
+                }
+            },
         ];
     }
 }

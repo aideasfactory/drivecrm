@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Actions\Calendar\CloseOpenSlotOffersForItemsAction;
 use App\Actions\Calendar\DetectCalendarClashesAction;
 use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
+use App\Actions\Payment\NotifyInstructorOfLessonPaidAction;
 use App\Actions\Payment\SendLessonInvoiceAction;
 use App\Actions\Payment\SendPaymentReceivedEmailsAction;
 use App\Actions\Shared\LogActivityAction;
@@ -59,6 +60,7 @@ class OrderService extends BaseService
         protected GrantTestPassGuaranteeAction $grantTestPassGuarantee,
         protected ConfirmUpfrontPaymentAction $confirmUpfrontPaymentAction,
         protected SendPaymentReceivedEmailsAction $sendPaymentReceivedEmails,
+        protected NotifyInstructorOfLessonPaidAction $notifyInstructorOfLessonPaid,
     ) {}
 
     /**
@@ -319,6 +321,11 @@ class OrderService extends BaseService
             ]);
         }
 
+        if ($isBookedByStaff && $order->invoice_sent_at === null) {
+            $order->invoice_sent_at = now();
+            $order->save();
+        }
+
         if (! $isBookedByStaff && $student->owns_account && $student->user?->expo_push_token) {
             $this->pushNotificationService->queueIfHasToken(
                 $student->user,
@@ -419,6 +426,7 @@ class OrderService extends BaseService
                     ? 'This booking is already confirmed. Weekly lesson invoices are sent separately.'
                     : 'This order has already been paid.',
                 OrderStatus::CANCELLED => 'This order has been cancelled.',
+                OrderStatus::EXPIRED => 'The time to pay for this booking ran out and the lessons were released.',
                 default => 'This order is not awaiting payment.',
             };
 
@@ -499,7 +507,7 @@ class OrderService extends BaseService
 
         $order->refresh();
 
-        if ($order->status === OrderStatus::CANCELLED) {
+        if ($order->isClosed()) {
             return [
                 'verified' => false,
                 'order' => $order,
@@ -543,7 +551,7 @@ class OrderService extends BaseService
 
         $order->refresh();
 
-        if ($order->status === OrderStatus::CANCELLED) {
+        if ($order->isClosed()) {
             return [
                 'verified' => false,
                 'order' => $order,
@@ -568,7 +576,7 @@ class OrderService extends BaseService
             : null;
 
         if (! ($this->confirmWeeklyFirstPaymentAction)($order, $chargeId)) {
-            if ($order->fresh()?->status === OrderStatus::CANCELLED) {
+            if ($order->fresh()?->isClosed()) {
                 $this->reportPaymentForReleasedOrder($order, $checkoutSessionId, $paymentIntentId ?? $chargeId);
             }
 
@@ -577,6 +585,12 @@ class OrderService extends BaseService
 
         $this->runConfirmationFollowUps($order);
         $this->sendFirstPaymentEmails($order);
+
+        $firstPayment = $order->firstLessonPayment();
+
+        if ($firstPayment) {
+            ($this->notifyInstructorOfLessonPaid)(collect([$firstPayment]), $order->student, $order->instructor);
+        }
 
         return true;
     }
@@ -596,7 +610,7 @@ class OrderService extends BaseService
         if (! ($this->confirmUpfrontPaymentAction)($order, $paymentIntentId, $chargeId)) {
             $order->refresh();
 
-            if ($order->status === OrderStatus::CANCELLED) {
+            if ($order->isClosed()) {
                 $this->reportPaymentForReleasedOrder($order, $checkoutSessionId, $paymentIntentId ?? $chargeId);
             } elseif ($chargeId && ! $order->stripe_charge_id) {
                 $order->update(['stripe_charge_id' => $chargeId]);
@@ -607,6 +621,15 @@ class OrderService extends BaseService
 
         $this->runConfirmationFollowUps($order);
         $this->sendFirstPaymentEmails($order);
+
+        ($this->notifyInstructorOfLessonPaid)(
+            LessonPayment::query()
+                ->whereHas('lesson', fn ($query) => $query->where('order_id', $order->id))
+                ->with('lesson')
+                ->get(),
+            $order->student,
+            $order->instructor,
+        );
 
         return true;
     }

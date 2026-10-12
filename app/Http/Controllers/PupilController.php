@@ -439,7 +439,13 @@ class PupilController extends Controller
     {
         $validated = $request->validated();
 
-        $package = Package::where('active', true)->findOrFail($validated['package_id']);
+        $packageQuery = Package::query()->where('active', true);
+
+        if ($request->user()?->isStudent()) {
+            $packageQuery->visibleToPupils();
+        }
+
+        $package = $packageQuery->findOrFail($validated['package_id']);
 
         if (! $student->instructor_id) {
             return response()->json([
