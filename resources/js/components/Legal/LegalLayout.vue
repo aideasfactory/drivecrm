@@ -23,7 +23,7 @@
           <div class="mb-8 border-b pb-6">
             <h1 class="text-3xl font-bold tracking-tight">{{ title }}</h1>
             <p class="mt-2 text-sm text-muted-foreground">
-              Watch Learn Drive.com Ltd t/a SmartDriving — Driving Instructor Platform
+              {{ subtitle }}
             </p>
             <p class="mt-1 text-sm text-muted-foreground">
               Effective date: {{ effectiveDate }} · Last updated: {{ lastUpdated }}
@@ -41,7 +41,7 @@
                 <a :href="link.href" class="underline underline-offset-4 hover:text-primary">{{ link.label }}</a><span v-if="index < otherPolicies.length - 1">, </span>
               </template>
             </p>
-            <p class="mt-4">© {{ new Date().getFullYear() }} Watch Learn Drive.com Ltd t/a SmartDriving. All rights reserved.</p>
+            <p class="mt-4">© {{ new Date().getFullYear() }} {{ companyName }}. All rights reserved.</p>
           </div>
         </CardContent>
       </Card>
@@ -59,17 +59,23 @@ interface Props {
   title: string
   effectiveDate: string
   lastUpdated: string
+  subtitle?: string
+  companyName?: string
+  links?: { label: string, href: string }[]
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  subtitle: 'Watch Learn Drive.com Ltd t/a SmartDriving — Driving Instructor Platform',
+  companyName: 'Watch Learn Drive.com Ltd t/a SmartDriving',
+})
 
-const allPolicies = [
-  { label: 'Terms of Service', href: '/terms-of-service' },
+const platformPolicies = [
+  { label: 'Instructor Platform Terms', href: '/instructor-terms' },
   { label: 'Privacy Policy', href: '/privacy-policy' },
   { label: 'Cookie Policy', href: '/cookie-policy' },
 ]
 
-const otherPolicies = computed(() => allPolicies.filter((policy) => policy.label !== props.title))
+const otherPolicies = computed(() => (props.links ?? platformPolicies).filter((policy) => policy.label !== props.title))
 </script>
 
 <style>
