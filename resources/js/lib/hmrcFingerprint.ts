@@ -35,15 +35,63 @@ export interface HmrcFingerprint {
     browser_user_agent: string;
 }
 
-export const captureHmrcFingerprint = (): HmrcFingerprint => {
-    const screens: HmrcScreen[] = [
-        {
-            width: window.screen.width,
-            height: window.screen.height,
-            scaling_factor: window.devicePixelRatio || 1,
-            colour_depth: window.screen.colorDepth || 24,
-        },
-    ];
+const currentScreen = (): HmrcScreen => ({
+    width: window.screen.width,
+    height: window.screen.height,
+    scaling_factor: Math.round((window.devicePixelRatio || 1) * 100) / 100,
+    colour_depth: window.screen.colorDepth || 24,
+});
+
+/**
+ * All monitors when the Window Management API is already granted.
+ * Otherwise the screen the window is on. Never prompts for permission.
+ */
+const collectScreens = async (): Promise<HmrcScreen[]> => {
+    const fallback = [currentScreen()];
+    const getScreenDetails = (
+        window as Window & {
+            getScreenDetails?: () => Promise<{
+                screens: Array<{
+                    width: number;
+                    height: number;
+                    devicePixelRatio?: number;
+                    colorDepth?: number;
+                }>;
+            }>;
+        }
+    ).getScreenDetails;
+
+    if (typeof getScreenDetails !== 'function' || !navigator.permissions?.query) {
+        return fallback;
+    }
+
+    try {
+        const permission = await navigator.permissions.query({
+            name: 'window-management' as PermissionName,
+        });
+
+        if (permission.state !== 'granted') {
+            return fallback;
+        }
+
+        const details = await getScreenDetails();
+        const screens = details.screens
+            .filter((screen) => screen.width > 0 && screen.height > 0)
+            .map((screen) => ({
+                width: screen.width,
+                height: screen.height,
+                scaling_factor: Math.round((screen.devicePixelRatio || window.devicePixelRatio || 1) * 100) / 100,
+                colour_depth: screen.colorDepth || window.screen.colorDepth || 24,
+            }));
+
+        return screens.length > 0 ? screens : fallback;
+    } catch {
+        return fallback;
+    }
+};
+
+export const captureHmrcFingerprint = async (): Promise<HmrcFingerprint> => {
+    const screens = await collectScreens();
 
     const windowSize: HmrcWindowSize = {
         width: window.innerWidth,

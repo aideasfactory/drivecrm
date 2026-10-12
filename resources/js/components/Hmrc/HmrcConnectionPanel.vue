@@ -359,10 +359,14 @@ const maskIdentifier = (value: string | null): string => {
 interface FraudHeaderIssue {
     code?: string;
     message?: string;
+    headers?: string[];
     [key: string]: unknown;
 }
 
 interface FraudHeaderResult {
+    code: string | null;
+    message: string | null;
+    spec_version: string | null;
     headers_sent: Record<string, string>;
     errors: FraudHeaderIssue[];
     warnings: FraudHeaderIssue[];
@@ -380,10 +384,11 @@ const handleValidateFraudHeaders = async () => {
     });
     if (result) {
         fraudResult.value = result;
-        if (result.errors.length === 0) {
+        const passed = result.errors.length === 0 && result.code !== 'INVALID_HEADERS';
+        if (passed) {
             toast.success(
                 result.warnings.length === 0
-                    ? 'Fraud headers passed validation with no issues.'
+                    ? 'Fraud headers passed HMRC validation with no issues.'
                     : `Fraud headers passed (with ${result.warnings.length} warning${result.warnings.length === 1 ? '' : 's'}).`,
             );
         } else {
@@ -992,16 +997,17 @@ const handleValidateFraudHeaders = async () => {
                     Diagnostic — Fraud-prevention headers
                 </CardTitle>
                 <CardDescription>
-                    Captures your device fingerprint, sends the
-                    <code class="text-xs">WEB_APP_VIA_SERVER</code> header set to HMRC's validator, and
-                    shows what HMRC reports back.
+                    Captures your device fingerprint and calls the sandbox Test Fraud Prevention
+                    Headers API (<code class="text-xs">GET /test/fraud-prevention-headers/validate</code>)
+                    with the same <code class="text-xs">WEB_APP_VIA_SERVER</code> headers used on VAT and
+                    ITSA calls.
                 </CardDescription>
             </CardHeader>
             <CardContent>
                 <div class="flex flex-col gap-4">
                     <div>
                         <Button
-                            :disabled="!connection.connected || fraudAction.running.value"
+                            :disabled="!connection.connected || environment !== 'sandbox' || fraudAction.running.value"
                             @click="handleValidateFraudHeaders"
                         >
                             <Loader2
@@ -1019,7 +1025,17 @@ const handleValidateFraudHeaders = async () => {
                         <AlertDescription>{{ fraudErrorMessage }}</AlertDescription>
                     </Alert>
 
+                    <p v-if="environment !== 'sandbox'" class="text-sm text-muted-foreground">
+                        This check only runs when HMRC_ENVIRONMENT is sandbox.
+                    </p>
+
                     <template v-if="fraudResult">
+                        <p v-if="fraudResult.code || fraudResult.message" class="text-sm text-muted-foreground">
+                            <span v-if="fraudResult.code" class="font-mono">{{ fraudResult.code }}</span>
+                            <span v-if="fraudResult.message"> — {{ fraudResult.message }}</span>
+                            <span v-if="fraudResult.spec_version"> (spec {{ fraudResult.spec_version }})</span>
+                        </p>
+
                         <Alert
                             v-if="fraudResult.errors.length === 0 && fraudResult.warnings.length === 0"
                             variant="default"
@@ -1041,6 +1057,9 @@ const handleValidateFraudHeaders = async () => {
                                     <li v-for="(err, i) in fraudResult.errors" :key="`err-${i}`">
                                         <span v-if="err.code" class="font-mono text-xs">{{ err.code }}:</span>
                                         {{ err.message ?? JSON.stringify(err) }}
+                                        <span v-if="err.headers?.length" class="font-mono text-xs">
+                                            ({{ err.headers.join(', ') }})
+                                        </span>
                                     </li>
                                 </ul>
                             </AlertDescription>
@@ -1056,6 +1075,9 @@ const handleValidateFraudHeaders = async () => {
                                     <li v-for="(warn, i) in fraudResult.warnings" :key="`warn-${i}`">
                                         <span v-if="warn.code" class="font-mono text-xs">{{ warn.code }}:</span>
                                         {{ warn.message ?? JSON.stringify(warn) }}
+                                        <span v-if="warn.headers?.length" class="font-mono text-xs">
+                                            ({{ warn.headers.join(', ') }})
+                                        </span>
                                     </li>
                                 </ul>
                             </AlertDescription>

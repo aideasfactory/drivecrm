@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Hmrc;
 
+use App\Actions\Hmrc\EnsureHmrcDeviceIdentifierAction;
 use App\Exceptions\Hmrc\HmrcApiException;
 use App\Exceptions\Hmrc\MissingFraudFingerprintException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreHmrcFingerprintRequest;
 use App\Services\HmrcService;
+use App\Support\Hmrc\FraudRequestContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -16,6 +18,7 @@ class HmrcFraudHeadersController extends Controller
 {
     public function __construct(
         protected HmrcService $hmrc,
+        protected EnsureHmrcDeviceIdentifierAction $ensureDeviceIdentifier,
     ) {}
 
     /**
@@ -25,6 +28,8 @@ class HmrcFraudHeadersController extends Controller
      */
     public function storeFingerprint(StoreHmrcFingerprintRequest $request): JsonResponse
     {
+        ($this->ensureDeviceIdentifier)($request, $request->user());
+
         try {
             $this->hmrc->storeFingerprint($request->user(), $request->validated());
         } catch (MissingFraudFingerprintException $exception) {
@@ -42,21 +47,19 @@ class HmrcFraudHeadersController extends Controller
     {
         $user = $request->user();
 
-        $context = [
-            'ip' => $request->ip(),
-            'port' => $request->server('REMOTE_PORT'),
-            'has_mfa' => (bool) $request->session()->get('two_factor_authenticated_at'),
-        ];
-
         try {
-            $result = $this->hmrc->validateFraudHeaders($user, $context);
+            $result = $this->hmrc->validateFraudHeaders($user, FraudRequestContext::fromRequest($request));
         } catch (MissingFraudFingerprintException $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
         } catch (HmrcApiException $exception) {
+            $status = $exception->statusCode >= 400 && $exception->statusCode <= 599
+                ? $exception->statusCode
+                : 502;
+
             return response()->json([
-                'message' => $exception->userMessage(),
+                'message' => $exception->getMessage(),
                 'status' => $exception->statusCode,
-            ], 502);
+            ], $status);
         }
 
         return response()->json($result);

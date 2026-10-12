@@ -4,17 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Hmrc;
 
+use App\Actions\Hmrc\EnsureHmrcDeviceIdentifierAction;
 use App\Enums\BusinessType;
 use App\Enums\VehicleMethod;
 use App\Exceptions\Hmrc\HmrcApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateInstructorTaxProfileRequest;
-use App\Models\HmrcDeviceIdentifier;
 use App\Models\User;
 use App\Services\HmrcService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cookie;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -22,6 +21,7 @@ class HmrcConnectionController extends Controller
 {
     public function __construct(
         protected HmrcService $hmrc,
+        protected EnsureHmrcDeviceIdentifierAction $ensureDeviceIdentifier,
     ) {}
 
     public function index(Request $request): Response
@@ -82,7 +82,7 @@ class HmrcConnectionController extends Controller
     {
         $user = $request->user();
 
-        $this->ensureDeviceIdentifier($request, $user->id);
+        ($this->ensureDeviceIdentifier)($request, $user);
 
         $url = $this->hmrc->beginAuthorization($user);
 
@@ -141,25 +141,4 @@ class HmrcConnectionController extends Controller
         return route('hmrc.index');
     }
 
-    private function ensureDeviceIdentifier(Request $request, int $userId): void
-    {
-        $cookieName = (string) config('hmrc.device_cookie.name', 'hmrc_device_id');
-        $cookieValue = $request->cookie($cookieName);
-
-        $identifier = HmrcDeviceIdentifier::forUser($request->user(), is_string($cookieValue) ? $cookieValue : null);
-
-        if ($cookieValue !== $identifier->device_id) {
-            Cookie::queue(Cookie::make(
-                $cookieName,
-                $identifier->device_id,
-                (int) config('hmrc.device_cookie.lifetime_minutes', 60 * 24 * 365 * 10),
-                path: '/',
-                domain: null,
-                secure: $request->isSecure(),
-                httpOnly: true,
-                raw: false,
-                sameSite: 'lax',
-            ));
-        }
-    }
 }
