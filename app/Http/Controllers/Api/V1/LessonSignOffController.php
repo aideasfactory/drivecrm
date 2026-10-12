@@ -51,7 +51,7 @@ class LessonSignOffController extends Controller
         } catch (LessonAlreadyCompletedException|InstructorNotOnboardedException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         } catch (\Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return response()->json(['message' => $this->instructorFacingMessage($e)], 422);
         }
 
         $lesson = $this->lessonSignOffService->getLessonDetail($student, $lesson->id);
@@ -59,5 +59,19 @@ class LessonSignOffController extends Controller
         return (new LessonDetailResource($lesson))
             ->additional(['message' => 'Lesson signed off.'])
             ->response();
+    }
+
+    /**
+     * Stripe transfer text must not reach the instructor. A platform balance
+     * shortfall does not land here — sign-off succeeds and this message is
+     * "Lesson signed off."
+     */
+    protected function instructorFacingMessage(\Exception $e): string
+    {
+        if (str_starts_with($e->getMessage(), 'Stripe transfer failed')) {
+            return 'We couldn\'t sign off this lesson just now. Please try again shortly.';
+        }
+
+        return $e->getMessage();
     }
 }

@@ -49,7 +49,7 @@ class GetStudentLessonsAction
                         'instructor:id,user_id,profile_picture_path',
                         'calendarItem.calendar:id,date',
                         'lessonPayment:id,lesson_id,amount_pence,test_pass_guarantee_pence,status,paid_at,stripe_invoice_id',
-                        'payout:id,lesson_id,status,amount_pence,stripe_transfer_id,paid_at',
+                        'payout:id,lesson_id,status,failure_code,failure_message,amount_pence,stripe_transfer_id,paid_at',
                         'reflectiveLog:id,lesson_id',
                         'resources:id,title,resource_type,video_url,file_path,file_name,file_size,mime_type,thumbnail_url',
                     ])
@@ -81,7 +81,7 @@ class GetStudentLessonsAction
                     'payment_status' => $lesson->lessonPayment?->status?->value ?? ($order->isPrepaid() ? 'paid' : null),
                     'has_stripe_invoice' => $lesson->lessonPayment?->stripe_invoice_id !== null,
                     'payment_mode' => $order->payment_mode->value,
-                    'payout_status' => $lesson->payout?->status?->value,
+                    'payout_status' => $lesson->payout?->statusForInstructor()->value,
                     'has_payout' => $lesson->payout !== null,
                     'calendar_date' => $lesson->calendarItem?->calendar?->date?->format('Y-m-d'),
                     'has_reflective_log' => $lesson->reflectiveLog !== null,

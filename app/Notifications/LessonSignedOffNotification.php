@@ -9,6 +9,7 @@ use App\Mail\RendersTemplatedMail;
 use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Student;
+use App\Support\StripeTransferFailure;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -53,6 +54,7 @@ class LessonSignedOffNotification extends Notification implements ShouldQueue
                     'student_name' => $studentName,
                     'lesson_date' => $lessonDate,
                     'lesson_time_line' => $lessonTimeLine,
+                    'payout_line' => $this->payoutLine(),
                     'app_name' => config('app.name'),
                 ],
             );
@@ -73,6 +75,22 @@ class LessonSignedOffNotification extends Notification implements ShouldQueue
                 'app_name' => config('app.name'),
             ],
         );
+    }
+
+    /**
+     * Confirm a transfer only when one was actually sent. A platform-balance
+     * shortfall still signs the lesson off, so the email stays silent about it.
+     */
+    protected function payoutLine(): string
+    {
+        $this->lesson->unsetRelation('payout');
+        $payout = $this->lesson->payout;
+
+        if ($payout?->isFailed() && StripeTransferFailure::isPlatformBalanceShortfall($payout->failure_code, $payout->failure_message)) {
+            return '';
+        }
+
+        return 'The payout for this lesson has been initiated to your account.';
     }
 
     /**

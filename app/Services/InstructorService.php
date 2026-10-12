@@ -22,6 +22,7 @@ use App\Actions\Instructor\DeleteInstructorProfilePictureAction;
 use App\Actions\Instructor\DeleteRecurringCalendarItemsAction;
 use App\Actions\Instructor\FillAvailableCalendarSlotsAction;
 use App\Actions\Instructor\ForceCompleteAppOnboardingAction;
+use App\Actions\Instructor\MarkPayoutPaidManuallyAction;
 use App\Actions\Instructor\GetGroupedStudentsAction;
 use App\Actions\Instructor\GetInstructorCalendarAction;
 use App\Actions\Instructor\GetInstructorDayLessonsAction;
@@ -63,6 +64,7 @@ use App\Models\Location;
 use App\Models\Message;
 use App\Models\MileageLog;
 use App\Models\Package;
+use App\Models\Payout;
 use App\Models\Student;
 use App\Models\User;
 use App\Notifications\CalendarClashDetectedNotification;
@@ -110,6 +112,7 @@ class InstructorService extends BaseService
         protected UpdateInstructorProfileAction $updateInstructorProfile,
         protected CompleteAppOnboardingStepAction $completeAppOnboardingStep,
         protected ForceCompleteAppOnboardingAction $forceCompleteAppOnboarding,
+        protected MarkPayoutPaidManuallyAction $markPayoutPaidManually,
         protected SendStripeSetupLinkAction $sendStripeSetupLink,
         protected UploadInstructorProfilePictureAction $uploadProfilePicture,
         protected DeleteInstructorProfilePictureAction $deleteProfilePicture,
@@ -860,6 +863,35 @@ class InstructorService extends BaseService
         }
 
         return $instructor;
+    }
+
+    /**
+     * Admin override: record a failed payout as paid after staff paid the
+     * instructor outside the platform. No money moves and Stripe is not called.
+     */
+    public function markPayoutPaidManually(Instructor $instructor, Payout $payout, User $admin, string $reference): Payout
+    {
+        abort_unless($payout->instructor_id === $instructor->id, 404);
+
+        $payout = ($this->markPayoutPaidManually)($payout, $reference);
+        $payout->loadMissing('lesson');
+        $lessonDate = $payout->lesson?->date?->format('j M Y') ?? 'unknown date';
+
+        ($this->logActivity)(
+            $instructor,
+            "{$admin->name} marked the {$payout->formatted_amount} payout for the lesson on {$lessonDate} as paid manually (ref: {$payout->manual_payment_reference})",
+            'payment',
+            [
+                'admin_user_id' => $admin->id,
+                'payout_id' => $payout->id,
+                'lesson_id' => $payout->lesson_id,
+                'failure_code' => $payout->failure_code,
+                'manual_payment_reference' => $payout->manual_payment_reference,
+            ],
+            'Payout marked paid manually'
+        );
+
+        return $payout;
     }
 
     /**

@@ -26,6 +26,7 @@ use App\Http\Requests\AdminResetPasswordRequest;
 use App\Http\Requests\FillAvailableSlotsRequest;
 use App\Http\Requests\ImportInstructorsCsvRequest;
 use App\Http\Requests\ImportLocationsCsvRequest;
+use App\Http\Requests\MarkPayoutPaidRequest;
 use App\Http\Requests\StoreCalendarItemRequest;
 use App\Http\Requests\StoreInstructorRequest;
 use App\Http\Requests\StoreLocationRequest;
@@ -42,6 +43,7 @@ use App\Models\Lesson;
 use App\Models\Location;
 use App\Models\MileageLog;
 use App\Models\Package;
+use App\Models\Payout;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\HmrcService;
@@ -50,6 +52,7 @@ use App\Services\OrderService;
 use App\Services\PriceUpliftService;
 use App\Services\SlotOfferService;
 use App\Services\StripeService;
+use App\Support\StripeTransferFailure;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -1250,6 +1253,12 @@ class InstructorController extends Controller
     {
         $payouts = $this->instructorService->getPayouts($instructor);
 
+        if (request()->user()?->isInstructor()) {
+            $payouts = $payouts->map(
+                fn (array $payout): array => StripeTransferFailure::concealFromInstructor($payout)
+            );
+        }
+
         return response()->json([
             'payouts' => $payouts,
         ]);
@@ -1304,6 +1313,31 @@ class InstructorController extends Controller
 
         return response()->json([
             'message' => 'Stripe connection reset. A new Stripe account will be created the next time they connect.',
+        ]);
+    }
+
+    /**
+     * Owner override: mark a failed payout as paid after the instructor was
+     * paid outside the platform. No money moves and Stripe is not called.
+     */
+    public function markPayoutPaid(MarkPayoutPaidRequest $request, Instructor $instructor, Payout $payout): JsonResponse
+    {
+        $payout = $this->instructorService->markPayoutPaidManually(
+            $instructor,
+            $payout,
+            $request->user(),
+            $request->validated('reference'),
+        );
+
+        return response()->json([
+            'message' => 'Payout marked as paid manually.',
+            'payout' => [
+                'id' => $payout->id,
+                'status' => $payout->status->value,
+                'paid_at' => $payout->paid_at?->toIso8601String(),
+                'paid_manually' => $payout->wasPaidManually(),
+                'manual_payment_reference' => $payout->manual_payment_reference,
+            ],
         ]);
     }
 

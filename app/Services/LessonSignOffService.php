@@ -17,6 +17,7 @@ use App\Models\Lesson;
 use App\Models\Payout;
 use App\Models\Student;
 use App\Notifications\LessonSignedOffNotification;
+use App\Notifications\ManualInstructorPayoutRequiredNotification;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -106,6 +107,10 @@ class LessonSignOffService extends BaseService
             ]
         );
 
+        if ($result['payout']?->isFailed()) {
+            $this->notifyHeadOfficeOfUnpaidPayout($result['payout'], $lesson, $instructor);
+        }
+
         // Send lesson signed off confirmation to the instructor
         $this->sendLessonSignedOffNotification($lesson, $student, $instructor);
 
@@ -137,6 +142,39 @@ class LessonSignOffService extends BaseService
         }
 
         return $result;
+    }
+
+    /**
+     * The lesson is already signed off. Email head office so staff can pay
+     * the instructor. A mail failure must not undo the sign-off, and the
+     * Stripe error is not written onto the instructor's activity log.
+     */
+    protected function notifyHeadOfficeOfUnpaidPayout(Payout $payout, Lesson $lesson, Instructor $instructor): void
+    {
+        $headOffice = config('mail.head_office_address');
+
+        if (! $headOffice) {
+            Log::critical('Instructor payout was not sent and no head office email is configured', [
+                'payout_id' => $payout->id,
+                'lesson_id' => $lesson->id,
+                'instructor_id' => $instructor->id,
+                'failure_code' => $payout->failure_code,
+                'failure_message' => $payout->failure_message,
+            ]);
+
+            return;
+        }
+
+        try {
+            Notification::route('mail', $headOffice)
+                ->notify(new ManualInstructorPayoutRequiredNotification($payout));
+        } catch (\Exception $e) {
+            Log::error('Failed to notify head office of an unpaid instructor payout', [
+                'payout_id' => $payout->id,
+                'lesson_id' => $lesson->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
