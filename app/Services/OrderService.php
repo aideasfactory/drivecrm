@@ -321,6 +321,11 @@ class OrderService extends BaseService
             ]);
         }
 
+        if ($isBookedByStaff && $order->invoice_sent_at === null) {
+            $order->invoice_sent_at = now();
+            $order->save();
+        }
+
         if (! $isBookedByStaff && $student->owns_account && $student->user?->expo_push_token) {
             $this->pushNotificationService->queueIfHasToken(
                 $student->user,

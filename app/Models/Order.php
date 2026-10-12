@@ -35,6 +35,7 @@ class Order extends Model
         'includes_test_pass_guarantee',
         'test_pass_guarantee_pence',
         'payment_hold_expires_at',
+        'invoice_sent_at',
     ];
 
     protected function casts(): array
@@ -53,6 +54,7 @@ class Order extends Model
             'includes_test_pass_guarantee' => 'boolean',
             'test_pass_guarantee_pence' => 'integer',
             'payment_hold_expires_at' => 'datetime',
+            'invoice_sent_at' => 'datetime',
         ];
     }
 

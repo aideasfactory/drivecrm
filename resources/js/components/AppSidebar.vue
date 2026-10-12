@@ -4,6 +4,7 @@ import {
     ArrowRightLeft,
     Bell,
     BookOpen,
+    CalendarCheck,
     DatabaseZap,
     Mail,
     FileText,
@@ -41,6 +42,7 @@ import { index as instructorsIndex } from '@/routes/instructors';
 import { edit as profileEdit } from '@/routes/profile';
 import { index as discountCodesIndex } from '@/routes/discount-codes';
 import { index as packagesIndex } from '@/routes/packages';
+import { index as lessonsBookedIndex } from '@/routes/lessons-booked';
 import { index as pupilsIndex } from '@/routes/pupils';
 import { index as reportsIndex } from '@/routes/reports';
 import { index as pushNotificationsIndex } from '@/routes/push-notifications';
@@ -76,6 +78,13 @@ const allNavItems: NavItem[] = [
         title: 'Students',
         href: pupilsIndex(),
         icon: Users,
+        restrictedOwnerVisible: true,
+    },
+    {
+        title: 'Lessons booked',
+        href: lessonsBookedIndex(),
+        icon: CalendarCheck,
+        roles: ['owner'],
         restrictedOwnerVisible: true,
     },
     {
