@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\MissingStripeConnectAccountException;
 use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\LessonPayment;
@@ -86,16 +87,33 @@ class StripeService
                 'url' => $accountLink->url,
             ];
         } catch (ApiErrorException $e) {
+            $accountMissing = $this->isMissingConnectAccount($e);
+
             Log::error('Stripe Account Link creation failed', [
                 'instructor_id' => $instructor->id,
+                'stripe_account_id' => $instructor->stripe_account_id,
                 'error' => $e->getMessage(),
+                'account_missing' => $accountMissing,
             ]);
 
             return [
                 'success' => false,
-                'error' => $e->getMessage(),
+                'error' => $accountMissing
+                    ? MissingStripeConnectAccountException::MESSAGE
+                    : $e->getMessage(),
+                'account_missing' => $accountMissing,
             ];
         }
+    }
+
+    /**
+     * Stripe's "No such account" means the stored Connect id is not on the
+     * platform these API keys use. Match the message rather than every
+     * resource_missing error (those also cover customers, prices, and so on).
+     */
+    public function isMissingConnectAccount(ApiErrorException $exception): bool
+    {
+        return str_contains(strtolower($exception->getMessage()), 'no such account');
     }
 
     /**
