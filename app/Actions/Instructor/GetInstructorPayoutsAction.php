@@ -41,6 +41,7 @@ class GetInstructorPayoutsAction
                     'failure_code' => $payout->failure_code,
                     'failure_message' => $payout->failure_message,
                     'paid_manually' => $payout->wasPaidManually(),
+                    'manual_payment_reference' => $payout->manual_payment_reference,
                     'paid_at' => $payout->paid_at?->toIso8601String(),
                     'created_at' => $payout->created_at->toIso8601String(),
                     'stripe_transfer_id' => $payout->stripe_transfer_id,

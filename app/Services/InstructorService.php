@@ -862,23 +862,24 @@ class InstructorService extends BaseService
      * Admin override: record a failed payout as paid after staff paid the
      * instructor outside the platform. No money moves and Stripe is not called.
      */
-    public function markPayoutPaidManually(Instructor $instructor, Payout $payout, User $admin): Payout
+    public function markPayoutPaidManually(Instructor $instructor, Payout $payout, User $admin, string $reference): Payout
     {
         abort_unless($payout->instructor_id === $instructor->id, 404);
 
-        $payout = ($this->markPayoutPaidManually)($payout);
+        $payout = ($this->markPayoutPaidManually)($payout, $reference);
         $payout->loadMissing('lesson');
         $lessonDate = $payout->lesson?->date?->format('j M Y') ?? 'unknown date';
 
         ($this->logActivity)(
             $instructor,
-            "{$admin->name} marked the {$payout->formatted_amount} payout for the lesson on {$lessonDate} as paid manually",
+            "{$admin->name} marked the {$payout->formatted_amount} payout for the lesson on {$lessonDate} as paid manually (ref: {$payout->manual_payment_reference})",
             'payment',
             [
                 'admin_user_id' => $admin->id,
                 'payout_id' => $payout->id,
                 'lesson_id' => $payout->lesson_id,
                 'failure_code' => $payout->failure_code,
+                'manual_payment_reference' => $payout->manual_payment_reference,
             ],
             'Payout marked paid manually'
         );

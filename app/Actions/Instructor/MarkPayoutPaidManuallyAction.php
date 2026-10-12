@@ -16,11 +16,12 @@ class MarkPayoutPaidManuallyAction
      *
      * Moves no money and makes no Stripe call. The failure code and message
      * are kept so the record still shows why it was paid by hand, and
-     * `stripe_transfer_id` stays null.
+     * `stripe_transfer_id` stays null. The reference of the manual payment is
+     * stored so the payout can be traced back to it.
      *
      * @throws ValidationException when the payout is not in a failed state
      */
-    public function __invoke(Payout $payout): Payout
+    public function __invoke(Payout $payout, string $reference): Payout
     {
         if (! $payout->isFailed()) {
             throw ValidationException::withMessages([
@@ -30,6 +31,7 @@ class MarkPayoutPaidManuallyAction
 
         $payout->status = PayoutStatus::PAID;
         $payout->paid_at = now();
+        $payout->manual_payment_reference = trim($reference);
         $payout->save();
 
         return $payout;

@@ -25,6 +25,7 @@ use App\Http\Requests\AdminResetPasswordRequest;
 use App\Http\Requests\FillAvailableSlotsRequest;
 use App\Http\Requests\ImportInstructorsCsvRequest;
 use App\Http\Requests\ImportLocationsCsvRequest;
+use App\Http\Requests\MarkPayoutPaidRequest;
 use App\Http\Requests\StoreCalendarItemRequest;
 use App\Http\Requests\StoreInstructorRequest;
 use App\Http\Requests\StoreLocationRequest;
@@ -1264,9 +1265,14 @@ class InstructorController extends Controller
      * Owner override: mark a failed payout as paid after the instructor was
      * paid outside the platform. No money moves and Stripe is not called.
      */
-    public function markPayoutPaid(Request $request, Instructor $instructor, Payout $payout): JsonResponse
+    public function markPayoutPaid(MarkPayoutPaidRequest $request, Instructor $instructor, Payout $payout): JsonResponse
     {
-        $payout = $this->instructorService->markPayoutPaidManually($instructor, $payout, $request->user());
+        $payout = $this->instructorService->markPayoutPaidManually(
+            $instructor,
+            $payout,
+            $request->user(),
+            $request->validated('reference'),
+        );
 
         return response()->json([
             'message' => 'Payout marked as paid manually.',
@@ -1275,6 +1281,7 @@ class InstructorController extends Controller
                 'status' => $payout->status->value,
                 'paid_at' => $payout->paid_at?->toIso8601String(),
                 'paid_manually' => $payout->wasPaidManually(),
+                'manual_payment_reference' => $payout->manual_payment_reference,
             ],
         ]);
     }

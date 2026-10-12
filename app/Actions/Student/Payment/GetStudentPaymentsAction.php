@@ -26,7 +26,7 @@ class GetStudentPaymentsAction
             ->with([
                 'lesson:id,order_id,date,start_time,end_time',
                 'lesson.order:id,package_name,payment_mode',
-                'lesson.payout:id,lesson_id,instructor_id,status,failure_code,failure_message,stripe_transfer_id,paid_at',
+                'lesson.payout:id,lesson_id,instructor_id,status,failure_code,failure_message,stripe_transfer_id,manual_payment_reference,paid_at',
             ])
             ->orderByDesc('created_at')
             ->get()
@@ -53,6 +53,7 @@ class GetStudentPaymentsAction
                     'payout_instructor_id' => $payout?->instructor_id,
                     'payout_status' => $payout?->status?->value,
                     'payout_paid_manually' => $payout?->wasPaidManually() ?? false,
+                    'payout_manual_payment_reference' => $payout?->manual_payment_reference,
                     'payout_failure_message' => $payout?->isFailed() ? $payout->failure_message : null,
                     'failure_code' => $payout?->failure_code,
                 ];

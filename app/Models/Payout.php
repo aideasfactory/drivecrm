@@ -20,6 +20,7 @@ class Payout extends Model
         'failure_code',
         'failure_message',
         'stripe_transfer_id',
+        'manual_payment_reference',
         'paid_at',
     ];
 

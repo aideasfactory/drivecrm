@@ -25,7 +25,7 @@ import {
 } from 'lucide-vue-next'
 import { toast } from '@/components/ui/sonner'
 import { useRole } from '@/composables/useRole'
-import { markPayoutPaid } from '@/actions/App/Http/Controllers/InstructorController'
+import MarkPayoutPaidSheet, { type PayoutToMark } from '@/components/Instructors/MarkPayoutPaidSheet.vue'
 import type { InstructorDetail, InstructorPayout } from '@/types/instructor'
 
 interface Props {
@@ -163,22 +163,17 @@ const loadPayouts = async () => {
     }
 }
 
-const markingPayoutId = ref<number | null>(null)
+const markSheetOpen = ref(false)
+const payoutToMark = ref<PayoutToMark | null>(null)
 
-const markAsPaidManually = async (payout: InstructorPayout) => {
-    if (markingPayoutId.value !== null) return
-    if (!confirm(`Mark the ${payout.formatted_amount} payout as paid?\n\nThis does not send any money. Only do this once the instructor has been paid outside the platform.`)) return
-
-    markingPayoutId.value = payout.id
-    try {
-        const { data } = await axios.post(markPayoutPaid.url({ instructor: props.instructor.id, payout: payout.id }))
-        toast.success(data?.message ?? 'Payout marked as paid manually.')
-        await loadPayouts()
-    } catch (error: any) {
-        toast.error(error?.response?.data?.message ?? 'Failed to mark payout as paid.')
-    } finally {
-        markingPayoutId.value = null
+const openMarkPaidSheet = (payout: InstructorPayout) => {
+    payoutToMark.value = {
+        id: payout.id,
+        instructorId: props.instructor.id,
+        amount: payout.formatted_amount,
+        lessonDate: formatDate(payout.lesson_date),
     }
+    markSheetOpen.value = true
 }
 
 const setFilter = (filter: FilterType) => {
@@ -291,11 +286,10 @@ onMounted(() => {
                                     variant="outline"
                                     size="sm"
                                     class="mt-1 h-7 bg-white"
-                                    :disabled="markingPayoutId !== null"
-                                    @click="markAsPaidManually(payout)"
+                                    @click="openMarkPaidSheet(payout)"
                                 >
                                     <CheckCircle2 class="mr-1 h-3.5 w-3.5" />
-                                    {{ markingPayoutId === payout.id ? 'Marking…' : 'Mark as paid' }}
+                                    Mark as paid
                                 </Button>
                             </li>
                         </ul>
@@ -367,7 +361,7 @@ onMounted(() => {
                                         {{ isOwner && payout.status === 'failed' ? 'Needs payment' : payout.status.charAt(0).toUpperCase() + payout.status.slice(1) }}
                                     </Badge>
                                     <p v-if="isOwner && payout.paid_manually" class="text-xs text-muted-foreground">
-                                        Paid manually
+                                        Paid manually<template v-if="payout.manual_payment_reference"> · Ref: {{ payout.manual_payment_reference }}</template>
                                     </p>
                                     <p v-if="isOwner && payout.status === 'failed'" class="max-w-xs text-xs text-amber-800">
                                         {{ payout.failure_message || 'Check the Stripe balance or pay the instructor manually.' }}
@@ -382,5 +376,7 @@ onMounted(() => {
                 </Table>
             </CardContent>
         </Card>
+
+        <MarkPayoutPaidSheet v-model:open="markSheetOpen" :payout="payoutToMark" @marked="loadPayouts" />
     </div>
 </template>
