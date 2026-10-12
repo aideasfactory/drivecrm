@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Exceptions\MissingStripeConnectAccountException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\V1\StripeAccountStatusResource;
 use App\Http\Resources\V1\StripeOnboardingLinkResource;
@@ -36,8 +35,6 @@ class InstructorStripeController extends Controller
                 $this->mobileReturnUrl($instructor),
                 $this->mobileRefreshUrl($instructor),
             );
-        } catch (MissingStripeConnectAccountException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }
