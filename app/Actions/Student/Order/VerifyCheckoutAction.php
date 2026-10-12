@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Actions\Student\Order;
 
-use App\Enums\OrderStatus;
 use App\Models\Order;
 use Illuminate\Support\Facades\Log;
 use Stripe\Checkout\Session;
@@ -50,7 +49,7 @@ class VerifyCheckoutAction
         $isPaid = $session->payment_status === 'paid';
         $paymentIntent = $session->payment_intent ?: null;
 
-        if ($order->status === OrderStatus::CANCELLED) {
+        if ($order->isClosed()) {
             return [
                 'paid' => false,
                 'paid_after_release' => $isPaid,

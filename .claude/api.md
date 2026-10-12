@@ -3197,7 +3197,7 @@ Books the short-notice lesson for the authenticated student. Availability is dec
 
 Reuses `SlotOfferService::acceptOffer` → `AcceptSlotOfferAction` → `OrderService::bookLessonsFromCalendarItem` (the same booking path as admin Add Booking). Concurrent accepts are serialised with `lockForUpdate` on the diary slot and the offer row. The first successful booking wins; the second student receives **422**.
 
-The slot is held (draft) as soon as the order/lessons are created, for the learner hold window (10 minutes). If the student does not pay in that time, `orders:release-expired-holds` releases the booking: the lessons are deleted, the order is cancelled and the diary slot becomes open availability again. The offer itself stays `booked` and is **not** re-published to other students.
+The slot is held (draft) as soon as the order/lessons are created, for the learner hold window (10 minutes). If the student does not pay in that time, `orders:release-expired-holds` releases the booking: the lessons are deleted, the order becomes `expired` and the diary slot becomes open availability again. The offer itself stays `booked` and is **not** re-published to other students.
 
 Payment behaviour matches a student-initiated `POST /api/v1/students/{student}/orders`. A Stripe Checkout URL is always returned as `checkout_url` for the in-app browser:
 
@@ -5172,7 +5172,7 @@ Book lessons — creates an order, calendar items, and lessons.
 
 The **same** `OrderService::bookLessons` / `bookLessonsFromCalendarItem` path is used by the admin diary **Add Booking** sheet and by this endpoint. Do not implement a separate mobile booking flow.
 
-Nothing is confirmed until the first payment is made — the full amount for `upfront`, or the first week (plus the Pass Your Test Guarantee if included) for `weekly`. Until then the order is `pending`, the lessons and diary slots are `draft`, and no confirmation or welcome email is sent. The hold deadline is returned as `payment_hold_expires_at`; when it passes, `orders:release-expired-holds` (every minute) deletes the lessons, frees the slots, cancels the order and closes the payment link.
+Nothing is confirmed until the first payment is made — the full amount for `upfront`, or the first week (plus the Pass Your Test Guarantee if included) for `weekly`. Until then the order is `pending`, the lessons and diary slots are `draft`, and no confirmation or welcome email is sent. The hold deadline is returned as `payment_hold_expires_at`; when it passes, `orders:release-expired-holds` (every minute) deletes the lessons, frees the slots, marks the order `expired` and closes the payment link.
 
 How the first payment is taken depends on who is booking (the same for both payment modes):
 - **Student (mobile app):** the Stripe Checkout URL is returned in the response as `checkout_url`. The mobile app should load this URL in an in-app browser. The lessons are held for **10 minutes**.
@@ -5290,7 +5290,7 @@ A student-initiated `weekly` booking returns the same shape as the student-initi
 | `digital_fee_pence` | integer | Total digital fee in pence (£3.99 × lessons) |
 | `total_price_pence` | integer | Total charge amount sent to Stripe (package + booking fee + digital fees) |
 | `payment_mode` | string | `upfront` or `weekly` |
-| `status` | string | Order status: `pending`, `active`, `completed`, `cancelled` |
+| `status` | string | Order status: `pending` (awaiting first payment), `active`, `completed`, `cancelled` (cancelled by the instructor/admin) or `expired` (not paid before `payment_hold_expires_at`; lessons deleted and slots released). Treat `expired` as gone: hide it, its lessons no longer exist. |
 | `payment_hold_expires_at` | string\|null | ISO 8601 time the unpaid booking is released if the first payment hasn't been made. `null` for legacy/imported orders |
 | `lessons_count` | integer\|null | Number of lessons created |
 | `created_at` | string\|null | ISO 8601 timestamp |
@@ -5414,7 +5414,8 @@ The recipient email is embedded in `message` so the app can surface it in a toas
 | Imported order | `Payment links do not apply to imported orders.` |
 | Upfront order `active` / `completed` | `This order has already been paid.` |
 | Weekly order `active` / `completed` | `This booking is already confirmed. Weekly lesson invoices are sent separately.` |
-| Order `cancelled` (includes released unpaid bookings) | `This order has been cancelled.` |
+| Order `cancelled` | `This order has been cancelled.` |
+| Order `expired` (released unpaid booking) | `The time to pay for this booking ran out and the lessons were released.` |
 | Hold has run out (release pending) | `The time to pay for this booking has passed, so the lessons are being released. Please book again.` |
 | Package no longer available | `The package for this order is no longer available, so a payment link cannot be generated.` |
 | No email on file for the booker | `No email address is on file for this student, so the payment link could not be sent.` |
@@ -5481,6 +5482,18 @@ GET /api/v1/orders/1/checkout/verify?session_id=cs_test_abc123...
   "data": {
     "id": 1,
     "status": "pending"
+  }
+}
+```
+
+**Error Response (booking expired before payment):** `422 Unprocessable Entity`. The hold ran out, the lessons were deleted and the slots released. Any payment taken is refunded by Head Office. Send the learner back to book again.
+```json
+{
+  "verified": false,
+  "message": "The time to pay for this booking ran out and the lessons were released. Any payment taken will be refunded.",
+  "data": {
+    "id": 1,
+    "status": "expired"
   }
 }
 ```
@@ -7643,6 +7656,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-10-01 | **Unpaid checkout no longer adds a contact or names the hold.** `GET /instructor/students` only lists pupils whose `instructor_id` is set. Website checkout no longer sets it; `AssignStudentOnPaidBookingAction` sets it when the first payment confirms the order (upfront or weekly). A learner who abandons checkout is absent from the instructor's contact list. Pupils already assigned (instructor-created, admin, PIN, or a previous paid booking) stay assigned. **`student_name` on `GET /instructor/calendar/items` is now `null` for `draft` holds** (it remains set for `booked`, `completed`, and `reserved`). The app should keep rendering the existing Held / Unpaid treatment and must not fall back to another name field — there isn't one on the item. Other booking-context fields on drafts are unchanged. The admin diary uses the same rule and labels the block "Held". | Instructor Students (index), Instructor Calendar (index) |
 
 | 2026-09-30 | **Instructor "lesson paid" push.** When a lesson is marked as paid (weekly `invoice.paid` webhook, first weekly payment at checkout, or a pay-in-full booking), the instructor is queued a push naming the pupil and the lesson date/time. Pay-in-full bookings send one summary push. New payload `type: "lesson_paid"`. No request or response fields changed. | Push Notifications |
+| 2026-10-12 | **New order status `expired`.** Unpaid bookings released by `orders:release-expired-holds` when `payment_hold_expires_at` passes are now `expired` instead of `cancelled` (existing released orders were migrated). `cancelled` now only means a booking the instructor or admin cancelled. **App action:** handle `status: "expired"` on the order object, which `POST /students/{student}/orders`, `GET /orders/{order}/checkout/verify` and slot-offer accept return. Treat it as gone and hide it. Its lessons are deleted, so they never appear in any lessons endpoint. `GET /orders/{order}/checkout/verify` returns 422 with `data.status = "expired"` when the hold ran out before payment. Resend-payment-link returns 422 `The time to pay for this booking ran out and the lessons were released.` for an expired order. | Orders (order object, verify, resend-payment-link), Student Slot Offers (accept) |
 | 2026-10-12 | **Package visibility for pupils.** New `visible_to_pupils` boolean on every package object (default `true`, so existing packages stay listed). `false` is a private package. `GET /instructor/packages` still returns private packages and includes the flag so the app can add a toggle. `POST` and `PUT /instructor/packages` accept optional `visible_to_pupils` (omit on update to leave it unchanged). `GET /student/packages` omits private packages. A student token gets **404** from `GET /packages/{package}/pricing` and `POST /students/{student}/orders` for a private package; an instructor token can still price and book it. Short-notice offers are unchanged. | Instructor Packages (list, create, update), Student Packages (list), Package Pricing (show), Orders (store) |
 ---
 

@@ -22,6 +22,7 @@ use App\Http\Controllers\Hmrc\Vehicles\VehicleController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\InstructorController;
 use App\Http\Controllers\IntegrationController;
+use App\Http\Controllers\LessonsBookedController;
 use App\Http\Controllers\MobileStripeOnboardingController;
 use App\Http\Controllers\Onboarding\OnboardingController;
 use App\Http\Controllers\Onboarding\StepFiveController;
@@ -490,6 +491,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('integrations.bird.messages.all');
     Route::post('/integrations/bird/sync', [BirdConversationController::class, 'sync'])
         ->name('integrations.bird.sync');
+
+    Route::get('/lessons-booked', [LessonsBookedController::class, 'index'])
+        ->name('lessons-booked.index');
 
     Route::get('/enquiries', [EnquiryController::class, 'index'])
         ->name('enquiries.index');

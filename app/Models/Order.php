@@ -35,6 +35,8 @@ class Order extends Model
         'includes_test_pass_guarantee',
         'test_pass_guarantee_pence',
         'payment_hold_expires_at',
+        'invoice_sent_at',
+        'booked_by_user_id',
     ];
 
     protected function casts(): array
@@ -53,6 +55,7 @@ class Order extends Model
             'includes_test_pass_guarantee' => 'boolean',
             'test_pass_guarantee_pence' => 'integer',
             'payment_hold_expires_at' => 'datetime',
+            'invoice_sent_at' => 'datetime',
         ];
     }
 
@@ -70,6 +73,14 @@ class Order extends Model
     public function instructor(): BelongsTo
     {
         return $this->belongsTo(Instructor::class);
+    }
+
+    /**
+     * The bookings-team user who booked this order on the student's behalf.
+     */
+    public function bookedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'booked_by_user_id');
     }
 
     /**
@@ -178,6 +189,32 @@ class Order extends Model
     public function isActive(): bool
     {
         return $this->status === OrderStatus::ACTIVE;
+    }
+
+    /**
+     * Whether the order was released because its first payment never arrived
+     * before the hold ran out.
+     */
+    public function isExpired(): bool
+    {
+        return $this->status === OrderStatus::EXPIRED;
+    }
+
+    /**
+     * Whether the order is closed without going ahead: cancelled, or expired
+     * unpaid. A payment that lands on a closed order must be refunded.
+     */
+    public function isClosed(): bool
+    {
+        return in_array($this->status, [OrderStatus::CANCELLED, OrderStatus::EXPIRED], true);
+    }
+
+    /**
+     * Whether the bookings team booked this order on the student's behalf.
+     */
+    public function isStaffBooking(): bool
+    {
+        return $this->booked_by_user_id !== null;
     }
 
     /**
