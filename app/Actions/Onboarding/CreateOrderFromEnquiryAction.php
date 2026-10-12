@@ -108,6 +108,7 @@ class CreateOrderFromEnquiryAction
                 'discount_percentage' => $discount['percentage'] ?? null,
                 'includes_test_pass_guarantee' => $testPassGuarantee['included'],
                 'test_pass_guarantee_pence' => $testPassGuarantee['charge_pence'],
+                'booked_by_user_id' => $enquiry->getStaffBooking()['user_id'] ?? null,
             ]);
 
             Log::info('Created order from onboarding', [

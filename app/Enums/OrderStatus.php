@@ -8,4 +8,5 @@ enum OrderStatus: string
     case ACTIVE = 'active';
     case COMPLETED = 'completed';
     case CANCELLED = 'cancelled';
+    case EXPIRED = 'expired';
 }

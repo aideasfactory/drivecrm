@@ -20,11 +20,24 @@ use Illuminate\Support\Collection;
 class ListStaffBookedLessonsAction
 {
     /**
+     * Order statuses behind each payment state shown on the list.
+     *
+     * @var array<string, list<OrderStatus>>
+     */
+    public const PAYMENT_STATES = [
+        'unpaid' => [OrderStatus::PENDING],
+        'paid' => [OrderStatus::ACTIVE, OrderStatus::COMPLETED],
+        'expired' => [OrderStatus::EXPIRED],
+        'cancelled' => [OrderStatus::CANCELLED],
+    ];
+
+    /**
      * Lessons booked by the bookings team, newest invoice first.
      *
-     * @return array{bookings: LengthAwarePaginator, counts: array{all: int, paid: int, unpaid: int}}
+     * @param  string  $paymentState  'all' or a key of PAYMENT_STATES
+     * @return array{bookings: LengthAwarePaginator, counts: array<string, int>}
      */
-    public function __invoke(string $paid): array
+    public function __invoke(string $paymentState): array
     {
         $orders = $this->baseQuery()
             ->with([
@@ -35,11 +48,8 @@ class ListStaffBookedLessonsAction
                     $query->orderBy('date')->orderBy('start_time');
                 },
             ])
-            ->when($paid === 'paid', function (Builder $query): void {
-                $query->whereIn('status', $this->paidStatuses());
-            })
-            ->when($paid === 'unpaid', function (Builder $query): void {
-                $query->whereNotIn('status', $this->paidStatuses());
+            ->when(isset(self::PAYMENT_STATES[$paymentState]), function (Builder $query) use ($paymentState): void {
+                $query->whereIn('status', self::PAYMENT_STATES[$paymentState]);
             })
             ->orderByDesc('invoice_sent_at')
             ->orderByDesc('id')
@@ -61,30 +71,38 @@ class ListStaffBookedLessonsAction
      */
     private function baseQuery(): Builder
     {
-        return Order::query()->whereNotNull('invoice_sent_at');
+        return Order::query()->whereNotNull('booked_by_user_id');
     }
 
     /**
-     * @return list<string>
-     */
-    private function paidStatuses(): array
-    {
-        return [OrderStatus::ACTIVE->value, OrderStatus::COMPLETED->value];
-    }
-
-    /**
-     * @return array{all: int, paid: int, unpaid: int}
+     * @return array<string, int>
      */
     private function counts(): array
     {
-        $all = $this->baseQuery()->count();
-        $paid = $this->baseQuery()->whereIn('status', $this->paidStatuses())->count();
+        $byStatus = $this->baseQuery()
+            ->toBase()
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
 
-        return [
-            'all' => $all,
-            'paid' => $paid,
-            'unpaid' => $all - $paid,
-        ];
+        $counts = ['all' => (int) $byStatus->sum()];
+
+        foreach (self::PAYMENT_STATES as $state => $statuses) {
+            $counts[$state] = (int) collect($statuses)->sum(fn (OrderStatus $status): int => (int) ($byStatus[$status->value] ?? 0));
+        }
+
+        return $counts;
+    }
+
+    private function paymentState(Order $order): string
+    {
+        foreach (self::PAYMENT_STATES as $state => $statuses) {
+            if (in_array($order->status, $statuses, true)) {
+                return $state;
+            }
+        }
+
+        return 'unpaid';
     }
 
     /**
@@ -125,7 +143,7 @@ class ListStaffBookedLessonsAction
      *     instructor_name: string|null,
      *     instructor_id: int|null,
      *     package: string,
-     *     paid: bool
+     *     payment_state: string
      * }
      */
     private function row(Order $order, ?Enquiry $enquiry): array
@@ -152,7 +170,7 @@ class ListStaffBookedLessonsAction
             'instructor_name' => $order->instructor?->user?->name,
             'instructor_id' => $order->instructor_id,
             'package' => $this->packageLabel($order, $startTime, $endTime),
-            'paid' => in_array($order->status, [OrderStatus::ACTIVE, OrderStatus::COMPLETED], true),
+            'payment_state' => $this->paymentState($order),
         ];
     }
 
@@ -230,7 +248,6 @@ class ListStaffBookedLessonsAction
 
         return $this->stringOrNull($point?->postcode);
     }
-
 
     /**
      * @param  array<string, mixed>  $step4

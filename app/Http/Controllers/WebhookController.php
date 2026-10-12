@@ -9,7 +9,6 @@ use App\Actions\Shared\LogActivityAction;
 use App\Actions\Student\GrantTestPassGuaranteeAction;
 use App\Enums\CalendarItemStatus;
 use App\Enums\LessonStatus;
-use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
 use App\Models\Instructor;
 use App\Models\Lesson;
@@ -150,7 +149,7 @@ class WebhookController extends Controller
 
         $orderService = app(OrderService::class);
 
-        if ($order->status === OrderStatus::CANCELLED) {
+        if ($order->isClosed()) {
             $orderService->reportPaymentForReleasedOrder($order, $session->id, $session->payment_intent ?? null);
 
             return;
@@ -192,7 +191,7 @@ class WebhookController extends Controller
         // The payment_intent.succeeded payload carries the funding charge directly.
         $chargeId = $paymentIntent->latest_charge ?? null;
 
-        if ($order->status === OrderStatus::CANCELLED) {
+        if ($order->isClosed()) {
             app(OrderService::class)->reportPaymentForReleasedOrder($order, $order->stripe_checkout_session_id, $paymentIntent->id);
 
             return;

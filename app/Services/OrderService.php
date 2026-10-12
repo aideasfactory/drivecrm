@@ -426,6 +426,7 @@ class OrderService extends BaseService
                     ? 'This booking is already confirmed. Weekly lesson invoices are sent separately.'
                     : 'This order has already been paid.',
                 OrderStatus::CANCELLED => 'This order has been cancelled.',
+                OrderStatus::EXPIRED => 'The time to pay for this booking ran out and the lessons were released.',
                 default => 'This order is not awaiting payment.',
             };
 
@@ -506,7 +507,7 @@ class OrderService extends BaseService
 
         $order->refresh();
 
-        if ($order->status === OrderStatus::CANCELLED) {
+        if ($order->isClosed()) {
             return [
                 'verified' => false,
                 'order' => $order,
@@ -550,7 +551,7 @@ class OrderService extends BaseService
 
         $order->refresh();
 
-        if ($order->status === OrderStatus::CANCELLED) {
+        if ($order->isClosed()) {
             return [
                 'verified' => false,
                 'order' => $order,
@@ -575,7 +576,7 @@ class OrderService extends BaseService
             : null;
 
         if (! ($this->confirmWeeklyFirstPaymentAction)($order, $chargeId)) {
-            if ($order->fresh()?->status === OrderStatus::CANCELLED) {
+            if ($order->fresh()?->isClosed()) {
                 $this->reportPaymentForReleasedOrder($order, $checkoutSessionId, $paymentIntentId ?? $chargeId);
             }
 
@@ -609,7 +610,7 @@ class OrderService extends BaseService
         if (! ($this->confirmUpfrontPaymentAction)($order, $paymentIntentId, $chargeId)) {
             $order->refresh();
 
-            if ($order->status === OrderStatus::CANCELLED) {
+            if ($order->isClosed()) {
                 $this->reportPaymentForReleasedOrder($order, $checkoutSessionId, $paymentIntentId ?? $chargeId);
             } elseif ($chargeId && ! $order->stripe_charge_id) {
                 $order->update(['stripe_charge_id' => $chargeId]);

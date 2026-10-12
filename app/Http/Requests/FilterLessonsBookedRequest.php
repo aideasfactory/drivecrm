@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Actions\StaffBooking\ListStaffBookedLessonsAction;
 use Illuminate\Foundation\Http\FormRequest;
 
 class FilterLessonsBookedRequest extends FormRequest
 {
-    private const PAID = ['all', 'paid', 'unpaid'];
-
     public function authorize(): bool
     {
         return true;
@@ -17,10 +16,10 @@ class FilterLessonsBookedRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $paid = $this->query('paid', 'all');
+        $paymentState = $this->query('payment', 'all');
 
         $this->merge([
-            'paid' => in_array($paid, self::PAID, true) ? $paid : 'all',
+            'payment' => in_array($paymentState, $this->paymentStates(), true) ? $paymentState : 'all',
         ]);
     }
 
@@ -30,7 +29,7 @@ class FilterLessonsBookedRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'paid' => ['nullable', 'in:'.implode(',', self::PAID)],
+            'payment' => ['nullable', 'in:'.implode(',', $this->paymentStates())],
         ];
     }
 
@@ -40,12 +39,20 @@ class FilterLessonsBookedRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'paid.in' => 'Choose all, paid, or unpaid.',
+            'payment.in' => 'Choose all, unpaid, paid, expired, or cancelled.',
         ];
     }
 
-    public function paidStatus(): string
+    public function paymentState(): string
     {
-        return $this->validated('paid') ?? 'all';
+        return $this->validated('payment') ?? 'all';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function paymentStates(): array
+    {
+        return ['all', ...array_keys(ListStaffBookedLessonsAction::PAYMENT_STATES)];
     }
 }

@@ -13,14 +13,14 @@ class LessonsBookedController extends Controller
 {
     public function index(FilterLessonsBookedRequest $request, ListStaffBookedLessonsAction $listStaffBookedLessons): Response
     {
-        $paid = $request->paidStatus();
-        $listing = $listStaffBookedLessons($paid);
+        $paymentState = $request->paymentState();
+        $listing = $listStaffBookedLessons($paymentState);
 
         return Inertia::render('LessonsBooked/Index', [
             'bookings' => $listing['bookings'],
             'counts' => $listing['counts'],
             'filters' => [
-                'paid' => $paid,
+                'payment' => $paymentState,
             ],
         ]);
     }

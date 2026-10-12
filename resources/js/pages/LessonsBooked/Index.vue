@@ -16,6 +16,8 @@ import { ChevronLeft, ChevronRight, Mail, Phone } from 'lucide-vue-next'
 import { show as instructorsShow } from '@/routes/instructors'
 import { index } from '@/routes/lessons-booked'
 
+type PaymentState = 'unpaid' | 'paid' | 'expired' | 'cancelled'
+
 interface BookedLesson {
     id: number
     invoice_sent_at: string | null
@@ -29,7 +31,7 @@ interface BookedLesson {
     instructor_name: string | null
     instructor_id: number | null
     package: string
-    paid: boolean
+    payment_state: PaymentState
 }
 
 interface PaginationLink {
@@ -51,14 +53,10 @@ interface Paginator {
     links: PaginationLink[]
 }
 
-interface Counts {
-    all: number
-    paid: number
-    unpaid: number
-}
+type Counts = Record<'all' | PaymentState, number>
 
 interface Filters {
-    paid: 'all' | 'paid' | 'unpaid'
+    payment: 'all' | PaymentState
 }
 
 interface Props {
@@ -69,14 +67,23 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const paidOptions: { value: Filters['paid']; label: string; count: keyof Counts }[] = [
-    { value: 'all', label: 'All', count: 'all' },
-    { value: 'unpaid', label: 'Unpaid', count: 'unpaid' },
-    { value: 'paid', label: 'Paid', count: 'paid' },
+const paymentOptions: { value: Filters['payment']; label: string }[] = [
+    { value: 'all', label: 'All' },
+    { value: 'unpaid', label: 'Unpaid' },
+    { value: 'paid', label: 'Paid' },
+    { value: 'expired', label: 'Expired' },
+    { value: 'cancelled', label: 'Cancelled' },
 ]
 
-const applyPaid = (paid: Filters['paid']) => {
-    router.get(index.url({ query: { paid } }), {}, { preserveScroll: true, preserveState: true })
+const paymentBadges: Record<PaymentState, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+    unpaid: { label: 'Unpaid', variant: 'destructive' },
+    paid: { label: 'Paid', variant: 'secondary' },
+    expired: { label: 'Expired', variant: 'outline' },
+    cancelled: { label: 'Cancelled', variant: 'outline' },
+}
+
+const applyPayment = (payment: Filters['payment']) => {
+    router.get(index.url({ query: { payment } }), {}, { preserveScroll: true, preserveState: true })
 }
 
 const goToPage = (url: string | null) => {
@@ -122,7 +129,7 @@ const breadcrumbs = [{ title: 'Lessons booked' }]
             <div class="flex flex-col gap-2">
                 <h2 class="text-3xl font-bold">Lessons booked</h2>
                 <p class="text-muted-foreground">
-                    Lessons booked by the bookings team. Unpaid rows are highlighted so payment can be chased.
+                    Lessons booked by the bookings team. Unpaid rows are highlighted so payment can be chased. Expired bookings ran out of time to pay and their lessons were released.
                 </p>
             </div>
 
@@ -131,18 +138,18 @@ const breadcrumbs = [{ title: 'Lessons booked' }]
                     <div class="mb-4 flex flex-wrap items-center gap-4">
                         <div class="flex items-center gap-1 rounded-md border p-1">
                             <Button
-                                v-for="option in paidOptions"
+                                v-for="option in paymentOptions"
                                 :key="option.value"
-                                :variant="filters.paid === option.value ? 'default' : 'ghost'"
+                                :variant="filters.payment === option.value ? 'default' : 'ghost'"
                                 size="sm"
-                                @click="applyPaid(option.value)"
+                                @click="applyPayment(option.value)"
                             >
                                 {{ option.label }}
                                 <Badge
                                     :variant="option.value === 'unpaid' ? 'destructive' : 'secondary'"
                                     class="ml-2"
                                 >
-                                    {{ counts[option.count] }}
+                                    {{ counts[option.value] }}
                                 </Badge>
                             </Button>
                         </div>
@@ -162,14 +169,17 @@ const breadcrumbs = [{ title: 'Lessons booked' }]
                                 <TableHead>Telephone</TableHead>
                                 <TableHead>Instructor</TableHead>
                                 <TableHead>Package (hours)</TableHead>
-                                <TableHead>Paid</TableHead>
+                                <TableHead>Payment</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             <TableRow
                                 v-for="row in bookings.data"
                                 :key="row.id"
-                                :class="row.paid ? undefined : 'bg-destructive/10 hover:bg-destructive/15'"
+                                :class="{
+                                    'bg-destructive/10 hover:bg-destructive/15': row.payment_state === 'unpaid',
+                                    'text-muted-foreground': row.payment_state === 'expired' || row.payment_state === 'cancelled',
+                                }"
                             >
                                 <TableCell class="whitespace-nowrap text-sm">
                                     {{ formatInvoiceSent(row.invoice_sent_at) }}
@@ -219,8 +229,8 @@ const breadcrumbs = [{ title: 'Lessons booked' }]
                                     {{ row.package }}
                                 </TableCell>
                                 <TableCell>
-                                    <Badge :variant="row.paid ? 'secondary' : 'destructive'">
-                                        {{ row.paid ? 'Paid' : 'Unpaid' }}
+                                    <Badge :variant="paymentBadges[row.payment_state].variant">
+                                        {{ paymentBadges[row.payment_state].label }}
                                     </Badge>
                                 </TableCell>
                             </TableRow>
