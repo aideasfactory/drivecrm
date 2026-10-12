@@ -4,11 +4,19 @@ import axios from 'axios'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Mail, Phone, MapPin, Edit, CreditCard, Loader2, CheckCircle, LogOut, ShieldCheck, Copy, Send } from 'lucide-vue-next'
+import { Mail, Phone, MapPin, Edit, CreditCard, Loader2, CheckCircle, LogOut, ShieldCheck, Copy, Send, RotateCcw } from 'lucide-vue-next'
 import { router, usePage } from '@inertiajs/vue3'
 import { toast } from '@/components/ui/toast'
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 import type { InstructorDetail } from '@/types/instructor'
-import { stripeStatus, startStripeOnboarding, refreshStripeOnboarding } from '@/actions/App/Http/Controllers/InstructorController'
+import { stripeStatus, startStripeOnboarding, refreshStripeOnboarding, resetStripe } from '@/actions/App/Http/Controllers/InstructorController'
 import { logout } from '@/routes'
 import { useRole } from '@/composables/useRole'
 import { useStripeSetupLink } from '@/composables/useStripeSetupLink'
@@ -33,6 +41,8 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 const { isOwner, isInstructor } = useRole()
 const { sendingSetupLink, sendSetupLink } = useStripeSetupLink(() => props.instructor.id)
+const isResetStripeDialogOpen = ref(false)
+const resettingStripe = ref(false)
 
 const page = usePage()
 const showMtdButton = computed<boolean>(
@@ -121,6 +131,32 @@ const handleStripeConnect = async () => {
     }
 }
 
+const confirmResetStripe = async () => {
+    if (resettingStripe.value) {
+        return
+    }
+
+    resettingStripe.value = true
+
+    try {
+        const { data } = await axios.post(resetStripe.url(props.instructor.id))
+        status.value = {
+            connected: false,
+            onboarding_complete: false,
+            charges_enabled: false,
+            payouts_enabled: false,
+        }
+        isResetStripeDialogOpen.value = false
+        toast({ title: data?.message ?? 'Stripe connection reset.' })
+        router.reload({ preserveScroll: true })
+    } catch (error: any) {
+        const message = error?.response?.data?.message ?? 'Failed to reset the Stripe connection.'
+        toast({ title: message, variant: 'destructive' })
+    } finally {
+        resettingStripe.value = false
+    }
+}
+
 onMounted(() => {
     checkStripeStatus()
 })
@@ -191,7 +227,7 @@ onMounted(() => {
             </div>
 
             <!-- Action Buttons -->
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center justify-end gap-2">
                 <!-- Stripe Connection Status & Button -->
                 <div v-if="!checkingStatus" class="flex items-center gap-2">
                     <!-- Fully Connected — visual label only -->
@@ -254,6 +290,18 @@ onMounted(() => {
                     HMRC / Tax
                 </Button>
 
+                <!-- Owner-only: clear a stale Stripe Connect id so the next connect creates a new account -->
+                <Button
+                    v-if="isOwner"
+                    variant="outline"
+                    class="min-w-[160px] cursor-pointer"
+                    :disabled="resettingStripe"
+                    @click="isResetStripeDialogOpen = true"
+                >
+                    <RotateCcw class="mr-2 h-4 w-4" />
+                    Reset Stripe
+                </Button>
+
                 <!-- Edit Profile Button -->
                 <Button @click="emit('edit')">
                     <Edit class="mr-2 h-4 w-4" />
@@ -267,5 +315,37 @@ onMounted(() => {
                 </Button>
             </div>
         </div>
+
+        <Dialog v-model:open="isResetStripeDialogOpen">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Reset Stripe connection?</DialogTitle>
+                    <DialogDescription>
+                        This clears the saved Stripe account for {{ instructor.name }} in Drive.
+                        Nothing is deleted on Stripe. The next time they connect, from the website
+                        or the app, a new Stripe account is created.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button
+                        variant="outline"
+                        :disabled="resettingStripe"
+                        @click="isResetStripeDialogOpen = false"
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="destructive"
+                        class="min-w-[140px]"
+                        :disabled="resettingStripe"
+                        @click="confirmResetStripe"
+                    >
+                        <Loader2 v-if="resettingStripe" class="mr-2 h-4 w-4 animate-spin" />
+                        <RotateCcw v-else class="mr-2 h-4 w-4" />
+                        Reset Stripe
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </div>
 </template>

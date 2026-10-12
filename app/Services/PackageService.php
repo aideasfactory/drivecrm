@@ -45,7 +45,15 @@ class PackageService extends BaseService
      */
     public function update(Package $package, array $data): Package
     {
-        return ($this->updatePackage)($package, $data);
+        $updated = ($this->updatePackage)($package, $data);
+
+        if ($updated->instructor_id !== null) {
+            $this->invalidate(
+                $this->cacheKey('instructor', $updated->instructor_id, 'packages')
+            );
+        }
+
+        return $updated;
     }
 
     /**

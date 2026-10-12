@@ -279,8 +279,8 @@
                         <label for="terms" class="cursor-pointer text-sm leading-relaxed text-muted-foreground">
                           I agree to the
                           <a href="/terms-of-service" target="_blank" rel="noopener noreferrer" class="font-medium text-foreground underline underline-offset-4 hover:text-primary">Terms of Service</a>,
-                          <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" class="font-medium text-foreground underline underline-offset-4 hover:text-primary">Privacy Policy</a>, and
-                          <a href="/cookie-policy" target="_blank" rel="noopener noreferrer" class="font-medium text-foreground underline underline-offset-4 hover:text-primary">Cookie Policy</a>. I understand the cancellation policy and payment terms.
+                          <a href="https://just-drive.co.uk/privacy-policy/" target="_blank" rel="noopener noreferrer" class="font-medium text-foreground underline underline-offset-4 hover:text-primary">Privacy Policy</a>, and
+                          <a href="https://just-drive.co.uk/cookies-policy/" target="_blank" rel="noopener noreferrer" class="font-medium text-foreground underline underline-offset-4 hover:text-primary">Cookie Policy</a>. I understand the cancellation policy and payment terms.
                         </label>
                       </div>
                     </CardContent>

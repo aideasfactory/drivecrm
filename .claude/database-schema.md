@@ -407,6 +407,7 @@ Lesson packages (both platform defaults and instructor bespoke packages).
 | `stripe_price_id` | varchar(255) | NULLABLE | Stripe price ID |
 | `active` | boolean | DEFAULT true | Whether package is available for new bookings. Instructors hide packages from the CRM admin (Details → Packages) by setting this to false. The row is kept so `orders.package_id` and `slot_offers.package_id` stay valid. Mobile and booking UIs only list `active = true`. Do not hard-delete packages: those FKs are `ON DELETE CASCADE` and would wipe orders (and therefore lessons and payments). |
 | `is_one_off` | boolean | DEFAULT false | True for reusable short-notice "One-Off Package" rows created from Offer Slot |
+| `visible_to_pupils` | boolean | DEFAULT true, NOT NULL | Whether pupils can choose this package. `true` (the default, including every existing row) lists it in pupil package pickers. `false` keeps it private: hidden from website onboarding (unless staff are booking on a pupil's behalf), hidden from `GET /api/v1/student/packages`, and rejected when a pupil tries to book or price it. Instructors and admins still see it and can book it for a pupil. |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
@@ -423,6 +424,7 @@ Lesson packages (both platform defaults and instructor bespoke packages).
 - `lesson_price_pence` is automatically calculated on save: `total_price_pence / lessons_count`
 - Prices are stored in pence (GBP smallest unit)
 - `is_one_off` packages are 1-lesson instructor packages created when offering a slot at a custom price. The same instructor + price combination is reused on later offers.
+- `visible_to_pupils` defaults to true so existing packages stay on pupil lists. Set it false for a private price (for example friends and family). Private packages stay on instructor and admin package screens and can still be used when staff book on a pupil's behalf. Pupils cannot select them during onboarding or checkout, and the student package API omits them.
 - Instructor-created packages are hidden, not deleted: `DELETE /instructors/{id}/packages/{package}` sets `active = false`. `PATCH .../restore` sets `active = true`. Lessons and `lesson_payments` have no `package_id` — they belong to orders, which snapshot package name and prices.
 
 ---

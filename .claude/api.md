@@ -887,7 +887,20 @@ Other deep-link values you may receive: `drive-app://stripe-onboarding?status=re
 | `url` | string | Stripe-hosted onboarding URL — open in the in-app browser straight away |
 | `stripe_account_id` | string | The instructor's Stripe Connect account ID (created on first call) |
 
-**Error Response:** `500` — Stripe account or link creation failed
+**Error Response:** `500` — Stripe account or link creation failed.
+
+When the saved Connect account does not exist on this platform, `message` is a support instruction and does **not** include Stripe's raw `No such account` text or the account id:
+
+```json
+{
+  "message": "We couldn't find this Stripe account. Please contact support so they can reset your Stripe connection. After that, connecting again creates a new account."
+}
+```
+
+Show that `message`. An owner resets the connection from the instructor profile in Drive CRM (nothing is deleted on Stripe). The next call creates a new account.
+
+Other Stripe failures still look like:
+
 ```json
 {
   "message": "Failed to create onboarding link: <stripe error>"
@@ -1499,6 +1512,7 @@ Returns all active packages for the authenticated instructor.
       "weekly_payment": "£40.99",
       "active": true,
       "is_one_off": false,
+      "visible_to_pupils": true,
       "has_stripe_price": true
     }
   ]
@@ -1523,9 +1537,10 @@ Returns all active packages for the authenticated instructor.
 | `weekly_payment` | string | Per-lesson amount when paying weekly, fees included (`total_price ÷ lessons_count`), formatted |
 | `active` | boolean | Whether the package is active |
 | `is_one_off` | boolean | `true` for reusable short-notice "One-Off Package" rows created from Offer Slot |
+| `visible_to_pupils` | boolean | `true` when pupils can choose this package. `false` is a private package (friends and family). Instructor lists still include it. Pupil package lists omit it. Defaults to `true` when omitted on create. |
 | `has_stripe_price` | boolean | Whether a Stripe price is configured for this package |
 
-> **Note:** Only active packages are returned. Packages without a Stripe price (`has_stripe_price: false`) cannot be used for upfront payments.
+> **Note:** Only active packages are returned. Private packages (`visible_to_pupils: false`) are included here so the instructor app can show the toggle. Packages without a Stripe price (`has_stripe_price: false`) cannot be used for upfront payments.
 
 > **Pricing shown to pupils:** Any screen a pupil (or an instructor booking on a pupil's behalf) uses to choose a package must show `total_price` / `weekly_payment` and itemise `booking_fee` + `digital_fee` — never `formatted_total_price` alone, which excludes the fees the pupil is charged. Use `GET /api/v1/packages/{package}/pricing` for raw numeric values.
 
@@ -1545,6 +1560,7 @@ Creates a new bespoke package for the authenticated instructor. The instructor m
 | `description` | string | No | Package description |
 | `total_price_pence` | integer | Yes | Total price in pence (e.g., 35000 = £350.00). Min: 0 |
 | `lessons_count` | integer | Yes | Number of lessons in the package. Min: 1 |
+| `visible_to_pupils` | boolean | No | `true` (default) shows the package to pupils. `false` keeps it private to instructors and admins. Omit to leave the default. |
 
 **Example Request:**
 ```json
@@ -1552,7 +1568,8 @@ Creates a new bespoke package for the authenticated instructor. The instructor m
   "name": "5 Hour Starter Package",
   "description": "Five one-hour driving lessons for beginners",
   "total_price_pence": 17500,
-  "lessons_count": 5
+  "lessons_count": 5,
+  "visible_to_pupils": false
 }
 ```
 
@@ -1573,6 +1590,8 @@ Creates a new bespoke package for the authenticated instructor. The instructor m
     "total_price": "£214.94",
     "weekly_payment": "£42.99",
     "active": true,
+    "is_one_off": false,
+    "visible_to_pupils": false,
     "has_stripe_price": true
   }
 }
@@ -1619,6 +1638,7 @@ Updates an existing package owned by the authenticated instructor. Returns `403`
 | `description` | string | No | Package description |
 | `total_price_pence` | integer | Yes | Total price in pence (e.g., 35000 = £350.00). Min: 0 |
 | `lessons_count` | integer | Yes | Number of lessons in the package. Min: 1 |
+| `visible_to_pupils` | boolean | No | `true` shows the package to pupils. `false` keeps it private. Omit to leave the current value unchanged. |
 
 **Example Request:**
 ```json
@@ -1626,7 +1646,8 @@ Updates an existing package owned by the authenticated instructor. Returns `403`
   "name": "5 Hour Starter Package (Updated)",
   "description": "Five one-hour driving lessons — now with free resources",
   "total_price_pence": 16000,
-  "lessons_count": 5
+  "lessons_count": 5,
+  "visible_to_pupils": true
 }
 ```
 
@@ -1647,6 +1668,8 @@ Updates an existing package owned by the authenticated instructor. Returns `403`
     "total_price": "£199.94",
     "weekly_payment": "£39.99",
     "active": true,
+    "is_one_off": false,
+    "visible_to_pupils": true,
     "has_stripe_price": true
   }
 }
@@ -2279,6 +2302,8 @@ List vehicles owned by the authenticated instructor.
 
 Returns the full pricing breakdown for a package, including booking fee, digital fee, promo discount, and calculated totals. **This is the single source of truth for all fee calculations** — the mobile app should never hardcode fee values.
 
+A **student** token receives **404** when the package is private (`visible_to_pupils: false`). Instructor tokens can still price a private package so they can book it for a pupil.
+
 **Query Parameters:**
 
 | Parameter | Type | Required | Description |
@@ -2889,6 +2914,7 @@ Once created, the offer is `open`. Active students with an Expo push token are q
       "weekly_payment": "£68.98",
       "active": true,
       "is_one_off": true,
+      "visible_to_pupils": true,
       "has_stripe_price": false
     },
     "calendar_item": {
@@ -2992,7 +3018,7 @@ These endpoints expose the authenticated student's **attached instructor's** pac
 
 **Auth required:** Yes (Bearer token — student only)
 
-Returns the active packages belonging to the authenticated student's attached instructor. Response shape matches `GET /api/v1/instructor/packages` exactly (same resource) — see the field table there. `total_price_pence` / `formatted_total_price` are the base price **before fees**. Show the pupil `total_price` (fee-inclusive) with `booking_fee` and `digital_fee` itemised, and `weekly_payment` for weekly.
+Returns the active packages belonging to the authenticated student's attached instructor that are **visible to pupils** (`visible_to_pupils: true`). Private packages are omitted. Response shape matches `GET /api/v1/instructor/packages` exactly (same resource) — see the field table there. `total_price_pence` / `formatted_total_price` are the base price **before fees**. Show the pupil `total_price` (fee-inclusive) with `booking_fee` and `digital_fee` itemised, and `weekly_payment` for weekly.
 
 **Example:** `GET /api/v1/student/packages`
 
@@ -3015,6 +3041,7 @@ Returns the active packages belonging to the authenticated student's attached in
       "weekly_payment": "£40.99",
       "active": true,
       "is_one_off": false,
+      "visible_to_pupils": true,
       "has_stripe_price": true
     }
   ]
@@ -3135,6 +3162,7 @@ Once another student accepts an offer, it disappears from this list. Do **not** 
         "weekly_payment": "£68.98",
         "active": true,
         "is_one_off": true,
+        "visible_to_pupils": true,
         "has_stripe_price": false
       },
       "calendar_item": {
@@ -5153,6 +5181,8 @@ How the first payment is taken depends on who is booking (the same for both paym
 For `weekly` orders, each later week is invoiced by email and due **48 hours before the lesson**.
 
 **Booking against a specific open diary slot:** send `calendar_item_id` instead of `first_lesson_date` / `start_time` / `end_time`. Date and time are taken from that slot. The slot must belong to the student's instructor and still be empty availability. The first lesson claims that slot (under a row lock); remaining lessons in a multi-lesson package are placed weekly at the same time, reusing matching empty slots where they exist. Any open short-notice offer on a claimed slot is closed.
+
+**Private packages:** a student token that sends a `package_id` with `visible_to_pupils: false` receives **404** (same as an unknown or inactive package). An instructor token can still book that package for the pupil. Short-notice offers are unchanged: if an instructor offers a private package, the pupil still sees that offer.
 
 **URL Parameters:**
 
@@ -7622,10 +7652,12 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-09-29 | **Per-lesson fee breakdown (additive).** New `payment_breakdown` object (`total_pence`, `lesson_pence`, `booking_fee_pence`, `digital_fee_pence`, `test_pass_guarantee_pence`) on `GET /students/{student}/lessons`, `GET /students/{student}/lessons/{lesson}`, `POST /students/{student}/lessons/{lesson}/sign-off`, `GET /instructor/lessons/{date}`, `GET /instructor/lessons?from=&to=` and `GET /instructor/calendar/items` (plus the other calendar item responses). The lesson list also gains `payment_mode`. `amount_pence` is unchanged and documented as the lesson price **before fees**. Docs fix: the `GET /student/packages` example now shows the real response (same as instructor packages, with fee fields). `test_pass_guarantee_pence` is the Pass Your Test Guarantee charged with that lesson — only ever the first lesson of an order, and `0` everywhere else. New rule: pupil-facing price displays must itemise every fee (see the **Payment Breakdown Object** note). | Student Lessons (index, show, sign-off), Instructor Day Lessons, Instructor Calendar Items, Student Packages (docs) |
 | 2026-09-29 | **Pay-at-booking hardening.** (1) **New 422 on `POST /students/{student}/orders` and slot-offer accept:** every week of a booking is now checked for clashes with other lessons (held/reserved/booked/completed), blocked-out periods and practical tests; any clash refuses the whole booking before anything is held or charged (`first_lesson_date` / `calendar_item_id`: "This time is no longer available on {date}. Please choose another time."). (2) Confirmation happens once: `GET /orders/{order}/checkout/verify`, the success pages and the webhook share one locked confirmation, so repeat verify calls no longer resend the confirmation email. (3) Weekly bookings paid at checkout now also send the week-1 "payment received" email (pupil) and "learner paid" email (instructor). (4) Released holds no longer turn slots the booking created into open availability. (5) Docs: a released slot-offer booking leaves the offer `booked`. No request or response fields changed. | Orders (store, verify), Student Slot Offers (accept) |
 | 2026-09-30 | **Added `DELETE /api/v1/push-token`**. It removes the user's Expo push token only when it matches the one sent, so an old device cannot switch off pushes on the current device. It always returns 200 (idempotent) and 422 on a missing or invalid token. When the token is removed, pending `push_notifications` rows for the user are marked `cancelled` so the next `push:send-queued` run sends nothing. **Added `has_push_token` (boolean) to every user object** (`GET /auth/user`, login, register), which is additive. Logout is unchanged: the app calls DELETE first, then logout. | Push Notifications (push-token — NEW DELETE), Auth (user, login, register) |
+| 2026-10-12 | **Stale Stripe Connect accounts.** `POST /instructor/stripe/onboarding` still returns `500` when link creation fails, but if Stripe says the stored account does not exist the `message` is now a support instruction and no longer includes the raw `No such account` text or the account id. Show that `message`. An owner resets the connection from the instructor profile in Drive CRM (nothing is deleted on Stripe); the next call creates a new account. | Instructor (stripe/onboarding) |
 | 2026-10-01 | **Unpaid checkout no longer adds a contact or names the hold.** `GET /instructor/students` only lists pupils whose `instructor_id` is set. Website checkout no longer sets it; `AssignStudentOnPaidBookingAction` sets it when the first payment confirms the order (upfront or weekly). A learner who abandons checkout is absent from the instructor's contact list. Pupils already assigned (instructor-created, admin, PIN, or a previous paid booking) stay assigned. **`student_name` on `GET /instructor/calendar/items` is now `null` for `draft` holds** (it remains set for `booked`, `completed`, and `reserved`). The app should keep rendering the existing Held / Unpaid treatment and must not fall back to another name field — there isn't one on the item. Other booking-context fields on drafts are unchanged. The admin diary uses the same rule and labels the block "Held". | Instructor Students (index), Instructor Calendar (index) |
 
 | 2026-09-30 | **Instructor "lesson paid" push.** When a lesson is marked as paid (weekly `invoice.paid` webhook, first weekly payment at checkout, or a pay-in-full booking), the instructor is queued a push naming the pupil and the lesson date/time. Pay-in-full bookings send one summary push. New payload `type: "lesson_paid"`. No request or response fields changed. | Push Notifications |
 | 2026-10-12 | **New order status `expired`.** Unpaid bookings released by `orders:release-expired-holds` when `payment_hold_expires_at` passes are now `expired` instead of `cancelled` (existing released orders were migrated). `cancelled` now only means a booking the instructor or admin cancelled. **App action:** handle `status: "expired"` on the order object, which `POST /students/{student}/orders`, `GET /orders/{order}/checkout/verify` and slot-offer accept return. Treat it as gone and hide it. Its lessons are deleted, so they never appear in any lessons endpoint. `GET /orders/{order}/checkout/verify` returns 422 with `data.status = "expired"` when the hold ran out before payment. Resend-payment-link returns 422 `The time to pay for this booking ran out and the lessons were released.` for an expired order. | Orders (order object, verify, resend-payment-link), Student Slot Offers (accept) |
+| 2026-10-12 | **Package visibility for pupils.** New `visible_to_pupils` boolean on every package object (default `true`, so existing packages stay listed). `false` is a private package. `GET /instructor/packages` still returns private packages and includes the flag so the app can add a toggle. `POST` and `PUT /instructor/packages` accept optional `visible_to_pupils` (omit on update to leave it unchanged). `GET /student/packages` omits private packages. A student token gets **404** from `GET /packages/{package}/pricing` and `POST /students/{student}/orders` for a private package; an instructor token can still price and book it. Short-notice offers are unchanged. | Instructor Packages (list, create, update), Student Packages (list), Package Pricing (show), Orders (store) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

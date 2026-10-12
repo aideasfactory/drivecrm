@@ -17,6 +17,7 @@ use App\Enums\PdiStatus;
 use App\Enums\RecurrencePattern;
 use App\Enums\TransmissionType;
 use App\Enums\VehicleMethod;
+use App\Exceptions\MissingStripeConnectAccountException;
 use App\Http\Controllers\Hmrc\Archive\ArchiveController;
 use App\Http\Controllers\Hmrc\Itsa\ItsaController;
 use App\Http\Controllers\Hmrc\Vat\VatController;
@@ -910,9 +911,7 @@ class InstructorController extends Controller
             );
 
             if (! $linkResult['success']) {
-                return response()->json([
-                    'message' => 'Failed to create account link: '.$linkResult['error'],
-                ], 500);
+                return $this->onboardingLinkFailureResponse($linkResult, 'Failed to create account link: ');
             }
 
             return response()->json([
@@ -949,9 +948,7 @@ class InstructorController extends Controller
             );
 
             if (! $linkResult['success']) {
-                return response()->json([
-                    'message' => 'Failed to refresh onboarding link: '.$linkResult['error'],
-                ], 500);
+                return $this->onboardingLinkFailureResponse($linkResult, 'Failed to refresh onboarding link: ');
             }
 
             return response()->json([
@@ -1253,6 +1250,27 @@ class InstructorController extends Controller
     }
 
     /**
+     * JSON error for a failed onboarding-link create or refresh.
+     *
+     * A missing Connect account is a known stale-id case: tell the instructor
+     * to contact support instead of returning Stripe's raw "No such account" text.
+     *
+     * @param  array{success: bool, error?: string, account_missing?: bool}  $linkResult
+     */
+    private function onboardingLinkFailureResponse(array $linkResult, string $prefix): JsonResponse
+    {
+        if ($linkResult['account_missing'] ?? false) {
+            return response()->json([
+                'message' => MissingStripeConnectAccountException::MESSAGE,
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => $prefix.($linkResult['error'] ?? 'Unknown error'),
+        ], 500);
+    }
+
+    /**
      * Owner action: email the instructor a link to connect Stripe themselves,
      * instead of the owner going through Stripe onboarding on their behalf.
      */
@@ -1262,6 +1280,24 @@ class InstructorController extends Controller
 
         return response()->json([
             'message' => "Stripe setup link sent to {$email}.",
+        ]);
+    }
+
+    /**
+     * Owner action: clear the stored Stripe Connect account and connection
+     * flags so the next connect (web or app) creates a new account.
+     * Does not delete anything on Stripe.
+     */
+    public function resetStripe(Request $request, Instructor $instructor): JsonResponse
+    {
+        $owner = $request->user();
+
+        abort_unless($owner instanceof User && $owner->isOwner(), 403, 'Unauthorized. Owner access required.');
+
+        $this->instructorService->resetStripeConnection($instructor, $owner);
+
+        return response()->json([
+            'message' => 'Stripe connection reset. A new Stripe account will be created the next time they connect.',
         ]);
     }
 
@@ -1670,6 +1706,7 @@ class InstructorController extends Controller
             'allows_weekly_payment' => $package->allowsWeeklyPayment(),
             'active' => $package->active,
             'is_one_off' => (bool) $package->is_one_off,
+            'visible_to_pupils' => $package->isVisibleToPupils(),
             'is_platform_package' => $package->isPlatformPackage(),
             'is_bespoke_package' => $package->isBespokePackage(),
         ];

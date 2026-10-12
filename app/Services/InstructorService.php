@@ -36,6 +36,7 @@ use App\Actions\Instructor\Mileage\DeleteMileageLogAction;
 use App\Actions\Instructor\Mileage\GetMileageLogsAction;
 use App\Actions\Instructor\Mileage\UpdateMileageLogAction;
 use App\Actions\Instructor\ReplaceInstructorLocationsAction;
+use App\Actions\Instructor\ResetInstructorStripeConnectionAction;
 use App\Actions\Instructor\SendInstructorWelcomeEmailAction;
 use App\Actions\Instructor\SendStripeSetupLinkAction;
 use App\Actions\Instructor\SetInstructorPackageActiveAction;
@@ -130,6 +131,7 @@ class InstructorService extends BaseService
         protected RecalculateStudentLessonNumbersAction $recalculateStudentLessonNumbers,
         protected StartStripeOnboardingAction $startStripeOnboarding,
         protected SyncStripeAccountStatusAction $syncStripeAccountStatus,
+        protected ResetInstructorStripeConnectionAction $resetStripeConnection,
     ) {}
 
     /**
@@ -885,6 +887,32 @@ class InstructorService extends BaseService
         );
 
         return $email;
+    }
+
+    /**
+     * Owner action: clear the stored Stripe Connect account and connection
+     * flags so the next connect creates a new account. Logs who reset it.
+     * Does not call Stripe.
+     */
+    public function resetStripeConnection(Instructor $instructor, User $owner): Instructor
+    {
+        $previousAccountId = $instructor->stripe_account_id;
+
+        $instructor = ($this->resetStripeConnection)($instructor);
+
+        ($this->logActivity)(
+            $instructor,
+            "{$owner->name} reset the Stripe connection (previous account: ".($previousAccountId ?? 'none').')',
+            'profile',
+            [
+                'admin_user_id' => $owner->id,
+                'previous_stripe_account_id' => $previousAccountId,
+                'reset_at' => now()->toIso8601String(),
+            ],
+            "Stripe connection reset by {$owner->name}"
+        );
+
+        return $instructor;
     }
 
     /**

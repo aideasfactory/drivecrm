@@ -16,5 +16,5 @@ return [
 
     'free_minimum_hours' => (float) env('TEST_PASS_GUARANTEE_FREE_MINIMUM_HOURS', 10),
 
-    'terms_url' => env('TEST_PASS_GUARANTEE_TERMS_URL', 'https://just-drive.co.uk/learner-terms-and-conditions/'),
+    'terms_url' => env('TEST_PASS_GUARANTEE_TERMS_URL', rtrim((string) env('APP_URL'), '/').'/terms-of-service#test-pass-guarantee'),
 ];

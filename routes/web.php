@@ -82,6 +82,8 @@ Route::get('/no-access', fn () => Inertia::render('NoAccess'))
 // Public legal pages (linked from onboarding, booking and outgoing emails).
 Route::get('/terms-of-service', fn () => Inertia::render('Legal/TermsOfService'))
     ->name('legal.terms');
+Route::get('/instructor-terms', fn () => Inertia::render('Legal/InstructorPlatformTerms'))
+    ->name('legal.instructor-terms');
 Route::get('/privacy-policy', fn () => Inertia::render('Legal/PrivacyPolicy'))
     ->name('legal.privacy');
 Route::get('/cookie-policy', fn () => Inertia::render('Legal/CookiePolicy'))
@@ -159,6 +161,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
     Route::post('/instructors/{instructor}/stripe/setup-link', [InstructorController::class, 'sendStripeSetupLink'])
         ->middleware(EnsureOwner::class)
         ->name('instructors.stripe.setup-link');
+    Route::post('/instructors/{instructor}/stripe/reset', [InstructorController::class, 'resetStripe'])
+        ->middleware(EnsureOwner::class)
+        ->name('instructors.stripe.reset');
     Route::get('/instructors/{instructor}/stripe/onboarding/return', [InstructorController::class, 'returnFromStripeOnboarding'])
         ->name('instructors.stripe.onboarding.return');
     Route::get('/instructors/{instructor}/stripe/status', [InstructorController::class, 'stripeStatus'])

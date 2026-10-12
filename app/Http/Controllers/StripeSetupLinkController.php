@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\MissingStripeConnectAccountException;
 use App\Models\Instructor;
 use App\Services\InstructorService;
 use Illuminate\Contracts\View\View;
@@ -47,6 +48,8 @@ class StripeSetupLinkController extends Controller
                 URL::temporarySignedRoute('stripe.setup.complete', now()->addDay(), ['instructor' => $instructor->id]),
                 URL::temporarySignedRoute('stripe.setup.start', now()->addDay(), ['instructor' => $instructor->id]),
             );
+        } catch (MissingStripeConnectAccountException) {
+            return $this->page('missing_account');
         } catch (RuntimeException $e) {
             Log::error('Stripe setup link: failed to start onboarding', [
                 'instructor_id' => $instructor->id,
@@ -87,7 +90,7 @@ class StripeSetupLinkController extends Controller
     }
 
     /**
-     * @param  'complete'|'incomplete'|'expired'|'error'  $state
+     * @param  'complete'|'incomplete'|'expired'|'error'|'missing_account'  $state
      */
     private function page(string $state, ?string $continueUrl = null): View
     {

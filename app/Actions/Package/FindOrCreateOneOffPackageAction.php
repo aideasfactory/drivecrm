@@ -11,8 +11,10 @@ class FindOrCreateOneOffPackageAction
 {
     /**
      * Find or create a reusable 1-lesson "One-Off Package" at the given price.
+     * Private and visible one-offs are kept as separate rows, so a one-off
+     * made from a private package never shows up on pupil package lists.
      */
-    public function __invoke(Instructor $instructor, int $pricePence): Package
+    public function __invoke(Instructor $instructor, int $pricePence, bool $visibleToPupils = true): Package
     {
         return Package::query()->firstOrCreate(
             [
@@ -20,6 +22,7 @@ class FindOrCreateOneOffPackageAction
                 'is_one_off' => true,
                 'total_price_pence' => $pricePence,
                 'lessons_count' => 1,
+                'visible_to_pupils' => $visibleToPupils,
             ],
             [
                 'name' => 'One-Off Package',

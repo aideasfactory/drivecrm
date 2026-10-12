@@ -55,6 +55,7 @@ class HandleInertiaRequests extends Middleware
                 'apple' => config('app_links.apple') ?: null,
                 'android' => config('app_links.android') ?: null,
             ],
+            'schoolContact' => config('contact.school'),
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
