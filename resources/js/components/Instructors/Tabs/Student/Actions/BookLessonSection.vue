@@ -32,6 +32,7 @@ interface Package {
     weekly_payment: string
     allows_weekly_payment: boolean
     active: boolean
+    visible_to_pupils?: boolean
     is_platform_package: boolean
     is_bespoke_package: boolean
 }
@@ -255,7 +256,7 @@ const handleSubmit = async () => {
                                 :key="pkg.id"
                                 :value="pkg.id"
                             >
-                                {{ pkg.name }} — {{ pkg.total_price }} incl. fees ({{ pkg.lessons_count }} lessons)
+                                {{ pkg.name }} — {{ pkg.total_price }} incl. fees ({{ pkg.lessons_count }} lessons){{ pkg.visible_to_pupils === false ? ' (private)' : '' }}
                             </option>
                         </select>
                         <p

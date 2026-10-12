@@ -58,8 +58,15 @@ class StepThreeController extends Controller
         // Only Drive packages (no instructor_id) are offered during onboarding —
         // instructor-owned packages must never appear here, even when an
         // instructor was selected in step 2. Intro offers first, then by size.
-        $packages = Package::whereNull('instructor_id')
-            ->where('active', true)
+        $packageQuery = Package::query()
+            ->whereNull('instructor_id')
+            ->where('active', true);
+
+        if (! $enquiry->isStaffBooking()) {
+            $packageQuery->visibleToPupils();
+        }
+
+        $packages = $packageQuery
             ->get()
             ->sortByDesc('is_intro_offer')
             ->sortBy('hours_total')
@@ -82,6 +89,7 @@ class StepThreeController extends Controller
                     'weekly_payment' => '£'.number_format($pricing['weekly_payment'], 2),
                     'lessons_count' => $package->lessons_count,
                     'isIntroOffer' => $package->is_intro_offer,
+                    'visible_to_pupils' => $package->isVisibleToPupils(),
                     'pricePerHour' => $package->less_price_pence,
                 ];
             });

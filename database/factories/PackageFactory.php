@@ -30,6 +30,7 @@ class PackageFactory extends Factory
             'total_price_pence' => $totalPricePence,
             'lessons_count' => $lessonsCount,
             'active' => true,
+            'visible_to_pupils' => true,
         ];
     }
 

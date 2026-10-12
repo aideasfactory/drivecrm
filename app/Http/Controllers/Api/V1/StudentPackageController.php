@@ -18,7 +18,8 @@ class StudentPackageController extends Controller
     ) {}
 
     /**
-     * Return active packages belonging to the authenticated student's attached instructor.
+     * Return active packages the authenticated student's instructor offers to pupils.
+     * Packages marked private stay off this list.
      */
     public function index(Request $request): AnonymousResourceCollection|JsonResponse
     {
@@ -36,7 +37,7 @@ class StudentPackageController extends Controller
             ], 422);
         }
 
-        $packages = $this->packageService->getPackages($student->instructor);
+        $packages = $this->packageService->getPackagesVisibleToPupils($student->instructor);
 
         return PackageResource::collection($packages);
     }

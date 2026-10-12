@@ -29,6 +29,7 @@ interface PackageOption {
     weekly_payment: string
     allows_weekly_payment: boolean
     active: boolean
+    visible_to_pupils?: boolean
 }
 
 interface StudentOption {
@@ -208,7 +209,7 @@ const handleSubmit = async () => {
                             {{ isLoadingPackages ? 'Loading packages...' : 'Select a package...' }}
                         </option>
                         <option v-for="pkg in packages" :key="pkg.id" :value="pkg.id">
-                            {{ pkg.name }} — {{ pkg.total_price }} incl. fees ({{ pkg.lessons_count }} lessons)
+                            {{ pkg.name }} — {{ pkg.total_price }} incl. fees ({{ pkg.lessons_count }} lessons){{ pkg.visible_to_pupils === false ? ' (private)' : '' }}
                         </option>
                     </select>
                     <p v-if="errors.package_id" class="text-sm text-destructive">{{ errors.package_id }}</p>

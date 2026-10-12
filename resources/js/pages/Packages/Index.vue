@@ -38,6 +38,7 @@ interface PackageItem {
     formatted_total_price: string
     formatted_lesson_price: string
     active: boolean
+    visible_to_pupils: boolean
     created_at: string | null
 }
 
@@ -143,6 +144,7 @@ const breadcrumbs = [{ title: 'Packages' }]
                                 <TableHead>Price</TableHead>
                                 <TableHead>Per Lesson</TableHead>
                                 <TableHead>Status</TableHead>
+                                <TableHead>Pupils</TableHead>
                                 <TableHead>Created</TableHead>
                                 <TableHead class="w-[50px]"></TableHead>
                             </TableRow>
@@ -197,6 +199,21 @@ const breadcrumbs = [{ title: 'Packages' }]
                                     </Badge>
                                 </TableCell>
                                 <TableCell>
+                                    <Badge
+                                        :variant="
+                                            pkg.visible_to_pupils === false
+                                                ? 'secondary'
+                                                : 'outline'
+                                        "
+                                    >
+                                        {{
+                                            pkg.visible_to_pupils === false
+                                                ? 'Private'
+                                                : 'Visible'
+                                        }}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell>
                                     <span class="text-muted-foreground">
                                         {{ pkg.created_at }}
                                     </span>
@@ -226,7 +243,7 @@ const breadcrumbs = [{ title: 'Packages' }]
                                 </TableCell>
                             </TableRow>
                             <TableRow v-if="filteredPackages.length === 0">
-                                <TableCell colspan="7" class="text-center">
+                                <TableCell colspan="8" class="text-center">
                                     <div class="py-8 text-muted-foreground">
                                         No packages found
                                     </div>

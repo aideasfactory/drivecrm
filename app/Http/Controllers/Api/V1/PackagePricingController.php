@@ -21,6 +21,10 @@ class PackagePricingController extends Controller
      */
     public function show(Request $request, Package $package): PackagePricingResource
     {
+        if ($request->user()?->isStudent() && ! $package->isVisibleToPupils()) {
+            abort(404);
+        }
+
         $promoDiscount = null;
 
         if ($request->filled('promo_code')) {

@@ -229,8 +229,9 @@ class StepSixController extends Controller
                 'enquiry_id' => $enquiry->id,
             ]);
 
-            // Verify package is active
-            if (! $package->active) {
+            // Learners cannot check out a private package. Staff booking on a
+            // pupil's behalf can still use it.
+            if (! $package->active || (! $package->isVisibleToPupils() && ! $enquiry->isStaffBooking())) {
                 return redirect()
                     ->route('onboarding.step3', ['uuid' => $enquiry->id])
                     ->with('error', 'This package is no longer available.');
