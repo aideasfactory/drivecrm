@@ -14,6 +14,9 @@ declare(strict_types=1);
  * - Bookings-team (staff) bookings email a payment link; slots are held until
  *   midnight in `timezone`.
  * - Emailed-link holds are never shorter than `minimum_hold_minutes`.
+ * - A paid lesson cancelled more than `late_cancellation_hours` before it
+ *   starts is refunded. Inside that window the instructor chooses between
+ *   refunding the pupil and being paid for the lesson.
  *
  * Always read these values through `App\Support\BookingPayments`.
  */
@@ -25,6 +28,8 @@ return [
     'instructor_hold_hours_before_lesson' => (int) env('BOOKING_INSTRUCTOR_HOLD_HOURS_BEFORE_LESSON', 48),
 
     'weekly_payment_due_hours_before_lesson' => (int) env('BOOKING_WEEKLY_PAYMENT_DUE_HOURS_BEFORE_LESSON', 48),
+
+    'late_cancellation_hours' => (int) env('BOOKING_LATE_CANCELLATION_HOURS', 48),
 
     'timezone' => env('BOOKING_TIMEZONE', 'Europe/London'),
 ];

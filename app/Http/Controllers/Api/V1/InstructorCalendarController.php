@@ -231,6 +231,8 @@ class InstructorCalendarController extends Controller
      * items. Booking slots (a lesson is attached): the request must include a
      * `reason`, and `scope=single` cancels just this lesson while `scope=future`
      * cancels this and all future un-signed-off lessons in the same booking.
+     * `refund_lesson` refunds paid lessons cancelled inside 48 hours instead of
+     * paying the instructor for them.
      */
     public function destroy(DeleteCalendarItemRequest $request, CalendarItem $calendarItem): JsonResponse
     {
@@ -252,12 +254,14 @@ class InstructorCalendarController extends Controller
                     (string) $request->input('reason'),
                     $deleteScope === 'future',
                     $request->user(),
+                    $request->boolean('refund_lesson'),
                 );
 
                 return response()->json([
                     'message' => "{$result['cancelled_count']} lesson(s) cancelled. The student has been notified.",
                     'cancelled_count' => $result['cancelled_count'],
                     'refund_required_count' => $result['refund_required_count'],
+                    'payout_count' => $result['payout_count'],
                 ]);
             }
 
