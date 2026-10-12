@@ -160,6 +160,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
     Route::post('/instructors/{instructor}/stripe/setup-link', [InstructorController::class, 'sendStripeSetupLink'])
         ->middleware(EnsureOwner::class)
         ->name('instructors.stripe.setup-link');
+    Route::post('/instructors/{instructor}/stripe/reset', [InstructorController::class, 'resetStripe'])
+        ->middleware(EnsureOwner::class)
+        ->name('instructors.stripe.reset');
     Route::get('/instructors/{instructor}/stripe/onboarding/return', [InstructorController::class, 'returnFromStripeOnboarding'])
         ->name('instructors.stripe.onboarding.return');
     Route::get('/instructors/{instructor}/stripe/status', [InstructorController::class, 'stripeStatus'])

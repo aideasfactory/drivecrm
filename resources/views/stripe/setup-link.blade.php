@@ -15,6 +15,11 @@
             'title' => 'This link has expired',
             'message' => 'For your security, Stripe setup links expire. Please ask us to send you a new one.',
         ],
+        'missing_account' => [
+            'icon' => 'warning',
+            'title' => 'Stripe account not found',
+            'message' => 'We couldn\'t find the Stripe account saved for you. Please contact support so they can reset it. After that, connecting again creates a new account.',
+        ],
         default => [
             'icon' => 'warning',
             'title' => 'Something went wrong',
