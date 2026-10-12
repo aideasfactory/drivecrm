@@ -11,6 +11,7 @@ use App\Models\Instructor;
 use App\Models\Package;
 use App\Services\CalendarService;
 use App\Services\InstructorService;
+use App\Services\OrderService;
 use App\Support\BookingPayments;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -22,6 +23,7 @@ class StepFourController extends Controller
     public function __construct(
         private CalendarService $calendarService,
         private InstructorService $instructorService,
+        private OrderService $orderService,
         private ReleaseLegacyStepFourHoldsAction $releaseLegacyStepFourHolds,
         private BuildPublicInstructorProfileAction $buildPublicInstructorProfile,
     ) {}
@@ -30,6 +32,7 @@ class StepFourController extends Controller
     {
         $enquiry = $request->get('enquiry');
         ($this->releaseLegacyStepFourHolds)($enquiry);
+        $this->orderService->releaseExpiredHolds();
         $step2Data = $enquiry->getStepData(2);
         $step1Data = $enquiry->getStepData(1);
         $postcode = $step1Data['postcode'] ?? null;
@@ -111,6 +114,8 @@ class StepFourController extends Controller
      */
     public function availability(Request $request, string $uuid, string $instructor)
     {
+        $this->orderService->releaseExpiredHolds();
+
         $availability = $this->calendarService->getAvailability(
             instructorId: $instructor,
             fromDate: now()->addDays(2),
