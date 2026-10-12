@@ -11,13 +11,13 @@
               </span>
             </div>
             <div class="flex items-center gap-4 sm:gap-6 text-sm">
-              <a href="tel:08003689215" class="hidden md:flex items-center hover:text-primary">
+              <a :href="phoneHref" class="hidden md:flex items-center hover:text-primary">
                 <Phone class="mr-1.5 h-4 w-4" />
-                0800 368 9215
+                {{ contact.phone }}
               </a>
-              <a href="mailto:lessons@just-drive.co.uk" class="hidden md:flex items-center hover:text-primary">
+              <a :href="emailHref" class="hidden md:flex items-center hover:text-primary">
                 <Mail class="mr-1.5 h-4 w-4" />
-                lessons@just-drive.co.uk
+                {{ contact.email }}
               </a>
             </div>
           </div>
@@ -176,14 +176,14 @@
             </Card>
           </Link>
 
-          <a href="tel:08003689215" class="block">
+          <a :href="phoneHref" class="block">
             <Card class="transition-colors hover:bg-accent">
               <CardContent class="flex items-center gap-4 px-6 py-4">
                 <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                   <PhoneCall class="h-5 w-5" />
                 </div>
                 <div class="flex-1">
-                  <p class="font-semibold">Call us on 0800 368 9215</p>
+                  <p class="font-semibold">Call us on {{ contact.phone }}</p>
                   <p class="text-sm text-muted-foreground">
                     Our team can often find solutions that aren't visible online.
                   </p>
@@ -232,6 +232,7 @@ import { Toaster, toast } from '@/components/ui/toast'
 import AppLogoIcon from '@/components/AppLogoIcon.vue'
 import { pushDataLayerEvent } from '@/lib/gtm'
 import { step1 } from '@/routes/booking'
+import { useSchoolContact } from '@/composables/useSchoolContact'
 import {
   Phone,
   Mail,
@@ -287,13 +288,15 @@ const journeySteps = [
   },
 ]
 
+const { contact, phoneHref, emailHref } = useSchoolContact()
+
 const shareUrl = 'https://just-drive.co.uk'
 
 const shareLink = async () => {
   if (navigator.share) {
     try {
       await navigator.share({
-        title: 'DRIVE Driving School',
+        title: contact.value.name,
         text: 'Learn to drive with DRIVE.',
         url: shareUrl,
       })

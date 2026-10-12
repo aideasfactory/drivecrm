@@ -6,62 +6,7 @@
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <!-- Left Sidebar -->
         <div class="lg:col-span-1 order-2 lg:order-1">
-          <Card class="lg:sticky lg:top-24">
-            <CardHeader>
-              <CardTitle>DRIVE Driving School</CardTitle>
-              <CardDescription class="space-y-2">
-                <div class="flex items-center">
-                  <MapPin class="mr-2 h-4 w-4" />
-                  <span>London & Surrounding Areas</span>
-                </div>
-                <div class="flex items-center">
-                  <Phone class="mr-2 h-4 w-4" />
-                  <span>020 1234 5678</span>
-                </div>
-                <div class="flex items-center">
-                  <Mail class="mr-2 h-4 w-4" />
-                  <span>hello@DRIVE.com</span>
-                </div>
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent class="space-y-6">
-              <div class="flex items-center flex-wrap gap-3">
-                <Badge variant="secondary" class="flex items-center bg-primary text-primary-foreground hover:bg-primary/90">
-                  <Shield class="mr-1 h-3 w-3" />
-                  DVSA Approved
-                </Badge>
-                <Badge variant="secondary" class="flex items-center bg-primary text-primary-foreground hover:bg-primary/90">
-                  <Lock class="mr-1 h-3 w-3" />
-                  Secure Checkout
-                </Badge>
-              </div>
-
-              <Separator />
-
-              <div>
-                <h4 class="font-semibold mb-3">Why book with us?</h4>
-                <ul class="space-y-2 text-sm">
-                  <li class="flex items-start">
-                    <CircleCheck class="mr-2 mt-0.5 h-4 w-4 flex-shrink-0" />
-                    <span>Full refund policy - cancel up to 48 hours before</span>
-                  </li>
-                  <li class="flex items-start">
-                    <CircleCheck class="mr-2 mt-0.5 h-4 w-4 flex-shrink-0" />
-                    <span>Flexible scheduling - reschedule anytime</span>
-                  </li>
-                  <li class="flex items-start">
-                    <CircleCheck class="mr-2 mt-0.5 h-4 w-4 flex-shrink-0" />
-                    <span>Qualified DVSA approved instructors</span>
-                  </li>
-                  <li class="flex items-start">
-                    <CircleCheck class="mr-2 mt-0.5 h-4 w-4 flex-shrink-0" />
-                    <span>Modern dual-control vehicles</span>
-                  </li>
-                </ul>
-              </div>
-            </CardContent>
-          </Card>
+          <OnboardingLeftSidebar />
         </div>
 
         <!-- Main Form -->
@@ -284,20 +229,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Spinner } from '@/components/ui/spinner'
 import { Toaster } from '@/components/ui/toast'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
+import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
 import {
   MapPin,
-  Phone,
-  Mail,
   Shield,
-  Lock,
-  CircleCheck,
   AlertCircle,
   Info,
   AlertTriangle,
