@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Instructor;
 
+use App\Exceptions\MissingStripeConnectAccountException;
 use App\Models\Instructor;
 use App\Services\StripeService;
 use RuntimeException;
@@ -22,6 +23,7 @@ class StartStripeOnboardingAction
      *
      * @return array{url: string, stripe_account_id: string}
      *
+     * @throws MissingStripeConnectAccountException when the stored Connect account does not exist
      * @throws RuntimeException
      */
     public function __invoke(Instructor $instructor, string $returnUrl, string $refreshUrl): array
@@ -40,6 +42,10 @@ class StartStripeOnboardingAction
         $linkResult = $this->stripeService->createAccountLink($instructor, $returnUrl, $refreshUrl);
 
         if (! $linkResult['success']) {
+            if ($linkResult['account_missing'] ?? false) {
+                throw new MissingStripeConnectAccountException;
+            }
+
             throw new RuntimeException('Failed to create onboarding link: '.$linkResult['error']);
         }
 

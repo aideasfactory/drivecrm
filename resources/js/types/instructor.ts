@@ -90,6 +90,7 @@ export interface Package {
   formatted_lesson_price: string
   active: boolean
   is_one_off?: boolean
+  visible_to_pupils?: boolean
   is_platform_package: boolean
   is_bespoke_package: boolean
 }
@@ -154,6 +155,7 @@ export interface CalendarItemResponse {
   unavailability_reason: string | null
   student_name: string | null
   is_paid: boolean | null
+  is_late_cancellation?: boolean | null
   lesson_id: number | null
   order_id: number | null
   future_siblings_count: number

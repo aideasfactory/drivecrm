@@ -27,6 +27,8 @@ class RestrictOwnerAccess
         'support-messages/*',
         'enquiries',
         'enquiries/*',
+        'lessons-booked',
+        'lessons-booked/*',
         'settings',
         'settings/*',
     ];

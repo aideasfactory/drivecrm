@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Save, X, Loader2 } from 'lucide-vue-next'
@@ -26,6 +27,7 @@ export interface PackageFormData {
     description: string
     total_price_pence: number
     lessons_count: number
+    visible_to_pupils: boolean
 }
 
 interface PackageFormState {
@@ -33,6 +35,7 @@ interface PackageFormState {
     description: string
     total_price_pounds: number
     lessons_count: number
+    visible_to_pupils: boolean
 }
 
 // Form state — price is held in pounds for the input; converted to pence on submit.
@@ -41,6 +44,7 @@ const formData = ref<PackageFormState>({
     description: '',
     total_price_pounds: 0,
     lessons_count: 1,
+    visible_to_pupils: true,
 })
 
 // Watch for package changes and populate form
@@ -53,6 +57,7 @@ watch(
                 description: pkg.description || '',
                 total_price_pounds: pkg.total_price_pence / 100,
                 lessons_count: pkg.lessons_count,
+                visible_to_pupils: pkg.visible_to_pupils !== false,
             }
         } else {
             // Reset form for new package
@@ -61,6 +66,7 @@ watch(
                 description: '',
                 total_price_pounds: 0,
                 lessons_count: 1,
+                visible_to_pupils: true,
             }
         }
     },
@@ -92,6 +98,7 @@ const handleSubmit = () => {
             (formData.value.total_price_pounds || 0) * 100
         ),
         lessons_count: formData.value.lessons_count,
+        visible_to_pupils: formData.value.visible_to_pupils,
     }
     emit('save', payload)
 }
@@ -159,7 +166,25 @@ const handleCancel = () => {
                 {{ formattedPrice }} total ({{ pricePerHour }} per hour)
             </p>
         </div>
- 
+
+        <div class="flex items-start gap-3 rounded-md border border-input p-3">
+            <Checkbox
+                id="visible_to_pupils"
+                v-model="formData.visible_to_pupils"
+                class="mt-0.5"
+            />
+            <div class="space-y-1">
+                <Label for="visible_to_pupils" class="cursor-pointer">
+                    Visible to pupils
+                </Label>
+                <p class="text-sm text-muted-foreground">
+                    Turn this off for a private package, such as friends and family.
+                    Pupils will not see it when they choose a package. Instructors
+                    and admins can still book it for them.
+                </p>
+            </div>
+        </div>
+
         <!-- Action Buttons -->
         <div class="flex justify-end gap-3 pt-4">
             <Button

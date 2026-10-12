@@ -18,7 +18,7 @@ class CreateAdminPackageAction
     /**
      * Create a new admin-level package with Stripe Product and Price.
      *
-     * @param  array{name: string, description: ?string, total_price_pence: int, lessons_count: int}  $data
+     * @param  array{name: string, description: ?string, total_price_pence: int, lessons_count: int, visible_to_pupils?: bool}  $data
      */
     public function __invoke(array $data): Package
     {
@@ -32,6 +32,7 @@ class CreateAdminPackageAction
                 'total_price_pence' => $data['total_price_pence'],
                 'lessons_count' => $data['lessons_count'],
                 'active' => true,
+                'visible_to_pupils' => $data['visible_to_pupils'] ?? true,
             ]);
 
             $productResult = $this->stripeService->createProduct($package);

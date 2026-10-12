@@ -321,6 +321,11 @@ class OrderService extends BaseService
             ]);
         }
 
+        if ($isBookedByStaff && $order->invoice_sent_at === null) {
+            $order->invoice_sent_at = now();
+            $order->save();
+        }
+
         if (! $isBookedByStaff && $student->owns_account && $student->user?->expo_push_token) {
             $this->pushNotificationService->queueIfHasToken(
                 $student->user,
@@ -421,6 +426,7 @@ class OrderService extends BaseService
                     ? 'This booking is already confirmed. Weekly lesson invoices are sent separately.'
                     : 'This order has already been paid.',
                 OrderStatus::CANCELLED => 'This order has been cancelled.',
+                OrderStatus::EXPIRED => 'The time to pay for this booking ran out and the lessons were released.',
                 default => 'This order is not awaiting payment.',
             };
 
@@ -501,7 +507,7 @@ class OrderService extends BaseService
 
         $order->refresh();
 
-        if ($order->status === OrderStatus::CANCELLED) {
+        if ($order->isClosed()) {
             return [
                 'verified' => false,
                 'order' => $order,
@@ -545,7 +551,7 @@ class OrderService extends BaseService
 
         $order->refresh();
 
-        if ($order->status === OrderStatus::CANCELLED) {
+        if ($order->isClosed()) {
             return [
                 'verified' => false,
                 'order' => $order,
@@ -570,7 +576,7 @@ class OrderService extends BaseService
             : null;
 
         if (! ($this->confirmWeeklyFirstPaymentAction)($order, $chargeId)) {
-            if ($order->fresh()?->status === OrderStatus::CANCELLED) {
+            if ($order->fresh()?->isClosed()) {
                 $this->reportPaymentForReleasedOrder($order, $checkoutSessionId, $paymentIntentId ?? $chargeId);
             }
 
@@ -578,11 +584,11 @@ class OrderService extends BaseService
         }
 
         $this->runConfirmationFollowUps($order);
+        $this->sendFirstPaymentEmails($order);
 
         $firstPayment = $order->firstLessonPayment();
 
         if ($firstPayment) {
-            ($this->sendPaymentReceivedEmails)($firstPayment, $order->student, $order->instructor);
             ($this->notifyInstructorOfLessonPaid)(collect([$firstPayment]), $order->student, $order->instructor);
         }
 
@@ -604,7 +610,7 @@ class OrderService extends BaseService
         if (! ($this->confirmUpfrontPaymentAction)($order, $paymentIntentId, $chargeId)) {
             $order->refresh();
 
-            if ($order->status === OrderStatus::CANCELLED) {
+            if ($order->isClosed()) {
                 $this->reportPaymentForReleasedOrder($order, $checkoutSessionId, $paymentIntentId ?? $chargeId);
             } elseif ($chargeId && ! $order->stripe_charge_id) {
                 $order->update(['stripe_charge_id' => $chargeId]);
@@ -614,6 +620,7 @@ class OrderService extends BaseService
         }
 
         $this->runConfirmationFollowUps($order);
+        $this->sendFirstPaymentEmails($order);
 
         ($this->notifyInstructorOfLessonPaid)(
             LessonPayment::query()
@@ -644,7 +651,7 @@ class OrderService extends BaseService
      */
     protected function runConfirmationFollowUps(Order $order): void
     {
-        $order->loadMissing(['student', 'instructor']);
+        $order->loadMissing(['student', 'instructor.user']);
 
         if ($order->student) {
             $this->sendConfirmationEmail->execute($order, $order->student);
@@ -654,6 +661,30 @@ class OrderService extends BaseService
 
         $this->logBookingConfirmed($order);
         $this->invalidateStudentCacheForBooking($order->instructor_id);
+    }
+
+    /**
+     * Email the pupil and the instructor that the first payment landed and the
+     * booking is confirmed. Sent once, by the call that confirms the order.
+     * Pay-in-full uses the first lesson's payment record (the same mail weekly
+     * already sends for week one). The Stripe invoice itself is emailed by
+     * Checkout because the session was created with invoice creation enabled.
+     */
+    protected function sendFirstPaymentEmails(Order $order): void
+    {
+        $order->loadMissing(['student', 'instructor.user']);
+
+        $firstPayment = $order->firstLessonPayment();
+
+        if (! $firstPayment) {
+            Log::warning('Confirmed booking has no lesson payment to email about', [
+                'order_id' => $order->id,
+            ]);
+
+            return;
+        }
+
+        ($this->sendPaymentReceivedEmails)($firstPayment, $order->student, $order->instructor);
     }
 
     /**
@@ -711,9 +742,12 @@ class OrderService extends BaseService
 
     /**
      * Release an unpaid order: close its Stripe Checkout session so it can no
-     * longer be paid, then free the slots. When Stripe reports the session was
-     * already paid (or cannot be reached) the order is kept for the payment
-     * webhook to confirm.
+     * longer be paid, then free the slots. A paid session is confirmed instead.
+     * When Stripe cannot be reached, or the payment is still settling, the
+     * order is kept. Once the hold itself has expired, an unpaid session that
+     * is still open (Checkout's page can outlive the 10-minute learner hold,
+     * because Stripe will not expire a session in under 30 minutes) does not
+     * keep the slots — they are freed, and a later payment is reported for a refund.
      */
     public function releaseUnpaidOrder(Order $order, string $reason): bool
     {
@@ -724,11 +758,11 @@ class OrderService extends BaseService
         if ($order->stripe_checkout_session_id) {
             $expiry = $this->stripeService->expireCheckoutSession($order->stripe_checkout_session_id);
 
-            if ($expiry['status'] === 'complete' && $expiry['payment_status'] === 'paid') {
-                // Paid but not yet confirmed (e.g. the webhook failed): confirm it now.
+            if ($expiry['payment_status'] === 'paid') {
                 Log::warning('Hold expired on a paid checkout session — confirming the booking', [
                     'order_id' => $order->id,
                     'session_id' => $order->stripe_checkout_session_id,
+                    'reason' => $reason,
                 ]);
 
                 $this->confirmPaidCheckoutSession($order, $order->stripe_checkout_session_id, $expiry['payment_intent']);
@@ -736,14 +770,26 @@ class OrderService extends BaseService
                 return false;
             }
 
-            if (! $expiry['released']) {
+            $holdHasExpired = $reason === 'payment_window_expired' || $order->hasPaymentHoldExpired();
+            $sessionStillOpen = $expiry['status'] === 'open';
+
+            if (! $expiry['released'] && ! ($holdHasExpired && $sessionStillOpen)) {
                 Log::warning('Kept unpaid order: its checkout session could not be closed', [
                     'order_id' => $order->id,
                     'session_id' => $order->stripe_checkout_session_id,
                     'session_status' => $expiry['status'],
+                    'reason' => $reason,
                 ]);
 
                 return false;
+            }
+
+            if ($sessionStillOpen && $holdHasExpired) {
+                Log::info('Payment hold expired while Stripe Checkout is still open — releasing the diary slots', [
+                    'order_id' => $order->id,
+                    'session_id' => $order->stripe_checkout_session_id,
+                    'payment_hold_expires_at' => $order->payment_hold_expires_at?->toIso8601String(),
+                ]);
             }
         }
 

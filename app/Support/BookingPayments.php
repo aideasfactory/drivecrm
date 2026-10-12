@@ -82,8 +82,9 @@ final class BookingPayments
     /**
      * Expiry to send to Stripe for a Checkout session backing a hold. Stripe
      * cannot expire a session sooner than 30 minutes, so short holds are
-     * closed by `orders:release-expired-holds` instead; long holds get a
-     * fresh session each time the emailed link is opened.
+     * closed by `orders:release-expired-holds` instead — including while the
+     * Checkout page is still open. Long holds get a fresh session each time
+     * the emailed link is opened.
      */
     public static function stripeCheckoutExpiresAt(?CarbonInterface $holdExpiresAt): CarbonImmutable
     {
@@ -102,6 +103,23 @@ final class BookingPayments
         }
 
         return $holdExpiresAt->greaterThan($latest) ? $latest : $holdExpiresAt;
+    }
+
+    /**
+     * Whether cancelling a lesson now falls inside the late-cancellation window
+     * (fewer than `late_cancellation_hours` before it starts, or already started).
+     */
+    public static function isLateCancellation(string $lessonDate, ?string $lessonStartTime): bool
+    {
+        $cutoff = self::lessonStartsAt($lessonDate, $lessonStartTime)
+            ->subHours(self::lateCancellationHours());
+
+        return self::now()->greaterThanOrEqualTo($cutoff);
+    }
+
+    public static function lateCancellationHours(): int
+    {
+        return (int) config('booking_payments.late_cancellation_hours', 48);
     }
 
     public static function learnerHoldMinutes(): int

@@ -37,7 +37,9 @@ use App\Actions\Instructor\Mileage\DeleteMileageLogAction;
 use App\Actions\Instructor\Mileage\GetMileageLogsAction;
 use App\Actions\Instructor\Mileage\UpdateMileageLogAction;
 use App\Actions\Instructor\ReplaceInstructorLocationsAction;
+use App\Actions\Instructor\ResetInstructorStripeConnectionAction;
 use App\Actions\Instructor\SendInstructorWelcomeEmailAction;
+use App\Actions\Instructor\SendStripeSetupLinkAction;
 use App\Actions\Instructor\SetInstructorPackageActiveAction;
 use App\Actions\Instructor\StartStripeOnboardingAction;
 use App\Actions\Instructor\SyncStripeAccountStatusAction;
@@ -111,6 +113,7 @@ class InstructorService extends BaseService
         protected CompleteAppOnboardingStepAction $completeAppOnboardingStep,
         protected ForceCompleteAppOnboardingAction $forceCompleteAppOnboarding,
         protected MarkPayoutPaidManuallyAction $markPayoutPaidManually,
+        protected SendStripeSetupLinkAction $sendStripeSetupLink,
         protected UploadInstructorProfilePictureAction $uploadProfilePicture,
         protected DeleteInstructorProfilePictureAction $deleteProfilePicture,
         protected DetectCalendarClashesAction $detectCalendarClashes,
@@ -131,6 +134,7 @@ class InstructorService extends BaseService
         protected RecalculateStudentLessonNumbersAction $recalculateStudentLessonNumbers,
         protected StartStripeOnboardingAction $startStripeOnboarding,
         protected SyncStripeAccountStatusAction $syncStripeAccountStatus,
+        protected ResetInstructorStripeConnectionAction $resetStripeConnection,
     ) {}
 
     /**
@@ -505,17 +509,20 @@ class InstructorService extends BaseService
 
     /**
      * Cancel the booking on a calendar item — the student has left / no longer
-     * wants lessons. Marks the lesson(s) cancelled (kept for history), frees the
-     * diary slot(s), stops future weekly invoices and notifies the student (plus
-     * Head Office when a paid lesson needs a manual refund). Cache invalidation
-     * is handled inside the action.
+     * wants lessons. Marks the lesson(s) cancelled (kept for history), takes them
+     * out of the diary while leaving the slot(s) open, stops future weekly
+     * invoices and notifies the student. Paid lessons are refunded (Head Office
+     * emailed) unless cancelled inside 48 hours without "Refund Lesson" ticked,
+     * in which case they are paid out to the instructor. Cache invalidation is
+     * handled inside the action.
      *
      * @param  bool  $applyToFutureInOrder  Also cancel future un-signed-off lessons in the same order.
-     * @return array{cancelled_count: int, refund_required_count: int}
+     * @param  bool  $refundLesson  Refund lessons cancelled inside the 48-hour window instead of paying the instructor.
+     * @return array{cancelled_count: int, refund_required_count: int, payout_count: int}
      */
-    public function cancelBooking(CalendarItem $calendarItem, string $reason, bool $applyToFutureInOrder, User $actor): array
+    public function cancelBooking(CalendarItem $calendarItem, string $reason, bool $applyToFutureInOrder, User $actor, bool $refundLesson = false): array
     {
-        return ($this->cancelBooking)($calendarItem, $reason, $applyToFutureInOrder, $actor);
+        return ($this->cancelBooking)($calendarItem, $reason, $applyToFutureInOrder, $actor, $refundLesson);
     }
 
     /**
@@ -896,6 +903,51 @@ class InstructorService extends BaseService
     public function startStripeOnboarding(Instructor $instructor, string $returnUrl, string $refreshUrl): array
     {
         return ($this->startStripeOnboarding)($instructor, $returnUrl, $refreshUrl);
+    }
+
+    /**
+     * Email the instructor a signed link to connect Stripe themselves, and
+     * log who sent it.
+     */
+    public function sendStripeSetupLink(Instructor $instructor, User $admin): string
+    {
+        $email = ($this->sendStripeSetupLink)($instructor);
+
+        ($this->logActivity)(
+            $instructor,
+            "{$admin->name} sent a Stripe setup link to {$email}",
+            'profile',
+            ['admin_user_id' => $admin->id, 'email' => $email],
+            'Stripe setup link sent'
+        );
+
+        return $email;
+    }
+
+    /**
+     * Owner action: clear the stored Stripe Connect account and connection
+     * flags so the next connect creates a new account. Logs who reset it.
+     * Does not call Stripe.
+     */
+    public function resetStripeConnection(Instructor $instructor, User $owner): Instructor
+    {
+        $previousAccountId = $instructor->stripe_account_id;
+
+        $instructor = ($this->resetStripeConnection)($instructor);
+
+        ($this->logActivity)(
+            $instructor,
+            "{$owner->name} reset the Stripe connection (previous account: ".($previousAccountId ?? 'none').')',
+            'profile',
+            [
+                'admin_user_id' => $owner->id,
+                'previous_stripe_account_id' => $previousAccountId,
+                'reset_at' => now()->toIso8601String(),
+            ],
+            "Stripe connection reset by {$owner->name}"
+        );
+
+        return $instructor;
     }
 
     /**

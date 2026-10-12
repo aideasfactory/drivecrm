@@ -229,8 +229,9 @@ class StepSixController extends Controller
                 'enquiry_id' => $enquiry->id,
             ]);
 
-            // Verify package is active
-            if (! $package->active) {
+            // Learners cannot check out a private package. Staff booking on a
+            // pupil's behalf can still use it.
+            if (! $package->active || (! $package->isVisibleToPupils() && ! $enquiry->isStaffBooking())) {
                 return redirect()
                     ->route('onboarding.step3', ['uuid' => $enquiry->id])
                     ->with('error', 'This package is no longer available.');
@@ -576,7 +577,7 @@ class StepSixController extends Controller
         $result = $this->orderService->verifyCheckout($order, $sessionId);
 
         if (! $result['verified']) {
-            if ($result['order']->status === OrderStatus::CANCELLED) {
+            if ($result['order']->isClosed()) {
                 return redirect()
                     ->route('onboarding.step4', ['uuid' => $enquiry->id])
                     ->with('error', 'Sorry, the time to pay for these lessons ran out and they were released. Any payment taken will be refunded - please choose a new time.');

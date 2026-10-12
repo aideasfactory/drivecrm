@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Instructor\ApplyStripeAccountStatusAction;
 use App\Actions\Payment\NotifyInstructorOfLessonPaidAction;
 use App\Actions\Payment\SendPaymentReceivedEmailsAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Student\GrantTestPassGuaranteeAction;
 use App\Enums\CalendarItemStatus;
 use App\Enums\LessonStatus;
-use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
 use App\Models\Instructor;
 use App\Models\Lesson;
@@ -73,6 +73,10 @@ class WebhookController extends Controller
             switch ($event->type) {
                 case 'checkout.session.completed':
                     $this->handleCheckoutSessionCompleted($event);
+                    break;
+
+                case 'checkout.session.expired':
+                    $this->handleCheckoutSessionExpired($event);
                     break;
 
                 case 'payment_intent.succeeded':
@@ -149,7 +153,7 @@ class WebhookController extends Controller
 
         $orderService = app(OrderService::class);
 
-        if ($order->status === OrderStatus::CANCELLED) {
+        if ($order->isClosed()) {
             $orderService->reportPaymentForReleasedOrder($order, $session->id, $session->payment_intent ?? null);
 
             return;
@@ -164,6 +168,36 @@ class WebhookController extends Controller
         // Confirms once, whichever of the webhook, success page or app verify
         // call arrives first; repeat deliveries do nothing.
         $orderService->confirmPaidCheckoutSession($order, $session->id, $session->payment_intent ?? null);
+    }
+
+    /**
+     * Stripe expired the Checkout session (its own timer, or our hold release).
+     * Free the slots only when our hold has also run out. A longer emailed-link
+     * hold keeps the booking: the next time the link is opened it gets a fresh
+     * session. Cancelling Checkout does not expire the session and does not
+     * come through here, so the learner can still retry before the hold ends.
+     */
+    protected function handleCheckoutSessionExpired(object $event): void
+    {
+        $session = $event->data->object;
+
+        $order = Order::where('stripe_checkout_session_id', $session->id)->first();
+
+        if (! $order || ! $order->isPending()) {
+            return;
+        }
+
+        if (! $order->hasPaymentHoldExpired()) {
+            Log::info('Webhook: Checkout session expired before the payment hold — booking kept', [
+                'order_id' => $order->id,
+                'session_id' => $session->id,
+                'payment_hold_expires_at' => $order->payment_hold_expires_at?->toIso8601String(),
+            ]);
+
+            return;
+        }
+
+        app(OrderService::class)->releaseUnpaidOrder($order, 'checkout_session_expired');
     }
 
     /**
@@ -191,7 +225,7 @@ class WebhookController extends Controller
         // The payment_intent.succeeded payload carries the funding charge directly.
         $chargeId = $paymentIntent->latest_charge ?? null;
 
-        if ($order->status === OrderStatus::CANCELLED) {
+        if ($order->isClosed()) {
             app(OrderService::class)->reportPaymentForReleasedOrder($order, $order->stripe_checkout_session_id, $paymentIntent->id);
 
             return;
@@ -248,11 +282,8 @@ class WebhookController extends Controller
             return;
         }
 
-        // Update instructor status
-        $instructor->onboarding_complete = ($account->details_submitted ?? false);
-        $instructor->charges_enabled = ($account->charges_enabled ?? false);
-        $instructor->payouts_enabled = ($account->payouts_enabled ?? false);
-        $instructor->save();
+        // Update instructor status (logs "Stripe connected" on first completion)
+        app(ApplyStripeAccountStatusAction::class)($instructor, $account);
 
         Log::info('Webhook: Instructor account updated', [
             'instructor_id' => $instructor->id,
@@ -273,6 +304,18 @@ class WebhookController extends Controller
             'customer' => $invoice->customer ?? null,
             'metadata' => isset($invoice->metadata) ? (array) $invoice->metadata : [],
         ]);
+
+        // Checkout payments create their own paid invoice (invoice_creation). That
+        // invoice is emailed by Stripe and the booking is confirmed from
+        // checkout.session.completed — it must not be treated as a weekly lesson charge.
+        if (($invoice->metadata->source ?? null) === 'checkout') {
+            Log::info('Webhook [invoice.paid]: Checkout invoice already confirmed with the session', [
+                'invoice_id' => $invoice->id,
+                'order_id' => $invoice->metadata->order_id ?? null,
+            ]);
+
+            return;
+        }
 
         // Try lesson_payment_id first (new invoices), fall back to lesson_id lookup
         $lessonPaymentId = $invoice->metadata->lesson_payment_id ?? null;

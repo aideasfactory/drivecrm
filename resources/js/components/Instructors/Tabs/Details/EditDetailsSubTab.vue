@@ -293,6 +293,7 @@ const restorePackage = async (pkg: Package) => {
                                 <TableHead>Total Price</TableHead>
                                 <TableHead>Price per Lesson</TableHead>
                                 <TableHead>Status</TableHead>
+                                <TableHead>Pupils</TableHead>
                                 <TableHead class="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -316,6 +317,11 @@ const restorePackage = async (pkg: Package) => {
                                 <TableCell>
                                     <Badge :variant="pkg.active ? 'default' : 'secondary'">
                                         {{ pkg.active ? 'Active' : 'Inactive' }}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell>
+                                    <Badge :variant="pkg.visible_to_pupils === false ? 'secondary' : 'outline'">
+                                        {{ pkg.visible_to_pupils === false ? 'Private' : 'Visible' }}
                                     </Badge>
                                 </TableCell>
                                 <TableCell class="text-right">
