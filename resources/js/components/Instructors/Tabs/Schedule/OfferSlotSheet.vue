@@ -26,6 +26,7 @@ interface PackageOption {
     total_price: string
     active: boolean
     is_one_off?: boolean
+    visible_to_pupils?: boolean
 }
 
 interface SlotPreset {
@@ -204,7 +205,7 @@ const handleSubmit = async () => {
                         <option :value="null">Select a package...</option>
                         <option v-for="pkg in packages" :key="pkg.id" :value="pkg.id">
                             {{ pkg.name }} — {{ pkg.total_price }} incl. fees
-                            {{ pkg.is_one_off ? '(one-off)' : '' }}
+                            {{ pkg.is_one_off ? '(one-off)' : '' }}{{ pkg.visible_to_pupils === false ? ' (private)' : '' }}
                         </option>
                     </select>
                     <p v-if="errors.package_id" class="text-sm text-destructive">{{ errors.package_id }}</p>

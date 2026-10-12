@@ -1670,6 +1670,7 @@ class InstructorController extends Controller
             'allows_weekly_payment' => $package->allowsWeeklyPayment(),
             'active' => $package->active,
             'is_one_off' => (bool) $package->is_one_off,
+            'visible_to_pupils' => $package->isVisibleToPupils(),
             'is_platform_package' => $package->isPlatformPackage(),
             'is_bespoke_package' => $package->isBespokePackage(),
         ];

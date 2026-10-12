@@ -20,7 +20,17 @@ class StorePackageRequest extends FormRequest
             'description' => ['nullable', 'string'],
             'total_price_pence' => ['required', 'integer', 'min:0'],
             'lessons_count' => ['required', 'integer', 'min:1'],
+            'visible_to_pupils' => ['sometimes', 'boolean'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->exists('visible_to_pupils')) {
+            $this->merge([
+                'visible_to_pupils' => $this->boolean('visible_to_pupils'),
+            ]);
+        }
     }
 
     public function messages(): array

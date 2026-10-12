@@ -36,6 +36,7 @@ class PackageController extends Controller
                 'formatted_total_price' => $package->formatted_total_price,
                 'formatted_lesson_price' => $package->formatted_lesson_price,
                 'active' => $package->active,
+                'visible_to_pupils' => $package->isVisibleToPupils(),
                 'created_at' => $package->created_at?->format('d M Y'),
             ]),
         ]);
@@ -59,6 +60,7 @@ class PackageController extends Controller
                 'formatted_total_price' => $package->formatted_total_price,
                 'formatted_lesson_price' => $package->formatted_lesson_price,
                 'active' => $package->active,
+                'visible_to_pupils' => $package->isVisibleToPupils(),
                 'is_platform_package' => $package->isPlatformPackage(),
             ],
         ], 201);
@@ -82,6 +84,7 @@ class PackageController extends Controller
                 'formatted_total_price' => $updatedPackage->formatted_total_price,
                 'formatted_lesson_price' => $updatedPackage->formatted_lesson_price,
                 'active' => $updatedPackage->active,
+                'visible_to_pupils' => $updatedPackage->isVisibleToPupils(),
                 'is_platform_package' => $updatedPackage->isPlatformPackage(),
                 'is_bespoke_package' => $updatedPackage->isBespokePackage(),
             ],

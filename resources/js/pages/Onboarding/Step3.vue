@@ -94,6 +94,13 @@
                           </div>
                         </div>
                         <CardTitle class="text-lg">{{ pkg.name }}</CardTitle>
+                        <Badge
+                          v-if="pkg.visible_to_pupils === false"
+                          variant="secondary"
+                          class="mt-2"
+                        >
+                          Private
+                        </Badge>
                         <CardDescription class="text-sm mt-1">
                           {{ pkg.lessons_count }} lessons
                         </CardDescription>

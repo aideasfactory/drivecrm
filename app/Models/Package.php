@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\Fees;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -23,6 +24,7 @@ class Package extends Model
         'stripe_price_id',
         'active',
         'is_one_off',
+        'visible_to_pupils',
     ];
 
     /**
@@ -45,6 +47,7 @@ class Package extends Model
             'lesson_price_pence' => 'integer',
             'active' => 'boolean',
             'is_one_off' => 'boolean',
+            'visible_to_pupils' => 'boolean',
         ];
     }
 
@@ -78,6 +81,43 @@ class Package extends Model
     public function isBespokePackage(): bool
     {
         return $this->instructor_id !== null;
+    }
+
+    /**
+     * Packages a pupil may choose. Missing values follow the column default (visible)
+     * so rows created before the attribute is hydrated stay on the public list.
+     *
+     * @param  Builder<Package>  $query
+     * @return Builder<Package>
+     */
+    public function scopeVisibleToPupils(Builder $query): Builder
+    {
+        return $query->where('visible_to_pupils', true);
+    }
+
+    public function isVisibleToPupils(): bool
+    {
+        $visible = $this->getAttribute('visible_to_pupils');
+
+        if ($visible === null) {
+            return true;
+        }
+
+        return (bool) $visible;
+    }
+
+    /**
+     * Read the pupil-visibility flag from create/update input.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function visibilityFromInput(array $data, bool $default = true): bool
+    {
+        if (! array_key_exists('visible_to_pupils', $data) || $data['visible_to_pupils'] === null) {
+            return $default;
+        }
+
+        return filter_var($data['visible_to_pupils'], FILTER_VALIDATE_BOOLEAN);
     }
 
     /**
