@@ -159,19 +159,20 @@
                           <CardTitle class="text-base">Learner Details</CardTitle>
                         </CardHeader>
                         <CardContent class="space-y-4">
-                          <div class="grid grid-cols-2 gap-4">
+                          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div>
                               <Label for="learner-first-name">First Name</Label>
                               <Input
                                 v-model="form.learner_first_name"
                                 id="learner-first-name"
                                 type="text"
+                                autocomplete="given-name"
                                 class="mt-1.5"
-                                :class="{ 'border-destructive': form.errors.learner_first_name }"
+                                :aria-invalid="errorFor('learner_first_name') ? 'true' : undefined"
+                                aria-describedby="learner-first-name-error"
+                                @blur="touch('learner_first_name')"
                               />
-                              <p v-if="form.errors.learner_first_name" class="text-sm text-destructive mt-1">
-                                {{ form.errors.learner_first_name }}
-                              </p>
+                              <FieldError id="learner-first-name-error" :message="errorFor('learner_first_name')" />
                             </div>
                             <div>
                               <Label for="learner-last-name">Last Name</Label>
@@ -179,25 +180,29 @@
                                 v-model="form.learner_last_name"
                                 id="learner-last-name"
                                 type="text"
+                                autocomplete="family-name"
                                 class="mt-1.5"
-                                :class="{ 'border-destructive': form.errors.learner_last_name }"
+                                :aria-invalid="errorFor('learner_last_name') ? 'true' : undefined"
+                                aria-describedby="learner-last-name-error"
+                                @blur="touch('learner_last_name')"
                               />
-                              <p v-if="form.errors.learner_last_name" class="text-sm text-destructive mt-1">
-                                {{ form.errors.learner_last_name }}
-                              </p>
+                              <FieldError id="learner-last-name-error" :message="errorFor('learner_last_name')" />
                             </div>
                             <div>
-                              <Label for="learner-phone">Phone</Label>
+                              <Label for="learner-phone">Mobile Number</Label>
                               <Input
                                 v-model="form.learner_phone"
                                 id="learner-phone"
                                 type="tel"
+                                autocomplete="tel"
+                                inputmode="tel"
+                                placeholder="07700 900123"
                                 class="mt-1.5"
-                                :class="{ 'border-destructive': form.errors.learner_phone }"
+                                :aria-invalid="errorFor('learner_phone') ? 'true' : undefined"
+                                aria-describedby="learner-phone-error"
+                                @blur="touch('learner_phone')"
                               />
-                              <p v-if="form.errors.learner_phone" class="text-sm text-destructive mt-1">
-                                {{ form.errors.learner_phone }}
-                              </p>
+                              <FieldError id="learner-phone-error" :message="errorFor('learner_phone')" />
                             </div>
                             <div>
                               <Label for="learner-email">Email</Label>
@@ -205,12 +210,16 @@
                                 v-model="form.learner_email"
                                 id="learner-email"
                                 type="email"
+                                autocomplete="email"
+                                inputmode="email"
+                                autocapitalize="off"
+                                spellcheck="false"
                                 class="mt-1.5"
-                                :class="{ 'border-destructive': form.errors.learner_email }"
+                                :aria-invalid="errorFor('learner_email') ? 'true' : undefined"
+                                aria-describedby="learner-email-error"
+                                @blur="touch('learner_email')"
                               />
-                              <p v-if="form.errors.learner_email" class="text-sm text-destructive mt-1">
-                                {{ form.errors.learner_email }}
-                              </p>
+                              <FieldError id="learner-email-error" :message="errorFor('learner_email')" />
                             </div>
                             <div>
                               <Label for="learner-dob">Date of Birth</Label>
@@ -218,12 +227,15 @@
                                 v-model="form.learner_dob"
                                 id="learner-dob"
                                 type="date"
-                                class="mt-1.5"
-                                :class="{ 'border-destructive': form.errors.learner_dob }"
+                                autocomplete="bday"
+                                :max="maxDateOfBirth"
+                                class="mt-1.5 block min-h-9 appearance-none [&::-webkit-date-and-time-value]:text-left"
+                                :aria-invalid="errorFor('learner_dob') ? 'true' : undefined"
+                                aria-describedby="learner-dob-error"
+                                @blur="touch('learner_dob')"
+                                @change="touch('learner_dob')"
                               />
-                              <p v-if="form.errors.learner_dob" class="text-sm text-destructive mt-1">
-                                {{ form.errors.learner_dob }}
-                              </p>
+                              <FieldError id="learner-dob-error" :message="errorFor('learner_dob')" />
                             </div>
                           </div>
                         </CardContent>
@@ -289,6 +301,10 @@
                   </AlertDescription>
                 </Alert>
 
+                <p v-if="submitError" role="alert" class="text-sm text-destructive">
+                  {{ submitError }}
+                </p>
+
                 <!-- Form Actions -->
                 <div class="flex w-full min-w-0 flex-col gap-3 border-t pt-6 sm:flex-row sm:items-center sm:justify-between">
                   <Link :href="step4({ uuid: uuid }).url" class="w-full sm:w-auto">
@@ -338,6 +354,15 @@ import { toast } from '@/components/ui/toast'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
+import FieldError from '@/components/Onboarding/FieldError.vue'
+import { useFieldValidation } from '@/composables/useFieldValidation'
+import {
+  todayIsoDate,
+  validateDateOfBirth,
+  validateEmailAddress,
+  validateName,
+  validateUkMobile,
+} from '@/lib/personDetailsValidation'
 import { step1, step2, step3, step4 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step5'
 import { ArrowLeft, ArrowRight, Car, MapPin, Star } from 'lucide-vue-next'
@@ -367,7 +392,8 @@ const props = defineProps({
     type: [Object, null],
     default: null
   },
-  maxStepReached: { type: Number, default: 5 }
+  maxStepReached: { type: Number, default: 5 },
+  learnerMinimumAge: { type: Number, default: 17 }
 })
 
 const page = usePage()
@@ -398,7 +424,59 @@ const isBookingForSomeoneElse = ref(form.booking_for_someone_else)
 // Watch and sync the local ref with the form
 watch(isBookingForSomeoneElse, (newValue) => {
   form.booking_for_someone_else = newValue
+
+  if (!newValue) {
+    form.clearErrors(...LEARNER_FIELDS)
+    resetValidation()
+  }
 })
+
+const LEARNER_FIELDS = ['learner_first_name', 'learner_last_name', 'learner_phone', 'learner_email', 'learner_dob']
+
+const maxDateOfBirth = todayIsoDate()
+
+const submitError = ref('')
+
+const isLearnerActive = () => isBookingForSomeoneElse.value
+
+const {
+  errorFor,
+  touch,
+  validateAll,
+  focusFirstServerError,
+  reset: resetValidation,
+} = useFieldValidation(form, [
+  {
+    key: 'learner_first_name',
+    id: 'learner-first-name',
+    active: isLearnerActive,
+    validate: () => validateName(form.learner_first_name, 'First name', "Enter the learner's first name"),
+  },
+  {
+    key: 'learner_last_name',
+    id: 'learner-last-name',
+    active: isLearnerActive,
+    validate: () => validateName(form.learner_last_name, 'Last name', "Enter the learner's last name"),
+  },
+  {
+    key: 'learner_phone',
+    id: 'learner-phone',
+    active: isLearnerActive,
+    validate: () => validateUkMobile(form.learner_phone, "Enter the learner's mobile number"),
+  },
+  {
+    key: 'learner_email',
+    id: 'learner-email',
+    active: isLearnerActive,
+    validate: () => validateEmailAddress(form.learner_email, "Enter the learner's email address"),
+  },
+  {
+    key: 'learner_dob',
+    id: 'learner-dob',
+    active: isLearnerActive,
+    validate: () => validateDateOfBirth(form.learner_dob, props.learnerMinimumAge, "Enter the learner's date of birth"),
+  },
+])
 
 function formatPence(pence) {
   return `£${((pence || 0) / 100).toFixed(2)}`
@@ -566,6 +644,23 @@ watch(editingAddress, () => {
 function submit() {
   // Cancel any pending auto-save to prevent race conditions
   clearTimeout(saveTimeout)
-  form.post(store({ uuid: uuid.value }).url)
+
+  submitError.value = ''
+
+  if (!validateAll()) {
+    return
+  }
+
+  // Inertia keeps the last transform, so drop the auto-save flag set by autoSave()
+  form.transform((data) => data).post(store({ uuid: uuid.value }).url, {
+    preserveScroll: true,
+    onError: (errors) => {
+      focusFirstServerError(errors)
+
+      const hasInlineError = isLearnerActive() && Object.keys(errors).some((key) => LEARNER_FIELDS.includes(key))
+
+      submitError.value = hasInlineError ? '' : "We couldn't save your booking details. Please check them and try again."
+    },
+  })
 }
 </script>
