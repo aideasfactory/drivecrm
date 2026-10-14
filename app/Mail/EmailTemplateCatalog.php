@@ -324,12 +324,12 @@ final class EmailTemplateCatalog
                 'app_name' => 'Application name',
             ], 'Lessons rescheduled for {{student_name}}', 'Hello {{recipient_name}},', "You have rescheduled **{{total_lessons}}** upcoming {{lesson_word}} for **{{student_name}}**.\n\nNew schedule: **{{day_of_week}}s at {{time}}**, starting **{{start_date}}**.\n\nThe student has been notified by email.", "Thanks,\nThe {{app_name}} Team", null),
 
-            self::entry(EmailTemplateKey::InstructorLessonPaymentReceived, 'Learner paid for a lesson', $audience, 'Sent to the instructor when a learner pays for an upcoming lesson.', [
+            self::entry(EmailTemplateKey::InstructorLessonPaymentReceived, 'Learner paid for a lesson', $audience, 'Sent to the instructor when a learner pays for an upcoming lesson. The amount is the lesson fee the instructor receives, excluding the booking fee and digital fee.', [
                 'student_name' => 'Learner name',
-                'amount' => 'Amount paid',
+                'amount' => 'Lesson fee the instructor receives',
                 'lesson_date' => 'Lesson date',
                 'lesson_time' => 'Lesson time',
-            ], 'Payment Received: {{student_name}} — Lesson on {{lesson_date}}', 'Hello!', "**{{student_name}}** has paid **{{amount}}** for their upcoming lesson.\n\n**Lesson Details:**\nDate: {{lesson_date}}\nTime: {{lesson_time}}\nAmount: {{amount}}\n\nThis lesson is now confirmed and paid.", "Best regards,\nThe Driving School Team", null),
+            ], 'Payment Received: {{student_name}} — Lesson on {{lesson_date}}', 'Hello!', "**{{student_name}}** has paid for their upcoming lesson.\n\n**Lesson Details:**\nDate: {{lesson_date}}\nTime: {{lesson_time}}\nLesson fee: {{amount}}\n\nThis lesson is now confirmed and paid.", "Best regards,\nThe Driving School Team", null),
 
             self::entry(EmailTemplateKey::InstructorLessonSignedOff, 'Lesson signed off (instructor)', $audience, 'Sent to the instructor after they sign off a lesson.', [
                 'recipient_name' => 'Instructor name',

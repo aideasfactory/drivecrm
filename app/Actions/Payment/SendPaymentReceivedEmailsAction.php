@@ -17,7 +17,9 @@ class SendPaymentReceivedEmailsAction
     /**
      * Send the itemised "payment received" email to the student (or their
      * contact) and the "learner paid" email to the instructor for one lesson
-     * payment. Failures are logged and never thrown.
+     * payment. The pupil email keeps the full total. The instructor email
+     * shows only the lesson fee they receive. Failures are logged and never
+     * thrown.
      */
     public function __invoke(LessonPayment $lessonPayment, ?Student $student, ?Instructor $instructor): void
     {

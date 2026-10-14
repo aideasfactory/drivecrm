@@ -74,6 +74,41 @@ class LessonPayment extends Model
     }
 
     /**
+     * The lesson fee the instructor is paid for this lesson, in pence.
+     *
+     * Booking fees, digital fees and any Pass Your Test Guarantee stay with
+     * the platform. The payout uses the lesson price, so that is what
+     * instructor payment emails show. When the lesson price is missing, the
+     * lesson share of this payment is used instead.
+     */
+    public function instructorLessonFeePence(): int
+    {
+        $this->loadMissing('lesson.order');
+
+        $lessonFeePence = (int) ($this->lesson?->amount_pence ?? 0);
+
+        if ($lessonFeePence > 0) {
+            return $lessonFeePence;
+        }
+
+        $order = $this->lesson?->order;
+
+        if ($order === null) {
+            return max(0, (int) $this->amount_pence - (int) $this->test_pass_guarantee_pence);
+        }
+
+        return (int) self::weeklyBreakdown($order, (int) $this->amount_pence, (int) $this->test_pass_guarantee_pence)['lesson'];
+    }
+
+    /**
+     * Formatted lesson fee the instructor receives (e.g., "£30.00").
+     */
+    public function getFormattedInstructorLessonFeeAttribute(): string
+    {
+        return self::formatPence($this->instructorLessonFeePence());
+    }
+
+    /**
      * Calculate a single weekly payment amount (in pence) for the lesson at the
      * given index, spreading the order total — base lesson cost plus booking and
      * digital fees — evenly across every lesson. Any rounding remainder lands on
