@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Models\Package;
 use App\Models\User;
 use App\Support\BookingPayments;
+use App\Support\Fees;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Exception;
@@ -659,7 +660,7 @@ class StripeService
         if ($digitalFeePence > 0) {
             $lineItems[] = $this->checkoutLineItem($digitalFeePence, ['product_data' => [
                 'name' => 'Digital fee',
-                'description' => "Digital services fee for {$lessonsCount} ".($lessonsCount === 1 ? 'lesson' : 'lessons'),
+                'description' => 'Digital services fee ('.Fees::perHourLabel().") for {$lessonsCount} ".($lessonsCount === 1 ? 'lesson' : 'lessons'),
             ]]);
         }
 
@@ -1013,7 +1014,7 @@ class StripeService
         if ($digitalComponent > 0) {
             $items[] = [
                 'amount' => $digitalComponent,
-                'description' => 'Digital services fee (weekly instalment)',
+                'description' => 'Digital services fee (weekly instalment, '.Fees::perHourLabel().')',
                 'component' => 'digital_fee',
             ];
         }

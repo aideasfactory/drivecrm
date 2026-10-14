@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Notifications;
 
 use App\Models\Instructor;
+use App\Support\Fees;
 use App\Models\Lesson;
 use App\Models\Order;
 use App\Models\Student;
@@ -75,7 +76,7 @@ class RefundRequiredNotification extends Notification implements ShouldQueue
         $message->line('')
             ->line('**Total paid for cancelled lessons:** '.$this->formatPence($totals['paid']))
             ->line('Lessons: '.$this->formatPence($totals['lesson']))
-            ->line('Digital fee: '.$this->formatPence($totals['digital_fee']));
+            ->line('Digital fee ('.Fees::perHourLabel().'): '.$this->formatPence($totals['digital_fee']));
 
         if ($totals['test_pass_guarantee'] > 0) {
             $message->line('Pass Your Test Guarantee: '.$this->formatPence($totals['test_pass_guarantee']));
@@ -140,7 +141,7 @@ class RefundRequiredNotification extends Notification implements ShouldQueue
             $parts = [
                 'lesson '.$this->formatPence($breakdown['lesson']),
                 'booking fee '.$this->formatPence($breakdown['booking_fee']),
-                'digital fee '.$this->formatPence($breakdown['digital_fee']),
+                'digital fee ('.Fees::perHourLabel().') '.$this->formatPence($breakdown['digital_fee']),
             ];
 
             if ($breakdown['test_pass_guarantee'] > 0) {

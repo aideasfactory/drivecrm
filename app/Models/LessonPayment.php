@@ -198,8 +198,11 @@ class LessonPayment extends Model
      * digital fee portion — based on the ratios stored on the order.
      *
      * The split is proportional to the order's own totals. The digital fee
-     * component absorbs any rounding remainder so the three parts always
-     * sum to $amountPence exactly. If the order has no meaningful totals
+     * stored on the order is the hourly rate times the hours booked, and every
+     * lesson in an order uses the same slot length, so this even share is the
+     * hour-proportional amount refunded when that lesson is cancelled. The
+     * digital fee component absorbs any rounding remainder so the three parts
+     * always sum to $amountPence exactly. If the order has no meaningful totals
      * (legacy / zero-value), the entire amount is treated as the lesson
      * component.
      *

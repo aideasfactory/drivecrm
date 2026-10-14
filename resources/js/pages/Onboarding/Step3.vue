@@ -120,7 +120,7 @@
                         <div class="text-xs text-muted-foreground mt-2">
                           Lessons {{ discount ? getDiscountedPrice(pkg.formatted_total_price) : pkg.formatted_total_price }}
                           <template v-if="pkg.booking_fee !== '£0.00'">+ booking fee {{ pkg.booking_fee }}</template>
-                          <template v-if="pkg.digital_fee !== '£0.00'">+ digital fee {{ pkg.digital_fee }}</template>
+                          <template v-if="pkg.digital_fee !== '£0.00'">+ digital fee {{ pkg.digital_fee }} ({{ perHourLabel }})</template>
                         </div>
                       </div>
                       <p class="text-xs text-muted-foreground leading-relaxed">{{ pkg.description }}</p>
@@ -196,6 +196,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useDigitalFeeLabel } from '@/composables/useDigitalFeeLabel'
 import { usePage, useForm, Link } from '@inertiajs/vue3'
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -210,6 +211,8 @@ import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 import { step2 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step3'
 import { ArrowLeft, ArrowRight, Car, GraduationCap, Trophy, Rocket, Check, Flame, AlertTriangle, Info } from 'lucide-vue-next'
+
+const { perHourLabel } = useDigitalFeeLabel()
 
 const props = defineProps({
   uuid: String,

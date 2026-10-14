@@ -262,7 +262,7 @@
                         <span class="shrink-0 font-medium">£{{ pricing?.booking_fee ?? '0.00' }}</span>
                       </div>
                       <div class="flex items-start justify-between gap-3">
-                        <span class="min-w-0">Digital fee ({{ lessonLabel(package?.lessons_count) }})</span>
+                        <span class="min-w-0">Digital fee ({{ perHourLabel }})</span>
                         <span class="shrink-0 font-medium">£{{ pricing?.digital_fee ?? '0.00' }}</span>
                       </div>
                       <div v-if="promoDiscount" class="flex items-start justify-between gap-3 text-green-600">
@@ -324,6 +324,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { useDigitalFeeLabel } from '@/composables/useDigitalFeeLabel'
 import { usePage, Link, useForm } from '@inertiajs/vue3'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -341,6 +342,8 @@ import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 import { step1, step2, step3, step4 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step5'
 import { ArrowLeft, ArrowRight, Car, MapPin, Star } from 'lucide-vue-next'
+
+const { perHourLabel } = useDigitalFeeLabel()
 
 const props = defineProps({
   uuid: String,

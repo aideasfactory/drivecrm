@@ -26,5 +26,6 @@ export type AppPageProps<
         android: string | null;
     };
     schoolContact: SchoolContact;
+    digitalFeePerHour: string;
     [key: string]: unknown;
 };

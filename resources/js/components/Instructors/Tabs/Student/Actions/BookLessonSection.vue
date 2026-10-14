@@ -80,11 +80,18 @@ const selectedSlot = computed(() =>
     slots.value.find((s) => s.id === selectedSlotId.value),
 )
 
-const loadPackages = async () => {
-    isLoadingPackages.value = true
+const loadPackages = async (startTime?: string, endTime?: string, silent = false) => {
+    if (!silent) {
+        isLoadingPackages.value = true
+    }
     try {
         const response = await axios.get(
             `/instructors/${props.instructorId}/packages`,
+            {
+                params: startTime && endTime
+                    ? { start_time: startTime, end_time: endTime }
+                    : {},
+            },
         )
         packages.value = (response.data.packages || []).filter(
             (p: Package) => p.active,
@@ -121,6 +128,14 @@ const loadSlots = async (date: string) => {
 
 watch(firstLessonDate, (date) => {
     loadSlots(date)
+})
+
+watch(selectedSlot, (slot) => {
+    if (!slot) {
+        return
+    }
+
+    loadPackages(slot.start_time, slot.end_time, true)
 })
 
 onMounted(() => {

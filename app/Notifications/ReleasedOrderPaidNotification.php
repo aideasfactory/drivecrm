@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Notifications;
 
 use App\Models\Order;
+use App\Support\Fees;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -58,7 +59,7 @@ class ReleasedOrderPaidNotification extends Notification implements ShouldQueue
             ->line('')
             ->line('**Amount paid:** '.$this->formatPence($breakdown['total_pence']))
             ->line('Lessons: '.$this->formatPence($breakdown['lesson_pence']))
-            ->line('Digital fee: '.$this->formatPence($breakdown['digital_fee_pence']));
+            ->line('Digital fee ('.Fees::perHourLabel().'): '.$this->formatPence($breakdown['digital_fee_pence']));
 
         if ($breakdown['test_pass_guarantee_pence'] > 0) {
             $message->line('Pass Your Test Guarantee: '.$this->formatPence($breakdown['test_pass_guarantee_pence']));

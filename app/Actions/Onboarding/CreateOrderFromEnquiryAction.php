@@ -66,7 +66,11 @@ class CreateOrderFromEnquiryAction
             // Fees are sourced from config/fees.php via App\Support\Fees so
             // FEES_OVERRIDE_TO_ZERO zeroes both amounts across the pipeline.
             $bookingFeePence = Fees::bookingFeePence();
-            $digitalFeePence = Fees::digitalFeeTotalPence($package->lessons_count);
+            $digitalFeePence = Fees::digitalFeeTotalPence(
+                (int) $package->lessons_count,
+                isset($step4['start_time']) ? (string) $step4['start_time'] : null,
+                isset($step4['end_time']) ? (string) $step4['end_time'] : null,
+            );
 
             // Apply the selected instructor's per-lesson price uplift to the
             // base package price, then any discount on top. Only Drive

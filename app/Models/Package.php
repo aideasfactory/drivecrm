@@ -140,27 +140,45 @@ class Package extends Model
 
     public function getDigitalFeeAttribute(): string
     {
-        return '£'.number_format(Fees::digitalFeePerLesson() * $this->lessons_count, 2);
+        return $this->formatMoney($this->pricedAmounts()['digital_fee']);
     }
 
     public function getTotalPriceAttribute(): string
     {
-        $packagePrice = $this->total_price_pence / 100;
-        $total = $packagePrice + Fees::bookingFee() + (Fees::digitalFeePerLesson() * $this->lessons_count);
-
-        return '£'.number_format($total, 2);
+        return $this->formatMoney($this->pricedAmounts()['total']);
     }
 
     public function getWeeklyPaymentAttribute(): string
     {
-        if (! $this->lessons_count) {
-            return '£'.number_format(0, 2);
-        }
+        return $this->formatMoney($this->pricedAmounts()['weekly']);
+    }
 
-        $packagePrice = $this->total_price_pence / 100;
-        $total = $packagePrice + Fees::bookingFee() + (Fees::digitalFeePerLesson() * $this->lessons_count);
+    /**
+     * Fee-inclusive prices for this package.
+     *
+     * Without a slot, each lesson uses the standard 2-hour diary length.
+     * Pass the chosen start and end so the digital fee follows that slot
+     * (£1.80 per hour of lesson time).
+     *
+     * @return array{digital_fee: float, total: float, weekly: float, hours: float}
+     */
+    public function pricedAmounts(?string $startTime = null, ?string $endTime = null): array
+    {
+        $lessonsCount = (int) $this->lessons_count;
+        $digitalFee = Fees::digitalFeeTotal($lessonsCount, $startTime, $endTime);
+        $total = ($this->total_price_pence / 100) + Fees::bookingFee() + $digitalFee;
 
-        return '£'.number_format($total / $this->lessons_count, 2);
+        return [
+            'digital_fee' => $digitalFee,
+            'total' => $total,
+            'weekly' => $lessonsCount > 0 ? $total / $lessonsCount : 0.0,
+            'hours' => Fees::bookedHours($lessonsCount, $startTime, $endTime),
+        ];
+    }
+
+    private function formatMoney(float $amount): string
+    {
+        return '£'.number_format($amount, 2);
     }
 
     /**

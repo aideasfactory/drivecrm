@@ -47,7 +47,7 @@
                   <span class="text-sm font-medium text-right">{{ formatPrice(order.first_payment.booking_fee_pence) }}</span>
                 </div>
                 <div v-if="order.first_payment.digital_fee_pence" class="flex items-start justify-between gap-4">
-                  <span class="text-sm text-muted-foreground">Digital fee</span>
+                  <span class="text-sm text-muted-foreground">Digital fee ({{ perHourLabel }})</span>
                   <span class="text-sm font-medium text-right">{{ formatPrice(order.first_payment.digital_fee_pence) }}</span>
                 </div>
                 <div v-if="order.test_pass_guarantee_pence !== null" class="flex items-start justify-between gap-4">
@@ -101,7 +101,7 @@
                   <span class="text-sm font-medium text-right">{{ formatPrice(order.booking_fee_pence) }}</span>
                 </div>
                 <div v-if="order.digital_fee_pence" class="flex items-start justify-between gap-4">
-                  <span class="text-sm text-muted-foreground">Digital fee</span>
+                  <span class="text-sm text-muted-foreground">Digital fee ({{ perHourLabel }})</span>
                   <span class="text-sm font-medium text-right">{{ formatPrice(order.digital_fee_pence) }}</span>
                 </div>
                 <div v-if="order.test_pass_guarantee_pence !== null" class="flex items-start justify-between gap-4">
@@ -169,6 +169,7 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { computed } from 'vue'
+import { useDigitalFeeLabel } from '@/composables/useDigitalFeeLabel'
 import { CheckCircle, CircleCheck, Info, Clock } from 'lucide-vue-next'
 
 interface OrderSummary {
@@ -201,6 +202,8 @@ const props = withDefaults(defineProps<{
 }>(), {
   weeklyPaymentDueHours: 48,
 })
+
+const { perHourLabel } = useDigitalFeeLabel()
 
 const isWeekly = computed((): boolean => props.order?.payment_mode === 'weekly')
 

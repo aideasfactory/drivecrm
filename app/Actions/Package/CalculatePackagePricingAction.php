@@ -17,8 +17,10 @@ class CalculatePackagePricingAction
      *   package_price_pence: int,
      *   package_price: float,
      *   booking_fee: float,
+     *   digital_fee_per_hour: float,
      *   digital_fee_per_lesson: float,
      *   digital_fee_total: float,
+     *   hours: float,
      *   lessons_count: int,
      *   promo_code: string|null,
      *   promo_discount: float,
@@ -28,12 +30,16 @@ class CalculatePackagePricingAction
      *   weekly_payment: float,
      * }
      */
-    public function __invoke(Package $package, ?array $promoDiscount = null): array
+    public function __invoke(Package $package, ?array $promoDiscount = null, ?string $startTime = null, ?string $endTime = null): array
     {
         $packagePrice = $package->total_price_pence / 100;
         $bookingFee = Fees::bookingFee();
-        $digitalFeePerLesson = Fees::digitalFeePerLesson();
-        $digitalFeeTotal = $digitalFeePerLesson * $package->lessons_count;
+        $lessonsCount = (int) $package->lessons_count;
+        $digitalFeePerHour = Fees::digitalFeePerHour();
+        $digitalFeeTotal = Fees::digitalFeeTotal($lessonsCount, $startTime, $endTime);
+        $digitalFeePerLesson = $lessonsCount > 0
+            ? round(Fees::digitalFeeTotalPence(1, $startTime, $endTime) / 100, 2)
+            : 0.0;
 
         $subtotal = $packagePrice + $bookingFee + $digitalFeeTotal;
 
@@ -46,17 +52,19 @@ class CalculatePackagePricingAction
         }
 
         $total = round($subtotal - $promoAmount, 2);
-        $weeklyPayment = $package->lessons_count > 0
-            ? round($total / $package->lessons_count, 2)
+        $weeklyPayment = $lessonsCount > 0
+            ? round($total / $lessonsCount, 2)
             : 0.0;
 
         return [
             'package_price_pence' => $package->total_price_pence,
             'package_price' => round($packagePrice, 2),
             'booking_fee' => $bookingFee,
+            'digital_fee_per_hour' => $digitalFeePerHour,
             'digital_fee_per_lesson' => $digitalFeePerLesson,
-            'digital_fee_total' => round($digitalFeeTotal, 2),
-            'lessons_count' => $package->lessons_count,
+            'digital_fee_total' => $digitalFeeTotal,
+            'hours' => Fees::bookedHours($lessonsCount, $startTime, $endTime),
+            'lessons_count' => $lessonsCount,
             'promo_code' => $promoCode,
             'promo_discount' => $promoAmount,
             'subtotal' => round($subtotal, 2),

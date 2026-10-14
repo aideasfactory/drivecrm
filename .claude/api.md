@@ -1507,9 +1507,11 @@ Returns all active packages for the authenticated instructor.
       "formatted_total_price": "£350.00",
       "formatted_lesson_price": "£35.00",
       "booking_fee": "£19.99",
-      "digital_fee": "£39.90",
-      "total_price": "£409.89",
-      "weekly_payment": "£40.99",
+      "digital_fee": "£36.00",
+      "digital_fee_per_hour": "£1.80/hour",
+      "hours": 20,
+      "total_price": "£405.99",
+      "weekly_payment": "£40.60",
       "active": true,
       "is_one_off": false,
       "visible_to_pupils": true,
@@ -1532,12 +1534,14 @@ Returns all active packages for the authenticated instructor.
 | `formatted_total_price` | string | Base package price, **before fees** (e.g., "£350.00") — instructor-facing only |
 | `formatted_lesson_price` | string | Base per-lesson price, before fees (e.g., "£35.00") |
 | `booking_fee` | string | One-off booking fee per order, formatted (e.g., "£19.99") |
-| `digital_fee` | string | Digital fee for the whole package (£3.99 × lessons), formatted (e.g., "£39.90") |
-| `total_price` | string | **What the pupil pays**: package + booking fee + digital fee, formatted (e.g., "£409.89") |
+| `digital_fee` | string | Digital fee for the whole package (£1.80 × total hours). Package lists assume the standard 2-hour lesson, so 10 lessons = 20 hours = £36.00. A booking with a known slot uses that slot's length instead. |
+| `total_price` | string | **What the pupil pays**: package + booking fee + digital fee, formatted (e.g., "£405.99") |
 | `weekly_payment` | string | Per-lesson amount when paying weekly, fees included (`total_price ÷ lessons_count`), formatted |
 | `active` | boolean | Whether the package is active |
 | `is_one_off` | boolean | `true` for reusable short-notice "One-Off Package" rows created from Offer Slot |
 | `visible_to_pupils` | boolean | `true` when pupils can choose this package. `false` is a private package (friends and family). Instructor lists still include it. Pupil package lists omit it. Defaults to `true` when omitted on create. |
+| `digital_fee_per_hour` | string | Hourly rate label, e.g. `"£1.80/hour"`. Show this next to the fee. Do not hardcode the rate. |
+| `hours` | float | Hours the digital fee was calculated on. On package lists this is `lessons_count × 2` (standard lesson). |
 | `has_stripe_price` | boolean | Whether a Stripe price is configured for this package |
 
 > **Note:** Only active packages are returned. Private packages (`visible_to_pupils: false`) are included here so the instructor app can show the toggle. Packages without a Stripe price (`has_stripe_price: false`) cannot be used for upfront payments.
@@ -2309,6 +2313,8 @@ A **student** token receives **404** when the package is private (`visible_to_pu
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `promo_code` | string | No | Promo code to apply (e.g., `SAVE10`, `SAVE20`) |
+| `start_time` | string | No | Slot start (`H:i`). With `end_time`, the digital fee uses this lesson length. Omit both to assume the standard 2-hour lesson. |
+| `end_time` | string | No | Slot end (`H:i`). See `start_time`. |
 
 **Success Response:** `200 OK`
 ```json
@@ -2317,15 +2323,17 @@ A **student** token receives **404** when the package is private (`visible_to_pu
     "package_price_pence": 35000,
     "package_price": 350.00,
     "booking_fee": 19.99,
-    "digital_fee_per_lesson": 3.99,
-    "digital_fee_total": 39.90,
+    "digital_fee_per_hour": 1.80,
+    "digital_fee_per_lesson": 3.60,
+    "digital_fee_total": 36.00,
+    "hours": 20,
     "lessons_count": 10,
     "promo_code": null,
     "promo_discount": 0,
-    "subtotal": 409.89,
-    "total": 409.89,
-    "total_pence": 40989,
-    "weekly_payment": 40.99
+    "subtotal": 405.99,
+    "total": 405.99,
+    "total_pence": 40599,
+    "weekly_payment": 40.60
   }
 }
 ```
@@ -2337,15 +2345,17 @@ A **student** token receives **404** when the package is private (`visible_to_pu
     "package_price_pence": 35000,
     "package_price": 350.00,
     "booking_fee": 19.99,
-    "digital_fee_per_lesson": 3.99,
-    "digital_fee_total": 39.90,
+    "digital_fee_per_hour": 1.80,
+    "digital_fee_per_lesson": 3.60,
+    "digital_fee_total": 36.00,
+    "hours": 20,
     "lessons_count": 10,
     "promo_code": "SAVE10",
     "promo_discount": 35.00,
-    "subtotal": 409.89,
-    "total": 374.89,
-    "total_pence": 37489,
-    "weekly_payment": 37.49
+    "subtotal": 405.99,
+    "total": 370.99,
+    "total_pence": 37099,
+    "weekly_payment": 37.10
   }
 }
 ```
@@ -2356,9 +2366,11 @@ A **student** token receives **404** when the package is private (`visible_to_pu
 |-------|------|-------------|
 | `package_price_pence` | integer | Base package price in pence |
 | `package_price` | float | Base package price in pounds |
-| `booking_fee` | float | Flat booking fee (currently £19.99) |
-| `digital_fee_per_lesson` | float | Digital fee per lesson (currently £3.99) |
-| `digital_fee_total` | float | Total digital fee (`digital_fee_per_lesson × lessons_count`) |
+| `booking_fee` | float | Flat booking fee (currently £19.99). Unchanged by the hourly digital fee. |
+| `digital_fee_per_hour` | float | Digital fee per hour of lesson time (currently £1.80). A 2-hour lesson is £3.60. |
+| `digital_fee_per_lesson` | float | Digital fee for one lesson at the resolved length (`£1.80 × hours of that lesson`). For a standard 2-hour lesson this is £3.60. Display `digital_fee_total` rather than multiplying this yourself. |
+| `digital_fee_total` | float | Total digital fee (`£1.80 × hours`). Authoritative total. |
+| `hours` | float | Total hours the digital fee was calculated on |
 | `lessons_count` | integer | Number of lessons in the package |
 | `promo_code` | string\|null | Applied promo code (uppercase), or `null` if none |
 | `promo_discount` | float | Discount amount from promo code (applied to package price only) |
@@ -3059,9 +3071,11 @@ Returns the active packages belonging to the authenticated student's attached in
       "formatted_total_price": "£350.00",
       "formatted_lesson_price": "£35.00",
       "booking_fee": "£19.99",
-      "digital_fee": "£39.90",
-      "total_price": "£409.89",
-      "weekly_payment": "£40.99",
+      "digital_fee": "£36.00",
+      "digital_fee_per_hour": "£1.80/hour",
+      "hours": 20,
+      "total_price": "£405.99",
+      "weekly_payment": "£40.60",
       "active": true,
       "is_one_off": false,
       "visible_to_pupils": true,
@@ -5311,7 +5325,7 @@ A student-initiated `weekly` booking returns the same shape as the student-initi
 | `package_lesson_price_pence` | integer | Per-lesson price in pence |
 | `package_lessons_count` | integer | Number of lessons in the package |
 | `booking_fee_pence` | integer | Booking fee in pence (e.g., 1999 = £19.99) |
-| `digital_fee_pence` | integer | Total digital fee in pence (£3.99 × lessons) |
+| `digital_fee_pence` | integer | Total digital fee in pence (£1.80 × booked hours; a 2-hour lesson is 360) |
 | `total_price_pence` | integer | Total charge amount sent to Stripe (package + booking fee + digital fees) |
 | `payment_mode` | string | `upfront` or `weekly` |
 | `status` | string | Order status: `pending` (awaiting first payment), `active`, `completed`, `cancelled` (cancelled by the instructor/admin) or `expired` (not paid before `payment_hold_expires_at`; lessons deleted and slots released). Treat `expired` as gone: hide it, its lessons no longer exist. |
@@ -7683,6 +7697,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 
 | 2026-09-30 | **Instructor "lesson paid" push.** When a lesson is marked as paid (weekly `invoice.paid` webhook, first weekly payment at checkout, or a pay-in-full booking), the instructor is queued a push naming the pupil and the lesson date/time. Pay-in-full bookings send one summary push. New payload `type: "lesson_paid"`. No request or response fields changed. | Push Notifications |
 | 2026-10-12 | **New order status `expired`.** Unpaid bookings released by `orders:release-expired-holds` when `payment_hold_expires_at` passes are now `expired` instead of `cancelled` (existing released orders were migrated). `cancelled` now only means a booking the instructor or admin cancelled. **App action:** handle `status: "expired"` on the order object, which `POST /students/{student}/orders`, `GET /orders/{order}/checkout/verify` and slot-offer accept return. Treat it as gone and hide it. Its lessons are deleted, so they never appear in any lessons endpoint. `GET /orders/{order}/checkout/verify` returns 422 with `data.status = "expired"` when the hold ran out before payment. Resend-payment-link returns 422 `The time to pay for this booking ran out and the lessons were released.` for an expired order. | Orders (order object, verify, resend-payment-link), Student Slot Offers (accept) |
+| 2026-10-14 | **Digital fee is £1.80 per hour of lesson time.** `digital_fee`, `total_price`, `weekly_payment` and order `digital_fee_pence` now use hours (a 2-hour lesson is £3.60; a package is £1.80 × total hours). Package lists assume the standard 2-hour lesson. `GET /packages/{package}/pricing` accepts optional `start_time` and `end_time` so a preview matches the chosen slot; order create still charges the slot that was booked. Additive fields: `digital_fee_per_hour` and `hours` on package objects; `digital_fee_per_hour` and `hours` on the pricing object. `digital_fee_per_lesson` remains, and is now the fee for one lesson at that length (£3.60 for 2 hours), not a flat per-lesson rate. The booking fee is unchanged. Display the amounts the API returns — do not multiply a hardcoded £1.80 by `lessons_count`. | Package Pricing, Instructor Packages, Student Packages, Orders |
 | 2026-10-12 | **Package visibility for pupils.** New `visible_to_pupils` boolean on every package object (default `true`, so existing packages stay listed). `false` is a private package. `GET /instructor/packages` still returns private packages and includes the flag so the app can add a toggle. `POST` and `PUT /instructor/packages` accept optional `visible_to_pupils` (omit on update to leave it unchanged). `GET /student/packages` omits private packages. A student token gets **404** from `GET /packages/{package}/pricing` and `POST /students/{student}/orders` for a private package; an instructor token can still price and book it. Short-notice offers are unchanged. | Instructor Packages (list, create, update), Student Packages (list), Package Pricing (show), Orders (store) |
 ---
 

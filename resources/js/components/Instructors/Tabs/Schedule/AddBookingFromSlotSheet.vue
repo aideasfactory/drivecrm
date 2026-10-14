@@ -85,7 +85,11 @@ const isOpen = computed({
 const loadPackages = async () => {
     isLoadingPackages.value = true
     try {
-        const response = await axios.get(`/instructors/${props.instructorId}/packages`)
+        const response = await axios.get(`/instructors/${props.instructorId}/packages`, {
+            params: props.slot
+                ? { start_time: props.slot.start_time, end_time: props.slot.end_time }
+                : {},
+        })
         packages.value = (response.data.packages || []).filter((pkg: PackageOption) => pkg.active)
     } catch {
         toast({ title: 'Failed to load packages', variant: 'destructive' })

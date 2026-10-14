@@ -410,13 +410,19 @@ class InstructorController extends Controller
     public function packages(Request $request, Instructor $instructor): JsonResponse
     {
         $packages = $this->instructorService->getPackages($instructor, onlyActive: false);
+        $startTime = $request->query('start_time');
+        $endTime = $request->query('end_time');
 
         return response()->json([
             // Owner-only figure — never expose the uplift to other viewers
             'price_uplift_pence' => $request->user()?->isOwner() === true
                 ? $instructor->price_uplift_pence
                 : null,
-            'packages' => $packages->map(fn (Package $package) => $this->packagePayload($package)),
+            'packages' => $packages->map(fn (Package $package) => $this->packagePayload(
+                $package,
+                is_string($startTime) ? $startTime : null,
+                is_string($endTime) ? $endTime : null,
+            )),
         ]);
     }
 
@@ -1728,8 +1734,10 @@ class InstructorController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function packagePayload(Package $package): array
+    private function packagePayload(Package $package, ?string $startTime = null, ?string $endTime = null): array
     {
+        $amounts = $package->pricedAmounts($startTime, $endTime);
+
         return [
             'id' => $package->id,
             'name' => $package->name,
@@ -1740,9 +1748,9 @@ class InstructorController extends Controller
             'formatted_total_price' => $package->formatted_total_price,
             'formatted_lesson_price' => $package->formatted_lesson_price,
             'booking_fee' => $package->booking_fee,
-            'digital_fee' => $package->digital_fee,
-            'total_price' => $package->total_price,
-            'weekly_payment' => $package->weekly_payment,
+            'digital_fee' => '£'.number_format($amounts['digital_fee'], 2),
+            'total_price' => '£'.number_format($amounts['total'], 2),
+            'weekly_payment' => '£'.number_format($amounts['weekly'], 2),
             'allows_weekly_payment' => $package->allowsWeeklyPayment(),
             'active' => $package->active,
             'is_one_off' => (bool) $package->is_one_off,

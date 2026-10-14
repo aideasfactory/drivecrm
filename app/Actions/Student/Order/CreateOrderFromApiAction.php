@@ -42,7 +42,7 @@ class CreateOrderFromApiAction
         $order = DB::transaction(function () use ($student, $package, $paymentMode, $firstLessonDate, $startTime, $endTime, $calendarItemIds): Order {
             $instructorId = $student->instructor_id;
 
-            $pricing = app(CalculatePackagePricingAction::class)($package);
+            $pricing = app(CalculatePackagePricingAction::class)($package, null, $startTime, $endTime);
 
             $order = Order::create([
                 'student_id' => $student->id,

@@ -81,7 +81,12 @@ class StepSixController extends Controller
         );
 
         $discount = $enquiry->getDiscountData();
-        $pricing = $this->packageService->calculateEnquiryPricing($package, $discount);
+        $pricing = $this->packageService->calculateEnquiryPricing(
+            $package,
+            $discount,
+            isset($step4['start_time']) ? (string) $step4['start_time'] : null,
+            isset($step4['end_time']) ? (string) $step4['end_time'] : null,
+        );
 
         $packagePrice = '£'.number_format($pricing['total'], 2);
         $lessonPrice = '£'.number_format($pricing['weekly_payment'], 2);

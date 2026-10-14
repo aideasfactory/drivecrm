@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\V1;
 
+use App\Support\Fees;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -25,6 +26,8 @@ class PackageResource extends JsonResource
             'formatted_lesson_price' => $this->formatted_lesson_price,
             'booking_fee' => $this->booking_fee,
             'digital_fee' => $this->digital_fee,
+            'digital_fee_per_hour' => Fees::perHourLabel(),
+            'hours' => Fees::bookedHours((int) $this->lessons_count),
             'total_price' => $this->total_price,
             'weekly_payment' => $this->weekly_payment,
             'active' => $this->active,

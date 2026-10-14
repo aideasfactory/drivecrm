@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Separator } from '@/components/ui/separator'
+import { useDigitalFeeLabel } from '@/composables/useDigitalFeeLabel'
 
 export interface PackagePricing {
     lessons_count: number
@@ -15,6 +16,8 @@ export interface PackagePricing {
 const props = defineProps<{
     pkg: PackagePricing
 }>()
+
+const { perHourLabel } = useDigitalFeeLabel()
 
 const isZero = (formatted: string) => formatted === '£0.00'
 
@@ -33,7 +36,7 @@ const showDigitalFee = computed(() => !isZero(props.pkg.digital_fee))
             <span>{{ pkg.booking_fee }}</span>
         </div>
         <div v-if="showDigitalFee" class="flex items-center justify-between gap-4">
-            <span>Digital fee</span>
+            <span>Digital fee ({{ perHourLabel }})</span>
             <span>{{ pkg.digital_fee }}</span>
         </div>
         <Separator class="my-2" />

@@ -66,7 +66,7 @@
               <span class="font-medium">{{ formatPence(payment.first_payment.booking_fee_pence) }}</span>
             </div>
             <div v-if="payment.first_payment.digital_fee_pence" class="flex items-start justify-between gap-4">
-              <span class="text-muted-foreground">Digital fee</span>
+              <span class="text-muted-foreground">Digital fee ({{ perHourLabel }})</span>
               <span class="font-medium">{{ formatPence(payment.first_payment.digital_fee_pence) }}</span>
             </div>
             <div v-if="payment.includes_test_pass_guarantee" class="flex items-start justify-between gap-4">
@@ -157,6 +157,9 @@ import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 import { CheckCircle, CircleCheck, Mail, Phone, Calendar, Info } from 'lucide-vue-next'
 import { computed } from 'vue'
+import { useDigitalFeeLabel } from '@/composables/useDigitalFeeLabel'
+
+const { perHourLabel } = useDigitalFeeLabel()
 
 const props = defineProps({
   enquiry: Object,

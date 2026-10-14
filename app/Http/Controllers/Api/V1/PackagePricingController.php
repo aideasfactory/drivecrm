@@ -44,7 +44,15 @@ class PackagePricingController extends Controller
             }
         }
 
-        $pricing = $this->packageService->calculatePricing($package, $promoDiscount);
+        $startTime = $request->query('start_time');
+        $endTime = $request->query('end_time');
+
+        $pricing = $this->packageService->calculatePricing(
+            $package,
+            $promoDiscount,
+            is_string($startTime) ? $startTime : null,
+            is_string($endTime) ? $endTime : null,
+        );
 
         return new PackagePricingResource($pricing);
     }

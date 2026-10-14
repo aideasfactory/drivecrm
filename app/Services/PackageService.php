@@ -70,9 +70,9 @@ class PackageService extends BaseService
      * @param  array{code?: string, percentage?: int|float}|null  $promoDiscount
      * @return array<string, mixed>
      */
-    public function calculatePricing(Package $package, ?array $promoDiscount = null): array
+    public function calculatePricing(Package $package, ?array $promoDiscount = null, ?string $startTime = null, ?string $endTime = null): array
     {
-        return ($this->calculatePricing)($package, $promoDiscount);
+        return ($this->calculatePricing)($package, $promoDiscount, $startTime, $endTime);
     }
 
     /**
@@ -84,12 +84,12 @@ class PackageService extends BaseService
      * @param  array{id?: string, label?: string, percentage?: int|float}|null  $discount
      * @return array<string, mixed>
      */
-    public function calculateEnquiryPricing(Package $package, ?array $discount = null): array
+    public function calculateEnquiryPricing(Package $package, ?array $discount = null, ?string $startTime = null, ?string $endTime = null): array
     {
         $promoDiscount = isset($discount['percentage'])
             ? ['code' => $discount['label'] ?? null, 'percentage' => $discount['percentage']]
             : null;
 
-        return $this->calculatePricing($package, $promoDiscount);
+        return $this->calculatePricing($package, $promoDiscount, $startTime, $endTime);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Fees;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -56,6 +57,7 @@ class HandleInertiaRequests extends Middleware
                 'android' => config('app_links.android') ?: null,
             ],
             'schoolContact' => config('contact.school'),
+            'digitalFeePerHour' => Fees::perHourLabel(),
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),

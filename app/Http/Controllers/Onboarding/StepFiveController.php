@@ -70,7 +70,12 @@ class StepFiveController extends Controller
         }
 
         $discount = $enquiry->getDiscountData();
-        $pricing = $package ? $this->packageService->calculateEnquiryPricing($package, $discount) : null;
+        $pricing = $package ? $this->packageService->calculateEnquiryPricing(
+            $package,
+            $discount,
+            isset($step4['start_time']) ? (string) $step4['start_time'] : null,
+            isset($step4['end_time']) ? (string) $step4['end_time'] : null,
+        ) : null;
 
         // Fee-inclusive (and discount-aware) figures before any guarantee add-on,
         // which the page adds on top when the learner opts in.
