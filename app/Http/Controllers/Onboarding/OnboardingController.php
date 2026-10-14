@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Onboarding;
 
+use App\Actions\Onboarding\BuildBookingConfirmationAction;
 use App\Enums\OrderStatus;
 use App\Http\Controllers\Controller;
 use App\Models\DiscountCode;
@@ -117,7 +118,7 @@ class OnboardingController extends Controller
     /**
      * Completion page after successful payment
      */
-    public function complete(Request $request)
+    public function complete(Request $request, BuildBookingConfirmationAction $buildBookingConfirmation)
     {
         $enquiry = $request->get('enquiry');
 
@@ -142,6 +143,7 @@ class OnboardingController extends Controller
                 'first_payment' => $order->firstPaymentBreakdown(),
                 'weekly_instalment' => $order->isWeekly() ? $order->formatted_weekly_instalment : null,
             ] : null,
+            'booking' => $buildBookingConfirmation($enquiry, $order),
             'staffBooking' => $enquiry->isStaffBooking() ? [
                 'payment_mode' => $step6['payment_mode'] ?? null,
                 'payment_link_sent_to' => $step6['payment_link_sent_to'] ?? null,

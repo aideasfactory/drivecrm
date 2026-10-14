@@ -13,6 +13,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\HtmlString;
 
 class OrderConfirmationNotification extends Notification implements ShouldQueue
 {
@@ -49,7 +50,7 @@ class OrderConfirmationNotification extends Notification implements ShouldQueue
             $bookedForLine = "\nThis booking was made for: **{$learnerName}**";
         }
 
-        return $this->templatedMail(
+        $message = $this->templatedMail(
             EmailTemplateKey::LearnerOrderConfirmation,
             [
                 'recipient_name' => $this->recipientName(),
@@ -64,6 +65,39 @@ class OrderConfirmationNotification extends Notification implements ShouldQueue
             ],
             url('/get-app'),
         );
+
+        $storeButtons = $this->appStoreButtons();
+
+        if ($storeButtons !== null) {
+            $message->line($storeButtons);
+        }
+
+        return $message;
+    }
+
+    /**
+     * App Store / Google Play buttons, limited to the store links that are configured.
+     */
+    protected function appStoreButtons(): ?HtmlString
+    {
+        $links = array_filter([
+            'Download on the App Store' => config('app_links.apple') ?: null,
+            'Get it on Google Play' => config('app_links.android') ?: null,
+        ]);
+
+        if ($links === []) {
+            return null;
+        }
+
+        $buttons = collect($links)
+            ->map(fn (string $url, string $label): string => sprintf(
+                '<a href="%s" target="_blank" rel="noopener" style="display:inline-block;margin:4px;padding:10px 18px;background:#111111;color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600;">%s</a>',
+                e($url),
+                e($label),
+            ))
+            ->implode('');
+
+        return new HtmlString('<p style="text-align:center;margin:8px 0 4px;"><strong>Get the DRIVE app</strong></p><p style="text-align:center;">'.$buttons.'</p>');
     }
 
     protected function recipientName(): string
