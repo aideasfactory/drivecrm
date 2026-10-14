@@ -51,7 +51,7 @@
                   <span class="text-sm font-medium text-right">{{ formatPrice(order.first_payment.digital_fee_pence) }}</span>
                 </div>
                 <div v-if="order.test_pass_guarantee_pence !== null" class="flex items-start justify-between gap-4">
-                  <span class="text-sm text-muted-foreground">Pass Your Test Guarantee</span>
+                  <TestPassGuaranteeInfo class="text-sm text-muted-foreground" />
                   <span class="text-sm font-medium text-right">
                     {{ order.first_payment.test_pass_guarantee_pence > 0 ? formatPrice(order.first_payment.test_pass_guarantee_pence) : 'Included free' }}
                   </span>
@@ -105,7 +105,7 @@
                   <span class="text-sm font-medium text-right">{{ formatPrice(order.digital_fee_pence) }}</span>
                 </div>
                 <div v-if="order.test_pass_guarantee_pence !== null" class="flex items-start justify-between gap-4">
-                  <span class="text-sm text-muted-foreground">Pass Your Test Guarantee</span>
+                  <TestPassGuaranteeInfo class="text-sm text-muted-foreground" />
                   <span class="text-sm font-medium text-right">
                     {{ order.test_pass_guarantee_pence > 0 ? formatPrice(order.test_pass_guarantee_pence) : 'Included free' }}
                   </span>
@@ -168,6 +168,7 @@
 <script setup lang="ts">
 import { Card, CardContent } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import TestPassGuaranteeInfo from '@/components/Shared/TestPassGuaranteeInfo.vue'
 import { computed } from 'vue'
 import { CheckCircle, CircleCheck, Info, Clock } from 'lucide-vue-next'
 

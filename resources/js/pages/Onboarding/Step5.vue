@@ -305,7 +305,7 @@
                         <span class="shrink-0 font-medium">-£{{ pricing?.uuid_discount }}</span>
                       </div>
                       <div v-if="testPassGuarantee?.free_when_paid_in_full" class="flex items-start justify-between gap-3">
-                        <span class="min-w-0">Pass Your Test Guarantee</span>
+                        <TestPassGuaranteeInfo class="min-w-0" />
                         <span class="shrink-0 font-medium">Free if paid in full</span>
                       </div>
                       <Separator />
@@ -374,6 +374,7 @@ import { toast } from '@/components/ui/toast'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
+import TestPassGuaranteeInfo from '@/components/Shared/TestPassGuaranteeInfo.vue'
 import { step1, step2, step3, step4 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step5'
 import { AlertCircle, ArrowLeft, ArrowRight, Car, MapPin, Star } from 'lucide-vue-next'
