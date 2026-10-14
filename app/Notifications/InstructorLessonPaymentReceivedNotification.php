@@ -33,10 +33,12 @@ class InstructorLessonPaymentReceivedNotification extends Notification implement
 
     public function toMail(object $notifiable): MailMessage
     {
+        $this->lessonPayment->loadMissing('lesson');
+
         $lesson = $this->lessonPayment->lesson;
         $lessonDate = $lesson->date->format('l, F j, Y');
         $lessonTime = $lesson->start_time->format('g:i A');
-        $amount = $this->lessonPayment->formatted_amount;
+        $amount = $this->lessonPayment->formatted_instructor_lesson_fee;
         $studentName = trim(($this->student->first_name ?? '').' '.($this->student->surname ?? ''));
 
         return $this->templatedMail(
@@ -59,7 +61,7 @@ class InstructorLessonPaymentReceivedNotification extends Notification implement
             'lesson_payment_id' => $this->lessonPayment->id,
             'lesson_id' => $this->lessonPayment->lesson_id,
             'student_name' => trim(($this->student->first_name ?? '').' '.($this->student->surname ?? '')),
-            'amount' => $this->lessonPayment->formatted_amount,
+            'amount' => $this->lessonPayment->formatted_instructor_lesson_fee,
         ];
     }
 }
