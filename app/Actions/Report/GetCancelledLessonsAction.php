@@ -19,7 +19,7 @@ class GetCancelledLessonsAction
      * @param  ?string  $cancelledFrom  Y-m-d — only lessons cancelled on/after this date
      * @param  ?string  $cancelledTo  Y-m-d — only lessons cancelled on/before this date
      * @param  ?string  $paymentStatus  'paid', 'due', or 'refunded'
-     * @return array{rows: Collection<int, array{lesson_id: int, student_id: ?int, instructor_id: ?int, learner_name: string, learner_phone: ?string, learner_email: ?string, instructor_name: ?string, lesson_date: string, lesson_time: string, amount: string, amount_pence: int, payment_status: ?string, cancellation_reason: ?string, cancelled_at: ?string}>, generated_at: string}
+     * @return array{rows: Collection<int, array{lesson_id: int, student_id: ?int, instructor_id: ?int, learner_name: string, learner_phone: ?string, learner_email: ?string, instructor_name: ?string, lesson_date: string, lesson_time: string, amount: string, amount_pence: int, payment_status: ?string, lesson_payment_id: ?int, manually_refunded_at: ?string, manually_refunded_by_name: ?string, order_id: int, booking_manually_refunded_at: ?string, booking_manually_refunded_by_name: ?string, cancellation_reason: ?string, cancelled_at: ?string}>, generated_at: string}
      */
     public function __invoke(?string $cancelledFrom = null, ?string $cancelledTo = null, ?string $paymentStatus = null): array
     {
@@ -45,7 +45,7 @@ class GetCancelledLessonsAction
                     $payment->where('status', $paymentStatus);
                 });
             })
-            ->with(['order.student', 'instructor.user', 'lessonPayment'])
+            ->with(['order.student', 'order.manuallyRefundedBy:id,name', 'instructor.user', 'lessonPayment.manuallyRefundedBy:id,name'])
             ->orderByDesc('cancelled_at')
             ->orderByDesc('date')
             ->get();
@@ -72,6 +72,12 @@ class GetCancelledLessonsAction
                     'amount' => '£'.number_format($lesson->amount_pence / 100, 2),
                     'amount_pence' => $lesson->amount_pence,
                     'payment_status' => $payment?->status->value,
+                    'lesson_payment_id' => $payment?->id,
+                    'manually_refunded_at' => $payment?->manually_refunded_at?->toIso8601String(),
+                    'manually_refunded_by_name' => $payment?->manuallyRefundedBy?->name,
+                    'order_id' => $lesson->order_id,
+                    'booking_manually_refunded_at' => $lesson->order?->manually_refunded_at?->toIso8601String(),
+                    'booking_manually_refunded_by_name' => $lesson->order?->manuallyRefundedBy?->name,
                     'cancellation_reason' => $lesson->cancellation_reason,
                     'cancelled_at' => $lesson->cancelled_at?->toIso8601String(),
                 ];

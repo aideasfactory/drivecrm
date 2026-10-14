@@ -25,7 +25,9 @@ class GetStudentPaymentsAction
         })
             ->with([
                 'lesson:id,order_id,date,start_time,end_time',
-                'lesson.order:id,package_name,payment_mode',
+                'lesson.order:id,package_name,payment_mode,manually_refunded_at,manually_refunded_by_user_id',
+                'lesson.order.manuallyRefundedBy:id,name',
+                'manuallyRefundedBy:id,name',
                 'lesson.payout:id,lesson_id,instructor_id,status,failure_code,failure_message,stripe_transfer_id,manual_payment_reference,paid_at',
             ])
             ->orderByDesc('created_at')
@@ -56,6 +58,12 @@ class GetStudentPaymentsAction
                     'payout_manual_payment_reference' => $payout?->manual_payment_reference,
                     'payout_failure_message' => $payout?->isFailed() ? $payout->failure_message : null,
                     'failure_code' => $payout?->failure_code,
+                    'manually_refunded' => $payment->wasManuallyRefunded(),
+                    'manually_refunded_at' => $payment->manually_refunded_at?->toIso8601String(),
+                    'manually_refunded_by_name' => $payment->manuallyRefundedBy?->name,
+                    'order_id' => $order?->id,
+                    'booking_manually_refunded_at' => $order?->manually_refunded_at?->toIso8601String(),
+                    'booking_manually_refunded_by_name' => $order?->manuallyRefundedBy?->name,
                 ];
             });
     }

@@ -48,7 +48,8 @@ class GetStudentLessonsAction
                         'instructor.user:id,name',
                         'instructor:id,user_id,profile_picture_path',
                         'calendarItem.calendar:id,date',
-                        'lessonPayment:id,lesson_id,amount_pence,test_pass_guarantee_pence,status,paid_at,stripe_invoice_id',
+                        'lessonPayment:id,lesson_id,amount_pence,test_pass_guarantee_pence,status,paid_at,stripe_invoice_id,manually_refunded_at,manually_refunded_by_user_id',
+                        'lessonPayment.manuallyRefundedBy:id,name',
                         'payout:id,lesson_id,status,failure_code,failure_message,amount_pence,stripe_transfer_id,paid_at',
                         'reflectiveLog:id,lesson_id',
                         'resources:id,title,resource_type,video_url,file_path,file_name,file_size,mime_type,thumbnail_url',
@@ -56,6 +57,7 @@ class GetStudentLessonsAction
                     ->orderBy('date')
                     ->orderBy('start_time'),
                 'package:id,name',
+                'manuallyRefundedBy:id,name',
             ])
             ->get()
             ->flatMap(fn ($order) => $order->lessons->map(function ($lesson) use ($order) {
@@ -80,6 +82,10 @@ class GetStudentLessonsAction
                     'lesson_payment_id' => $lesson->lessonPayment?->id,
                     'payment_status' => $lesson->lessonPayment?->status?->value ?? ($order->isPrepaid() ? 'paid' : null),
                     'has_stripe_invoice' => $lesson->lessonPayment?->stripe_invoice_id !== null,
+                    'payment_manually_refunded_at' => $lesson->lessonPayment?->manually_refunded_at?->toIso8601String(),
+                    'payment_manually_refunded_by_name' => $lesson->lessonPayment?->manuallyRefundedBy?->name,
+                    'booking_manually_refunded_at' => $order->manually_refunded_at?->toIso8601String(),
+                    'booking_manually_refunded_by_name' => $order->manuallyRefundedBy?->name,
                     'payment_mode' => $order->payment_mode->value,
                     'payout_status' => $lesson->payout?->statusForInstructor()->value,
                     'has_payout' => $lesson->payout !== null,

@@ -44,6 +44,7 @@ class ListStaffBookedLessonsAction
                 'student.pickupPoints',
                 'instructor.user',
                 'package',
+                'manuallyRefundedBy:id,name',
                 'lessons' => function ($query): void {
                     $query->orderBy('date')->orderBy('start_time');
                 },
@@ -143,7 +144,10 @@ class ListStaffBookedLessonsAction
      *     instructor_name: string|null,
      *     instructor_id: int|null,
      *     package: string,
-     *     payment_state: string
+     *     payment_state: string,
+     *     can_mark_refunded: bool,
+     *     manually_refunded_at: string|null,
+     *     manually_refunded_by_name: string|null
      * }
      */
     private function row(Order $order, ?Enquiry $enquiry): array
@@ -171,6 +175,9 @@ class ListStaffBookedLessonsAction
             'instructor_id' => $order->instructor_id,
             'package' => $this->packageLabel($order, $startTime, $endTime),
             'payment_state' => $this->paymentState($order),
+            'can_mark_refunded' => ! $order->isImported(),
+            'manually_refunded_at' => $order->manually_refunded_at?->toIso8601String(),
+            'manually_refunded_by_name' => $order->manuallyRefundedBy?->name,
         ];
     }
 
