@@ -290,7 +290,6 @@ import {
   UserRound,
 } from 'lucide-vue-next'
 import TestPassGuaranteeInfo from '@/components/Shared/TestPassGuaranteeInfo.vue'
-import { CheckCircle, CircleCheck, Mail, Phone, Calendar, Info } from 'lucide-vue-next'
 import { computed } from 'vue'
 
 interface BookingConfirmation {

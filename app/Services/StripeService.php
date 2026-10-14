@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Models\Package;
 use App\Models\User;
 use App\Support\BookingPayments;
+use App\Support\TestPassGuarantee;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Exception;
@@ -303,15 +304,18 @@ class StripeService
                 ? $this->buildCheckoutLineItems($order, $package, $chargeAmountPence - $testPassGuaranteePence)
                 : [['price' => $package->stripe_price_id, 'quantity' => 1]];
 
+            // A free guarantee still gets a £0 line so the learner sees what they're getting.
+            $includesFreeGuarantee = $testPassGuaranteePence === 0
+                && $order->total_price_pence !== null
+                && $order->includes_test_pass_guarantee;
+
             if ($testPassGuaranteePence > 0) {
-                $lineItems[] = [
-                    'price_data' => [
-                        'currency' => 'gbp',
-                        'unit_amount' => $testPassGuaranteePence,
-                        'product_data' => ['name' => 'Pass Your Test Guarantee'],
-                    ],
-                    'quantity' => 1,
-                ];
+                $lineItems[] = $this->checkoutLineItem($testPassGuaranteePence, ['product_data' => ['name' => 'Pass Your Test Guarantee']]);
+            } elseif ($includesFreeGuarantee) {
+                $lineItems[] = $this->checkoutLineItem(0, ['product_data' => [
+                    'name' => 'Pass Your Test Guarantee',
+                    'description' => 'Usually £'.number_format(TestPassGuarantee::price(), 2).' — included free',
+                ]]);
             }
 
             // Shared between the session and its PaymentIntent. Session metadata is

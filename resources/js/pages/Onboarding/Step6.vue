@@ -53,7 +53,10 @@
                   </template>
                   <div v-if="selectedGuarantee?.included" class="flex justify-between">
                     <TestPassGuaranteeInfo class="text-muted-foreground">Pass Your Test Guarantee:</TestPassGuaranteeInfo>
-                    <span class="font-medium">{{ selectedGuarantee.is_free ? 'Free' : `£${testPassGuarantee.price}` }}</span>
+                    <span v-if="selectedGuarantee.is_free" class="font-medium">
+                      <s class="font-normal text-muted-foreground">£{{ testPassGuarantee.price }}</s> £0.00
+                    </span>
+                    <span v-else class="font-medium">£{{ testPassGuarantee.price }}</span>
                   </div>
                   <div class="flex justify-between font-semibold">
                     <span>Total:</span>
@@ -196,7 +199,10 @@
                           />
                           <TestPassGuaranteeInfo />
                         </CardTitle>
-                        <Badge v-if="selectedGuarantee.is_free" class="bg-green-600 text-white hover:bg-green-600">Included free</Badge>
+                        <div v-if="selectedGuarantee.is_free" class="flex shrink-0 items-center gap-2">
+                          <s class="text-sm text-muted-foreground">£{{ testPassGuarantee.price }}</s>
+                          <Badge class="bg-green-600 text-white hover:bg-green-600">£0 &middot; Included free</Badge>
+                        </div>
                         <Badge v-else variant="secondary">£{{ testPassGuarantee.price }}</Badge>
                       </div>
                       <CardDescription>
@@ -233,7 +239,7 @@
                           :class="selectedGuarantee.is_free ? 'cursor-not-allowed' : 'cursor-pointer'"
                         >
                           <template v-if="selectedGuarantee.is_free">
-                            Pass Your Test Guarantee included (free)
+                            Pass Your Test Guarantee included (<s class="font-normal text-muted-foreground">£{{ testPassGuarantee.price }}</s> free)
                           </template>
                           <template v-else>
                             Include Pass Your Test Guarantee (+£{{ testPassGuarantee.price }})
