@@ -175,6 +175,7 @@ Owner-only CRM screen at `/email-templates`. Staff can change wording only — r
 - `2026_09_23_150837_update_instructor_welcome_link_expiry_copy` — instructor welcome link expiry wording.
 - `2026_09_24_150000_add_cost_breakdown_to_payment_email_templates` — inserts `{{cost_breakdown}}` into `learner.payment_link`, `learner.payment_due_soon` and `learner.lesson_payment_received` so learners see the lesson / booking fee / digital fee split. No schema change.
 - `2026_09_29_100000_update_payment_link_template_for_pay_at_booking` — `learner.payment_link` gets `{{amount_label}}: {{total}}` ("First week" for weekly orders) and `{{pay_by_line}}` (the hold deadline) in place of "This payment link will expire after 24 hours." No schema change.
+- `2026_10_14_103000_update_instructor_payment_received_email_to_lesson_fee` — `instructor.lesson_payment_received` drops the amount from the opening line and relabels "Amount: {{amount}}" as "Lesson fee: {{amount}}"; `{{amount}}` is now the lesson fee the instructor is paid (`lessons.amount_pence`), not the pupil's fee-inclusive total. No schema change.
 
 ### Relationship Summary
 

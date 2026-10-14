@@ -78,26 +78,13 @@ class LessonPayment extends Model
      *
      * Booking fees, digital fees and any Pass Your Test Guarantee stay with
      * the platform. The payout uses the lesson price, so that is what
-     * instructor payment emails show. When the lesson price is missing, the
-     * lesson share of this payment is used instead.
+     * instructor payment emails show.
      */
     public function instructorLessonFeePence(): int
     {
-        $this->loadMissing('lesson.order');
+        $this->loadMissing('lesson');
 
-        $lessonFeePence = (int) ($this->lesson?->amount_pence ?? 0);
-
-        if ($lessonFeePence > 0) {
-            return $lessonFeePence;
-        }
-
-        $order = $this->lesson?->order;
-
-        if ($order === null) {
-            return max(0, (int) $this->amount_pence - (int) $this->test_pass_guarantee_pence);
-        }
-
-        return (int) self::weeklyBreakdown($order, (int) $this->amount_pence, (int) $this->test_pass_guarantee_pence)['lesson'];
+        return (int) ($this->lesson?->amount_pence ?? 0);
     }
 
     /**
