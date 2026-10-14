@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Models\Package;
 use App\Models\User;
 use App\Support\BookingPayments;
+use App\Support\TestPassGuarantee;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Exception;
@@ -277,7 +278,6 @@ class StripeService
             $testPassGuaranteePence = $order->total_price_pence !== null ? (int) $order->test_pass_guarantee_pence : 0;
 
             $hasDiscount = $order->discount_percentage !== null && $order->discount_percentage > 0;
-            $hasFeesOrDiscount = $order->total_price_pence !== null || $hasDiscount;
 
             Log::info('StripeService: Creating checkout session', [
                 'order_id' => $order->id,
@@ -295,13 +295,12 @@ class StripeService
                 'digital_fee_pence' => $order->digital_fee_pence,
             ]);
 
-            // Always use price_data when fees are included or a discount is applied,
-            // since the pre-created Stripe Price only reflects the base package price.
-            // The guarantee add-on gets its own line below, so the package and fee
+            // Lines are always priced inline and named from the order: the package's
+            // pre-created Stripe Product/Price keep whatever name and price they had
+            // when the package was created, so they can be out of date. A paid
+            // guarantee add-on gets its own line below, so the package and fee
             // lines are built from the charge without it.
-            $lineItems = $hasFeesOrDiscount
-                ? $this->buildCheckoutLineItems($order, $package, $chargeAmountPence - $testPassGuaranteePence)
-                : [['price' => $package->stripe_price_id, 'quantity' => 1]];
+            $lineItems = $this->buildCheckoutLineItems($order, $package, $chargeAmountPence - $testPassGuaranteePence);
 
             if ($testPassGuaranteePence > 0) {
                 $lineItems[] = [
@@ -626,7 +625,8 @@ class StripeService
      * uplifted) package price, then the booking fee and digital fee as their
      * own lines so the student sees the breakdown on the Stripe payment page
      * and receipt. Falls back to a single line for the full charge when the
-     * stored components do not add up to it (e.g. legacy orders).
+     * stored components do not add up to it (e.g. legacy orders). A free Pass
+     * Your Test Guarantee has no £0 line; it is called out on the package line.
      *
      * @return list<array<string, mixed>>
      */
@@ -636,9 +636,17 @@ class StripeService
         $bookingFeePence = (int) ($order->booking_fee_pence ?? 0);
         $digitalFeePence = (int) ($order->digital_fee_pence ?? 0);
 
-        $packageProduct = $package->stripe_product_id
-            ? ['product' => $package->stripe_product_id]
-            : ['product_data' => ['name' => $package->name]];
+        $lessonsCount = (int) ($order->package_lessons_count ?? $package->lessons_count);
+        $packageDescription = "{$lessonsCount} driving ".($lessonsCount === 1 ? 'lesson' : 'lessons');
+
+        if ($order->includes_test_pass_guarantee && (int) $order->test_pass_guarantee_pence === 0) {
+            $packageDescription .= ' · Pass Your Test Guarantee included free (£0.00, usually £'.number_format(TestPassGuarantee::price(), 2).')';
+        }
+
+        $packageProduct = ['product_data' => [
+            'name' => $order->package_name ?: $package->name,
+            'description' => $packageDescription,
+        ]];
 
         $isItemised = ($bookingFeePence > 0 || $digitalFeePence > 0)
             && $packagePence > 0
@@ -647,8 +655,6 @@ class StripeService
         if (! $isItemised) {
             return [$this->checkoutLineItem($chargeAmountPence, $packageProduct)];
         }
-
-        $lessonsCount = (int) ($order->package_lessons_count ?? $package->lessons_count);
 
         $lineItems = [$this->checkoutLineItem($packagePence, $packageProduct)];
 
