@@ -8,6 +8,7 @@ use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Services\OrderService;
 use App\Support\BookingPayments;
+use App\Support\TestPassGuarantee;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -135,6 +136,7 @@ class PaymentLinkCheckoutController extends Controller
             'booking_fee_pence' => $order->booking_fee_pence,
             'digital_fee_pence' => $order->digital_fee_pence,
             'test_pass_guarantee_pence' => $order->includes_test_pass_guarantee ? (int) $order->test_pass_guarantee_pence : null,
+            'test_pass_guarantee_usual_pence' => TestPassGuarantee::pricePence(),
             // What the first payment covered: the full amount for pay in full, week 1 for weekly
             'first_payment' => $order->firstPaymentBreakdown(),
             'weekly_instalment' => $order->isWeekly() ? $order->formatted_weekly_instalment : null,

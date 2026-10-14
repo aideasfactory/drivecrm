@@ -8,6 +8,7 @@ use App\Models\DiscountCode;
 use App\Models\Enquiry;
 use App\Models\Instructor;
 use App\Models\Order;
+use App\Support\TestPassGuarantee;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -139,6 +140,7 @@ class OnboardingController extends Controller
             'payment' => $isPaid ? [
                 'payment_mode' => $order->payment_mode->value,
                 'includes_test_pass_guarantee' => (bool) $order->includes_test_pass_guarantee,
+                'test_pass_guarantee_usual_pence' => TestPassGuarantee::pricePence(),
                 'first_payment' => $order->firstPaymentBreakdown(),
                 'weekly_instalment' => $order->isWeekly() ? $order->formatted_weekly_instalment : null,
             ] : null,

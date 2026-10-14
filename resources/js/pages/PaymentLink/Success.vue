@@ -52,8 +52,12 @@
                 </div>
                 <div v-if="order.test_pass_guarantee_pence !== null" class="flex items-start justify-between gap-4">
                   <span class="text-sm text-muted-foreground">Pass Your Test Guarantee</span>
-                  <span class="text-sm font-medium text-right">
-                    {{ order.first_payment.test_pass_guarantee_pence > 0 ? formatPrice(order.first_payment.test_pass_guarantee_pence) : 'Included free' }}
+                  <span v-if="order.first_payment.test_pass_guarantee_pence > 0" class="text-sm font-medium text-right">
+                    {{ formatPrice(order.first_payment.test_pass_guarantee_pence) }}
+                  </span>
+                  <span v-else class="text-sm font-medium text-right">
+                    <IncludedFreePrice :usual-price="formatPrice(order.test_pass_guarantee_usual_pence)" />
+                    <span class="block text-xs font-normal text-muted-foreground">Included free</span>
                   </span>
                 </div>
               </template>
@@ -106,8 +110,12 @@
                 </div>
                 <div v-if="order.test_pass_guarantee_pence !== null" class="flex items-start justify-between gap-4">
                   <span class="text-sm text-muted-foreground">Pass Your Test Guarantee</span>
-                  <span class="text-sm font-medium text-right">
-                    {{ order.test_pass_guarantee_pence > 0 ? formatPrice(order.test_pass_guarantee_pence) : 'Included free' }}
+                  <span v-if="order.test_pass_guarantee_pence > 0" class="text-sm font-medium text-right">
+                    {{ formatPrice(order.test_pass_guarantee_pence) }}
+                  </span>
+                  <span v-else class="text-sm font-medium text-right">
+                    <IncludedFreePrice :usual-price="formatPrice(order.test_pass_guarantee_usual_pence)" />
+                    <span class="block text-xs font-normal text-muted-foreground">Included free</span>
                   </span>
                 </div>
               </template>
@@ -169,6 +177,7 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { computed } from 'vue'
+import IncludedFreePrice from '@/components/Shared/IncludedFreePrice.vue'
 import { CheckCircle, CircleCheck, Info, Clock } from 'lucide-vue-next'
 
 interface OrderSummary {
@@ -181,6 +190,7 @@ interface OrderSummary {
   booking_fee_pence: number | null
   digital_fee_pence: number | null
   test_pass_guarantee_pence: number | null
+  test_pass_guarantee_usual_pence: number
   first_payment: {
     total_pence: number
     lesson_pence: number

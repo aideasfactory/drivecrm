@@ -71,8 +71,12 @@
             </div>
             <div v-if="payment.includes_test_pass_guarantee" class="flex items-start justify-between gap-4">
               <span class="text-muted-foreground">Pass Your Test Guarantee</span>
-              <span class="font-medium">
-                {{ payment.first_payment.test_pass_guarantee_pence > 0 ? formatPence(payment.first_payment.test_pass_guarantee_pence) : 'Included free' }}
+              <span v-if="payment.first_payment.test_pass_guarantee_pence > 0" class="font-medium">
+                {{ formatPence(payment.first_payment.test_pass_guarantee_pence) }}
+              </span>
+              <span v-else class="text-right font-medium">
+                <IncludedFreePrice :usual-price="formatPence(payment.test_pass_guarantee_usual_pence)" />
+                <span class="block text-xs font-normal text-muted-foreground">Included free</span>
               </span>
             </div>
             <Separator />
@@ -155,6 +159,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
+import IncludedFreePrice from '@/components/Shared/IncludedFreePrice.vue'
 import { CheckCircle, CircleCheck, Mail, Phone, Calendar, Info } from 'lucide-vue-next'
 import { computed } from 'vue'
 
