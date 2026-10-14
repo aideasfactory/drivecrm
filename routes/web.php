@@ -306,6 +306,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
     // Student Payments
     Route::get('/students/{student}/payments', [PupilController::class, 'payments'])
         ->name('students.payments');
+    Route::patch('/students/{student}/payments/{lessonPayment}/refund', [PupilController::class, 'updatePaymentRefund'])
+        ->middleware(EnsureOwner::class)
+        ->name('students.payments.refund');
 
     // Student Orders
     Route::get('/students/{student}/available-slots', [PupilController::class, 'availableSlots'])
@@ -497,6 +500,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
 
     Route::get('/lessons-booked', [LessonsBookedController::class, 'index'])
         ->name('lessons-booked.index');
+    Route::patch('/lessons-booked/{order}/refund', [LessonsBookedController::class, 'updateRefund'])
+        ->middleware(EnsureOwner::class)
+        ->name('lessons-booked.refund');
 
     Route::get('/enquiries', [EnquiryController::class, 'index'])
         ->name('enquiries.index');

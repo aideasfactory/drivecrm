@@ -35,12 +35,14 @@ use App\Http\Requests\DeleteStudentProfileRequest;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\StorePickupPointRequest;
 use App\Http\Requests\UpdatePickupPointRequest;
+use App\Http\Requests\UpdateManualRefundRequest;
 use App\Http\Requests\UpdateStudentStatusRequest;
 use App\Jobs\ProcessLessonSignOffJob;
 use App\Models\CalendarItem;
 use App\Models\Contact;
 use App\Models\Instructor;
 use App\Models\Lesson;
+use App\Models\LessonPayment;
 use App\Models\Note;
 use App\Models\Package;
 use App\Models\Student;
@@ -406,6 +408,26 @@ class PupilController extends Controller
 
         return response()->json([
             'payments' => $payments,
+        ]);
+    }
+
+    /**
+     * Owner override: tick or untick a paid lesson payment as refunded outside
+     * the platform (e.g. in Stripe or by bank transfer). No Stripe refund is made.
+     */
+    public function updatePaymentRefund(UpdateManualRefundRequest $request, Student $student, LessonPayment $lessonPayment, OrderService $orderService): JsonResponse
+    {
+        $refunded = $request->boolean('refunded');
+        $payment = $orderService->setLessonPaymentManualRefund($student, $lessonPayment, $refunded, $request->user());
+
+        return response()->json([
+            'message' => $refunded ? 'Payment marked as refunded.' : 'Refund mark removed. Payment set back to paid.',
+            'payment' => [
+                'id' => $payment->id,
+                'status' => $payment->status->value,
+                'manually_refunded_at' => $payment->manually_refunded_at?->toIso8601String(),
+                'manually_refunded_by_name' => $payment->manuallyRefundedBy?->name,
+            ],
         ]);
     }
 

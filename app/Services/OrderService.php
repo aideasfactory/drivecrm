@@ -10,6 +10,8 @@ use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
 use App\Actions\Payment\NotifyInstructorOfLessonPaidAction;
 use App\Actions\Payment\SendLessonInvoiceAction;
 use App\Actions\Payment\SendPaymentReceivedEmailsAction;
+use App\Actions\Payment\SetLessonPaymentManualRefundAction;
+use App\Actions\Payment\SetOrderManualRefundAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Student\GrantTestPassGuaranteeAction;
 use App\Actions\Student\Order\ConfirmUpfrontPaymentAction;
@@ -29,6 +31,7 @@ use App\Models\LessonPayment;
 use App\Models\Order;
 use App\Models\Package;
 use App\Models\Student;
+use App\Models\User;
 use App\Notifications\CalendarClashDetectedNotification;
 use App\Notifications\ReleasedOrderPaidNotification;
 use App\Support\BookingPayments;
@@ -61,7 +64,93 @@ class OrderService extends BaseService
         protected ConfirmUpfrontPaymentAction $confirmUpfrontPaymentAction,
         protected SendPaymentReceivedEmailsAction $sendPaymentReceivedEmails,
         protected NotifyInstructorOfLessonPaidAction $notifyInstructorOfLessonPaid,
+        protected SetLessonPaymentManualRefundAction $setLessonPaymentManualRefund,
+        protected SetOrderManualRefundAction $setOrderManualRefund,
     ) {}
+
+    /**
+     * Admin override: tick or untick a student's paid lesson payment as
+     * refunded outside the platform. No money moves and Stripe is not called.
+     * Every change is written to the student's activity log for the audit trail.
+     */
+    public function setLessonPaymentManualRefund(Student $student, LessonPayment $payment, bool $refunded, User $admin): LessonPayment
+    {
+        $payment->loadMissing('lesson.order');
+        abort_unless($payment->lesson?->order?->student_id === $student->id, 404);
+
+        $previousMarkedById = $payment->manually_refunded_by_user_id;
+        $previousMarkedAt = $payment->manually_refunded_at?->toIso8601String();
+
+        $payment = ($this->setLessonPaymentManualRefund)($payment, $refunded, $admin);
+        $payment->setRelation('manuallyRefundedBy', $refunded ? $admin : null);
+
+        $lessonDate = $payment->lesson?->date?->format('j M Y') ?? 'unknown date';
+        $bookingId = $payment->lesson?->order_id;
+        $message = $refunded
+            ? "{$admin->name} marked the {$payment->formatted_amount} payment for the lesson on {$lessonDate} (booking #{$bookingId}) as refunded outside the system"
+            : "{$admin->name} unmarked the {$payment->formatted_amount} payment for the lesson on {$lessonDate} (booking #{$bookingId}) as refunded — status set back to paid";
+
+        ($this->logActivity)(
+            $student,
+            $message,
+            'payment',
+            [
+                'action' => $refunded ? 'manual_refund_marked' : 'manual_refund_unmarked',
+                'admin_user_id' => $admin->id,
+                'admin_name' => $admin->name,
+                'lesson_payment_id' => $payment->id,
+                'lesson_id' => $payment->lesson_id,
+                'order_id' => $bookingId,
+                'amount_pence' => $payment->amount_pence,
+                'previous_marked_by_user_id' => $previousMarkedById,
+                'previous_marked_at' => $previousMarkedAt,
+            ],
+            $refunded ? 'Payment marked as refunded' : 'Payment refund mark removed'
+        );
+
+        return $payment;
+    }
+
+    /**
+     * Admin override: tick or untick a booking as refunded outside the
+     * platform. No money moves and Stripe is not called. Every change is
+     * written to the student's activity log for the audit trail.
+     */
+    public function setOrderManualRefund(Order $order, bool $refunded, User $admin): Order
+    {
+        $previousMarkedById = $order->manually_refunded_by_user_id;
+        $previousMarkedAt = $order->manually_refunded_at?->toIso8601String();
+
+        $order = ($this->setOrderManualRefund)($order, $refunded, $admin);
+        $order->setRelation('manuallyRefundedBy', $refunded ? $admin : null);
+
+        $amount = $order->formatted_amount_paid;
+        $message = $refunded
+            ? "{$admin->name} marked booking #{$order->id} ({$order->package_name}, {$amount}) as refunded outside the system"
+            : "{$admin->name} unmarked booking #{$order->id} ({$order->package_name}, {$amount}) as refunded";
+
+        $loggable = $order->student ?? $order->instructor;
+
+        if ($loggable) {
+            ($this->logActivity)(
+                $loggable,
+                $message,
+                'payment',
+                [
+                    'action' => $refunded ? 'manual_refund_marked' : 'manual_refund_unmarked',
+                    'admin_user_id' => $admin->id,
+                    'admin_name' => $admin->name,
+                    'order_id' => $order->id,
+                    'total_price_pence' => $order->total_price_pence,
+                    'previous_marked_by_user_id' => $previousMarkedById,
+                    'previous_marked_at' => $previousMarkedAt,
+                ],
+                $refunded ? 'Booking marked as refunded' : 'Booking refund mark removed'
+            );
+        }
+
+        return $order;
+    }
 
     /**
      * Book lessons: create draft calendar items, order and lessons, then take the
