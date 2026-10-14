@@ -4,14 +4,17 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        @php($gtmId = config('services.gtm.container_id'))
-        @php($googleAdsId = config('services.google_tag.ads_id'))
-        @php($googleGa4Id = config('services.google_tag.ga4_id'))
-        @php($isTrackingRoute = request()->routeIs('booking.*', 'onboarding.*'))
-        @php($loadGtm = $gtmId && $isTrackingRoute)
-        @php($loadGtag = ($googleAdsId || $googleGa4Id) && $isTrackingRoute)
+        @php($isPublicBookingRoute = request()->routeIs('booking.*', 'onboarding.*', 'payment-link.*'))
+        @php($usercentricsId = $isPublicBookingRoute ? config('services.usercentrics.settings_id') : null)
+        @php($gtmId = $isPublicBookingRoute ? config('services.gtm.container_id') : null)
 
-        @if ($loadGtm)
+        @if ($usercentricsId)
+            {{-- Usercentrics consent banner — first in <head>, ahead of any tracking --}}
+            <script id="usercentrics-cmp" src="https://web.cmp.usercentrics.eu/ui/loader.js" data-settings-id="{{ $usercentricsId }}" async></script>
+        @endif
+
+        @if ($gtmId)
+            {{-- GA4, Google Ads and Meta Pixel all load through GTM, gated by Usercentrics consent --}}
             <!-- Google Tag Manager -->
             <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
             new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -19,22 +22,6 @@
             'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
             })(window,document,'script','dataLayer','{{ $gtmId }}');</script>
             <!-- End Google Tag Manager -->
-        @endif
-
-        @if ($loadGtag)
-            {{-- Google tag (gtag.js) — Google Ads + GA4 on the booking page --}}
-            <script async src="https://www.googletagmanager.com/gtag/js?id={{ $googleAdsId ?: $googleGa4Id }}"></script>
-            <script>
-                window.dataLayer = window.dataLayer || [];
-                function gtag(){dataLayer.push(arguments);}
-                gtag('js', new Date());
-                @if ($googleAdsId)
-                    gtag('config', @json($googleAdsId));
-                @endif
-                @if ($googleGa4Id)
-                    gtag('config', @json($googleGa4Id));
-                @endif
-            </script>
         @endif
 
         {{-- Inline script to detect system dark mode preference and apply it immediately --}}
@@ -77,7 +64,7 @@
         @inertiaHead
     </head>
     <body class="font-sans antialiased">
-        @if ($loadGtm)
+        @if ($gtmId)
             <!-- Google Tag Manager (noscript) -->
             <noscript><iframe src="https://www.googletagmanager.com/ns.html?id={{ $gtmId }}"
             height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>

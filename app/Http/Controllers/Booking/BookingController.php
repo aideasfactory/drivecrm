@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Booking;
 
 use App\Http\Controllers\Controller;
 use App\Models\Enquiry;
+use App\Support\MarketingParams;
 use Illuminate\Http\Request;
 
 class BookingController extends Controller
@@ -36,6 +37,7 @@ class BookingController extends Controller
             'max_step_reached' => 1,
         ]);
 
-        return redirect()->route('booking.step1', ['uuid' => $enquiry->id]);
+        // Pass ad-click/UTM params through so GTM sees them on the landing page
+        return redirect()->route('booking.step1', ['uuid' => $enquiry->id, ...MarketingParams::fromRequest($request)]);
     }
 }

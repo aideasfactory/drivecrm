@@ -85,6 +85,7 @@ class PaymentLinkCheckoutController extends Controller
 
         return Inertia::render('PaymentLink/Success', [
             'verified' => $result['verified'],
+            'purchaseEvent' => $result['verified'] ? $this->orderService->claimPurchaseEvent($result['order']) : null,
             'message' => $result['message'],
             'weeklyPaymentDueHours' => BookingPayments::weeklyPaymentDueHoursBeforeLesson(),
             'order' => $this->formatOrder(

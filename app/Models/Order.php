@@ -36,6 +36,7 @@ class Order extends Model
         'test_pass_guarantee_pence',
         'payment_hold_expires_at',
         'invoice_sent_at',
+        'purchase_tracked_at',
         'booked_by_user_id',
     ];
 
@@ -56,6 +57,7 @@ class Order extends Model
             'test_pass_guarantee_pence' => 'integer',
             'payment_hold_expires_at' => 'datetime',
             'invoice_sent_at' => 'datetime',
+            'purchase_tracked_at' => 'datetime',
         ];
     }
 

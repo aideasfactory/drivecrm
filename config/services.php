@@ -85,9 +85,8 @@ return [
         'container_id' => env('GTM_CONTAINER_ID', 'GTM-56KMNJR'),
     ],
 
-    'google_tag' => [
-        'ads_id' => env('GOOGLE_ADS_ID', 'AW-10884289539'),
-        'ga4_id' => env('GOOGLE_GA4_ID', 'G-NBYWT0EZF6'),
+    'usercentrics' => [
+        'settings_id' => env('USERCENTRICS_SETTINGS_ID', 'QQGm7qReAQa3CR'),
     ],
 
 ];

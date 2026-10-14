@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Actions\Calendar\CloseOpenSlotOffersForItemsAction;
 use App\Actions\Calendar\DetectCalendarClashesAction;
 use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
+use App\Actions\Payment\ClaimPurchaseEventAction;
 use App\Actions\Payment\NotifyInstructorOfLessonPaidAction;
 use App\Actions\Payment\SendLessonInvoiceAction;
 use App\Actions\Payment\SendPaymentReceivedEmailsAction;
@@ -61,6 +62,7 @@ class OrderService extends BaseService
         protected ConfirmUpfrontPaymentAction $confirmUpfrontPaymentAction,
         protected SendPaymentReceivedEmailsAction $sendPaymentReceivedEmails,
         protected NotifyInstructorOfLessonPaidAction $notifyInstructorOfLessonPaid,
+        protected ClaimPurchaseEventAction $claimPurchaseEvent,
     ) {}
 
     /**
@@ -478,6 +480,17 @@ class OrderService extends BaseService
             $session->status === 'complete' => ['state' => 'processing'] + $state,
             default => $state,
         };
+    }
+
+    /**
+     * The GTM `purchase` dataLayer payload for a paid order, returned only the
+     * first time it's asked for so the conversion is reported once.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function claimPurchaseEvent(Order $order): ?array
+    {
+        return ($this->claimPurchaseEvent)($order);
     }
 
     /**

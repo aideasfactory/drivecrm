@@ -9,6 +9,8 @@ use App\Models\DiscountCode;
 use App\Models\Enquiry;
 use App\Models\Instructor;
 use App\Models\Order;
+use App\Services\OrderService;
+use App\Support\MarketingParams;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -112,13 +114,14 @@ class OnboardingController extends Controller
             'max_step_reached' => $maxStep,
         ]);
 
-        return redirect()->route('onboarding.step1', ['uuid' => $enquiry->id]);
+        // Pass ad-click/UTM params through so GTM sees them on the landing page
+        return redirect()->route('onboarding.step1', ['uuid' => $enquiry->id, ...MarketingParams::fromRequest($request)]);
     }
 
     /**
      * Completion page after successful payment
      */
-    public function complete(Request $request, BuildBookingConfirmationAction $buildBookingConfirmation)
+    public function complete(Request $request, BuildBookingConfirmationAction $buildBookingConfirmation, OrderService $orderService)
     {
         $enquiry = $request->get('enquiry');
 
@@ -144,6 +147,8 @@ class OnboardingController extends Controller
                 'weekly_instalment' => $order->isWeekly() ? $order->formatted_weekly_instalment : null,
             ] : null,
             'booking' => $buildBookingConfirmation($enquiry, $order),
+            // Only the learner's own payment counts — staff bookings land here unpaid
+            'purchaseEvent' => $isPaid ? $orderService->claimPurchaseEvent($order) : null,
             'staffBooking' => $enquiry->isStaffBooking() ? [
                 'payment_mode' => $step6['payment_mode'] ?? null,
                 'payment_link_sent_to' => $step6['payment_link_sent_to'] ?? null,

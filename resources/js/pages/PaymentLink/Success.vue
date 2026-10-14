@@ -170,6 +170,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import TestPassGuaranteeInfo from '@/components/Shared/TestPassGuaranteeInfo.vue'
 import { computed } from 'vue'
+import { usePurchaseTracking, type PurchaseEvent } from '@/composables/usePurchaseTracking'
 import { CheckCircle, CircleCheck, Info, Clock } from 'lucide-vue-next'
 
 interface OrderSummary {
@@ -199,9 +200,13 @@ const props = withDefaults(defineProps<{
   message?: string
   order: OrderSummary | null
   weeklyPaymentDueHours?: number
+  purchaseEvent?: PurchaseEvent | null
 }>(), {
   weeklyPaymentDueHours: 48,
+  purchaseEvent: null,
 })
+
+usePurchaseTracking(props.purchaseEvent)
 
 const isWeekly = computed((): boolean => props.order?.payment_mode === 'weekly')
 

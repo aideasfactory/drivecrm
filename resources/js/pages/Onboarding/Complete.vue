@@ -291,6 +291,7 @@ import {
 } from 'lucide-vue-next'
 import TestPassGuaranteeInfo from '@/components/Shared/TestPassGuaranteeInfo.vue'
 import { computed } from 'vue'
+import { usePurchaseTracking, type PurchaseEvent } from '@/composables/usePurchaseTracking'
 
 interface BookingConfirmation {
   greeting_name: string | null
@@ -325,11 +326,15 @@ const props = withDefaults(defineProps<{
   booking?: BookingConfirmation | null
   staffBooking?: Record<string, any> | null
   payment?: PaymentSummary | null
+  purchaseEvent?: PurchaseEvent | null
 }>(), {
   booking: null,
   staffBooking: null,
   payment: null,
+  purchaseEvent: null,
 })
+
+usePurchaseTracking(props.purchaseEvent)
 
 const page = usePage<AppPageProps>()
 const appLinks = computed(() => page.props.appLinks ?? { apple: null, android: null })
