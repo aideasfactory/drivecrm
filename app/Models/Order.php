@@ -37,6 +37,8 @@ class Order extends Model
         'payment_hold_expires_at',
         'invoice_sent_at',
         'booked_by_user_id',
+        'manually_refunded_at',
+        'manually_refunded_by_user_id',
     ];
 
     protected function casts(): array
@@ -56,6 +58,7 @@ class Order extends Model
             'test_pass_guarantee_pence' => 'integer',
             'payment_hold_expires_at' => 'datetime',
             'invoice_sent_at' => 'datetime',
+            'manually_refunded_at' => 'datetime',
         ];
     }
 
@@ -81,6 +84,23 @@ class Order extends Model
     public function bookedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'booked_by_user_id');
+    }
+
+    /**
+     * The admin user who marked this booking as refunded outside the platform.
+     */
+    public function manuallyRefundedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'manually_refunded_by_user_id');
+    }
+
+    /**
+     * Whether an admin marked this booking as refunded outside the platform
+     * (e.g. directly in Stripe or by bank transfer).
+     */
+    public function wasManuallyRefunded(): bool
+    {
+        return $this->manually_refunded_at !== null;
     }
 
     /**

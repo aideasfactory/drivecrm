@@ -20,6 +20,8 @@ class LessonPayment extends Model
         'paid_at',
         'stripe_invoice_id',
         'stripe_charge_id',
+        'manually_refunded_at',
+        'manually_refunded_by_user_id',
     ];
 
     protected function casts(): array
@@ -30,6 +32,7 @@ class LessonPayment extends Model
             'status' => PaymentStatus::class,
             'due_date' => 'date',
             'paid_at' => 'datetime',
+            'manually_refunded_at' => 'datetime',
         ];
     }
 
@@ -39,6 +42,23 @@ class LessonPayment extends Model
     public function lesson(): BelongsTo
     {
         return $this->belongsTo(Lesson::class);
+    }
+
+    /**
+     * The admin user who marked this payment as refunded outside the platform.
+     */
+    public function manuallyRefundedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'manually_refunded_by_user_id');
+    }
+
+    /**
+     * Whether an admin marked this payment as refunded outside the platform
+     * (e.g. directly in Stripe or by bank transfer).
+     */
+    public function wasManuallyRefunded(): bool
+    {
+        return $this->manually_refunded_at !== null;
     }
 
     /**
