@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Onboarding;
 
+use App\Support\ContactDetails;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StepOneRequest extends FormRequest
@@ -29,8 +30,8 @@ class StepOneRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'first_name' => ['required', 'string', 'max:255'],
-            'last_name' => ['required', 'string', 'max:255'],
+            'first_name' => ['required', 'string', 'max:255', 'regex:'.ContactDetails::NAME_REGEX],
+            'last_name' => ['required', 'string', 'max:255', 'regex:'.ContactDetails::NAME_REGEX],
             'email' => ['required', 'email', 'max:255'],
             'phone' => ['required', 'string', 'regex:/^\+(?:447\d{9}|(?!44)[1-9]\d{6,14})$/'],
             'postcode' => ['required', 'string', 'regex:/^[A-Z]{1,2}[0-9]{1,2}[A-Z]?\s?[0-9][A-Z]{2}$/i'],
@@ -44,11 +45,13 @@ class StepOneRequest extends FormRequest
     {
         return [
             'first_name.required' => 'Please enter your first name',
+            'first_name.regex' => 'First name can only contain letters, spaces, hyphens and apostrophes',
             'last_name.required' => 'Please enter your last name',
+            'last_name.regex' => 'Last name can only contain letters, spaces, hyphens and apostrophes',
             'email.required' => 'Please enter your email address',
             'email.email' => 'Please enter a valid email address',
             'phone.required' => 'Please enter your phone number',
-            'phone.regex' => 'Please enter a valid mobile number including country code, e.g. +447710896753',
+            'phone.regex' => 'Please enter a valid mobile number. UK numbers must be a mobile, e.g. 07700 900123',
             'postcode.required' => 'Please enter your postcode',
             'postcode.regex' => 'Please enter a valid UK postcode',
             'privacy_consent.required' => 'You must agree to the Terms of Service and Privacy Policy to continue',
