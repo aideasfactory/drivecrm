@@ -15,8 +15,13 @@ declare(strict_types=1);
  * Any other host — including app.just-drive.co.uk — keeps the redirect from
  * / to /booking. Override with a comma-separated ONBOARDING_ENTRY_HOSTS list
  * when a non-production hostname should follow the Drive Plus entry.
+ *
+ * `learner_minimum_age` is the youngest age (in whole years, as of today) a
+ * learner can be booked in at. Mirrors the Terms of Service eligibility rule.
  */
 return [
+    'learner_minimum_age' => (int) env('ONBOARDING_LEARNER_MINIMUM_AGE', 17),
+
     'excluded_instructor_ids' => env('ONBOARDING_EXCLUDED_INSTRUCTOR_IDS', ''),
 
     'entry_hosts' => array_values(array_filter(array_map(

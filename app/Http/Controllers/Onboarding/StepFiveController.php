@@ -13,6 +13,7 @@ use App\Models\Location;
 use App\Models\Package;
 use App\Services\PackageService;
 use App\Services\PriceUpliftService;
+use App\Support\PersonDetails;
 use App\Support\TestPassGuarantee;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -157,6 +158,8 @@ class StepFiveController extends Controller
                 'package_total_with_fees_pence' => $packageTotalWithFeesPence,
                 'weekly_payment_pence' => $weeklyPaymentPence,
             ] : null,
+
+            'learnerMinimumAge' => PersonDetails::minimumAge(),
 
             'testPassGuarantee' => $package
                 ? TestPassGuarantee::bookingFormData($enquiry, $package)
