@@ -13,6 +13,7 @@ use App\Models\Location;
 use App\Models\Package;
 use App\Services\PackageService;
 use App\Services\PriceUpliftService;
+use App\Support\ContactDetails;
 use App\Support\TestPassGuarantee;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -144,6 +145,7 @@ class StepFiveController extends Controller
                 'phone' => $step5['learner_phone'] ?? null,
                 'dob' => $step5['learner_dob'] ?? null,
             ],
+            'learnerMinimumAge' => ContactDetails::learnerMinimumAge(),
 
             'pricing' => $pricing ? [
                 'package_price' => number_format($pricing['package_price'], 2),

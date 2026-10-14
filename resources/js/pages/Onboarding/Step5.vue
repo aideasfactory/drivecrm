@@ -20,7 +20,7 @@
             </CardHeader>
 
             <CardContent class="px-4 sm:px-6">
-              <form @submit.prevent="submit" class="space-y-6">
+              <form novalidate @submit.prevent="submit" class="space-y-6">
                 <!-- Instructor Summary -->
                 <Card>
                   <CardHeader class="px-4 sm:px-6">
@@ -159,18 +159,24 @@
                           <CardTitle class="text-base">Learner Details</CardTitle>
                         </CardHeader>
                         <CardContent class="space-y-4">
-                          <div class="grid grid-cols-2 gap-4">
+                          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div>
                               <Label for="learner-first-name">First Name</Label>
                               <Input
                                 v-model="form.learner_first_name"
                                 id="learner-first-name"
                                 type="text"
+                                autocomplete="off"
+                                autocapitalize="words"
+                                maxlength="100"
                                 class="mt-1.5"
-                                :class="{ 'border-destructive': form.errors.learner_first_name }"
+                                :aria-invalid="form.errors.learner_first_name ? 'true' : undefined"
+                                :aria-describedby="form.errors.learner_first_name ? 'learner-first-name-error' : undefined"
+                                @blur="onLearnerBlur('learner_first_name')"
                               />
-                              <p v-if="form.errors.learner_first_name" class="text-sm text-destructive mt-1">
-                                {{ form.errors.learner_first_name }}
+                              <p v-if="form.errors.learner_first_name" id="learner-first-name-error" class="mt-1 flex items-start text-sm text-destructive">
+                                <AlertCircle class="mr-1 mt-0.5 h-4 w-4 shrink-0" />
+                                <span>{{ form.errors.learner_first_name }}</span>
                               </p>
                             </div>
                             <div>
@@ -179,24 +185,36 @@
                                 v-model="form.learner_last_name"
                                 id="learner-last-name"
                                 type="text"
+                                autocomplete="off"
+                                autocapitalize="words"
+                                maxlength="100"
                                 class="mt-1.5"
-                                :class="{ 'border-destructive': form.errors.learner_last_name }"
+                                :aria-invalid="form.errors.learner_last_name ? 'true' : undefined"
+                                :aria-describedby="form.errors.learner_last_name ? 'learner-last-name-error' : undefined"
+                                @blur="onLearnerBlur('learner_last_name')"
                               />
-                              <p v-if="form.errors.learner_last_name" class="text-sm text-destructive mt-1">
-                                {{ form.errors.learner_last_name }}
+                              <p v-if="form.errors.learner_last_name" id="learner-last-name-error" class="mt-1 flex items-start text-sm text-destructive">
+                                <AlertCircle class="mr-1 mt-0.5 h-4 w-4 shrink-0" />
+                                <span>{{ form.errors.learner_last_name }}</span>
                               </p>
                             </div>
                             <div>
-                              <Label for="learner-phone">Phone</Label>
+                              <Label for="learner-phone">Mobile Number</Label>
                               <Input
                                 v-model="form.learner_phone"
                                 id="learner-phone"
                                 type="tel"
+                                inputmode="tel"
+                                autocomplete="off"
+                                placeholder="07700 900123"
                                 class="mt-1.5"
-                                :class="{ 'border-destructive': form.errors.learner_phone }"
+                                :aria-invalid="form.errors.learner_phone ? 'true' : undefined"
+                                :aria-describedby="form.errors.learner_phone ? 'learner-phone-error' : undefined"
+                                @blur="onLearnerBlur('learner_phone')"
                               />
-                              <p v-if="form.errors.learner_phone" class="text-sm text-destructive mt-1">
-                                {{ form.errors.learner_phone }}
+                              <p v-if="form.errors.learner_phone" id="learner-phone-error" class="mt-1 flex items-start text-sm text-destructive">
+                                <AlertCircle class="mr-1 mt-0.5 h-4 w-4 shrink-0" />
+                                <span>{{ form.errors.learner_phone }}</span>
                               </p>
                             </div>
                             <div>
@@ -205,11 +223,19 @@
                                 v-model="form.learner_email"
                                 id="learner-email"
                                 type="email"
+                                inputmode="email"
+                                autocomplete="off"
+                                autocapitalize="off"
+                                spellcheck="false"
+                                maxlength="255"
                                 class="mt-1.5"
-                                :class="{ 'border-destructive': form.errors.learner_email }"
+                                :aria-invalid="form.errors.learner_email ? 'true' : undefined"
+                                :aria-describedby="form.errors.learner_email ? 'learner-email-error' : undefined"
+                                @blur="onLearnerBlur('learner_email')"
                               />
-                              <p v-if="form.errors.learner_email" class="text-sm text-destructive mt-1">
-                                {{ form.errors.learner_email }}
+                              <p v-if="form.errors.learner_email" id="learner-email-error" class="mt-1 flex items-start text-sm text-destructive">
+                                <AlertCircle class="mr-1 mt-0.5 h-4 w-4 shrink-0" />
+                                <span>{{ form.errors.learner_email }}</span>
                               </p>
                             </div>
                             <div>
@@ -218,11 +244,16 @@
                                 v-model="form.learner_dob"
                                 id="learner-dob"
                                 type="date"
+                                :max="todayIsoDate()"
+                                @change="onLearnerBlur('learner_dob')"
                                 class="mt-1.5"
-                                :class="{ 'border-destructive': form.errors.learner_dob }"
+                                :aria-invalid="form.errors.learner_dob ? 'true' : undefined"
+                                :aria-describedby="form.errors.learner_dob ? 'learner-dob-error' : undefined"
+                                @blur="onLearnerBlur('learner_dob')"
                               />
-                              <p v-if="form.errors.learner_dob" class="text-sm text-destructive mt-1">
-                                {{ form.errors.learner_dob }}
+                              <p v-if="form.errors.learner_dob" id="learner-dob-error" class="mt-1 flex items-start text-sm text-destructive">
+                                <AlertCircle class="mr-1 mt-0.5 h-4 w-4 shrink-0" />
+                                <span>{{ form.errors.learner_dob }}</span>
                               </p>
                             </div>
                           </div>
@@ -274,7 +305,7 @@
                         <span class="shrink-0 font-medium">-£{{ pricing?.uuid_discount }}</span>
                       </div>
                       <div v-if="testPassGuarantee?.free_when_paid_in_full" class="flex items-start justify-between gap-3">
-                        <span class="min-w-0">Pass Your Test Guarantee</span>
+                        <TestPassGuaranteeInfo class="min-w-0" />
                         <span class="shrink-0 font-medium">Free if paid in full</span>
                       </div>
                       <Separator />
@@ -288,6 +319,11 @@
                     </div>
                   </AlertDescription>
                 </Alert>
+
+                <p v-if="otherErrorMessage" role="alert" class="flex items-start text-sm text-destructive">
+                  <AlertCircle class="mr-1 mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{{ otherErrorMessage }}</span>
+                </p>
 
                 <!-- Form Actions -->
                 <div class="flex w-full min-w-0 flex-col gap-3 border-t pt-6 sm:flex-row sm:items-center sm:justify-between">
@@ -338,9 +374,18 @@ import { toast } from '@/components/ui/toast'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
+import TestPassGuaranteeInfo from '@/components/Shared/TestPassGuaranteeInfo.vue'
 import { step1, step2, step3, step4 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step5'
-import { ArrowLeft, ArrowRight, Car, MapPin, Star } from 'lucide-vue-next'
+import { AlertCircle, ArrowLeft, ArrowRight, Car, MapPin, Star } from 'lucide-vue-next'
+import {
+  focusFirstError,
+  todayIsoDate,
+  validateDateOfBirth,
+  validateEmail,
+  validateName,
+  validateUkMobile,
+} from '@/lib/contactValidation'
 
 const props = defineProps({
   uuid: String,
@@ -367,7 +412,8 @@ const props = defineProps({
     type: [Object, null],
     default: null
   },
-  maxStepReached: { type: Number, default: 5 }
+  maxStepReached: { type: Number, default: 5 },
+  learnerMinimumAge: { type: Number, default: 17 }
 })
 
 const page = usePage()
@@ -395,9 +441,75 @@ const bookingFee = 5
 // Local ref for checkbox to handle reactivity
 const isBookingForSomeoneElse = ref(form.booking_for_someone_else)
 
-// Watch and sync the local ref with the form
+const learnerFieldIds = {
+  learner_first_name: 'learner-first-name',
+  learner_last_name: 'learner-last-name',
+  learner_phone: 'learner-phone',
+  learner_email: 'learner-email',
+  learner_dob: 'learner-dob',
+}
+const learnerFields = Object.keys(learnerFieldIds)
+
+// Fields are only re-validated while typing once the learner has left them (or submitted).
+const touchedLearnerFields = ref({})
+
+function learnerFieldError(field) {
+  const value = form[field]
+
+  switch (field) {
+    case 'learner_first_name':
+      return validateName(value, 'Please enter the learner’s first name', 'First name')
+    case 'learner_last_name':
+      return validateName(value, 'Please enter the learner’s last name', 'Last name')
+    case 'learner_phone':
+      return validateUkMobile(value, 'Please enter the learner’s mobile number')
+    case 'learner_email':
+      return validateEmail(value, 'Please enter the learner’s email address')
+    case 'learner_dob':
+      return validateDateOfBirth(value, props.learnerMinimumAge, 'Please enter the learner’s date of birth')
+    default:
+      return null
+  }
+}
+
+function validateLearnerField(field) {
+  const message = learnerFieldError(field)
+
+  if (message) {
+    form.setError(field, message)
+  } else {
+    form.clearErrors(field)
+  }
+
+  return message
+}
+
+const otherErrorMessage = computed(() => {
+  const field = Object.keys(form.errors).find((key) => !learnerFields.includes(key))
+
+  return field ? form.errors[field] : null
+})
+
+function onLearnerBlur(field) {
+  touchedLearnerFields.value[field] = true
+  validateLearnerField(field)
+}
+
+learnerFields.forEach((field) => {
+  watch(() => form[field], () => {
+    if (isBookingForSomeoneElse.value && touchedLearnerFields.value[field]) {
+      validateLearnerField(field)
+    }
+  })
+})
+
 watch(isBookingForSomeoneElse, (newValue) => {
   form.booking_for_someone_else = newValue
+
+  if (!newValue) {
+    touchedLearnerFields.value = {}
+    form.clearErrors(...learnerFields)
+  }
 })
 
 function formatPence(pence) {
@@ -566,6 +678,40 @@ watch(editingAddress, () => {
 function submit() {
   // Cancel any pending auto-save to prevent race conditions
   clearTimeout(saveTimeout)
-  form.post(store({ uuid: uuid.value }).url)
+
+  const bookingForSomeoneElse = isBookingForSomeoneElse.value
+
+  if (bookingForSomeoneElse) {
+    const errors = {}
+
+    learnerFields.forEach((field) => {
+      touchedLearnerFields.value[field] = true
+      const message = validateLearnerField(field)
+
+      if (message) {
+        errors[field] = message
+      }
+    })
+
+    if (Object.keys(errors).length > 0) {
+      focusFirstError(learnerFieldIds, errors)
+      return
+    }
+  }
+
+  // transform() persists on the form, so reset it here or an earlier auto-save's
+  // auto_save flag would turn this submit into another auto-save.
+  form
+    .transform((data) => ({
+      ...data,
+      booking_for_someone_else: bookingForSomeoneElse,
+      ...(bookingForSomeoneElse ? {} : Object.fromEntries(learnerFields.map((field) => [field, null]))),
+    }))
+    .post(store({ uuid: uuid.value }).url, {
+      preserveScroll: 'errors',
+      onError: (errors) => {
+        focusFirstError(learnerFieldIds, errors)
+      },
+    })
 }
 </script>

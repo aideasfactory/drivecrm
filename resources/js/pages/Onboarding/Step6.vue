@@ -52,7 +52,7 @@
                     </div>
                   </template>
                   <div v-if="selectedGuarantee?.included" class="flex justify-between">
-                    <span class="text-muted-foreground">Pass Your Test Guarantee:</span>
+                    <TestPassGuaranteeInfo class="text-muted-foreground">Pass Your Test Guarantee:</TestPassGuaranteeInfo>
                     <span class="font-medium">{{ selectedGuarantee.is_free ? 'Free' : `£${testPassGuarantee.price}` }}</span>
                   </div>
                   <div class="flex justify-between font-semibold">
@@ -194,7 +194,7 @@
                             class="h-5 w-5"
                             :class="selectedGuarantee.is_free ? 'text-green-600 dark:text-green-500' : 'text-primary'"
                           />
-                          Pass Your Test Guarantee
+                          <TestPassGuaranteeInfo />
                         </CardTitle>
                         <Badge v-if="selectedGuarantee.is_free" class="bg-green-600 text-white hover:bg-green-600">Included free</Badge>
                         <Badge v-else variant="secondary">£{{ testPassGuarantee.price }}</Badge>
@@ -331,6 +331,7 @@ import { Spinner } from '@/components/ui/spinner'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
+import TestPassGuaranteeInfo from '@/components/Shared/TestPassGuaranteeInfo.vue'
 import { step5 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step6'
 import { ArrowLeft, Lock, Calendar, ShieldCheck, UserCog } from 'lucide-vue-next'
