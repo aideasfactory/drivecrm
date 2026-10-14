@@ -8,6 +8,7 @@ use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Services\OrderService;
 use App\Support\BookingPayments;
+use App\Support\MarketingAttribution;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -82,14 +83,17 @@ class PaymentLinkCheckoutController extends Controller
         }
 
         $result = $this->orderService->verifyCheckout($order, $sessionId);
+        $verifiedOrder = $result['order']->loadMissing(['package', 'instructor.user', 'student']);
+        $isPaid = $verifiedOrder->isActive() || $verifiedOrder->status === OrderStatus::COMPLETED;
 
         return Inertia::render('PaymentLink/Success', [
             'verified' => $result['verified'],
             'message' => $result['message'],
             'weeklyPaymentDueHours' => BookingPayments::weeklyPaymentDueHoursBeforeLesson(),
-            'order' => $this->formatOrder(
-                $result['order']->loadMissing(['package', 'instructor.user', 'student'])
-            ),
+            'order' => $this->formatOrder($verifiedOrder),
+            'purchaseEvent' => $result['verified'] && $isPaid
+                ? MarketingAttribution::purchaseEventOnce($verifiedOrder)
+                : null,
         ]);
     }
 

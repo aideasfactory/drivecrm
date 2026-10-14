@@ -2,16 +2,36 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}"  @class(['dark' => ($appearance ?? 'system') == 'dark'])>
     <head>
         <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        @php($gtmId = config('services.gtm.container_id'))
-        @php($googleAdsId = config('services.google_tag.ads_id'))
-        @php($googleGa4Id = config('services.google_tag.ga4_id'))
-        @php($isTrackingRoute = request()->routeIs('booking.*', 'onboarding.*'))
-        @php($loadGtm = $gtmId && $isTrackingRoute)
-        @php($loadGtag = ($googleAdsId || $googleGa4Id) && $isTrackingRoute)
+        @php($isTrackingRoute = request()->routeIs('booking.*', 'onboarding.*', 'payment-link.*'))
+        @php($usercentricsSettingsId = $isTrackingRoute ? config('services.usercentrics.settings_id') : null)
+        @php($gtmId = $usercentricsSettingsId ? config('services.gtm.container_id') : null)
 
-        @if ($loadGtm)
+        @if ($usercentricsSettingsId)
+            {{-- Google Consent Mode v2: everything denied until Usercentrics reports consent. Must run before the CMP and GTM. --}}
+            <script>
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('consent', 'default', {
+                    ad_storage: 'denied',
+                    ad_user_data: 'denied',
+                    ad_personalization: 'denied',
+                    analytics_storage: 'denied',
+                    functionality_storage: 'denied',
+                    personalization_storage: 'denied',
+                    security_storage: 'granted',
+                    wait_for_update: 500
+                });
+                gtag('set', 'ads_data_redaction', true);
+                gtag('set', 'url_passthrough', true);
+                gtag('set', { cookie_domain: 'auto' });
+            </script>
+            <link rel="preconnect" href="//web.cmp.usercentrics.eu">
+            <link rel="preconnect" href="//api.usercentrics.eu">
+            <script id="usercentrics-cmp" src="https://web.cmp.usercentrics.eu/ui/loader.js" data-settings-id="{{ $usercentricsSettingsId }}" async></script>
+        @endif
+
+        @if ($gtmId)
             <!-- Google Tag Manager -->
             <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
             new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -21,21 +41,7 @@
             <!-- End Google Tag Manager -->
         @endif
 
-        @if ($loadGtag)
-            {{-- Google tag (gtag.js) — Google Ads + GA4 on the booking page --}}
-            <script async src="https://www.googletagmanager.com/gtag/js?id={{ $googleAdsId ?: $googleGa4Id }}"></script>
-            <script>
-                window.dataLayer = window.dataLayer || [];
-                function gtag(){dataLayer.push(arguments);}
-                gtag('js', new Date());
-                @if ($googleAdsId)
-                    gtag('config', @json($googleAdsId));
-                @endif
-                @if ($googleGa4Id)
-                    gtag('config', @json($googleGa4Id));
-                @endif
-            </script>
-        @endif
+        <meta name="viewport" content="width=device-width, initial-scale=1">
 
         {{-- Inline script to detect system dark mode preference and apply it immediately --}}
         <script>
@@ -77,13 +83,6 @@
         @inertiaHead
     </head>
     <body class="font-sans antialiased">
-        @if ($loadGtm)
-            <!-- Google Tag Manager (noscript) -->
-            <noscript><iframe src="https://www.googletagmanager.com/ns.html?id={{ $gtmId }}"
-            height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-            <!-- End Google Tag Manager (noscript) -->
-        @endif
-
         @inertia
     </body>
 </html>

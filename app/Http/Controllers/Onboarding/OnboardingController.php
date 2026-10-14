@@ -8,6 +8,7 @@ use App\Models\DiscountCode;
 use App\Models\Enquiry;
 use App\Models\Instructor;
 use App\Models\Order;
+use App\Support\MarketingAttribution;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -77,15 +78,13 @@ class OnboardingController extends Controller
             $data['prefill'] = $prefill;
         }
 
-        // Google Ads landing URLs carry ?gclid=…; capture it here so it
-        // survives the redirect into the step flow and can be forwarded to
-        // downstream tools (Bird CRM, admin email, GTM) as source "Google ads".
-        $gclid = trim((string) $request->query('gclid', ''));
-        if ($gclid !== '') {
-            $data['tracking'] = [
-                'gclid' => $gclid,
-                'source' => 'Google ads',
-            ];
+        // Ad landing URLs carry gclid/gbraid/wbraid/fbclid and utm_* params.
+        // Store them for downstream tools (Bird CRM, admin email) and keep
+        // them on the step 1 URL so GTM sees them on its first page load.
+        $attribution = MarketingAttribution::fromRequest($request);
+        $tracking = MarketingAttribution::enquiryTracking($attribution);
+        if ($tracking !== null) {
+            $data['tracking'] = $tracking;
         }
 
         if ($request->boolean('staff_booking') && $request->user()?->isOwner()) {
@@ -111,7 +110,7 @@ class OnboardingController extends Controller
             'max_step_reached' => $maxStep,
         ]);
 
-        return redirect()->route('onboarding.step1', ['uuid' => $enquiry->id]);
+        return redirect()->route('onboarding.step1', ['uuid' => $enquiry->id, ...$attribution]);
     }
 
     /**
@@ -147,6 +146,11 @@ class OnboardingController extends Controller
                 'payment_link_sent_to' => $step6['payment_link_sent_to'] ?? null,
                 'hold_deadline' => $step6['hold_deadline'] ?? null,
             ] : null,
+            // Staff bookings are paid by the learner via the emailed payment
+            // link, which pushes the purchase event from its own success page.
+            'purchaseEvent' => $isPaid && ! $enquiry->isStaffBooking()
+                ? MarketingAttribution::purchaseEventOnce($order)
+                : null,
         ]);
     }
 }

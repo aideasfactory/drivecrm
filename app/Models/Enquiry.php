@@ -60,10 +60,10 @@ class Enquiry extends Model
     }
 
     /**
-     * Get marketing tracking data captured at entry (currently only the
-     * Google Ads gclid + source label).
+     * Get marketing tracking data captured at entry: click IDs (gclid,
+     * gbraid, wbraid, fbclid), utm_* params and the "Google ads" source label.
      *
-     * @return array{gclid?: string, source?: string}|null
+     * @return array<string, string>|null
      */
     public function getTracking(): ?array
     {

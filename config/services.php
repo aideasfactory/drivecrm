@@ -81,13 +81,14 @@ return [
         'conversations_api_key' => env('BIRD_CONVERSATIONS_API_KEY', env('BIRD_API_KEY')),
     ],
 
+    // GA4 (G-NBYWT0EZF6), Google Ads (AW-10884289539) and Meta are loaded
+    // only through this container — the same one as just-drive.co.uk.
     'gtm' => [
         'container_id' => env('GTM_CONTAINER_ID', 'GTM-56KMNJR'),
     ],
 
-    'google_tag' => [
-        'ads_id' => env('GOOGLE_ADS_ID', 'AW-10884289539'),
-        'ga4_id' => env('GOOGLE_GA4_ID', 'G-NBYWT0EZF6'),
+    'usercentrics' => [
+        'settings_id' => env('USERCENTRICS_SETTINGS_ID', 'QQGm7qReAQa3CR'),
     ],
 
 ];

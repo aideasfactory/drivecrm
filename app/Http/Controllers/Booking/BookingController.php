@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Booking;
 
 use App\Http\Controllers\Controller;
 use App\Models\Enquiry;
+use App\Support\MarketingAttribution;
 use Illuminate\Http\Request;
 
 class BookingController extends Controller
@@ -19,15 +20,13 @@ class BookingController extends Controller
             'source' => 'booking',
         ];
 
-        // Google Ads landing URLs carry ?gclid=…; capture it here so it
-        // survives the redirect into the step flow and can be forwarded to
-        // downstream tools (Bird CRM, admin email, GTM) as source "Google ads".
-        $gclid = trim((string) $request->query('gclid', ''));
-        if ($gclid !== '') {
-            $data['tracking'] = [
-                'gclid' => $gclid,
-                'source' => 'Google ads',
-            ];
+        // Ad landing URLs carry gclid/gbraid/wbraid/fbclid and utm_* params.
+        // Store them for downstream tools (Bird CRM, admin email) and keep
+        // them on the step 1 URL so GTM sees them on its first page load.
+        $attribution = MarketingAttribution::fromRequest($request);
+        $tracking = MarketingAttribution::enquiryTracking($attribution);
+        if ($tracking !== null) {
+            $data['tracking'] = $tracking;
         }
 
         $enquiry = Enquiry::create([
@@ -36,6 +35,6 @@ class BookingController extends Controller
             'max_step_reached' => 1,
         ]);
 
-        return redirect()->route('booking.step1', ['uuid' => $enquiry->id]);
+        return redirect()->route('booking.step1', ['uuid' => $enquiry->id, ...$attribution]);
     }
 }

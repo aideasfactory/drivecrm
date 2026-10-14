@@ -156,7 +156,8 @@ import { Separator } from '@/components/ui/separator'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 import { CheckCircle, CircleCheck, Mail, Phone, Calendar, Info } from 'lucide-vue-next'
-import { computed } from 'vue'
+import { computed, onMounted, type PropType } from 'vue'
+import { pushPurchaseEvent, type PurchaseEvent } from '@/lib/gtm'
 
 const props = defineProps({
   enquiry: Object,
@@ -167,10 +168,18 @@ const props = defineProps({
   payment: {
     type: [Object, null],
     default: null
+  },
+  purchaseEvent: {
+    type: [Object, null] as PropType<PurchaseEvent | null>,
+    default: null
   }
 })
 
 const isWeekly = computed(() => props.payment?.payment_mode === 'weekly')
+
+onMounted(() => {
+  pushPurchaseEvent(props.purchaseEvent)
+})
 
 function formatPence(pence: number | null | undefined): string {
   return `£${((pence || 0) / 100).toFixed(2)}`

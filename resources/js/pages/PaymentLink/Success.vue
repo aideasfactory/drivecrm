@@ -168,8 +168,9 @@
 <script setup lang="ts">
 import { Card, CardContent } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { CheckCircle, CircleCheck, Info, Clock } from 'lucide-vue-next'
+import { pushPurchaseEvent, type PurchaseEvent } from '@/lib/gtm'
 
 interface OrderSummary {
   id: number
@@ -198,11 +199,17 @@ const props = withDefaults(defineProps<{
   message?: string
   order: OrderSummary | null
   weeklyPaymentDueHours?: number
+  purchaseEvent?: PurchaseEvent | null
 }>(), {
   weeklyPaymentDueHours: 48,
+  purchaseEvent: null,
 })
 
 const isWeekly = computed((): boolean => props.order?.payment_mode === 'weekly')
+
+onMounted(() => {
+  pushPurchaseEvent(props.purchaseEvent)
+})
 
 const formatPrice = (pence: number): string => {
   return new Intl.NumberFormat('en-GB', {
