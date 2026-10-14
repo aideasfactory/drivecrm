@@ -13,7 +13,7 @@ return [
     'school' => [
         'name' => env('SCHOOL_NAME', 'DRIVE Driving School'),
         'location' => env('SCHOOL_LOCATION', 'United Kingdom'),
-        'phone' => env('SCHOOL_PHONE', '0800 368 9125'),
+        'phone' => env('SCHOOL_PHONE', '0800 368 9215'),
         'email' => env('SCHOOL_EMAIL', 'lessons@just-drive.co.uk'),
     ],
 ];

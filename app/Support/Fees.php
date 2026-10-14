@@ -35,7 +35,8 @@ final class Fees
     }
 
     /**
-     * Digital fee charged per lesson, in pounds (e.g., 3.99).
+     * Digital fee charged per lesson, in pounds: the hourly rate times the
+     * fixed lesson length (e.g., £1.80 × 2 hours = 3.60).
      */
     public static function digitalFeePerLesson(): float
     {
@@ -43,7 +44,7 @@ final class Fees
             return 0.0;
         }
 
-        return (float) config('fees.digital_fee_per_lesson', 0);
+        return round((float) config('fees.digital_fee_per_hour', 0) * (float) config('fees.lesson_hours', 2), 2);
     }
 
     /**
