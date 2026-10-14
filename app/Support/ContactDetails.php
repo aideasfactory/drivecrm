@@ -15,7 +15,7 @@ final class ContactDetails
      * Letters (any script), spaces, hyphens and straight or curly apostrophes.
      * iOS inserts a curly apostrophe (’) by default.
      */
-    public const NAME_REGEX = "/^\p{L}[\p{L}\p{M}\s'’\-]*$/u";
+    public const NAME_REGEX = '/^\p{L}[\p{L}\p{M}\s\'’\-]*$/u';
 
     public const UK_MOBILE_REGEX = '/^\+447\d{9}$/';
 
