@@ -72,6 +72,9 @@ Users (1) ──┬── (1) Instructors ──┬── (Many) Packages
                           Instructors (Many)
 
 Students (Many) ──── (0..1) Orders   [students.test_pass_guarantee_order_id]
+
+Users (1) ──── (Many) Orders          [orders.manually_refunded_by_user_id — owner who ticked the booking refunded]
+Users (1) ──── (Many) LessonPayments  [lesson_payments.manually_refunded_by_user_id — owner who ticked the payment refunded]
 ```
 
 ---
@@ -460,6 +463,8 @@ Student enrollments/purchases of lesson packages.
 | `payment_hold_expires_at` | timestamp | NULLABLE | When an unpaid (`pending`) booking is released if its first payment hasn't been made. Set at booking: +10 min (learner via booking form or app; on the booking form this is when they press Pay at step 6, as step 4 only remembers the chosen slot and no longer drafts diary items), UK midnight (bookings team) or 48h before the first lesson (instructor/admin diary). Emailed-link holds are never less than 15 minutes. Not extended by a resend. `null` for legacy/imported orders. Rules in `App\Support\BookingPayments` / `config/booking_payments.php`. |
 | `invoice_sent_at` | timestamp | NULLABLE, INDEX | When the bookings team's payment-link email was first sent for a staff booking. Set once by `OrderService::sendPaymentLink` (staff sends only); resends don't change it. Backfilled from `created_at` for existing staff bookings. |
 | `booked_by_user_id` | bigint unsigned | FOREIGN KEY (users.id), NULLABLE, ON DELETE SET NULL | Bookings-team user who booked this order on the student's behalf ("Book lessons for a student" form). Copied from the enquiry's `data.staff_booking.user_id` by `CreateOrderFromEnquiryAction`. `null` = booked by the learner, app or instructor. `Order::isStaffBooking()`. |
+| `manually_refunded_at` | timestamp | NULLABLE | When an owner ticked the booking as refunded outside the system (directly in Stripe or by bank transfer). `null` = not marked. Cleared when unticked. `Order::wasManuallyRefunded()`. |
+| `manually_refunded_by_user_id` | bigint unsigned | FOREIGN KEY (users.id), NULLABLE, ON DELETE SET NULL | Owner (admin user) who ticked the booking as refunded. Cleared when unticked. Relationship `manuallyRefundedBy`. |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
@@ -473,6 +478,7 @@ Student enrollments/purchases of lesson packages.
 - Belongs to one `Instructor`
 - Belongs to one `Package` (template reference — pricing should be read from snapshot columns)
 - Belongs to one `User` as `bookedBy` (nullable — bookings-team user for staff bookings)
+- Belongs to one `User` as `manuallyRefundedBy` (nullable — owner who ticked the booking as refunded outside the system)
 - Has many `Lessons`
 - Has many `LessonPayments` (through Lessons)
 
@@ -488,6 +494,7 @@ Student enrollments/purchases of lesson packages.
 - **Pass Your Test Guarantee (booking form only):** free when booked hours (lessons × slot length from step 4) ≥ `config('test_pass_guarantee.free_minimum_hours')` (10) and `payment_mode = upfront`. Otherwise the learner can opt in on the payment step (step 6) for `config('test_pass_guarantee.price')` (£50). Upfront: charged as a separate Stripe Checkout line item. Weekly: added in full to the first `lesson_payments` row (see `lesson_payments.test_pass_guarantee_pence`); the rest of the total is spread evenly as usual. Rules live in `App\Support\TestPassGuarantee`.
 - **Imported orders** (`payment_mode = imported`): one per imported student, on a hidden (`active = false`) per-instructor "Imported lessons" package with £0 totals. Lessons on them report `payment_status = paid` / `is_paid = true` so they can be signed off in the app and CRM. `SignOffLessonAction` skips the Stripe onboarding + payment guards and creates **no Payout**; `LessonSignOffService` also skips the student feedback email, next-invoice and resource recommendations. `Order::isImported()`, `Order::isPrepaid()` (confirmed upfront or imported).
 - **Staff bookings:** orders with `booked_by_user_id` set are listed on the admin "Lessons booked" page (`ListStaffBookedLessonsAction`) so unpaid ones can be chased.
+- **Manual refund tick (booking):** owners can tick/untick a booking as refunded outside the system on the "Lessons booked" page (`PATCH /lessons-booked/{order}/refund`, `SetOrderManualRefundAction`). Sets/clears `manually_refunded_at` + `manually_refunded_by_user_id` only — no Stripe refund, the order `status` and its `lesson_payments` are untouched. Works for released (`expired`) bookings that have no payment rows left. Not allowed on `imported` orders. Every tick/untick is written to the student's `activity_logs` (category `payment`, metadata `action` = `manual_refund_marked` / `manual_refund_unmarked`, `admin_user_id`, previous marker) — that log is the audit trail.
 - **Price snapshot:** `package_name`, `package_total_price_pence`, `package_lesson_price_pence`, and `package_lessons_count` are copied from the package at order creation time. Always use these snapshot columns for pricing/display — never read live from `packages` table via the `package` relationship for pricing data.
 
 ---
@@ -562,6 +569,8 @@ Tracks payment status for individual lessons (used in weekly payment mode).
 | `paid_at` | datetime | NULLABLE | When payment was received |
 | `stripe_invoice_id` | varchar(255) | NULLABLE | Stripe Invoice ID |
 | `stripe_charge_id` | varchar(255) | NULLABLE | Stripe Charge ID that funded this weekly lesson payment (the Invoice's `charge`, falling back to its payment intent's `latest_charge`). Persisted at payment time (`invoice.paid` webhook) so the lesson's payout Transfer can cite it as `source_transaction`, letting Stripe draw against that specific charge instead of the general available balance. 1:1 — one invoice charge funds one lesson payout. Nullable for legacy payments created before this column existed. |
+| `manually_refunded_at` | timestamp | NULLABLE | When an owner ticked this payment as refunded outside the system (directly in Stripe or by bank transfer). `null` = not marked. Cleared when unticked. `LessonPayment::wasManuallyRefunded()`. |
+| `manually_refunded_by_user_id` | bigint unsigned | FOREIGN KEY (users.id), NULLABLE, ON DELETE SET NULL | Owner (admin user) who ticked the payment as refunded. Cleared when unticked. Relationship `manuallyRefundedBy`. |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
@@ -570,6 +579,7 @@ Tracks payment status for individual lessons (used in weekly payment mode).
 
 **Relationships:**
 - Belongs to one `Lesson`
+- Belongs to one `User` as `manuallyRefundedBy` (nullable — owner who ticked the payment as refunded outside the system)
 
 **Enums:**
 - Status: `due`, `paid`, `refunded`
@@ -578,6 +588,7 @@ Tracks payment status for individual lessons (used in weekly payment mode).
 - Created for each lesson in weekly payment mode
 - Weekly payments are charged via Stripe Subscriptions/Invoices
 - Payment must be completed before lesson can be marked as completed
+- **Manual refund tick (payment):** owners can tick a `paid` payment as refunded outside the system from the student's Payments tab or the Cancelled Lessons report (`PATCH /students/{student}/payments/{lessonPayment}/refund`, `SetLessonPaymentManualRefundAction`). Ticking sets `status = refunded` + `manually_refunded_at` / `manually_refunded_by_user_id`; unticking (only for payments ticked this way) sets `status` back to `paid` and clears both (`paid_at` is kept). No Stripe refund is made. A refunded payment blocks sign-off like any non-paid payment. Every tick/untick is written to the student's `activity_logs` (category `payment`, metadata `action` = `manual_refund_marked` / `manual_refund_unmarked`, `admin_user_id`, previous marker) — that log is the audit trail.
 
 ---
 
