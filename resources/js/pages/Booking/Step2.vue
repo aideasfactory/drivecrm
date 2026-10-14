@@ -92,7 +92,7 @@
             <ShieldCheck class="h-5 w-5" />
           </div>
           <div>
-            <p class="font-semibold">Pass Your Test Guarantee included</p>
+            <p class="font-semibold"><TestPassGuaranteeInfo>Pass Your Test Guarantee included</TestPassGuaranteeInfo></p>
             <p class="text-sm text-muted-foreground">
               Book 10 hours or more and if you don't pass first time, DRIVE pays for your second test.
               No forms, no fuss — just book and drive.
@@ -230,6 +230,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Toaster, toast } from '@/components/ui/toast'
 import AppLogoIcon from '@/components/AppLogoIcon.vue'
+import TestPassGuaranteeInfo from '@/components/Shared/TestPassGuaranteeInfo.vue'
 import { pushDataLayerEvent } from '@/lib/gtm'
 import { step1 } from '@/routes/booking'
 import { useSchoolContact } from '@/composables/useSchoolContact'
