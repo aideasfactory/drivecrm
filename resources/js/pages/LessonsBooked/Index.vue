@@ -14,7 +14,9 @@ import {
 } from '@/components/ui/table'
 import { ChevronLeft, ChevronRight, Mail, Phone } from 'lucide-vue-next'
 import { show as instructorsShow } from '@/routes/instructors'
-import { index } from '@/routes/lessons-booked'
+import { index, refund } from '@/routes/lessons-booked'
+import ManualRefundToggle from '@/components/Shared/ManualRefundToggle.vue'
+import { useRole } from '@/composables/useRole'
 
 type PaymentState = 'unpaid' | 'paid' | 'expired' | 'cancelled'
 
@@ -32,6 +34,9 @@ interface BookedLesson {
     instructor_id: number | null
     package: string
     payment_state: PaymentState
+    can_mark_refunded: boolean
+    manually_refunded_at: string | null
+    manually_refunded_by_name: string | null
 }
 
 interface PaginationLink {
@@ -118,6 +123,12 @@ const studentHref = (row: BookedLesson) => {
     })
 }
 
+const { isOwner } = useRole()
+
+const reloadBookings = () => {
+    router.reload({ only: ['bookings'] })
+}
+
 const breadcrumbs = [{ title: 'Lessons booked' }]
 </script>
 
@@ -170,6 +181,7 @@ const breadcrumbs = [{ title: 'Lessons booked' }]
                                 <TableHead>Instructor</TableHead>
                                 <TableHead>Package (hours)</TableHead>
                                 <TableHead>Payment</TableHead>
+                                <TableHead>Refunded outside system</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -233,9 +245,20 @@ const breadcrumbs = [{ title: 'Lessons booked' }]
                                         {{ paymentBadges[row.payment_state].label }}
                                     </Badge>
                                 </TableCell>
+                                <TableCell>
+                                    <ManualRefundToggle
+                                        :id="`booking-refund-${row.id}`"
+                                        :url="refund.url({ order: row.id })"
+                                        :refunded-at="row.manually_refunded_at"
+                                        :refunded-by-name="row.manually_refunded_by_name"
+                                        :subject="`booking #${row.id} for ${row.student_name}`"
+                                        :can-edit="isOwner && row.can_mark_refunded"
+                                        @updated="reloadBookings"
+                                    />
+                                </TableCell>
                             </TableRow>
                             <TableRow v-if="bookings.data.length === 0">
-                                <TableCell colspan="9" class="py-8 text-center text-muted-foreground">
+                                <TableCell colspan="10" class="py-8 text-center text-muted-foreground">
                                     No lessons booked match this filter.
                                 </TableCell>
                             </TableRow>

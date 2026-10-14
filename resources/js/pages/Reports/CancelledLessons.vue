@@ -10,6 +10,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CalendarX, Download, CheckCircle2, X } from 'lucide-vue-next';
 import { index as reportsIndex, cancelledLessons } from '@/routes/reports';
+import { updatePaymentRefund } from '@/actions/App/Http/Controllers/PupilController';
+import ManualRefundToggle from '@/components/Shared/ManualRefundToggle.vue';
+import { useRole } from '@/composables/useRole';
 
 interface CancelledLessonRow {
     lesson_id: number;
@@ -24,6 +27,12 @@ interface CancelledLessonRow {
     amount: string;
     amount_pence: number;
     payment_status: string | null;
+    lesson_payment_id: number | null;
+    manually_refunded_at: string | null;
+    manually_refunded_by_name: string | null;
+    order_id: number;
+    booking_manually_refunded_at: string | null;
+    booking_manually_refunded_by_name: string | null;
     cancellation_reason: string | null;
     cancelled_at: string | null;
 }
@@ -86,6 +95,18 @@ const formatDateTime = (date: string | null): string =>
     date
         ? new Date(date).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
         : '—';
+
+const { isOwner } = useRole();
+
+const canToggleRefund = (row: CancelledLessonRow): boolean =>
+    isOwner.value &&
+    row.student_id !== null &&
+    row.lesson_payment_id !== null &&
+    (row.payment_status === 'paid' || (row.payment_status === 'refunded' && row.manually_refunded_at !== null));
+
+const reloadReport = () => {
+    router.reload({ only: ['report'] });
+};
 
 const paymentBadgeVariant = (status: string | null): 'default' | 'secondary' | 'destructive' | 'outline' => {
     if (status === 'paid') return 'destructive';
@@ -165,6 +186,7 @@ const paymentLabel = (status: string | null): string => {
                                 <TableHead>Lesson</TableHead>
                                 <TableHead class="text-right">Amount</TableHead>
                                 <TableHead>Payment</TableHead>
+                                <TableHead>Refunded outside system</TableHead>
                                 <TableHead>Reason</TableHead>
                                 <TableHead>Cancelled</TableHead>
                             </TableRow>
@@ -193,6 +215,23 @@ const paymentLabel = (status: string | null): string => {
                                     <Badge :variant="paymentBadgeVariant(row.payment_status)">
                                         {{ paymentLabel(row.payment_status) }}
                                     </Badge>
+                                    <p v-if="row.booking_manually_refunded_at" class="mt-1 text-xs text-muted-foreground">
+                                        Booking #{{ row.order_id }} refunded by {{ row.booking_manually_refunded_by_name ?? 'a removed user' }},
+                                        {{ formatDateTime(row.booking_manually_refunded_at) }}
+                                    </p>
+                                </TableCell>
+                                <TableCell>
+                                    <ManualRefundToggle
+                                        v-if="row.student_id !== null && row.lesson_payment_id !== null"
+                                        :id="`cancelled-lesson-refund-${row.lesson_id}`"
+                                        :url="updatePaymentRefund.url({ student: row.student_id, lessonPayment: row.lesson_payment_id })"
+                                        :refunded-at="row.manually_refunded_at"
+                                        :refunded-by-name="row.manually_refunded_by_name"
+                                        :subject="`the ${row.amount} payment for ${row.learner_name}'s lesson on ${formatDate(row.lesson_date)}`"
+                                        :can-edit="canToggleRefund(row)"
+                                        @updated="reloadReport"
+                                    />
+                                    <span v-else class="text-muted-foreground">—</span>
                                 </TableCell>
                                 <TableCell class="max-w-xs">
                                     <span class="line-clamp-2 text-sm">{{ row.cancellation_reason ?? '—' }}</span>

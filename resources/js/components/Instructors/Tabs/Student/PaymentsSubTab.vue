@@ -31,6 +31,8 @@ import {
 import { toast } from '@/components/ui/sonner'
 import { useRole } from '@/composables/useRole'
 import MarkPayoutPaidSheet, { type PayoutToMark } from '@/components/Instructors/MarkPayoutPaidSheet.vue'
+import ManualRefundToggle from '@/components/Shared/ManualRefundToggle.vue'
+import { updatePaymentRefund } from '@/actions/App/Http/Controllers/PupilController'
 
 interface Payment {
     id: number
@@ -52,6 +54,12 @@ interface Payment {
     payout_paid_manually: boolean
     payout_manual_payment_reference: string | null
     payout_failure_message: string | null
+    manually_refunded: boolean
+    manually_refunded_at: string | null
+    manually_refunded_by_name: string | null
+    order_id: number | null
+    booking_manually_refunded_at: string | null
+    booking_manually_refunded_by_name: string | null
 }
 
 interface Props {
@@ -140,6 +148,12 @@ const loadPayments = async () => {
         loading.value = false
     }
 }
+
+const canToggleRefund = (payment: Payment): boolean =>
+    isOwner.value && (payment.status === 'paid' || (payment.status === 'refunded' && payment.manually_refunded))
+
+const refundSubject = (payment: Payment): string =>
+    `the ${formatCurrency(payment.amount_pence)} payment for the lesson on ${formatDate(payment.lesson_date)}`
 
 const markSheetOpen = ref(false)
 const payoutToMark = ref<PayoutToMark | null>(null)
@@ -281,6 +295,7 @@ onMounted(() => {
                             <TableHead>Due Date</TableHead>
                             <TableHead>Paid At</TableHead>
                             <TableHead class="text-center">Transferred</TableHead>
+                            <TableHead>Refunded outside system</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -293,6 +308,14 @@ onMounted(() => {
                             </TableCell>
                             <TableCell>
                                 {{ payment.package_name }}
+                                <span
+                                    v-if="payment.booking_manually_refunded_at"
+                                    class="block text-xs text-muted-foreground"
+                                >
+                                    Booking #{{ payment.order_id }} marked refunded by
+                                    {{ payment.booking_manually_refunded_by_name ?? 'a removed user' }},
+                                    {{ formatDateTime(payment.booking_manually_refunded_at) }}
+                                </span>
                             </TableCell>
                             <TableCell>
                                 <Badge variant="secondary" class="gap-1">
@@ -345,6 +368,17 @@ onMounted(() => {
                                     </Tooltip>
                                 </TooltipProvider>
                                 <span v-else class="text-muted-foreground">—</span>
+                            </TableCell>
+                            <TableCell>
+                                <ManualRefundToggle
+                                    :id="`payment-refund-${payment.id}`"
+                                    :url="updatePaymentRefund.url({ student: props.studentId, lessonPayment: payment.id })"
+                                    :refunded-at="payment.manually_refunded_at"
+                                    :refunded-by-name="payment.manually_refunded_by_name"
+                                    :subject="refundSubject(payment)"
+                                    :can-edit="canToggleRefund(payment)"
+                                    @updated="loadPayments"
+                                />
                             </TableCell>
                         </TableRow>
                     </TableBody>

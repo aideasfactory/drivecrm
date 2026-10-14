@@ -62,6 +62,10 @@ interface Lesson {
     lesson_payment_id: number | null
     payment_status: 'due' | 'paid' | 'refunded' | null
     has_stripe_invoice: boolean
+    payment_manually_refunded_at: string | null
+    payment_manually_refunded_by_name: string | null
+    booking_manually_refunded_at: string | null
+    booking_manually_refunded_by_name: string | null
     payment_mode: 'upfront' | 'weekly' | 'imported'
     payout_status: 'pending' | 'paid' | 'failed' | null
     has_payout: boolean
@@ -164,6 +168,9 @@ const statusIcon = (status: string) => {
             return Clock
     }
 }
+
+const formatRefundDate = (dateTime: string): string =>
+    new Date(dateTime).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 
 const paymentBadgeVariant = (status: string | null): 'default' | 'secondary' | 'destructive' | 'outline' => {
     switch (status) {
@@ -407,6 +414,14 @@ onMounted(() => {
                                         Resend
                                     </Button>
                                 </div>
+                                <p v-if="lesson.payment_manually_refunded_at" class="mt-1 text-xs text-muted-foreground">
+                                    Refunded by {{ lesson.payment_manually_refunded_by_name ?? 'a removed user' }},
+                                    {{ formatRefundDate(lesson.payment_manually_refunded_at) }}
+                                </p>
+                                <p v-else-if="lesson.booking_manually_refunded_at" class="mt-1 text-xs text-muted-foreground">
+                                    Booking refunded by {{ lesson.booking_manually_refunded_by_name ?? 'a removed user' }},
+                                    {{ formatRefundDate(lesson.booking_manually_refunded_at) }}
+                                </p>
                             </TableCell>
                             <TableCell class="text-right">
                                 <Button
