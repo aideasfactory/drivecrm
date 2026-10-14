@@ -92,7 +92,7 @@
             </CardHeader>
 
             <CardContent>
-              <form @submit.prevent="submit" class="space-y-6">
+              <form novalidate @submit.prevent="submit" class="space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div class="space-y-2">
                     <Label for="first_name">
@@ -103,12 +103,16 @@
                       v-model="form.first_name"
                       type="text"
                       placeholder="Enter your first name"
-                      required
-                      :class="{ 'border-destructive': form.errors.first_name }"
+                      autocomplete="given-name"
+                      autocapitalize="words"
+                      maxlength="100"
+                      :aria-invalid="form.errors.first_name ? 'true' : undefined"
+                      :aria-describedby="form.errors.first_name ? 'first_name-error' : undefined"
+                      @blur="onFieldBlur('first_name')"
                     />
-                    <p v-if="form.errors.first_name" class="text-sm text-destructive flex items-center">
-                      <AlertCircle class="mr-1 h-4 w-4" />
-                      {{ form.errors.first_name }}
+                    <p v-if="form.errors.first_name" id="first_name-error" class="text-sm text-destructive flex items-start">
+                      <AlertCircle class="mr-1 mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{{ form.errors.first_name }}</span>
                     </p>
                   </div>
 
@@ -121,12 +125,16 @@
                       v-model="form.last_name"
                       type="text"
                       placeholder="Enter your last name"
-                      required
-                      :class="{ 'border-destructive': form.errors.last_name }"
+                      autocomplete="family-name"
+                      autocapitalize="words"
+                      maxlength="100"
+                      :aria-invalid="form.errors.last_name ? 'true' : undefined"
+                      :aria-describedby="form.errors.last_name ? 'last_name-error' : undefined"
+                      @blur="onFieldBlur('last_name')"
                     />
-                    <p v-if="form.errors.last_name" class="text-sm text-destructive flex items-center">
-                      <AlertCircle class="mr-1 h-4 w-4" />
-                      {{ form.errors.last_name }}
+                    <p v-if="form.errors.last_name" id="last_name-error" class="text-sm text-destructive flex items-start">
+                      <AlertCircle class="mr-1 mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{{ form.errors.last_name }}</span>
                     </p>
                   </div>
                 </div>
@@ -140,16 +148,18 @@
                     v-model="form.email"
                     type="email"
                     placeholder="your.email@example.com"
-                    required
-                    :class="{ 'border-destructive': form.errors.email }"
+                    inputmode="email"
+                    autocomplete="email"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    maxlength="255"
+                        :aria-invalid="form.errors.email ? 'true' : undefined"
+                        :aria-describedby="form.errors.email ? 'email-error' : undefined"
+                        @blur="onFieldBlur('email')"
                   />
-                  <p v-if="form.errors.email" class="text-sm text-destructive flex items-center">
-                    <AlertCircle class="mr-1 h-4 w-4" />
-                    {{ form.errors.email }}
-                  </p>
-                  <p v-if="form.email && !validateEmail(form.email)" class="text-sm text-orange-600 flex items-center">
-                    <AlertTriangle class="mr-1 h-4 w-4" />
-                    Please enter a valid email address
+                  <p v-if="form.errors.email" id="email-error" class="text-sm text-destructive flex items-start">
+                    <AlertCircle class="mr-1 mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{{ form.errors.email }}</span>
                   </p>
                 </div>
 
@@ -173,22 +183,21 @@
                       v-model="form.phone"
                       type="tel"
                       class="flex-1"
-                      placeholder="7710 896753"
-                      required
-                      :class="{ 'border-destructive': form.errors.phone }"
+                      placeholder="07710 896753"
+                      inputmode="tel"
+                      autocomplete="tel-national"
+                      :aria-invalid="form.errors.phone ? 'true' : undefined"
+                      :aria-describedby="form.errors.phone ? 'phone-error' : undefined"
+                      @blur="onFieldBlur('phone')"
                     />
                   </div>
-                  <p v-if="form.errors.phone" class="text-sm text-destructive flex items-center">
-                    <AlertCircle class="mr-1 h-4 w-4" />
-                    {{ form.errors.phone }}
+                  <p v-if="form.errors.phone" id="phone-error" class="text-sm text-destructive flex items-start">
+                    <AlertCircle class="mr-1 mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{{ form.errors.phone }}</span>
                   </p>
                   <p class="text-sm text-muted-foreground flex items-center">
                     <Info class="mr-1 h-4 w-4" />
                     We'll use this for lesson confirmations and updates
-                  </p>
-                  <p v-if="form.phone && !validatePhone(form.phone)" class="text-sm text-orange-600 flex items-center">
-                    <AlertTriangle class="mr-1 h-4 w-4" />
-                    {{ countryCode === '+44' ? 'Enter your mobile number without the leading 0, e.g. 7710 896753' : 'Enter your number without the country code or leading 0' }}
                   </p>
                 </div>
 
@@ -203,20 +212,19 @@
                     class="uppercase"
                     placeholder="e.g. SW1A 1AA"
                     maxlength="8"
-                    required
-                    :class="{ 'border-destructive': form.errors.postcode }"
+                    autocomplete="postal-code"
+                    autocapitalize="characters"
+                        :aria-invalid="form.errors.postcode ? 'true' : undefined"
+                        :aria-describedby="form.errors.postcode ? 'postcode-error' : undefined"
+                        @blur="onFieldBlur('postcode')"
                   />
-                  <p v-if="form.errors.postcode" class="text-sm text-destructive flex items-center">
-                    <AlertCircle class="mr-1 h-4 w-4" />
-                    {{ form.errors.postcode }}
+                  <p v-if="form.errors.postcode" id="postcode-error" class="text-sm text-destructive flex items-start">
+                    <AlertCircle class="mr-1 mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{{ form.errors.postcode }}</span>
                   </p>
                   <p class="text-sm text-muted-foreground flex items-center">
                     <MapPin class="mr-1 h-4 w-4" />
                     Enter your postcode for lesson pickup location
-                  </p>
-                  <p v-if="form.postcode && !validatePostcode(form.postcode)" class="text-sm text-orange-600 flex items-center">
-                    <AlertTriangle class="mr-1 h-4 w-4" />
-                    Please enter a valid postcode
                   </p>
                 </div>
 
@@ -227,16 +235,17 @@
                   <select
                     id="transmission"
                     v-model="form.transmission"
-                    required
+                    :aria-invalid="form.errors.transmission ? 'true' : undefined"
+                    :aria-describedby="form.errors.transmission ? 'transmission-error' : undefined"
                     class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     :class="{ 'border-destructive': form.errors.transmission }"
                   >
                     <option value="manual">Manual</option>
                     <option value="automatic">Automatic</option>
                   </select>
-                  <p v-if="form.errors.transmission" class="text-sm text-destructive flex items-center">
-                    <AlertCircle class="mr-1 h-4 w-4" />
-                    {{ form.errors.transmission }}
+                  <p v-if="form.errors.transmission" id="transmission-error" class="text-sm text-destructive flex items-start">
+                    <AlertCircle class="mr-1 mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{{ form.errors.transmission }}</span>
                   </p>
                 </div>
 
@@ -248,7 +257,8 @@
                       type="checkbox"
                       id="privacy_consent"
                       v-model="privacyConsent"
-                      required
+                      :aria-invalid="form.errors.privacy_consent ? 'true' : undefined"
+                      :aria-describedby="form.errors.privacy_consent ? 'privacy_consent-error' : undefined"
                       class="h-4 w-4 mt-1 rounded border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
                     />
                     <Label for="privacy_consent" class="block text-sm leading-relaxed cursor-pointer">
@@ -259,9 +269,9 @@
                       <a href="https://just-drive.co.uk/cookies-policy/" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Cookie Policy</a>
                     </Label>
                   </div>
-                  <p v-if="form.errors.privacy_consent" class="text-sm text-destructive flex items-center ml-7">
-                    <AlertCircle class="mr-1 h-4 w-4" />
-                    {{ form.errors.privacy_consent }}
+                  <p v-if="form.errors.privacy_consent" id="privacy_consent-error" class="text-sm text-destructive flex items-start ml-7">
+                    <AlertCircle class="mr-1 mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{{ form.errors.privacy_consent }}</span>
                   </p>
 
                 </div>
@@ -284,7 +294,7 @@
                 <div class="flex items-center space-x-4 ml-auto">
                   <Button
                     @click="submit"
-                    :disabled="!isFormValid || form.processing"
+                    :disabled="form.processing"
                     class="cursor-pointer"
                   >
                     Check my area
@@ -305,7 +315,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { usePage, useForm } from '@inertiajs/vue3'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -327,9 +337,17 @@ import {
   CircleCheck,
   AlertCircle,
   Info,
-  AlertTriangle,
   ArrowRight
 } from 'lucide-vue-next'
+import {
+  focusFirstError,
+  toE164Phone,
+  validateBookerPhone,
+  validateEmail,
+  validateName,
+  validatePostcode,
+  type FieldError,
+} from '@/lib/contactValidation'
 
 const page = usePage()
 const { contact, phoneHref, emailHref } = useSchoolContact()
@@ -401,52 +419,94 @@ watch(privacyConsent, (newValue) => {
   form.privacy_consent = newValue
 })
 
-const isFormValid = computed(() => {
-  const hasRequiredFields = form.first_name.trim() &&
-                           form.last_name.trim() &&
-                           form.email.trim() &&
-                           form.phone.trim() &&
-                           form.postcode.trim() &&
-                           form.transmission &&
-                           privacyConsent.value
-
-  if (!hasRequiredFields) return false
-
-  return validateEmail(form.email) &&
-         validatePhone(form.phone) &&
-         validatePostcode(form.postcode)
-})
-
-function validateEmail(email: string) {
-  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  return re.test(email)
+const fieldIds = {
+  first_name: 'first_name',
+  last_name: 'last_name',
+  email: 'email',
+  phone: 'phone',
+  postcode: 'postcode',
+  transmission: 'transmission',
+  privacy_consent: 'privacy_consent',
 }
 
-// National number as bare digits, forgiving a typed leading 0 (e.g. "07710 896753" → "7710896753").
-function nationalDigits(phone: string) {
-  const digits = phone.replace(/\D/g, '')
-  return digits.startsWith('0') ? digits.slice(1) : digits
+type BookerField = keyof typeof fieldIds
+
+const bookerFields = Object.keys(fieldIds) as BookerField[]
+
+const touchedFields = ref<Partial<Record<BookerField, boolean>>>({})
+
+function fieldError(field: BookerField): FieldError {
+  switch (field) {
+    case 'first_name':
+      return validateName(form.first_name, 'Please enter your first name', 'First name')
+    case 'last_name':
+      return validateName(form.last_name, 'Please enter your last name', 'Last name')
+    case 'email':
+      return validateEmail(form.email, 'Please enter your email address')
+    case 'phone':
+      return validateBookerPhone(form.phone, countryCode.value)
+    case 'postcode':
+      return validatePostcode(form.postcode)
+    case 'transmission':
+      return form.transmission ? null : 'Please choose a transmission preference'
+    case 'privacy_consent':
+      return privacyConsent.value ? null : 'You must agree to the Terms of Service and Privacy Policy to continue'
+    default:
+      return null
+  }
 }
 
-function validatePhone(phone: string) {
-  const digits = nationalDigits(phone)
-  if (!digits) return false
+function validateField(field: BookerField): FieldError {
+  const message = fieldError(field)
 
-  if (countryCode.value === '+44') {
-    return /^7\d{9}$/.test(digits)
+  if (message) {
+    form.setError(field, message)
+  } else {
+    form.clearErrors(field)
   }
 
-  const totalLength = countryCode.value.replace(/\D/g, '').length + digits.length
-  return totalLength >= 8 && totalLength <= 15
+  return message
 }
 
-function validatePostcode(postcode: string) {
-  const re = /^[A-Z]{1,2}[0-9]{1,2}[A-Z]?\s?[0-9][A-Z]{2}$/i
-  return re.test(postcode.trim())
+function onFieldBlur(field: BookerField) {
+  touchedFields.value[field] = true
+  validateField(field)
 }
+
+// Once a field has been left (or the form submitted), re-check it as the user corrects it.
+for (const field of bookerFields) {
+  watch(
+    () => (field === 'privacy_consent' ? privacyConsent.value : form[field]),
+    () => {
+      if (touchedFields.value[field] || field === 'privacy_consent') {
+        validateField(field)
+      }
+    },
+  )
+}
+
+watch(countryCode, () => {
+  if (touchedFields.value.phone) {
+    validateField('phone')
+  }
+})
 
 function submit() {
-  if (!isFormValid.value) return
+  const errors: Partial<Record<BookerField, string>> = {}
+
+  for (const field of bookerFields) {
+    touchedFields.value[field] = true
+    const message = validateField(field)
+
+    if (message) {
+      errors[field] = message
+    }
+  }
+
+  if (Object.keys(errors).length > 0) {
+    focusFirstError(fieldIds, errors)
+    return
+  }
 
   const enquiry = page.props.enquiry as any
   if (!enquiry?.id) {
@@ -457,10 +517,11 @@ function submit() {
   form
     .transform((data) => ({
       ...data,
-      phone: countryCode.value + nationalDigits(data.phone),
+      phone: toE164Phone(data.phone, countryCode.value),
     }))
     .post(`/booking/${enquiry.id}/step/1`, {
       preserveScroll: 'errors',
+      onError: (serverErrors) => focusFirstError(fieldIds, serverErrors),
     })
 }
 </script>
