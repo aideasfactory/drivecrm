@@ -23,6 +23,7 @@ use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use App\Enums\PaymentStatus;
+use App\Jobs\SyncOnboardingBookingToBirdJob;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
 use App\Models\LessonPayment;
@@ -661,6 +662,8 @@ class OrderService extends BaseService
 
         $this->logBookingConfirmed($order);
         $this->invalidateStudentCacheForBooking($order->instructor_id);
+
+        SyncOnboardingBookingToBirdJob::dispatch($order)->afterCommit();
     }
 
     /**

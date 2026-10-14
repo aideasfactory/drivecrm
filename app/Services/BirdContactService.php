@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Enums\OrderStatus;
+use App\Enums\PaymentMode;
 use App\Models\Enquiry;
+use App\Models\Order;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 /**
- * Upserts a Bird CRM contact from a booking enquiry via the Bird Contacts API.
+ * Upserts a Bird CRM contact from a booking or onboarding enquiry via the Bird
+ * Contacts API.
  *
  * Uses the "Create or Update Contact by Identifier" endpoint (PATCH), so the
  * same enquiry email submitted twice updates the existing contact rather than
@@ -22,6 +26,8 @@ use RuntimeException;
 class BirdContactService extends BaseService
 {
     private const BASE_URL = 'https://api.bird.com';
+
+    public function __construct(protected OrderService $orderService) {}
 
     /**
      * Upsert a Bird contact from the data captured during a booking enquiry.
@@ -59,6 +65,62 @@ class BirdContactService extends BaseService
 
         $payload = $this->buildPayload($step1, $step2, $enquiry->getTracking() ?? []);
 
+        return $this->upsertByEmail($email, $payload, $enquiry->id, $apiKey, $workspaceId);
+    }
+
+    /**
+     * Upsert the Bird contact for a learner signing up through the onboarding
+     * flow, including where their booking and payment stand.
+     *
+     * Called once the order exists (still unpaid) and again when its first
+     * payment confirms, so "paid" and "paymentType" stay accurate and unpaid
+     * learners can be sent back to "bookingUrl" to finish paying.
+     *
+     * @return array<string, mixed> Parsed Bird response body
+     */
+    public function syncOnboardingBooking(Enquiry $enquiry, Order $order): array
+    {
+        if (! config('services.bird.enabled')) {
+            Log::info('Bird onboarding sync skipped (BIRD_ENABLED=false)', [
+                'enquiry_id' => $enquiry->id,
+                'order_id' => $order->id,
+            ]);
+
+            return [];
+        }
+
+        $apiKey = (string) config('services.bird.api_key', '');
+        $workspaceId = (string) config('services.bird.workspace_id', '');
+
+        if ($apiKey === '' || $workspaceId === '') {
+            throw new RuntimeException('Bird API credentials are not configured (BIRD_API_KEY, BIRD_WORKSPACE_ID).');
+        }
+
+        $step1 = $enquiry->getStepData(1) ?? [];
+        $email = $this->stringOrNull($step1['email'] ?? null);
+
+        if ($email === null) {
+            throw new RuntimeException(sprintf(
+                'Cannot sync enquiry %s to Bird: email is missing from step 1.',
+                $enquiry->id,
+            ));
+        }
+
+        $payload = $this->buildPayload($step1, [], $enquiry->getTracking() ?? []);
+        $payload['attributes'] = array_merge(
+            $payload['attributes'] ?? [],
+            $this->buildBookingAttributes($enquiry, $order),
+        );
+
+        return $this->upsertByEmail($email, $payload, $enquiry->id, $apiKey, $workspaceId);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function upsertByEmail(string $email, array $payload, string $enquiryId, string $apiKey, string $workspaceId): array
+    {
         $url = sprintf(
             '%s/workspaces/%s/contacts/identifiers/emailaddress/%s',
             self::BASE_URL,
@@ -67,7 +129,7 @@ class BirdContactService extends BaseService
         );
 
         Log::info('Bird upsert request', [
-            'enquiry_id' => $enquiry->id,
+            'enquiry_id' => $enquiryId,
             'url' => $url,
             'payload' => $payload,
         ]);
@@ -77,14 +139,109 @@ class BirdContactService extends BaseService
             ->patch($url, $payload);
 
         Log::info('Bird upsert response', [
-            'enquiry_id' => $enquiry->id,
+            'enquiry_id' => $enquiryId,
             'status' => $response->status(),
             'body' => $response->json() ?? $response->body(),
         ]);
 
-        $this->assertSuccessful($response, $enquiry->id);
+        $this->assertSuccessful($response, $enquiryId);
 
         return $response->json() ?? [];
+    }
+
+    /**
+     * Booking and payment attributes for an onboarding order.
+     *
+     * These keys follow this workspace's camelCase attribute convention and
+     * must exist as contact attributes in Bird, which rejects unknown keys:
+     * paid (text "Yes"/"No"), paymentType (text "upfront"/"weekly"/"other"),
+     * bookingValue (number, pounds), alternativeBookingInfo (text),
+     * instructor (text), dateOfFirstLesson (text, YYYY-MM-DD) and
+     * bookingUrl (text).
+     *
+     * @return array<string, mixed>
+     */
+    private function buildBookingAttributes(Enquiry $enquiry, Order $order): array
+    {
+        $order->loadMissing('instructor.user');
+
+        $isPaid = $order->isActive() || $order->status === OrderStatus::COMPLETED;
+        $totalPence = $order->total_price_pence ?? $order->package_total_price_pence;
+
+        return array_filter([
+            'paid' => $isPaid ? 'Yes' : 'No',
+            'paymentType' => match ($order->payment_mode) {
+                PaymentMode::UPFRONT => 'upfront',
+                PaymentMode::WEEKLY => 'weekly',
+                default => 'other',
+            },
+            'bookingValue' => $totalPence !== null ? round($totalPence / 100, 2) : null,
+            'alternativeBookingInfo' => $this->resolveAlternativeBookingInfo($enquiry),
+            'instructor' => $this->stringOrNull($order->instructor?->user?->name),
+            'dateOfFirstLesson' => $this->resolveDateOfFirstLesson($enquiry, $order),
+            'bookingUrl' => $this->resolveBookingUrl($enquiry, $order),
+        ], fn ($value) => $value !== null);
+    }
+
+    /**
+     * Who the booking is really for, when that isn't the step 1 contact: the
+     * learner's details when booking on someone else's behalf, and the staff
+     * member when the bookings team made the booking.
+     */
+    private function resolveAlternativeBookingInfo(Enquiry $enquiry): ?string
+    {
+        $step5 = $enquiry->getStepData(5) ?? [];
+        $parts = [];
+
+        if ($step5['booking_for_someone_else'] ?? false) {
+            $learnerName = trim(($step5['learner_first_name'] ?? '').' '.($step5['learner_last_name'] ?? ''));
+            $learnerDob = $this->stringOrNull($step5['learner_dob'] ?? null);
+            $learnerDetails = array_filter([
+                $this->stringOrNull($step5['learner_email'] ?? null),
+                $this->stringOrNull($step5['learner_phone'] ?? null),
+                $learnerDob !== null ? 'DOB '.$learnerDob : null,
+            ]);
+
+            $parts[] = 'Booking for someone else: '.($learnerName !== '' ? $learnerName : 'learner')
+                .($learnerDetails !== [] ? ' ('.implode(', ', $learnerDetails).')' : '');
+        }
+
+        $staffBooking = $enquiry->getStaffBooking();
+
+        if ($staffBooking !== null) {
+            $parts[] = 'Booked by staff: '.($staffBooking['name'] ?? 'bookings team');
+        }
+
+        return $parts !== [] ? implode('; ', $parts) : null;
+    }
+
+    private function resolveDateOfFirstLesson(Enquiry $enquiry, Order $order): ?string
+    {
+        $firstLesson = $order->lessons()
+            ->orderBy('date')
+            ->orderBy('start_time')
+            ->first();
+
+        if ($firstLesson?->date !== null) {
+            return $firstLesson->date->toDateString();
+        }
+
+        return $this->stringOrNull($enquiry->getStepData(4)['date'] ?? null);
+    }
+
+    /**
+     * Where an unpaid learner goes to finish paying. Learners return to the
+     * onboarding payment step, which outlives the short checkout hold and
+     * re-opens Stripe Checkout. Staff bookings use the emailed payment link,
+     * as the onboarding steps belong to the staff member's session.
+     */
+    private function resolveBookingUrl(Enquiry $enquiry, Order $order): string
+    {
+        if ($enquiry->isStaffBooking()) {
+            return $this->orderService->paymentLinkUrl($order, 'staff_onboarding');
+        }
+
+        return route('onboarding.step6', ['uuid' => $enquiry->id]);
     }
 
     /**

@@ -11,6 +11,7 @@ use App\Enums\PaymentMode;
 use App\Exceptions\SlotNoLongerAvailableException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Onboarding\StepSixRequest;
+use App\Jobs\SyncOnboardingBookingToBirdJob;
 use App\Models\Enquiry;
 use App\Models\Instructor;
 use App\Models\Order;
@@ -346,6 +347,8 @@ class StepSixController extends Controller
             }
 
             DB::commit();
+
+            SyncOnboardingBookingToBirdJob::dispatch($order);
 
             Log::info('Onboarding checkout session created', [
                 'order_id' => $order->id,
