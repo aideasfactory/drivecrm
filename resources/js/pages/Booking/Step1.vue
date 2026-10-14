@@ -92,7 +92,7 @@
             </CardHeader>
 
             <CardContent>
-              <form @submit.prevent="submit" class="space-y-6">
+              <form novalidate @submit.prevent="submit" class="space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div class="space-y-2">
                     <Label for="first_name">
@@ -104,12 +104,12 @@
                       type="text"
                       placeholder="Enter your first name"
                       required
-                      :class="{ 'border-destructive': form.errors.first_name }"
+                      :aria-invalid="errorFor('first_name') ? 'true' : undefined"
+                      aria-describedby="first_name-error"
+                      @blur="touch('first_name')"
+                      autocomplete="given-name"
                     />
-                    <p v-if="form.errors.first_name" class="text-sm text-destructive flex items-center">
-                      <AlertCircle class="mr-1 h-4 w-4" />
-                      {{ form.errors.first_name }}
-                    </p>
+                    <FieldError id="first_name-error" :message="errorFor('first_name')" />
                   </div>
 
                   <div class="space-y-2">
@@ -122,12 +122,12 @@
                       type="text"
                       placeholder="Enter your last name"
                       required
-                      :class="{ 'border-destructive': form.errors.last_name }"
+                      :aria-invalid="errorFor('last_name') ? 'true' : undefined"
+                      aria-describedby="last_name-error"
+                      @blur="touch('last_name')"
+                      autocomplete="family-name"
                     />
-                    <p v-if="form.errors.last_name" class="text-sm text-destructive flex items-center">
-                      <AlertCircle class="mr-1 h-4 w-4" />
-                      {{ form.errors.last_name }}
-                    </p>
+                    <FieldError id="last_name-error" :message="errorFor('last_name')" />
                   </div>
                 </div>
 
@@ -141,16 +141,15 @@
                     type="email"
                     placeholder="your.email@example.com"
                     required
-                    :class="{ 'border-destructive': form.errors.email }"
+                    :aria-invalid="errorFor('email') ? 'true' : undefined"
+                    aria-describedby="email-error"
+                    @blur="touch('email')"
+                    inputmode="email"
+                    autocomplete="email"
+                    autocapitalize="off"
+                    spellcheck="false"
                   />
-                  <p v-if="form.errors.email" class="text-sm text-destructive flex items-center">
-                    <AlertCircle class="mr-1 h-4 w-4" />
-                    {{ form.errors.email }}
-                  </p>
-                  <p v-if="form.email && !validateEmail(form.email)" class="text-sm text-orange-600 flex items-center">
-                    <AlertTriangle class="mr-1 h-4 w-4" />
-                    Please enter a valid email address
-                  </p>
+                  <FieldError id="email-error" :message="errorFor('email')" />
                 </div>
 
                 <div class="space-y-2">
@@ -173,22 +172,19 @@
                       v-model="form.phone"
                       type="tel"
                       class="flex-1"
-                      placeholder="7710 896753"
+                      placeholder="07700 900123"
                       required
-                      :class="{ 'border-destructive': form.errors.phone }"
+                      :aria-invalid="errorFor('phone') ? 'true' : undefined"
+                      aria-describedby="phone-error"
+                      @blur="touch('phone')"
+                      inputmode="tel"
+                      autocomplete="tel-national"
                     />
                   </div>
-                  <p v-if="form.errors.phone" class="text-sm text-destructive flex items-center">
-                    <AlertCircle class="mr-1 h-4 w-4" />
-                    {{ form.errors.phone }}
-                  </p>
+                  <FieldError id="phone-error" :message="errorFor('phone')" />
                   <p class="text-sm text-muted-foreground flex items-center">
                     <Info class="mr-1 h-4 w-4" />
                     We'll use this for lesson confirmations and updates
-                  </p>
-                  <p v-if="form.phone && !validatePhone(form.phone)" class="text-sm text-orange-600 flex items-center">
-                    <AlertTriangle class="mr-1 h-4 w-4" />
-                    {{ countryCode === '+44' ? 'Enter your mobile number without the leading 0, e.g. 7710 896753' : 'Enter your number without the country code or leading 0' }}
                   </p>
                 </div>
 
@@ -204,19 +200,15 @@
                     placeholder="e.g. SW1A 1AA"
                     maxlength="8"
                     required
-                    :class="{ 'border-destructive': form.errors.postcode }"
+                    :aria-invalid="errorFor('postcode') ? 'true' : undefined"
+                    aria-describedby="postcode-error"
+                    @blur="touch('postcode')"
+                    autocomplete="postal-code"
                   />
-                  <p v-if="form.errors.postcode" class="text-sm text-destructive flex items-center">
-                    <AlertCircle class="mr-1 h-4 w-4" />
-                    {{ form.errors.postcode }}
-                  </p>
+                  <FieldError id="postcode-error" :message="errorFor('postcode')" />
                   <p class="text-sm text-muted-foreground flex items-center">
                     <MapPin class="mr-1 h-4 w-4" />
                     Enter your postcode for lesson pickup location
-                  </p>
-                  <p v-if="form.postcode && !validatePostcode(form.postcode)" class="text-sm text-orange-600 flex items-center">
-                    <AlertTriangle class="mr-1 h-4 w-4" />
-                    Please enter a valid postcode
                   </p>
                 </div>
 
@@ -234,10 +226,7 @@
                     <option value="manual">Manual</option>
                     <option value="automatic">Automatic</option>
                   </select>
-                  <p v-if="form.errors.transmission" class="text-sm text-destructive flex items-center">
-                    <AlertCircle class="mr-1 h-4 w-4" />
-                    {{ form.errors.transmission }}
-                  </p>
+                  <FieldError id="transmission-error" :message="form.errors.transmission" />
                 </div>
 
                 <div class="space-y-4 pt-4">
@@ -249,6 +238,9 @@
                       id="privacy_consent"
                       v-model="privacyConsent"
                       required
+                      :aria-invalid="errorFor('privacy_consent') ? 'true' : undefined"
+                      aria-describedby="privacy_consent-error"
+                      @change="touch('privacy_consent')"
                       class="h-4 w-4 mt-1 rounded border-input text-primary focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
                     />
                     <Label for="privacy_consent" class="block text-sm leading-relaxed cursor-pointer">
@@ -259,10 +251,7 @@
                       <a href="https://just-drive.co.uk/cookies-policy/" target="_blank" rel="noopener noreferrer" class="underline hover:text-primary whitespace-nowrap">Cookie Policy</a>
                     </Label>
                   </div>
-                  <p v-if="form.errors.privacy_consent" class="text-sm text-destructive flex items-center ml-7">
-                    <AlertCircle class="mr-1 h-4 w-4" />
-                    {{ form.errors.privacy_consent }}
-                  </p>
+                  <FieldError id="privacy_consent-error" class="ml-7" :message="errorFor('privacy_consent')" />
 
                 </div>
 
@@ -284,7 +273,7 @@
                 <div class="flex items-center space-x-4 ml-auto">
                   <Button
                     @click="submit"
-                    :disabled="!isFormValid || form.processing"
+                    :disabled="form.processing"
                     class="cursor-pointer"
                   >
                     Check my area
@@ -305,7 +294,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { usePage, useForm } from '@inertiajs/vue3'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -316,6 +305,15 @@ import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Spinner } from '@/components/ui/spinner'
 import { Toaster } from '@/components/ui/toast'
+import FieldError from '@/components/Onboarding/FieldError.vue'
+import { useFieldValidation } from '@/composables/useFieldValidation'
+import {
+  nationalDigits,
+  validateDialCodePhone,
+  validateEmailAddress,
+  validateName,
+  validateUkPostcode,
+} from '@/lib/personDetailsValidation'
 import AppLogoIcon from '@/components/AppLogoIcon.vue'
 import { useSchoolContact } from '@/composables/useSchoolContact'
 import {
@@ -325,9 +323,7 @@ import {
   Shield,
   Lock,
   CircleCheck,
-  AlertCircle,
   Info,
-  AlertTriangle,
   ArrowRight
 } from 'lucide-vue-next'
 
@@ -401,52 +397,43 @@ watch(privacyConsent, (newValue) => {
   form.privacy_consent = newValue
 })
 
-const isFormValid = computed(() => {
-  const hasRequiredFields = form.first_name.trim() &&
-                           form.last_name.trim() &&
-                           form.email.trim() &&
-                           form.phone.trim() &&
-                           form.postcode.trim() &&
-                           form.transmission &&
-                           privacyConsent.value
-
-  if (!hasRequiredFields) return false
-
-  return validateEmail(form.email) &&
-         validatePhone(form.phone) &&
-         validatePostcode(form.postcode)
-})
-
-function validateEmail(email: string) {
-  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  return re.test(email)
-}
-
-// National number as bare digits, forgiving a typed leading 0 (e.g. "07710 896753" → "7710896753").
-function nationalDigits(phone: string) {
-  const digits = phone.replace(/\D/g, '')
-  return digits.startsWith('0') ? digits.slice(1) : digits
-}
-
-function validatePhone(phone: string) {
-  const digits = nationalDigits(phone)
-  if (!digits) return false
-
-  if (countryCode.value === '+44') {
-    return /^7\d{9}$/.test(digits)
-  }
-
-  const totalLength = countryCode.value.replace(/\D/g, '').length + digits.length
-  return totalLength >= 8 && totalLength <= 15
-}
-
-function validatePostcode(postcode: string) {
-  const re = /^[A-Z]{1,2}[0-9]{1,2}[A-Z]?\s?[0-9][A-Z]{2}$/i
-  return re.test(postcode.trim())
-}
+const { errorFor, touch, validateAll, focusFirstServerError } = useFieldValidation(form, [
+  {
+    key: 'first_name',
+    id: 'first_name',
+    validate: () => validateName(form.first_name, 'First name', 'Please enter your first name'),
+  },
+  {
+    key: 'last_name',
+    id: 'last_name',
+    validate: () => validateName(form.last_name, 'Last name', 'Please enter your last name'),
+  },
+  {
+    key: 'email',
+    id: 'email',
+    validate: () => validateEmailAddress(form.email, 'Please enter your email address'),
+  },
+  {
+    key: 'phone',
+    id: 'phone',
+    validate: () => validateDialCodePhone(form.phone, countryCode.value),
+  },
+  {
+    key: 'postcode',
+    id: 'postcode',
+    validate: () => validateUkPostcode(form.postcode),
+  },
+  {
+    key: 'privacy_consent',
+    id: 'privacy_consent',
+    validate: () => (privacyConsent.value ? null : 'You must agree to the Terms of Service and Privacy Policy to continue'),
+  },
+])
 
 function submit() {
-  if (!isFormValid.value) return
+  if (!validateAll()) {
+    return
+  }
 
   const enquiry = page.props.enquiry as any
   if (!enquiry?.id) {
@@ -457,10 +444,11 @@ function submit() {
   form
     .transform((data) => ({
       ...data,
-      phone: countryCode.value + nationalDigits(data.phone),
+      phone: countryCode.value + nationalDigits(data.phone, countryCode.value),
     }))
     .post(`/booking/${enquiry.id}/step/1`, {
-      preserveScroll: 'errors',
+      preserveScroll: true,
+      onError: (errors) => focusFirstServerError(errors),
     })
 }
 </script>
