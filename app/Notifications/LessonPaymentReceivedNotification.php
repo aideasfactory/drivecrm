@@ -45,13 +45,15 @@ class LessonPaymentReceivedNotification extends Notification implements ShouldQu
             EmailTemplateKey::LearnerLessonPaymentReceived,
             [
                 'recipient_name' => $this->recipientName(),
-                'intro' => $this->introLine($lessonDate, $lessonTime, $amount),
+                'learner_name' => trim(($this->student->first_name ?? '').' '.($this->student->surname ?? '')),
+                'learner_first_name' => $this->student->first_name,
                 'package_name' => $order->package_name,
                 'lesson_date' => $lessonDate,
                 'lesson_time' => $lessonTime,
                 'instructor_name' => $instructorName,
                 'cost_breakdown' => implode("\n", $this->lessonPayment->costBreakdownLines()),
                 'amount' => $amount,
+                'booked_by_contact' => $this->isBookedByContact,
             ],
         );
     }
@@ -63,17 +65,6 @@ class LessonPaymentReceivedNotification extends Notification implements ShouldQu
         }
 
         return $this->student->first_name ?? 'there';
-    }
-
-    protected function introLine(string $lessonDate, string $lessonTime, string $amount): string
-    {
-        $learnerName = $this->student->first_name.' '.$this->student->surname;
-
-        if ($this->isBookedByContact) {
-            return "We've received your payment of **{$amount}** for **{$learnerName}'s** driving lesson on **{$lessonDate}** at **{$lessonTime}**.";
-        }
-
-        return "We've received your payment of **{$amount}** for your driving lesson on **{$lessonDate}** at **{$lessonTime}**.";
     }
 
     /**

@@ -51,46 +51,28 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
             default => '',
         };
 
-        $firstLessonLine = $firstLesson
-            ? 'First lesson: '.Carbon::parse($firstLesson->date)->format('l, F j, Y')
-            : '';
-
-        $bookedForLine = '';
-        if ($this->isBookedByContact) {
-            $learnerName = $this->student->first_name.' '.$this->student->surname;
-            $bookedForLine = "\nThis booking was made for: **{$learnerName}**";
-        }
-
         return $this->templatedMail(
             EmailTemplateKey::LearnerPaymentLink,
             [
                 'recipient_name' => $this->recipientName(),
-                'intro' => $this->introLine(),
+                'learner_name' => trim(($this->student->first_name ?? '').' '.($this->student->surname ?? '')),
+                'learner_first_name' => $this->student->first_name,
                 'package_name' => $order->package_name,
                 'lessons_count' => $order->package_lessons_count,
                 'instructor_name' => $instructor->user->name,
-                'amount_label' => $firstWeeklyPayment ? 'First week' : 'Total',
                 'cost_breakdown' => $costBreakdown,
                 'total' => $totalFormatted,
-                'first_lesson_line' => $firstLessonLine,
-                'pay_by_line' => $this->payByLine($firstWeeklyPayment !== null),
-                'booked_for_line' => $bookedForLine,
+                'first_lesson_date' => $firstLesson ? Carbon::parse($firstLesson->date)->format('l, F j, Y') : '',
+                'pay_by' => $order->payment_hold_expires_at
+                    ? BookingPayments::formatDeadline($order->payment_hold_expires_at)
+                    : '',
+                'weekly_payment_due_hours' => BookingPayments::weeklyPaymentDueHoursBeforeLesson(),
+                'booked_by_contact' => $this->isBookedByContact,
+                'booked_by_staff' => $this->isBookedByStaff,
+                'pay_weekly' => $firstWeeklyPayment !== null,
             ],
             $this->checkoutUrl,
         );
-    }
-
-    protected function payByLine(bool $isWeekly): string
-    {
-        $line = $this->order->payment_hold_expires_at
-            ? 'Please pay by **'.BookingPayments::formatDeadline($this->order->payment_hold_expires_at).'**. If payment isn\'t made by then, the lessons will be released and offered to other learners.'
-            : 'The lessons are held for you until payment is made.';
-
-        if ($isWeekly) {
-            $line .= "\n\nAfter the first week, each lesson is invoiced by email and due ".BookingPayments::weeklyPaymentDueHoursBeforeLesson().' hours before it takes place.';
-        }
-
-        return $line;
     }
 
     protected function recipientName(): string
@@ -100,27 +82,6 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
         }
 
         return $this->student->first_name ?? 'there';
-    }
-
-    protected function introLine(): string
-    {
-        $instructorName = $this->order->instructor->user->name;
-
-        if ($this->isBookedByStaff) {
-            $bookedFor = $this->isBookedByContact
-                ? '**'.$this->student->first_name.' '.$this->student->surname.'**'
-                : 'you';
-
-            return "Our bookings team has booked driving lessons for {$bookedFor} with **{$instructorName}**. Please complete the payment to confirm the booking.";
-        }
-
-        if ($this->isBookedByContact) {
-            $learnerName = $this->student->first_name.' '.$this->student->surname;
-
-            return "Your instructor **{$instructorName}** has booked driving lessons for **{$learnerName}**. Please complete the payment to confirm the booking.";
-        }
-
-        return "Your instructor **{$instructorName}** has booked driving lessons for you. Please complete the payment to confirm the booking.";
     }
 
     /**

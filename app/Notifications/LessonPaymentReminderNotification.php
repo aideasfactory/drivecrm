@@ -49,12 +49,14 @@ class LessonPaymentReminderNotification extends Notification implements ShouldQu
             EmailTemplateKey::LearnerLessonPaymentReminder,
             [
                 'recipient_name' => $this->recipientName(),
-                'intro' => $this->introLine($lessonDate, $lessonTime),
+                'learner_name' => trim(($this->student->first_name ?? '').' '.($this->student->surname ?? '')),
+                'learner_first_name' => $this->student->first_name,
                 'package_name' => $order->package_name,
                 'lesson_date' => $lessonDate,
                 'lesson_time' => $lessonTime,
                 'cost_breakdown' => $this->costBreakdown(),
                 'amount' => $amount,
+                'booked_by_contact' => $this->isBookedByContact,
             ],
             $this->hostedInvoiceUrl,
         );
@@ -76,17 +78,6 @@ class LessonPaymentReminderNotification extends Notification implements ShouldQu
         }
 
         return $this->student->first_name ?? 'there';
-    }
-
-    protected function introLine(string $lessonDate, string $lessonTime): string
-    {
-        $learnerName = $this->student->first_name.' '.$this->student->surname;
-
-        if ($this->isBookedByContact) {
-            return "This is a friendly reminder that payment is required for **{$learnerName}'s** upcoming driving lesson on **{$lessonDate}** at **{$lessonTime}**.";
-        }
-
-        return "This is a friendly reminder that payment is required for your upcoming driving lesson on **{$lessonDate}** at **{$lessonTime}**.";
     }
 
     /**

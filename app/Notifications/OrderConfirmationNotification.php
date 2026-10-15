@@ -39,29 +39,28 @@ class OrderConfirmationNotification extends Notification implements ShouldQueue
         $order = $this->order;
         $instructor = $order->instructor;
         $firstLesson = $order->lessons()->orderBy('date')->first();
-
-        $firstLessonLine = $firstLesson
-            ? 'First lesson: '.Carbon::parse($firstLesson->date)->format('l, F j, Y')
-            : '';
-
-        $bookedForLine = '';
-        if ($this->isBookedByContact) {
-            $learnerName = $this->student->first_name.' '.$this->student->surname;
-            $bookedForLine = "\nThis booking was made for: **{$learnerName}**";
-        }
+        $isPaidInFull = $order->isUpfront();
 
         $message = $this->templatedMail(
             EmailTemplateKey::LearnerOrderConfirmation,
             [
                 'recipient_name' => $this->recipientName(),
-                'intro' => $this->introLine(),
+                'learner_name' => trim(($this->student->first_name ?? '').' '.($this->student->surname ?? '')),
+                'learner_first_name' => $this->student->first_name,
                 'package_name' => $order->package_name,
                 'lessons_count' => $order->package_lessons_count,
                 'instructor_name' => $instructor->user->name,
-                'first_lesson_line' => $firstLessonLine,
-                'payment_block' => $this->paymentBlock(),
-                'booked_for_line' => $bookedForLine,
+                'first_lesson_date' => $firstLesson ? Carbon::parse($firstLesson->date)->format('l, F j, Y') : '',
+                'cost_breakdown' => implode("\n", $order->costBreakdownLines()),
+                'total' => $order->formatted_amount_paid,
+                'weekly_instalment' => $isPaidInFull ? '' : $order->formatted_weekly_instalment,
                 'app_name' => config('app.name'),
+                'booked_by_contact' => $this->isBookedByContact,
+                'paid_in_full' => $isPaidInFull,
+                'pay_weekly' => ! $isPaidInFull,
+                'guarantee_on_first_payment' => ! $isPaidInFull
+                    && $order->includes_test_pass_guarantee
+                    && $order->test_pass_guarantee_pence > 0,
             ],
             url('/get-app'),
         );
@@ -107,44 +106,6 @@ class OrderConfirmationNotification extends Notification implements ShouldQueue
         }
 
         return $this->student->first_name ?? 'there';
-    }
-
-    protected function introLine(): string
-    {
-        if ($this->isBookedByContact) {
-            $learnerName = $this->student->first_name.' '.$this->student->surname;
-
-            return "Great news! You have successfully booked driving lessons for **{$learnerName}**.";
-        }
-
-        return 'Great news! Your driving lessons have been successfully booked.';
-    }
-
-    protected function paymentBlock(): string
-    {
-        $order = $this->order;
-
-        if ($order->isUpfront()) {
-            return implode("\n", [
-                '**Payment — paid in full:**',
-                ...$order->costBreakdownLines(),
-                "**Total paid: {$order->formatted_amount_paid}**",
-            ]);
-        }
-
-        if (! $order->hasFees()) {
-            return "Payment: Weekly ({$order->formatted_weekly_instalment} per lesson)";
-        }
-
-        $hasPaidGuarantee = $order->includes_test_pass_guarantee && $order->test_pass_guarantee_pence > 0;
-
-        return implode("\n", array_filter([
-            '**Payment — weekly:**',
-            ...$order->costBreakdownLines(),
-            "**Total: {$order->formatted_amount_paid}**",
-            "Paid in {$order->package_lessons_count} weekly instalments of {$order->formatted_weekly_instalment}",
-            $hasPaidGuarantee ? '(Pass Your Test Guarantee added to your first weekly payment)' : null,
-        ]));
     }
 
     /**

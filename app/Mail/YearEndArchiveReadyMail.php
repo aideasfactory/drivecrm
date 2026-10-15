@@ -54,7 +54,7 @@ class YearEndArchiveReadyMail extends Mailable
             [
                 'recipient_name' => $this->archive->instructor?->user?->name ?: 'there',
                 'tax_year_label' => $this->archive->taxYearLabel(),
-                'file_size' => $fileSizeMb ? ' ('.$fileSizeMb.' MB)' : '',
+                'file_size' => $fileSizeMb ? $fileSizeMb.' MB' : '',
                 'finance_rows' => number_format((int) ($counts['finances'] ?? 0)),
                 'mileage_rows' => number_format((int) ($counts['mileage_logs'] ?? 0)),
                 'receipts' => number_format((int) ($counts['receipts'] ?? 0)),

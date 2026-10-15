@@ -49,18 +49,18 @@ class LessonRescheduledNotification extends Notification implements ShouldQueue
             $newTime = $this->lesson->start_time->format('H:i').' - '.$this->lesson->end_time->format('H:i');
         }
 
-        $notesBlock = $this->notes
-            ? "\n**Notes from your instructor:**\n".$this->notes
-            : '';
-
         return $this->templatedMail(
             EmailTemplateKey::LearnerLessonRescheduled,
             [
                 'recipient_name' => $this->student->first_name ?? 'there',
                 'instructor_name' => $this->instructor->user?->name ?? 'your instructor',
                 'old_when' => $oldDateFormatted.' at '.$oldTime,
+                'old_date' => $oldDateFormatted,
+                'old_time' => $oldTime,
                 'new_when' => $newDateFormatted.($newTime ? ' at '.$newTime : ''),
-                'notes_block' => $notesBlock,
+                'new_date' => $newDateFormatted,
+                'new_time' => $newTime,
+                'notes' => $this->notes,
                 'app_name' => config('app.name'),
             ],
         );

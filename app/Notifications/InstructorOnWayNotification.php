@@ -40,24 +40,11 @@ class InstructorOnWayNotification extends Notification implements ShouldQueue
             [
                 'recipient_name' => $this->student->getBookerDetails()['first_name'] ?? 'there',
                 'instructor_name' => $this->instructor->name ?? 'Your instructor',
-                'lesson_when' => $this->lessonWhen(),
+                'lesson_date' => $this->lesson->date?->format('l, j F'),
+                'lesson_time' => $this->lesson->start_time?->format('H:i'),
                 'app_name' => config('app.name'),
             ],
         );
-    }
-
-    /**
-     * A readable " on Monday, 1 June at 14:00" suffix, or empty string when unknown.
-     */
-    protected function lessonWhen(): string
-    {
-        $date = $this->lesson->date?->format('l, j F');
-
-        if ($date && $this->lesson->start_time) {
-            return ' on '.$date.' at '.$this->lesson->start_time->format('H:i');
-        }
-
-        return $date ? ' on '.$date : '';
     }
 
     /**

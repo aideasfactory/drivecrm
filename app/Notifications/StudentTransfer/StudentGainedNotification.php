@@ -51,50 +51,35 @@ class StudentGainedNotification extends Notification implements ShouldQueue
                 'recipient_name' => $this->destinationInstructor->first_name ?? 'there',
                 'student_name' => $studentName,
                 'source_name' => $sourceName,
-                'lessons_block' => $this->lessonsBlock(),
+                'moved_lessons_count' => $this->movedLessons->count(),
+                'lesson_list' => $this->lessonList(),
+                'clash_count' => $this->clashingLessons->count(),
                 'app_name' => config('app.name'),
+                'multiple_lessons' => $this->movedLessons->count() > 1,
+                'multiple_clashes' => $this->clashingLessons->count() > 1,
             ],
         );
     }
 
-    protected function lessonsBlock(): string
+    protected function lessonList(): string
     {
-        $movedCount = $this->movedLessons->count();
-        $clashCount = $this->clashingLessons->count();
-
-        if ($movedCount === 0) {
-            return 'No future lessons were on the previous instructor’s diary, so nothing has been added to yours yet. The student will book new lessons with you as normal.';
-        }
-
-        $lines = [];
-        $lines[] = $movedCount === 1
-            ? 'The following lesson has been added to your diary at its existing date and time:'
-            : "The following {$movedCount} lessons have been added to your diary at their existing dates and times:";
-
         $clashIds = $this->clashingLessons->pluck('id')->all();
         $sortedLessons = $this->movedLessons->sortBy(fn (Lesson $lesson) => ($lesson->date?->format('Y-m-d') ?? '9999-12-31').' '.($lesson->start_time?->format('H:i') ?? '23:59'));
 
-        foreach ($sortedLessons as $lesson) {
-            $dateFormatted = $lesson->date?->format('l, j F Y') ?? 'Unknown date';
-            $timeFormatted = $lesson->start_time && $lesson->end_time
-                ? $lesson->start_time->format('H:i').' – '.$lesson->end_time->format('H:i')
-                : '';
-            $isClash = in_array($lesson->id, $clashIds, true);
+        return $sortedLessons
+            ->map(function (Lesson $lesson) use ($clashIds): string {
+                $dateFormatted = $lesson->date?->format('l, j F Y') ?? 'Unknown date';
+                $timeFormatted = $lesson->start_time && $lesson->end_time
+                    ? $lesson->start_time->format('H:i').' – '.$lesson->end_time->format('H:i')
+                    : '';
 
-            if ($isClash) {
-                $lines[] = "⚠️ **{$dateFormatted} at {$timeFormatted} — clashes with your existing diary**";
-            } else {
-                $lines[] = "• {$dateFormatted} at {$timeFormatted}";
-            }
-        }
+                if (in_array($lesson->id, $clashIds, true)) {
+                    return "⚠️ **{$dateFormatted} at {$timeFormatted} — clashes with your existing diary**";
+                }
 
-        if ($clashCount > 0) {
-            $clashWord = $clashCount === 1 ? 'clash' : 'clashes';
-            $lines[] = '';
-            $lines[] = "⚠️ **{$clashCount} {$clashWord} flagged above.** Please review your diary and rebook the affected lessons at alternative times that suit you and the student.";
-        }
-
-        return implode("\n", $lines);
+                return "• {$dateFormatted} at {$timeFormatted}";
+            })
+            ->implode("\n");
     }
 
     /**

@@ -46,7 +46,7 @@ class LessonFeedbackRequest extends Mailable
     private function rendered(): RenderedEmailTemplate
     {
         $lessonTime = $this->lesson->start_time?->format('H:i') && $this->lesson->end_time?->format('H:i')
-            ? ' ('.$this->lesson->start_time->format('H:i').' - '.$this->lesson->end_time->format('H:i').')'
+            ? $this->lesson->start_time->format('H:i').' - '.$this->lesson->end_time->format('H:i')
             : '';
 
         return $this->renderedCache ??= $this->renderedTemplate(
