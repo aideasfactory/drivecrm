@@ -50,7 +50,7 @@ class PaymentDueSoonNotification extends Notification implements ShouldQueue
                 'package_name' => $order->package_name,
                 'lesson_date' => $lessonDate,
                 'lesson_time' => $lessonTime,
-                'cost_breakdown' => implode("\n", $this->lessonPayment->costBreakdownLines()),
+                ...$this->lessonPayment->costBreakdownPlaceholders(),
                 'amount' => $amount,
                 'booked_by_contact' => $this->isBookedByContact,
             ],

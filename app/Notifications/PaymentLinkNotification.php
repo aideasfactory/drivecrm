@@ -45,11 +45,9 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
         $totalFormatted = $firstWeeklyPayment
             ? '£'.number_format($firstWeeklyPayment->amount_pence / 100, 2)
             : $order->formatted_amount_paid;
-        $costBreakdown = match (true) {
-            $firstWeeklyPayment !== null => implode("\n", $firstWeeklyPayment->costBreakdownLines()),
-            $order->hasFees() => implode("\n", $order->costBreakdownLines()),
-            default => '',
-        };
+        $costBreakdown = $firstWeeklyPayment
+            ? $firstWeeklyPayment->costBreakdownPlaceholders()
+            : $order->costBreakdownPlaceholders();
 
         return $this->templatedMail(
             EmailTemplateKey::LearnerPaymentLink,
@@ -60,7 +58,7 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
                 'package_name' => $order->package_name,
                 'lessons_count' => $order->package_lessons_count,
                 'instructor_name' => $instructor->user->name,
-                'cost_breakdown' => $costBreakdown,
+                ...$costBreakdown,
                 'total' => $totalFormatted,
                 'first_lesson_date' => $firstLesson ? Carbon::parse($firstLesson->date)->format('l, F j, Y') : '',
                 'pay_by' => $order->payment_hold_expires_at

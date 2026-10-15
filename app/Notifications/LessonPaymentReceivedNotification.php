@@ -51,7 +51,7 @@ class LessonPaymentReceivedNotification extends Notification implements ShouldQu
                 'lesson_date' => $lessonDate,
                 'lesson_time' => $lessonTime,
                 'instructor_name' => $instructorName,
-                'cost_breakdown' => implode("\n", $this->lessonPayment->costBreakdownLines()),
+                ...$this->lessonPayment->costBreakdownPlaceholders(),
                 'amount' => $amount,
                 'booked_by_contact' => $this->isBookedByContact,
             ],

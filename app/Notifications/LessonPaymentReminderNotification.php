@@ -54,21 +54,12 @@ class LessonPaymentReminderNotification extends Notification implements ShouldQu
                 'package_name' => $order->package_name,
                 'lesson_date' => $lessonDate,
                 'lesson_time' => $lessonTime,
-                'cost_breakdown' => $this->costBreakdown(),
+                ...LessonPayment::breakdownPlaceholders($this->breakdown ?? []),
                 'amount' => $amount,
                 'booked_by_contact' => $this->isBookedByContact,
             ],
             $this->hostedInvoiceUrl,
         );
-    }
-
-    protected function costBreakdown(): string
-    {
-        if (! is_array($this->breakdown)) {
-            return '';
-        }
-
-        return implode("\n", LessonPayment::breakdownLines($this->breakdown));
     }
 
     protected function recipientName(): string
