@@ -11,12 +11,24 @@ use InvalidArgumentException;
 final class EmailTemplateCatalog
 {
     /**
+     * Order-level cost lines (whole package): lessons, then each fee only when charged.
+     */
+    private const ORDER_COST_LINES = "Lessons: {{lesson_cost}}{{#if booking_fee}}\nBooking fee: {{booking_fee}}{{/if}}{{#if digital_fee}}\nDigital fee: {{digital_fee}}{{/if}}{{#if guarantee_fee}}\nPass Your Test Guarantee: {{guarantee_fee}}{{/if}}{{#if guarantee_included_free}}\nPass Your Test Guarantee: Included free{{/if}}";
+
+    /**
+     * Single-payment cost lines, shown only when the payment carries fees. The
+     * trailing newline keeps a blank line before the amount that follows.
+     */
+    private const PAYMENT_COST_LINES = "{{#if has_fees}}**Cost breakdown:**{{#if lesson_cost}}\nLesson cost: {{lesson_cost}}{{/if}}{{#if booking_fee}}\nBooking fee (weekly instalment): {{booking_fee}}{{/if}}{{#if digital_fee}}\nDigital services fee (weekly instalment): {{digital_fee}}{{/if}}{{#if guarantee_fee}}\nPass Your Test Guarantee: {{guarantee_fee}}{{/if}}\n{{/if}}";
+
+    /**
      * @return array{
      *     key: string,
      *     name: string,
      *     audience: string,
      *     description: string,
      *     placeholders: array<string, string>,
+     *     conditions: array<string, string>,
      *     subject: string,
      *     greeting: string,
      *     body: string,
@@ -42,6 +54,7 @@ final class EmailTemplateCatalog
      *     audience: string,
      *     description: string,
      *     placeholders: array<string, string>,
+     *     conditions: array<string, string>,
      *     subject: string,
      *     greeting: string,
      *     body: string,
@@ -72,6 +85,7 @@ final class EmailTemplateCatalog
      *     audience: string,
      *     description: string,
      *     placeholders: array<string, string>,
+     *     conditions: array<string, string>,
      *     subject: string,
      *     greeting: string,
      *     body: string,
@@ -98,108 +112,158 @@ final class EmailTemplateCatalog
             ], 'Welcome to {{app_name}}!', 'Hello {{recipient_name}}!', "Thanks for joining {{app_name}}! Your account has been created successfully.\n\nYou can now browse instructors, book lessons, and manage your driving journey all in one place.\n\n{{action_button}}\n\nWe're excited to help you on the road to your driving licence!", "Safe driving,\nThe {{app_name}} Team", 'Open App'),
 
             self::entry(EmailTemplateKey::LearnerOrderConfirmation, 'Lesson booking confirmation', $audience, 'Sent after a learner (or their contact) books a package.', [
-                'recipient_name' => 'Greeting name (learner or contact)',
-                'intro' => 'Opening sentence for this booking',
+                'recipient_name' => 'Greeting name (learner, or the contact who booked)',
+                'learner_name' => 'Learner full name',
+                'learner_first_name' => 'Learner first name',
                 'package_name' => 'Package name',
                 'lessons_count' => 'Number of lessons',
                 'instructor_name' => 'Instructor name',
-                'first_lesson_line' => 'First lesson date, if booked',
-                'payment_block' => 'Payment summary for this order',
-                'booked_for_line' => 'Shown when a contact booked on behalf of a learner',
+                'first_lesson_date' => 'First lesson date (blank if none booked yet)',
+                'lesson_cost' => 'Lessons cost, excluding fees',
+                'booking_fee' => 'Booking fee (blank when none)',
+                'digital_fee' => 'Digital fee (blank when none)',
+                'guarantee_fee' => 'Pass Your Test Guarantee charge (blank when none or free)',
+                'total' => 'Order total',
+                'weekly_instalment' => 'Regular weekly instalment (blank when paid in full)',
                 'app_name' => 'Application name',
-            ], 'Your Driving Lessons Have Been Booked!', 'Hello {{recipient_name}}!', "{{intro}}\n\n**Order Details:**\nPackage: {{package_name}}\nNumber of lessons: {{lessons_count}}\nInstructor: {{instructor_name}}\n{{first_lesson_line}}\n\n{{payment_block}}\n\n**Next Steps:**\n1. Download the app to view your lesson schedule\n2. Your instructor will contact you to confirm the details\n3. Make sure to arrive 5 minutes early for your first lesson\n{{booked_for_line}}\n\n{{action_button}}\n\nThank you for choosing us for your driving lessons!", "Safe driving,\nThe Driving School Team", 'Download app'),
+            ], 'Your Driving Lessons Have Been Booked!', 'Hello {{recipient_name}}!', "{{#if booked_by_contact}}Great news! You have successfully booked driving lessons for **{{learner_name}}**.{{else}}Great news! Your driving lessons have been successfully booked.{{/if}}\n\n**Order Details:**\nPackage: {{package_name}}\nNumber of lessons: {{lessons_count}}\nInstructor: {{instructor_name}}\n{{#if first_lesson_date}}First lesson: {{first_lesson_date}}{{/if}}\n\n{{#if paid_in_full}}**Payment — paid in full:**\n".self::ORDER_COST_LINES."\n**Total paid: {{total}}**{{else}}**Payment — weekly:**\n".self::ORDER_COST_LINES."\n**Total: {{total}}**\nPaid in {{lessons_count}} weekly instalments of {{weekly_instalment}}{{#if guarantee_on_first_payment}}\n(Pass Your Test Guarantee added to your first weekly payment){{/if}}{{/if}}\n\n**Next Steps:**\n1. Download the app to view your lesson schedule\n2. Your instructor will contact you to confirm the details\n3. Make sure to arrive 5 minutes early for your first lesson\n{{#if booked_by_contact}}\nThis booking was made for: **{{learner_name}}**{{/if}}\n\n{{action_button}}\n\nThank you for choosing us for your driving lessons!", "Safe driving,\nThe Driving School Team", 'Download app', [
+                'booked_by_contact' => 'A contact (e.g. parent) booked on behalf of the learner',
+                'paid_in_full' => 'The order was paid in full up front',
+                'pay_weekly' => 'The order is paid weekly',
+                'guarantee_on_first_payment' => 'Weekly order with a paid Pass Your Test Guarantee on the first payment',
+                'guarantee_included_free' => 'The Pass Your Test Guarantee is included free',
+            ]),
 
             self::entry(EmailTemplateKey::LearnerPaymentLink, 'Payment link for booked lessons', $audience, 'Sent when an instructor books lessons that still need paying.', [
-                'recipient_name' => 'Greeting name (learner or contact)',
-                'intro' => 'Opening sentence for this booking',
+                'recipient_name' => 'Greeting name (learner, or the contact who booked)',
+                'learner_name' => 'Learner full name',
+                'learner_first_name' => 'Learner first name',
                 'package_name' => 'Package name',
                 'lessons_count' => 'Number of lessons',
                 'instructor_name' => 'Instructor name',
-                'cost_breakdown' => 'Lessons, booking fee and digital fee lines (blank when there are no fees)',
-                'amount_label' => '"Total" when paying in full, "First week" for weekly payments',
-                'total' => 'Formatted amount to pay now, including fees',
-                'first_lesson_line' => 'First lesson date, if booked',
-                'pay_by_line' => 'When the lessons are released if unpaid',
-                'booked_for_line' => 'Shown when a contact booked on behalf of a learner',
-            ], 'Complete Your Payment for Driving Lessons', 'Hello {{recipient_name}}!', "{{intro}}\n\n**Booking Details:**\nPackage: {{package_name}}\nNumber of lessons: {{lessons_count}}\nInstructor: {{instructor_name}}\n{{cost_breakdown}}\n{{amount_label}}: {{total}}\n{{first_lesson_line}}\n\nPlease complete your payment using the link below to confirm your lessons.\n\n{{action_button}}\n\n{{pay_by_line}}\n{{booked_for_line}}", "Safe driving,\nThe Driving School Team", 'Pay Now'),
+                'lesson_cost' => 'Lessons cost due now, excluding fees (whole order, or the first week)',
+                'booking_fee' => 'Booking fee due now (blank when none)',
+                'digital_fee' => 'Digital fee due now (blank when none)',
+                'guarantee_fee' => 'Pass Your Test Guarantee charge due now (blank when none or free)',
+                'total' => 'Amount to pay now, including fees (whole order, or the first week)',
+                'first_lesson_date' => 'First lesson date (blank if none booked yet)',
+                'pay_by' => 'Payment deadline before the lessons are released (blank if held until paid)',
+                'weekly_payment_due_hours' => 'Hours before each weekly lesson its payment is due',
+            ], 'Complete Your Payment for Driving Lessons', 'Hello {{recipient_name}}!', "{{#if booked_by_staff}}Our bookings team has booked driving lessons for {{#if booked_by_contact}}**{{learner_name}}**{{else}}you{{/if}} with **{{instructor_name}}**. Please complete the payment to confirm the booking.{{else}}Your instructor **{{instructor_name}}** has booked driving lessons for {{#if booked_by_contact}}**{{learner_name}}**{{else}}you{{/if}}. Please complete the payment to confirm the booking.{{/if}}\n\n**Booking Details:**\nPackage: {{package_name}}\nNumber of lessons: {{lessons_count}}\nInstructor: {{instructor_name}}\n{{#if has_fees}}{{#if pay_weekly}}".self::PAYMENT_COST_LINES."{{else}}".self::ORDER_COST_LINES."{{/if}}{{/if}}\n{{#if pay_weekly}}First week{{else}}Total{{/if}}: {{total}}\n{{#if first_lesson_date}}First lesson: {{first_lesson_date}}{{/if}}\n\nPlease complete your payment using the link below to confirm your lessons.\n\n{{action_button}}\n\n{{#if pay_by}}Please pay by **{{pay_by}}**. If payment isn't made by then, the lessons will be released and offered to other learners.{{else}}The lessons are held for you until payment is made.{{/if}}{{#if pay_weekly}}\n\nAfter the first week, each lesson is invoiced by email and due {{weekly_payment_due_hours}} hours before it takes place.{{/if}}\n{{#if booked_by_contact}}\nThis booking was made for: **{{learner_name}}**{{/if}}", "Safe driving,\nThe Driving School Team", 'Pay Now', [
+                'booked_by_contact' => 'A contact (e.g. parent) is paying on behalf of the learner',
+                'booked_by_staff' => 'The head-office bookings team made the booking',
+                'pay_weekly' => 'The order is paid weekly (the amount due now is the first week)',
+                'has_fees' => 'The amount due now includes a booking fee, digital fee or guarantee',
+                'guarantee_included_free' => 'The Pass Your Test Guarantee is included free (paid in full only)',
+            ]),
 
             self::entry(EmailTemplateKey::LearnerPaymentDueSoon, 'Payment due soon (48 hours)', $audience, 'Reminder that a weekly lesson payment is due in under 48 hours.', [
-                'recipient_name' => 'Greeting name (learner or contact)',
-                'intro' => 'Opening reminder sentence',
+                'recipient_name' => 'Greeting name (learner, or the contact who booked)',
+                'learner_name' => 'Learner full name',
+                'learner_first_name' => 'Learner first name',
                 'package_name' => 'Package name',
                 'lesson_date' => 'Lesson date',
                 'lesson_time' => 'Lesson time',
-                'cost_breakdown' => 'Optional fee breakdown',
+                'lesson_cost' => 'Lesson cost in this payment, excluding fees',
+                'booking_fee' => 'Booking fee share in this payment (blank when none)',
+                'digital_fee' => 'Digital fee share in this payment (blank when none)',
+                'guarantee_fee' => 'Pass Your Test Guarantee charge in this payment (blank when none)',
                 'amount' => 'Amount due',
-            ], 'Payment Due Soon: Your Driving Lesson on {{lesson_date}}', 'Hello {{recipient_name}}!', "{{intro}}\n\n**Lesson Details:**\nPackage: {{package_name}}\nDate: {{lesson_date}}\nTime: {{lesson_time}}\n{{cost_breakdown}}\nAmount due: {{amount}}\n\nYour lesson is in less than 48 hours. Please complete your payment using the link below to secure it.\n\n{{action_button}}\n\nIf you have already paid, please disregard this email.", "Safe driving,\nThe Driving School Team", 'Pay Now'),
+            ], 'Payment Due Soon: Your Driving Lesson on {{lesson_date}}', 'Hello {{recipient_name}}!', "This is a reminder that payment is due for {{#if booked_by_contact}}**{{learner_name}}'s**{{else}}your{{/if}} upcoming driving lesson on **{{lesson_date}}** at **{{lesson_time}}**.\n\n**Lesson Details:**\nPackage: {{package_name}}\nDate: {{lesson_date}}\nTime: {{lesson_time}}\n".self::PAYMENT_COST_LINES."\nAmount due: {{amount}}\n\nYour lesson is in less than 48 hours. Please complete your payment using the link below to secure it.\n\n{{action_button}}\n\nIf you have already paid, please disregard this email.", "Safe driving,\nThe Driving School Team", 'Pay Now', [
+                'booked_by_contact' => 'A contact (e.g. parent) booked on behalf of the learner',
+                'has_fees' => 'This payment includes a booking fee, digital fee or guarantee',
+            ]),
 
             self::entry(EmailTemplateKey::LearnerBookingCancelled, 'Booking cancelled', $audience, 'Sent to the learner when lessons are cancelled.', [
                 'recipient_name' => 'Learner first name',
                 'instructor_name' => 'Instructor name',
-                'lesson_word' => '"lesson has" or "lessons have"',
-                'lesson_noun' => '"Lesson Has" or "Lessons Have"',
+                'lesson_count' => 'Number of cancelled lessons',
                 'lesson_list' => 'Bulleted list of cancelled lessons',
                 'reason' => 'Cancellation reason',
-                'refund_line' => 'Refund or no-charge explanation',
+                'late_notice_hours' => 'Late-cancellation notice period in hours',
                 'app_name' => 'Application name',
-            ], 'Your Driving {{lesson_noun}} Been Cancelled', 'Hello {{recipient_name}},', "We're letting you know that the following {{lesson_word}} been cancelled by **{{instructor_name}}**:\n\n{{lesson_list}}\n\n**Reason:**\n{{reason}}\n\n{{refund_line}}\n\nIf you have any questions, please get in touch with your instructor.", "Kind regards,\nThe {{app_name}} Team", null),
+            ], 'Your Driving {{#if multiple_lessons}}Lessons Have{{else}}Lesson Has{{/if}} Been Cancelled', 'Hello {{recipient_name}},', "We're letting you know that the following {{#if multiple_lessons}}lessons have{{else}}lesson has{{/if}} been cancelled by **{{instructor_name}}**:\n\n{{lesson_list}}\n\n**Reason:**\n{{reason}}\n\n{{#if refund_due}}{{#if late_cancellation_charged}}Some of these lessons were cancelled less than {{late_notice_hours}} hours before they were due to start, so what you paid for those is not refundable. You will be refunded what you paid for the others, including the digital fee and any Pass Your Test Guarantee. The booking fee is non-refundable. Our head office will be in touch about this shortly.{{else}}You will be refunded what you paid for these lessons, including the digital fee and any Pass Your Test Guarantee. The booking fee is non-refundable. Our head office will be in touch about this shortly.{{/if}}{{else}}{{#if late_cancellation_charged}}This was cancelled less than {{late_notice_hours}} hours before the lesson was due to start, so what you paid is not refundable.{{else}}There is nothing further you need to do, and you will not be charged for these lessons.{{/if}}{{/if}}\n\nIf you have any questions, please get in touch with your instructor.", "Kind regards,\nThe {{app_name}} Team", null, [
+                'multiple_lessons' => 'More than one lesson was cancelled',
+                'refund_due' => 'A refund is owed for some or all of the lessons',
+                'late_cancellation_charged' => 'At least one lesson was cancelled inside the late-notice period and is not refundable',
+            ]),
 
             self::entry(EmailTemplateKey::LearnerLessonSignedOff, 'Lesson signed off (learner)', $audience, 'Sent to the learner after their instructor signs off a lesson.', [
                 'recipient_name' => 'Learner first name',
                 'instructor_name' => 'Instructor name',
                 'lesson_date' => 'Lesson date',
-                'lesson_time_line' => 'Lesson time, if set',
-                'instructor_notes_block' => 'Instructor notes, if any',
+                'lesson_time' => 'Lesson time range (blank if not set)',
+                'instructor_notes' => 'Instructor notes / lesson summary (blank if none)',
                 'app_name' => 'Application name',
-            ], 'Your Driving Lesson Has Been Signed Off', 'Hello {{recipient_name}}!', "Great news! Your driving lesson on **{{lesson_date}}** has been signed off by {{instructor_name}}.\n{{lesson_time_line}}\n{{instructor_notes_block}}\n\nKeep up the great work on your driving journey!", "Safe driving,\nThe {{app_name}} Team", null),
+            ], 'Your Driving Lesson Has Been Signed Off', 'Hello {{recipient_name}}!', "Great news! Your driving lesson on **{{lesson_date}}** has been signed off by {{instructor_name}}.\n{{#if lesson_time}}Lesson time: {{lesson_time}}{{/if}}\n{{#if instructor_notes}}**Instructor Notes:**\n{{instructor_notes}}{{/if}}\n\nKeep up the great work on your driving journey!", "Safe driving,\nThe {{app_name}} Team", null),
 
             self::entry(EmailTemplateKey::LearnerLessonsBulkRescheduled, 'Lessons bulk-rescheduled (learner)', $audience, 'Sent when an instructor moves a run of upcoming lessons to a new weekly slot.', [
                 'recipient_name' => 'Learner first name',
                 'instructor_name' => 'Instructor name',
-                'lesson_word' => '"lesson" or "lessons"',
                 'start_date' => 'First new lesson date',
                 'day_of_week' => 'New weekday',
                 'time' => 'New time range',
                 'total_lessons' => 'How many lessons moved',
                 'app_name' => 'Application name',
-            ], 'Your driving lessons have been rescheduled', 'Hello {{recipient_name}},', "Your upcoming {{lesson_word}} with **{{instructor_name}}** have been rescheduled.\n\nFrom **{{start_date}}**, you will now have your lessons on **{{day_of_week}}s at {{time}}**.\n\nTotal {{lesson_word}} moved: **{{total_lessons}}**.\n\nIf this new schedule does not work for you, please contact your instructor to arrange alternatives.", "Safe driving,\nThe {{app_name}} Team", null),
+            ], 'Your driving {{#if multiple_lessons}}lessons have{{else}}lesson has{{/if}} been rescheduled', 'Hello {{recipient_name}},', "Your upcoming {{#if multiple_lessons}}lessons{{else}}lesson{{/if}} with **{{instructor_name}}** {{#if multiple_lessons}}have{{else}}has{{/if}} been rescheduled.\n\nFrom **{{start_date}}**, you will now have your lessons on **{{day_of_week}}s at {{time}}**.\n\nTotal {{#if multiple_lessons}}lessons{{else}}lesson{{/if}} moved: **{{total_lessons}}**.\n\nIf this new schedule does not work for you, please contact your instructor to arrange alternatives.", "Safe driving,\nThe {{app_name}} Team", null, [
+                'multiple_lessons' => 'More than one lesson was moved',
+            ]),
 
             self::entry(EmailTemplateKey::LearnerLessonRescheduled, 'Single lesson rescheduled', $audience, 'Sent when one lesson is moved to a new date or time.', [
                 'recipient_name' => 'Learner first name',
                 'instructor_name' => 'Instructor name',
                 'old_when' => 'Previous date and time',
+                'old_date' => 'Previous date',
+                'old_time' => 'Previous time range',
                 'new_when' => 'New date and time',
-                'notes_block' => 'Optional notes from the instructor',
+                'new_date' => 'New date',
+                'new_time' => 'New time range (blank if not set)',
+                'notes' => 'Notes from the instructor (blank if none)',
                 'app_name' => 'Application name',
-            ], 'Your Driving Lesson Has Been Rescheduled', 'Hello {{recipient_name}}!', "Your driving lesson with **{{instructor_name}}** has been rescheduled.\n\n**Previous:**\n{{old_when}}\n\n**New:**\n{{new_when}}\n{{notes_block}}\n\nIf this new time does not work for you, please contact your instructor to arrange an alternative.", "Safe driving,\nThe {{app_name}} Team", null),
+            ], 'Your Driving Lesson Has Been Rescheduled', 'Hello {{recipient_name}}!', "Your driving lesson with **{{instructor_name}}** has been rescheduled.\n\n**Previous:**\n{{old_when}}\n\n**New:**\n{{new_when}}\n{{#if notes}}\n**Notes from your instructor:**\n{{notes}}{{/if}}\n\nIf this new time does not work for you, please contact your instructor to arrange an alternative.", "Safe driving,\nThe {{app_name}} Team", null),
 
             self::entry(EmailTemplateKey::LearnerLessonPaymentReminder, 'Lesson payment required', $audience, 'Sent when a weekly lesson invoice is waiting to be paid.', [
-                'recipient_name' => 'Greeting name (learner or contact)',
-                'intro' => 'Opening reminder sentence',
+                'recipient_name' => 'Greeting name (learner, or the contact who booked)',
+                'learner_name' => 'Learner full name',
+                'learner_first_name' => 'Learner first name',
                 'package_name' => 'Package name',
                 'lesson_date' => 'Lesson date',
                 'lesson_time' => 'Lesson time',
-                'cost_breakdown' => 'Optional fee breakdown',
+                'lesson_cost' => 'Lesson cost in this payment, excluding fees',
+                'booking_fee' => 'Booking fee share in this payment (blank when none)',
+                'digital_fee' => 'Digital fee share in this payment (blank when none)',
+                'guarantee_fee' => 'Pass Your Test Guarantee charge in this payment (blank when none)',
                 'amount' => 'Amount due',
-            ], 'Payment Required: Your Driving Lesson on {{lesson_date}}', 'Hello {{recipient_name}}!', "{{intro}}\n\n**Lesson Details:**\nPackage: {{package_name}}\nDate: {{lesson_date}}\nTime: {{lesson_time}}\n{{cost_breakdown}}\n**Amount due: {{amount}}**\n\nPlease complete your payment using the link below to secure your lesson.\n\n{{action_button}}\n\nIf you have already paid, please disregard this email.", "Safe driving,\nThe Driving School Team", 'Pay Now'),
+            ], 'Payment Required: Your Driving Lesson on {{lesson_date}}', 'Hello {{recipient_name}}!', "This is a friendly reminder that payment is required for {{#if booked_by_contact}}**{{learner_name}}'s**{{else}}your{{/if}} upcoming driving lesson on **{{lesson_date}}** at **{{lesson_time}}**.\n\n**Lesson Details:**\nPackage: {{package_name}}\nDate: {{lesson_date}}\nTime: {{lesson_time}}\n".self::PAYMENT_COST_LINES."\n**Amount due: {{amount}}**\n\nPlease complete your payment using the link below to secure your lesson.\n\n{{action_button}}\n\nIf you have already paid, please disregard this email.", "Safe driving,\nThe Driving School Team", 'Pay Now', [
+                'booked_by_contact' => 'A contact (e.g. parent) booked on behalf of the learner',
+                'has_fees' => 'This payment includes a booking fee, digital fee or guarantee',
+            ]),
 
             self::entry(EmailTemplateKey::LearnerLessonPaymentReceived, 'Lesson payment confirmed', $audience, 'Sent when a weekly lesson payment succeeds.', [
-                'recipient_name' => 'Greeting name (learner or contact)',
-                'intro' => 'Payment confirmation sentence',
+                'recipient_name' => 'Greeting name (learner, or the contact who booked)',
+                'learner_name' => 'Learner full name',
+                'learner_first_name' => 'Learner first name',
                 'package_name' => 'Package name',
                 'lesson_date' => 'Lesson date',
                 'lesson_time' => 'Lesson time',
                 'instructor_name' => 'Instructor name',
-                'cost_breakdown' => 'Optional fee breakdown',
+                'lesson_cost' => 'Lesson cost in this payment, excluding fees',
+                'booking_fee' => 'Booking fee share in this payment (blank when none)',
+                'digital_fee' => 'Digital fee share in this payment (blank when none)',
+                'guarantee_fee' => 'Pass Your Test Guarantee charge in this payment (blank when none)',
                 'amount' => 'Amount paid',
-            ], 'Payment Confirmed: Your Driving Lesson on {{lesson_date}}', 'Hello {{recipient_name}}!', "{{intro}}\n\n**Lesson Details:**\nPackage: {{package_name}}\nDate: {{lesson_date}}\nTime: {{lesson_time}}\nInstructor: {{instructor_name}}\n{{cost_breakdown}}\nAmount paid: {{amount}}\n\nYour lesson is confirmed. Please arrive 5 minutes early.\nIf you need to make any changes, please contact us as soon as possible.", "Safe driving,\nThe Driving School Team", null),
+            ], 'Payment Confirmed: Your Driving Lesson on {{lesson_date}}', 'Hello {{recipient_name}}!', "We've received your payment of **{{amount}}** for {{#if booked_by_contact}}**{{learner_name}}'s**{{else}}your{{/if}} driving lesson on **{{lesson_date}}** at **{{lesson_time}}**.\n\n**Lesson Details:**\nPackage: {{package_name}}\nDate: {{lesson_date}}\nTime: {{lesson_time}}\nInstructor: {{instructor_name}}\n".self::PAYMENT_COST_LINES."\nAmount paid: {{amount}}\n\nYour lesson is confirmed. Please arrive 5 minutes early.\nIf you need to make any changes, please contact us as soon as possible.", "Safe driving,\nThe Driving School Team", null, [
+                'booked_by_contact' => 'A contact (e.g. parent) booked on behalf of the learner',
+                'has_fees' => 'This payment includes a booking fee, digital fee or guarantee',
+            ]),
 
             self::entry(EmailTemplateKey::LearnerInstructorOnWay, 'Instructor on the way', $audience, 'Sent when the instructor taps “on my way” for a lesson.', [
                 'recipient_name' => 'Booker first name',
                 'instructor_name' => 'Instructor name',
-                'lesson_when' => 'Optional " on Monday, 1 June at 14:00" suffix',
+                'lesson_date' => 'Lesson date, e.g. "Monday, 1 June" (blank if unknown)',
+                'lesson_time' => 'Lesson start time, e.g. "14:00" (blank if unknown)',
                 'app_name' => 'Application name',
-            ], 'Your instructor is on the way', 'Hello {{recipient_name}},', "**{{instructor_name}}** is on their way to your driving lesson{{lesson_when}}.\n\nPlease be ready at your agreed pickup point.", "See you soon,\nThe {{app_name}} Team", null),
+            ], 'Your instructor is on the way', 'Hello {{recipient_name}},', "**{{instructor_name}}** is on their way to your driving lesson{{#if lesson_date}} on {{lesson_date}}{{#if lesson_time}} at {{lesson_time}}{{/if}}{{/if}}.\n\nPlease be ready at your agreed pickup point.", "See you soon,\nThe {{app_name}} Team", null),
 
             self::entry(EmailTemplateKey::LearnerInstructorArrived, 'Instructor arrived', $audience, 'Sent when the instructor taps “I’ve arrived” for a lesson.', [
                 'recipient_name' => 'Booker first name',
@@ -251,8 +315,8 @@ final class EmailTemplateCatalog
                 'recipient_name' => 'Learner first name',
                 'instructor_name' => 'Instructor name',
                 'lesson_date' => 'Lesson date',
-                'lesson_time' => 'Lesson time range, if set',
-            ], 'How was your driving lesson?', 'Hello {{recipient_name}},', "How was your driving lesson with **{{instructor_name}}** on **{{lesson_date}}**{{lesson_time}}?\n\nYour feedback helps us keep lessons useful and enjoyable.", null, null),
+                'lesson_time' => 'Lesson time range, e.g. "10:00 - 11:00" (blank if not set)',
+            ], 'How was your driving lesson?', 'Hello {{recipient_name}},', "How was your driving lesson with **{{instructor_name}}** on **{{lesson_date}}**{{#if lesson_time}} ({{lesson_time}}){{/if}}?\n\nYour feedback helps us keep lessons useful and enjoyable.", null, null),
         ];
     }
 
@@ -263,6 +327,7 @@ final class EmailTemplateCatalog
      *     audience: string,
      *     description: string,
      *     placeholders: array<string, string>,
+     *     conditions: array<string, string>,
      *     subject: string,
      *     greeting: string,
      *     body: string,
@@ -301,28 +366,36 @@ final class EmailTemplateCatalog
                 'recipient_name' => 'Instructor first name',
                 'student_name' => 'Learner name',
                 'source_name' => 'Previous instructor name',
-                'lessons_block' => 'Transferred lesson list or empty-diary explanation',
+                'moved_lessons_count' => 'Number of future lessons added to your diary',
+                'lesson_list' => 'List of transferred lessons (clashes are flagged)',
+                'clash_count' => 'Number of transferred lessons that clash with your diary',
                 'app_name' => 'Application name',
-            ], 'New student assigned: {{student_name}}', 'Hello {{recipient_name}},', "**{{student_name}}** has been transferred to you from **{{source_name}}**.\n\n{{lessons_block}}\n\nPayment for any future lessons will be sent to your Stripe account once the lesson has been signed off.", "Thanks,\nThe {{app_name}} Team", null),
+            ], 'New student assigned: {{student_name}}', 'Hello {{recipient_name}},', "**{{student_name}}** has been transferred to you from **{{source_name}}**.\n\n{{#if moved_lessons_count}}{{#if multiple_lessons}}The following {{moved_lessons_count}} lessons have been added to your diary at their existing dates and times:{{else}}The following lesson has been added to your diary at its existing date and time:{{/if}}\n{{lesson_list}}{{#if clash_count}}\n\n⚠️ **{{clash_count}} {{#if multiple_clashes}}clashes{{else}}clash{{/if}} flagged above.** Please review your diary and rebook the affected lessons at alternative times that suit you and the student.{{/if}}{{else}}No future lessons were on the previous instructor’s diary, so nothing has been added to yours yet. The student will book new lessons with you as normal.{{/if}}\n\nPayment for any future lessons will be sent to your Stripe account once the lesson has been signed off.", "Thanks,\nThe {{app_name}} Team", null, [
+                'multiple_lessons' => 'More than one lesson was added to your diary',
+                'multiple_clashes' => 'More than one transferred lesson clashes',
+            ]),
 
             self::entry(EmailTemplateKey::InstructorStudentLost, 'Student transferred away', $audience, 'Sent to the previous instructor when a learner is transferred away.', [
                 'recipient_name' => 'Instructor first name',
                 'student_name' => 'Learner name',
                 'destination_name' => 'New instructor name',
-                'lessons_line' => 'How many future lessons were removed',
+                'lessons_removed' => 'Number of future lessons removed from your diary',
                 'app_name' => 'Application name',
-            ], 'Student transferred: {{student_name}}', 'Hello {{recipient_name}},', "**{{student_name}}** has been transferred to **{{destination_name}}**.\n\n{{lessons_line}}\n\nAny lessons you have already taught and been paid for remain attached to you — this transfer only affects future bookings.", "Thanks,\nThe {{app_name}} Team", null),
+            ], 'Student transferred: {{student_name}}', 'Hello {{recipient_name}},', "**{{student_name}}** has been transferred to **{{destination_name}}**.\n\n{{#if lessons_removed}}{{#if multiple_lessons}}{{lessons_removed}} future lessons have been removed from your diary.{{else}}1 future lesson has been removed from your diary.{{/if}}{{else}}No future lessons were on your diary at the time of transfer.{{/if}}\n\nAny lessons you have already taught and been paid for remain attached to you — this transfer only affects future bookings.", "Thanks,\nThe {{app_name}} Team", null, [
+                'multiple_lessons' => 'More than one future lesson was removed',
+            ]),
 
             self::entry(EmailTemplateKey::InstructorLessonsBulkRescheduled, 'Lessons bulk-rescheduled (instructor)', $audience, 'Confirmation to the instructor after they move a run of upcoming lessons.', [
                 'recipient_name' => 'Instructor first name',
                 'student_name' => 'Learner name',
                 'total_lessons' => 'How many lessons moved',
-                'lesson_word' => '"lesson" or "lessons"',
                 'day_of_week' => 'New weekday',
                 'time' => 'New time range',
                 'start_date' => 'First new lesson date',
                 'app_name' => 'Application name',
-            ], 'Lessons rescheduled for {{student_name}}', 'Hello {{recipient_name}},', "You have rescheduled **{{total_lessons}}** upcoming {{lesson_word}} for **{{student_name}}**.\n\nNew schedule: **{{day_of_week}}s at {{time}}**, starting **{{start_date}}**.\n\nThe student has been notified by email.", "Thanks,\nThe {{app_name}} Team", null),
+            ], 'Lessons rescheduled for {{student_name}}', 'Hello {{recipient_name}},', "You have rescheduled **{{total_lessons}}** upcoming {{#if multiple_lessons}}lessons{{else}}lesson{{/if}} for **{{student_name}}**.\n\nNew schedule: **{{day_of_week}}s at {{time}}**, starting **{{start_date}}**.\n\nThe student has been notified by email.", "Thanks,\nThe {{app_name}} Team", null, [
+                'multiple_lessons' => 'More than one lesson was moved',
+            ]),
 
             self::entry(EmailTemplateKey::InstructorLessonPaymentReceived, 'Learner paid for a lesson', $audience, 'Sent to the instructor when a learner pays for an upcoming lesson. The amount is the lesson fee the instructor receives, excluding the booking fee and digital fee.', [
                 'student_name' => 'Learner name',
@@ -335,10 +408,11 @@ final class EmailTemplateCatalog
                 'recipient_name' => 'Instructor name',
                 'student_name' => 'Learner name',
                 'lesson_date' => 'Lesson date',
-                'lesson_time_line' => 'Lesson time, if set',
-                'payout_line' => 'Payout sentence when the transfer was sent; blank otherwise',
+                'lesson_time' => 'Lesson time range (blank if not set)',
                 'app_name' => 'Application name',
-            ], 'Lesson Signed Off — {{student_name}}', 'Hello {{recipient_name}}!', "You have signed off the lesson with **{{student_name}}** on **{{lesson_date}}**.\n{{lesson_time_line}}\n{{payout_line}}", "Thanks,\nThe {{app_name}} Team", null),
+            ], 'Lesson Signed Off — {{student_name}}', 'Hello {{recipient_name}}!', "You have signed off the lesson with **{{student_name}}** on **{{lesson_date}}**.\n{{#if lesson_time}}Lesson time: {{lesson_time}}{{/if}}\n{{#if payout_initiated}}The payout for this lesson has been initiated to your account.{{/if}}", "Thanks,\nThe {{app_name}} Team", null, [
+                'payout_initiated' => 'The payout transfer was started (false when it is held for a platform balance shortfall)',
+            ]),
 
             self::entry(EmailTemplateKey::InstructorCalendarClash, 'Scheduling clash detected', $audience, 'Sent when a new calendar item overlaps existing items.', [
                 'recipient_name' => 'Instructor name',
@@ -369,14 +443,14 @@ final class EmailTemplateCatalog
             self::entry(EmailTemplateKey::InstructorYearEndArchiveReady, 'Tax-year archive ready', $audience, 'Sent when a year-end tax archive ZIP is ready to download.', [
                 'recipient_name' => 'Instructor name',
                 'tax_year_label' => 'Tax year label',
-                'file_size' => 'File size, if known',
+                'file_size' => 'File size, e.g. "12.34 MB" (blank if unknown)',
                 'finance_rows' => 'Finance row count',
                 'mileage_rows' => 'Mileage row count',
                 'receipts' => 'Receipt count',
                 'submissions' => 'Submission count',
                 'link_expires_at' => 'Download link expiry',
                 'retention_years' => 'How long the archive is kept',
-            ], 'Your {{tax_year_label}} tax-year archive is ready', 'Hello {{recipient_name}},', "Your {{tax_year_label}} tax-year archive is ready to download.\n\nIt includes {{finance_rows}} finance rows, {{mileage_rows}} mileage logs, {{receipts}} receipts and {{submissions}} submissions{{file_size}}.\n\n{{action_button}}\n\nThis download link expires on {{link_expires_at}}. We keep a copy for {{retention_years}} years to meet HMRC record-keeping rules.", null, 'Download archive'),
+            ], 'Your {{tax_year_label}} tax-year archive is ready', 'Hello {{recipient_name}},', "Your {{tax_year_label}} tax-year archive is ready to download.\n\nIt includes {{finance_rows}} finance rows, {{mileage_rows}} mileage logs, {{receipts}} receipts and {{submissions}} submissions{{#if file_size}} ({{file_size}}){{/if}}.\n\n{{action_button}}\n\nThis download link expires on {{link_expires_at}}. We keep a copy for {{retention_years}} years to meet HMRC record-keeping rules.", null, 'Download archive'),
         ];
     }
 
@@ -387,6 +461,7 @@ final class EmailTemplateCatalog
      *     audience: string,
      *     description: string,
      *     placeholders: array<string, string>,
+     *     conditions: array<string, string>,
      *     subject: string,
      *     greeting: string,
      *     body: string,
@@ -412,6 +487,7 @@ final class EmailTemplateCatalog
      *     audience: string,
      *     description: string,
      *     placeholders: array<string, string>,
+     *     conditions: array<string, string>,
      *     subject: string,
      *     greeting: string,
      *     body: string,
@@ -435,12 +511,14 @@ final class EmailTemplateCatalog
 
     /**
      * @param  array<string, string>  $placeholders
+     * @param  array<string, string>  $conditions
      * @return array{
      *     key: string,
      *     name: string,
      *     audience: string,
      *     description: string,
      *     placeholders: array<string, string>,
+     *     conditions: array<string, string>,
      *     subject: string,
      *     greeting: string,
      *     body: string,
@@ -459,6 +537,7 @@ final class EmailTemplateCatalog
         string $body,
         ?string $salutation,
         ?string $actionText,
+        array $conditions = [],
     ): array {
         return [
             'key' => $key->value,
@@ -466,6 +545,7 @@ final class EmailTemplateCatalog
             'audience' => $audience,
             'description' => $description,
             'placeholders' => $placeholders,
+            'conditions' => $conditions,
             'subject' => $subject,
             'greeting' => $greeting,
             'body' => $body,

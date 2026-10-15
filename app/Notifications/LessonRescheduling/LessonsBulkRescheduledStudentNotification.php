@@ -39,14 +39,13 @@ class LessonsBulkRescheduledStudentNotification extends Notification implements 
     public function toMail(object $notifiable): MailMessage
     {
         $startDate = Carbon::parse($this->newStartDate);
-        $lessonWord = $this->totalLessons === 1 ? 'lesson' : 'lessons';
 
         return $this->templatedMail(
             EmailTemplateKey::LearnerLessonsBulkRescheduled,
             [
                 'recipient_name' => $this->student->first_name ?: 'there',
                 'instructor_name' => $this->instructor->user?->name ?? 'your instructor',
-                'lesson_word' => $lessonWord,
+                'multiple_lessons' => $this->totalLessons !== 1,
                 'start_date' => $startDate->format('l, j F Y'),
                 'day_of_week' => $startDate->format('l'),
                 'time' => $this->newStartTime.' – '.$this->newEndTime,

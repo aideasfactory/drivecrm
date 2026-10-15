@@ -209,6 +209,46 @@ class LessonPayment extends Model
         return $lines;
     }
 
+    /**
+     * This payment's cost components as individual email placeholder values.
+     *
+     * @return array{lesson_cost: string, booking_fee: string, digital_fee: string, guarantee_fee: string, has_fees: bool}
+     */
+    public function costBreakdownPlaceholders(): array
+    {
+        $order = $this->lesson?->order;
+
+        if (! $order) {
+            return self::breakdownPlaceholders([]);
+        }
+
+        return self::breakdownPlaceholders(self::weeklyBreakdown($order, (int) $this->amount_pence, (int) $this->test_pass_guarantee_pence));
+    }
+
+    /**
+     * A payment breakdown as individual email placeholder values. Amounts are
+     * blank when zero so templates can wrap each line in `{{#if booking_fee}}…{{/if}}`;
+     * `has_fees` matches when {@see breakdownLines()} would print a breakdown.
+     *
+     * @param  array{lesson?: int, booking_fee?: int, digital_fee?: int, test_pass_guarantee?: int}  $breakdown
+     * @return array{lesson_cost: string, booking_fee: string, digital_fee: string, guarantee_fee: string, has_fees: bool}
+     */
+    public static function breakdownPlaceholders(array $breakdown): array
+    {
+        $lesson = (int) ($breakdown['lesson'] ?? 0);
+        $bookingFee = (int) ($breakdown['booking_fee'] ?? 0);
+        $digitalFee = (int) ($breakdown['digital_fee'] ?? 0);
+        $testPassGuarantee = (int) ($breakdown['test_pass_guarantee'] ?? 0);
+
+        return [
+            'lesson_cost' => $lesson > 0 ? self::formatPence($lesson) : '',
+            'booking_fee' => $bookingFee > 0 ? self::formatPence($bookingFee) : '',
+            'digital_fee' => $digitalFee > 0 ? self::formatPence($digitalFee) : '',
+            'guarantee_fee' => $testPassGuarantee > 0 ? self::formatPence($testPassGuarantee) : '',
+            'has_fees' => $bookingFee > 0 || $digitalFee > 0 || $testPassGuarantee > 0,
+        ];
+    }
+
     protected static function formatPence(int $pence): string
     {
         return '£'.number_format($pence / 100, 2);

@@ -381,6 +381,27 @@ class Order extends Model
     }
 
     /**
+     * The order's cost components as individual email placeholder values.
+     * Amounts are blank when zero so templates can wrap each line in
+     * `{{#if booking_fee}}…{{/if}}`.
+     *
+     * @return array{lesson_cost: string, booking_fee: string, digital_fee: string, guarantee_fee: string, guarantee_included_free: bool, has_fees: bool}
+     */
+    public function costBreakdownPlaceholders(): array
+    {
+        $hasPaidGuarantee = $this->includes_test_pass_guarantee && $this->test_pass_guarantee_pence > 0;
+
+        return [
+            'lesson_cost' => $this->formatted_package_total_price,
+            'booking_fee' => $this->booking_fee_pence > 0 ? $this->formatted_booking_fee : '',
+            'digital_fee' => $this->digital_fee_pence > 0 ? $this->formatted_digital_fee : '',
+            'guarantee_fee' => $hasPaidGuarantee ? $this->formatted_test_pass_guarantee : '',
+            'guarantee_included_free' => (bool) $this->includes_test_pass_guarantee && ! $hasPaidGuarantee,
+            'has_fees' => $this->hasFees(),
+        ];
+    }
+
+    /**
      * Get formatted lesson price from snapshot (e.g., "£50.00").
      */
     public function getFormattedPackageLessonPriceAttribute(): string

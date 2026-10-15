@@ -21,6 +21,7 @@ import {
     UserCog,
     Users,
     UsersRound,
+    Workflow,
 } from 'lucide-vue-next';
 import { computed } from 'vue';
 import NavFooter from '@/components/NavFooter.vue';
@@ -47,6 +48,7 @@ import { index as pupilsIndex } from '@/routes/pupils';
 import { index as reportsIndex } from '@/routes/reports';
 import { index as pushNotificationsIndex } from '@/routes/push-notifications';
 import { index as emailTemplatesIndex } from '@/routes/email-templates';
+import { index as workflowsIndex } from '@/routes/workflows';
 import { index as hazardPerceptionIndex } from '@/routes/hazard-perception';
 import { index as importsIndex } from '@/routes/imports';
 import { index as resourcesIndex } from '@/routes/resources';
@@ -127,6 +129,12 @@ const allNavItems: NavItem[] = [
         title: 'Email templates',
         href: emailTemplatesIndex(),
         icon: Mail,
+        roles: ['owner'],
+    },
+    {
+        title: 'Workflows',
+        href: workflowsIndex(),
+        icon: Workflow,
         roles: ['owner'],
     },
     {

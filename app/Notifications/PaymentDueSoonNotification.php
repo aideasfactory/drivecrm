@@ -45,12 +45,14 @@ class PaymentDueSoonNotification extends Notification implements ShouldQueue
             EmailTemplateKey::LearnerPaymentDueSoon,
             [
                 'recipient_name' => $this->recipientName(),
-                'intro' => $this->introLine($lessonDate, $lessonTime),
+                'learner_name' => trim(($this->student->first_name ?? '').' '.($this->student->surname ?? '')),
+                'learner_first_name' => $this->student->first_name,
                 'package_name' => $order->package_name,
                 'lesson_date' => $lessonDate,
                 'lesson_time' => $lessonTime,
-                'cost_breakdown' => implode("\n", $this->lessonPayment->costBreakdownLines()),
+                ...$this->lessonPayment->costBreakdownPlaceholders(),
                 'amount' => $amount,
+                'booked_by_contact' => $this->isBookedByContact,
             ],
             $this->hostedInvoiceUrl,
         );
@@ -63,17 +65,6 @@ class PaymentDueSoonNotification extends Notification implements ShouldQueue
         }
 
         return $this->student->first_name ?? 'there';
-    }
-
-    protected function introLine(string $lessonDate, string $lessonTime): string
-    {
-        $learnerName = trim(($this->student->first_name ?? '').' '.($this->student->surname ?? ''));
-
-        if ($this->isBookedByContact) {
-            return "This is a reminder that payment is due for **{$learnerName}'s** upcoming driving lesson on **{$lessonDate}** at **{$lessonTime}**.";
-        }
-
-        return "This is a reminder that payment is due for your upcoming driving lesson on **{$lessonDate}** at **{$lessonTime}**.";
     }
 
     /**

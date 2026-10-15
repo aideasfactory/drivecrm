@@ -42,7 +42,6 @@ class LessonsBulkRescheduledInstructorNotification extends Notification implemen
             ? trim("{$this->student->first_name} {$this->student->surname}")
             : 'a student';
         $startDate = Carbon::parse($this->newStartDate);
-        $lessonWord = $this->totalLessons === 1 ? 'lesson' : 'lessons';
 
         return $this->templatedMail(
             EmailTemplateKey::InstructorLessonsBulkRescheduled,
@@ -50,7 +49,7 @@ class LessonsBulkRescheduledInstructorNotification extends Notification implemen
                 'recipient_name' => $this->instructor->first_name ?? 'there',
                 'student_name' => $studentName,
                 'total_lessons' => $this->totalLessons,
-                'lesson_word' => $lessonWord,
+                'multiple_lessons' => $this->totalLessons !== 1,
                 'day_of_week' => $startDate->format('l'),
                 'time' => $this->newStartTime.' – '.$this->newEndTime,
                 'start_date' => $startDate->format('l, j F Y'),

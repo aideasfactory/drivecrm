@@ -38,11 +38,9 @@ class LessonSignedOffNotification extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $lessonDate = $this->lesson->date?->format('l, j F Y') ?? 'N/A';
-        $lessonTimeLine = '';
-
-        if ($this->lesson->start_time && $this->lesson->end_time) {
-            $lessonTimeLine = 'Lesson time: '.$this->lesson->start_time->format('H:i').' - '.$this->lesson->end_time->format('H:i');
-        }
+        $lessonTime = $this->lesson->start_time && $this->lesson->end_time
+            ? $this->lesson->start_time->format('H:i').' - '.$this->lesson->end_time->format('H:i')
+            : '';
 
         if ($this->isForInstructor) {
             $studentName = trim(($this->student->first_name ?? '').' '.($this->student->surname ?? ''));
@@ -53,16 +51,12 @@ class LessonSignedOffNotification extends Notification implements ShouldQueue
                     'recipient_name' => $this->instructor->user?->name ?? 'there',
                     'student_name' => $studentName,
                     'lesson_date' => $lessonDate,
-                    'lesson_time_line' => $lessonTimeLine,
-                    'payout_line' => $this->payoutLine(),
+                    'lesson_time' => $lessonTime,
+                    'payout_initiated' => $this->isPayoutInitiated(),
                     'app_name' => config('app.name'),
                 ],
             );
         }
-
-        $notesBlock = $this->lesson->summary
-            ? "**Instructor Notes:**\n".$this->lesson->summary
-            : '';
 
         return $this->templatedMail(
             EmailTemplateKey::LearnerLessonSignedOff,
@@ -70,8 +64,8 @@ class LessonSignedOffNotification extends Notification implements ShouldQueue
                 'recipient_name' => $this->student->first_name ?? 'there',
                 'instructor_name' => $this->instructor->user?->name ?? 'your instructor',
                 'lesson_date' => $lessonDate,
-                'lesson_time_line' => $lessonTimeLine,
-                'instructor_notes_block' => $notesBlock,
+                'lesson_time' => $lessonTime,
+                'instructor_notes' => $this->lesson->summary,
                 'app_name' => config('app.name'),
             ],
         );
@@ -81,16 +75,16 @@ class LessonSignedOffNotification extends Notification implements ShouldQueue
      * Confirm a transfer only when one was actually sent. A platform-balance
      * shortfall still signs the lesson off, so the email stays silent about it.
      */
-    protected function payoutLine(): string
+    protected function isPayoutInitiated(): bool
     {
         $this->lesson->unsetRelation('payout');
         $payout = $this->lesson->payout;
 
         if ($payout?->isFailed() && StripeTransferFailure::isPlatformBalanceShortfall($payout->failure_code, $payout->failure_message)) {
-            return '';
+            return false;
         }
 
-        return 'The payout for this lesson has been initiated to your account.';
+        return true;
     }
 
     /**
