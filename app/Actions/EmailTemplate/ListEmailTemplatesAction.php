@@ -23,6 +23,7 @@ class ListEmailTemplatesAction
      *     audience_label: string,
      *     description: string,
      *     placeholders: array<int, array{key: string, label: string}>,
+     *     conditions: array<int, array{key: string, label: string}>,
      *     subject: string,
      *     greeting: string,
      *     body: string,
@@ -58,6 +59,13 @@ class ListEmailTemplatesAction
                     'audience_label' => $audience->label(),
                     'description' => $definition['description'],
                     'placeholders' => collect($definition['placeholders'])
+                        ->map(fn (string $label, string $key): array => [
+                            'key' => $key,
+                            'label' => $label,
+                        ])
+                        ->values()
+                        ->all(),
+                    'conditions' => collect($definition['conditions'])
                         ->map(fn (string $label, string $key): array => [
                             'key' => $key,
                             'label' => $label,

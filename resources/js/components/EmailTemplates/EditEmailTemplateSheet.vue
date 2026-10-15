@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { toast } from '@/components/ui/sonner'
-import { Mail, Loader2, Save, RotateCcw } from 'lucide-vue-next'
+import { Mail, Loader2, Save, RotateCcw, Plus } from 'lucide-vue-next'
 import {
     update as updateEmailTemplate,
     restore as restoreEmailTemplate,
@@ -32,6 +32,7 @@ export interface EmailTemplateItem {
     audience_label: string
     description: string
     placeholders: EmailTemplatePlaceholder[]
+    conditions: EmailTemplatePlaceholder[]
     subject: string
     greeting: string
     body: string
@@ -78,6 +79,9 @@ watch(
         form.body = template.body
         form.salutation = template.salutation
         form.action_text = template.action_text ?? ''
+        lastFocus.field = 'body'
+        lastFocus.start = null
+        lastFocus.end = null
         Object.keys(errors).forEach((key) => delete errors[key])
     },
     { immediate: true },
@@ -87,9 +91,44 @@ const canSave = computed(
     () => form.subject.trim().length > 0 && form.body.trim().length > 0,
 )
 
+type EditableField = 'subject' | 'greeting' | 'body' | 'salutation'
+
+const lastFocus = reactive<{
+    field: EditableField
+    start: number | null
+    end: number | null
+}>({ field: 'body', start: null, end: null })
+
+const rememberCursor = (field: EditableField, event: FocusEvent) => {
+    const target = event.target as HTMLInputElement | HTMLTextAreaElement
+    lastFocus.field = field
+    lastFocus.start = target.selectionStart
+    lastFocus.end = target.selectionEnd
+}
+
+const insertText = (text: string) => {
+    const field = lastFocus.field
+    const current = form[field] ?? ''
+    const start = lastFocus.start ?? current.length
+    const end = lastFocus.end ?? start
+
+    form[field] = `${current.slice(0, start)}${text}${current.slice(end)}`
+    lastFocus.start = start + text.length
+    lastFocus.end = lastFocus.start
+}
+
 const insertPlaceholder = (key: string) => {
-    const token = `{{${key}}}`
-    form.body = form.body ? `${form.body}${token}` : token
+    insertText(`{{${key}}}`)
+}
+
+const insertCondition = (key: string) => {
+    const field = lastFocus.field
+    const current = form[field] ?? ''
+    const start = lastFocus.start ?? current.length
+    const end = lastFocus.end ?? start
+    const selected = current.slice(start, end)
+
+    insertText(`{{#if ${key}}}${selected}{{/if}}`)
 }
 
 const applyValidationErrors = (validationErrors: Record<string, string>) => {
@@ -203,7 +242,11 @@ const handleOpenChange = (value: boolean) => {
 
                 <div class="space-y-2">
                     <Label for="subject">Subject</Label>
-                    <Input id="subject" v-model="form.subject" />
+                    <Input
+                        id="subject"
+                        v-model="form.subject"
+                        @blur="rememberCursor('subject', $event)"
+                    />
                     <p v-if="errors.subject" class="text-sm text-destructive">
                         {{ errors.subject }}
                     </p>
@@ -215,6 +258,7 @@ const handleOpenChange = (value: boolean) => {
                         id="greeting"
                         v-model="form.greeting"
                         placeholder="Hello {{recipient_name}},"
+                        @blur="rememberCursor('greeting', $event)"
                     />
                     <p v-if="errors.greeting" class="text-sm text-destructive">
                         {{ errors.greeting }}
@@ -227,6 +271,7 @@ const handleOpenChange = (value: boolean) => {
                         id="body"
                         v-model="form.body"
                         class="min-h-64 font-mono text-sm"
+                        @blur="rememberCursor('body', $event)"
                     />
                     <p class="text-xs text-muted-foreground">
                         Markdown is supported (**bold**, lists, links). Put
@@ -239,25 +284,81 @@ const handleOpenChange = (value: boolean) => {
                 </div>
 
                 <div class="space-y-2">
-                    <Label>Placeholders</Label>
-                    <div class="flex flex-wrap gap-2">
-                        <Button
+                    <Label>Available placeholders</Label>
+                    <p class="text-xs text-muted-foreground">
+                        Click a placeholder to insert it where your cursor was
+                        in the subject, greeting, body or sign-off. Values are
+                        filled in when the email sends. Placeholders not listed
+                        here are left blank, so a typo will never break an
+                        email.
+                    </p>
+                    <ul class="divide-y rounded-md border">
+                        <li
                             v-for="placeholder in template.placeholders"
                             :key="placeholder.key"
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            class="cursor-pointer"
-                            @click="insertPlaceholder(placeholder.key)"
+                            class="flex items-center justify-between gap-3 px-3 py-2"
                         >
-                            {{ placeholder.key }}
-                        </Button>
-                    </div>
+                            <div class="min-w-0">
+                                <code
+                                    class="text-xs font-medium"
+                                    v-text="`{{${placeholder.key}}}`"
+                                />
+                                <p class="text-xs text-muted-foreground">
+                                    {{ placeholder.label }}
+                                </p>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                class="shrink-0 cursor-pointer"
+                                @click="insertPlaceholder(placeholder.key)"
+                            >
+                                <Plus class="mr-1 h-3 w-3" />
+                                Insert
+                            </Button>
+                        </li>
+                    </ul>
+                </div>
+
+                <div v-if="template.conditions.length" class="space-y-2">
+                    <Label>Conditions</Label>
                     <p class="text-xs text-muted-foreground">
-                        Click a placeholder to insert it into the body. Dynamic
-                        details (dates, amounts, names) are filled in when the
-                        email sends.
+                        Show text only in some cases with
+                        <code
+                            v-text="'{{#if condition}}shown when true{{else}}shown otherwise{{/if}}'"
+                        />. The
+                        <code v-text="'{{else}}'" /> part is optional. Any
+                        placeholder above also works as a condition (true when
+                        it has a value). Select text first to wrap it.
                     </p>
+                    <ul class="divide-y rounded-md border">
+                        <li
+                            v-for="condition in template.conditions"
+                            :key="condition.key"
+                            class="flex items-center justify-between gap-3 px-3 py-2"
+                        >
+                            <div class="min-w-0">
+                                <code
+                                    class="text-xs font-medium"
+                                    v-text="condition.key"
+                                />
+                                <p class="text-xs text-muted-foreground">
+                                    {{ condition.label }}
+                                </p>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                class="shrink-0 cursor-pointer"
+                                @click="insertCondition(condition.key)"
+                            >
+                                <Plus class="mr-1 h-3 w-3" />
+                                Insert
+                            </Button>
+                        </li>
+                    </ul>
                 </div>
 
                 <div class="space-y-2">
@@ -285,6 +386,7 @@ const handleOpenChange = (value: boolean) => {
                         id="salutation"
                         v-model="form.salutation"
                         class="min-h-20"
+                        @blur="rememberCursor('salutation', $event)"
                     />
                     <p
                         v-if="errors.salutation"
