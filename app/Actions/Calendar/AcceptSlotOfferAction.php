@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Calendar;
 
+use App\Enums\OrderSource;
 use App\Enums\PaymentMode;
 use App\Enums\SlotOfferStatus;
 use App\Models\CalendarItem;
@@ -77,6 +78,7 @@ class AcceptSlotOfferAction
                 $paymentMode,
                 $item,
                 $returnCheckoutUrl,
+                OrderSource::LEARNER_APP,
             );
 
             $lockedOffer->update([

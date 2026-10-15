@@ -8,6 +8,7 @@ use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
 use App\Actions\Student\Order\CreateDraftCalendarItemsAction;
 use App\Enums\CalendarItemStatus;
 use App\Enums\LessonStatus;
+use App\Enums\OrderSource;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use App\Enums\PaymentStatus;
@@ -109,6 +110,7 @@ class CreateOrderFromEnquiryAction
                 'includes_test_pass_guarantee' => $testPassGuarantee['included'],
                 'test_pass_guarantee_pence' => $testPassGuarantee['charge_pence'],
                 'booked_by_user_id' => $enquiry->getStaffBooking()['user_id'] ?? null,
+                'source' => $enquiry->isStaffBooking() ? OrderSource::BOOKINGS_TEAM : OrderSource::WEBSITE,
             ]);
 
             Log::info('Created order from onboarding', [

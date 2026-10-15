@@ -29,6 +29,7 @@ use App\Actions\Student\PickupPoint\UpdatePickupPointAction;
 use App\Actions\Student\Status\RemoveStudentFromInstructorAction;
 use App\Actions\Student\Status\UpdateStudentStatusAction;
 use App\Actions\Student\Transfer\GetOnboardedInstructorsAction;
+use App\Enums\OrderSource;
 use App\Enums\PaymentMode;
 use App\Http\Requests\AdminResetPasswordRequest;
 use App\Http\Requests\DeleteStudentProfileRequest;
@@ -468,7 +469,8 @@ class PupilController extends Controller
                 $student,
                 $package,
                 $paymentMode,
-                $calendarItem
+                $calendarItem,
+                source: OrderSource::CRM
             );
         } else {
             $result = $orderService->bookLessons(
@@ -477,7 +479,8 @@ class PupilController extends Controller
                 $paymentMode,
                 $validated['first_lesson_date'],
                 $validated['start_time'],
-                $validated['end_time']
+                $validated['end_time'],
+                source: OrderSource::CRM
             );
         }
 

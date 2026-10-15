@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\OrderSource;
 use App\Enums\PaymentMode;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
@@ -59,6 +60,7 @@ class StudentOrderController extends Controller
 
         $paymentMode = PaymentMode::from($validated['payment_mode']);
         $isStudentInitiated = $request->user()->role === UserRole::STUDENT;
+        $source = $isStudentInitiated ? OrderSource::LEARNER_APP : OrderSource::INSTRUCTOR_APP;
 
         if (! empty($validated['calendar_item_id'])) {
             $calendarItem = CalendarItem::with('calendar')->findOrFail($validated['calendar_item_id']);
@@ -67,7 +69,8 @@ class StudentOrderController extends Controller
                 $package,
                 $paymentMode,
                 $calendarItem,
-                returnCheckoutUrl: $isStudentInitiated
+                returnCheckoutUrl: $isStudentInitiated,
+                source: $source
             );
         } else {
             $result = $this->orderService->bookLessons(
@@ -77,7 +80,8 @@ class StudentOrderController extends Controller
                 $validated['first_lesson_date'],
                 $validated['start_time'],
                 $validated['end_time'],
-                returnCheckoutUrl: $isStudentInitiated
+                returnCheckoutUrl: $isStudentInitiated,
+                source: $source
             );
         }
 

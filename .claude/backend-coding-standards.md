@@ -70,6 +70,16 @@ public function index(Request $request, Instructor $instructor): StudentCollecti
 - "Update instructor profile" → target `$request->user()->instructor`
 - The ID is NEVER in the URL or request body for the current user's own resources
 
+## 4a. 💳 Payment Pipeline (NON-NEGOTIABLE)
+
+**We cannot afford to break payments.** Before changing any backend code, check it against
+**`.claude/payment-pipeline.md`**. If the change touches the payment pipeline (orders, checkout,
+Stripe, webhooks, holds, invoices, payouts, refunds, pricing/fees):
+- Announce `⚠️ PAYMENT PIPELINE: ...` before making the change
+- Keep it minimal and additive; never alter amounts, Stripe calls, webhooks or status transitions as a side effect
+- Trace every caller (web, API, webhook, command, job) and check deploy order for new columns
+- End the task summary with a `💳 Payment impact:` report (see payment-pipeline.md)
+
 ## 5. JIT Index - Directory Map
 
 ### Primary Contexts

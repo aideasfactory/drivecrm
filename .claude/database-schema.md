@@ -465,6 +465,7 @@ Student enrollments/purchases of lesson packages.
 | `invoice_sent_at` | timestamp | NULLABLE, INDEX | When the bookings team's payment-link email was first sent for a staff booking. Set once by `OrderService::sendPaymentLink` (staff sends only); resends don't change it. Backfilled from `created_at` for existing staff bookings. |
 | `purchase_tracked_at` | timestamp | NULLABLE | When the success page (onboarding complete or payment-link success) first pushed this order's GTM `purchase` dataLayer event. Claimed atomically by `ClaimPurchaseEventAction` so the conversion fires once per order. Backfilled from `updated_at` for orders already active/completed when the column was added. |
 | `booked_by_user_id` | bigint unsigned | FOREIGN KEY (users.id), NULLABLE, ON DELETE SET NULL | Bookings-team user who booked this order on the student's behalf ("Book lessons for a student" form). Copied from the enquiry's `data.staff_booking.user_id` by `CreateOrderFromEnquiryAction`. `null` = booked by the learner, app or instructor. `Order::isStaffBooking()`. |
+| `source` | varchar(32) | NULLABLE | Where the order was booked from (`App\Enums\OrderSource`): `website` (learner booking form), `bookings_team` (staff "Book lessons for a student"), `crm` (web CRM, `PupilController::storeOrder`), `learner_app` / `instructor_app` (`POST /api/v1/students/{student}/orders`, by the caller's role; short-notice slot offers accepted in the app are `learner_app`), `imported` (legacy importer). Set at creation by `CreateOrderFromEnquiryAction`, `OrderService::bookLessons` and `ResolveImportedOrderAction`. Backfilled for `imported`, `bookings_team` and `website` (enquiry step 6 `order_id`); other legacy orders are `null`, shown as "Instructor / App". |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
@@ -472,6 +473,7 @@ Student enrollments/purchases of lesson packages.
 - Composite index on `(student_id, status)`
 - Composite index on `(instructor_id, status)`
 - Composite index on `(status, payment_hold_expires_at)` (used by `orders:release-expired-holds`)
+- Index on `created_at` ("Lessons booked" → All bookings date filter)
 
 **Relationships:**
 - Belongs to one `Student`
@@ -484,6 +486,7 @@ Student enrollments/purchases of lesson packages.
 **Enums:**
 - Payment Mode: `upfront`, `weekly`, `imported`
 - Status: `pending`, `active`, `completed`, `cancelled`, `expired`
+- Source: `website`, `bookings_team`, `crm`, `learner_app`, `instructor_app`, `imported` (nullable for legacy orders)
 
 **Business Logic:**
 - **Pay at booking:** every order is created `pending` with `draft` lessons and `draft` calendar items. Nothing is confirmed (no confirmation/welcome email) until the first payment lands.
@@ -493,6 +496,7 @@ Student enrollments/purchases of lesson packages.
 - **Pass Your Test Guarantee (booking form only):** free when booked hours (lessons × slot length from step 4) ≥ `config('test_pass_guarantee.free_minimum_hours')` (10) and `payment_mode = upfront`. Otherwise the learner can opt in on the payment step (step 6) for `config('test_pass_guarantee.price')` (£50). Upfront: charged as a separate Stripe Checkout line item. Weekly: added in full to the first `lesson_payments` row (see `lesson_payments.test_pass_guarantee_pence`); the rest of the total is spread evenly as usual. Rules live in `App\Support\TestPassGuarantee`.
 - **Imported orders** (`payment_mode = imported`): one per imported student, on a hidden (`active = false`) per-instructor "Imported lessons" package with £0 totals. Lessons on them report `payment_status = paid` / `is_paid = true` so they can be signed off in the app and CRM. `SignOffLessonAction` skips the Stripe onboarding + payment guards and creates **no Payout**; `LessonSignOffService` also skips the student feedback email, next-invoice and resource recommendations. `Order::isImported()`, `Order::isPrepaid()` (confirmed upfront or imported).
 - **Staff bookings:** orders with `booked_by_user_id` set are listed on the admin "Lessons booked" page (`ListStaffBookedLessonsAction`) so unpaid ones can be chased.
+- **All bookings:** the "Lessons booked" page's All bookings tab (`ListAllBookedLessonsAction`) lists every non-imported order by `created_at`, with its `source`.
 - **Price snapshot:** `package_name`, `package_total_price_pence`, `package_lesson_price_pence`, and `package_lessons_count` are copied from the package at order creation time. Always use these snapshot columns for pricing/display — never read live from `packages` table via the `package` relationship for pricing data.
 
 ---

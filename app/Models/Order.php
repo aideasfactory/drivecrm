@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\OrderSource;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -38,6 +39,7 @@ class Order extends Model
         'invoice_sent_at',
         'purchase_tracked_at',
         'booked_by_user_id',
+        'source',
     ];
 
     protected function casts(): array
@@ -45,6 +47,7 @@ class Order extends Model
         return [
             'payment_mode' => PaymentMode::class,
             'status' => OrderStatus::class,
+            'source' => OrderSource::class,
             'package_total_price_pence' => 'integer',
             'package_lesson_price_pence' => 'integer',
             'package_lessons_count' => 'integer',

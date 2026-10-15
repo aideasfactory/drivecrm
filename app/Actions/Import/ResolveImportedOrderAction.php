@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Import;
 
+use App\Enums\OrderSource;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use App\Models\Instructor;
@@ -47,6 +48,7 @@ class ResolveImportedOrderAction
             [
                 'package_id' => $package->id,
                 'package_name' => self::PACKAGE_NAME,
+                'source' => OrderSource::IMPORTED,
                 'package_total_price_pence' => 0,
                 'package_lesson_price_pence' => 0,
                 'package_lessons_count' => 0,

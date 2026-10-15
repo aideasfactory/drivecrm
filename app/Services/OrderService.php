@@ -21,6 +21,7 @@ use App\Actions\Student\Order\ReleaseUnpaidOrderAction;
 use App\Actions\Student\Order\SendPaymentLinkEmailAction;
 use App\Actions\Student\Order\VerifyCheckoutAction;
 use App\Enums\LessonStatus;
+use App\Enums\OrderSource;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use App\Enums\PaymentStatus;
@@ -87,7 +88,8 @@ class OrderService extends BaseService
         string $startTime,
         string $endTime,
         bool $returnCheckoutUrl = false,
-        ?int $anchorCalendarItemId = null
+        ?int $anchorCalendarItemId = null,
+        ?OrderSource $source = null
     ): array {
         $calendarItemIds = ($this->createDraftCalendarItems)(
             $student->instructor_id,
@@ -107,7 +109,8 @@ class OrderService extends BaseService
             $firstLessonDate,
             $startTime,
             $endTime,
-            $calendarItemIds
+            $calendarItemIds,
+            $source
         );
 
         $order->update([
@@ -145,7 +148,8 @@ class OrderService extends BaseService
         Package $package,
         PaymentMode $paymentMode,
         CalendarItem $calendarItem,
-        bool $returnCheckoutUrl = false
+        bool $returnCheckoutUrl = false,
+        ?OrderSource $source = null
     ): array {
         $calendarItem->loadMissing('calendar');
 
@@ -173,7 +177,8 @@ class OrderService extends BaseService
             $startTime,
             $endTime,
             $returnCheckoutUrl,
-            $calendarItem->id
+            $calendarItem->id,
+            $source
         );
     }
 

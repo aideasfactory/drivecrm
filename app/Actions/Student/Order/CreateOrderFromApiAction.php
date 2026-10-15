@@ -8,6 +8,7 @@ use App\Actions\Package\CalculatePackagePricingAction;
 use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
 use App\Enums\CalendarItemStatus;
 use App\Enums\LessonStatus;
+use App\Enums\OrderSource;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use App\Enums\PaymentStatus;
@@ -29,6 +30,7 @@ class CreateOrderFromApiAction
      * Create an order with scheduled lessons from API request data.
      *
      * @param  array<int, int>  $calendarItemIds  Draft calendar item IDs (one per lesson)
+     * @param  ?OrderSource  $source  Where the booking came from (CRM, learner app or instructor app)
      */
     public function __invoke(
         Student $student,
@@ -37,9 +39,10 @@ class CreateOrderFromApiAction
         string $firstLessonDate,
         string $startTime,
         string $endTime,
-        array $calendarItemIds
+        array $calendarItemIds,
+        ?OrderSource $source = null
     ): Order {
-        $order = DB::transaction(function () use ($student, $package, $paymentMode, $firstLessonDate, $startTime, $endTime, $calendarItemIds): Order {
+        $order = DB::transaction(function () use ($student, $package, $paymentMode, $firstLessonDate, $startTime, $endTime, $calendarItemIds, $source): Order {
             $instructorId = $student->instructor_id;
 
             $pricing = app(CalculatePackagePricingAction::class)($package);
@@ -57,6 +60,7 @@ class CreateOrderFromApiAction
                 'total_price_pence' => $pricing['total_pence'],
                 'status' => OrderStatus::PENDING,
                 'payment_mode' => $paymentMode,
+                'source' => $source,
             ]);
 
             Log::info('Created order from API', [

@@ -4,24 +4,26 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Actions\StaffBooking\ListStaffBookedLessonsAction;
 use App\Http\Requests\FilterLessonsBookedRequest;
+use App\Services\LessonsBookedService;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class LessonsBookedController extends Controller
 {
-    public function index(FilterLessonsBookedRequest $request, ListStaffBookedLessonsAction $listStaffBookedLessons): Response
+    public function __construct(
+        protected LessonsBookedService $lessonsBookedService,
+    ) {}
+
+    public function index(FilterLessonsBookedRequest $request): Response
     {
-        $paymentState = $request->paymentState();
-        $listing = $listStaffBookedLessons($paymentState);
+        $filters = $request->filters();
+        $listing = $this->lessonsBookedService->list($filters);
 
         return Inertia::render('LessonsBooked/Index', [
             'bookings' => $listing['bookings'],
             'counts' => $listing['counts'],
-            'filters' => [
-                'payment' => $paymentState,
-            ],
+            'filters' => $filters,
         ]);
     }
 }
