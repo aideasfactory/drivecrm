@@ -45,6 +45,7 @@ use App\Http\Controllers\StudentTransferController;
 use App\Http\Controllers\SupportMessagesController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\WebhookController;
+use App\Http\Controllers\WorkflowController;
 use App\Http\Middleware\EnsureInstructor;
 use App\Http\Middleware\EnsureMtdEnrolled;
 use App\Http\Middleware\EnsureOwner;
@@ -383,6 +384,12 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
             ->name('email-templates.update');
         Route::post('/email-templates/{emailTemplate}/restore', [EmailTemplateController::class, 'restore'])
             ->name('email-templates.restore');
+    });
+
+    // Workflows (Owner Only) — plain-English reference of every journey and what it sends
+    Route::middleware([EnsureOwner::class])->group(function () {
+        Route::get('/workflows', [WorkflowController::class, 'index'])
+            ->name('workflows.index');
     });
 
     // Support Messages (Owner Only)
