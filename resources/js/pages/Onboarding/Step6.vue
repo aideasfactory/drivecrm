@@ -273,25 +273,6 @@
                     </AlertDescription>
                   </Alert>
 
-                  <!-- Terms -->
-                  <Card>
-                    <CardContent class="pt-0">
-                      <div class="flex items-start gap-3">
-                        <Checkbox
-                          id="terms"
-                          v-model="termsAccepted"
-                          class="mt-0.5 cursor-pointer"
-                        />
-                        <label for="terms" class="cursor-pointer text-sm leading-relaxed text-muted-foreground">
-                          I agree to the
-                          <a href="/terms-of-service" target="_blank" rel="noopener noreferrer" class="font-medium text-foreground underline underline-offset-4 hover:text-primary">Terms of Service</a>,
-                          <a href="https://just-drive.co.uk/privacy-policy/" target="_blank" rel="noopener noreferrer" class="font-medium text-foreground underline underline-offset-4 hover:text-primary">Privacy Policy</a>, and
-                          <a href="https://just-drive.co.uk/cookies-policy/" target="_blank" rel="noopener noreferrer" class="font-medium text-foreground underline underline-offset-4 hover:text-primary">Cookie Policy</a>. I understand the cancellation policy and payment terms.
-                        </label>
-                      </div>
-                    </CardContent>
-                  </Card>
-
                   <!-- Actions -->
                   <div class="flex w-full min-w-0 flex-col gap-3 border-t pt-6 sm:flex-row sm:items-center sm:justify-between">
                     <Link :href="step5({ uuid: uuid }).url" class="w-full sm:w-auto">
@@ -303,7 +284,7 @@
 
                     <Button
                       type="submit"
-                      :disabled="!termsAccepted || form.processing"
+                      :disabled="form.processing"
                       class="h-auto w-full max-w-full cursor-pointer whitespace-normal px-4 py-2 text-center sm:h-9 sm:w-auto sm:whitespace-nowrap"
                     >
                       <Spinner v-if="form.processing" class="mr-2 h-4 w-4 animate-spin" />
@@ -372,16 +353,7 @@ const page = usePage()
 
 const form = useForm({
   payment_mode: 'upfront',  // 'upfront' or 'weekly'
-  terms_accepted: false,
   test_pass_guarantee: props.testPassGuarantee?.opted_in ?? false
-})
-
-// Local ref for checkbox to handle reactivity
-const termsAccepted = ref(form.terms_accepted)
-
-// Watch and sync the local ref with the form
-watch(termsAccepted, (newValue) => {
-  form.terms_accepted = newValue
 })
 
 const includeTestPassGuarantee = ref(form.test_pass_guarantee)
@@ -489,7 +461,6 @@ function processPayment() {
   console.log('=== STEP 6: Processing Payment ===')
   console.log('Form data:', {
     payment_mode: form.payment_mode,
-    terms_accepted: form.terms_accepted,
     test_pass_guarantee: form.test_pass_guarantee
   })
   console.log('UUID:', uuid.value)
