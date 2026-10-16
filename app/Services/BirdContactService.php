@@ -4,11 +4,16 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Enums\OrderStatus;
+use App\Enums\PaymentMode;
 use App\Models\Enquiry;
+use App\Models\Instructor;
+use App\Models\Order;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
+use Throwable;
 
 /**
  * Upserts a Bird CRM contact from a booking enquiry via the Bird Contacts API.
@@ -84,7 +89,129 @@ class BirdContactService extends BaseService
 
         $this->assertSuccessful($response, $enquiry->id);
 
+        $this->syncBookingDetails($enquiry, $url, $apiKey);
+
         return $response->json() ?? [];
+    }
+
+    /**
+     * Send the booking details (instructor, first lesson, payment) as a second
+     * request once the contact itself is saved. Kept separate so that if Bird
+     * rejects one of these values, the contact sync above still stands; the
+     * failure is logged rather than retried.
+     */
+    private function syncBookingDetails(Enquiry $enquiry, string $url, string $apiKey): void
+    {
+        $attributes = $this->buildBookingAttributes($enquiry);
+
+        if ($attributes === []) {
+            return;
+        }
+
+        Log::info('Bird booking details request', [
+            'enquiry_id' => $enquiry->id,
+            'attributes' => $attributes,
+        ]);
+
+        try {
+            $response = Http::acceptJson()
+                ->withHeaders(['Authorization' => 'AccessKey '.$apiKey])
+                ->patch($url, ['attributes' => $attributes]);
+        } catch (Throwable $exception) {
+            Log::error('Bird booking details request failed', [
+                'enquiry_id' => $enquiry->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return;
+        }
+
+        if ($response->failed()) {
+            Log::error('Bird rejected booking details', [
+                'enquiry_id' => $enquiry->id,
+                'status' => $response->status(),
+                'body' => $response->json() ?? $response->body(),
+            ]);
+        }
+    }
+
+    /**
+     * Booking details from the /onboarding flow. Each value is only sent once
+     * the learner has reached the step that captures it. The /booking short
+     * form captures none of them, so it sends nothing here.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildBookingAttributes(Enquiry $enquiry): array
+    {
+        if ($enquiry->isShortBookingForm()) {
+            return [];
+        }
+
+        $step2 = $enquiry->getStepData(2) ?? [];
+        $step4 = $enquiry->getStepData(4) ?? [];
+        $step5 = $enquiry->getStepData(5) ?? [];
+        $step6 = $enquiry->getStepData(6) ?? [];
+
+        $order = isset($step6['order_id']) ? Order::find($step6['order_id']) : null;
+        $instructor = isset($step2['instructor_id'])
+            ? Instructor::with('user')->find($step2['instructor_id'])
+            : null;
+        $isPaid = $order !== null && in_array($order->status, [OrderStatus::ACTIVE, OrderStatus::COMPLETED], true);
+
+        return array_filter([
+            // "paymentTaken" is a Yes/No dropdown in Bird
+            'paymentTaken' => $isPaid ? 'Yes' : 'No',
+            'paymentType' => match ($order?->payment_mode) {
+                PaymentMode::UPFRONT => 'Upfront',
+                PaymentMode::WEEKLY => 'Weekly',
+                default => null,
+            },
+            'bookingValue' => $order ? round($order->total_price_pence / 100, 2) : null,
+            'alternativebookinginfo' => $this->alternativeBookingInfo($step5),
+            'instructor' => $this->stringOrNull($instructor?->user?->name),
+            'dateOfFirstLesson' => $this->stringOrNull($step4['date'] ?? null),
+            'bookingUrl' => $isPaid ? null : $this->bookingUrl($enquiry),
+        ], fn ($value) => $value !== null);
+    }
+
+    /**
+     * The learner's details when the booker is booking for someone else.
+     *
+     * @param  array<string, mixed>  $step5
+     */
+    private function alternativeBookingInfo(array $step5): ?string
+    {
+        if (! ($step5['booking_for_someone_else'] ?? false)) {
+            return null;
+        }
+
+        $name = trim((string) ($step5['learner_first_name'] ?? '').' '.(string) ($step5['learner_last_name'] ?? ''));
+
+        $parts = array_filter([
+            $name !== '' ? 'Name: '.$name : null,
+            ($email = $this->stringOrNull($step5['learner_email'] ?? null)) ? 'Email: '.$email : null,
+            ($phone = $this->stringOrNull($step5['learner_phone'] ?? null)) ? 'Phone: '.$phone : null,
+            ($dob = $this->stringOrNull($step5['learner_dob'] ?? null)) ? 'DOB: '.$dob : null,
+        ]);
+
+        return $parts !== [] ? implode(', ', $parts) : null;
+    }
+
+    /**
+     * Link back to the furthest onboarding step the learner reached (step 6 is
+     * checkout). Staff bookings get none — the learner pays from the emailed
+     * payment link.
+     */
+    private function bookingUrl(Enquiry $enquiry): ?string
+    {
+        if ($enquiry->isStaffBooking()) {
+            return null;
+        }
+
+        $step = min(max((int) $enquiry->max_step_reached, 1), 6);
+
+        return route('onboarding.step'.$step, ['uuid' => $enquiry->id]);
     }
 
     /**

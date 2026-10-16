@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Onboarding;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SyncBookingEnquiryToBirdJob;
 use App\Http\Requests\Onboarding\StepOneRequest;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -66,12 +67,14 @@ class StepOneController extends Controller
             $enquiry->max_step_reached = max($enquiry->max_step_reached, 3);
             $enquiry->current_step = max($enquiry->current_step, 2);
             $enquiry->save();
+            SyncBookingEnquiryToBirdJob::dispatchSafely($enquiry);
 
             return redirect()->route('onboarding.step3', ['uuid' => $enquiry->id]);
         }
 
         $enquiry->max_step_reached = max($enquiry->max_step_reached, 2);
         $enquiry->save();
+        SyncBookingEnquiryToBirdJob::dispatchSafely($enquiry);
 
         return redirect()->route('onboarding.step2', ['uuid' => $enquiry->id]);
     }

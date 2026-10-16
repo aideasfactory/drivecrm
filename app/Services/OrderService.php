@@ -25,7 +25,9 @@ use App\Enums\OrderSource;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use App\Enums\PaymentStatus;
+use App\Jobs\SyncBookingEnquiryToBirdJob;
 use App\Models\CalendarItem;
+use App\Models\Enquiry;
 use App\Models\Instructor;
 use App\Models\LessonPayment;
 use App\Models\Order;
@@ -41,6 +43,7 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 use Stripe\Checkout\Session;
+use Throwable;
 
 class OrderService extends BaseService
 {
@@ -679,6 +682,28 @@ class OrderService extends BaseService
 
         $this->logBookingConfirmed($order);
         $this->invalidateStudentCacheForBooking($order->instructor_id);
+        $this->syncPaidBookingToBird($order);
+    }
+
+    /**
+     * Mark the learner's Bird contact as paid for bookings made through the
+     * /onboarding flow. Must never affect confirming the payment, so any error
+     * is logged and swallowed.
+     */
+    protected function syncPaidBookingToBird(Order $order): void
+    {
+        try {
+            $enquiry = Enquiry::findForOrder($order->id);
+
+            if ($enquiry) {
+                SyncBookingEnquiryToBirdJob::dispatchSafely($enquiry);
+            }
+        } catch (Throwable $exception) {
+            Log::error('Could not queue Bird payment sync for order', [
+                'order_id' => $order->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
     }
 
     /**

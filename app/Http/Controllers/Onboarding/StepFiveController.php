@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Onboarding;
 
 use App\Actions\Onboarding\BuildPublicInstructorProfileAction;
 use App\Http\Controllers\Controller;
+use App\Jobs\SyncBookingEnquiryToBirdJob;
 use App\Http\Requests\Onboarding\StepFiveRequest;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
@@ -191,6 +192,7 @@ class StepFiveController extends Controller
             $enquiry->current_step = max($enquiry->current_step, 5);
             $enquiry->max_step_reached = max($enquiry->max_step_reached, 6);
             $enquiry->save();
+            SyncBookingEnquiryToBirdJob::dispatchSafely($enquiry);
 
             return redirect()->route('onboarding.step6', ['uuid' => $enquiry->id]);
         }
