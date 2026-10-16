@@ -86,4 +86,27 @@ class Enquiry extends Model
     {
         return $this->getStaffBooking() !== null;
     }
+
+    /**
+     * Whether this enquiry came from the 2-step /booking coverage form rather
+     * than the full /onboarding booking flow.
+     */
+    public function isShortBookingForm(): bool
+    {
+        return ($this->data['source'] ?? null) === 'booking';
+    }
+
+    /**
+     * Find the enquiry whose step 6 created the given order.
+     */
+    public static function findForOrder(int $orderId): ?self
+    {
+        return self::query()
+            ->where(function ($query) use ($orderId): void {
+                $query->where('data->steps->step6->order_id', $orderId)
+                    ->orWhere('data->steps->step6->order_id', (string) $orderId);
+            })
+            ->latest()
+            ->first();
+    }
 }

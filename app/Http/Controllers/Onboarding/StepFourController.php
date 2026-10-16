@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Onboarding;
 use App\Actions\Onboarding\BuildPublicInstructorProfileAction;
 use App\Actions\Onboarding\ReleaseLegacyStepFourHoldsAction;
 use App\Http\Controllers\Controller;
+use App\Jobs\SyncBookingEnquiryToBirdJob;
 use App\Http\Requests\Onboarding\StepFourRequest;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
@@ -201,6 +202,7 @@ class StepFourController extends Controller
         $enquiry->current_step = max($enquiry->current_step, 4);
         $enquiry->max_step_reached = max($enquiry->max_step_reached, 5);
         $enquiry->save();
+        SyncBookingEnquiryToBirdJob::dispatchSafely($enquiry);
 
         Log::info('Step 4 slot choice saved', [
             'enquiry_id' => $enquiry->id,
