@@ -25,9 +25,11 @@ import {
     Gauge,
     BookOpen,
     Flag,
+    AlertTriangle,
     Save,
     PoundSterling,
 } from 'lucide-vue-next'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -235,6 +237,13 @@ const editItemOffersRefundChoice = computed(() => {
     return editItemIsBooking.value && item?.is_paid === true && item?.is_late_cancellation === true
 })
 
+/** Whether the booking being cancelled is still awaiting its first payment —
+ *  the whole booking is cancelled, so there is no scope choice. */
+const editItemAwaitingPayment = computed(() => {
+    const item = itemsMap.value.get(editForm.value.id)
+    return editItemIsBooking.value && item?.awaiting_payment === true
+})
+
 /** Whether the edit form should be stripped down to reschedule-only (date/time
  *  only, no status / notes / reason). Applies to all active bookings the
  *  instructor can move but not re-purpose: booked (paid or weekly-already-paid),
@@ -408,6 +417,7 @@ async function loadCalendarRange(startDate: string, endDate: string) {
                     student_name: item.student_name ?? null,
                     is_paid: item.is_paid ?? null,
                     is_late_cancellation: item.is_late_cancellation ?? null,
+                    awaiting_payment: item.awaiting_payment ?? null,
                     lesson_id: item.lesson_id ?? null,
                     order_id: item.order_id ?? null,
                     future_siblings_count: item.future_siblings_count ?? 0,
@@ -1956,7 +1966,16 @@ onMounted(() => {
                         </p>
                     </div>
 
-                    <div class="space-y-2">
+                    <Alert v-if="editItemAwaitingPayment" variant="destructive">
+                        <AlertTriangle class="h-4 w-4" />
+                        <AlertTitle>The whole booking will be cancelled</AlertTitle>
+                        <AlertDescription>
+                            This booking hasn't been paid yet, so every lesson in it will be cancelled and its
+                            payment link will stop working.
+                        </AlertDescription>
+                    </Alert>
+
+                    <div v-else class="space-y-2">
                         <Label class="text-sm font-medium">Cancellation scope</Label>
                         <label class="flex cursor-pointer items-center gap-3 rounded-md border border-input px-3 py-2.5 transition-colors hover:bg-muted/50" :class="{ 'border-primary bg-primary/5': deleteScope === 'single' }">
                             <input type="radio" v-model="deleteScope" value="single" class="accent-primary" />

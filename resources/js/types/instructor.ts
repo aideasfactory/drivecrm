@@ -156,6 +156,8 @@ export interface CalendarItemResponse {
   student_name: string | null
   is_paid: boolean | null
   is_late_cancellation?: boolean | null
+  /** Booking still awaiting its first payment: cancelling cancels the whole booking. */
+  awaiting_payment?: boolean | null
   lesson_id: number | null
   order_id: number | null
   future_siblings_count: number

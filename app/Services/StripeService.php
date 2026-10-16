@@ -801,6 +801,51 @@ class StripeService
     }
 
     /**
+     * Stop a lesson invoice from being paid because its lesson was cancelled.
+     * An open invoice is voided and a draft is deleted; an invoice already void
+     * or uncollectible counts as stopped. A paid invoice is reported back so the
+     * caller can treat the lesson as paid.
+     *
+     * @return array{status: 'voided'|'paid'|'failed', charge_id?: string|null}
+     */
+    public function voidInvoice(string $invoiceId): array
+    {
+        try {
+            $invoice = $this->stripe->invoices->retrieve($invoiceId);
+
+            if ($invoice->status === 'paid') {
+                return ['status' => 'paid', 'charge_id' => $this->getChargeIdForInvoice($invoiceId)];
+            }
+
+            if ($invoice->status === 'open') {
+                $invoice = $this->stripe->invoices->voidInvoice($invoiceId);
+            } elseif ($invoice->status === 'draft') {
+                $this->stripe->invoices->delete($invoiceId);
+
+                return ['status' => 'voided'];
+            }
+
+            if (in_array($invoice->status, ['void', 'uncollectible'], true)) {
+                return ['status' => 'voided'];
+            }
+
+            Log::warning('Stripe: Invoice could not be voided', [
+                'invoice_id' => $invoiceId,
+                'status' => $invoice->status,
+            ]);
+
+            return ['status' => 'failed'];
+        } catch (ApiErrorException $e) {
+            Log::error('Stripe: Failed to void invoice', [
+                'invoice_id' => $invoiceId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ['status' => 'failed'];
+        }
+    }
+
+    /**
      * Verify Stripe webhook signature.
      */
     public function verifyWebhookSignature(string $payload, string $signature): array

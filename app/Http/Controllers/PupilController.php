@@ -29,6 +29,7 @@ use App\Actions\Student\PickupPoint\UpdatePickupPointAction;
 use App\Actions\Student\Status\RemoveStudentFromInstructorAction;
 use App\Actions\Student\Status\UpdateStudentStatusAction;
 use App\Actions\Student\Transfer\GetOnboardedInstructorsAction;
+use App\Enums\LessonStatus;
 use App\Enums\OrderSource;
 use App\Enums\PaymentMode;
 use App\Http\Requests\AdminResetPasswordRequest;
@@ -538,6 +539,10 @@ class PupilController extends Controller
 
         if (! $lessonBelongsToStudent) {
             return response()->json(['message' => 'Lesson not found for this student.'], 404);
+        }
+
+        if ($lesson->status === LessonStatus::CANCELLED) {
+            return response()->json(['message' => 'This lesson has been cancelled, so its invoice cannot be resent.'], 422);
         }
 
         $lessonPayment = $lesson->lessonPayment;

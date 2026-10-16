@@ -49,6 +49,9 @@ class CalendarItemResource extends JsonResource
             // True when cancelling now is inside the 48-hour window, where the
             // cancel sheet offers the "Refund Lesson" tickbox.
             'is_late_cancellation' => $this->isLateCancellation($lesson),
+            // True when the booking is still awaiting its first payment: cancelling
+            // any lesson cancels the whole booking (`scope` is ignored).
+            'awaiting_payment' => $lesson ? $lesson->order?->isPending() === true && ! $lesson->order->isImported() : null,
             'amount_pence' => $lesson?->amount_pence,
             'payment_breakdown' => $lesson?->paymentBreakdown(),
             'mileage' => $lesson?->mileage,
