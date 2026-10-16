@@ -176,7 +176,6 @@ class StepFiveController extends Controller
             'pickup_address_line_2' => $step5['pickup_address_line_2'] ?? '',
             'pickup_city' => $step5['pickup_city'] ?? 'London',
             'pickup_postcode' => $step5['pickup_postcode'] ?? $step1['postcode'] ?? '',
-            'postcode' => $step1['postcode'] ?? '',
         ]);
     }
 
