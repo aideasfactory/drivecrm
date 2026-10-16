@@ -16,11 +16,13 @@ use App\Models\LessonPayment;
 use App\Models\Order;
 use App\Models\Student;
 use App\Models\WebhookEvent;
+use App\Notifications\RefundRequiredNotification;
 use App\Services\OrderService;
 use App\Services\StripeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 
 class WebhookController extends Controller
 {
@@ -361,6 +363,9 @@ class WebhookController extends Controller
         $chargeId = $invoice->charge
             ?? app(StripeService::class)->getChargeIdForInvoice($invoice->id);
 
+        // Already recorded (redelivery, or the lesson's cancellation found it paid and dealt with it)
+        $wasAlreadyPaid = $lessonPayment->isPaid();
+
         // Mark lesson payment as paid
         $lessonPayment->update([
             'status' => PaymentStatus::PAID,
@@ -386,6 +391,16 @@ class WebhookController extends Controller
             'student_id' => $student?->id,
             'instructor_id' => $instructor?->id,
         ]);
+
+        // The lesson was cancelled before this invoice was paid: keep the
+        // record of the money, but don't rebook anything — Head Office refunds it.
+        if ($lesson && ($lesson->status === LessonStatus::CANCELLED || $order?->isClosed())) {
+            if (! $wasAlreadyPaid) {
+                $this->reportPaymentForCancelledLesson($lessonPayment, $invoice->id);
+            }
+
+            return;
+        }
 
         // Update the calendar item status to BOOKED if still in DRAFT/RESERVED
         if ($lesson && $lesson->calendarItem) {
@@ -446,6 +461,45 @@ class WebhookController extends Controller
             'lesson_id' => $lessonPayment->lesson_id,
             'invoice_id' => $invoice->id,
         ]);
+    }
+
+    /**
+     * Email Head Office that a lesson was paid for after it was cancelled, so
+     * the payment is refunded manually.
+     */
+    protected function reportPaymentForCancelledLesson(LessonPayment $lessonPayment, string $invoiceId): void
+    {
+        $lesson = $lessonPayment->lesson;
+        $order = $lesson->order;
+
+        Log::critical('Webhook [invoice.paid]: Payment received for a cancelled lesson — refund required', [
+            'lesson_payment_id' => $lessonPayment->id,
+            'lesson_id' => $lesson->id,
+            'order_id' => $order?->id,
+            'invoice_id' => $invoiceId,
+            'amount_pence' => $lessonPayment->amount_pence,
+        ]);
+
+        $headOffice = config('mail.head_office_address');
+
+        if (! $headOffice) {
+            return;
+        }
+
+        try {
+            Notification::route('mail', $headOffice)->notify(new RefundRequiredNotification(
+                $order?->student,
+                $order?->instructor,
+                $order,
+                collect([$lesson]),
+                'Paid after the lesson was cancelled (Stripe invoice '.$invoiceId.')',
+            ));
+        } catch (\Exception $e) {
+            Log::error('Webhook [invoice.paid]: Failed to email Head Office about a cancelled lesson payment', [
+                'lesson_payment_id' => $lessonPayment->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

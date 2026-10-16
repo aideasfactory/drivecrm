@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\OrderSource;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
+use App\Enums\PaymentStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -272,6 +273,20 @@ class Order extends Model
     public function isImported(): bool
     {
         return $this->payment_mode === PaymentMode::IMPORTED;
+    }
+
+    /**
+     * Whether the booking was ever paid for. Confirmation records the payment
+     * (paid lesson payments, or the upfront payment intent on older orders), so
+     * a cancelled order with none of these was cancelled before it was paid.
+     */
+    public function wasPaidBeforeClosing(): bool
+    {
+        return $this->stripe_payment_intent_id !== null
+            || LessonPayment::query()
+                ->whereHas('lesson', fn ($query) => $query->where('order_id', $this->id))
+                ->whereIn('status', [PaymentStatus::PAID, PaymentStatus::REFUNDED])
+                ->exists();
     }
 
     /**

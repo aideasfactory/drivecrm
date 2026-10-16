@@ -738,10 +738,10 @@ class OrderService extends BaseService
      */
     public function reportPaymentForReleasedOrder(Order $order, ?string $checkoutSessionId, ?string $paymentReference): void
     {
-        // A released booking has had its lessons deleted. One that still has
-        // lessons was confirmed and later cancelled — its refund is handled by
-        // the cancellation (RefundRequiredNotification), so don't report it here.
-        if ($order->lessons()->exists()) {
+        // A booking paid for and later cancelled has its refund handled by the
+        // cancellation (RefundRequiredNotification), so don't report it here.
+        // One released, or cancelled while still unpaid, is reported.
+        if ($order->wasPaidBeforeClosing()) {
             Log::warning('Payment reported for a cancelled booking that was not released unpaid — no alert sent', [
                 'order_id' => $order->id,
                 'checkout_session_id' => $checkoutSessionId,
@@ -843,6 +843,47 @@ class OrderService extends BaseService
         }
 
         return $released;
+    }
+
+    /**
+     * Close an unpaid order's Stripe Checkout session before its booking is
+     * cancelled, so the learner cannot pay for lessons that no longer exist.
+     * A session that turns out to be paid confirms the order instead, and the
+     * cancellation must not go ahead. When Stripe cannot close the session the
+     * cancellation must not go ahead either.
+     *
+     * @return 'closed'|'paid'|'failed'
+     */
+    public function closeCheckoutForCancellation(Order $order): string
+    {
+        if (! $order->stripe_checkout_session_id) {
+            return 'closed';
+        }
+
+        $expiry = $this->stripeService->expireCheckoutSession($order->stripe_checkout_session_id);
+
+        if ($expiry['payment_status'] === 'paid') {
+            Log::warning('Cancelling an unpaid booking whose checkout session is paid — confirming it instead', [
+                'order_id' => $order->id,
+                'session_id' => $order->stripe_checkout_session_id,
+            ]);
+
+            $this->confirmPaidCheckoutSession($order, $order->stripe_checkout_session_id, $expiry['payment_intent']);
+
+            return 'paid';
+        }
+
+        if (! $expiry['released']) {
+            Log::warning('Could not close checkout session before cancelling an unpaid booking', [
+                'order_id' => $order->id,
+                'session_id' => $order->stripe_checkout_session_id,
+                'session_status' => $expiry['status'],
+            ]);
+
+            return 'failed';
+        }
+
+        return 'closed';
     }
 
     /**

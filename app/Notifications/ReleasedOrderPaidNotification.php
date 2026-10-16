@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Enums\OrderStatus;
 use App\Models\Order;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -12,9 +13,10 @@ use Illuminate\Notifications\Notification;
 
 /**
  * Tells Head Office that a pupil paid for a booking after its hold ran out and
- * the lessons were released. The booking is not re-confirmed (the time may have
- * gone to someone else), so the payment has to be refunded manually. Works from
- * the order snapshot because a released order's lessons have been deleted.
+ * the lessons were released, or after it was cancelled while still unpaid. The
+ * booking is not re-confirmed (the time may have gone to someone else), so the
+ * payment has to be refunded manually. Works from the order snapshot because a
+ * released order's lessons have been deleted.
  */
 class ReleasedOrderPaidNotification extends Notification implements ShouldQueue
 {
@@ -44,10 +46,16 @@ class ReleasedOrderPaidNotification extends Notification implements ShouldQueue
         $breakdown = $order->firstPaymentBreakdown();
         $refundPence = $breakdown['total_pence'] - $breakdown['booking_fee_pence'];
 
+        $whatHappened = $order->status === OrderStatus::CANCELLED
+            ? 'A pupil paid for a booking after it had been cancelled, before it was ever paid for. The booking has **not** been confirmed.'
+            : 'A pupil paid for a booking after the time to pay had run out and the lessons had been released. The booking has **not** been confirmed.';
+
         $message = (new MailMessage)
-            ->subject('Action Required: Refund for a Payment on a Released Booking')
+            ->subject($order->status === OrderStatus::CANCELLED
+                ? 'Action Required: Refund for a Payment on a Cancelled Booking'
+                : 'Action Required: Refund for a Payment on a Released Booking')
             ->greeting('Refund required')
-            ->line('A pupil paid for a booking after the time to pay had run out and the lessons had been released. The booking has **not** been confirmed.')
+            ->line($whatHappened)
             ->line('')
             ->line("**Student:** {$studentName}")
             ->line("**Instructor:** {$instructorName}")

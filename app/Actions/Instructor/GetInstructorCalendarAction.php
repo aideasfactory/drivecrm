@@ -127,6 +127,10 @@ class GetInstructorCalendarAction
                         'is_late_cancellation' => $lesson && $lesson->status !== LessonStatus::COMPLETED
                             ? $lesson->isLateCancellation()
                             : null,
+                        // Unpaid booking: cancelling any lesson cancels the whole booking
+                        'awaiting_payment' => $lesson
+                            ? $lesson->order?->isPending() === true && ! $lesson->order->isImported()
+                            : null,
                         'lesson_id' => $lessonId,
                         'order_id' => $orderId,
                         'future_siblings_count' => $futureSiblingsCount,

@@ -1301,6 +1301,7 @@ Returns the authenticated instructor's lessons for a specific date, ordered by s
 | `status` | string | Lesson status: `pending`, `completed`, or `cancelled` |
 | `completed_at` | string\|null | ISO 8601 timestamp when lesson was completed |
 | `summary` | string\|null | Instructor lesson summary/notes |
+| `awaiting_payment` | boolean\|null | `true` when the booking is still waiting for its **first payment** (order `pending`, not imported). Cancelling any lesson then cancels the **whole booking** and `scope` is ignored, so the cancel sheet should hide the "this one / and future" choice and warn: *"This booking hasn't been paid yet, so the whole booking will be cancelled."* `null` for availability slots |
 | `amount_pence` | integer\|null | Lesson price in pence, **before fees** (e.g., 3500 = £35.00). This is not what the pupil paid — use `payment_breakdown` for that |
 | `payment_breakdown` | object | What the pupil pays for this lesson, itemised. See **Payment Breakdown Object** under `GET /students/{student}/lessons` |
 | `student` | object\|null | Student details (see Student Object below) |
@@ -2780,6 +2781,10 @@ Deletes a calendar item belonging to the authenticated instructor. Behaviour dep
 
   Notes are added to the instructor's profile notes (one per cancelled lesson). Imported bookings never create a Stripe transfer (settled outside the platform).
 
+  **Unpaid bookings (`awaiting_payment: true`):** the whole booking is cancelled whatever `scope` says. Its Stripe payment page is closed first, so the learner can no longer pay. If the payment lands at that moment the booking is confirmed instead and the cancel is refused; if Stripe can't be reached the cancel is refused. Either way nothing changes and the instructor can retry.
+
+  **Open weekly invoices:** each cancelled lesson's unpaid Stripe invoice is voided. An invoice found already paid is treated as a paid lesson (refund / payout rules above). If an invoice can't be voided the cancel is refused and nothing changes.
+
 **Path Parameters:**
 
 | Field | Type | Description |
@@ -2848,6 +2853,12 @@ DELETE /api/v1/instructor/calendar/items/42
   }
 }
 ```
+
+**Error — Payment couldn't be stopped (400):** nothing was cancelled; show the message and let the instructor retry.
+```json
+{ "message": "We couldn't close the payment page for this booking. Please try again in a minute." }
+```
+Other messages with the same shape: `"Payment for this booking has just come through. Refresh and cancel again to refund it."` and `"We couldn't cancel the payment request for the lesson on 12 Nov 2026. Please try again in a minute."`
 
 **Error — Not found / not owned (404):**
 ```json
@@ -7684,6 +7695,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-09-30 | **Instructor "lesson paid" push.** When a lesson is marked as paid (weekly `invoice.paid` webhook, first weekly payment at checkout, or a pay-in-full booking), the instructor is queued a push naming the pupil and the lesson date/time. Pay-in-full bookings send one summary push. New payload `type: "lesson_paid"`. No request or response fields changed. | Push Notifications |
 | 2026-10-12 | **New order status `expired`.** Unpaid bookings released by `orders:release-expired-holds` when `payment_hold_expires_at` passes are now `expired` instead of `cancelled` (existing released orders were migrated). `cancelled` now only means a booking the instructor or admin cancelled. **App action:** handle `status: "expired"` on the order object, which `POST /students/{student}/orders`, `GET /orders/{order}/checkout/verify` and slot-offer accept return. Treat it as gone and hide it. Its lessons are deleted, so they never appear in any lessons endpoint. `GET /orders/{order}/checkout/verify` returns 422 with `data.status = "expired"` when the hold ran out before payment. Resend-payment-link returns 422 `The time to pay for this booking ran out and the lessons were released.` for an expired order. | Orders (order object, verify, resend-payment-link), Student Slot Offers (accept) |
 | 2026-10-12 | **Package visibility for pupils.** New `visible_to_pupils` boolean on every package object (default `true`, so existing packages stay listed). `false` is a private package. `GET /instructor/packages` still returns private packages and includes the flag so the app can add a toggle. `POST` and `PUT /instructor/packages` accept optional `visible_to_pupils` (omit on update to leave it unchanged). `GET /student/packages` omits private packages. A student token gets **404** from `GET /packages/{package}/pricing` and `POST /students/{student}/orders` for a private package; an instructor token can still price and book it. Short-notice offers are unchanged. | Instructor Packages (list, create, update), Student Packages (list), Package Pricing (show), Orders (store) |
+| 2026-10-15 | **Cancelled lessons can no longer be paid for.** Calendar items gain `awaiting_payment`. `DELETE /calendar/items/{calendarItem}` on a booking awaiting its first payment now cancels the **whole booking** (`scope` ignored) and closes its Stripe payment page first; open weekly invoices of cancelled lessons are voided. New 400 messages when Stripe can't stop the payment (nothing is cancelled). Mirrored on the web `DELETE /instructors/{instructor}/calendar/items/{calendarItem}`. | `DELETE /api/v1/instructor/calendar/items/{calendarItem}`, `GET/PUT /api/v1/instructor/calendar/items` (resource field) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.
