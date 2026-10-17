@@ -47,10 +47,6 @@
                             {{ transmissionLabel }}
                           </span>
                           <span class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
-                            <MapPin class="h-4 w-4 shrink-0" />
-                            {{ postcode || 'Area not set' }}
-                          </span>
-                          <span class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
                             <Star class="h-4 w-4 shrink-0 fill-yellow-400 text-yellow-400" />
                             {{ ratingLabel }}
                           </span>
@@ -377,7 +373,7 @@ import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 import TestPassGuaranteeInfo from '@/components/Shared/TestPassGuaranteeInfo.vue'
 import { step1, step2, step3, step4 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step5'
-import { AlertCircle, ArrowLeft, ArrowRight, Car, MapPin, Star } from 'lucide-vue-next'
+import { AlertCircle, ArrowLeft, ArrowRight, Car, Star } from 'lucide-vue-next'
 import {
   focusFirstError,
   todayIsoDate,
@@ -407,7 +403,6 @@ const props = defineProps({
   pickup_address_line_2: String,
   pickup_city: String,
   pickup_postcode: String,
-  postcode: String,
   testPassGuarantee: {
     type: [Object, null],
     default: null
@@ -422,7 +417,7 @@ const form = useForm({
   pickup_address_line_1: props.stepData?.pickup_address_line_1 || props.pickup_address_line_1 || '',
   pickup_address_line_2: props.stepData?.pickup_address_line_2 || props.pickup_address_line_2 || '',
   pickup_city: props.stepData?.pickup_city || props.pickup_city || 'London',
-  pickup_postcode: props.stepData?.pickup_postcode || props.pickup_postcode || props.postcode || '',
+  pickup_postcode: props.stepData?.pickup_postcode || props.pickup_postcode || '',
   booking_for_someone_else: props.stepData?.booking_for_someone_else || false,
   learner_first_name: props.stepData?.learner_first_name || '',
   learner_last_name: props.stepData?.learner_last_name || '',
