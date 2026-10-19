@@ -191,15 +191,15 @@
                     :class="selectedGuarantee.is_free ? 'border-green-500 bg-green-50 dark:border-green-600 dark:bg-green-950/30' : ''"
                   >
                     <CardHeader>
-                      <div class="flex items-center justify-between gap-4">
+                      <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                         <CardTitle class="flex items-center gap-2 text-lg">
                           <ShieldCheck
-                            class="h-5 w-5"
+                            class="h-5 w-5 shrink-0"
                             :class="selectedGuarantee.is_free ? 'text-green-600 dark:text-green-500' : 'text-primary'"
                           />
                           <TestPassGuaranteeInfo />
                         </CardTitle>
-                        <div v-if="selectedGuarantee.is_free" class="flex shrink-0 items-center gap-2">
+                        <div v-if="selectedGuarantee.is_free" class="flex flex-wrap items-center gap-2 sm:shrink-0">
                           <s class="text-sm text-muted-foreground">£{{ testPassGuarantee.price }}</s>
                           <Badge class="bg-green-600 text-white hover:bg-green-600">£0 &middot; Included free</Badge>
                         </div>
