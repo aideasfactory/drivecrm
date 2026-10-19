@@ -1011,8 +1011,8 @@ function openDeleteDialog() {
 async function loadCancellationReasons() {
     cancellationReasonsLoading.value = true
     try {
-        const response = await axios.get(cancellationReasonsRoute.url())
-        cancellationReasons.value = response.data.data
+        const response = await axios.get(cancellationReasonsRoute.url(props.instructorId))
+        cancellationReasons.value = Array.isArray(response.data?.data) ? response.data.data : []
     } catch {
         toast({ title: 'Failed to load cancellation reasons', variant: 'destructive' })
     } finally {

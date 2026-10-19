@@ -746,9 +746,10 @@ class InstructorController extends Controller
     }
 
     /**
-     * The reasons that can be picked when cancelling a booked lesson.
+     * The reasons that can be picked when cancelling a booked lesson. Scoped
+     * under the instructor so instructors and restricted owners can reach it.
      */
-    public function cancellationReasons(): JsonResponse
+    public function cancellationReasons(Instructor $instructor): JsonResponse
     {
         return response()->json([
             'data' => $this->instructorService->getCancellationReasonOptions(),
