@@ -347,8 +347,6 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
     // Student Status & Management
     Route::patch('/students/{student}/status', [PupilController::class, 'updateStatus'])
         ->name('students.status.update');
-    Route::patch('/students/{student}/imported', [PupilController::class, 'updateImported'])
-        ->name('students.imported.update');
     Route::patch('/students/{student}/cash-payments', [PupilController::class, 'updateCashPayments'])
         ->name('students.cash-payments.update');
     Route::delete('/students/{student}/remove', [PupilController::class, 'removeStudent'])

@@ -87,7 +87,7 @@ class OrderService extends BaseService
      *
      * Pay in full charges the whole order; pay weekly charges the first week.
      *
-     * Cash (imported pupils, booked by a full-access owner only) takes no
+     * Cash (pupils with cash payments turned on, booked by a full-access owner only) takes no
      * payment at all: the order is confirmed straight away with no hold, and
      * the pupil is emailed a cash booking confirmation instead of a link.
      *
@@ -108,7 +108,7 @@ class OrderService extends BaseService
     ): array {
         if ($paymentMode === PaymentMode::CASH && ! CashBookings::allowedFor($bookedBy, $student)) {
             throw ValidationException::withMessages([
-                'payment_mode' => 'Cash bookings are only for imported pupils, booked by an owner with full access.',
+                'payment_mode' => 'Cash bookings are only for pupils with cash payments turned on, booked by an owner with full access.',
             ]);
         }
 

@@ -60,7 +60,7 @@ class StoreOrderRequest extends FormRequest
                 $student = $this->route('student');
 
                 if (! $student instanceof Student || ! CashBookings::allowedFor($this->user(), $student)) {
-                    $validator->errors()->add('payment_mode', 'Cash bookings are only for imported pupils with cash payments turned on, booked by an owner with full access.');
+                    $validator->errors()->add('payment_mode', 'Cash bookings are only for pupils with cash payments turned on, booked by an owner with full access.');
                 }
             },
         ];

@@ -38,7 +38,6 @@ use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\StorePickupPointRequest;
 use App\Http\Requests\UpdatePickupPointRequest;
 use App\Http\Requests\UpdateStudentCashPaymentsRequest;
-use App\Http\Requests\UpdateStudentImportedRequest;
 use App\Http\Requests\UpdateStudentStatusRequest;
 use App\Jobs\ProcessLessonSignOffJob;
 use App\Models\CalendarItem;
@@ -713,23 +712,7 @@ class PupilController extends Controller
     }
 
     /**
-     * Mark a pupil as imported (so cash orders can be booked for them), or clear it.
-     */
-    public function updateImported(UpdateStudentImportedRequest $request, Student $student): JsonResponse
-    {
-        $imported = $request->boolean('imported');
-        $student = $this->studentService->setImported($student, $imported, $request->user());
-
-        return response()->json([
-            'is_imported' => $student->isImported(),
-            'cash_payments_enabled' => $student->cash_payments_enabled,
-            'can_book_cash' => CashBookings::allowedFor($request->user(), $student),
-            'message' => $imported ? 'Pupil marked as imported.' : 'Imported mark removed.',
-        ]);
-    }
-
-    /**
-     * Turn cash payments on or off for an imported pupil (full-access owners only).
+     * Turn cash payments on or off for a pupil (full-access owners only).
      */
     public function updateCashPayments(UpdateStudentCashPaymentsRequest $request, Student $student): JsonResponse
     {

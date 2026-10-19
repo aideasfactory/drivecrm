@@ -7,7 +7,6 @@ namespace App\Actions\Student;
 use App\Actions\Shared\LogActivityAction;
 use App\Models\Student;
 use App\Models\User;
-use Illuminate\Validation\ValidationException;
 
 class SetStudentCashPaymentsAction
 {
@@ -17,19 +16,10 @@ class SetStudentCashPaymentsAction
 
     /**
      * Turn cash payments on or off for a pupil. Off by default (the importer
-     * never turns it on). Only imported pupils can have it turned on; existing
-     * orders are left untouched.
-     *
-     * @throws ValidationException When turning it on for a pupil who is not imported.
+     * never turns it on). Existing orders are left untouched.
      */
     public function __invoke(Student $student, bool $enabled, ?User $changedBy = null): Student
     {
-        if ($enabled && ! $student->isImported()) {
-            throw ValidationException::withMessages([
-                'cash_payments_enabled' => 'Only imported pupils can pay by cash. Mark the pupil as imported first.',
-            ]);
-        }
-
         if ($student->cash_payments_enabled === $enabled) {
             return $student;
         }
