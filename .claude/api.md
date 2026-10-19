@@ -2448,7 +2448,7 @@ Returns the authenticated instructor's calendar items for a specific date, **or*
 | `order_id` | integer\|null | The order the lesson belongs to |
 | `student_name` | string\|null | Full name of the student the slot is for. **`null` on a `draft` hold** (checkout reached, first payment not taken) so the diary shows a hold rather than a named booking. Populated for `booked`, `completed`, and `reserved` (weekly, after the first payment). |
 | `is_paid` | boolean\|null | `true` when the lesson is paid (weekly per-lesson payment settled, or a confirmed upfront order). **A `draft` is upfront-but-awaiting-payment, so it returns `false`.** Use this to show a paid/refund hint on cancel. |
-| `is_late_cancellation` | boolean\|null | `true` when cancelling now is **less than 48 hours** before the lesson starts (UK time). When `true` **and** `is_paid` is `true`, the cancel sheet shows a **Refund Lesson** tickbox (sent as `refund_lesson` on DELETE). `null` for availability slots and completed lessons |
+| `is_late_cancellation` | boolean\|null | `true` when cancelling now is **less than 48 hours** before the lesson starts (UK time). Informational only: late cancellations are never paid out to the instructor, and Head Office is told how much notice was given. `null` for availability slots and completed lessons |
 | `amount_pence` | integer\|null | Lesson price in pence, **before fees** (e.g., 3500 = £35.00). This is not what the pupil paid — use `payment_breakdown` for that |
 | `payment_breakdown` | object\|null | What the pupil pays for the lesson, itemised (see **Payment Breakdown Object** under `GET /students/{student}/lessons`). `null` for availability slots |
 | `mileage` | integer\|null | Recorded mileage (completed lessons) |
@@ -2768,22 +2768,20 @@ Updates a calendar item belonging to the authenticated instructor — used to **
 Deletes a calendar item belonging to the authenticated instructor. Behaviour depends on whether the item is a plain availability slot or an active booking:
 
 - **Availability slot (no lesson attached):** removed from the diary. For recurring items, `scope` controls single-occurrence vs all-future deletion.
-- **Booking slot (a draft / reserved / booked lesson is attached):** the booking is **cancelled** (the student has left / no longer wants lessons). A `reason` is **required**. `scope=single` cancels just this lesson; `scope=future` cancels this lesson and every future un-signed-off lesson in the same booking. The lesson rows are kept for history with `status = cancelled` and detached from the diary, but **the slot stays open**: it goes back to empty availability (`is_available: true`, no status — its travel block stays) so the instructor can offer it to other pupils. Future weekly invoices stop automatically. The student is always emailed a cancellation confirmation.
+- **Booking slot (a draft / reserved / booked lesson is attached):** the booking is **cancelled**. Send a `reason_code` (from `GET /api/v1/instructor/lesson-cancellation-reasons`) and, when that reason needs them (`other`), `reason` details. `scope=single` cancels just this lesson; `scope=future` cancels this lesson and every future un-signed-off lesson in the same booking. The lesson rows are kept for history with `status = cancelled` and detached from the diary, but **the slot stays open**: it goes back to empty availability (`is_available: true`, no status — its travel block stays) so the instructor can offer it to other pupils. Future weekly invoices stop automatically. The student is always emailed a cancellation confirmation.
 
-  **What happens to the money (per paid lesson):**
+  **What happens to the money (per lesson):**
 
-  | When cancelled | `refund_lesson` | Outcome | Instructor profile note |
-  |---|---|---|---|
-  | 48+ hours before the lesson | ignored | Head Office emailed that a refund is due (manual Stripe refund, booking fee retained) | `Cancelled/Refunded` |
-  | Under 48 hours | `true` | No payout to the instructor; Head Office emailed that a refund is due | `Cancelled/Refunded` |
-  | Under 48 hours | `false` / omitted | Lesson paid out to the instructor (Stripe transfer + `payouts` row, as at sign-off). No refund | `Cancelled/Paid` |
-  | Lesson not paid | ignored | Nothing to refund or pay out | `Cancelled/Unpaid` |
+  | Lesson | Outcome | Instructor profile note |
+  |---|---|---|
+  | Paid (any notice) | **Nothing is refunded or paid out automatically.** Head Office is emailed the reason, who cancelled, any details and the hours' notice (flagged **LATE** under 48 hours). They contact the pupil and instructor, then refund the pupil (everything except the booking fee) or pay the instructor by hand. The pupil's email says Head Office will be in touch. | `Cancelled/Refund review` |
+  | Not paid | Nothing to refund or pay out | `Cancelled/Unpaid` |
 
-  Notes are added to the instructor's profile notes (one per cancelled lesson). Imported bookings never create a Stripe transfer (settled outside the platform).
+  Notes are added to the instructor's profile notes (one per cancelled lesson), including the reason.
 
   **Unpaid bookings (`awaiting_payment: true`):** the whole booking is cancelled whatever `scope` says. Its Stripe payment page is closed first, so the learner can no longer pay. If the payment lands at that moment the booking is confirmed instead and the cancel is refused; if Stripe can't be reached the cancel is refused. Either way nothing changes and the instructor can retry.
 
-  **Open weekly invoices:** each cancelled lesson's unpaid Stripe invoice is voided. An invoice found already paid is treated as a paid lesson (refund / payout rules above). If an invoice can't be voided the cancel is refused and nothing changes.
+  **Open weekly invoices:** each cancelled lesson's unpaid Stripe invoice is voided. An invoice found already paid is treated as a paid lesson (Head Office review above). If an invoice can't be voided the cancel is refused and nothing changes.
 
 **Path Parameters:**
 
@@ -2796,10 +2794,11 @@ Deletes a calendar item belonging to the authenticated instructor. Behaviour dep
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `scope` | string | No | `single` (default) or `future`. For availability slots, `future` = this + all future items in the recurrence group. For bookings, `future` = this + all future lessons in the same booking. |
-| `reason` | string | **Yes for bookings** | Why the booking is being cancelled (max 1000 chars). Shown to the student in their cancellation email. Ignored for availability slots. |
-| `refund_lesson` | boolean | No | The **Refund Lesson** tickbox. Only affects paid lessons cancelled under 48 hours before they start: `true` refunds the pupil (no instructor payout), `false` (default) pays the instructor. Ignored otherwise. |
+| `reason_code` | string | **Yes for bookings (new apps)** | One of the `value`s from `GET /api/v1/instructor/lesson-cancellation-reasons`, e.g. `pupil_request`, `instructor_unwell`, `other`. **Temporarily optional** so older app versions keep working: when omitted it is stored as `other`. Will become required once the updated app has shipped. Ignored for availability slots. |
+| `reason` | string | When `reason_code` is `other` **or omitted** | Free-text details (max 1000 chars). Optional for every other reason. Shown to the student after the reason label in their cancellation email, and to Head Office. Ignored for availability slots. |
+| `refund_lesson` | boolean | No | **Deprecated, ignored.** Accepted so older app versions don't get a 422. Late cancellations are never paid out. |
 
-> Send `scope` and `reason` in the JSON request body for booking cancellations (or `scope` as a query param for availability deletes). `reason` is only validated/required when the target item has a lesson attached.
+> Send `scope`, `reason_code` and `reason` in the JSON request body for booking cancellations (or `scope` as a query param for availability deletes). `reason_code`/`reason` are only validated when the target item has a lesson attached.
 
 **Example (availability slot):** `DELETE /api/v1/instructor/calendar/items/42?scope=future`
 
@@ -2808,8 +2807,8 @@ Deletes a calendar item belonging to the authenticated instructor. Behaviour dep
 DELETE /api/v1/instructor/calendar/items/42
 {
   "scope": "single",
-  "reason": "Family emergency.",
-  "refund_lesson": true
+  "reason_code": "pupil_unwell",
+  "reason": "Pupil phoned in the morning with flu."
 }
 ```
 
@@ -2841,15 +2840,25 @@ DELETE /api/v1/instructor/calendar/items/42
 | Field | Type | Description |
 |-------|------|-------------|
 | `cancelled_count` | integer | Number of lessons cancelled (1 for `scope=single`, more for `scope=future`). |
-| `refund_required_count` | integer | How many of the cancelled lessons are being refunded (Head Office emailed). `0` when nothing was paid or every paid lesson was paid out. |
-| `payout_count` | integer | How many of the cancelled lessons were paid out to the instructor (late cancellation without `refund_lesson`). |
+| `refund_required_count` | integer | How many of the cancelled lessons were paid for and sent to Head Office for review. `0` when nothing was paid. |
+| `payout_count` | integer | **Deprecated, always `0`.** Cancelling never pays out to the instructor. |
 
-**Error — Booking cancellation missing reason (422):**
+**Error — Missing details (422):** `reason_code` is `other` (or omitted) and no `reason` was sent.
 ```json
 {
-  "message": "A reason is required to cancel this booking.",
+  "message": "Please add details for this cancellation.",
   "errors": {
-    "reason": ["A reason is required to cancel this booking."]
+    "reason": ["Please add details for this cancellation."]
+  }
+}
+```
+
+**Error — Unknown reason (422):**
+```json
+{
+  "message": "Please choose a valid cancellation reason.",
+  "errors": {
+    "reason_code": ["Please choose a valid cancellation reason."]
   }
 }
 ```
@@ -2869,14 +2878,39 @@ Other messages with the same shape: `"Payment for this booking has just come thr
 
 > **Note:** Completed lessons and lessons that already have a payout (signed off) are never cancelled — they are excluded from the `scope=future` cascade. If every non-completed lesson in the order ends up cancelled, the order itself is marked cancelled.
 
-Empty availability deletes and booking cancellations both reuse the same `InstructorService` paths as the admin diary (`removeCalendarItem` / `cancelBooking` → `CancelBookingAction`). The instructor is **not** emailed on cancel. Head Office receives `RefundRequiredNotification` only for lessons being refunded. Stripe refunds stay manual.
+Empty availability deletes and booking cancellations both reuse the same `InstructorService` paths as the admin diary (`removeCalendarItem` / `cancelBooking` → `CancelBookingAction`). The instructor is **not** emailed on cancel. Head Office receives `CancelledPaidLessonsReviewNotification` whenever paid lessons are cancelled. Refunds and any instructor payment are manual.
 
-**Error — late cancellation can't be paid out (400):** returned when a paid lesson is cancelled under 48 hours without `refund_lesson` and the instructor's Stripe account cannot receive payouts (or the Stripe transfer fails). Nothing is cancelled; resend with `refund_lesson: true` or fix the Stripe account.
+---
+
+#### `GET /api/v1/instructor/lesson-cancellation-reasons`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+The reasons an instructor can pick when cancelling a booked lesson. Show them as a single-choice list on the cancel sheet and send the chosen `value` as `reason_code` on `DELETE /api/v1/instructor/calendar/items/{calendarItem}`. Fetch the list rather than hardcoding it, so options can change without an app release.
+
+**Response (200):**
 ```json
 {
-  "message": "The instructor cannot receive payouts yet, so this late cancellation cannot be paid out. Tick \"Refund Lesson\" to refund the pupil instead."
+  "data": [
+    { "value": "pupil_request", "label": "Pupil asked to cancel", "cancelled_by": "pupil", "details_required": false },
+    { "value": "pupil_unwell", "label": "Pupil unwell", "cancelled_by": "pupil", "details_required": false },
+    { "value": "pupil_no_show", "label": "Pupil didn't turn up", "cancelled_by": "pupil", "details_required": false },
+    { "value": "pupil_stopped_lessons", "label": "Pupil no longer needs lessons", "cancelled_by": "pupil", "details_required": false },
+    { "value": "instructor_unavailable", "label": "Instructor unavailable", "cancelled_by": "instructor", "details_required": false },
+    { "value": "instructor_unwell", "label": "Instructor unwell", "cancelled_by": "instructor", "details_required": false },
+    { "value": "vehicle_problem", "label": "Car problem", "cancelled_by": "instructor", "details_required": false },
+    { "value": "weather", "label": "Weather / unsafe conditions", "cancelled_by": "other", "details_required": false },
+    { "value": "other", "label": "Other", "cancelled_by": "other", "details_required": true }
+  ]
 }
 ```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `value` | string | Send as `reason_code` |
+| `label` | string | Text to show |
+| `cancelled_by` | string | `pupil`, `instructor` or `other`. Useful for grouping the list |
+| `details_required` | boolean | When `true`, the details box (`reason`) must be filled in |
 
 ---
 
@@ -6436,7 +6470,8 @@ The `role` field is always returned in user responses. Use it to determine which
 | POST | `/api/v1/instructor/calendar/items` | Yes | Instructor | Create calendar item |
 | POST | `/api/v1/instructor/calendar/fill-slots` | Yes | Instructor | Bulk-fill diary with available slots (skips clashes) |
 | PUT | `/api/v1/instructor/calendar/items/{calendarItem}` | Yes | Instructor | Update / move / reschedule calendar item (single or bulk) |
-| DELETE | `/api/v1/instructor/calendar/items/{calendarItem}` | Yes | Instructor | Delete empty slot, or cancel a booking (`reason` required) |
+| DELETE | `/api/v1/instructor/calendar/items/{calendarItem}` | Yes | Instructor | Delete empty slot, or cancel a booking (`reason_code` + optional `reason` details) |
+| GET | `/api/v1/instructor/lesson-cancellation-reasons` | Yes | Instructor | Reasons to pick from when cancelling a booking |
 | POST | `/api/v1/instructor/calendar/items/{calendarItem}/offers` | Yes | Instructor | Offer an empty diary slot at short notice |
 | DELETE | `/api/v1/instructor/calendar/items/{calendarItem}/offers` | Yes | Instructor | Withdraw an open short-notice offer |
 | GET | `/api/v1/instructor/finances` | Yes | Instructor | List finance records |
@@ -7696,6 +7731,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-10-12 | **New order status `expired`.** Unpaid bookings released by `orders:release-expired-holds` when `payment_hold_expires_at` passes are now `expired` instead of `cancelled` (existing released orders were migrated). `cancelled` now only means a booking the instructor or admin cancelled. **App action:** handle `status: "expired"` on the order object, which `POST /students/{student}/orders`, `GET /orders/{order}/checkout/verify` and slot-offer accept return. Treat it as gone and hide it. Its lessons are deleted, so they never appear in any lessons endpoint. `GET /orders/{order}/checkout/verify` returns 422 with `data.status = "expired"` when the hold ran out before payment. Resend-payment-link returns 422 `The time to pay for this booking ran out and the lessons were released.` for an expired order. | Orders (order object, verify, resend-payment-link), Student Slot Offers (accept) |
 | 2026-10-12 | **Package visibility for pupils.** New `visible_to_pupils` boolean on every package object (default `true`, so existing packages stay listed). `false` is a private package. `GET /instructor/packages` still returns private packages and includes the flag so the app can add a toggle. `POST` and `PUT /instructor/packages` accept optional `visible_to_pupils` (omit on update to leave it unchanged). `GET /student/packages` omits private packages. A student token gets **404** from `GET /packages/{package}/pricing` and `POST /students/{student}/orders` for a private package; an instructor token can still price and book it. Short-notice offers are unchanged. | Instructor Packages (list, create, update), Student Packages (list), Package Pricing (show), Orders (store) |
 | 2026-10-15 | **Cancelled lessons can no longer be paid for.** Calendar items gain `awaiting_payment`. `DELETE /calendar/items/{calendarItem}` on a booking awaiting its first payment now cancels the **whole booking** (`scope` ignored) and closes its Stripe payment page first; open weekly invoices of cancelled lessons are voided. New 400 messages when Stripe can't stop the payment (nothing is cancelled). Mirrored on the web `DELETE /instructors/{instructor}/calendar/items/{calendarItem}`. | `DELETE /api/v1/instructor/calendar/items/{calendarItem}`, `GET/PUT /api/v1/instructor/calendar/items` (resource field) |
+| 2026-10-19 | **Cancellations go to Head Office review; structured reasons.** `DELETE /calendar/items/{calendarItem}` booking cancellations no longer pay out late cancellations to the instructor: every paid cancelled lesson, whatever the notice, emails Head Office to decide by hand. New `reason_code` (temporarily optional, defaults to `other`); `reason` is now the free-text details, required only for `other` / no code. `refund_lesson` is deprecated and ignored; `payout_count` is always `0`; the "late cancellation can't be paid out" 400 is gone. New `GET /api/v1/instructor/lesson-cancellation-reasons`. `is_late_cancellation` is now informational only. | `DELETE /api/v1/instructor/calendar/items/{calendarItem}`, `GET /api/v1/instructor/lesson-cancellation-reasons` (new), calendar item resource |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

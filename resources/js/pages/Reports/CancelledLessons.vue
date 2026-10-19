@@ -24,6 +24,9 @@ interface CancelledLessonRow {
     amount: string;
     amount_pence: number;
     payment_status: string | null;
+    /** Null for lessons cancelled before structured reasons existed. */
+    cancellation_reason_label: string | null;
+    cancelled_by: string | null;
     cancellation_reason: string | null;
     cancelled_at: string | null;
 }
@@ -166,6 +169,7 @@ const paymentLabel = (status: string | null): string => {
                                 <TableHead class="text-right">Amount</TableHead>
                                 <TableHead>Payment</TableHead>
                                 <TableHead>Reason</TableHead>
+                                <TableHead>Cancelled by</TableHead>
                                 <TableHead>Cancelled</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -195,8 +199,10 @@ const paymentLabel = (status: string | null): string => {
                                     </Badge>
                                 </TableCell>
                                 <TableCell class="max-w-xs">
-                                    <span class="line-clamp-2 text-sm">{{ row.cancellation_reason ?? '—' }}</span>
+                                    <div v-if="row.cancellation_reason_label" class="text-sm font-medium">{{ row.cancellation_reason_label }}</div>
+                                    <span class="line-clamp-2 text-sm text-muted-foreground">{{ row.cancellation_reason ?? (row.cancellation_reason_label ? '' : '—') }}</span>
                                 </TableCell>
+                                <TableCell class="whitespace-nowrap text-sm">{{ row.cancelled_by ?? '—' }}</TableCell>
                                 <TableCell class="whitespace-nowrap text-sm text-muted-foreground">
                                     {{ formatDateTime(row.cancelled_at) }}
                                 </TableCell>

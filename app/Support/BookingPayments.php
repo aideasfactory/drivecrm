@@ -117,6 +117,14 @@ final class BookingPayments
         return self::now()->greaterThanOrEqualTo($cutoff);
     }
 
+    /**
+     * Whole hours from now until a lesson starts; negative once it has started.
+     */
+    public static function hoursUntilLesson(string $lessonDate, ?string $lessonStartTime): int
+    {
+        return (int) self::now()->diffInHours(self::lessonStartsAt($lessonDate, $lessonStartTime), false);
+    }
+
     public static function lateCancellationHours(): int
     {
         return (int) config('booking_payments.late_cancellation_hours', 48);

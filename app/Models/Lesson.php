@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\LessonCancellationReason;
 use App\Enums\LessonStatus;
 use App\Support\BookingPayments;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -27,6 +28,7 @@ class Lesson extends Model
         'status',
         'summary',
         'cancellation_reason',
+        'cancellation_reason_code',
         'cancelled_at',
         'mileage',
         'student_lesson_number',
@@ -41,6 +43,7 @@ class Lesson extends Model
             'completed_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'status' => LessonStatus::class,
+            'cancellation_reason_code' => LessonCancellationReason::class,
         ];
     }
 
@@ -152,8 +155,8 @@ class Lesson extends Model
     }
 
     /**
-     * Whether cancelling this lesson now is a late cancellation, where the
-     * instructor chooses between refunding the pupil and being paid.
+     * Whether cancelling this lesson now is a late cancellation (inside the
+     * late-notice window). Flagged to Head Office when a paid lesson is cancelled.
      */
     public function isLateCancellation(): bool
     {
@@ -162,6 +165,22 @@ class Lesson extends Model
         }
 
         return BookingPayments::isLateCancellation(
+            $this->date->toDateString(),
+            $this->start_time?->format('H:i'),
+        );
+    }
+
+    /**
+     * Whole hours of notice if this lesson were cancelled now; negative once it
+     * has started, null when it has no date.
+     */
+    public function hoursNotice(): ?int
+    {
+        if (! $this->date) {
+            return null;
+        }
+
+        return BookingPayments::hoursUntilLesson(
             $this->date->toDateString(),
             $this->start_time?->format('H:i'),
         );

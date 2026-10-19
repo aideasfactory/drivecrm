@@ -46,10 +46,10 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toast'
 import WeeklyCalendarGrid from './Schedule/WeeklyCalendarGrid.vue'
 import MonthlyCalendarGrid from './Schedule/MonthlyCalendarGrid.vue'
@@ -61,7 +61,8 @@ import {
     DIARY_START_MINUTES,
     DIARY_MAX_END_MINUTES,
 } from '@/lib/diary-hours'
-import type { CalendarItemFormData, CalendarItemResponse, RecurrencePattern, ReflectiveLogData } from '@/types/instructor'
+import { cancellationReasons as cancellationReasonsRoute } from '@/actions/App/Http/Controllers/InstructorController'
+import type { CalendarItemFormData, CalendarItemResponse, CancellationReasonOption, RecurrencePattern, ReflectiveLogData } from '@/types/instructor'
 
 interface Props {
     instructorId: number
@@ -103,10 +104,18 @@ const isOfferSlotSheetOpen = ref(false)
 const formLoading = ref(false)
 const events = ref<CalendarEvent[]>([])
 const deleteScope = ref<'single' | 'future'>('single')
-/** Reason entered when cancelling a booking (required for booking slots). */
+/** Reason picked when cancelling a booking (required for booking slots). */
+const cancelReasonCode = ref('')
+/** Optional details for the cancellation (required when the reason is "Other"). */
 const cancelReason = ref('')
-/** "Refund Lesson" choice for a paid booking cancelled inside the 48-hour window. */
-const refundLesson = ref(false)
+const cancellationReasons = ref<CancellationReasonOption[]>([])
+const cancellationReasonsLoading = ref(false)
+
+const cancellationReasonGroups: { key: CancellationReasonOption['cancelled_by']; label: string }[] = [
+    { key: 'pupil', label: 'Pupil cancelled' },
+    { key: 'instructor', label: 'Instructor cancelled' },
+    { key: 'other', label: 'Other' },
+]
 
 // Map of backend items by ID for quick lookup
 const itemsMap = ref<Map<number, CalendarItemResponse>>(new Map())
@@ -230,11 +239,21 @@ const editItemIsBooking = computed(() => {
     return item ? BOOKING_STATUSES.includes(item.status as string) : false
 })
 
-/** Whether the booking being cancelled is paid and starts within 48 hours —
- *  the instructor chooses between refunding the pupil and being paid. */
-const editItemOffersRefundChoice = computed(() => {
+/** Whether the booking being cancelled has been paid for — Head Office
+ *  reviews it; nothing is refunded or paid out automatically. */
+const editItemIsPaid = computed(() => {
     const item = itemsMap.value.get(editForm.value.id)
-    return editItemIsBooking.value && item?.is_paid === true && item?.is_late_cancellation === true
+    return editItemIsBooking.value && item?.is_paid === true
+})
+
+const selectedCancellationReason = computed(() =>
+    cancellationReasons.value.find((reason) => reason.value === cancelReasonCode.value) ?? null,
+)
+
+/** A booking cancellation needs a reason, plus details when that reason requires them. */
+const cancellationIsComplete = computed(() => {
+    const reason = selectedCancellationReason.value
+    return reason !== null && (!reason.details_required || cancelReason.value.trim() !== '')
 })
 
 /** Whether the booking being cancelled is still awaiting its first payment —
@@ -976,17 +995,33 @@ function cancelBulkMove() {
 function openDeleteDialog() {
     isEditSheetOpen.value = false
     deleteScope.value = 'single'
+    cancelReasonCode.value = ''
     cancelReason.value = ''
-    refundLesson.value = false
     isDeleteDialogOpen.value = true
+
+    if (editItemIsBooking.value && cancellationReasons.value.length === 0) {
+        loadCancellationReasons()
+    }
+}
+
+async function loadCancellationReasons() {
+    cancellationReasonsLoading.value = true
+    try {
+        const response = await axios.get(cancellationReasonsRoute.url())
+        cancellationReasons.value = response.data.data
+    } catch {
+        toast({ title: 'Failed to load cancellation reasons', variant: 'destructive' })
+    } finally {
+        cancellationReasonsLoading.value = false
+    }
 }
 
 async function handleDelete() {
     const isBooking = editItemIsBooking.value
 
     // A booking cancellation must explain why.
-    if (isBooking && cancelReason.value.trim() === '') {
-        toast({ title: 'Please enter a reason for cancelling this booking.', variant: 'destructive' })
+    if (isBooking && !cancellationIsComplete.value) {
+        toast({ title: 'Please choose a reason (and add details for "Other").', variant: 'destructive' })
         return
     }
 
@@ -1003,8 +1038,8 @@ async function handleDelete() {
                 data: isBooking
                     ? {
                         scope: scopeParam,
+                        reason_code: cancelReasonCode.value,
                         reason: cancelReason.value.trim(),
-                        refund_lesson: editItemOffersRefundChoice.value && refundLesson.value,
                     }
                     : undefined,
             },
@@ -1012,7 +1047,11 @@ async function handleDelete() {
 
         // Always reload to pick up travel item deletions
         if (isBooking) {
-            toast({ title: 'Booking cancelled. The student has been notified.' })
+            toast({
+                title: editItemIsPaid.value
+                    ? 'Booking cancelled. The student and Head Office have been notified.'
+                    : 'Booking cancelled. The student has been notified.',
+            })
         } else {
             toast({ title: scopeParam === 'future' ? 'Recurring time slots removed successfully!' : 'Time slot removed successfully!' })
         }
@@ -1939,12 +1978,37 @@ onMounted(() => {
                 <!-- Booking cancellation: required reason + scope -->
                 <div v-if="editItemIsBooking" class="space-y-4 border-t border-border pt-4">
                     <div class="space-y-2">
-                        <Label for="cancel-reason">Reason for cancelling <span class="text-destructive">*</span></Label>
-                        <textarea
+                        <Label for="cancel-reason-code">Reason for cancelling <span class="text-destructive">*</span></Label>
+                        <select
+                            id="cancel-reason-code"
+                            v-model="cancelReasonCode"
+                            :disabled="cancellationReasonsLoading"
+                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                            <option value="" disabled>{{ cancellationReasonsLoading ? 'Loading reasons...' : 'Choose a reason...' }}</option>
+                            <optgroup v-for="group in cancellationReasonGroups" :key="group.key" :label="group.label">
+                                <option
+                                    v-for="reason in cancellationReasons.filter((option) => option.cancelled_by === group.key)"
+                                    :key="reason.value"
+                                    :value="reason.value"
+                                >
+                                    {{ reason.label }}
+                                </option>
+                            </optgroup>
+                        </select>
+                    </div>
+
+                    <div class="space-y-2">
+                        <Label for="cancel-reason">
+                            Details
+                            <span v-if="selectedCancellationReason?.details_required" class="text-destructive">*</span>
+                            <span v-else class="text-muted-foreground">(optional)</span>
+                        </Label>
+                        <Textarea
                             id="cancel-reason"
                             v-model="cancelReason"
-                            placeholder="Why is this booking being cancelled? (the student will see this)"
-                            class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            placeholder="Anything Head Office should know (the student will see this too)"
+                            class="min-h-[80px]"
                             maxlength="1000"
                         />
                         <p class="text-xs text-muted-foreground">
@@ -1952,19 +2016,14 @@ onMounted(() => {
                         </p>
                     </div>
 
-                    <div v-if="editItemOffersRefundChoice" class="space-y-1">
-                        <div class="flex items-start gap-3">
-                            <Checkbox id="refund-lesson" v-model="refundLesson" class="mt-0.5 cursor-pointer" />
-                            <label for="refund-lesson" class="cursor-pointer text-sm font-medium leading-snug">
-                                Refund Lesson
-                            </label>
-                        </div>
-                        <p class="text-xs text-muted-foreground">
-                            This lesson starts within 48 hours.
-                            <template v-if="refundLesson">DRIVE will be notified to refund the pupil and the instructor will not be paid.</template>
-                            <template v-else>The instructor will be paid for this lesson and the pupil will not be refunded.</template>
-                        </p>
-                    </div>
+                    <Alert v-if="editItemIsPaid">
+                        <PoundSterling class="h-4 w-4" />
+                        <AlertTitle>This lesson has been paid for</AlertTitle>
+                        <AlertDescription>
+                            Nothing is refunded or paid out automatically. Head Office will be notified and will contact
+                            the pupil and the instructor to decide whether the pupil is refunded.
+                        </AlertDescription>
+                    </Alert>
 
                     <Alert v-if="editItemAwaitingPayment" variant="destructive">
                         <AlertTriangle class="h-4 w-4" />
@@ -2027,7 +2086,7 @@ onMounted(() => {
                     <Button
                         variant="destructive"
                         @click="handleDelete"
-                        :disabled="formLoading || (editItemIsBooking && cancelReason.trim() === '')"
+                        :disabled="formLoading || (editItemIsBooking && !cancellationIsComplete)"
                         class="min-w-[100px]"
                     >
                         <Loader2 v-if="formLoading" class="mr-2 h-4 w-4 animate-spin" />

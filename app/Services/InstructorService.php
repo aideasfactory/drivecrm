@@ -53,6 +53,7 @@ use App\Actions\ProgressTracker\SeedInstructorProgressTrackerAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Shared\Message\SendBroadcastMessageAction;
 use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
+use App\Enums\LessonCancellationReason;
 use App\Enums\MessageType;
 use App\Enums\RecurrencePattern;
 use App\Enums\UserRole;
@@ -511,18 +512,27 @@ class InstructorService extends BaseService
      * Cancel the booking on a calendar item — the student has left / no longer
      * wants lessons. Marks the lesson(s) cancelled (kept for history), takes them
      * out of the diary while leaving the slot(s) open, stops future weekly
-     * invoices and notifies the student. Paid lessons are refunded (Head Office
-     * emailed) unless cancelled inside 48 hours without "Refund Lesson" ticked,
-     * in which case they are paid out to the instructor. Cache invalidation is
-     * handled inside the action.
+     * invoices and notifies the student. Paid lessons are never refunded or
+     * paid out automatically: Head Office is emailed to review them. Cache
+     * invalidation is handled inside the action.
      *
+     * @param  string|null  $details  Free-text details for the reason.
      * @param  bool  $applyToFutureInOrder  Also cancel future un-signed-off lessons in the same order.
-     * @param  bool  $refundLesson  Refund lessons cancelled inside the 48-hour window instead of paying the instructor.
      * @return array{cancelled_count: int, refund_required_count: int, payout_count: int}
      */
-    public function cancelBooking(CalendarItem $calendarItem, string $reason, bool $applyToFutureInOrder, User $actor, bool $refundLesson = false): array
+    public function cancelBooking(CalendarItem $calendarItem, LessonCancellationReason $reasonCode, ?string $details, bool $applyToFutureInOrder, User $actor): array
     {
-        return ($this->cancelBooking)($calendarItem, $reason, $applyToFutureInOrder, $actor, $refundLesson);
+        return ($this->cancelBooking)($calendarItem, $reasonCode, $details, $applyToFutureInOrder, $actor);
+    }
+
+    /**
+     * The reasons an instructor can pick when cancelling a lesson.
+     *
+     * @return array<int, array{value: string, label: string, cancelled_by: string, details_required: bool}>
+     */
+    public function getCancellationReasonOptions(): array
+    {
+        return LessonCancellationReason::options();
     }
 
     /**

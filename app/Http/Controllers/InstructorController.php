@@ -13,6 +13,7 @@ use App\Actions\Shared\Contact\UpdateContactAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Enums\BusinessType;
 use App\Enums\InstructorStatus;
+use App\Enums\LessonCancellationReason;
 use App\Enums\PdiStatus;
 use App\Enums\RecurrencePattern;
 use App\Enums\TransmissionType;
@@ -745,6 +746,16 @@ class InstructorController extends Controller
     }
 
     /**
+     * The reasons that can be picked when cancelling a booked lesson.
+     */
+    public function cancellationReasons(): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->instructorService->getCancellationReasonOptions(),
+        ]);
+    }
+
+    /**
      * Delete a calendar item (time slot).
      */
     public function destroyCalendarItem(Instructor $instructor, CalendarItem $calendarItem): JsonResponse
@@ -762,21 +773,36 @@ class InstructorController extends Controller
             // Booking slot (draft/reserved/booked lesson attached): cancelling
             // requires a reason and offers a "this / this + future in booking" scope.
             if ($calendarItem->lessons()->exists()) {
-                $reason = trim((string) request()->input('reason', ''));
+                $reasonCode = LessonCancellationReason::tryFrom((string) request()->input('reason_code'));
+                $details = trim((string) request()->input('reason', ''));
 
-                if ($reason === '') {
+                if (! $reasonCode) {
                     return response()->json([
-                        'message' => 'A reason is required to cancel this booking.',
-                        'errors' => ['reason' => ['A reason is required to cancel this booking.']],
+                        'message' => 'Please choose a reason for cancelling this booking.',
+                        'errors' => ['reason_code' => ['Please choose a reason for cancelling this booking.']],
+                    ], 422);
+                }
+
+                if ($reasonCode->requiresDetails() && $details === '') {
+                    return response()->json([
+                        'message' => 'Please add details for this cancellation.',
+                        'errors' => ['reason' => ['Please add details for this cancellation.']],
+                    ], 422);
+                }
+
+                if (mb_strlen($details) > 1000) {
+                    return response()->json([
+                        'message' => 'The details cannot exceed 1000 characters.',
+                        'errors' => ['reason' => ['The details cannot exceed 1000 characters.']],
                     ], 422);
                 }
 
                 $result = $this->instructorService->cancelBooking(
                     $calendarItem,
-                    $reason,
+                    $reasonCode,
+                    $details,
                     $deleteScope === 'future',
                     request()->user(),
-                    request()->boolean('refund_lesson'),
                 );
 
                 return response()->json([
