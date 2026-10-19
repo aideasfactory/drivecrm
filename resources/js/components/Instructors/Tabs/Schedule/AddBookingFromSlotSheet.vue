@@ -67,7 +67,7 @@ const selectedStudentId = ref<number | null>(null)
 const selectedPackageId = ref<number | null>(null)
 const paymentMode = ref('upfront')
 const cashNote = ref('')
-// Imported pupil + full-access owner: decided by the server per student, re-checked on submit.
+// Imported pupil with cash turned on + full-access owner: decided by the server per student, re-checked on submit.
 const canBookCash = ref(false)
 
 const isCash = computed(() => paymentMode.value === 'cash')

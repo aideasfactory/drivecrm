@@ -149,7 +149,7 @@ final class WorkflowCatalog
                 self::step('If they do not pay in time', 'The lessons are released. See "Booking not paid in time".', []),
             ]),
 
-            self::workflow('booking-cash', self::GROUP_BOOKING, 'Imported learner pays in cash', 'Head office books lessons for a learner imported from another system, who pays the instructor in cash at each lesson. Nothing goes through Stripe and there is no booking or digital fee.', [
+            self::workflow('booking-cash', self::GROUP_BOOKING, 'Imported learner pays in cash', 'Head office books lessons for a learner imported from another system, who pays the instructor in cash at each lesson. Cash payments are off for every learner, including straight after import, until an owner with full admin access turns them on from the pupil page. Nothing goes through Stripe and there is no booking or digital fee.', [
                 self::step('Head office books the lessons', 'An owner with full admin access picks "Pay in cash" when booking from the pupil page, and can add a note. The booking team and instructors cannot. The booking is confirmed straight away, with no payment window, and the lessons go into the diary marked "Cash".', [
                     self::email(EmailTemplateKey::LearnerCashBookingConfirmed, 'Learner, or the person who booked'),
                     self::email(EmailTemplateKey::InstructorCalendarClash, 'Instructor', 'Only when the new lessons overlap existing diary items.'),

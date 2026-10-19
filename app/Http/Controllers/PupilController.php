@@ -37,6 +37,7 @@ use App\Http\Requests\DeleteStudentProfileRequest;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\StorePickupPointRequest;
 use App\Http\Requests\UpdatePickupPointRequest;
+use App\Http\Requests\UpdateStudentCashPaymentsRequest;
 use App\Http\Requests\UpdateStudentImportedRequest;
 use App\Http\Requests\UpdateStudentStatusRequest;
 use App\Jobs\ProcessLessonSignOffJob;
@@ -118,6 +119,7 @@ class PupilController extends Controller
     {
         $data = (new GetStudentDetailAction)($student);
         $data['is_imported'] = $student->isImported();
+        $data['cash_payments_enabled'] = $student->cash_payments_enabled;
         $data['can_book_cash'] = CashBookings::allowedFor(request()->user(), $student);
 
         return response()->json([
@@ -720,8 +722,24 @@ class PupilController extends Controller
 
         return response()->json([
             'is_imported' => $student->isImported(),
+            'cash_payments_enabled' => $student->cash_payments_enabled,
             'can_book_cash' => CashBookings::allowedFor($request->user(), $student),
             'message' => $imported ? 'Pupil marked as imported.' : 'Imported mark removed.',
+        ]);
+    }
+
+    /**
+     * Turn cash payments on or off for an imported pupil (full-access owners only).
+     */
+    public function updateCashPayments(UpdateStudentCashPaymentsRequest $request, Student $student): JsonResponse
+    {
+        $enabled = $request->boolean('cash_payments_enabled');
+        $student = $this->studentService->setCashPayments($student, $enabled, $request->user());
+
+        return response()->json([
+            'cash_payments_enabled' => $student->cash_payments_enabled,
+            'can_book_cash' => CashBookings::allowedFor($request->user(), $student),
+            'message' => $enabled ? 'Cash payments turned on.' : 'Cash payments turned off.',
         ]);
     }
 

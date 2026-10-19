@@ -17,9 +17,11 @@ class SetStudentImportedAction
 
     /**
      * Mark an existing pupil as imported from another system (e.g. GoRoadie),
-     * or clear the mark. Imported pupils can be booked as cash orders by a
+     * or clear the mark. Imported pupils can have cash payments turned on by a
      * full-access owner. Sets `users.imported_at` exactly as the importer
      * does; the welcome-email flag and existing orders are left untouched.
+     * Clearing the mark also turns cash payments off, so marking the pupil
+     * again later never turns cash back on by itself.
      *
      * @throws ValidationException When the pupil has no login account to mark.
      */
@@ -41,13 +43,17 @@ class SetStudentImportedAction
 
         $user->forceFill(['imported_at' => $imported ? now() : null])->save();
 
+        if (! $imported && $student->cash_payments_enabled) {
+            $student->forceFill(['cash_payments_enabled' => false])->save();
+        }
+
         $changedByName = $changedBy?->name ?? 'head office';
 
         ($this->logActivity)(
             $student,
             $imported
-                ? "Marked as an imported pupil by {$changedByName} (can be booked as cash)"
-                : "Imported pupil mark removed by {$changedByName} (cash bookings no longer offered)",
+                ? "Marked as an imported pupil by {$changedByName} (cash payments can now be turned on)"
+                : "Imported pupil mark removed by {$changedByName} (cash payments turned off)",
             'profile',
             [
                 'imported' => $imported,

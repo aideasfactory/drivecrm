@@ -347,6 +347,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('students.status.update');
     Route::patch('/students/{student}/imported', [PupilController::class, 'updateImported'])
         ->name('students.imported.update');
+    Route::patch('/students/{student}/cash-payments', [PupilController::class, 'updateCashPayments'])
+        ->name('students.cash-payments.update');
     Route::delete('/students/{student}/remove', [PupilController::class, 'removeStudent'])
         ->name('students.remove');
     Route::delete('/students/{student}', [PupilController::class, 'destroy'])

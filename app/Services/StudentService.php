@@ -10,7 +10,6 @@ use App\Actions\Student\DeleteStudentAction;
 use App\Actions\Student\DeleteStudentProfilePictureAction;
 use App\Actions\Student\GetAllStudentsAction;
 use App\Actions\Student\GetStudentByIdAction;
-use App\Actions\Student\SetStudentImportedAction;
 use App\Actions\Student\GetStudentInstructorProfileAction;
 use App\Actions\Student\GetStudentPracticeHoursAction;
 use App\Actions\Student\PickupPoint\CreatePickupPointAction;
@@ -19,6 +18,8 @@ use App\Actions\Student\PickupPoint\GetStudentPickupPointsAction;
 use App\Actions\Student\PickupPoint\SetDefaultPickupPointAction;
 use App\Actions\Student\PickupPoint\UpdatePickupPointAction;
 use App\Actions\Student\ResendStudentInviteAction;
+use App\Actions\Student\SetStudentCashPaymentsAction;
+use App\Actions\Student\SetStudentImportedAction;
 use App\Actions\Student\Status\RemoveStudentFromInstructorAction;
 use App\Actions\Student\UpdateStudentAction;
 use App\Actions\Student\UploadStudentProfilePictureAction;
@@ -49,15 +50,24 @@ class StudentService extends BaseService
         protected DeleteStudentProfilePictureAction $deleteProfilePictureAction,
         protected GetStudentInstructorProfileAction $getInstructorProfile,
         protected GetStudentPracticeHoursAction $getPracticeHours,
-        protected SetStudentImportedAction $setStudentImported
+        protected SetStudentImportedAction $setStudentImported,
+        protected SetStudentCashPaymentsAction $setStudentCashPayments
     ) {}
 
     /**
-     * Mark a pupil as imported (eligible for cash orders), or clear the mark.
+     * Mark a pupil as imported (so cash payments can be turned on), or clear the mark.
      */
     public function setImported(Student $student, bool $imported, ?User $changedBy = null): Student
     {
         return ($this->setStudentImported)($student, $imported, $changedBy);
+    }
+
+    /**
+     * Turn cash payments on or off for an imported pupil.
+     */
+    public function setCashPayments(Student $student, bool $enabled, ?User $changedBy = null): Student
+    {
+        return ($this->setStudentCashPayments)($student, $enabled, $changedBy);
     }
 
     /**

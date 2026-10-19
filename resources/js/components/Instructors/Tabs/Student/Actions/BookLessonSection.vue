@@ -49,7 +49,7 @@ const props = withDefaults(defineProps<{
     studentId: number
     instructorId: number
     headerMode?: boolean
-    // Imported pupil + full-access owner: the server decides, and re-checks on submit.
+    // Imported pupil with cash turned on + full-access owner: the server decides, and re-checks on submit.
     canBookCash?: boolean
 }>(), {
     headerMode: false,

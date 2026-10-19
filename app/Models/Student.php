@@ -52,6 +52,7 @@ class Student extends Model
         'contact_terms' => 'boolean',
         'contact_communications' => 'boolean',
         'owns_account' => 'boolean',
+        'cash_payments_enabled' => 'boolean',
         'app_last_active_at' => 'datetime',
         'test_pass_guarantee_at' => 'datetime',
     ];

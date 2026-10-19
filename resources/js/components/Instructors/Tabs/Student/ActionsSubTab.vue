@@ -32,6 +32,7 @@ const student = ref<{
     inactive_reason: string | null
     instructor_id: number | null
     is_imported: boolean
+    cash_payments_enabled: boolean
 } | null>(null)
 const isLoadingStudent = ref(true)
 const contactManagerKey = ref(0)
@@ -124,6 +125,7 @@ const handleStatusUpdated = (
                     v-else-if="student"
                     :student-id="studentId"
                     :is-imported="student.is_imported"
+                    :cash-payments-enabled="student.cash_payments_enabled"
                     @updated="emit('importedUpdated')"
                 />
             </CardContent>
