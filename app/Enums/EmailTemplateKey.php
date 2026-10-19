@@ -9,6 +9,7 @@ enum EmailTemplateKey: string
     case LearnerWelcome = 'learner.welcome';
     case LearnerRegistered = 'learner.registered';
     case LearnerOrderConfirmation = 'learner.order_confirmation';
+    case LearnerCashBookingConfirmed = 'learner.cash_booking_confirmed';
     case LearnerPaymentLink = 'learner.payment_link';
     case LearnerPaymentDueSoon = 'learner.payment_due_soon';
     case LearnerBookingCancelled = 'learner.booking_cancelled';

@@ -83,27 +83,31 @@ class LessonSignOffService extends BaseService
         $payoutAmountPence = $result['payout']?->amount_pence;
         $instructorName = $instructor->user?->name ?? 'Instructor';
         $lessonDate = $lesson->date?->format('d M Y') ?? 'N/A';
+        $isCash = $lesson->order->isCash();
+        $cashNote = $isCash ? ' (paid in cash: £'.number_format(((int) $lesson->amount_pence) / 100, 2).')' : '';
 
         // Log activity for both student and instructor
         ($this->logActivity)(
             $student,
-            "Lesson on {$lessonDate} signed off by {$instructorName}",
+            "Lesson on {$lessonDate} signed off by {$instructorName}{$cashNote}",
             'lesson',
             [
                 'lesson_id' => $lesson->id,
                 'instructor_id' => $instructor->id,
                 'payout_amount_pence' => $payoutAmountPence,
+                'paid_in_cash' => $isCash,
             ]
         );
 
         ($this->logActivity)(
             $instructor,
-            "Signed off lesson on {$lessonDate} for {$student->first_name} {$student->surname}",
+            "Signed off lesson on {$lessonDate} for {$student->first_name} {$student->surname}{$cashNote}",
             'lesson',
             [
                 'lesson_id' => $lesson->id,
                 'student_id' => $student->id,
                 'payout_amount_pence' => $payoutAmountPence,
+                'paid_in_cash' => $isCash,
             ]
         );
 

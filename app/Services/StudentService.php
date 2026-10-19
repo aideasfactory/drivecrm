@@ -18,6 +18,8 @@ use App\Actions\Student\PickupPoint\GetStudentPickupPointsAction;
 use App\Actions\Student\PickupPoint\SetDefaultPickupPointAction;
 use App\Actions\Student\PickupPoint\UpdatePickupPointAction;
 use App\Actions\Student\ResendStudentInviteAction;
+use App\Actions\Student\SetStudentCashPaymentsAction;
+use App\Actions\Student\SetStudentImportedAction;
 use App\Actions\Student\Status\RemoveStudentFromInstructorAction;
 use App\Actions\Student\UpdateStudentAction;
 use App\Actions\Student\UploadStudentProfilePictureAction;
@@ -47,8 +49,26 @@ class StudentService extends BaseService
         protected UploadStudentProfilePictureAction $uploadProfilePicture,
         protected DeleteStudentProfilePictureAction $deleteProfilePictureAction,
         protected GetStudentInstructorProfileAction $getInstructorProfile,
-        protected GetStudentPracticeHoursAction $getPracticeHours
+        protected GetStudentPracticeHoursAction $getPracticeHours,
+        protected SetStudentImportedAction $setStudentImported,
+        protected SetStudentCashPaymentsAction $setStudentCashPayments
     ) {}
+
+    /**
+     * Mark a pupil as imported (so cash payments can be turned on), or clear the mark.
+     */
+    public function setImported(Student $student, bool $imported, ?User $changedBy = null): Student
+    {
+        return ($this->setStudentImported)($student, $imported, $changedBy);
+    }
+
+    /**
+     * Turn cash payments on or off for an imported pupil.
+     */
+    public function setCashPayments(Student $student, bool $enabled, ?User $changedBy = null): Student
+    {
+        return ($this->setStudentCashPayments)($student, $enabled, $changedBy);
+    }
 
     /**
      * Get all students with instructor relationships.

@@ -35,6 +35,7 @@ import {
     CheckCircle2,
     Clock,
     Ban,
+    Banknote,
     PoundSterling,
     Loader2,
     ClipboardCheck,
@@ -62,7 +63,7 @@ interface Lesson {
     lesson_payment_id: number | null
     payment_status: 'due' | 'paid' | 'refunded' | null
     has_stripe_invoice: boolean
-    payment_mode: 'upfront' | 'weekly' | 'imported'
+    payment_mode: 'upfront' | 'weekly' | 'imported' | 'cash'
     payout_status: 'pending' | 'paid' | 'failed' | null
     has_payout: boolean
     calendar_date: string | null
@@ -393,6 +394,10 @@ onMounted(() => {
                                         {{ lesson.payment_status
                                             ? lesson.payment_status.charAt(0).toUpperCase() + lesson.payment_status.slice(1)
                                             : '—' }}
+                                    </Badge>
+                                    <Badge v-if="lesson.payment_mode === 'cash'" variant="outline" class="gap-1">
+                                        <Banknote class="h-3 w-3" />
+                                        Cash
                                     </Badge>
                                     <Button
                                         v-if="lesson.payment_status === 'due' && lesson.has_stripe_invoice"

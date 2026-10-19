@@ -20,6 +20,7 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip'
 import {
+    Banknote,
     CreditCard,
     PoundSterling,
     CheckCircle2,
@@ -38,7 +39,7 @@ interface Payment {
     lesson_date: string | null
     lesson_time: string | null
     package_name: string
-    payment_mode: 'upfront' | 'weekly'
+    payment_mode: 'upfront' | 'weekly' | 'cash'
     amount_pence: number
     status: 'due' | 'paid' | 'refunded'
     due_date: string | null
@@ -296,8 +297,9 @@ onMounted(() => {
                             </TableCell>
                             <TableCell>
                                 <Badge variant="secondary" class="gap-1">
-                                    <PoundSterling class="h-3 w-3" />
-                                    {{ payment.payment_mode === 'upfront' ? 'Upfront' : 'Weekly' }}
+                                    <Banknote v-if="payment.payment_mode === 'cash'" class="h-3 w-3" />
+                                    <PoundSterling v-else class="h-3 w-3" />
+                                    {{ payment.payment_mode === 'cash' ? 'Cash' : payment.payment_mode === 'upfront' ? 'Upfront' : 'Weekly' }}
                                 </Badge>
                             </TableCell>
                             <TableCell>

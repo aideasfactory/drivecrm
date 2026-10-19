@@ -155,6 +155,8 @@ export interface CalendarItemResponse {
   unavailability_reason: string | null
   student_name: string | null
   is_paid: boolean | null
+  /** Pupil pays the instructor in cash at the lesson (no Stripe). */
+  is_cash?: boolean | null
   is_late_cancellation?: boolean | null
   /** Booking still awaiting its first payment: cancelling cancels the whole booking. */
   awaiting_payment?: boolean | null
