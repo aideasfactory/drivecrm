@@ -134,6 +134,21 @@ final class EmailTemplateCatalog
                 'guarantee_included_free' => 'The Pass Your Test Guarantee is included free',
             ]),
 
+            self::entry(EmailTemplateKey::LearnerCashBookingConfirmed, 'Cash booking confirmation', $audience, 'Sent when head office books lessons that the learner pays for in cash to their instructor.', [
+                'recipient_name' => 'Greeting name (learner, or the contact who booked)',
+                'learner_name' => 'Learner full name',
+                'learner_first_name' => 'Learner first name',
+                'package_name' => 'Package name',
+                'lessons_count' => 'Number of lessons',
+                'instructor_name' => 'Instructor name',
+                'first_lesson_date' => 'First lesson date (blank if none booked yet)',
+                'lesson_price' => 'Cash to pay the instructor at each lesson',
+                'total' => 'Total for all lessons in the booking',
+                'app_name' => 'Application name',
+            ], 'Your Driving Lessons Have Been Booked', 'Hello {{recipient_name}}!', "{{#if booked_by_contact}}Driving lessons have been booked for **{{learner_name}}** with **{{instructor_name}}**.{{else}}Your driving lessons with **{{instructor_name}}** have been booked.{{/if}} They are paid in cash to the instructor at each lesson, so there is nothing to pay online.\n\n**Booking Details:**\nPackage: {{package_name}}\nNumber of lessons: {{lessons_count}}\nInstructor: {{instructor_name}}\n{{#if first_lesson_date}}First lesson: {{first_lesson_date}}{{/if}}\n\n**Paying in cash — each lesson:**\nLesson: {{lesson_price}}\nBooking fee: £0.00\nDigital fee: £0.00\n**Pay your instructor {{lesson_price}} in cash at each lesson**\n\nTotal for all {{lessons_count}} lessons: {{total}}\n\n**Next Steps:**\n1. Download the app to view your lesson schedule\n2. Have the cash ready for your instructor at each lesson\n3. Make sure to arrive 5 minutes early for your first lesson\n{{#if booked_by_contact}}\nThis booking was made for: **{{learner_name}}**{{/if}}\n\n{{action_button}}\n\nIf you have any questions, please get in touch with your instructor.", "Safe driving,\nThe Driving School Team", 'Download app', [
+                'booked_by_contact' => 'A contact (e.g. parent) booked on behalf of the learner',
+            ]),
+
             self::entry(EmailTemplateKey::LearnerPaymentLink, 'Payment link for booked lessons', $audience, 'Sent when an instructor books lessons that still need paying.', [
                 'recipient_name' => 'Greeting name (learner, or the contact who booked)',
                 'learner_name' => 'Learner full name',

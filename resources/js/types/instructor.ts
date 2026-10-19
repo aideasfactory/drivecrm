@@ -156,6 +156,8 @@ export interface CalendarItemResponse {
   student_name: string | null
   is_paid: boolean | null
   /** Under 48 hours' notice. Informational: late cancellations are never paid out. */
+  /** Pupil pays the instructor in cash at the lesson (no Stripe). */
+  is_cash?: boolean | null
   is_late_cancellation?: boolean | null
   /** Booking still awaiting its first payment: cancelling cancels the whole booking. */
   awaiting_payment?: boolean | null

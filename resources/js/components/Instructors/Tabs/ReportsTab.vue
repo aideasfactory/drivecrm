@@ -26,6 +26,7 @@ import {
 import { toast } from '@/components/ui/sonner'
 import { useRole } from '@/composables/useRole'
 import MarkPayoutPaidSheet, { type PayoutToMark } from '@/components/Instructors/MarkPayoutPaidSheet.vue'
+import CashLessonsCard from '@/components/Instructors/CashLessonsCard.vue'
 import type { InstructorDetail, InstructorPayout } from '@/types/instructor'
 
 interface Props {
@@ -376,6 +377,8 @@ onMounted(() => {
                 </Table>
             </CardContent>
         </Card>
+
+        <CashLessonsCard :instructor-id="instructor.id" />
 
         <MarkPayoutPaidSheet v-model:open="markSheetOpen" :payout="payoutToMark" @marked="loadPayouts" />
     </div>

@@ -46,8 +46,11 @@ class CalendarItemResource extends JsonResource
             'order_id' => $lesson?->order_id,
             'student_name' => $this->studentName(),
             'is_paid' => $this->isPaid($lesson),
-            // True when cancelling now is inside the 48-hour window. Informational
-            // only: late cancellations go to Head Office, never paid out.
+            // True when the pupil pays the instructor in cash at the lesson
+            // (no Stripe). The app shows "Cash – collect £X" using `amount_pence`.
+            'is_cash' => $lesson ? $lesson->order?->isCash() === true : null,
+            // True when cancelling now is inside the 48-hour window, where the
+            // cancel sheet offers the "Refund Lesson" tickbox.
             'is_late_cancellation' => $this->isLateCancellation($lesson),
             // True when the booking is still awaiting its first payment: cancelling
             // any lesson cancels the whole booking (`scope` is ignored).
@@ -126,9 +129,11 @@ class CalendarItemResource extends JsonResource
 
         // Weekly: per-lesson payment status. Upfront: paid once the order is
         // confirmed — a draft is upfront-but-awaiting-payment, so never paid.
-        // Imported: settled outside the platform, always paid.
+        // Imported: settled outside the platform, always paid. Cash: paid to
+        // the instructor at the lesson, so never blocks sign-off.
         return $lesson->lessonPayment?->isPaid()
             ?? ($lesson->order?->isImported() === true
+                || $lesson->order?->isCash() === true
                 || ($lesson->order?->isUpfront() === true && ! $lesson->isDraft()));
     }
 

@@ -149,6 +149,21 @@ final class WorkflowCatalog
                 self::step('If they do not pay in time', 'The lessons are released. See "Booking not paid in time".', []),
             ]),
 
+            self::workflow('booking-cash', self::GROUP_BOOKING, 'Imported learner pays in cash', 'Head office books lessons for a learner imported from another system, who pays the instructor in cash at each lesson. Cash payments are off for every learner, including straight after import, until an owner with full admin access turns them on from the pupil page. Nothing goes through Stripe and there is no booking or digital fee.', [
+                self::step('Head office books the lessons', 'An owner with full admin access picks "Pay in cash" when booking from the pupil page, and can add a note. The booking team and instructors cannot. The booking is confirmed straight away, with no payment window, and the lessons go into the diary marked "Cash".', [
+                    self::email(EmailTemplateKey::LearnerCashBookingConfirmed, 'Learner, or the person who booked'),
+                    self::email(EmailTemplateKey::InstructorCalendarClash, 'Instructor', 'Only when the new lessons overlap existing diary items.'),
+                ]),
+                self::step('Before each lesson', 'Normal lesson reminders only. No invoices, payment emails or payment reminders are sent, and the lessons are never released for non-payment.', []),
+                self::step('The instructor signs the lesson off', 'The instructor collects the cash and signs off as usual, on the website or in the app, even without Stripe set up. The lesson is recorded as paid in cash and shows in the pupil\'s payments and the instructor\'s reports. No payout is sent.', [
+                    self::email(EmailTemplateKey::InstructorLessonSignedOff, 'Instructor'),
+                    self::email(EmailTemplateKey::LearnerLessonFeedbackRequest, 'Learner'),
+                ]),
+                self::step('A cash lesson is cancelled', 'The slot is freed. Nothing was paid through us, so there is no refund and the learner is told they will not be charged.', [
+                    self::email(EmailTemplateKey::LearnerBookingCancelled, 'Learner'),
+                ]),
+            ]),
+
             self::workflow('slot-offer', self::GROUP_BOOKING, 'Short-notice lesson offer', 'An instructor with a free slot offers it to their existing learners, and the first to book and pay gets it.', [
                 self::step('The instructor offers a free slot', 'The offer goes to the instructor\'s active learners who have the app.', [
                     self::push('Short Notice Lesson Available', 'Instructor\'s active learners'),

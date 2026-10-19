@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Onboarding;
 
 use App\Actions\Onboarding\BuildPublicInstructorProfileAction;
 use App\Http\Controllers\Controller;
-use App\Jobs\SyncBookingEnquiryToBirdJob;
 use App\Http\Requests\Onboarding\StepTwoRequest;
+use App\Jobs\SyncBookingEnquiryToBirdJob;
 use App\Services\InstructorService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;

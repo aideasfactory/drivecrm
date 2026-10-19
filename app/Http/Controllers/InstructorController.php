@@ -1291,6 +1291,16 @@ class InstructorController extends Controller
     }
 
     /**
+     * Get an instructor's signed-off cash lessons (no payout — paid in cash).
+     */
+    public function cashLessons(Instructor $instructor): JsonResponse
+    {
+        return response()->json([
+            'cash_lessons' => $this->instructorService->getCashLessons($instructor),
+        ]);
+    }
+
+    /**
      * JSON error for a failed onboarding-link create or refresh.
      *
      * A missing Connect account is a known stale-id case: tell the instructor

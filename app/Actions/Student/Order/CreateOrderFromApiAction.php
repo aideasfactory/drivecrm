@@ -47,6 +47,14 @@ class CreateOrderFromApiAction
 
             $pricing = app(CalculatePackagePricingAction::class)($package);
 
+            // Cash orders are paid to the instructor at each lesson: no booking
+            // or digital fee, so the order total is the package price alone.
+            if ($paymentMode === PaymentMode::CASH) {
+                $pricing['booking_fee'] = 0;
+                $pricing['digital_fee_total'] = 0;
+                $pricing['total_pence'] = (int) $package->total_price_pence;
+            }
+
             $order = Order::create([
                 'student_id' => $student->id,
                 'instructor_id' => $instructorId,

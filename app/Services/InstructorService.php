@@ -24,6 +24,7 @@ use App\Actions\Instructor\FillAvailableCalendarSlotsAction;
 use App\Actions\Instructor\ForceCompleteAppOnboardingAction;
 use App\Actions\Instructor\GetGroupedStudentsAction;
 use App\Actions\Instructor\GetInstructorCalendarAction;
+use App\Actions\Instructor\GetInstructorCashLessonsAction;
 use App\Actions\Instructor\GetInstructorDayLessonsAction;
 use App\Actions\Instructor\GetInstructorFinancesAction;
 use App\Actions\Instructor\GetInstructorLessonsInRangeAction;
@@ -104,6 +105,7 @@ class InstructorService extends BaseService
         protected FillAvailableCalendarSlotsAction $fillAvailableCalendarSlots,
         protected CreatePupilAction $createPupil,
         protected GetInstructorPayoutsAction $getInstructorPayouts,
+        protected GetInstructorCashLessonsAction $getInstructorCashLessons,
         protected GetInstructorDayLessonsAction $getInstructorDayLessons,
         protected GetInstructorLessonsInRangeAction $getInstructorLessonsInRange,
         protected GetGroupedStudentsAction $getGroupedStudents,
@@ -831,6 +833,14 @@ class InstructorService extends BaseService
     public function getPayouts(Instructor $instructor): Collection
     {
         return ($this->getInstructorPayouts)($instructor);
+    }
+
+    /**
+     * Get an instructor's signed-off cash lessons (paid to them directly, no payout).
+     */
+    public function getCashLessons(Instructor $instructor): Collection
+    {
+        return ($this->getInstructorCashLessons)($instructor);
     }
 
     /**

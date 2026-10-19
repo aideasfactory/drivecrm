@@ -276,6 +276,15 @@ class Order extends Model
     }
 
     /**
+     * Check if the pupil pays the instructor in cash at each lesson. Cash
+     * orders never touch Stripe: no checkout, invoices, fees or payouts.
+     */
+    public function isCash(): bool
+    {
+        return $this->payment_mode === PaymentMode::CASH;
+    }
+
+    /**
      * Whether the booking was ever paid for. Confirmation records the payment
      * (paid lesson payments, or the upfront payment intent on older orders), so
      * a cancelled order with none of these was cancelled before it was paid.
@@ -291,12 +300,13 @@ class Order extends Model
 
     /**
      * Whether lessons on this order count as paid without a per-lesson
-     * payment row: a confirmed upfront order, or an imported order (settled
-     * outside the platform).
+     * payment row: a confirmed upfront order, an imported order (settled
+     * outside the platform), or a cash order (paid to the instructor at the
+     * lesson; its payment row is only recorded at sign-off).
      */
     public function isPrepaid(): bool
     {
-        return ($this->isUpfront() && $this->isActive()) || $this->isImported();
+        return ($this->isUpfront() && $this->isActive()) || $this->isImported() || $this->isCash();
     }
 
     /**

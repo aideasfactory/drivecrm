@@ -7,4 +7,5 @@ enum PaymentMode: string
     case UPFRONT = 'upfront';
     case WEEKLY = 'weekly';
     case IMPORTED = 'imported';
+    case CASH = 'cash';
 }

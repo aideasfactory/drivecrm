@@ -52,6 +52,7 @@ class Student extends Model
         'contact_terms' => 'boolean',
         'contact_communications' => 'boolean',
         'owns_account' => 'boolean',
+        'cash_payments_enabled' => 'boolean',
         'app_last_active_at' => 'datetime',
         'test_pass_guarantee_at' => 'datetime',
     ];
@@ -161,6 +162,15 @@ class Student extends Model
     public function hasInstructor(): bool
     {
         return $this->instructor_id !== null;
+    }
+
+    /**
+     * Check if the pupil was brought in from another system (e.g. GoRoadie)
+     * by the importer.
+     */
+    public function isImported(): bool
+    {
+        return $this->user?->imported_at !== null;
     }
 
     /**

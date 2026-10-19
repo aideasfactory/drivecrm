@@ -37,6 +37,8 @@ use App\Http\Requests\DeleteStudentProfileRequest;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\StorePickupPointRequest;
 use App\Http\Requests\UpdatePickupPointRequest;
+use App\Http\Requests\UpdateStudentCashPaymentsRequest;
+use App\Http\Requests\UpdateStudentImportedRequest;
 use App\Http\Requests\UpdateStudentStatusRequest;
 use App\Jobs\ProcessLessonSignOffJob;
 use App\Models\CalendarItem;
@@ -52,6 +54,7 @@ use App\Services\InstructorCalendarService;
 use App\Services\LessonSignOffService;
 use App\Services\OrderService;
 use App\Services\StudentService;
+use App\Support\CashBookings;
 use App\Support\StripeTransferFailure;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -115,6 +118,9 @@ class PupilController extends Controller
     public function show(Student $student): JsonResponse
     {
         $data = (new GetStudentDetailAction)($student);
+        $data['is_imported'] = $student->isImported();
+        $data['cash_payments_enabled'] = $student->cash_payments_enabled;
+        $data['can_book_cash'] = CashBookings::allowedFor(request()->user(), $student);
 
         return response()->json([
             'student' => $data,
@@ -463,6 +469,7 @@ class PupilController extends Controller
         }
 
         $paymentMode = PaymentMode::from($validated['payment_mode']);
+        $cashNote = $validated['cash_note'] ?? null;
 
         if (! empty($validated['calendar_item_id'])) {
             $calendarItem = CalendarItem::with('calendar')->findOrFail($validated['calendar_item_id']);
@@ -471,7 +478,9 @@ class PupilController extends Controller
                 $package,
                 $paymentMode,
                 $calendarItem,
-                source: OrderSource::CRM
+                source: OrderSource::CRM,
+                bookedBy: $request->user(),
+                cashNote: $cashNote
             );
         } else {
             $result = $orderService->bookLessons(
@@ -481,12 +490,16 @@ class PupilController extends Controller
                 $validated['first_lesson_date'],
                 $validated['start_time'],
                 $validated['end_time'],
-                source: OrderSource::CRM
+                source: OrderSource::CRM,
+                bookedBy: $request->user(),
+                cashNote: $cashNote
             );
         }
 
         return response()->json([
-            'message' => 'Order created. A payment link has been emailed to the student.',
+            'message' => $paymentMode === PaymentMode::CASH
+                ? 'Cash order created. The student has been emailed their booking confirmation.'
+                : 'Order created. A payment link has been emailed to the student.',
             'order' => $result['order'],
         ], 201);
     }
@@ -696,6 +709,37 @@ class PupilController extends Controller
         return response()->json([
             'student' => $student,
             'message' => 'Student status updated successfully.',
+        ]);
+    }
+
+    /**
+     * Mark a pupil as imported (so cash orders can be booked for them), or clear it.
+     */
+    public function updateImported(UpdateStudentImportedRequest $request, Student $student): JsonResponse
+    {
+        $imported = $request->boolean('imported');
+        $student = $this->studentService->setImported($student, $imported, $request->user());
+
+        return response()->json([
+            'is_imported' => $student->isImported(),
+            'cash_payments_enabled' => $student->cash_payments_enabled,
+            'can_book_cash' => CashBookings::allowedFor($request->user(), $student),
+            'message' => $imported ? 'Pupil marked as imported.' : 'Imported mark removed.',
+        ]);
+    }
+
+    /**
+     * Turn cash payments on or off for an imported pupil (full-access owners only).
+     */
+    public function updateCashPayments(UpdateStudentCashPaymentsRequest $request, Student $student): JsonResponse
+    {
+        $enabled = $request->boolean('cash_payments_enabled');
+        $student = $this->studentService->setCashPayments($student, $enabled, $request->user());
+
+        return response()->json([
+            'cash_payments_enabled' => $student->cash_payments_enabled,
+            'can_book_cash' => CashBookings::allowedFor($request->user(), $student),
+            'message' => $enabled ? 'Cash payments turned on.' : 'Cash payments turned off.',
         ]);
     }
 

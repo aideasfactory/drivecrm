@@ -177,6 +177,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('instructors.activity-logs');
     Route::get('/instructors/{instructor}/payouts', [InstructorController::class, 'payouts'])
         ->name('instructors.payouts');
+    Route::get('/instructors/{instructor}/cash-lessons', [InstructorController::class, 'cashLessons'])
+        ->name('instructors.cash-lessons');
     Route::post('/instructors/{instructor}/payouts/{payout}/mark-paid', [InstructorController::class, 'markPayoutPaid'])
         ->middleware(EnsureOwner::class)
         ->name('instructors.payouts.mark-paid');
@@ -345,6 +347,10 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
     // Student Status & Management
     Route::patch('/students/{student}/status', [PupilController::class, 'updateStatus'])
         ->name('students.status.update');
+    Route::patch('/students/{student}/imported', [PupilController::class, 'updateImported'])
+        ->name('students.imported.update');
+    Route::patch('/students/{student}/cash-payments', [PupilController::class, 'updateCashPayments'])
+        ->name('students.cash-payments.update');
     Route::delete('/students/{student}/remove', [PupilController::class, 'removeStudent'])
         ->name('students.remove');
     Route::delete('/students/{student}', [PupilController::class, 'destroy'])

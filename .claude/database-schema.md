@@ -363,6 +363,7 @@ Extended profile for users with student role.
 | `contact_terms` | boolean | NULLABLE | Booker accepted terms |
 | `contact_communications` | boolean | NULLABLE | Booker marketing consent |
 | `owns_account` | boolean | DEFAULT true | Learner owns this account |
+| `cash_payments_enabled` | boolean | DEFAULT false | Owner has turned on cash payments for this pupil. Off by default, including for pupils created by the importer. Only a full-access owner can change it (`PATCH /students/{student}/cash-payments`, `SetStudentCashPaymentsAction`) and only for imported pupils (`users.imported_at` set). Removing the imported mark turns it off. Required (with imported + full-access owner) by `CashBookings::allowedFor` |
 | `status` | varchar(50) | DEFAULT 'active' | Student status (active, inactive, on_hold, passed, failed, completed) |
 | `inactive_reason` | text | NULLABLE | Reason for status change (e.g., why student was made inactive) |
 | `test_pass_guarantee_at` | timestamp | NULLABLE | When the student got Pass Your Test Guarantee (free or paid). NULL = no guarantee. Set by `GrantTestPassGuaranteeAction` only after the covering payment is confirmed. Drives the "Pass Your Test Guarantee" badge in the admin pupil views. |
@@ -455,7 +456,7 @@ Student enrollments/purchases of lesson packages.
 | `test_pass_guarantee_pence` | integer unsigned | DEFAULT 0 | Amount charged for the guarantee add-on. 0 when not included or when it was free (10+ booked hours paid in full). Included in `total_price_pence`. |
 | `payment_mode` | enum('upfront', 'weekly') | DEFAULT 'upfront' | Payment method chosen |
 | `total_price_pence` | integer unsigned | NULLABLE | Total charge amount in pence (package + booking fee + digital fees - discounts). Sent to Stripe. |
-| `payment_mode` | enum('upfront', 'weekly', 'imported') | DEFAULT 'upfront' | Payment method chosen. `imported` = lessons brought in from another system by the legacy importer — settled outside the platform, no Stripe IDs, no lesson_payments, never paid out. |
+| `payment_mode` | enum('upfront', 'weekly', 'imported', 'cash') | DEFAULT 'upfront' | Payment method chosen. `imported` = lessons brought in from another system by the legacy importer — settled outside the platform, no Stripe IDs, no lesson_payments, never paid out. `cash` = imported pupil pays the instructor in cash at each lesson (migration `2026_10_17_163438_add_cash_to_orders_payment_mode`) — see Business Logic. |
 | `status` | enum('pending', 'active', 'completed', 'cancelled', 'expired') | DEFAULT 'pending' | Order status. `cancelled` = cancelled by instructor/admin (lessons kept as `cancelled`). `expired` = unpaid booking released when its hold ran out (lessons deleted). `Order::isExpired()`, `Order::isClosed()` (cancelled or expired). |
 | `stripe_payment_intent_id` | varchar(255) | NULLABLE | Stripe Payment Intent ID (for upfront payments) |
 | `stripe_charge_id` | varchar(255) | NULLABLE | Stripe Charge ID that funded this upfront order (the PaymentIntent's `latest_charge`). Persisted at payment time (`checkout.session.completed` / `payment_intent.succeeded` webhooks) so per-lesson payout Transfers can cite it as `source_transaction`, letting Stripe draw against that specific charge instead of the general available balance. Nullable for legacy orders created before this column existed. |
@@ -484,7 +485,7 @@ Student enrollments/purchases of lesson packages.
 - Has many `LessonPayments` (through Lessons)
 
 **Enums:**
-- Payment Mode: `upfront`, `weekly`, `imported`
+- Payment Mode: `upfront`, `weekly`, `imported`, `cash`
 - Status: `pending`, `active`, `completed`, `cancelled`, `expired`
 - Source: `website`, `bookings_team`, `crm`, `learner_app`, `instructor_app`, `imported` (nullable for legacy orders)
 
@@ -494,7 +495,8 @@ Student enrollments/purchases of lesson packages.
 - Weekly payment: the first week (plus a paid guarantee) via Stripe Checkout, which marks the first `lesson_payments` row `paid`. On payment, the order becomes `active`, that week's item becomes `booked` and the rest `reserved`. Later weeks are invoiced by email when the previous lesson is signed off, due 48h before the lesson.
 - **Release:** `orders:release-expired-holds` (every minute) expires the Stripe session, then deletes the lessons (lesson_payments cascade), returns the slots to availability and marks the order `expired`. A payment landing on a closed (`cancelled`/`expired`) order alerts Head Office to refund it. The order is kept if Stripe reports the session already paid. The midnight `calendar:cleanup-drafts` skips items belonging to pending orders with a hold.
 - **Pass Your Test Guarantee (booking form only):** free when booked hours (lessons × slot length from step 4) ≥ `config('test_pass_guarantee.free_minimum_hours')` (10) and `payment_mode = upfront`. Otherwise the learner can opt in on the payment step (step 6) for `config('test_pass_guarantee.price')` (£50). Upfront: charged as a separate Stripe Checkout line item. Weekly: added in full to the first `lesson_payments` row (see `lesson_payments.test_pass_guarantee_pence`); the rest of the total is spread evenly as usual. Rules live in `App\Support\TestPassGuarantee`.
-- **Imported orders** (`payment_mode = imported`): one per imported student, on a hidden (`active = false`) per-instructor "Imported lessons" package with £0 totals. Lessons on them report `payment_status = paid` / `is_paid = true` so they can be signed off in the app and CRM. `SignOffLessonAction` skips the Stripe onboarding + payment guards and creates **no Payout**; `LessonSignOffService` also skips the student feedback email, next-invoice and resource recommendations. `Order::isImported()`, `Order::isPrepaid()` (confirmed upfront or imported).
+- **Imported orders** (`payment_mode = imported`): one per imported student, on a hidden (`active = false`) per-instructor "Imported lessons" package with £0 totals. Lessons on them report `payment_status = paid` / `is_paid = true` so they can be signed off in the app and CRM. `SignOffLessonAction` skips the Stripe onboarding + payment guards and creates **no Payout**; `LessonSignOffService` also skips the student feedback email, next-invoice and resource recommendations. `Order::isImported()`, `Order::isPrepaid()` (confirmed upfront, imported or cash).
+- **Cash orders** (`payment_mode = cash`): only for imported pupils (`users.imported_at` set) with `students.cash_payments_enabled = true`, only booked by a full-access owner from the CRM pupil page (`App\Support\CashBookings::allowedFor`, enforced in `StoreOrderRequest` and `OrderService::bookLessons`). `booking_fee_pence = 0`, `digital_fee_pence = 0`, `total_price_pence = package_total_price_pence`, no guarantee. Confirmed on booking by `ConfirmCashOrderAction`: `active` straight away, `payment_hold_expires_at = null`, all calendar items `booked`, lessons `pending`. **No `lesson_payments` rows at booking** — `RecordCashLessonPaymentAction` creates one `paid` row per lesson at sign-off (amount = lesson price). So reminders, invoices and the invoice-due report never see cash lessons, and cancelling one is the "unpaid" outcome. `SignOffLessonAction` skips the Stripe onboarding + payment guards and creates **no Payout**; unlike imported, the feedback email and recommendations still run. `Order::isCash()`.
 - **Staff bookings:** orders with `booked_by_user_id` set are listed on the admin "Lessons booked" page (`ListStaffBookedLessonsAction`) so unpaid ones can be chased.
 - **All bookings:** the "Lessons booked" page's All bookings tab (`ListAllBookedLessonsAction`) lists every non-imported order by `created_at`, with its `source`.
 - **Price snapshot:** `package_name`, `package_total_price_pence`, `package_lesson_price_pence`, and `package_lessons_count` are copied from the package at order creation time. Always use these snapshot columns for pricing/display — never read live from `packages` table via the `package` relationship for pricing data.
@@ -559,7 +561,9 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 
 ### 7. **lesson_payments**
 
-Tracks payment status for individual lessons (used in weekly payment mode).
+Tracks payment status for individual lessons (used in weekly payment mode). Cash orders also get one row
+per lesson, created `paid` at sign-off by `RecordCashLessonPaymentAction` (no Stripe IDs, `amount_pence` = the
+lesson price). A cash order never has a `due` row.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -1555,7 +1559,7 @@ The permanent record of everything the importer brought in. Links a legacy syste
 
 **Indexes:** unique `(entity, source_ref)`, index `(entity, model_id)`
 
-**Other imported markers:** `users.imported_at` (accounts), `orders.payment_mode = imported` (imported lessons' orders), `instructor_finances.category = imported` (finance rows with no category given). Imported receipts are stored exactly like manual uploads (`instructors/{id}/finance-receipts/{financeId}/…` on s3).
+**Other imported markers:** `users.imported_at` (accounts — also set or cleared by a full-access owner from the pupil's Actions tab, "Mark as imported", `SetStudentImportedAction`; a pupil must be imported before an owner can turn on `students.cash_payments_enabled`, and clearing the mark turns cash off), `orders.payment_mode = imported` (imported lessons' orders), `instructor_finances.category = imported` (finance rows with no category given). Imported receipts are stored exactly like manual uploads (`instructors/{id}/finance-receipts/{financeId}/…` on s3).
 
 ---
 
