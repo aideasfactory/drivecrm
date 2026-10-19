@@ -39,4 +39,44 @@ final class ContactDetails
 
         return $phone;
     }
+
+    /**
+     * Normalise a UK-flavoured phone number into E.164 (e.g. "+447545399797").
+     *
+     * The booking forms are UK-only, so bare numbers are assumed to be GB.
+     * Returns null when the result isn't a plausible E.164 length (8–15 digits).
+     */
+    public static function toE164(?string $phone): ?string
+    {
+        if ($phone === null) {
+            return null;
+        }
+
+        $hasPlus = str_starts_with(trim($phone), '+');
+        $digits = (string) preg_replace('/\D/', '', $phone);
+
+        if ($digits === '') {
+            return null;
+        }
+
+        if ($hasPlus) {
+            $normalised = '+'.$digits;
+        } elseif (str_starts_with($digits, '00')) {
+            $normalised = '+'.substr($digits, 2);
+        } elseif (str_starts_with($digits, '0')) {
+            $normalised = '+44'.substr($digits, 1);
+        } elseif (str_starts_with($digits, '44')) {
+            $normalised = '+'.$digits;
+        } else {
+            $normalised = '+44'.$digits;
+        }
+
+        $length = strlen($normalised) - 1;
+
+        if ($length < 8 || $length > 15) {
+            return null;
+        }
+
+        return $normalised;
+    }
 }
