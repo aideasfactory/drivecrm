@@ -9,11 +9,8 @@ namespace App\Enums;
  */
 enum LessonCancellationOutcome: string
 {
-    /** The pupil is refunded; Head Office is told a refund is due. */
+    /** The lesson was paid for: Head Office reviews it and refunds the pupil or pays the instructor by hand. */
     case Refunded = 'refunded';
-
-    /** Late cancellation the instructor kept: the lesson is paid out to them. */
-    case Paid = 'paid';
 
     /** The lesson was never paid for, so there is nothing to refund or pay out. */
     case Unpaid = 'unpaid';
@@ -24,8 +21,7 @@ enum LessonCancellationOutcome: string
     public function noteLabel(): string
     {
         return match ($this) {
-            self::Refunded => 'Cancelled/Refunded',
-            self::Paid => 'Cancelled/Paid',
+            self::Refunded => 'Cancelled/Refund review',
             self::Unpaid => 'Cancelled/Unpaid',
         };
     }

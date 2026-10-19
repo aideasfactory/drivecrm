@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Actions\Calendar;
 
 use App\Actions\Shared\Note\CreateNoteAction;
-use App\Actions\Student\Lesson\CreateLessonPayoutAction;
 use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
 use App\Actions\Student\RevokeTestPassGuaranteeAction;
 use App\Enums\LessonCancellationOutcome;
+use App\Enums\LessonCancellationReason;
 use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
@@ -19,7 +19,7 @@ use App\Models\LessonPayment;
 use App\Models\Order;
 use App\Models\User;
 use App\Notifications\BookingCancelledNotification;
-use App\Notifications\RefundRequiredNotification;
+use App\Notifications\CancelledPaidLessonsReviewNotification;
 use App\Services\InstructorCalendarService;
 use App\Services\OrderService;
 use App\Services\StripeService;
@@ -34,7 +34,6 @@ class CancelBookingAction
 {
     public function __construct(
         protected ReopenCancelledLessonSlotAction $reopenCancelledLessonSlot,
-        protected CreateLessonPayoutAction $createLessonPayout,
         protected CreateNoteAction $createNote,
         protected RecalculateStudentLessonNumbersAction $recalculateStudentLessonNumbers,
         protected RevokeTestPassGuaranteeAction $revokeTestPassGuarantee,
@@ -48,13 +47,11 @@ class CancelBookingAction
      * other pupils. Future weekly invoices stop automatically because the
      * invoice sender skips cancelled lessons.
      *
-     * Each paid lesson is either refunded or paid out to the instructor:
-     *  - more than 48 hours before it starts: refunded;
-     *  - inside 48 hours: refunded when `$refundLesson` is ticked, otherwise
-     *    paid out to the instructor (Stripe transfer, as at sign-off).
-     * No Stripe refund happens here — Head Office is emailed to refund manually.
-     * Every cancelled lesson is noted on the instructor's profile as
-     * Cancelled/Refunded, Cancelled/Paid or Cancelled/Unpaid.
+     * Paid lessons are never refunded or paid out here, however late the
+     * cancellation. Head Office is emailed the reason, who cancelled and the
+     * notice given, and decides by hand whether to refund the pupil or pay the
+     * instructor. Every cancelled lesson is noted on the instructor's profile
+     * as Cancelled/Refund review or Cancelled/Unpaid.
      *
      * A booking still awaiting its first payment is always cancelled as a
      * whole (its price covers every lesson), and its Stripe Checkout session
@@ -62,16 +59,16 @@ class CancelBookingAction
      * the cancelled lessons are voided. If Stripe cannot do either, nothing is
      * cancelled.
      *
+     * @param  string|null  $details  Free-text details; required by the caller when the reason needs them.
      * @param  bool  $applyToFutureInOrder  When true, also cancel every future un-signed-off lesson in the same order. Ignored for a booking awaiting its first payment.
-     * @param  bool  $refundLesson  The instructor's "Refund Lesson" choice for lessons inside the 48-hour window.
-     * @return array{cancelled_count: int, refund_required_count: int, payout_count: int}
+     * @return array{cancelled_count: int, refund_required_count: int, payout_count: int} `payout_count` is always 0 (kept for API clients).
      */
     public function __invoke(
         CalendarItem $item,
-        string $reason,
+        LessonCancellationReason $reasonCode,
+        ?string $details,
         bool $applyToFutureInOrder,
         User $actor,
-        bool $refundLesson = false,
     ): array {
         $item->loadMissing(['calendar', 'lessons.order.student.user', 'lessons.lessonPayment', 'lessons.payout']);
 
@@ -102,7 +99,7 @@ class CancelBookingAction
         $voidedPayments = $this->stopOpenInvoices($cancelSet);
 
         try {
-            return $this->cancelLessons($cancelSet, $order, $instructor, $reason, $actor, $refundLesson, $isUnpaidBooking);
+            return $this->cancelLessons($cancelSet, $order, $instructor, $reasonCode, $details, $actor, $isUnpaidBooking);
         } catch (Throwable $e) {
             // The lessons stay booked, so their invoices must be issued again.
             $this->forgetVoidedInvoices($voidedPayments);
@@ -121,27 +118,27 @@ class CancelBookingAction
         Collection $cancelSet,
         ?Order $order,
         ?Instructor $instructor,
-        string $reason,
+        LessonCancellationReason $reasonCode,
+        ?string $details,
         User $actor,
-        bool $refundLesson,
         bool $isUnpaidBooking,
     ): array {
         /** @var Collection<int, LessonCancellationOutcome> $outcomes */
         $outcomes = $cancelSet->mapWithKeys(fn (Lesson $lesson): array => [
-            $lesson->id => $this->outcomeFor($lesson, $refundLesson),
+            $lesson->id => $this->outcomeFor($lesson),
         ]);
 
         $refundLessons = $cancelSet->filter(fn (Lesson $lesson): bool => $outcomes[$lesson->id] === LessonCancellationOutcome::Refunded)->values();
-        $payoutLessons = $cancelSet->filter(fn (Lesson $lesson): bool => $outcomes[$lesson->id] === LessonCancellationOutcome::Paid)->values();
-        $transferLessons = $payoutLessons->reject(fn (Lesson $lesson): bool => $lesson->order?->isImported() === true)->values();
 
-        if ($transferLessons->isNotEmpty() && (! $instructor?->onboarding_complete || ! $instructor->payouts_enabled)) {
-            throw new RuntimeException('The instructor cannot receive payouts yet, so this late cancellation cannot be paid out. Tick "Refund Lesson" to refund the pupil instead.');
-        }
+        // Notice is measured now, before the lessons change, for Head Office.
+        $hoursNotice = $refundLessons->mapWithKeys(fn (Lesson $lesson): array => [$lesson->id => $lesson->hoursNotice()])->all();
+
+        $details = trim((string) $details) === '' ? null : trim((string) $details);
+        $reasonText = $reasonCode->describe($details);
 
         $affectedDates = collect();
 
-        DB::transaction(function () use ($cancelSet, $reason, $affectedDates, $transferLessons, $instructor, $isUnpaidBooking, $order): void {
+        DB::transaction(function () use ($cancelSet, $reasonCode, $details, $affectedDates, $isUnpaidBooking, $order): void {
             if ($isUnpaidBooking) {
                 $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->first();
 
@@ -152,7 +149,8 @@ class CancelBookingAction
 
             foreach ($cancelSet as $lesson) {
                 $lesson->status = LessonStatus::CANCELLED;
-                $lesson->cancellation_reason = $reason;
+                $lesson->cancellation_reason = $details;
+                $lesson->cancellation_reason_code = $reasonCode;
                 $lesson->cancelled_at = now();
 
                 $calendarItem = $lesson->calendarItem;
@@ -166,12 +164,6 @@ class CancelBookingAction
                     $affectedDates->push($calendarItem->calendar?->date?->format('Y-m-d'));
                     ($this->reopenCancelledLessonSlot)($calendarItem);
                 }
-            }
-
-            // Stripe transfers last: a failure rolls the cancellation back, and
-            // nothing after them in the transaction can fail and orphan a transfer.
-            foreach ($transferLessons as $lesson) {
-                ($this->createLessonPayout)($lesson, $instructor);
             }
         });
 
@@ -187,39 +179,31 @@ class CancelBookingAction
 
         $this->invalidateCalendarCache($instructor?->id, $affectedDates);
 
-        $this->noteOutcomesOnInstructor($instructor, $cancelSet, $outcomes, $order, $reason);
+        $this->noteOutcomesOnInstructor($instructor, $cancelSet, $outcomes, $order, $reasonText);
 
-        $this->sendNotifications($cancelSet, $refundLessons, $payoutLessons, $order, $reason, $orderCancelled, $actor, $guaranteeRemoved);
+        $this->sendNotifications($cancelSet, $refundLessons, $order, $reasonCode, $details, $hoursNotice, $orderCancelled, $actor, $guaranteeRemoved);
 
         return [
             'cancelled_count' => $cancelSet->count(),
             'refund_required_count' => $refundLessons->count(),
-            'payout_count' => $payoutLessons->count(),
+            'payout_count' => 0,
         ];
     }
 
     /**
-     * Decide whether a cancelled lesson is refunded or paid out. Unpaid lessons
-     * have nothing to refund or pay out. Paid lessons are refunded unless the
-     * cancellation is inside the 48-hour window and the instructor did not
-     * tick "Refund Lesson".
+     * Paid lessons go to Head Office for review; unpaid lessons have nothing
+     * to refund or pay out.
      */
-    protected function outcomeFor(Lesson $lesson, bool $refundLesson): LessonCancellationOutcome
+    protected function outcomeFor(Lesson $lesson): LessonCancellationOutcome
     {
-        if (! $this->wasPaid($lesson)) {
-            return LessonCancellationOutcome::Unpaid;
-        }
-
-        if ($lesson->isLateCancellation() && ! $refundLesson) {
-            return LessonCancellationOutcome::Paid;
-        }
-
-        return LessonCancellationOutcome::Refunded;
+        return $this->wasPaid($lesson)
+            ? LessonCancellationOutcome::Refunded
+            : LessonCancellationOutcome::Unpaid;
     }
 
     /**
      * Record each cancelled lesson on the instructor's profile as a note
-     * starting Cancelled/Refunded, Cancelled/Paid or Cancelled/Unpaid.
+     * starting Cancelled/Refund review or Cancelled/Unpaid.
      *
      * @param  Collection<int, Lesson>  $cancelSet
      * @param  Collection<int, LessonCancellationOutcome>  $outcomes
@@ -471,19 +455,20 @@ class CancelBookingAction
     }
 
     /**
-     * Always email the student. Email Head Office only when a lesson is being
-     * refunded (a manual refund is required).
+     * Always email the student. Email Head Office only when paid lessons were
+     * cancelled, so they can review them by hand.
      *
      * @param  Collection<int, Lesson>  $cancelSet
-     * @param  Collection<int, Lesson>  $refundLessons
-     * @param  Collection<int, Lesson>  $payoutLessons
+     * @param  Collection<int, Lesson>  $refundLessons  Paid lessons for Head Office to review.
+     * @param  array<int, int|null>  $hoursNotice
      */
     protected function sendNotifications(
         Collection $cancelSet,
         Collection $refundLessons,
-        Collection $payoutLessons,
         ?Order $order,
-        string $reason,
+        LessonCancellationReason $reasonCode,
+        ?string $details,
+        array $hoursNotice,
         bool $orderCancelled,
         User $actor,
         bool $guaranteeRemoved = false,
@@ -491,6 +476,7 @@ class CancelBookingAction
         $student = $order?->student;
         $instructor = $order?->instructor;
         $refundRequired = $refundLessons->isNotEmpty();
+        $reason = $reasonCode->describe($details);
 
         if ($student?->user) {
             $student->user->notify(new BookingCancelledNotification(
@@ -499,7 +485,6 @@ class CancelBookingAction
                 $cancelSet,
                 $reason,
                 $refundRequired,
-                $payoutLessons->isNotEmpty(),
             ));
 
             $student->logActivity(
@@ -509,8 +494,8 @@ class CancelBookingAction
                     'order_id' => $order?->id,
                     'cancelled_lesson_ids' => $cancelSet->pluck('id')->all(),
                     'refund_required' => $refundRequired,
-                    'refunded_lesson_ids' => $refundLessons->pluck('id')->all(),
-                    'paid_out_lesson_ids' => $payoutLessons->pluck('id')->all(),
+                    'reason_code' => $reasonCode->value,
+                    'head_office_review_lesson_ids' => $refundLessons->pluck('id')->all(),
                     'order_cancelled' => $orderCancelled,
                     'cancelled_by_user_id' => $actor->id,
                 ],
@@ -520,12 +505,15 @@ class CancelBookingAction
 
         if ($refundRequired && config('mail.head_office_address')) {
             Notification::route('mail', config('mail.head_office_address'))
-                ->notify(new RefundRequiredNotification(
+                ->notify(new CancelledPaidLessonsReviewNotification(
                     $student,
                     $instructor,
                     $order,
                     $refundLessons,
-                    $reason,
+                    $reasonCode,
+                    $details,
+                    $hoursNotice,
+                    $actor->name,
                     $guaranteeRemoved,
                 ));
         }

@@ -9,7 +9,6 @@ use App\Mail\RendersTemplatedMail;
 use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Student;
-use App\Support\BookingPayments;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -23,6 +22,8 @@ class BookingCancelledNotification extends Notification implements ShouldQueue
 
     /**
      * @param  Collection<int, Lesson>  $lessons  The cancelled lessons.
+     * @param  string  $reason  The reason label plus any details.
+     * @param  bool  $refundRequired  Some lessons were paid for, so Head Office will be in touch.
      */
     public function __construct(
         public Student $student,
@@ -30,7 +31,6 @@ class BookingCancelledNotification extends Notification implements ShouldQueue
         public Collection $lessons,
         public string $reason,
         public bool $refundRequired,
-        public bool $lateCancellationCharged = false,
     ) {}
 
     /**
@@ -57,11 +57,9 @@ class BookingCancelledNotification extends Notification implements ShouldQueue
                 'lesson_count' => $count,
                 'lesson_list' => $lessonList,
                 'reason' => $this->reason,
-                'late_notice_hours' => BookingPayments::lateCancellationHours(),
                 'app_name' => config('app.name'),
                 'multiple_lessons' => $count !== 1,
                 'refund_due' => $this->refundRequired,
-                'late_cancellation_charged' => $this->lateCancellationCharged,
             ],
         );
     }
@@ -88,7 +86,6 @@ class BookingCancelledNotification extends Notification implements ShouldQueue
             'lesson_ids' => $this->lessons->pluck('id')->all(),
             'reason' => $this->reason,
             'refund_required' => $this->refundRequired,
-            'late_cancellation_charged' => $this->lateCancellationCharged,
         ];
     }
 }

@@ -155,6 +155,7 @@ export interface CalendarItemResponse {
   unavailability_reason: string | null
   student_name: string | null
   is_paid: boolean | null
+  /** Under 48 hours' notice. Informational: late cancellations are never paid out. */
   /** Pupil pays the instructor in cash at the lesson (no Stripe). */
   is_cash?: boolean | null
   is_late_cancellation?: boolean | null
@@ -190,4 +191,12 @@ export interface InstructorPayout {
   lesson_date: string | null
   lesson_start_time: string | null
   lesson_end_time: string | null
+}
+
+/** A reason that can be picked when cancelling a booked lesson. */
+export interface CancellationReasonOption {
+  value: string
+  label: string
+  cancelled_by: 'pupil' | 'instructor' | 'other'
+  details_required: boolean
 }

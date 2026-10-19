@@ -194,13 +194,11 @@ final class EmailTemplateCatalog
                 'instructor_name' => 'Instructor name',
                 'lesson_count' => 'Number of cancelled lessons',
                 'lesson_list' => 'Bulleted list of cancelled lessons',
-                'reason' => 'Cancellation reason',
-                'late_notice_hours' => 'Late-cancellation notice period in hours',
+                'reason' => 'Cancellation reason (and any details the canceller added)',
                 'app_name' => 'Application name',
-            ], 'Your Driving {{#if multiple_lessons}}Lessons Have{{else}}Lesson Has{{/if}} Been Cancelled', 'Hello {{recipient_name}},', "We're letting you know that the following {{#if multiple_lessons}}lessons have{{else}}lesson has{{/if}} been cancelled by **{{instructor_name}}**:\n\n{{lesson_list}}\n\n**Reason:**\n{{reason}}\n\n{{#if refund_due}}{{#if late_cancellation_charged}}Some of these lessons were cancelled less than {{late_notice_hours}} hours before they were due to start, so what you paid for those is not refundable. You will be refunded what you paid for the others, including the digital fee and any Pass Your Test Guarantee. The booking fee is non-refundable. Our head office will be in touch about this shortly.{{else}}You will be refunded what you paid for these lessons, including the digital fee and any Pass Your Test Guarantee. The booking fee is non-refundable. Our head office will be in touch about this shortly.{{/if}}{{else}}{{#if late_cancellation_charged}}This was cancelled less than {{late_notice_hours}} hours before the lesson was due to start, so what you paid is not refundable.{{else}}There is nothing further you need to do, and you will not be charged for these lessons.{{/if}}{{/if}}\n\nIf you have any questions, please get in touch with your instructor.", "Kind regards,\nThe {{app_name}} Team", null, [
+            ], 'Your Driving {{#if multiple_lessons}}Lessons Have{{else}}Lesson Has{{/if}} Been Cancelled', 'Hello {{recipient_name}},', "We're letting you know that the following {{#if multiple_lessons}}lessons have{{else}}lesson has{{/if}} been cancelled by **{{instructor_name}}**:\n\n{{lesson_list}}\n\n**Reason:**\n{{reason}}\n\n{{#if refund_due}}Our head office will be in touch shortly about what you paid for {{#if multiple_lessons}}these lessons{{else}}this lesson{{/if}}.{{else}}There is nothing further you need to do, and you will not be charged for these lessons.{{/if}}\n\nIf you have any questions, please get in touch with your instructor.", "Kind regards,\nThe {{app_name}} Team", null, [
                 'multiple_lessons' => 'More than one lesson was cancelled',
-                'refund_due' => 'A refund is owed for some or all of the lessons',
-                'late_cancellation_charged' => 'At least one lesson was cancelled inside the late-notice period and is not refundable',
+                'refund_due' => 'Some or all of the lessons were paid for (Head Office will be in touch)',
             ]),
 
             self::entry(EmailTemplateKey::LearnerLessonSignedOff, 'Lesson signed off (learner)', $audience, 'Sent to the learner after their instructor signs off a lesson.', [

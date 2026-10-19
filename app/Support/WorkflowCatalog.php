@@ -280,18 +280,15 @@ final class WorkflowCatalog
                 self::step('The learner wants to move a lesson', 'Learners cannot reschedule themselves. They contact their instructor.', []),
             ]),
 
-            self::workflow('lessons-cancelled', self::GROUP_CHANGES, 'Lessons cancelled', "An instructor or head office cancels one or more lessons. What the learner is told depends on whether they had paid and whether it was within {$lateHours} hours of the lesson.", [
-                self::step('The lessons are cancelled', 'The diary slots are freed. The learner gets one email listing the cancelled lessons and the reason, with refund wording that matches their situation.', [
+            self::workflow('lessons-cancelled', self::GROUP_CHANGES, 'Lessons cancelled', 'An instructor or head office cancels one or more lessons and picks a reason, which also records who cancelled (pupil, instructor or other). Paid lessons are never refunded or paid out automatically: head office reviews each one.', [
+                self::step('The lessons are cancelled', 'The diary slots are freed. The learner gets one email listing the cancelled lessons and the reason. If they had paid, it says head office will be in touch.', [
                     self::email(EmailTemplateKey::LearnerBookingCancelled, 'Learner'),
                 ]),
                 self::step('Lesson not paid yet', 'It is simply cancelled.', [
                     self::none('Nothing else is sent.'),
                 ]),
-                self::step("Paid, cancelled less than {$lateHours} hours before, refund not ticked", 'This counts as a late cancellation. The instructor is paid for the lesson and the learner is told it is not refundable.', [
-                    self::none('Nothing else is sent.'),
-                ]),
-                self::step('Paid, and a refund is due', 'The learner is refunded what they paid, including the digital fee and any Pass Your Test Guarantee. The booking fee is not refunded. Head office processes the refund by hand in Stripe.', [
-                    self::adminEmail('Action Required: Refund for Cancelled Booking', 'Head office'),
+                self::step('Lesson already paid', "Head office gets the reason, who cancelled, any details and how much notice was given (flagged late when under {$lateHours} hours). They contact the learner and instructor, then either refund the learner in Stripe (everything except the booking fee) or pay the instructor by hand.", [
+                    self::adminEmail('Action Required: Review Cancelled Paid Lesson(s)', 'Head office'),
                 ]),
                 self::step('The learner wants to cancel', 'Learners cannot cancel themselves. They contact their instructor or head office.', []),
             ]),

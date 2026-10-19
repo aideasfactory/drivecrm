@@ -225,14 +225,26 @@ class InstructorCalendarController extends Controller
     }
 
     /**
+     * The reasons an instructor can pick when cancelling a booked lesson,
+     * sent back as `reason_code` on the cancel request.
+     */
+    public function cancellationReasons(): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->instructorService->getCancellationReasonOptions(),
+        ]);
+    }
+
+    /**
      * Delete a calendar item for the authenticated instructor.
      *
      * Availability slots: ?scope=single (default) or ?scope=future for recurring
-     * items. Booking slots (a lesson is attached): the request must include a
-     * `reason`, and `scope=single` cancels just this lesson while `scope=future`
-     * cancels this and all future un-signed-off lessons in the same booking.
-     * `refund_lesson` refunds paid lessons cancelled inside 48 hours instead of
-     * paying the instructor for them.
+     * items. Booking slots (a lesson is attached): the request carries a
+     * `reason_code` (plus `reason` details, required for `other` or when no
+     * code is sent), and `scope=single` cancels just this lesson while
+     * `scope=future` cancels this and all future un-signed-off lessons in the
+     * same booking. Paid lessons go to Head Office for review; nothing is paid
+     * out to the instructor.
      */
     public function destroy(DeleteCalendarItemRequest $request, CalendarItem $calendarItem): JsonResponse
     {
@@ -251,10 +263,10 @@ class InstructorCalendarController extends Controller
             if ($calendarItem->lessons()->exists()) {
                 $result = $this->instructorService->cancelBooking(
                     $calendarItem,
-                    (string) $request->input('reason'),
+                    $request->reasonCode(),
+                    $request->input('reason'),
                     $deleteScope === 'future',
                     $request->user(),
-                    $request->boolean('refund_lesson'),
                 );
 
                 return response()->json([

@@ -92,6 +92,7 @@ Route::prefix('v1')->group(function (): void {
             Route::post('calendar/fill-slots', [InstructorCalendarController::class, 'fillSlots']);
             Route::put('calendar/items/{calendarItem}', [InstructorCalendarController::class, 'update']);
             Route::delete('calendar/items/{calendarItem}', [InstructorCalendarController::class, 'destroy']);
+            Route::get('lesson-cancellation-reasons', [InstructorCalendarController::class, 'cancellationReasons']);
             Route::post('calendar/items/{calendarItem}/offers', [InstructorCalendarController::class, 'storeOffer']);
             Route::delete('calendar/items/{calendarItem}/offers', [InstructorCalendarController::class, 'destroyOffer']);
             Route::get('finances/config', [InstructorFinanceController::class, 'config']);
