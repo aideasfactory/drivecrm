@@ -6,8 +6,8 @@ namespace App\Http\Controllers\Onboarding;
 
 use App\Actions\Onboarding\BuildPublicInstructorProfileAction;
 use App\Http\Controllers\Controller;
-use App\Jobs\SyncBookingEnquiryToBirdJob;
 use App\Http\Requests\Onboarding\StepFiveRequest;
+use App\Jobs\SyncBookingEnquiryToBirdJob;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
 use App\Models\Location;

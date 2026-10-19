@@ -10,6 +10,7 @@ use App\Actions\Student\DeleteStudentAction;
 use App\Actions\Student\DeleteStudentProfilePictureAction;
 use App\Actions\Student\GetAllStudentsAction;
 use App\Actions\Student\GetStudentByIdAction;
+use App\Actions\Student\SetStudentImportedAction;
 use App\Actions\Student\GetStudentInstructorProfileAction;
 use App\Actions\Student\GetStudentPracticeHoursAction;
 use App\Actions\Student\PickupPoint\CreatePickupPointAction;
@@ -47,8 +48,17 @@ class StudentService extends BaseService
         protected UploadStudentProfilePictureAction $uploadProfilePicture,
         protected DeleteStudentProfilePictureAction $deleteProfilePictureAction,
         protected GetStudentInstructorProfileAction $getInstructorProfile,
-        protected GetStudentPracticeHoursAction $getPracticeHours
+        protected GetStudentPracticeHoursAction $getPracticeHours,
+        protected SetStudentImportedAction $setStudentImported
     ) {}
+
+    /**
+     * Mark a pupil as imported (eligible for cash orders), or clear the mark.
+     */
+    public function setImported(Student $student, bool $imported, ?User $changedBy = null): Student
+    {
+        return ($this->setStudentImported)($student, $imported, $changedBy);
+    }
 
     /**
      * Get all students with instructor relationships.

@@ -13,11 +13,13 @@ use App\Actions\Payment\SendLessonInvoiceAction;
 use App\Actions\Payment\SendPaymentReceivedEmailsAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Student\GrantTestPassGuaranteeAction;
+use App\Actions\Student\Order\ConfirmCashOrderAction;
 use App\Actions\Student\Order\ConfirmUpfrontPaymentAction;
 use App\Actions\Student\Order\ConfirmWeeklyFirstPaymentAction;
 use App\Actions\Student\Order\CreateDraftCalendarItemsAction;
 use App\Actions\Student\Order\CreateOrderFromApiAction;
 use App\Actions\Student\Order\ReleaseUnpaidOrderAction;
+use App\Actions\Student\Order\SendCashBookingConfirmationEmailAction;
 use App\Actions\Student\Order\SendPaymentLinkEmailAction;
 use App\Actions\Student\Order\VerifyCheckoutAction;
 use App\Enums\LessonStatus;
@@ -33,9 +35,11 @@ use App\Models\LessonPayment;
 use App\Models\Order;
 use App\Models\Package;
 use App\Models\Student;
+use App\Models\User;
 use App\Notifications\CalendarClashDetectedNotification;
 use App\Notifications\ReleasedOrderPaidNotification;
 use App\Support\BookingPayments;
+use App\Support\CashBookings;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -67,6 +71,8 @@ class OrderService extends BaseService
         protected SendPaymentReceivedEmailsAction $sendPaymentReceivedEmails,
         protected NotifyInstructorOfLessonPaidAction $notifyInstructorOfLessonPaid,
         protected ClaimPurchaseEventAction $claimPurchaseEvent,
+        protected ConfirmCashOrderAction $confirmCashOrder,
+        protected SendCashBookingConfirmationEmailAction $sendCashBookingConfirmationEmail,
     ) {}
 
     /**
@@ -81,6 +87,10 @@ class OrderService extends BaseService
      *
      * Pay in full charges the whole order; pay weekly charges the first week.
      *
+     * Cash (imported pupils, booked by a full-access owner only) takes no
+     * payment at all: the order is confirmed straight away with no hold, and
+     * the pupil is emailed a cash booking confirmation instead of a link.
+     *
      * @return array{order: Order, checkout_url?: string|null}
      */
     public function bookLessons(
@@ -92,8 +102,16 @@ class OrderService extends BaseService
         string $endTime,
         bool $returnCheckoutUrl = false,
         ?int $anchorCalendarItemId = null,
-        ?OrderSource $source = null
+        ?OrderSource $source = null,
+        ?User $bookedBy = null,
+        ?string $cashNote = null
     ): array {
+        if ($paymentMode === PaymentMode::CASH && ! CashBookings::allowedFor($bookedBy, $student)) {
+            throw ValidationException::withMessages([
+                'payment_mode' => 'Cash bookings are only for imported pupils, booked by an owner with full access.',
+            ]);
+        }
+
         $calendarItemIds = ($this->createDraftCalendarItems)(
             $student->instructor_id,
             $firstLessonDate,
@@ -116,18 +134,22 @@ class OrderService extends BaseService
             $source
         );
 
-        $order->update([
-            'payment_hold_expires_at' => $returnCheckoutUrl
-                ? BookingPayments::learnerHoldExpiresAt()
-                : BookingPayments::instructorHoldExpiresAt($firstLessonDate, $startTime),
-        ]);
-
         $checkoutUrl = null;
 
-        if ($returnCheckoutUrl) {
-            $checkoutUrl = $this->createCheckoutSession($order, $package, $student, 'mobile_app');
+        if ($paymentMode === PaymentMode::CASH) {
+            $this->confirmCashBooking($order, $student, $bookedBy, $cashNote);
         } else {
-            $this->sendPaymentLinkEmail->execute($order, $student, $this->paymentLinkUrl($order, 'instructor_booking'));
+            $order->update([
+                'payment_hold_expires_at' => $returnCheckoutUrl
+                    ? BookingPayments::learnerHoldExpiresAt()
+                    : BookingPayments::instructorHoldExpiresAt($firstLessonDate, $startTime),
+            ]);
+
+            if ($returnCheckoutUrl) {
+                $checkoutUrl = $this->createCheckoutSession($order, $package, $student, 'mobile_app');
+            } else {
+                $this->sendPaymentLinkEmail->execute($order, $student, $this->paymentLinkUrl($order, 'instructor_booking'));
+            }
         }
 
         // Invalidate grouped students cache so the instructor sees the new booking immediately
@@ -152,7 +174,9 @@ class OrderService extends BaseService
         PaymentMode $paymentMode,
         CalendarItem $calendarItem,
         bool $returnCheckoutUrl = false,
-        ?OrderSource $source = null
+        ?OrderSource $source = null,
+        ?User $bookedBy = null,
+        ?string $cashNote = null
     ): array {
         $calendarItem->loadMissing('calendar');
 
@@ -181,8 +205,38 @@ class OrderService extends BaseService
             $endTime,
             $returnCheckoutUrl,
             $calendarItem->id,
-            $source
+            $source,
+            $bookedBy,
+            $cashNote
         );
+    }
+
+    /**
+     * Confirm a cash booking straight away (no payment to wait for), record who
+     * booked it and why, and email the pupil their cash booking confirmation.
+     */
+    protected function confirmCashBooking(Order $order, Student $student, ?User $bookedBy, ?string $cashNote): void
+    {
+        ($this->confirmCashOrder)($order);
+
+        $bookedByName = $bookedBy?->name ?? 'head office';
+        $note = $cashNote !== null && trim($cashNote) !== '' ? trim($cashNote) : null;
+        $details = "{$order->package_name} ({$order->package_lessons_count} lessons, {$order->formatted_package_lesson_price} per lesson in cash)"
+            .($note !== null ? ". Note: {$note}" : '');
+        $metadata = [
+            'order_id' => $order->id,
+            'payment_mode' => PaymentMode::CASH->value,
+            'booked_by_user_id' => $bookedBy?->id,
+            'note' => $note,
+        ];
+
+        ($this->logActivity)($student, "Cash order created by {$bookedByName}: {$details}", 'booking', $metadata);
+
+        if ($order->instructor) {
+            ($this->logActivity)($order->instructor, "Cash order created by {$bookedByName} for {$student->first_name} {$student->surname}: {$details}", 'booking', $metadata);
+        }
+
+        ($this->sendCashBookingConfirmationEmail)($order, $student);
     }
 
     /**
@@ -427,6 +481,12 @@ class OrderService extends BaseService
         if ($order->isImported()) {
             throw ValidationException::withMessages([
                 'order' => 'Payment links do not apply to imported orders.',
+            ]);
+        }
+
+        if ($order->isCash()) {
+            throw ValidationException::withMessages([
+                'order' => 'This booking is paid in cash to the instructor, so there is no payment link.',
             ]);
         }
 

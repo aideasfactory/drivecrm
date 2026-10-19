@@ -71,8 +71,10 @@ class GetInstructorCalendarAction
                             // Weekly: per-lesson payment status. Upfront: paid once confirmed —
                             // a draft is upfront-but-awaiting-payment, so never paid.
                             // Imported: settled outside the platform, always paid.
+                            // Cash: paid to the instructor at the lesson, never blocks sign-off.
                             $isPaid = $lesson->lessonPayment?->isPaid()
                                 ?? ($lesson->order?->isImported() === true
+                                    || $lesson->order?->isCash() === true
                                     || ($lesson->order?->isUpfront() === true && ! $lesson->isDraft()));
                         }
                     }
@@ -124,6 +126,7 @@ class GetInstructorCalendarAction
                         'parent_item_id' => $item->parent_item_id,
                         'student_name' => $studentName,
                         'is_paid' => $isPaid,
+                        'is_cash' => $lesson ? $lesson->order?->isCash() === true : null,
                         'is_late_cancellation' => $lesson && $lesson->status !== LessonStatus::COMPLETED
                             ? $lesson->isLateCancellation()
                             : null,

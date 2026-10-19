@@ -12,6 +12,7 @@ import StudentStatusSection from '@/components/Instructors/Tabs/Student/Actions/
 import RemoveStudentSection from '@/components/Instructors/Tabs/Student/Actions/RemoveStudentSection.vue'
 import DeleteLearnerSection from '@/components/Instructors/Tabs/Student/Actions/DeleteLearnerSection.vue'
 import StudentChecklistSection from '@/components/Instructors/Tabs/Student/Actions/StudentChecklistSection.vue'
+import ImportedPupilSection from '@/components/Instructors/Tabs/Student/Actions/ImportedPupilSection.vue'
 
 interface Props {
     studentId: number
@@ -19,13 +20,18 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const { isOwner } = useRole()
+const { isOwner, hasFullOwnerAccess } = useRole()
+
+const emit = defineEmits<{
+    importedUpdated: []
+}>()
 
 const student = ref<{
     name: string
     student_status: string
     inactive_reason: string | null
     instructor_id: number | null
+    is_imported: boolean
 } | null>(null)
 const isLoadingStudent = ref(true)
 const contactManagerKey = ref(0)
@@ -103,6 +109,23 @@ const handleStatusUpdated = (
         <Card>
             <CardContent class="p-6">
                 <PasswordResetSection :reset-url="`/students/${studentId}/password`" />
+            </CardContent>
+        </Card>
+
+        <!-- Imported pupil / cash payments (full-access owners only) -->
+        <Card v-if="hasFullOwnerAccess" class="md:col-span-2">
+            <CardContent class="p-6">
+                <div v-if="isLoadingStudent" class="space-y-4">
+                    <Skeleton class="h-5 w-40" />
+                    <Skeleton class="h-4 w-80" />
+                    <Skeleton class="h-10 w-40" />
+                </div>
+                <ImportedPupilSection
+                    v-else-if="student"
+                    :student-id="studentId"
+                    :is-imported="student.is_imported"
+                    @updated="emit('importedUpdated')"
+                />
             </CardContent>
         </Card>
 

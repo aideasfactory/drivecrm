@@ -231,10 +231,11 @@ const editItemIsBooking = computed(() => {
 })
 
 /** Whether the booking being cancelled is paid and starts within 48 hours —
- *  the instructor chooses between refunding the pupil and being paid. */
+ *  the instructor chooses between refunding the pupil and being paid.
+ *  Never for cash lessons: nothing was paid through us. */
 const editItemOffersRefundChoice = computed(() => {
     const item = itemsMap.value.get(editForm.value.id)
-    return editItemIsBooking.value && item?.is_paid === true && item?.is_late_cancellation === true
+    return editItemIsBooking.value && item?.is_paid === true && item?.is_cash !== true && item?.is_late_cancellation === true
 })
 
 /** Whether the booking being cancelled is still awaiting its first payment —
@@ -376,6 +377,8 @@ function toCalendarEvent(item: CalendarItemResponse): CalendarEvent {
         parentItemId: item.parent_item_id ?? null,
         studentName: item.student_name,
         isPaid: item.is_paid,
+        isCash: item.is_cash ?? null,
+        amountPence: item.amount_pence ?? null,
         notes: item.notes,
         unavailabilityReason: item.unavailability_reason,
         recurrencePattern: item.recurrence_pattern ?? 'none',
@@ -416,6 +419,7 @@ async function loadCalendarRange(startDate: string, endDate: string) {
                     unavailability_reason: item.unavailability_reason ?? null,
                     student_name: item.student_name ?? null,
                     is_paid: item.is_paid ?? null,
+                    is_cash: item.is_cash ?? null,
                     is_late_cancellation: item.is_late_cancellation ?? null,
                     awaiting_payment: item.awaiting_payment ?? null,
                     lesson_id: item.lesson_id ?? null,

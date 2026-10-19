@@ -38,6 +38,7 @@ interface StudentDetail {
     status: string
     has_test_pass_guarantee: boolean
     test_pass_guarantee_at: string | null
+    can_book_cash: boolean
 }
 
 interface Props {
@@ -193,6 +194,7 @@ onMounted(() => {
                         v-if="student.instructor_id"
                         :student-id="studentId"
                         :instructor-id="student.instructor_id"
+                        :can-book-cash="student.can_book_cash"
                         header-mode
                     />
                 </div>
@@ -251,6 +253,7 @@ onMounted(() => {
                 <ActionsSubTab
                     v-if="activeSubTab === 'actions'"
                     :student-id="studentId"
+                    @imported-updated="loadStudent"
                 />
                 <LogSubTab
                     v-if="activeSubTab === 'log'"

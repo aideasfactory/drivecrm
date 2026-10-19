@@ -7,6 +7,7 @@ import {
     Flag,
     PoundSterling,
     CircleOff,
+    Banknote,
 } from 'lucide-vue-next'
 
 import type { CalendarItemTypeValue, RecurrencePattern } from '@/types/instructor'
@@ -23,6 +24,9 @@ export interface CalendarEvent {
     parentItemId: number | null
     studentName: string | null
     isPaid: boolean | null
+    /** Pupil pays the instructor in cash at the lesson (no Stripe). */
+    isCash?: boolean | null
+    amountPence?: number | null
     notes: string | null
     unavailabilityReason: string | null
     recurrencePattern: RecurrencePattern
@@ -90,6 +94,17 @@ const widthPercent = computed(() => (1 / colTotal.value) * 100)
 /** Whether the booked/completed slot has been paid */
 const isPaid = computed(() => props.event.isPaid === true)
 
+/** Whether the pupil pays the instructor in cash at the lesson */
+const isCash = computed(() => props.event.isCash === true)
+
+/** "Cash – collect £60.00" for a booked cash lesson */
+const cashLabel = computed(() => {
+    if (props.event.amountPence == null) return 'Cash – collect at lesson'
+    const amount = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' })
+        .format(props.event.amountPence / 100)
+    return `Cash – collect ${amount}`
+})
+
 /** Whether the slot has a booking (booked or completed) */
 const hasBooking = computed(() => {
     const status = props.event.status
@@ -151,7 +166,8 @@ const statusLabel = computed(() => {
 
     const status = props.event.status
 
-    if (status === 'completed') return 'Completed'
+    if (status === 'completed') return isCash.value ? 'Completed – Paid in cash' : 'Completed'
+    if (status === 'booked' && isCash.value) return cashLabel.value
     if (status === 'booked' && isPaid.value) return 'Booked & Paid'
     if (status === 'booked') return 'Booked (Unpaid)'
     if (status === 'draft') return 'Held'
@@ -221,7 +237,8 @@ function handlePointerDown(e: PointerEvent) {
             <Check v-if="showFlag && event.status === 'booked'" class="h-3 w-3 shrink-0" />
             <X v-if="showFlag && !event.isAvailable && event.status !== 'booked' && event.status !== 'completed'" class="h-3 w-3 shrink-0" />
             <!-- Payment icons -->
-            <PoundSterling v-if="showPaymentIcon && isPaid" class="h-3 w-3 shrink-0" />
+            <Banknote v-if="showPaymentIcon && isCash" class="h-3 w-3 shrink-0" />
+            <PoundSterling v-else-if="showPaymentIcon && isPaid" class="h-3 w-3 shrink-0" />
             <CircleOff v-if="showPaymentIcon && !isPaid" class="h-3 w-3 shrink-0" />
             <span>{{ formatTime(event.startTime) }} - {{ formatTime(event.endTime) }}</span>
             <!-- Recurrence indicator -->

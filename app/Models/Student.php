@@ -164,6 +164,15 @@ class Student extends Model
     }
 
     /**
+     * Check if the pupil was brought in from another system (e.g. GoRoadie)
+     * by the importer.
+     */
+    public function isImported(): bool
+    {
+        return $this->user?->imported_at !== null;
+    }
+
+    /**
      * Check if booking was made by a third party.
      */
     public function isBookedByThirdParty(): bool
