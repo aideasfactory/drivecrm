@@ -38,6 +38,7 @@ use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\StorePickupPointRequest;
 use App\Http\Requests\UpdatePickupPointRequest;
 use App\Http\Requests\UpdateStudentCashPaymentsRequest;
+use App\Http\Requests\UpdateStudentDetailsRequest;
 use App\Http\Requests\UpdateStudentStatusRequest;
 use App\Jobs\ProcessLessonSignOffJob;
 use App\Models\CalendarItem;
@@ -123,6 +124,19 @@ class PupilController extends Controller
 
         return response()->json([
             'student' => $data,
+        ]);
+    }
+
+    /**
+     * Update a pupil's details from the pupil profile "Edit details" sheet.
+     */
+    public function update(UpdateStudentDetailsRequest $request, Student $student): JsonResponse
+    {
+        $student = $this->studentService->update($student, $request->validated());
+
+        return response()->json([
+            'student' => (new GetStudentDetailAction)($student),
+            'message' => 'Pupil details updated successfully.',
         ]);
     }
 

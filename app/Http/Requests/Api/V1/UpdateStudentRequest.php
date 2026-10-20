@@ -43,6 +43,7 @@ class UpdateStudentRequest extends FormRequest
             'surname' => ['sometimes', 'string', 'max:255'],
             'email' => $emailRules,
             'phone' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'date_of_birth' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'before:today', 'after:1900-01-01'],
             'contact_first_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'contact_surname' => ['sometimes', 'nullable', 'string', 'max:255'],
             'contact_email' => ['sometimes', 'nullable', 'string', 'email', 'max:255'],
@@ -61,6 +62,7 @@ class UpdateStudentRequest extends FormRequest
     {
         return [
             'email.unique' => 'This email address is already in use by another account.',
+            'date_of_birth.before' => 'The date of birth must be in the past.',
         ];
     }
 }

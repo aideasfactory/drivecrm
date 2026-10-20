@@ -276,6 +276,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('pupils.assign-instructor');
     Route::get('/students/{student}', [PupilController::class, 'show'])
         ->name('students.show');
+    Route::put('/students/{student}', [PupilController::class, 'update'])
+        ->name('students.update');
     Route::get('/students/{student}/activity-logs', [PupilController::class, 'activityLogs'])
         ->name('students.activity-logs');
 
