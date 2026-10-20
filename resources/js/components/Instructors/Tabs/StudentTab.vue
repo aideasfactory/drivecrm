@@ -31,7 +31,7 @@ interface StudentDetail {
     surname: string | null
     email: string | null
     phone: string | null
-    postcode: string | null
+    default_pickup_point: { postcode: string } | null
     booking_details: { postcode: string | null } | null
     has_app: boolean
     lessons_completed: number
@@ -70,8 +70,16 @@ const subTabs: { key: SubTabType; label: string }[] = [
 
 const activeSubTab = computed(() => props.subtab || 'overview')
 
-const headerPostcode = computed(
-    () => student.value?.postcode || student.value?.booking_details?.postcode || null,
+const headerPostcode = computed(() => {
+    if (student.value?.default_pickup_point) {
+        return student.value.default_pickup_point.postcode || null
+    }
+
+    return student.value?.booking_details?.postcode || null
+})
+
+const headerPostcodeFromBooking = computed(
+    () => !student.value?.default_pickup_point && !!student.value?.booking_details?.postcode,
 )
 
 const switchSubTab = (subTabKey: SubTabType) => {
@@ -198,6 +206,9 @@ onMounted(() => {
                                 >
                                     <MapPin class="h-4 w-4" />
                                     <span>{{ headerPostcode }}</span>
+                                    <Badge v-if="headerPostcodeFromBooking" variant="secondary">
+                                        From booking
+                                    </Badge>
                                 </div>
                             </div>
                         </div>

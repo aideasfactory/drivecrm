@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
+import { router } from '@inertiajs/vue3'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -17,28 +19,37 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet'
 import { toast } from '@/components/ui/sonner'
-import { User, Pencil, Loader2, Save } from 'lucide-vue-next'
+import { User, Pencil, Loader2, Save, MapPin, ExternalLink, ClipboardCopy } from 'lucide-vue-next'
 
-interface AddressDetails {
-    address_line_1: string | null
-    address_line_2: string | null
-    city: string | null
+interface PickupPoint {
+    id: number
+    label: string
+    address: string
+    postcode: string
+    is_default: boolean
+}
+
+interface BookingDetails {
+    address: string | null
     postcode: string | null
     date_of_birth: string | null
 }
 
-interface PupilDetails extends AddressDetails {
+interface PupilDetails {
+    instructor_id: number | null
     first_name: string | null
     surname: string | null
     email: string | null
     phone: string | null
+    date_of_birth: string | null
     owns_account: boolean
     has_app: boolean
     contact_first_name: string | null
     contact_surname: string | null
     contact_email: string | null
     contact_phone: string | null
-    booking_details: AddressDetails
+    default_pickup_point: PickupPoint | null
+    booking_details: BookingDetails
 }
 
 interface PupilDetailsForm {
@@ -46,19 +57,20 @@ interface PupilDetailsForm {
     surname: string
     email: string
     phone: string
-    address_line_1: string
-    address_line_2: string
-    city: string
-    postcode: string
     date_of_birth: string
     owns_account: boolean
     contact_first_name: string
     contact_surname: string
     contact_email: string
     contact_phone: string
+    pickup_point: {
+        label: string
+        address: string
+        postcode: string
+    }
 }
 
-type AddressField = keyof AddressDetails
+const DEFAULT_PICKUP_LABEL = 'Home'
 
 const props = defineProps<{
     studentId: number
@@ -83,28 +95,34 @@ function emptyForm(): PupilDetailsForm {
         surname: '',
         email: '',
         phone: '',
-        address_line_1: '',
-        address_line_2: '',
-        city: '',
-        postcode: '',
         date_of_birth: '',
         owns_account: true,
         contact_first_name: '',
         contact_surname: '',
         contact_email: '',
         contact_phone: '',
+        pickup_point: { label: DEFAULT_PICKUP_LABEL, address: '', postcode: '' },
     }
 }
 
-const storedOrBooked = (field: AddressField): string | null =>
-    details.value?.[field] || details.value?.booking_details?.[field] || null
+const pickupPoint = computed(() => details.value?.default_pickup_point ?? null)
+const booking = computed(() => details.value?.booking_details ?? null)
 
-const isFromBooking = (field: AddressField): boolean =>
-    !details.value?.[field] && !!details.value?.booking_details?.[field]
+const displayAddress = computed(() => pickupPoint.value?.address || (pickupPoint.value ? null : booking.value?.address) || null)
+const displayPostcode = computed(() => pickupPoint.value?.postcode || (pickupPoint.value ? null : booking.value?.postcode) || null)
+const addressFromBooking = computed(() => !pickupPoint.value && !!booking.value?.address)
+const postcodeFromBooking = computed(() => !pickupPoint.value && !!booking.value?.postcode)
 
-const hasBookingFallback = computed(() =>
-    (['address_line_1', 'address_line_2', 'city', 'postcode', 'date_of_birth'] as AddressField[]).some(isFromBooking),
+const displayDateOfBirth = computed(() => details.value?.date_of_birth || booking.value?.date_of_birth || null)
+const dateOfBirthFromBooking = computed(() => !details.value?.date_of_birth && !!booking.value?.date_of_birth)
+
+const hasBookingFallback = computed(
+    () => addressFromBooking.value || postcodeFromBooking.value || dateOfBirthFromBooking.value,
 )
+
+const hasBookingAddress = computed(() => !!(booking.value?.address || booking.value?.postcode))
+
+const canManagePickupPoints = computed(() => !!details.value?.instructor_id)
 
 const formatDate = (value: string | null): string | null => {
     if (!value) return null
@@ -142,19 +160,49 @@ const openEditSheet = () => {
         surname: d.surname ?? '',
         email: d.email ?? '',
         phone: d.phone ?? '',
-        address_line_1: storedOrBooked('address_line_1') ?? '',
-        address_line_2: storedOrBooked('address_line_2') ?? '',
-        city: storedOrBooked('city') ?? '',
-        postcode: storedOrBooked('postcode') ?? '',
-        date_of_birth: storedOrBooked('date_of_birth') ?? '',
+        date_of_birth: d.date_of_birth || d.booking_details?.date_of_birth || '',
         owns_account: d.owns_account,
         contact_first_name: d.contact_first_name ?? '',
         contact_surname: d.contact_surname ?? '',
         contact_email: d.contact_email ?? '',
         contact_phone: d.contact_phone ?? '',
+        pickup_point: {
+            label: d.default_pickup_point?.label ?? DEFAULT_PICKUP_LABEL,
+            address: d.default_pickup_point?.address ?? '',
+            postcode: d.default_pickup_point?.postcode ?? '',
+        },
     }
     errors.value = {}
     isSheetOpen.value = true
+}
+
+const useBookingAddress = () => {
+    form.value.pickup_point.address = booking.value?.address ?? form.value.pickup_point.address
+    form.value.pickup_point.postcode = booking.value?.postcode ?? form.value.pickup_point.postcode
+}
+
+const goToPickupPoints = () => {
+    if (!details.value?.instructor_id) return
+    isSheetOpen.value = false
+    router.visit(`/instructors/${details.value.instructor_id}`, {
+        data: { tab: 'student', student: props.studentId, subtab: 'actions' },
+        preserveScroll: true,
+    })
+}
+
+/**
+ * A new pickup point is only created when the admin has entered an address
+ * or postcode; an existing default pickup point is always sent so it can be
+ * edited (and validated) in place.
+ */
+const buildPayload = () => {
+    const { pickup_point, ...fields } = form.value
+    const hasPickupInput = !!(pickup_point.address.trim() || pickup_point.postcode.trim())
+
+    return {
+        ...fields,
+        pickup_point: pickupPoint.value || hasPickupInput ? pickup_point : null,
+    }
 }
 
 const handleSubmit = async () => {
@@ -162,7 +210,7 @@ const handleSubmit = async () => {
     isSubmitting.value = true
 
     try {
-        const response = await axios.put(basePath, form.value)
+        const response = await axios.put(basePath, buildPayload())
         details.value = response.data.student
         isSheetOpen.value = false
         toast.success(response.data.message || 'Pupil details updated')
@@ -224,42 +272,34 @@ const handleSubmit = async () => {
                         <dd class="font-medium">{{ details.phone ?? '—' }}</dd>
                     </div>
                     <div>
-                        <dt class="text-sm text-muted-foreground">Address</dt>
-                        <dd class="font-medium">
-                            <template v-if="storedOrBooked('address_line_1') || storedOrBooked('address_line_2') || storedOrBooked('city')">
-                                <span v-if="storedOrBooked('address_line_1')" class="block">{{ storedOrBooked('address_line_1') }}</span>
-                                <span v-if="storedOrBooked('address_line_2')" class="block">{{ storedOrBooked('address_line_2') }}</span>
-                                <span v-if="storedOrBooked('city')" class="block">{{ storedOrBooked('city') }}</span>
-                            </template>
-                            <template v-else>—</template>
-                            <Badge
-                                v-if="isFromBooking('address_line_1') || isFromBooking('address_line_2') || isFromBooking('city')"
-                                variant="secondary"
-                                class="mt-1"
-                            >
-                                From booking
-                            </Badge>
+                        <dt class="text-sm text-muted-foreground">
+                            Pickup address
+                            <span v-if="pickupPoint">({{ pickupPoint.label }})</span>
+                        </dt>
+                        <dd class="flex flex-col items-start gap-1 font-medium">
+                            <span>{{ displayAddress ?? '—' }}</span>
+                            <Badge v-if="addressFromBooking" variant="secondary">From booking</Badge>
                         </dd>
                     </div>
                     <div>
                         <dt class="text-sm text-muted-foreground">Postcode</dt>
                         <dd class="flex items-center gap-2 font-medium">
-                            {{ storedOrBooked('postcode') ?? '—' }}
-                            <Badge v-if="isFromBooking('postcode')" variant="secondary">From booking</Badge>
+                            {{ displayPostcode ?? '—' }}
+                            <Badge v-if="postcodeFromBooking" variant="secondary">From booking</Badge>
                         </dd>
                     </div>
                     <div>
                         <dt class="text-sm text-muted-foreground">Date of birth</dt>
                         <dd class="flex items-center gap-2 font-medium">
-                            {{ formatDate(storedOrBooked('date_of_birth')) ?? '—' }}
-                            <Badge v-if="isFromBooking('date_of_birth')" variant="secondary">From booking</Badge>
+                            {{ formatDate(displayDateOfBirth) ?? '—' }}
+                            <Badge v-if="dateOfBirthFromBooking" variant="secondary">From booking</Badge>
                         </dd>
                     </div>
                 </dl>
 
                 <p v-if="hasBookingFallback" class="text-sm text-muted-foreground">
-                    Details marked "From booking" come from the pupil's booking form and haven't been saved to their
-                    profile yet. Saving the pupil's details stores them on the profile.
+                    Details marked "From booking" come from the pupil's booking form. This pupil has no pickup point
+                    or saved date of birth yet; adding them in Edit Details saves them to the pupil.
                 </p>
 
                 <template v-if="!details.owns_account">
@@ -343,38 +383,91 @@ const handleSubmit = async () => {
 
                     <Separator />
 
-                    <div class="space-y-2">
-                        <Label for="pd_address_line_1">Address line 1</Label>
-                        <Input id="pd_address_line_1" v-model="form.address_line_1" :disabled="isSubmitting" />
-                        <p v-if="errors.address_line_1" class="text-sm text-destructive">
-                            {{ errors.address_line_1 }}
-                        </p>
-                    </div>
+                    <!-- Default pickup point -->
+                    <div class="space-y-4">
+                        <Alert>
+                            <MapPin class="h-4 w-4" />
+                            <AlertTitle>You're editing this pupil's default pickup point</AlertTitle>
+                            <AlertDescription>
+                                <p v-if="pickupPoint">
+                                    Changes here update the "{{ pickupPoint.label }}" pickup point, which instructors
+                                    see for lessons.
+                                </p>
+                                <p v-else>
+                                    This pupil has no pickup points. Entering an address here creates their default
+                                    pickup point.
+                                </p>
+                                <Button
+                                    v-if="canManagePickupPoints"
+                                    type="button"
+                                    variant="link"
+                                    class="h-auto p-0"
+                                    @click="goToPickupPoints"
+                                >
+                                    <ExternalLink class="mr-1 h-3.5 w-3.5" />
+                                    Manage all pickup points
+                                </Button>
+                            </AlertDescription>
+                        </Alert>
 
-                    <div class="space-y-2">
-                        <Label for="pd_address_line_2">Address line 2</Label>
-                        <Input id="pd_address_line_2" v-model="form.address_line_2" :disabled="isSubmitting" />
-                        <p v-if="errors.address_line_2" class="text-sm text-destructive">
-                            {{ errors.address_line_2 }}
-                        </p>
-                    </div>
-
-                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div class="space-y-2">
-                            <Label for="pd_city">Town / city</Label>
-                            <Input id="pd_city" v-model="form.city" :disabled="isSubmitting" />
-                            <p v-if="errors.city" class="text-sm text-destructive">{{ errors.city }}</p>
+                        <div
+                            v-if="!pickupPoint && hasBookingAddress"
+                            class="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm"
+                        >
+                            <span class="text-muted-foreground">
+                                From booking:
+                                {{ [booking?.address, booking?.postcode].filter(Boolean).join(', ') }}
+                            </span>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                :disabled="isSubmitting"
+                                @click="useBookingAddress"
+                            >
+                                <ClipboardCopy class="mr-2 h-4 w-4" />
+                                Use booking address
+                            </Button>
                         </div>
+
                         <div class="space-y-2">
-                            <Label for="pd_postcode">Postcode</Label>
+                            <Label for="pd_pickup_label">Pickup point label</Label>
                             <Input
-                                id="pd_postcode"
-                                v-model="form.postcode"
+                                id="pd_pickup_label"
+                                v-model="form.pickup_point.label"
+                                placeholder="e.g., Home, School, Work"
+                                :disabled="isSubmitting"
+                            />
+                            <p v-if="errors['pickup_point.label']" class="text-sm text-destructive">
+                                {{ errors['pickup_point.label'] }}
+                            </p>
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label for="pd_pickup_address">Pickup address</Label>
+                            <Input
+                                id="pd_pickup_address"
+                                v-model="form.pickup_point.address"
+                                placeholder="e.g., 123 Main Street, Middlesbrough"
+                                :disabled="isSubmitting"
+                            />
+                            <p v-if="errors['pickup_point.address']" class="text-sm text-destructive">
+                                {{ errors['pickup_point.address'] }}
+                            </p>
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label for="pd_pickup_postcode">Pickup postcode</Label>
+                            <Input
+                                id="pd_pickup_postcode"
+                                v-model="form.pickup_point.postcode"
                                 placeholder="e.g., TS7 1AB"
                                 class="uppercase"
                                 :disabled="isSubmitting"
                             />
-                            <p v-if="errors.postcode" class="text-sm text-destructive">{{ errors.postcode }}</p>
+                            <p v-if="errors['pickup_point.postcode']" class="text-sm text-destructive">
+                                {{ errors['pickup_point.postcode'] }}
+                            </p>
                         </div>
                     </div>
 
