@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { MessageSquare, Send, Loader2, CheckCheck } from 'lucide-vue-next'
 import { toast } from '@/components/ui/sonner'
+import { formatRelativeDateTime } from '@/lib/relativeDate'
 
 interface MessageSender {
     id: number
@@ -79,20 +80,7 @@ const readReceiptTitle = (msg: ChatMessage): string => {
     return msg.read_at ? `Read ${formatMessageTime(msg.read_at)}` : 'Sent — not read yet'
 }
 
-const formatMessageTime = (dateString: string): string => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-    const time = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-
-    if (diffDays === 0) return `Today, ${time}`
-    if (diffDays === 1) return `Yesterday, ${time}`
-    if (diffDays < 7) return `${date.toLocaleDateString('en-GB', { weekday: 'long' })}, ${time}`
-
-    return `${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}, ${time}`
-}
+const formatMessageTime = (dateString: string): string => formatRelativeDateTime(dateString)
 
 // Scroll to bottom of messages
 const scrollToBottom = async () => {

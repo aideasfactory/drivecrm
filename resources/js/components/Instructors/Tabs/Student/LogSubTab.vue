@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/sonner'
+import { formatRelativeDateTime } from '@/lib/relativeDate'
 import {
     Activity,
     Search,
@@ -84,21 +85,6 @@ const categoryVariant = (category: string): 'default' | 'secondary' | 'outline' 
         case 'payment': return 'destructive'
         default: return 'secondary'
     }
-}
-
-const formatDate = (dateString: string): string => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-    const time = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-
-    if (diffDays === 0) return `Today at ${time}`
-    if (diffDays === 1) return `Yesterday at ${time}`
-    if (diffDays < 7) return `${date.toLocaleDateString('en-GB', { weekday: 'long' })} at ${time}`
-
-    return `${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} at ${time}`
 }
 
 const loadLogs = async (page = 1, append = false) => {
@@ -257,7 +243,7 @@ onMounted(() => {
                         View Invoice
                     </a>
                     <p class="text-xs text-muted-foreground">
-                        {{ formatDate(log.created_at) }}
+                        {{ formatRelativeDateTime(log.created_at) }}
                     </p>
                 </div>
             </div>
