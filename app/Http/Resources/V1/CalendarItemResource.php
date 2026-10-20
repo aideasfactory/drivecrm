@@ -45,7 +45,10 @@ class CalendarItemResource extends JsonResource
             // lesson down to reschedule-only.
             'lesson_id' => $lesson?->id,
             'order_id' => $lesson?->order_id,
-            'student_name' => $this->studentName(),
+            // The pupil's student ID, for pupil-scoped calls from the diary
+            // (e.g. POST /students/{student}/orders/{order}/alternative-payment).
+            'student_id' => $lesson?->order?->student_id,
+            'student_name' => $this->studentName($lesson),
             'is_paid' => $this->isPaid($lesson),
             // True when the pupil pays the instructor in cash at the lesson
             // (no Stripe). The app shows "Cash – collect £X" using `amount_pence`.
@@ -95,28 +98,24 @@ class CalendarItemResource extends JsonResource
     }
 
     /**
-     * The student's name for a confirmed slot — booked, completed, or reserved
-     * (weekly, after the first payment). Draft holds awaiting that payment omit
-     * the name so an unpaid checkout does not look like a named booking. Only
-     * resolved when `lessons` is loaded.
+     * The student's name for any booking-family slot. Draft holds awaiting the
+     * first payment are only named when staff or the instructor made the
+     * booking: a learner's own unpaid checkout stays unnamed so it does not
+     * look like a named booking.
      */
-    protected function studentName(): ?string
+    protected function studentName(?Lesson $lesson): ?string
     {
-        if (! $this->resource->relationLoaded('lessons')) {
+        $order = $lesson?->order;
+
+        if (! $order) {
             return null;
         }
 
-        $namedStatuses = [
-            CalendarItemStatus::BOOKED,
-            CalendarItemStatus::COMPLETED,
-            CalendarItemStatus::RESERVED,
-        ];
-
-        if (! in_array($this->status, $namedStatuses, true)) {
+        if ($this->status === CalendarItemStatus::DRAFT && ! AlternativePayments::isStaffOrInstructorBooking($order)) {
             return null;
         }
 
-        $student = $this->lessons->first()?->order?->student;
+        $student = $order->student;
 
         if (! $student) {
             return null;

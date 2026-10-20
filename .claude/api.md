@@ -2452,7 +2452,8 @@ Returns the authenticated instructor's calendar items for a specific date, **or*
 |-------|------|-------------|
 | `lesson_id` | integer\|null | The lesson backing the slot (booked / completed / draft / reserved) |
 | `order_id` | integer\|null | The order the lesson belongs to |
-| `student_name` | string\|null | Full name of the student the slot is for. **`null` on a `draft` hold** (checkout reached, first payment not taken) so the diary shows a hold rather than a named booking. Populated for `booked`, `completed`, and `reserved` (weekly, after the first payment). |
+| `student_id` | integer\|null | The pupil's student ID (the `{student}` in pupil-scoped routes). Use it with `order_id` to call `POST /students/{student_id}/orders/{order_id}/alternative-payment` from the diary when `can_confirm_alternative_payment` is `true`. Populated for `booked`, `completed`, `draft` and `reserved`. |
+| `student_name` | string\|null | Full name of the student the slot is for. Populated for `booked`, `completed` and `reserved`, and for a `draft` the instructor or Head Office booked (so always set when `can_confirm_alternative_payment` is `true`). **`null` on a `draft` from the pupil's own website/app checkout** (first payment not taken) so the diary shows a hold rather than a named booking. |
 | `is_paid` | boolean\|null | `true` when the lesson is paid (weekly per-lesson payment settled, or a confirmed upfront order). **A `draft` is upfront-but-awaiting-payment, so it returns `false`.** Use this to show a paid/refund hint on cancel. |
 | `is_late_cancellation` | boolean\|null | `true` when cancelling now is **less than 48 hours** before the lesson starts (UK time). Informational only: late cancellations are never paid out to the instructor, and Head Office is told how much notice was given. `null` for availability slots and completed lessons |
 | `is_paid` | boolean\|null | `true` when the lesson is paid (weekly per-lesson payment settled, a confirmed upfront order, an imported order, or a **cash** order). **A `draft` is upfront-but-awaiting-payment, so it returns `false`.** Use this to show a paid/refund hint on cancel. |
@@ -2707,6 +2708,7 @@ Updates a calendar item belonging to the authenticated instructor — used to **
     "recurrence_group_id": null,
     "lesson_id": 88,
     "order_id": 17,
+    "student_id": 31,
     "student_name": "Jamie Doe",
     "is_paid": true,
     "amount_pence": 6000,
@@ -2748,6 +2750,7 @@ Updates a calendar item belonging to the authenticated instructor — used to **
     "recurrence_group_id": null,
     "lesson_id": 88,
     "order_id": 17,
+    "student_id": 31,
     "student_name": "Jamie Doe",
     "is_paid": true,
     "amount_pence": 6000,
@@ -7846,6 +7849,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-10-20 | **Resend-payment-link 422 for alternative-payment pupils.** When the payment window has passed on a booking of a pupil with alternative payments on (no longer released automatically), `POST /students/{student}/orders/{order}/resend-payment-link` now returns `The time to pay by card has passed. If the pupil is paying another way, confirm the alternative payment.` instead of the "lessons are being released" message. Other pupils unchanged. | Orders (resend-payment-link) |
 
 | 2026-10-20 | **Pupil date of birth.** New optional `date_of_birth` (`YYYY-MM-DD`, must be in the past, `null` clears it) on `PUT /api/v1/students/{student}`. Every student resource response gains `date_of_birth` (string or `null`, additive). Staff can also edit it on the web pupil profile. Who can update is unchanged (the pupil or their instructor). **App action:** show and edit date of birth on the pupil details screen. | Students (update, and every response using the student resource) |
+| 2026-10-20 | **Calendar items: `student_id`, and names on instructor-made drafts.** Every calendar item response (`GET /instructor/calendar/items` and the calendar item create/show/update responses) gains `student_id` (integer or `null`, additive), set for `booked`, `completed`, `draft` and `reserved` items. Use it with `order_id` to call `POST /students/{student}/orders/{order}/alternative-payment` from the diary. `student_name` is now also set on `draft` items the instructor or Head Office booked; it stays `null` on drafts from the pupil's own website/app checkout (the 2026-10-01 rule now only covers those). **App action:** show the confirm-alternative-payment action on diary items with `can_confirm_alternative_payment: true` using `student_id` + `order_id`, and label instructor-made drafts with `student_name`. | Calendar Items |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.
