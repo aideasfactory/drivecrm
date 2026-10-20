@@ -57,14 +57,7 @@ class StudentService extends BaseService
      */
     public function setCashPayments(Student $student, bool $enabled, ?User $changedBy = null): Student
     {
-        $student = ($this->setStudentCashPayments)($student, $enabled, $changedBy);
-
-        // The instructor's app pupil list shows whether alternative payments are on.
-        if ($student->instructor_id) {
-            $this->invalidate($this->cacheKey('instructor', $student->instructor_id, 'grouped_students'));
-        }
-
-        return $student;
+        return ($this->setStudentCashPayments)($student, $enabled, $changedBy);
     }
 
     /**
