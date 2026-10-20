@@ -153,6 +153,28 @@ test('an instructor can update a student assigned to them', function () {
         ->assertJsonPath('data.first_name', 'Updated');
 });
 
+test('an instructor can set and clear a student date of birth', function () {
+    $user = User::factory()->create(['role' => UserRole::INSTRUCTOR]);
+    $instructor = Instructor::factory()->create(['user_id' => $user->id]);
+    $student = Student::factory()->create(['instructor_id' => $instructor->id]);
+    $token = $user->createToken('Test Device')->plainTextToken;
+
+    $this->withHeaders(['Authorization' => 'Bearer '.$token])
+        ->putJson("/api/v1/students/{$student->id}", ['date_of_birth' => '2007-05-14'])
+        ->assertOk()
+        ->assertJsonPath('data.date_of_birth', '2007-05-14');
+
+    $this->withHeaders(['Authorization' => 'Bearer '.$token])
+        ->putJson("/api/v1/students/{$student->id}", ['date_of_birth' => now()->addDay()->toDateString()])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('date_of_birth');
+
+    $this->withHeaders(['Authorization' => 'Bearer '.$token])
+        ->putJson("/api/v1/students/{$student->id}", ['date_of_birth' => null])
+        ->assertOk()
+        ->assertJsonPath('data.date_of_birth', null);
+});
+
 test('an instructor cannot update a student not assigned to them', function () {
     $user = User::factory()->create(['role' => UserRole::INSTRUCTOR]);
     Instructor::factory()->create(['user_id' => $user->id]);

@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/sonner'
-import { ArrowLeft, Phone, Mail, StickyNote, CalendarPlus } from 'lucide-vue-next'
+import { ArrowLeft, Phone, Mail, MapPin, Cake, UserPen } from 'lucide-vue-next'
 import type { InstructorDetail } from '@/types/instructor'
 import OverviewSubTab from './Student/OverviewSubTab.vue'
 import LessonsSubTab from './Student/LessonsSubTab.vue'
@@ -20,17 +20,14 @@ import ActionsSubTab from './Student/ActionsSubTab.vue'
 import LogSubTab from './Student/LogSubTab.vue'
 import BookLessonSection from './Student/Actions/BookLessonSection.vue'
 import TestPassGuaranteeBadge from '@/components/Shared/TestPassGuaranteeBadge.vue'
+import EditStudentDetailsSheet from './Student/EditStudentDetailsSheet.vue'
+import type { EditableStudentDetail } from './Student/EditStudentDetailsSheet.vue'
 
-interface StudentDetail {
-    id: number
+interface StudentDetail extends EditableStudentDetail {
     user_id: number | null
     instructor_id: number | null
     name: string
     avatar: string | null
-    first_name: string | null
-    surname: string | null
-    email: string | null
-    phone: string | null
     has_app: boolean
     lessons_completed: number
     lessons_total: number
@@ -53,6 +50,19 @@ const props = withDefaults(defineProps<Props>(), {
 
 const student = ref<StudentDetail | null>(null)
 const loading = ref(true)
+const isEditSheetOpen = ref(false)
+
+const formattedDateOfBirth = computed(() => {
+    if (!student.value?.date_of_birth) {
+        return null
+    }
+
+    return new Date(`${student.value.date_of_birth}T00:00:00`).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+    })
+})
 
 type SubTabType = 'overview' | 'lessons' | 'payments' | 'transfer' | 'emergency' | 'messages' | 'actions' | 'log'
 
@@ -185,18 +195,46 @@ onMounted(() => {
                                     <Mail class="h-4 w-4" />
                                     <span>{{ student.email }}</span>
                                 </div>
+
+                                <div
+                                    v-if="student.default_pickup_point?.postcode"
+                                    class="flex items-center gap-2 text-muted-foreground"
+                                    :title="student.default_pickup_point.address ?? undefined"
+                                >
+                                    <MapPin class="h-4 w-4" />
+                                    <span>{{ student.default_pickup_point.postcode }}</span>
+                                </div>
+
+                                <div
+                                    v-if="formattedDateOfBirth"
+                                    class="flex items-center gap-2 text-muted-foreground"
+                                >
+                                    <Cake class="h-4 w-4" />
+                                    <span>{{ formattedDateOfBirth }}</span>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Book Lessons -->
-                    <BookLessonSection
-                        v-if="student.instructor_id"
-                        :student-id="studentId"
-                        :instructor-id="student.instructor_id"
-                        :can-book-cash="student.can_book_cash"
-                        header-mode
-                    />
+                    <div class="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            class="cursor-pointer"
+                            @click="isEditSheetOpen = true"
+                        >
+                            <UserPen class="mr-2 h-4 w-4" />
+                            Edit Details
+                        </Button>
+
+                        <!-- Book Lessons -->
+                        <BookLessonSection
+                            v-if="student.instructor_id"
+                            :student-id="studentId"
+                            :instructor-id="student.instructor_id"
+                            :can-book-cash="student.can_book_cash"
+                            header-mode
+                        />
+                    </div>
                 </div>
             </CardContent>
         </Card>
@@ -261,5 +299,13 @@ onMounted(() => {
                 />
             </CardContent>
         </Card>
+
+        <EditStudentDetailsSheet
+            v-if="student"
+            v-model:open="isEditSheetOpen"
+            :student="student"
+            @updated="loadStudent"
+            @manage-pickup-points="switchSubTab('actions')"
+        />
     </div>
 </template>

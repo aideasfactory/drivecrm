@@ -26,6 +26,7 @@ class Student extends Model
         'surname',
         'email',
         'phone',
+        'date_of_birth',
         'contact_first_name',
         'contact_surname',
         'contact_email',
@@ -47,6 +48,7 @@ class Student extends Model
     ];
 
     protected $casts = [
+        'date_of_birth' => 'date',
         'terms_accepted' => 'boolean',
         'allow_communications' => 'boolean',
         'contact_terms' => 'boolean',

@@ -3988,7 +3988,8 @@ When the student has a linked user account, `first_name`/`surname` and `email` c
   "first_name": "Janet",
   "surname": "Smith",
   "email": "janet@example.com",
-  "phone": "07700900099"
+  "phone": "07700900099",
+  "date_of_birth": "2007-05-14"
 }
 ```
 
@@ -3998,6 +3999,7 @@ When the student has a linked user account, `first_name`/`surname` and `email` c
 | `surname` | string | No | Student's surname (max 255) |
 | `email` | string\|null | No | Student's email address. If the student has a linked user account, must not belong to another user (422 otherwise); a non-empty value is synced to the login email |
 | `phone` | string\|null | No | Student's phone number (max 50) |
+| `date_of_birth` | string\|null | No | Date of birth, `YYYY-MM-DD`. Must be in the past (after 1900-01-01). `null` clears it |
 | `contact_first_name` | string\|null | No | Booker's first name (max 255) |
 | `contact_surname` | string\|null | No | Booker's surname (max 255) |
 | `contact_email` | string\|null | No | Booker's email |
@@ -4016,6 +4018,7 @@ When the student has a linked user account, `first_name`/`surname` and `email` c
     "surname": "Smith",
     "email": "janet@example.com",
     "phone": "07700900099",
+    "date_of_birth": "2007-05-14",
     "status": "active",
     "has_app": true,
     "app_last_active_at": "2026-03-17T09:55:00+00:00",
@@ -7736,6 +7739,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-10-15 | **Cancelled lessons can no longer be paid for.** Calendar items gain `awaiting_payment`. `DELETE /calendar/items/{calendarItem}` on a booking awaiting its first payment now cancels the **whole booking** (`scope` ignored) and closes its Stripe payment page first; open weekly invoices of cancelled lessons are voided. New 400 messages when Stripe can't stop the payment (nothing is cancelled). Mirrored on the web `DELETE /instructors/{instructor}/calendar/items/{calendarItem}`. | `DELETE /api/v1/instructor/calendar/items/{calendarItem}`, `GET/PUT /api/v1/instructor/calendar/items` (resource field) |
 | 2026-10-19 | **Cancellations go to Head Office review; structured reasons.** `DELETE /calendar/items/{calendarItem}` booking cancellations no longer pay out late cancellations to the instructor: every paid cancelled lesson, whatever the notice, emails Head Office to decide by hand. New `reason_code` (temporarily optional, defaults to `other`); `reason` is now the free-text details, required only for `other` / no code. `refund_lesson` is deprecated and ignored; `payout_count` is always `0`; the "late cancellation can't be paid out" 400 is gone. New `GET /api/v1/instructor/lesson-cancellation-reasons`. `is_late_cancellation` is now informational only. | `DELETE /api/v1/instructor/calendar/items/{calendarItem}`, `GET /api/v1/instructor/lesson-cancellation-reasons` (new), calendar item resource |
 | 2026-10-17 | **Cash orders (imported pupils).** New display-only `payment_mode: "cash"` on lesson list/show, instructor day lessons and orders: an imported pupil pays the instructor the lesson price in cash at each lesson, with no booking or digital fee and no Stripe. Only a full-access owner can create one, from Drive CRM (`POST /students/{student}/orders` on the **web** accepts `payment_mode: "cash"` + optional `cash_note`; the mobile order create and slot-offer accept still accept only `upfront` / `weekly`). Cash orders are `active` straight away (no `checkout_url`, no `payment_hold_expires_at`). Cash lessons report `payment_status: "paid"` and calendar items `is_paid: true`, so the existing Sign Off button shows. `POST /students/{student}/lessons/{lesson}/sign-off` on a cash lesson skips the Stripe onboarding + payment guards and creates **no payout**; unlike imported lessons the feedback email and resource recommendations still go out. Calendar items gain `is_cash` (additive). **App action:** show "Cash – collect £X" (`amount_pence`) on cash lessons and hide the Refund Lesson tickbox when `is_cash` is `true`; treat `"cash"` as a known `payment_mode` value. | Student Lessons (index, show, sign-off), Instructor Day Lessons, Calendar Items (`is_paid`, `is_cash` — NEW), Orders (`payment_mode`) |
+| 2026-10-20 | **Pupil date of birth.** New optional `date_of_birth` (`YYYY-MM-DD`, must be in the past, `null` clears it) on `PUT /api/v1/students/{student}`. Every student resource response gains `date_of_birth` (string or `null`, additive). Staff can also edit it on the web pupil profile. Who can update is unchanged (the pupil or their instructor). **App action:** show and edit date of birth on the pupil details screen. | Students (update, and every response using the student resource) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.
