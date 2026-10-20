@@ -7,6 +7,7 @@ namespace App\Actions\Student\Lesson;
 use App\Enums\LessonCardStatus;
 use App\Enums\LessonStatus;
 use App\Models\Student;
+use App\Support\AlternativePayments;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -48,7 +49,7 @@ class GetStudentLessonsAction
                         'instructor.user:id,name',
                         'instructor:id,user_id,profile_picture_path',
                         'calendarItem.calendar:id,date',
-                        'lessonPayment:id,lesson_id,amount_pence,test_pass_guarantee_pence,status,paid_at,stripe_invoice_id',
+                        'lessonPayment:id,lesson_id,amount_pence,test_pass_guarantee_pence,status,payment_method,alternative_payment_confirmed_at,paid_at,stripe_invoice_id',
                         'payout:id,lesson_id,status,failure_code,failure_message,amount_pence,stripe_transfer_id,paid_at',
                         'reflectiveLog:id,lesson_id',
                         'resources:id,title,resource_type,video_url,file_path,file_name,file_size,mime_type,thumbnail_url',
@@ -58,7 +59,8 @@ class GetStudentLessonsAction
                 'package:id,name',
             ])
             ->get()
-            ->flatMap(fn ($order) => $order->lessons->map(function ($lesson) use ($order) {
+            ->flatMap(fn ($order) => $order->lessons->map(function ($lesson) use ($order, $student) {
+                $order->setRelation('student', $student);
                 $lesson->setRelation('order', $order);
 
                 return [
@@ -84,6 +86,7 @@ class GetStudentLessonsAction
                     'payout_status' => $lesson->payout?->statusForInstructor()->value,
                     'has_payout' => $lesson->payout !== null,
                     'calendar_date' => $lesson->calendarItem?->calendar?->date?->format('Y-m-d'),
+                    ...AlternativePayments::lessonFlags($lesson),
                     'has_reflective_log' => $lesson->reflectiveLog !== null,
                     'resources_count' => $lesson->resources->count(),
                     '_date_obj' => $lesson->date,

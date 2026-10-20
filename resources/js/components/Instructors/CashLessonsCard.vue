@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
     Table,
@@ -17,6 +18,7 @@ import { cashLessons as cashLessonsRoute } from '@/actions/App/Http/Controllers/
 
 interface CashLesson {
     lesson_id: number
+    is_alternative_payment: boolean
     amount_pence: number
     formatted_amount: string
     student_name: string | null
@@ -92,10 +94,11 @@ onMounted(() => {
                 <div>
                     <CardTitle class="flex items-center gap-2">
                         <Banknote class="h-5 w-5" />
-                        Cash Lessons
+                        Cash &amp; Alternative Payments
                     </CardTitle>
                     <CardDescription class="mt-1">
-                        Signed-off lessons the pupil paid for in cash. These have no payout.
+                        Signed-off lessons the pupil paid for directly: cash bookings, and lessons the instructor
+                        confirmed were paid by an alternative method. These have no payout.
                     </CardDescription>
                 </div>
                 <div v-if="!loading && lessons.length > 0" class="flex gap-6 text-right">
@@ -117,7 +120,7 @@ onMounted(() => {
             </div>
 
             <p v-else-if="lessons.length === 0" class="py-6 text-center text-sm text-muted-foreground">
-                No cash lessons signed off yet.
+                No cash or alternative-payment lessons signed off yet.
             </p>
 
             <Table v-else>
@@ -127,7 +130,8 @@ onMounted(() => {
                         <TableHead>Lesson Date</TableHead>
                         <TableHead>Time</TableHead>
                         <TableHead>Package</TableHead>
-                        <TableHead class="text-right">Cash</TableHead>
+                        <TableHead>Method</TableHead>
+                        <TableHead class="text-right">Amount</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -136,6 +140,11 @@ onMounted(() => {
                         <TableCell>{{ formatDate(lesson.lesson_date) }}</TableCell>
                         <TableCell>{{ formatTime(lesson.lesson_start_time, lesson.lesson_end_time) }}</TableCell>
                         <TableCell>{{ lesson.package_name || '—' }}</TableCell>
+                        <TableCell>
+                            <Badge variant="outline">
+                                {{ lesson.is_alternative_payment ? 'Alternative method' : 'Cash booking' }}
+                            </Badge>
+                        </TableCell>
                         <TableCell class="text-right font-medium">{{ lesson.formatted_amount }}</TableCell>
                     </TableRow>
                 </TableBody>

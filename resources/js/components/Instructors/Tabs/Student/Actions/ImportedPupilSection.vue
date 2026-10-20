@@ -34,7 +34,7 @@ const toggleCashPayments = async () => {
         const message =
             error.response?.data?.errors?.cash_payments_enabled?.[0] ||
             error.response?.data?.message ||
-            'Failed to update cash payments'
+            'Failed to update alternative payment method'
         toast({ title: message, variant: 'destructive' })
     } finally {
         isSavingCash.value = false
@@ -47,14 +47,29 @@ const toggleCashPayments = async () => {
         <div>
             <h3 class="flex items-center gap-2 text-lg font-semibold">
                 <Banknote class="h-5 w-5" />
-                Cash Payments
+                Alternative Payment Method
                 <Badge v-if="isImported" variant="secondary">Imported</Badge>
-                <Badge v-if="cashEnabled" variant="secondary">Pays by cash</Badge>
+                <Badge v-if="cashEnabled" variant="secondary">Alternative payments on</Badge>
             </h3>
             <p class="mt-1 text-sm text-muted-foreground">
-                Let this pupil pay the instructor in cash at each lesson, with no booking or digital fee. Cash
-                payments are off until you turn them on. Changing this does not change existing bookings.
+                Let this pupil pay the instructor directly (for example in cash), with no booking or digital fee.
+                Off until you turn it on.
             </p>
+            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                <li>
+                    Bookings stay card bookings: the pupil still gets payment links and invoices, and can pay by card
+                    at any time.
+                </li>
+                <li>
+                    The instructor can confirm a booking that hasn't been paid, and sign off an unpaid pay-as-you-go
+                    lesson by confirming the pupil paid them another way. They accept the risk each time.
+                </li>
+                <li>Unpaid bookings for this pupil are not cancelled automatically.</li>
+                <li>
+                    Turning this off: lessons already signed off stay as they are. Anything unpaid goes back to normal
+                    card payment, and unpaid bookings past their payment deadline are released.
+                </li>
+            </ul>
         </div>
 
         <div class="flex flex-wrap gap-3">
@@ -67,7 +82,7 @@ const toggleCashPayments = async () => {
                 <Loader2 v-if="isSavingCash" class="mr-2 h-4 w-4 animate-spin" />
                 <Ban v-else-if="cashEnabled" class="mr-2 h-4 w-4" />
                 <Banknote v-else class="mr-2 h-4 w-4" />
-                {{ cashEnabled ? 'Turn off cash payments' : 'Turn on cash payments' }}
+                {{ cashEnabled ? 'Turn off alternative payments' : 'Turn on alternative payments' }}
             </Button>
         </div>
     </div>

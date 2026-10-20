@@ -8,6 +8,7 @@ use App\Enums\CalendarItemStatus;
 use App\Enums\LessonStatus;
 use App\Enums\SlotOfferStatus;
 use App\Models\Lesson;
+use App\Support\AlternativePayments;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Carbon;
@@ -55,6 +56,9 @@ class CalendarItemResource extends JsonResource
             // True when the booking is still awaiting its first payment: cancelling
             // any lesson cancels the whole booking (`scope` is ignored).
             'awaiting_payment' => $lesson ? $lesson->order?->isPending() === true && ! $lesson->order->isImported() : null,
+            // Alternative payment method (pupil pays the instructor directly, owner
+            // switch on the pupil): what the instructor can do about payment.
+            ...AlternativePayments::lessonFlags($lesson),
             'amount_pence' => $lesson?->amount_pence,
             'payment_breakdown' => $lesson?->paymentBreakdown(),
             'mileage' => $lesson?->mileage,

@@ -11,6 +11,7 @@ use App\Http\Requests\Api\V1\SignOffLessonRequest;
 use App\Http\Resources\V1\LessonDetailResource;
 use App\Models\Lesson;
 use App\Models\Student;
+use App\Services\AlternativePaymentService;
 use App\Services\LessonSignOffService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
@@ -18,16 +19,19 @@ use Illuminate\Support\Facades\Gate;
 class LessonSignOffController extends Controller
 {
     public function __construct(
-        protected LessonSignOffService $lessonSignOffService
+        protected LessonSignOffService $lessonSignOffService,
+        protected AlternativePaymentService $alternativePaymentService
     ) {}
 
     /**
      * Sign off a lesson as completed.
      *
-     * Same body and pipeline as admin CRM: { "summary": "..." } only.
-     * Runs the existing LessonSignOffService in this request so the app
-     * receives the completed lesson instead of "being processed".
-     * Admin still queues ProcessLessonSignOffJob — that job is unchanged.
+     * Same body and pipeline as admin CRM: { "summary": "..." }, plus
+     * `alternative_payment_confirmed` for an unpaid lesson of a pupil with
+     * alternative payments turned on (the invoice is voided and the lesson
+     * recorded as paid that way first). Runs the existing LessonSignOffService
+     * in this request so the app receives the completed lesson instead of
+     * "being processed". Admin still queues ProcessLessonSignOffJob.
      */
     public function store(SignOffLessonRequest $request, Student $student, int $lessonId): JsonResponse
     {
@@ -45,6 +49,12 @@ class LessonSignOffController extends Controller
         }
 
         $summary = $request->validated('summary');
+
+        $this->alternativePaymentService->prepareSignOff(
+            $lesson,
+            $request->user(),
+            $request->boolean('alternative_payment_confirmed')
+        );
 
         try {
             $this->lessonSignOffService->signOffLesson($lesson, $instructor, $summary);

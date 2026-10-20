@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\LessonPaymentMethod;
 use App\Enums\PaymentStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -16,6 +17,9 @@ class LessonPayment extends Model
         'amount_pence',
         'test_pass_guarantee_pence',
         'status',
+        'payment_method',
+        'alternative_payment_confirmed_at',
+        'alternative_payment_confirmed_by',
         'due_date',
         'paid_at',
         'stripe_invoice_id',
@@ -28,6 +32,8 @@ class LessonPayment extends Model
             'amount_pence' => 'integer',
             'test_pass_guarantee_pence' => 'integer',
             'status' => PaymentStatus::class,
+            'payment_method' => LessonPaymentMethod::class,
+            'alternative_payment_confirmed_at' => 'datetime',
             'due_date' => 'date',
             'paid_at' => 'datetime',
         ];
@@ -39,6 +45,32 @@ class LessonPayment extends Model
     public function lesson(): BelongsTo
     {
         return $this->belongsTo(Lesson::class);
+    }
+
+    /**
+     * The user (instructor or staff) who confirmed the pupil pays this lesson
+     * by an alternative method.
+     */
+    public function alternativePaymentConfirmedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'alternative_payment_confirmed_by');
+    }
+
+    /**
+     * True once the lesson has been recorded as paid outside Stripe.
+     */
+    public function isPaidByAlternativeMethod(): bool
+    {
+        return $this->isPaid() && $this->payment_method === LessonPaymentMethod::ALTERNATIVE;
+    }
+
+    /**
+     * True when an instructor has confirmed this lesson is paid by an
+     * alternative method. It is then never invoiced or chased.
+     */
+    public function hasAlternativePaymentConfirmed(): bool
+    {
+        return $this->alternative_payment_confirmed_at !== null;
     }
 
     /**

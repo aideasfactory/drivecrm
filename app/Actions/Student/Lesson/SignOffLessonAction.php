@@ -40,7 +40,10 @@ class SignOffLessonAction
      * outside the platform: they skip the Stripe onboarding and payment guards
      * and never create a payout, so `payout` is null for them. Cash orders
      * (paid to the instructor at the lesson) skip the same guards and create
-     * no payout; their lesson is recorded as paid in cash instead.
+     * no payout; their lesson is recorded as paid in cash instead. A weekly
+     * lesson paid by an alternative method (recorded before sign-off by
+     * AlternativePaymentService::prepareSignOff) skips the onboarding guard and
+     * creates no payout either: the pupil paid the instructor directly.
      *
      * @return array{lesson: Lesson, payout: Payout|null, order_completed: bool}
      *
@@ -57,12 +60,13 @@ class SignOffLessonAction
 
         $isImported = $lesson->order->isImported();
         $isCash = $lesson->order->isCash();
+        $isAlternativePayment = $lesson->lessonPayment?->isPaidByAlternativeMethod() === true;
 
         // Guard: instructor onboarding complete and payouts enabled
         // payouts_enabled correlates with Stripe's 'transfers' capability — without it,
-        // platform transfers to the connected account will fail. Imported and cash
-        // lessons never pay out through Stripe, so they don't need it.
-        if (! $isImported && ! $isCash && (! $instructor->onboarding_complete || ! $instructor->payouts_enabled)) {
+        // platform transfers to the connected account will fail. Imported, cash and
+        // alternative-payment lessons never pay out through Stripe, so they don't need it.
+        if (! $isImported && ! $isCash && ! $isAlternativePayment && (! $instructor->onboarding_complete || ! $instructor->payouts_enabled)) {
             throw new InstructorNotOnboardedException;
         }
 
@@ -83,7 +87,7 @@ class SignOffLessonAction
             }
         }
 
-        return DB::transaction(function () use ($lesson, $instructor, $isImported, $isCash) {
+        return DB::transaction(function () use ($lesson, $instructor, $isImported, $isCash, $isAlternativePayment) {
             // 1. Mark lesson as completed
             $lesson = ($this->markLessonCompleted)($lesson);
 
@@ -97,7 +101,7 @@ class SignOffLessonAction
                 ($this->recordCashLessonPayment)($lesson);
             }
 
-            $payout = $isImported || $isCash ? null : ($this->createPayout)($lesson, $instructor);
+            $payout = $isImported || $isCash || $isAlternativePayment ? null : ($this->createPayout)($lesson, $instructor);
 
             // 4. Check if all order lessons are completed
             $orderCompleted = ($this->checkOrderCompletion)($lesson->order);

@@ -38,6 +38,7 @@ use App\Models\Student;
 use App\Models\User;
 use App\Notifications\CalendarClashDetectedNotification;
 use App\Notifications\ReleasedOrderPaidNotification;
+use App\Support\AlternativePayments;
 use App\Support\BookingPayments;
 use App\Support\CashBookings;
 use Carbon\Carbon;
@@ -504,8 +505,11 @@ class OrderService extends BaseService
         }
 
         if ($order->hasPaymentHoldExpired()) {
+            // Alternative-payment bookings are not released when the hold passes.
             throw ValidationException::withMessages([
-                'order' => 'The time to pay for this booking has passed, so the lessons are being released. Please book again.',
+                'order' => AlternativePayments::canConfirmBooking($order)
+                    ? 'The time to pay by card has passed. If the pupil is paying another way, confirm the alternative payment.'
+                    : 'The time to pay for this booking has passed, so the lessons are being released. Please book again.',
             ]);
         }
     }
@@ -949,6 +953,12 @@ class OrderService extends BaseService
     /**
      * Release every unpaid order whose hold has run out.
      *
+     * Weekly bookings made by staff or the instructor for a pupil with
+     * alternative payments turned on are never released automatically: the
+     * instructor may confirm them as paid by an alternative method at any time
+     * up to the lesson. Learner self-bookings (website, learner app) are
+     * released as normal. Turning the pupil's switch off puts them back here.
+     *
      * @return array{released: int, kept: int}
      */
     public function releaseExpiredHolds(): array
@@ -961,6 +971,12 @@ class OrderService extends BaseService
             ->whereIn('payment_mode', [PaymentMode::UPFRONT, PaymentMode::WEEKLY])
             ->whereNotNull('payment_hold_expires_at')
             ->where('payment_hold_expires_at', '<=', now())
+            ->whereNot(fn ($query) => $query
+                ->where('payment_mode', PaymentMode::WEEKLY)
+                ->whereHas('student', fn ($student) => $student->where('cash_payments_enabled', true))
+                ->where(fn ($source) => $source
+                    ->whereNull('source')
+                    ->orWhereNotIn('source', AlternativePayments::learnerSourceValues())))
             ->orderBy('payment_hold_expires_at')
             ->each(function (Order $order) use (&$released, &$kept): void {
                 try {
@@ -1036,6 +1052,7 @@ class OrderService extends BaseService
             ->whereNotNull('lessons.date')
             ->where('lesson_payments.status', PaymentStatus::DUE)
             ->whereNull('lesson_payments.stripe_invoice_id')
+            ->whereNull('lesson_payments.alternative_payment_confirmed_at')
             ->orderBy('lessons.date')
             ->orderBy('lessons.start_time')
             ->select('lesson_payments.*')

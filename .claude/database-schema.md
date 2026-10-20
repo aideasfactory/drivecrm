@@ -364,7 +364,7 @@ Extended profile for users with student role.
 | `contact_terms` | boolean | NULLABLE | Booker accepted terms |
 | `contact_communications` | boolean | NULLABLE | Booker marketing consent |
 | `owns_account` | boolean | DEFAULT true | Learner owns this account |
-| `cash_payments_enabled` | boolean | DEFAULT false | Owner has turned on cash payments for this pupil. Off by default, including for pupils created by the importer. Only a full-access owner can change it (`PATCH /students/{student}/cash-payments`, `SetStudentCashPaymentsAction`), for any pupil — imported or not. Required (with a full-access owner booking) by `CashBookings::allowedFor` |
+| `cash_payments_enabled` | boolean | DEFAULT false | Shown as **"Alternative payment method"** in the CRM. Owner has turned on alternative (e.g. cash) payments for this pupil. Also lets instructors confirm bookings / sign off unpaid weekly lessons as paid by an alternative method (`App\Support\AlternativePayments`), and stops the automatic release of staff/instructor weekly bookings. Off by default, including for pupils created by the importer. Only a full-access owner can change it (`PATCH /students/{student}/cash-payments`, `SetStudentCashPaymentsAction`), for any pupil — imported or not. Required (with a full-access owner booking) by `CashBookings::allowedFor` |
 | `status` | varchar(50) | DEFAULT 'active' | Student status (active, inactive, on_hold, passed, failed, completed) |
 | `inactive_reason` | text | NULLABLE | Reason for status change (e.g., why student was made inactive) |
 | `test_pass_guarantee_at` | timestamp | NULLABLE | When the student got Pass Your Test Guarantee (free or paid). NULL = no guarantee. Set by `GrantTestPassGuaranteeAction` only after the covering payment is confirmed. Drives the "Pass Your Test Guarantee" badge in the admin pupil views. |
@@ -498,6 +498,7 @@ Student enrollments/purchases of lesson packages.
 - **Pass Your Test Guarantee (booking form only):** free when booked hours (lessons × slot length from step 4) ≥ `config('test_pass_guarantee.free_minimum_hours')` (10) and `payment_mode = upfront`. Otherwise the learner can opt in on the payment step (step 6) for `config('test_pass_guarantee.price')` (£50). Upfront: charged as a separate Stripe Checkout line item. Weekly: added in full to the first `lesson_payments` row (see `lesson_payments.test_pass_guarantee_pence`); the rest of the total is spread evenly as usual. Rules live in `App\Support\TestPassGuarantee`.
 - **Imported orders** (`payment_mode = imported`): one per imported student, on a hidden (`active = false`) per-instructor "Imported lessons" package with £0 totals. Lessons on them report `payment_status = paid` / `is_paid = true` so they can be signed off in the app and CRM. `SignOffLessonAction` skips the Stripe onboarding + payment guards and creates **no Payout**; `LessonSignOffService` also skips the student feedback email, next-invoice and resource recommendations. `Order::isImported()`, `Order::isPrepaid()` (confirmed upfront, imported or cash).
 - **Cash orders** (`payment_mode = cash`): only for pupils with `students.cash_payments_enabled = true` (imported or not), only booked by a full-access owner from the CRM pupil page (`App\Support\CashBookings::allowedFor`, enforced in `StoreOrderRequest` and `OrderService::bookLessons`). `booking_fee_pence = 0`, `digital_fee_pence = 0`, `total_price_pence = package_total_price_pence`, no guarantee. Confirmed on booking by `ConfirmCashOrderAction`: `active` straight away, `payment_hold_expires_at = null`, all calendar items `booked`, lessons `pending`. **No `lesson_payments` rows at booking** — `RecordCashLessonPaymentAction` creates one `paid` row per lesson at sign-off (amount = lesson price). So reminders, invoices and the invoice-due report never see cash lessons, and cancelling one is the "unpaid" outcome. `SignOffLessonAction` skips the Stripe onboarding + payment guards and creates **no Payout**; unlike imported, the feedback email and recommendations still run. `Order::isCash()`.
+- **Alternative payment method** (`students.cash_payments_enabled = true`, weekly orders only — `App\Support\AlternativePayments`, `AlternativePaymentService`): bookings stay normal card bookings. While a weekly order is `pending`, the pupil's instructor (or staff on the web) can confirm the pupil pays by an alternative method: the Checkout session is closed (refused if paid / can't close), then `ConfirmAlternativePaymentBookingAction` makes the order `active`, lessons `pending`, diary items `reserved` (none are paid yet) and sets the first lesson payment's `alternative_payment_confirmed_*`. No confirmation email, guarantee or Bird "payment taken". At sign-off an unpaid lesson needs `alternative_payment_confirmed = true`: any open invoice is voided (if Stripe says it is paid, the payment is recorded paid by card and the sign-off pays out as normal), then `RecordAlternativeLessonPaymentAction` records it paid (`payment_method = alternative`, lesson price). `SignOffLessonAction` skips the Stripe onboarding guard and creates **no Payout** for it. `orders:release-expired-holds` skips pending weekly orders of these pupils unless the learner booked them (`source` website / learner_app), so the hold stays set (draft cleanup still skips them). Turning the flag off puts them back in the normal flow: `SetStudentCashPaymentsAction` also clears `alternative_payment_confirmed_*` on the pupil's still-`due` lesson payments, so they are invoiced and chased again (paid rows keep theirs).
 - **Staff bookings:** orders with `booked_by_user_id` set are listed on the admin "Lessons booked" page (`ListStaffBookedLessonsAction`) so unpaid ones can be chased.
 - **All bookings:** the "Lessons booked" page's All bookings tab (`ListAllBookedLessonsAction`) lists every non-imported order by `created_at`, with its `source`.
 - **Price snapshot:** `package_name`, `package_total_price_pence`, `package_lesson_price_pence`, and `package_lessons_count` are copied from the package at order creation time. Always use these snapshot columns for pricing/display — never read live from `packages` table via the `package` relationship for pricing data.
@@ -573,6 +574,9 @@ lesson price). A cash order never has a `due` row.
 | `amount_pence` | integer | NOT NULL | Payment amount in pence |
 | `test_pass_guarantee_pence` | integer unsigned | DEFAULT 0 | Portion of `amount_pence` that pays for Pass Your Test Guarantee. Only ever set on the first weekly payment of a booking-form order that opted in. Itemised separately on the Stripe invoice; when this payment's `invoice.paid` webhook lands the student is flagged. |
 | `status` | enum('due', 'paid', 'refunded') | DEFAULT 'due' | Payment status |
+| `payment_method` | varchar(20) | NULLABLE | `App\Enums\LessonPaymentMethod`. `null` = card (Stripe) or a row written before this column existed (not backfilled). `alternative` = the instructor confirmed at sign-off that the pupil paid outside Stripe (e.g. cash); no payout. Migration `2026_10_20_145537_add_alternative_payment_to_lesson_payments_table` |
+| `alternative_payment_confirmed_at` | timestamp | NULLABLE | When an instructor (or staff) confirmed this lesson is paid by an alternative method and accepted the risk. Set when a booking is confirmed by alternative payment (first lesson) and at an alternative sign-off. A `due` row with this set is never invoiced (`SendLessonInvoices`, `OrderService::sendNextDueInvoice`) or sent a 48h payment reminder |
+| `alternative_payment_confirmed_by` | bigint unsigned | NULLABLE, FOREIGN KEY (users.id), ON DELETE SET NULL | Who confirmed it |
 | `due_date` | date | NULLABLE | When payment is due |
 | `paid_at` | datetime | NULLABLE | When payment was received |
 | `stripe_invoice_id` | varchar(255) | NULLABLE | Stripe Invoice ID |
@@ -585,14 +589,21 @@ lesson price). A cash order never has a `due` row.
 
 **Relationships:**
 - Belongs to one `Lesson`
+- Belongs to one `User` as `alternativePaymentConfirmedBy` (nullable)
 
 **Enums:**
 - Status: `due`, `paid`, `refunded`
+- Payment method: `card`, `alternative` (nullable; only `alternative` is written today)
 
 **Business Logic:**
 - Created for each lesson in weekly payment mode
 - Weekly payments are charged via Stripe Subscriptions/Invoices
 - Payment must be completed before lesson can be marked as completed
+- **Alternative payment method** (pupils with `students.cash_payments_enabled = true`, weekly orders only, rules in
+  `App\Support\AlternativePayments`): confirming an unpaid booking sets the first lesson's
+  `alternative_payment_confirmed_*`; an alternative sign-off voids any open invoice, then sets `status = paid`,
+  `payment_method = alternative`, `paid_at`, `amount_pence` = the lesson price (booking/digital fees waived) and
+  `test_pass_guarantee_pence = 0`. See Business Logic → Alternative payment method.
 
 ---
 

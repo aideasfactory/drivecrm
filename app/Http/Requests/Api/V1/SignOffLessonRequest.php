@@ -20,6 +20,8 @@ class SignOffLessonRequest extends FormRequest
     {
         return [
             'summary' => ['required', 'string', 'max:5000'],
+            // Only used for an unpaid lesson of a pupil with alternative payments turned on.
+            'alternative_payment_confirmed' => ['sometimes', 'boolean'],
         ];
     }
 }

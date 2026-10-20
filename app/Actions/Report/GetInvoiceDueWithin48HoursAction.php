@@ -14,8 +14,9 @@ class GetInvoiceDueWithin48HoursAction
 {
     /**
      * Get learners whose lesson falls on the calendar date two days from today
-     * (any time of day) and whose lesson payment is still due (unpaid), so they
-     * can be chased manually before their lesson.
+     * (any time of day) and whose lesson payment is still due (unpaid, and not
+     * confirmed as paid by an alternative method), so they can be chased
+     * manually before their lesson.
      *
      * @return array{rows: Collection<int, array{lesson_id: int, student_id: ?int, instructor_id: ?int, learner_name: string, learner_phone: ?string, learner_email: ?string, instructor_name: ?string, lesson_date: string, lesson_time: string, amount_due: string, amount_pence: int, due_date: ?string}>, generated_at: string, target_date: string}
      */
@@ -26,7 +27,9 @@ class GetInvoiceDueWithin48HoursAction
 
         $lessons = Lesson::query()
             ->whereHas('lessonPayment', function ($query): void {
-                $query->where('status', PaymentStatus::DUE->value);
+                $query->where('status', PaymentStatus::DUE->value)
+                    // Confirmed as paid by an alternative method: nothing to chase.
+                    ->whereNull('alternative_payment_confirmed_at');
             })
             ->whereNotIn('status', [
                 LessonStatus::CANCELLED->value,

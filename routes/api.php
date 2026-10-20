@@ -206,6 +206,7 @@ Route::prefix('v1')->group(function (): void {
         // Order routes
         Route::post('students/{student}/orders', [StudentOrderController::class, 'store']);
         Route::post('students/{student}/orders/{order}/resend-payment-link', [StudentOrderController::class, 'resendPaymentLink']);
+        Route::post('students/{student}/orders/{order}/alternative-payment', [StudentOrderController::class, 'confirmAlternativePayment']);
         Route::get('orders/{order}/checkout/verify', [StudentOrderController::class, 'verify']);
 
         // Push notification routes

@@ -36,6 +36,10 @@ class LessonResource extends JsonResource
             'payment_status' => $this['payment_status'],
             'payment_mode' => $this['payment_mode'],
             'payment_breakdown' => $this['payment_breakdown'],
+            'alternative_payment_allowed' => $this['alternative_payment_allowed'],
+            'can_confirm_alternative_payment' => $this['can_confirm_alternative_payment'],
+            'can_sign_off_with_alternative_payment' => $this['can_sign_off_with_alternative_payment'],
+            'paid_by_alternative_method' => $this['paid_by_alternative_method'],
         ];
     }
 }

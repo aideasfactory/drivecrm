@@ -327,6 +327,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('students.lessons.sign-off');
     Route::post('/students/{student}/lessons/{lesson}/resend-invoice', [PupilController::class, 'resendLessonInvoice'])
         ->name('students.lessons.resend-invoice');
+    Route::post('/students/{student}/orders/{order}/alternative-payment', [PupilController::class, 'confirmAlternativePayment'])
+        ->name('students.orders.alternative-payment');
 
     // Student Pickup Points
     Route::get('/students/{student}/pickup-points', [PupilController::class, 'pickupPoints'])
