@@ -56,6 +56,22 @@ class StudentPolicy
     }
 
     /**
+     * Determine whether staff can edit the learner's details from the CRM
+     * pupil profile.
+     *
+     * Owners can edit any pupil at any point, including after the pupil is
+     * booked in with an instructor. Instructors can edit their own pupils.
+     */
+    public function updateDetails(User $user, Student $student): bool
+    {
+        if ($user->isOwner()) {
+            return true;
+        }
+
+        return $user->isInstructor() && $student->instructor_id === $user->instructor?->id;
+    }
+
+    /**
      * Determine whether staff can delete the learner profile (soft delete).
      *
      * Admin (owner) only. Instructors may detach a pupil from their own

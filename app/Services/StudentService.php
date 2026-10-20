@@ -9,6 +9,7 @@ use App\Actions\Student\AttachStudentToInstructorAction;
 use App\Actions\Student\DeleteStudentAction;
 use App\Actions\Student\DeleteStudentProfilePictureAction;
 use App\Actions\Student\GetAllStudentsAction;
+use App\Actions\Student\GetStudentBookingDetailsAction;
 use App\Actions\Student\GetStudentByIdAction;
 use App\Actions\Student\GetStudentInstructorProfileAction;
 use App\Actions\Student\GetStudentPracticeHoursAction;
@@ -49,8 +50,20 @@ class StudentService extends BaseService
         protected DeleteStudentProfilePictureAction $deleteProfilePictureAction,
         protected GetStudentInstructorProfileAction $getInstructorProfile,
         protected GetStudentPracticeHoursAction $getPracticeHours,
-        protected SetStudentCashPaymentsAction $setStudentCashPayments
+        protected SetStudentCashPaymentsAction $setStudentCashPayments,
+        protected GetStudentBookingDetailsAction $getStudentBookingDetails
     ) {}
+
+    /**
+     * Address and date of birth captured on the pupil's booking, used when
+     * the profile has no stored value yet.
+     *
+     * @return array{address_line_1: string|null, address_line_2: string|null, city: string|null, postcode: string|null, date_of_birth: string|null}
+     */
+    public function getBookingDetails(Student $student): array
+    {
+        return ($this->getStudentBookingDetails)($student);
+    }
 
     /**
      * Turn cash payments on or off for a pupil.

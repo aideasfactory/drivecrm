@@ -11,7 +11,7 @@ class UpdateStudentAction
     /**
      * Update an existing student record.
      *
-     * @param  array{first_name?: string, surname?: string, email?: string|null, phone?: string|null, contact_first_name?: string|null, contact_surname?: string|null, contact_email?: string|null, contact_phone?: string|null, owns_account?: bool}  $data
+     * @param  array{first_name?: string, surname?: string, email?: string|null, phone?: string|null, address_line_1?: string|null, address_line_2?: string|null, city?: string|null, postcode?: string|null, date_of_birth?: string|null, contact_first_name?: string|null, contact_surname?: string|null, contact_email?: string|null, contact_phone?: string|null, owns_account?: bool}  $data
      */
     public function __invoke(Student $student, array $data): Student
     {
@@ -19,11 +19,15 @@ class UpdateStudentAction
 
         $this->syncLinkedUser($student, $data);
 
-        $student->logActivity(
-            'Student profile updated',
-            'profile',
-            ['updated_fields' => array_keys($data)]
-        );
+        $updatedFields = array_values(array_diff(array_keys($student->getChanges()), ['updated_at']));
+
+        if ($updatedFields !== []) {
+            $student->logActivity(
+                'Student profile updated',
+                'profile',
+                ['updated_fields' => $updatedFields]
+            );
+        }
 
         return $student->fresh(['user', 'instructor.user']);
     }

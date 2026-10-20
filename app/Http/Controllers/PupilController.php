@@ -37,6 +37,7 @@ use App\Http\Requests\DeleteStudentProfileRequest;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\StorePickupPointRequest;
 use App\Http\Requests\UpdatePickupPointRequest;
+use App\Http\Requests\UpdatePupilDetailsRequest;
 use App\Http\Requests\UpdateStudentCashPaymentsRequest;
 use App\Http\Requests\UpdateStudentStatusRequest;
 use App\Jobs\ProcessLessonSignOffJob;
@@ -120,9 +121,26 @@ class PupilController extends Controller
         $data['is_imported'] = $student->isImported();
         $data['cash_payments_enabled'] = $student->cash_payments_enabled;
         $data['can_book_cash'] = CashBookings::allowedFor(request()->user(), $student);
+        $data['booking_details'] = $this->studentService->getBookingDetails($student);
 
         return response()->json([
             'student' => $data,
+        ]);
+    }
+
+    /**
+     * Update a pupil's personal and contact details from the pupil profile.
+     */
+    public function update(UpdatePupilDetailsRequest $request, Student $student): JsonResponse
+    {
+        $student = $this->studentService->update($student, $request->validated());
+
+        $data = (new GetStudentDetailAction)($student);
+        $data['booking_details'] = $this->studentService->getBookingDetails($student);
+
+        return response()->json([
+            'student' => $data,
+            'message' => 'Pupil details updated successfully.',
         ]);
     }
 
