@@ -505,8 +505,11 @@ class OrderService extends BaseService
         }
 
         if ($order->hasPaymentHoldExpired()) {
+            // Alternative-payment bookings are not released when the hold passes.
             throw ValidationException::withMessages([
-                'order' => 'The time to pay for this booking has passed, so the lessons are being released. Please book again.',
+                'order' => AlternativePayments::canConfirmBooking($order)
+                    ? 'The time to pay by card has passed. If the pupil is paying another way, confirm the alternative payment.'
+                    : 'The time to pay for this booking has passed, so the lessons are being released. Please book again.',
             ]);
         }
     }
