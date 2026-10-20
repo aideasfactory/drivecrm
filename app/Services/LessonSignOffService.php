@@ -84,7 +84,14 @@ class LessonSignOffService extends BaseService
         $instructorName = $instructor->user?->name ?? 'Instructor';
         $lessonDate = $lesson->date?->format('d M Y') ?? 'N/A';
         $isCash = $lesson->order->isCash();
-        $cashNote = $isCash ? ' (paid in cash: £'.number_format(((int) $lesson->amount_pence) / 100, 2).')' : '';
+        $isAlternativePayment = $lesson->lessonPayment?->isPaidByAlternativeMethod() === true;
+        $alternativeConfirmedBy = $lesson->lessonPayment?->alternativePaymentConfirmedBy?->name ?? $instructorName;
+        $formattedLessonPrice = '£'.number_format(((int) $lesson->amount_pence) / 100, 2);
+        $cashNote = match (true) {
+            $isCash => " (paid in cash: {$formattedLessonPrice})",
+            $isAlternativePayment => " (paid by an alternative method: {$formattedLessonPrice}, confirmed by {$alternativeConfirmedBy}, risks accepted)",
+            default => '',
+        };
 
         // Log activity for both student and instructor
         ($this->logActivity)(
@@ -96,6 +103,7 @@ class LessonSignOffService extends BaseService
                 'instructor_id' => $instructor->id,
                 'payout_amount_pence' => $payoutAmountPence,
                 'paid_in_cash' => $isCash,
+                'paid_by_alternative_method' => $isAlternativePayment,
             ]
         );
 
@@ -108,6 +116,7 @@ class LessonSignOffService extends BaseService
                 'student_id' => $student->id,
                 'payout_amount_pence' => $payoutAmountPence,
                 'paid_in_cash' => $isCash,
+                'paid_by_alternative_method' => $isAlternativePayment,
             ]
         );
 

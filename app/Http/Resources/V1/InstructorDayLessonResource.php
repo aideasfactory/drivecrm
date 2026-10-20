@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\V1;
 
+use App\Support\AlternativePayments;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -45,6 +46,7 @@ class InstructorDayLessonResource extends JsonResource
             'package_name' => $order?->package_name,
             'payment_status' => $this->lessonPayment?->status?->value ?? ($order?->isPrepaid() ? 'paid' : null),
             'payment_mode' => $order?->payment_mode->value,
+            ...AlternativePayments::lessonFlags($this->resource),
             'payout_status' => $this->payout?->statusForInstructor()->value,
             'has_payout' => $this->payout !== null,
             'calendar_item' => $this->calendarItem ? [

@@ -33,6 +33,7 @@ use App\Enums\LessonStatus;
 use App\Enums\OrderSource;
 use App\Enums\PaymentMode;
 use App\Http\Requests\AdminResetPasswordRequest;
+use App\Http\Requests\Api\V1\ConfirmAlternativePaymentRequest;
 use App\Http\Requests\DeleteStudentProfileRequest;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\StorePickupPointRequest;
@@ -45,10 +46,12 @@ use App\Models\Contact;
 use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Note;
+use App\Models\Order;
 use App\Models\Package;
 use App\Models\Student;
 use App\Models\StudentChecklistItem;
 use App\Models\StudentPickupPoint;
+use App\Services\AlternativePaymentService;
 use App\Services\InstructorCalendarService;
 use App\Services\LessonSignOffService;
 use App\Services\OrderService;
@@ -63,7 +66,8 @@ use Inertia\Response;
 class PupilController extends Controller
 {
     public function __construct(
-        protected StudentService $studentService
+        protected StudentService $studentService,
+        protected AlternativePaymentService $alternativePaymentService
     ) {}
 
     /**
@@ -387,7 +391,8 @@ class PupilController extends Controller
     }
 
     /**
-     * Get all lessons for a student.
+     * Get all lessons for a student, plus any bookings awaiting their first
+     * payment that can be confirmed as paid by an alternative method.
      */
     public function lessons(Student $student, LessonSignOffService $service): JsonResponse
     {
@@ -395,6 +400,25 @@ class PupilController extends Controller
 
         return response()->json([
             'lessons' => $lessons,
+            'alternative_payment_allowed' => $student->cash_payments_enabled === true,
+            'alternative_payment_bookings' => $this->alternativePaymentService->getConfirmableBookings($student),
+        ]);
+    }
+
+    /**
+     * Confirm a booking awaiting its first payment as paid by an alternative
+     * method. Closes the Stripe payment page and activates the order.
+     */
+    public function confirmAlternativePayment(ConfirmAlternativePaymentRequest $request, Student $student, Order $order): JsonResponse
+    {
+        if ($order->student_id !== $student->id) {
+            return response()->json(['message' => 'Booking not found for this student.'], 404);
+        }
+
+        $this->alternativePaymentService->confirmBooking($order, $request->user());
+
+        return response()->json([
+            'message' => 'Booking confirmed. The pupil is paying by an alternative method.',
         ]);
     }
 
@@ -510,6 +534,7 @@ class PupilController extends Controller
     {
         $data = request()->validate([
             'summary' => 'required|string|max:5000',
+            'alternative_payment_confirmed' => 'sometimes|boolean',
         ]);
 
         // Verify lesson belongs to this student (via order)
@@ -531,6 +556,14 @@ class PupilController extends Controller
         if (! $instructor) {
             return response()->json(['message' => 'No instructor assigned to this lesson.'], 422);
         }
+
+        // Unpaid lesson of a pupil with alternative payments on: void the invoice and
+        // record the payment now, so a Stripe failure is shown instead of lost in the job.
+        $this->alternativePaymentService->prepareSignOff(
+            $lesson,
+            request()->user(),
+            request()->boolean('alternative_payment_confirmed')
+        );
 
         // Dispatch sign-off job for async processing
         ProcessLessonSignOffJob::dispatch($lesson, $instructor, $data['summary']);
@@ -722,7 +755,7 @@ class PupilController extends Controller
         return response()->json([
             'cash_payments_enabled' => $student->cash_payments_enabled,
             'can_book_cash' => CashBookings::allowedFor($request->user(), $student),
-            'message' => $enabled ? 'Cash payments turned on.' : 'Cash payments turned off.',
+            'message' => $enabled ? 'Alternative payments turned on.' : 'Alternative payments turned off.',
         ]);
     }
 

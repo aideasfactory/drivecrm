@@ -26,6 +26,8 @@ class StudentResource extends JsonResource
             'has_app' => $this->user_id !== null,
             'app_last_active_at' => $this->app_last_active_at?->toIso8601String(),
             'profile_picture_url' => $this->profile_picture_url,
+            // Owner has turned on the alternative payment method (pays the instructor directly).
+            'alternative_payment_allowed' => $this->cash_payments_enabled === true,
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];
     }

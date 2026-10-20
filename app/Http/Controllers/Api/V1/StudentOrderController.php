@@ -8,12 +8,15 @@ use App\Enums\OrderSource;
 use App\Enums\PaymentMode;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\ConfirmAlternativePaymentRequest;
 use App\Http\Requests\Api\V1\CreateOrderRequest;
 use App\Http\Resources\V1\OrderResource;
 use App\Models\CalendarItem;
+use App\Models\Lesson;
 use App\Models\Order;
 use App\Models\Package;
 use App\Models\Student;
+use App\Services\AlternativePaymentService;
 use App\Services\OrderService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
@@ -24,7 +27,8 @@ use Illuminate\Support\Facades\RateLimiter;
 class StudentOrderController extends Controller
 {
     public function __construct(
-        protected OrderService $orderService
+        protected OrderService $orderService,
+        protected AlternativePaymentService $alternativePaymentService
     ) {}
 
     /**
@@ -130,6 +134,28 @@ class StudentOrderController extends Controller
 
         return response()->json([
             'message' => "Payment link re-sent to {$result['email']}",
+        ]);
+    }
+
+    /**
+     * Confirm a booking awaiting its first payment as paid by an alternative
+     * method (pupil pays the instructor directly). Only the pupil's instructor,
+     * only for pupils whose alternative payments an owner turned on, weekly
+     * orders only. Closes the Stripe payment page and activates the order.
+     */
+    public function confirmAlternativePayment(ConfirmAlternativePaymentRequest $request, Student $student, Order $order): JsonResponse
+    {
+        Gate::authorize('signOff', [Lesson::class, $student]);
+
+        if ($order->student_id !== $student->id) {
+            throw (new ModelNotFoundException)->setModel(Order::class, [$order->id]);
+        }
+
+        $order = $this->alternativePaymentService->confirmBooking($order, $request->user());
+
+        return response()->json([
+            'message' => 'Booking confirmed. The pupil is paying you by an alternative method.',
+            'data' => new OrderResource($order),
         ]);
     }
 

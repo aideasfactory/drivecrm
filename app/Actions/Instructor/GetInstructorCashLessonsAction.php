@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Instructor;
 
+use App\Enums\LessonPaymentMethod;
 use App\Enums\LessonStatus;
 use App\Enums\PaymentMode;
 use App\Models\Instructor;
@@ -13,18 +14,21 @@ use Illuminate\Support\Collection;
 class GetInstructorCashLessonsAction
 {
     /**
-     * Signed-off lessons on an instructor's cash orders, newest first. Cash
-     * lessons have no payout (the pupil paid the instructor directly), so this
-     * is how they show in the instructor's reports.
+     * Signed-off lessons on an instructor's cash orders, and lessons signed off
+     * as paid by an alternative method, newest first. Neither has a payout (the
+     * pupil paid the instructor directly), so this is how they show in the
+     * instructor's reports.
      *
-     * @return Collection<int, array{lesson_id: int, amount_pence: int, formatted_amount: string, student_name: string|null, package_name: string|null, lesson_date: string|null, lesson_start_time: string|null, lesson_end_time: string|null, completed_at: string|null}>
+     * @return Collection<int, array{lesson_id: int, is_alternative_payment: bool, amount_pence: int, formatted_amount: string, student_name: string|null, package_name: string|null, lesson_date: string|null, lesson_start_time: string|null, lesson_end_time: string|null, completed_at: string|null}>
      */
     public function __invoke(Instructor $instructor): Collection
     {
         return Lesson::query()
             ->where('instructor_id', $instructor->id)
             ->where('status', LessonStatus::COMPLETED)
-            ->whereHas('order', fn ($query) => $query->where('payment_mode', PaymentMode::CASH))
+            ->where(fn ($query) => $query
+                ->whereHas('order', fn ($order) => $order->where('payment_mode', PaymentMode::CASH))
+                ->orWhereHas('lessonPayment', fn ($payment) => $payment->where('payment_method', LessonPaymentMethod::ALTERNATIVE)))
             ->with(['order.student', 'lessonPayment'])
             ->orderByDesc('completed_at')
             ->get()
@@ -34,6 +38,7 @@ class GetInstructorCashLessonsAction
 
                 return [
                     'lesson_id' => $lesson->id,
+                    'is_alternative_payment' => $lesson->lessonPayment?->isPaidByAlternativeMethod() === true,
                     'amount_pence' => $amountPence,
                     'formatted_amount' => '£'.number_format($amountPence / 100, 2),
                     'student_name' => $student ? trim($student->first_name.' '.$student->surname) : null,

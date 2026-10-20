@@ -73,6 +73,7 @@
     - [Pickup Points (Set Default)](#patch-apiv1studentsstudentpickup-pointspickuppointdefault)
     - [Orders](#post-apiv1studentsstudentorders)
     - [Orders (Resend Payment Link)](#post-apiv1studentsstudentordersorderresend-payment-link)
+    - [Orders (Confirm Alternative Payment)](#post-apiv1studentsstudentordersorderalternative-payment)
   - [Resources](#get-apiv1resources)
     - [Instructor Resource Tree](#get-apiv1instructorresources)
     - [Resource Detail](#get-apiv1resourcesresource)
@@ -1192,6 +1193,7 @@ Returns the authenticated instructor's students grouped by status, plus a recent
 | `phone` | string\|null | Student's phone number |
 | `status` | string\|null | Student status (e.g., `active`, `passed`, `inactive`) |
 | `has_app` | boolean | Whether the student has a linked user **account**. This is `true` as soon as the account exists — it does **not** mean the student has ever opened the app. |
+| `alternative_payment_allowed` | boolean | Head Office has turned on alternative payments for this pupil (pays the instructor directly, e.g. cash). Show a badge; the per-lesson flags say what can be done |
 | `app_last_active_at` | string\|null | ISO 8601 timestamp of the student's last authenticated app activity, or `null` if they have **never used the app**. Updated server-side on authenticated API requests (throttled to ~once / 15 min). Use this — not `has_app` — to decide whether a pupil has actually started using the app. |
 | `updated_at` | string\|null | ISO 8601 timestamp of last update |
 
@@ -1308,6 +1310,10 @@ Returns the authenticated instructor's lessons for a specific date, ordered by s
 | `package_name` | string\|null | Name of the package the lesson is part of |
 | `payment_status` | string\|null | Payment status: `paid`, `due`, `refunded`, or null |
 | `payment_mode` | string\|null | Package payment mode: `upfront` or `weekly` |
+| `alternative_payment_allowed` | boolean\|null | Head Office has turned on alternative payments for the pupil (pays the instructor directly, e.g. cash) **and** this is a weekly booking. Show a "Pays by alternative method" badge. `null` when there is no lesson |
+| `can_confirm_alternative_payment` | boolean\|null | Booking is still awaiting its first payment and the instructor can confirm the pupil is paying by an alternative method → show the action that calls `POST /students/{student}/orders/{order_id}/alternative-payment`. `null` when there is no lesson |
+| `can_sign_off_with_alternative_payment` | boolean\|null | Lesson is pending and not paid by card yet, so sign-off is allowed with the instructor's confirmation → show the "I confirm the pupil paid by an alternative method and accept the risks" tick and send `alternative_payment_confirmed: true`. `null` when there is no lesson |
+| `paid_by_alternative_method` | boolean\|null | Lesson was recorded as paid by an alternative method at sign-off (no payout). `null` when there is no lesson |
 | `payout_status` | string\|null | Instructor payout status: `pending`, `paid`, `failed`, or null |
 | `has_payout` | boolean | Whether a payout has been created for this lesson |
 | `calendar_item` | object\|null | Calendar item data (see Calendar Item Object below) |
@@ -2451,6 +2457,10 @@ Returns the authenticated instructor's calendar items for a specific date, **or*
 | `is_late_cancellation` | boolean\|null | `true` when cancelling now is **less than 48 hours** before the lesson starts (UK time). Informational only: late cancellations are never paid out to the instructor, and Head Office is told how much notice was given. `null` for availability slots and completed lessons |
 | `is_paid` | boolean\|null | `true` when the lesson is paid (weekly per-lesson payment settled, a confirmed upfront order, an imported order, or a **cash** order). **A `draft` is upfront-but-awaiting-payment, so it returns `false`.** Use this to show a paid/refund hint on cancel. |
 | `is_cash` | boolean\|null | `true` when the pupil pays the instructor **in cash** at the lesson (order `payment_mode: "cash"`, no Stripe). Show "Cash – collect £X" using `amount_pence`, and **never** show the Refund Lesson tickbox for it (nothing was paid through us — the server ignores `refund_lesson` for cash lessons). `null` for availability slots |
+| `alternative_payment_allowed` | boolean\|null | Head Office has turned on alternative payments for the pupil (pays the instructor directly, e.g. cash) **and** this is a weekly booking. Show a "Pays by alternative method" badge. `null` when there is no lesson |
+| `can_confirm_alternative_payment` | boolean\|null | Booking is still awaiting its first payment and the instructor can confirm the pupil is paying by an alternative method → show the action that calls `POST /students/{student}/orders/{order_id}/alternative-payment`. `null` when there is no lesson |
+| `can_sign_off_with_alternative_payment` | boolean\|null | Lesson is pending and not paid by card yet, so sign-off is allowed with the instructor's confirmation → show the "I confirm the pupil paid by an alternative method and accept the risks" tick and send `alternative_payment_confirmed: true`. `null` when there is no lesson |
+| `paid_by_alternative_method` | boolean\|null | Lesson was recorded as paid by an alternative method at sign-off (no payout). `null` when there is no lesson |
 | `is_late_cancellation` | boolean\|null | `true` when cancelling now is **less than 48 hours** before the lesson starts (UK time). When `true` **and** `is_paid` is `true`, the cancel sheet shows a **Refund Lesson** tickbox (sent as `refund_lesson` on DELETE). `null` for availability slots and completed lessons |
 | `amount_pence` | integer\|null | Lesson price in pence, **before fees** (e.g., 3500 = £35.00). This is not what the pupil paid — use `payment_breakdown` for that |
 | `payment_breakdown` | object\|null | What the pupil pays for the lesson, itemised (see **Payment Breakdown Object** under `GET /students/{student}/lessons`). `null` for availability slots |
@@ -4328,6 +4338,10 @@ Returns lessons for a given student across all their orders. Supports optional f
 | `resources_count` | integer | Number of resources attached to this lesson |
 | `payment_status` | string\|null | Payment status: `paid`, `due`, `refunded`, or null |
 | `payment_mode` | string\|null | `upfront`, `weekly`, `imported` or `cash` |
+| `alternative_payment_allowed` | boolean\|null | Head Office has turned on alternative payments for the pupil (pays the instructor directly, e.g. cash) **and** this is a weekly booking. Show a "Pays by alternative method" badge. `null` when there is no lesson |
+| `can_confirm_alternative_payment` | boolean\|null | Booking is still awaiting its first payment and the instructor can confirm the pupil is paying by an alternative method → show the action that calls `POST /students/{student}/orders/{order_id}/alternative-payment`. `null` when there is no lesson |
+| `can_sign_off_with_alternative_payment` | boolean\|null | Lesson is pending and not paid by card yet, so sign-off is allowed with the instructor's confirmation → show the "I confirm the pupil paid by an alternative method and accept the risks" tick and send `alternative_payment_confirmed: true`. `null` when there is no lesson |
+| `paid_by_alternative_method` | boolean\|null | Lesson was recorded as paid by an alternative method at sign-off (no payout). `null` when there is no lesson |
 | `payment_breakdown` | object | What the pupil pays for this lesson, itemised (see below) |
 
 **Payment Breakdown Object** (`payment_breakdown`, also returned on lesson detail, instructor day lessons and instructor calendar items):
@@ -4451,6 +4465,10 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 | `summary` | string\|null | Instructor's lesson summary/notes |
 | `payment_status` | string\|null | Payment status: `paid`, `due`, `refunded`, or null. **Always `null` for `draft` lessons** (no payment record exists until checkout completes) |
 | `payment_mode` | string\|null | Package payment mode: `upfront` or `weekly` |
+| `alternative_payment_allowed` | boolean\|null | Head Office has turned on alternative payments for the pupil (pays the instructor directly, e.g. cash) **and** this is a weekly booking. Show a "Pays by alternative method" badge. `null` when there is no lesson |
+| `can_confirm_alternative_payment` | boolean\|null | Booking is still awaiting its first payment and the instructor can confirm the pupil is paying by an alternative method → show the action that calls `POST /students/{student}/orders/{order_id}/alternative-payment`. `null` when there is no lesson |
+| `can_sign_off_with_alternative_payment` | boolean\|null | Lesson is pending and not paid by card yet, so sign-off is allowed with the instructor's confirmation → show the "I confirm the pupil paid by an alternative method and accept the risks" tick and send `alternative_payment_confirmed: true`. `null` when there is no lesson |
+| `paid_by_alternative_method` | boolean\|null | Lesson was recorded as paid by an alternative method at sign-off (no payout). `null` when there is no lesson |
 | `payout_status` | string\|null | Instructor payout status: `pending`, `paid`, `failed`, or null |
 | `has_payout` | boolean | Whether a payout has been created for this lesson |
 | `calendar_date` | string\|null | Calendar date for the lesson slot (YYYY-MM-DD) |
@@ -4510,13 +4528,21 @@ Unpaid weekly lessons, unpaid upfront orders, and instructors who are not Stripe
 **Request Body:**
 ```json
 {
-  "summary": "Good progress today. Practiced roundabouts and dual carriageway driving."
+  "summary": "Good progress today. Practiced roundabouts and dual carriageway driving.",
+  "alternative_payment_confirmed": true
 }
 ```
 
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
 | `summary` | string | Yes | Lesson summary / what was covered (max 5000 characters). Used by AI to recommend learning resources — same field as admin Sign Off Lesson. |
+| `alternative_payment_confirmed` | boolean | Only when `can_sign_off_with_alternative_payment` is `true` | The instructor confirms the pupil paid them by an alternative method (e.g. cash) and accepts the risks. Ignored for every other lesson. |
+
+**Alternative payment method.** When the lesson has `can_sign_off_with_alternative_payment: true` (Head Office turned on alternative payments for the pupil, weekly booking, lesson not paid by card yet), sign-off **requires** `alternative_payment_confirmed: true`. Then, before the lesson is completed:
+1. The lesson's open Stripe invoice (if any) is cancelled so it can't be paid by card. If Stripe says the pupil **has just paid it**, the lesson is signed off as a normal card-paid lesson (payout as usual).
+2. Otherwise the lesson is recorded as **paid by an alternative method**: `payment_status: "paid"`, `paid_by_alternative_method: true`, amount = the lesson price (booking and digital fees waived). **No payout** is made and the instructor does not need Stripe set up.
+
+The confirmation (who, when) is written to the pupil's and instructor's activity log. Each lesson stands alone: if the pupil pays the next week's invoice by card, that lesson signs off normally.
 
 **Success Response:** `200 OK`
 ```json
@@ -4554,6 +4580,10 @@ Unpaid weekly lessons, unpaid upfront orders, and instructors who are not Stripe
 ```
 
 Other 422 messages are the existing pipeline messages (unpaid weekly/upfront, instructor not onboarded for payouts).
+
+**Alternative payment 422s** (`errors.alternative_payment_confirmed`):
+- Missing / `false` on a lesson that needs it: `This lesson hasn't been paid by card. To sign it off, confirm the pupil paid you by an alternative method and that you accept the risks.` — show the confirmation and resend with `true`.
+- Stripe couldn't cancel the invoice (e.g. a card payment is going through): `We couldn't cancel the pupil's card payment request for this lesson. If they are paying by card right now, wait for it to go through. Otherwise try again in a minute.` Nothing was changed.
 
 > **Important:** The lesson must have `status = "pending"` and belong to the specified student. On this endpoint a `200` means the shared service has already completed the lesson (summary saved, `completed_at` set, payout attempted). AI recommendations still queue from `summary` as they do in admin.
 
@@ -5498,6 +5528,77 @@ The recipient email is embedded in `message` so the app can surface it in a toas
   "message": "A payment link was sent moments ago. Please wait a few minutes before re-sending."
 }
 ```
+
+---
+
+#### `POST /api/v1/students/{student}/orders/{order}/alternative-payment`
+
+**Auth required:** Yes (Bearer token — the pupil's instructor only)
+
+Confirm a booking that is still **awaiting its first payment** as paid by an **alternative method** (the pupil pays the instructor directly, e.g. cash). Only works when Head Office has turned on alternative payments for the pupil (`alternative_payment_allowed`), only for **weekly** (pay-as-you-go) bookings, and only for bookings made by the instructor or Head Office (not ones the pupil made and is paying for in the app). Use `can_confirm_alternative_payment` on the lesson / calendar item to decide whether to show the action.
+
+What it does, in order:
+1. Closes the booking's Stripe payment page so the pupil can no longer pay it by card. If Stripe reports it has just been paid, the booking is confirmed as a normal card booking and this returns `422` (refetch).
+2. Confirms the booking exactly as a first card payment would: order `active`, every lesson `pending` (so they can be signed off), diary items `reserved` (shown with the pupil's name).
+3. Marks the **first lesson's** payment as confirmed, so the pupil is never invoiced or sent payment reminders for it.
+
+Nothing is marked paid here — the first lesson is recorded as paid by an alternative method when it is signed off (with `alternative_payment_confirmed: true`). No confirmation email is sent to the pupil. The confirmation (who, when) is written to the pupil's and instructor's activity log.
+
+Bookings of pupils with alternative payments on are **never released automatically** while awaiting payment (except bookings the pupil made themselves), so this can be done any time up to the lesson, including on the day.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The student record ID |
+| `order` | integer | The order ID (`order_id` on the lesson or calendar item) |
+
+**Request Body:**
+```json
+{
+  "accept_risks": true
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `accept_risks` | boolean | Yes | Must be `true`. The instructor confirms the pupil will pay them directly and accepts that they are not paid through Drive for these lessons and that late cancellations / no-shows aren't covered. |
+
+**Success Response:** `200 OK`
+```json
+{
+  "message": "Booking confirmed. The pupil is paying you by an alternative method.",
+  "data": {
+    "id": 812,
+    "payment_mode": "weekly",
+    "status": "active"
+  }
+}
+```
+
+`data` is the standard order object. Refetch the pupil's lessons / diary afterwards: the lessons are now `pending`.
+
+**Error Responses:**
+
+`403 Forbidden` — not the pupil's instructor.
+
+`404 Not Found` — the order doesn't belong to this pupil.
+
+`422 Unprocessable Entity` — `accept_risks` missing/false:
+```json
+{
+  "message": "Please confirm you accept the risks of an alternative payment.",
+  "errors": { "accept_risks": ["Please confirm you accept the risks of an alternative payment."] }
+}
+```
+
+`422` — can't be confirmed (`errors.order`), one of:
+- `Alternative payments are not turned on for this pupil. Ask Head Office.`
+- `Only pay-as-you-go (weekly) bookings can be paid by an alternative method.`
+- `This booking is no longer waiting for payment.`
+- `The pupil booked this themselves, so it must be paid by card.`
+- `The pupil has just paid for this booking by card, so it is already confirmed.`
+- `We couldn't close the card payment page for this booking. Please try again in a minute.`
 
 ---
 
@@ -6513,6 +6614,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | PATCH | `/api/v1/students/{student}/pickup-points/{pickupPoint}/default` | Yes | Both | Set default pickup point |
 | POST | `/api/v1/students/{student}/orders` | Yes | Both | Create order/booking (optional `calendar_item_id` for a specific slot) |
 | POST | `/api/v1/students/{student}/orders/{order}/resend-payment-link` | Yes | Both | Re-send payment-link email (pending orders still inside their hold; hold not extended; 3-min cooldown) |
+| POST | `/api/v1/students/{student}/orders/{order}/alternative-payment` | Yes | Instructor | Confirm a booking awaiting payment as paid by an alternative method (closes Stripe payment page, activates booking) |
 | GET | `/api/v1/orders/{order}/checkout/verify` | Yes | Both | Verify payment |
 | GET | `/api/v1/packages/{package}/pricing` | Yes | Any | Package pricing breakdown |
 | GET | `/api/v1/resources` | Yes | Any | List resources |
@@ -7736,6 +7838,8 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-10-15 | **Cancelled lessons can no longer be paid for.** Calendar items gain `awaiting_payment`. `DELETE /calendar/items/{calendarItem}` on a booking awaiting its first payment now cancels the **whole booking** (`scope` ignored) and closes its Stripe payment page first; open weekly invoices of cancelled lessons are voided. New 400 messages when Stripe can't stop the payment (nothing is cancelled). Mirrored on the web `DELETE /instructors/{instructor}/calendar/items/{calendarItem}`. | `DELETE /api/v1/instructor/calendar/items/{calendarItem}`, `GET/PUT /api/v1/instructor/calendar/items` (resource field) |
 | 2026-10-19 | **Cancellations go to Head Office review; structured reasons.** `DELETE /calendar/items/{calendarItem}` booking cancellations no longer pay out late cancellations to the instructor: every paid cancelled lesson, whatever the notice, emails Head Office to decide by hand. New `reason_code` (temporarily optional, defaults to `other`); `reason` is now the free-text details, required only for `other` / no code. `refund_lesson` is deprecated and ignored; `payout_count` is always `0`; the "late cancellation can't be paid out" 400 is gone. New `GET /api/v1/instructor/lesson-cancellation-reasons`. `is_late_cancellation` is now informational only. | `DELETE /api/v1/instructor/calendar/items/{calendarItem}`, `GET /api/v1/instructor/lesson-cancellation-reasons` (new), calendar item resource |
 | 2026-10-17 | **Cash orders (imported pupils).** New display-only `payment_mode: "cash"` on lesson list/show, instructor day lessons and orders: an imported pupil pays the instructor the lesson price in cash at each lesson, with no booking or digital fee and no Stripe. Only a full-access owner can create one, from Drive CRM (`POST /students/{student}/orders` on the **web** accepts `payment_mode: "cash"` + optional `cash_note`; the mobile order create and slot-offer accept still accept only `upfront` / `weekly`). Cash orders are `active` straight away (no `checkout_url`, no `payment_hold_expires_at`). Cash lessons report `payment_status: "paid"` and calendar items `is_paid: true`, so the existing Sign Off button shows. `POST /students/{student}/lessons/{lesson}/sign-off` on a cash lesson skips the Stripe onboarding + payment guards and creates **no payout**; unlike imported lessons the feedback email and resource recommendations still go out. Calendar items gain `is_cash` (additive). **App action:** show "Cash – collect £X" (`amount_pence`) on cash lessons and hide the Refund Lesson tickbox when `is_cash` is `true`; treat `"cash"` as a known `payment_mode` value. | Student Lessons (index, show, sign-off), Instructor Day Lessons, Calendar Items (`is_paid`, `is_cash` — NEW), Orders (`payment_mode`) |
+| 2026-10-20 | **Alternative payment method.** For pupils Head Office has turned on alternative payments for (pays the instructor directly, e.g. cash), weekly bookings only. **New** `POST /students/{student}/orders/{order}/alternative-payment` (`{ "accept_risks": true }`, instructor only) confirms a booking awaiting its first payment: closes the Stripe payment page, makes the order `active` and its lessons `pending`, and stops the first lesson being invoiced or chased. `POST /students/{student}/lessons/{lesson}/sign-off` accepts optional `alternative_payment_confirmed`; it is **required** when the lesson has `can_sign_off_with_alternative_payment: true` (new 422 on `errors.alternative_payment_confirmed` otherwise). It voids the open invoice and records the lesson paid by an alternative method (lesson price, no payout); if the invoice turns out paid, it signs off as a normal card lesson. **New additive fields** `alternative_payment_allowed`, `can_confirm_alternative_payment`, `can_sign_off_with_alternative_payment`, `paid_by_alternative_method` on lesson list/show, instructor day/range lessons and calendar items; `alternative_payment_allowed` on the instructor's students list. These bookings are no longer released automatically while awaiting payment (unless the pupil booked them). | Orders (alternative-payment — NEW), Lesson Sign-Off, Student Lessons (index, show), Instructor Day Lessons, Calendar Items, Instructor Students |
+
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

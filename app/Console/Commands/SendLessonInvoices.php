@@ -32,6 +32,8 @@ class SendLessonInvoices extends Command
         $lessonPayments = LessonPayment::query()
             ->where('status', PaymentStatus::DUE)
             ->whereNull('stripe_invoice_id')
+            // Confirmed as paid by an alternative method: never invoiced.
+            ->whereNull('alternative_payment_confirmed_at')
             ->where('due_date', '<=', now()->addHours(48))
             ->whereHas('lesson', function ($query) {
                 $query->whereNotNull('date')

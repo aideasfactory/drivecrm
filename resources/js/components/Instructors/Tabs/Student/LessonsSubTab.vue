@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
     Table,
     TableBody,
@@ -27,6 +29,7 @@ import {
     Dialog,
     DialogContent,
     DialogDescription,
+    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
@@ -43,8 +46,11 @@ import {
     FileText,
     Send,
     ShoppingCart,
+    HandCoins,
+    TriangleAlert,
 } from 'lucide-vue-next'
 import { toast } from '@/components/ui/sonner'
+import { confirmAlternativePayment } from '@/actions/App/Http/Controllers/PupilController'
 
 interface Lesson {
     id: number
@@ -67,6 +73,19 @@ interface Lesson {
     payout_status: 'pending' | 'paid' | 'failed' | null
     has_payout: boolean
     calendar_date: string | null
+    alternative_payment_allowed: boolean
+    can_sign_off_with_alternative_payment: boolean
+    paid_by_alternative_method: boolean
+}
+
+interface AlternativePaymentBooking {
+    order_id: number
+    package_name: string | null
+    lessons_count: number
+    first_lesson_date: string | null
+    first_lesson_start_time: string | null
+    first_lesson_end_time: string | null
+    amount_pence: number
 }
 
 interface Props {
@@ -82,12 +101,21 @@ const props = defineProps<Props>()
 // Data state
 const lessons = ref<Lesson[]>([])
 const loading = ref(true)
+const alternativePaymentAllowed = ref(false)
+const alternativePaymentBookings = ref<AlternativePaymentBooking[]>([])
+
+// Confirm-booking (alternative payment) dialog state
+const isConfirmBookingOpen = ref(false)
+const confirmBookingTarget = ref<AlternativePaymentBooking | null>(null)
+const confirmBookingRisksAccepted = ref(false)
+const isConfirmingBooking = ref(false)
 
 // Sign-off sheet state
 const isSignOffSheetOpen = ref(false)
 const signOffTarget = ref<Lesson | null>(null)
 const isSigningOff = ref(false)
 const summary = ref('')
+const alternativePaymentConfirmed = ref(false)
 const errors = ref<Record<string, string>>({})
 
 // View summary dialog state
@@ -185,6 +213,8 @@ const loadLessons = async () => {
     try {
         const response = await axios.get(`/students/${props.studentId}/lessons`)
         lessons.value = response.data.lessons || []
+        alternativePaymentAllowed.value = response.data.alternative_payment_allowed === true
+        alternativePaymentBookings.value = response.data.alternative_payment_bookings || []
     } catch {
         toast.error('Failed to load lessons')
     } finally {
@@ -215,8 +245,45 @@ const resendInvoice = async (lesson: Lesson) => {
 const openSignOffSheet = (lesson: Lesson) => {
     signOffTarget.value = lesson
     summary.value = ''
+    alternativePaymentConfirmed.value = false
     errors.value = {}
     isSignOffSheetOpen.value = true
+}
+
+const canSignOff = (lesson: Lesson): boolean =>
+    lesson.status === 'pending' && (lesson.payment_status === 'paid' || lesson.can_sign_off_with_alternative_payment)
+
+const signOffNeedsAlternativeConfirmation = computed(
+    () => signOffTarget.value?.can_sign_off_with_alternative_payment === true,
+)
+
+// Confirm a booking awaiting its first payment as paid by an alternative method
+const openConfirmBooking = (booking: AlternativePaymentBooking) => {
+    confirmBookingTarget.value = booking
+    confirmBookingRisksAccepted.value = false
+    isConfirmBookingOpen.value = true
+}
+
+const handleConfirmBooking = async () => {
+    if (!confirmBookingTarget.value || !confirmBookingRisksAccepted.value) return
+
+    isConfirmingBooking.value = true
+    try {
+        const response = await axios.post(
+            confirmAlternativePayment.url({ student: props.studentId, order: confirmBookingTarget.value.order_id }),
+            { accept_risks: true },
+        )
+        toast.success(response.data.message || 'Booking confirmed')
+        isConfirmBookingOpen.value = false
+        confirmBookingTarget.value = null
+        await loadLessons()
+    } catch (error: any) {
+        const data = error.response?.data
+        const message = data?.errors?.order?.[0] || data?.errors?.accept_risks?.[0] || data?.message || 'Failed to confirm booking'
+        toast.error(message)
+    } finally {
+        isConfirmingBooking.value = false
+    }
 }
 
 const handleSignOff = async () => {
@@ -229,11 +296,23 @@ const handleSignOff = async () => {
         return
     }
 
+    if (signOffNeedsAlternativeConfirmation.value && !alternativePaymentConfirmed.value) {
+        errors.value = {
+            alternative_payment_confirmed: 'Please confirm the pupil paid by an alternative method and that you accept the risks.',
+        }
+        return
+    }
+
     isSigningOff.value = true
     try {
         await axios.post(
             `/students/${props.studentId}/lessons/${signOffTarget.value.id}/sign-off`,
-            { summary: summary.value.trim() },
+            {
+                summary: summary.value.trim(),
+                alternative_payment_confirmed: signOffNeedsAlternativeConfirmation.value
+                    ? alternativePaymentConfirmed.value
+                    : undefined,
+            },
         )
 
         // Optimistically update the lesson status in the list
@@ -244,6 +323,7 @@ const handleSignOff = async () => {
                 status: 'completed',
                 completed_at: new Date().toISOString(),
                 summary: summary.value.trim(),
+                ...(signOffNeedsAlternativeConfirmation.value ? { payment_status: 'paid' as const } : {}),
             }
         }
 
@@ -313,6 +393,49 @@ onMounted(() => {
                 </CardContent>
             </Card>
         </div>
+
+        <!-- Bookings awaiting payment that can be confirmed as paid by an alternative method -->
+        <Card v-if="!loading && alternativePaymentBookings.length > 0">
+            <CardHeader>
+                <CardTitle class="flex items-center gap-2">
+                    <HandCoins class="h-5 w-5" />
+                    Bookings Awaiting Payment
+                </CardTitle>
+                <p class="text-sm text-muted-foreground">
+                    Alternative payments are on for this pupil. If they are paying the instructor directly, confirm
+                    the booking here. Until then it waits for a card payment and is not cancelled automatically.
+                </p>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>First Lesson</TableHead>
+                            <TableHead>Time</TableHead>
+                            <TableHead>Package</TableHead>
+                            <TableHead>Lessons</TableHead>
+                            <TableHead class="text-right">Actions</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        <TableRow v-for="booking in alternativePaymentBookings" :key="booking.order_id">
+                            <TableCell class="font-medium">{{ formatDate(booking.first_lesson_date) }}</TableCell>
+                            <TableCell>
+                                {{ formatTime(booking.first_lesson_start_time, booking.first_lesson_end_time) }}
+                            </TableCell>
+                            <TableCell>{{ booking.package_name || '—' }}</TableCell>
+                            <TableCell class="tabular-nums">{{ booking.lessons_count }}</TableCell>
+                            <TableCell class="text-right">
+                                <Button variant="outline" size="sm" class="gap-1" @click="openConfirmBooking(booking)">
+                                    <HandCoins class="h-4 w-4" />
+                                    Paying by Alternative Method
+                                </Button>
+                            </TableCell>
+                        </TableRow>
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
 
         <!-- Lessons Table -->
         <Card>
@@ -399,6 +522,18 @@ onMounted(() => {
                                         <Banknote class="h-3 w-3" />
                                         Cash
                                     </Badge>
+                                    <Badge v-else-if="lesson.paid_by_alternative_method" variant="outline" class="gap-1">
+                                        <HandCoins class="h-3 w-3" />
+                                        Alternative method
+                                    </Badge>
+                                    <Badge
+                                        v-else-if="lesson.can_sign_off_with_alternative_payment"
+                                        variant="secondary"
+                                        class="gap-1"
+                                    >
+                                        <HandCoins class="h-3 w-3" />
+                                        Alt. payment allowed
+                                    </Badge>
                                     <Button
                                         v-if="lesson.payment_status === 'due' && lesson.has_stripe_invoice"
                                         variant="ghost"
@@ -415,7 +550,7 @@ onMounted(() => {
                             </TableCell>
                             <TableCell class="text-right">
                                 <Button
-                                    v-if="lesson.status === 'pending' && lesson.payment_status === 'paid'"
+                                    v-if="canSignOff(lesson)"
                                     variant="outline"
                                     size="sm"
                                     @click="openSignOffSheet(lesson)"
@@ -425,7 +560,7 @@ onMounted(() => {
                                     Sign Off
                                 </Button>
                                 <span
-                                    v-else-if="lesson.status === 'pending' && lesson.payment_status !== 'paid'"
+                                    v-else-if="lesson.status === 'pending'"
                                     class="text-xs text-muted-foreground"
                                 >
                                     Awaiting payment
@@ -515,6 +650,34 @@ onMounted(() => {
                         </p>
                     </div>
 
+                    <!-- Alternative payment confirmation (unpaid lesson, pupil with alternative payments on) -->
+                    <div v-if="signOffNeedsAlternativeConfirmation" class="space-y-3">
+                        <Alert>
+                            <TriangleAlert class="h-4 w-4" />
+                            <AlertTitle>This lesson hasn't been paid by card</AlertTitle>
+                            <AlertDescription>
+                                Signing off cancels the pupil's card payment request for this lesson and records it
+                                as paid by an alternative method ({{ formatCurrency(signOffTarget.amount_pence) }}, no
+                                booking or digital fee). No payout is made through Drive, and late cancellations or
+                                no-shows aren't covered.
+                            </AlertDescription>
+                        </Alert>
+                        <div class="flex items-start gap-3 rounded-md border border-input p-3">
+                            <Checkbox
+                                id="alternative_payment_confirmed"
+                                v-model="alternativePaymentConfirmed"
+                                :disabled="isSigningOff"
+                                class="mt-0.5"
+                            />
+                            <Label for="alternative_payment_confirmed" class="cursor-pointer leading-snug">
+                                I confirm the pupil paid by an alternative method and I accept the risks.
+                            </Label>
+                        </div>
+                        <p v-if="errors.alternative_payment_confirmed" class="text-destructive text-sm">
+                            {{ errors.alternative_payment_confirmed }}
+                        </p>
+                    </div>
+
                     <!-- Terms & Conditions -->
                     <div class="space-y-3">
                         <h4 class="text-sm font-medium">Terms & Conditions</h4>
@@ -524,7 +687,8 @@ onMounted(() => {
                                 <li>The lesson took place as scheduled on the date and time shown above.</li>
                                 <li>The student attended and participated in the full lesson duration.</li>
                                 <li>You delivered the lesson content in accordance with the agreed syllabus.</li>
-                                <li>You understand that signing off will trigger a payout to your connected Stripe account for the lesson amount.</li>
+                                <li v-if="signOffNeedsAlternativeConfirmation">You understand that no payout will be made, because the pupil paid you directly.</li>
+                                <li v-else>You understand that signing off will trigger a payout to your connected Stripe account for the lesson amount.</li>
                                 <li>Once signed off, this action cannot be reversed. The lesson will be permanently marked as completed.</li>
                                 <li>A feedback request email will be sent to the student following sign-off.</li>
                                 <li>Relevant learning resources will be recommended to the student based on your lesson summary.</li>
@@ -553,6 +717,58 @@ onMounted(() => {
                 </SheetFooter>
             </SheetContent>
         </Sheet>
+
+        <!-- Confirm Booking (Alternative Payment) Dialog -->
+        <Dialog v-model:open="isConfirmBookingOpen">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle class="flex items-center gap-2">
+                        <HandCoins class="h-5 w-5" />
+                        Paying by Alternative Method
+                    </DialogTitle>
+                    <DialogDescription>
+                        {{ confirmBookingTarget?.package_name }} · first lesson
+                        {{ confirmBookingTarget ? formatDate(confirmBookingTarget.first_lesson_date) : '' }}
+                    </DialogDescription>
+                </DialogHeader>
+                <div class="space-y-4">
+                    <Alert>
+                        <TriangleAlert class="h-4 w-4" />
+                        <AlertTitle>The pupil will pay the instructor directly</AlertTitle>
+                        <AlertDescription>
+                            This confirms the booking and cancels the pupil's card payment link. The instructor isn't
+                            paid through Drive for lessons paid this way, and late cancellations or no-shows aren't
+                            covered. Later lessons are still invoiced as normal.
+                        </AlertDescription>
+                    </Alert>
+                    <div class="flex items-start gap-3 rounded-md border border-input p-3">
+                        <Checkbox
+                            id="confirm_booking_risks"
+                            v-model="confirmBookingRisksAccepted"
+                            :disabled="isConfirmingBooking"
+                            class="mt-0.5"
+                        />
+                        <Label for="confirm_booking_risks" class="cursor-pointer leading-snug">
+                            I confirm the pupil is paying by an alternative method and I accept the risks.
+                        </Label>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" :disabled="isConfirmingBooking" @click="isConfirmBookingOpen = false">
+                        Cancel
+                    </Button>
+                    <Button
+                        :disabled="isConfirmingBooking || !confirmBookingRisksAccepted"
+                        class="min-w-[160px]"
+                        @click="handleConfirmBooking"
+                    >
+                        <Loader2 v-if="isConfirmingBooking" class="mr-2 h-4 w-4 animate-spin" />
+                        <HandCoins v-else class="mr-2 h-4 w-4" />
+                        Confirm Booking
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
 
         <!-- View Summary Dialog -->
         <Dialog v-model:open="isViewSummaryOpen">

@@ -31,8 +31,8 @@ class SetStudentCashPaymentsAction
         ($this->logActivity)(
             $student,
             $enabled
-                ? "Cash payments turned on by {$changedByName}"
-                : "Cash payments turned off by {$changedByName}",
+                ? "Alternative payments (e.g. cash) turned on by {$changedByName}"
+                : "Alternative payments (e.g. cash) turned off by {$changedByName}",
             'profile',
             [
                 'cash_payments_enabled' => $enabled,

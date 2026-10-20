@@ -15,8 +15,9 @@ class GetPaymentRemindersDueAction
 {
     /**
      * Find lessons due a 48-hour payment reminder: the lesson payment is still
-     * DUE, the lesson is not draft/cancelled/completed, now is within
-     * [start − 48h, start), and no payment_due_48h reminder row exists yet.
+     * DUE (and not confirmed as paid by an alternative method), the lesson is
+     * not draft/cancelled/completed, now is within [start − 48h, start), and
+     * no payment_due_48h reminder row exists yet.
      *
      * The DB filters to a 2-day date window (index-friendly); the precise 48h
      * datetime boundary is then applied in PHP against the combined date+time.
@@ -29,7 +30,9 @@ class GetPaymentRemindersDueAction
 
         return Lesson::query()
             ->whereHas('lessonPayment', function ($query): void {
-                $query->where('status', PaymentStatus::DUE->value);
+                $query->where('status', PaymentStatus::DUE->value)
+                    // Confirmed as paid by an alternative method: never chased.
+                    ->whereNull('alternative_payment_confirmed_at');
             })
             ->whereNotIn('status', [
                 LessonStatus::DRAFT->value,

@@ -164,6 +164,21 @@ final class WorkflowCatalog
                 ]),
             ]),
 
+            self::workflow('booking-alternative-payment', self::GROUP_BOOKING, 'Learner pays by an alternative method', 'A learner pays their instructor directly (for example in cash) on an otherwise normal pay-as-you-go booking. An owner turns on "Alternative payment method" on the pupil page when the instructor asks. The booking stays a card booking: the learner gets the usual payment emails and can pay by card at any time. Lessons paid the other way have no booking or digital fee and no payout.', [
+                self::step('The booking is made as normal', 'The instructor or head office books pay-as-you-go lessons and the learner is sent the usual payment link. Bookings for this learner are not cancelled automatically if they are not paid, unless the learner booked them themselves.', [
+                    self::email(EmailTemplateKey::LearnerPaymentLink, 'Learner, or the person paying'),
+                ]),
+                self::step('The instructor confirms the booking', 'Any time before the first lesson, including on the day, the instructor (in the app, or head office on the website) confirms the learner is paying by an alternative method and accepts the risks. The card payment link stops working, the booking is confirmed and the first lesson is never invoiced or chased. No email is sent.', []),
+                self::step('The instructor signs a lesson off', 'If the lesson was paid by card, sign-off is normal and the instructor is paid through Stripe. If not, the instructor ticks that the learner paid by an alternative method and accepts the risks: the lesson\'s card invoice is cancelled and the lesson is recorded as paid that way, with no payout. It shows in the instructor\'s cash and alternative payments report.', [
+                    self::email(EmailTemplateKey::InstructorLessonSignedOff, 'Instructor'),
+                    self::email(EmailTemplateKey::LearnerLessonFeedbackRequest, 'Learner'),
+                ]),
+                self::step('The following weeks', 'Each lesson is invoiced as normal. The learner can pay by card, or the instructor can sign off with the alternative-payment tick again.', [
+                    self::email(EmailTemplateKey::LearnerLessonPaymentReminder, 'Learner'),
+                ]),
+                self::step('Head office turns it off', 'Lessons already signed off stay as they are. Anything unpaid goes back to normal card payment, and unpaid bookings past their payment deadline are released.', []),
+            ]),
+
             self::workflow('slot-offer', self::GROUP_BOOKING, 'Short-notice lesson offer', 'An instructor with a free slot offers it to their existing learners, and the first to book and pay gets it.', [
                 self::step('The instructor offers a free slot', 'The offer goes to the instructor\'s active learners who have the app.', [
                     self::push('Short Notice Lesson Available', 'Instructor\'s active learners'),
