@@ -19,6 +19,8 @@ class GetStudentDetailAction
     {
         $student->load(['user', 'instructor', 'orders.lessons.lessonPayment']);
 
+        $defaultPickupPoint = $student->pickupPoints()->default()->first();
+
         $name = $student->first_name && $student->surname
             ? $student->first_name.' '.$student->surname
             : ($student->user?->name ?? 'Unknown');
@@ -41,6 +43,18 @@ class GetStudentDetailAction
             'surname' => $student->surname,
             'email' => $student->email ?? $student->user?->email,
             'phone' => $student->phone,
+            'date_of_birth' => $student->date_of_birth?->toDateString(),
+            'contact_first_name' => $student->contact_first_name,
+            'contact_surname' => $student->contact_surname,
+            'contact_email' => $student->contact_email,
+            'contact_phone' => $student->contact_phone,
+            'owns_account' => (bool) ($student->owns_account ?? true),
+            'default_pickup_point' => $defaultPickupPoint ? [
+                'id' => $defaultPickupPoint->id,
+                'label' => $defaultPickupPoint->label,
+                'address' => $defaultPickupPoint->address,
+                'postcode' => $defaultPickupPoint->postcode,
+            ] : null,
             'has_app' => $student->user_id !== null,
             'lessons_completed' => $lessonsCompleted,
             'lessons_total' => $lessonsTotal,

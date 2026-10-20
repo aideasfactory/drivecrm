@@ -354,6 +354,7 @@ Extended profile for users with student role.
 | `surname` | varchar(255) | NULLABLE | Learner's surname |
 | `email` | varchar(255) | NULLABLE | Learner's email |
 | `phone` | varchar(50) | NULLABLE | Learner's phone |
+| `date_of_birth` | date | NULLABLE | Learner's date of birth. Optional; edited by staff on the web pupil profile (`PUT /students/{student}`) or by the pupil / their instructor in the app (`PUT /api/v1/students/{student}`). Pupils have no address column — their address is the default pickup point (`student_pickup_points.is_default`) |
 | `contact_first_name` | varchar(255) | NULLABLE | Booker's first name (if different) |
 | `contact_surname` | varchar(255) | NULLABLE | Booker's surname |
 | `contact_email` | varchar(255) | NULLABLE | Booker's email |

@@ -3998,7 +3998,8 @@ When the student has a linked user account, `first_name`/`surname` and `email` c
   "first_name": "Janet",
   "surname": "Smith",
   "email": "janet@example.com",
-  "phone": "07700900099"
+  "phone": "07700900099",
+  "date_of_birth": "2007-05-14"
 }
 ```
 
@@ -4008,6 +4009,7 @@ When the student has a linked user account, `first_name`/`surname` and `email` c
 | `surname` | string | No | Student's surname (max 255) |
 | `email` | string\|null | No | Student's email address. If the student has a linked user account, must not belong to another user (422 otherwise); a non-empty value is synced to the login email |
 | `phone` | string\|null | No | Student's phone number (max 50) |
+| `date_of_birth` | string\|null | No | Date of birth, `YYYY-MM-DD`. Must be in the past (after 1900-01-01). `null` clears it |
 | `contact_first_name` | string\|null | No | Booker's first name (max 255) |
 | `contact_surname` | string\|null | No | Booker's surname (max 255) |
 | `contact_email` | string\|null | No | Booker's email |
@@ -4026,6 +4028,7 @@ When the student has a linked user account, `first_name`/`surname` and `email` c
     "surname": "Smith",
     "email": "janet@example.com",
     "phone": "07700900099",
+    "date_of_birth": "2007-05-14",
     "status": "active",
     "has_app": true,
     "app_last_active_at": "2026-03-17T09:55:00+00:00",
@@ -7842,6 +7845,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-10-20 | **Alternative payment method.** For pupils Head Office has turned on alternative payments for (pays the instructor directly, e.g. cash), weekly bookings only. **New** `POST /students/{student}/orders/{order}/alternative-payment` (`{ "accept_risks": true }`, instructor only) confirms a booking awaiting its first payment: closes the Stripe payment page, makes the order `active` and its lessons `pending`, and stops the first lesson being invoiced or chased. `POST /students/{student}/lessons/{lesson}/sign-off` accepts optional `alternative_payment_confirmed`; it is **required** when the lesson has `can_sign_off_with_alternative_payment: true` (new 422 on `errors.alternative_payment_confirmed` otherwise). It voids the open invoice and records the lesson paid by an alternative method (lesson price, no payout); if the invoice turns out paid, it signs off as a normal card lesson. **New additive fields** `alternative_payment_allowed`, `can_confirm_alternative_payment`, `can_sign_off_with_alternative_payment`, `paid_by_alternative_method` on lesson list/show, instructor day/range lessons and calendar items; `alternative_payment_allowed` on the instructor's students list. These bookings are no longer released automatically while awaiting payment (unless the pupil booked them). | Orders (alternative-payment — NEW), Lesson Sign-Off, Student Lessons (index, show), Instructor Day Lessons, Calendar Items, Instructor Students |
 | 2026-10-20 | **Resend-payment-link 422 for alternative-payment pupils.** When the payment window has passed on a booking of a pupil with alternative payments on (no longer released automatically), `POST /students/{student}/orders/{order}/resend-payment-link` now returns `The time to pay by card has passed. If the pupil is paying another way, confirm the alternative payment.` instead of the "lessons are being released" message. Other pupils unchanged. | Orders (resend-payment-link) |
 
+| 2026-10-20 | **Pupil date of birth.** New optional `date_of_birth` (`YYYY-MM-DD`, must be in the past, `null` clears it) on `PUT /api/v1/students/{student}`. Every student resource response gains `date_of_birth` (string or `null`, additive). Staff can also edit it on the web pupil profile. Who can update is unchanged (the pupil or their instructor). **App action:** show and edit date of birth on the pupil details screen. | Students (update, and every response using the student resource) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

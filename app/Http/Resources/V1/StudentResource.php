@@ -22,6 +22,7 @@ class StudentResource extends JsonResource
             'surname' => $this->surname,
             'email' => $this->email ?? $this->user?->email,
             'phone' => $this->phone,
+            'date_of_birth' => $this->date_of_birth?->toDateString(),
             'status' => $this->status,
             'has_app' => $this->user_id !== null,
             'app_last_active_at' => $this->app_last_active_at?->toIso8601String(),
