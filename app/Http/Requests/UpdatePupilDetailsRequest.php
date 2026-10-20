@@ -26,24 +26,24 @@ class UpdatePupilDetailsRequest extends FormRequest
     }
 
     /**
-     * Normalise the postcode to upper case with a single space before the
-     * inward code (e.g. "ts71ab" becomes "TS7 1AB").
+     * Normalise the pickup point postcode to upper case with a single space
+     * before the inward code (e.g. "ts71ab" becomes "TS7 1AB").
      */
     protected function prepareForValidation(): void
     {
-        $postcode = $this->input('postcode');
+        $pickupPoint = $this->input('pickup_point');
 
-        if (! is_string($postcode)) {
+        if (! is_array($pickupPoint) || ! is_string($pickupPoint['postcode'] ?? null)) {
             return;
         }
 
-        $stripped = strtoupper((string) preg_replace('/\s+/', '', $postcode));
+        $stripped = strtoupper((string) preg_replace('/\s+/', '', $pickupPoint['postcode']));
 
-        $this->merge([
-            'postcode' => strlen($stripped) > 3
-                ? substr($stripped, 0, -3).' '.substr($stripped, -3)
-                : ($stripped === '' ? null : $stripped),
-        ]);
+        $pickupPoint['postcode'] = strlen($stripped) > 3
+            ? substr($stripped, 0, -3).' '.substr($stripped, -3)
+            : ($stripped === '' ? null : $stripped);
+
+        $this->merge(['pickup_point' => $pickupPoint]);
     }
 
     /**
@@ -72,10 +72,10 @@ class UpdatePupilDetailsRequest extends FormRequest
             'surname' => ['required', 'string', 'max:255'],
             'email' => $emailRules,
             'phone' => ['nullable', 'string', 'max:50'],
-            'address_line_1' => ['nullable', 'string', 'max:255'],
-            'address_line_2' => ['nullable', 'string', 'max:255'],
-            'city' => ['nullable', 'string', 'max:100'],
-            'postcode' => ['nullable', 'string', 'max:10', 'regex:/^[A-Z]{1,2}[0-9][0-9A-Z]?\s?[0-9][A-Z]{2}$/i'],
+            'pickup_point' => ['nullable', 'array'],
+            'pickup_point.label' => ['required_with:pickup_point', 'string', 'max:255'],
+            'pickup_point.address' => ['required_with:pickup_point', 'string', 'max:1000'],
+            'pickup_point.postcode' => ['required_with:pickup_point', 'string', 'max:10', 'regex:/^[A-Z]{1,2}[0-9][0-9A-Z]?\s?[0-9][A-Z]{2}$/i'],
             'date_of_birth' => ['nullable', 'date', 'after:1900-01-01', 'before_or_equal:today'],
             'owns_account' => ['required', 'boolean'],
             'contact_first_name' => ['nullable', 'string', 'max:255'],
@@ -97,7 +97,10 @@ class UpdatePupilDetailsRequest extends FormRequest
             'surname.required' => 'A surname is required.',
             'email.required' => 'This pupil has an app login, so an email address is required.',
             'email.unique' => 'This email address is already in use by another account.',
-            'postcode.regex' => 'Please enter a valid UK postcode.',
+            'pickup_point.label.required_with' => 'A label for the pickup point is required.',
+            'pickup_point.address.required_with' => 'The pickup address is required.',
+            'pickup_point.postcode.required_with' => 'The pickup postcode is required.',
+            'pickup_point.postcode.regex' => 'Please enter a valid UK postcode.',
             'date_of_birth.before_or_equal' => 'Date of birth can’t be in the future.',
             'date_of_birth.after' => 'Please enter a valid date of birth.',
         ];

@@ -17,12 +17,12 @@ class GetStudentBookingDetailsAction
     private const ORDERS_TO_SEARCH = 10;
 
     /**
-     * Address and date of birth captured when the pupil booked, for pupils
-     * whose profile has no stored value yet. Uses the same postcode priority
-     * as the "Lessons booked" page: pickup postcode, then the postcode searched
-     * at step 1, then the pupil's default pickup point.
+     * Pickup address and date of birth captured on the pupil's booking form,
+     * shown when the pupil has no pickup point or stored date of birth. The
+     * postcode uses the "Lessons booked" page order: the step 5 pickup
+     * postcode, then the postcode searched at step 1.
      *
-     * @return array{address_line_1: string|null, address_line_2: string|null, city: string|null, postcode: string|null, date_of_birth: string|null}
+     * @return array{address: string|null, postcode: string|null, date_of_birth: string|null}
      */
     public function __invoke(Student $student): array
     {
@@ -30,15 +30,16 @@ class GetStudentBookingDetailsAction
         $step1 = $enquiry?->getStepData(1) ?? [];
         $step5 = $enquiry?->getStepData(5) ?? [];
 
-        $pickupPoint = $student->pickupPoints()->orderByDesc('is_default')->oldest()->first();
+        $addressParts = array_filter([
+            $this->stringOrNull($step5['pickup_address_line_1'] ?? null),
+            $this->stringOrNull($step5['pickup_address_line_2'] ?? null),
+            $this->stringOrNull($step5['pickup_city'] ?? null),
+        ]);
 
         return [
-            'address_line_1' => $this->stringOrNull($step5['pickup_address_line_1'] ?? null) ?? $this->stringOrNull($pickupPoint?->address),
-            'address_line_2' => $this->stringOrNull($step5['pickup_address_line_2'] ?? null),
-            'city' => $this->stringOrNull($step5['pickup_city'] ?? null),
+            'address' => $addressParts !== [] ? implode(', ', $addressParts) : null,
             'postcode' => $this->stringOrNull($step5['pickup_postcode'] ?? null)
-                ?? $this->stringOrNull($step1['postcode'] ?? null)
-                ?? $this->stringOrNull($pickupPoint?->postcode),
+                ?? $this->stringOrNull($step1['postcode'] ?? null),
             'date_of_birth' => $this->dateOrNull($step5['learner_dob'] ?? null),
         ];
     }

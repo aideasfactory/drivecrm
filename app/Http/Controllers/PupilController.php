@@ -121,27 +121,48 @@ class PupilController extends Controller
         $data['is_imported'] = $student->isImported();
         $data['cash_payments_enabled'] = $student->cash_payments_enabled;
         $data['can_book_cash'] = CashBookings::allowedFor(request()->user(), $student);
-        $data['booking_details'] = $this->studentService->getBookingDetails($student);
 
         return response()->json([
-            'student' => $data,
+            'student' => array_merge($data, $this->addressDetails($student)),
         ]);
     }
 
     /**
      * Update a pupil's personal and contact details from the pupil profile.
+     * The address edits the pupil's default pickup point.
      */
     public function update(UpdatePupilDetailsRequest $request, Student $student): JsonResponse
     {
-        $student = $this->studentService->update($student, $request->validated());
+        $student = $this->studentService->updateDetails($student, $request->validated());
 
         $data = (new GetStudentDetailAction)($student);
-        $data['booking_details'] = $this->studentService->getBookingDetails($student);
 
         return response()->json([
-            'student' => $data,
+            'student' => array_merge($data, $this->addressDetails($student)),
             'message' => 'Pupil details updated successfully.',
         ]);
+    }
+
+    /**
+     * The pupil's default pickup point, plus the booking-form details shown
+     * when there is no pickup point or stored date of birth.
+     *
+     * @return array{default_pickup_point: array{id: int, label: string, address: string, postcode: string, is_default: bool}|null, booking_details: array{address: string|null, postcode: string|null, date_of_birth: string|null}}
+     */
+    private function addressDetails(Student $student): array
+    {
+        $pickupPoint = $this->studentService->getDefaultPickupPoint($student);
+
+        return [
+            'default_pickup_point' => $pickupPoint ? [
+                'id' => $pickupPoint->id,
+                'label' => $pickupPoint->label,
+                'address' => $pickupPoint->address,
+                'postcode' => $pickupPoint->postcode,
+                'is_default' => (bool) $pickupPoint->is_default,
+            ] : null,
+            'booking_details' => $this->studentService->getBookingDetails($student),
+        ];
     }
 
     /**

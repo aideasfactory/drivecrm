@@ -15,6 +15,7 @@ use App\Actions\Student\GetStudentInstructorProfileAction;
 use App\Actions\Student\GetStudentPracticeHoursAction;
 use App\Actions\Student\PickupPoint\CreatePickupPointAction;
 use App\Actions\Student\PickupPoint\DeletePickupPointAction;
+use App\Actions\Student\PickupPoint\GetDefaultPickupPointAction;
 use App\Actions\Student\PickupPoint\GetStudentPickupPointsAction;
 use App\Actions\Student\PickupPoint\SetDefaultPickupPointAction;
 use App\Actions\Student\PickupPoint\UpdatePickupPointAction;
@@ -29,6 +30,7 @@ use App\Models\StudentPickupPoint;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 
 class StudentService extends BaseService
 {
@@ -51,18 +53,84 @@ class StudentService extends BaseService
         protected GetStudentInstructorProfileAction $getInstructorProfile,
         protected GetStudentPracticeHoursAction $getPracticeHours,
         protected SetStudentCashPaymentsAction $setStudentCashPayments,
-        protected GetStudentBookingDetailsAction $getStudentBookingDetails
+        protected GetStudentBookingDetailsAction $getStudentBookingDetails,
+        protected GetDefaultPickupPointAction $getDefaultPickupPointAction
     ) {}
 
     /**
-     * Address and date of birth captured on the pupil's booking, used when
-     * the profile has no stored value yet.
+     * Pickup address and date of birth captured on the pupil's booking form,
+     * used when the pupil has no pickup point or stored date of birth.
      *
-     * @return array{address_line_1: string|null, address_line_2: string|null, city: string|null, postcode: string|null, date_of_birth: string|null}
+     * @return array{address: string|null, postcode: string|null, date_of_birth: string|null}
      */
     public function getBookingDetails(Student $student): array
     {
         return ($this->getStudentBookingDetails)($student);
+    }
+
+    /**
+     * The pupil's default pickup point (or their first one when none is flagged).
+     */
+    public function getDefaultPickupPoint(Student $student): ?StudentPickupPoint
+    {
+        return ($this->getDefaultPickupPointAction)($student);
+    }
+
+    /**
+     * Update a pupil's details from the CRM pupil profile. The address is the
+     * pupil's default pickup point: it is updated when one exists, otherwise
+     * a new default pickup point is created. Both go through the pickup point
+     * actions so the postcode is geocoded.
+     *
+     * @param  array<string, mixed>  $data  Student fields, plus an optional `pickup_point` array{label: string, address: string, postcode: string}
+     */
+    public function updateDetails(Student $student, array $data): Student
+    {
+        $pickupPoint = $data['pickup_point'] ?? null;
+        unset($data['pickup_point']);
+
+        return DB::transaction(function () use ($student, $data, $pickupPoint): Student {
+            $updated = $this->update($student, $data);
+
+            if (is_array($pickupPoint)) {
+                $this->saveDefaultPickupPoint($student, $pickupPoint);
+            }
+
+            return $updated;
+        });
+    }
+
+    /**
+     * Create or update the pupil's default pickup point. An unchanged pickup
+     * point is left alone.
+     *
+     * @param  array{label: string, address: string, postcode: string}  $pickupPoint
+     */
+    private function saveDefaultPickupPoint(Student $student, array $pickupPoint): StudentPickupPoint
+    {
+        $data = [
+            'label' => $pickupPoint['label'],
+            'address' => $pickupPoint['address'],
+            'postcode' => $pickupPoint['postcode'],
+            'is_default' => true,
+        ];
+
+        $existing = $this->getDefaultPickupPoint($student);
+
+        if (! $existing) {
+            return ($this->createPickupPoint)($student, $data);
+        }
+
+        $isUnchanged = $existing->is_default
+            && $existing->label === $data['label']
+            && $existing->address === $data['address']
+            && strtoupper(str_replace(' ', '', $existing->postcode)) === strtoupper(str_replace(' ', '', $data['postcode']));
+
+        if ($isUnchanged) {
+            return $existing;
+        }
+
+        return ($this->updatePickupPoint)($existing, $data);
     }
 
     /**
