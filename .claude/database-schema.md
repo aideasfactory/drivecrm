@@ -354,6 +354,11 @@ Extended profile for users with student role.
 | `surname` | varchar(255) | NULLABLE | Learner's surname |
 | `email` | varchar(255) | NULLABLE | Learner's email |
 | `phone` | varchar(50) | NULLABLE | Learner's phone |
+| `address_line_1` | varchar(255) | NULLABLE | Learner's home address, line 1. Edited by staff from the CRM pupil profile (`PUT /students/{student}`). When empty, the profile shows the pickup address from the booking enquiry instead (`GetStudentBookingDetailsAction`, read-only) |
+| `address_line_2` | varchar(255) | NULLABLE | Learner's home address, line 2 |
+| `city` | varchar(100) | NULLABLE | Learner's town / city |
+| `postcode` | varchar(10) | NULLABLE | Learner's UK postcode, stored upper case with a single space (e.g. `TS7 1AB`). When empty, the profile falls back to the booking enquiry's pickup postcode, then its step-1 postcode, then the default pickup point |
+| `date_of_birth` | date | NULLABLE | Learner's date of birth. Falls back to the booking enquiry's `learner_dob` for display when empty |
 | `contact_first_name` | varchar(255) | NULLABLE | Booker's first name (if different) |
 | `contact_surname` | varchar(255) | NULLABLE | Booker's surname |
 | `contact_email` | varchar(255) | NULLABLE | Booker's email |
@@ -392,6 +397,7 @@ Extended profile for users with student role.
 - A learner is added to an instructor's contact list (`students.instructor_id`) only after a booking's first payment is confirmed (`AssignStudentOnPaidBookingAction`). Website checkout creates the student and the unpaid hold without setting `instructor_id`. An existing assignment is left unchanged until that payment. Instructor-created pupils, admin assignment, and PIN attach still assign immediately.
 - Students inherit instructor assignments from their orders once those orders are paid
 - Status change to `inactive` should include a reason in `inactive_reason`
+- Owners can edit a pupil's details (name, contact, address, postcode, date of birth, booker) at any time from the CRM pupil profile, including after the pupil is booked with an instructor (`StudentPolicy::updateDetails`). Name and email changes sync to the linked `users` row. Onboarding does not write the address columns; for pupils with nothing stored, the profile shows the booking enquiry's values until staff save them. GDPR deletion (`ProcessAccountDeletionAction`) nulls the address and date-of-birth columns
 - Removing a student from an instructor sets `instructor_id = null` (soft-remove). This does **not** delete the profile.
 - Staff delete (`DELETE /students/{student}`, owners or the assigned instructor) soft-deletes the student (`deleted_at`), detaches `instructor_id`, sets `status = inactive` / `inactive_reason = Profile deleted by staff`, removes the profile picture, and locks the linked `users` row (tokens revoked, sessions cleared, password randomised, email rewritten to `deleted-student-{student_id}@deleted.invalid`). Historical `belongsTo` student relations use `withTrashed()` so invoices and lessons still resolve. This is separate from user-requested GDPR deletion (`ProcessAccountDeletionAction`), which anonymises PII in place without setting `deleted_at`.
 

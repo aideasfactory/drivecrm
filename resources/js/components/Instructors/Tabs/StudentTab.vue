@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/sonner'
-import { ArrowLeft, Phone, Mail, StickyNote, CalendarPlus } from 'lucide-vue-next'
+import { ArrowLeft, Phone, Mail, MapPin, StickyNote, CalendarPlus } from 'lucide-vue-next'
 import type { InstructorDetail } from '@/types/instructor'
 import OverviewSubTab from './Student/OverviewSubTab.vue'
 import LessonsSubTab from './Student/LessonsSubTab.vue'
@@ -31,6 +31,8 @@ interface StudentDetail {
     surname: string | null
     email: string | null
     phone: string | null
+    postcode: string | null
+    booking_details: { postcode: string | null } | null
     has_app: boolean
     lessons_completed: number
     lessons_total: number
@@ -67,6 +69,10 @@ const subTabs: { key: SubTabType; label: string }[] = [
 ]
 
 const activeSubTab = computed(() => props.subtab || 'overview')
+
+const headerPostcode = computed(
+    () => student.value?.postcode || student.value?.booking_details?.postcode || null,
+)
 
 const switchSubTab = (subTabKey: SubTabType) => {
     router.visit(`/instructors/${props.instructor.id}`, {
@@ -185,6 +191,14 @@ onMounted(() => {
                                     <Mail class="h-4 w-4" />
                                     <span>{{ student.email }}</span>
                                 </div>
+
+                                <div
+                                    v-if="headerPostcode"
+                                    class="flex items-center gap-2 text-muted-foreground"
+                                >
+                                    <MapPin class="h-4 w-4" />
+                                    <span>{{ headerPostcode }}</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -225,6 +239,7 @@ onMounted(() => {
                 <OverviewSubTab
                     v-if="activeSubTab === 'overview'"
                     :student-id="studentId"
+                    @details-updated="loadStudent"
                 />
                 <LessonsSubTab
                     v-if="activeSubTab === 'lessons'"

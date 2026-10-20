@@ -12,6 +12,7 @@ import {
 } from 'lucide-vue-next'
 import { toast } from '@/components/ui/sonner'
 import NotesCard from './NotesCard.vue'
+import PupilDetailsCard from './PupilDetailsCard.vue'
 
 interface StudentOverview {
     lessons_completed: number
@@ -25,6 +26,10 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+const emit = defineEmits<{
+    (e: 'details-updated'): void
+}>()
 
 // Student overview state
 const overview = ref<StudentOverview | null>(null)
@@ -125,6 +130,8 @@ onMounted(() => {
                 </CardContent>
             </Card>
         </div>
+
+        <PupilDetailsCard :student-id="studentId" @updated="emit('details-updated')" />
 
         <!-- Notes: admins see internal (private) + shared side by side; instructors only shared -->
         <div class="grid grid-cols-1 items-start gap-6" :class="isOwner ? 'lg:grid-cols-2' : ''">
