@@ -524,6 +524,7 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 | `cancellation_reason` | text | NULLABLE | Free-text details the canceller added (required when the reason is `other`). Retained for history. Before 2026-10-19 this held the whole free-text reason |
 | `cancellation_reason_code` | varchar(50) | NULLABLE | Structured cancellation reason, cast to `App\Enums\LessonCancellationReason` (`pupil_request`, `pupil_unwell`, `pupil_no_show`, `pupil_stopped_lessons`, `instructor_unavailable`, `instructor_unwell`, `vehicle_problem`, `weather`, `other`). Each reason maps to who cancelled (pupil / instructor / other). NULL for lessons cancelled before 2026-10-19 |
 | `cancelled_at` | timestamp | NULLABLE | When the lesson was cancelled |
+| `provisional_at` | timestamp | NULLABLE, INDEX | Set when the lesson was booked as a **later week of a package** onto a time that already clashed with something in the instructor's diary (another lesson or hold, blocked-out time, a practical test). The lesson is booked anyway as its own diary item, stacked next to what it clashes with, and the DRIVE bookings team rearranges it with the pupil. Cleared when the lesson is moved, cancelled or marked confirmed from the Clashes report. NULL = not provisional |
 | `mileage` | unsigned integer | NULLABLE | Miles driven during this lesson |
 | `student_lesson_number` | unsigned integer | NOT NULL, INDEX | Per-student running lesson number — starts at 1 for each student and increments across all their orders. Used as the user-facing lesson reference for support queries. Stable for life (cancelled / cleaned drafts keep their number; gaps are allowed). |
 | `status` | enum('draft', 'pending', 'completed', 'cancelled') | DEFAULT 'pending' | Lesson status |
@@ -535,6 +536,7 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 - Index on `instructor_id`
 - Index on `calendar_item_id`
 - Index on `student_lesson_number`
+- Index on `provisional_at`
 
 **Relationships:**
 - Belongs to one `Order`
@@ -557,6 +559,7 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 - A booking (draft/reserved/booked lesson) can be cancelled from the instructor schedule: `status` → `cancelled`, `cancellation_reason` + `cancelled_at` set, and `calendar_item_id` nulled so the lesson is retained for history while its calendar slot goes back to open availability (`is_available = true`, `status = NULL`) for re-booking. `cancellation_reason_code` + `cancellation_reason` (details) are set from the reason picked. Cancelling **never** creates a `Payout`: every paid cancelled lesson is emailed to Head Office for review (reason, who cancelled, hours' notice, late flag when under `booking_payments.late_cancellation_hours`), who refund the pupil or pay the instructor by hand. Each cancelled lesson adds an instructor `notes` row starting `Cancelled/Refund review` or `Cancelled/Unpaid` (older notes may say `Cancelled/Refunded` or `Cancelled/Paid`). Cancellation never touches `completed` lessons or lessons with a `Payout`
 - `summary` is written by the instructor at sign-off time; used by AI (AWS Bedrock Nova) to match against resource tags and recommend relevant videos/PDFs to the student
 - `mileage` is recorded by the instructor after the lesson is completed, via the schedule view
+- **Provisional lessons** (`provisional_at` set): `FlagProvisionalLessonsAction` flags a new booking's lessons whose diary item overlaps a blocker (`CalendarItem::blocksBooking()`) straight after the lessons are created (`CreateOrderFromApiAction`, `CreateOrderFromEnquiryAction`). Only the later booking is flagged; what it clashes with is never changed. `Lesson::isProvisional()` / `scopeProvisional()` only count open (`draft` / `pending`) lessons still in the diary. Moving the lesson (`UpdateCalendarItemAction`, single or with future lessons) clears it. Cancelling clears it and **deletes** the lesson's diary item (and travel block) when the booking created it (`created_by_hold = true`) instead of reopening it as availability. `ConfirmProvisionalLessonAction` (Clashes report "Mark confirmed") clears it. No status or payment change
 - `student_lesson_number` is assigned at lesson creation time inside the order's transaction. Computed as `MAX(student_lesson_number) + 1` over the student's existing lessons (across all orders), with `lockForUpdate()` on the existing rows to serialise concurrent same-student order creations. Numbers are immutable after assignment — a cancelled or cleaned-up draft lesson keeps its number, so gaps in the sequence are expected and intentional
 
 ---
@@ -908,7 +911,8 @@ Defines time slots within a calendar date.
 - A `draft` hold (checkout reached, payment not taken) is shown without the pupil's name. The name is attached once the slot becomes `reserved` or `booked` after the first payment.
 - Draft items are cleaned up by `calendar:cleanup-drafts` command if abandoned
 - Releasing a draft (unpaid hold released or cleaned up) **deletes** items with `created_by_hold = true` (and their travel blocks) and puts all other drafts back on offer (`is_available = true`, `status` and `created_by_hold` cleared). An unpaid booking therefore never leaves availability the instructor did not offer
-- A booking is refused if any week's lesson time overlaps another lesson (`draft`/`reserved`/`booked`/`completed`), a blocked-out slot (`is_available = false`) or a practical test on the same calendar. Travel blocks are not clashes
+- A booking is refused if the **first** week's lesson time overlaps another lesson (`draft`/`reserved`/`booked`/`completed`), a blocked-out slot (`is_available = false`) or a practical test on the same calendar (`CalendarItem::blocksBooking()`). Later weeks that clash are still held as their own item, alongside what is already there, and their lessons are flagged provisional (`lessons.provisional_at`)
+- Editing an item without changing its date or times skips the overlap check, so stacked (provisional) items and what they sit next to stay editable
 - Recurring slots: materialized instances pattern — each occurrence is a separate row linked by `recurrence_group_id`
 - Individual occurrences can be modified/deleted without affecting the rest of the series
 - Deleting "this and all future" removes all items in the group from the selected date forward (excluding those with lessons)

@@ -39,6 +39,7 @@ class UpdateCalendarItemAction
     ): CalendarItem {
         $oldCalendar = $calendarItem->calendar;
         $newDate = Carbon::parse($date)->format('Y-m-d');
+        $isMoved = ! $calendarItem->isAt($newDate, $startTime, $endTime);
 
         // Check if date changed - need to move to different calendar
         if ($oldCalendar->date->format('Y-m-d') !== $newDate) {
@@ -87,7 +88,7 @@ class UpdateCalendarItemAction
         $this->consumeOverlappedAvailability($calendarItem, $startTime, $endTime);
 
         // Sync linked lessons when the calendar item is moved
-        $this->syncLessonDates($calendarItem, $newDate, $startTime, $endTime);
+        $this->syncLessonDates($calendarItem, $newDate, $startTime, $endTime, $isMoved);
 
         // Handle travel-time block changes
         $this->syncTravelBlock($calendarItem, $travelTimeMinutes);
@@ -139,13 +140,15 @@ class UpdateCalendarItemAction
 
     /**
      * Update linked lessons' date and times to match the moved calendar item.
+     * Moving a provisional (clashing) lesson resolves it, so the flag is cleared.
      */
-    private function syncLessonDates(CalendarItem $calendarItem, string $date, string $startTime, string $endTime): void
+    private function syncLessonDates(CalendarItem $calendarItem, string $date, string $startTime, string $endTime, bool $isMoved): void
     {
         $calendarItem->lessons()->update([
             'date' => $date,
             'start_time' => $startTime,
             'end_time' => $endTime,
+            ...($isMoved ? ['provisional_at' => null] : []),
         ]);
     }
 

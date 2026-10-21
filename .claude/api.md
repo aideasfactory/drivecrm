@@ -1314,6 +1314,7 @@ Returns the authenticated instructor's lessons for a specific date, ordered by s
 | `can_confirm_alternative_payment` | boolean\|null | Booking is still awaiting its first payment and the instructor can confirm the pupil is paying by an alternative method → show the action that calls `POST /students/{student}/orders/{order_id}/alternative-payment`. `null` when there is no lesson |
 | `can_sign_off_with_alternative_payment` | boolean\|null | Lesson is pending and not paid by card yet, so sign-off is allowed with the instructor's confirmation → show the "I confirm the pupil paid by an alternative method and accept the risks" tick and send `alternative_payment_confirmed: true`. `null` when there is no lesson |
 | `paid_by_alternative_method` | boolean\|null | Lesson was recorded as paid by an alternative method at sign-off (no payout). `null` when there is no lesson |
+| `is_provisional` | boolean | **Provisional (clashing) lesson.** A later week of a package booked onto a time that was already taken. It is listed alongside the item it clashes with (same or overlapping time). Show it with the provisional treatment and the label *"Provisional booking – DRIVE team speaking to customer"*. The instructor doesn't need to do anything. `false` when there is no lesson. Clears when the lesson is moved or cancelled, or when the DRIVE team confirms it |
 | `payout_status` | string\|null | Instructor payout status: `pending`, `paid`, `failed`, or null |
 | `has_payout` | boolean | Whether a payout has been created for this lesson |
 | `calendar_item` | object\|null | Calendar item data (see Calendar Item Object below) |
@@ -2462,6 +2463,7 @@ Returns the authenticated instructor's calendar items for a specific date, **or*
 | `can_confirm_alternative_payment` | boolean\|null | Booking is still awaiting its first payment and the instructor can confirm the pupil is paying by an alternative method → show the action that calls `POST /students/{student}/orders/{order_id}/alternative-payment`. `null` when there is no lesson |
 | `can_sign_off_with_alternative_payment` | boolean\|null | Lesson is pending and not paid by card yet, so sign-off is allowed with the instructor's confirmation → show the "I confirm the pupil paid by an alternative method and accept the risks" tick and send `alternative_payment_confirmed: true`. `null` when there is no lesson |
 | `paid_by_alternative_method` | boolean\|null | Lesson was recorded as paid by an alternative method at sign-off (no payout). `null` when there is no lesson |
+| `is_provisional` | boolean | **Provisional (clashing) lesson.** A later week of a package booked onto a time that was already taken. It is listed alongside the item it clashes with (same or overlapping time). Show it with the provisional treatment and the label *"Provisional booking – DRIVE team speaking to customer"*. The instructor doesn't need to do anything. `false` when there is no lesson. Clears when the lesson is moved or cancelled, or when the DRIVE team confirms it |
 | `is_late_cancellation` | boolean\|null | `true` when cancelling now is **less than 48 hours** before the lesson starts (UK time). When `true` **and** `is_paid` is `true`, the cancel sheet shows a **Refund Lesson** tickbox (sent as `refund_lesson` on DELETE). `null` for availability slots and completed lessons |
 | `amount_pence` | integer\|null | Lesson price in pence, **before fees** (e.g., 3500 = £35.00). This is not what the pupil paid — use `payment_breakdown` for that |
 | `payment_breakdown` | object\|null | What the pupil pays for the lesson, itemised (see **Payment Breakdown Object** under `GET /students/{student}/lessons`). `null` for availability slots |
@@ -4348,6 +4350,7 @@ Returns lessons for a given student across all their orders. Supports optional f
 | `can_confirm_alternative_payment` | boolean\|null | Booking is still awaiting its first payment and the instructor can confirm the pupil is paying by an alternative method → show the action that calls `POST /students/{student}/orders/{order_id}/alternative-payment`. `null` when there is no lesson |
 | `can_sign_off_with_alternative_payment` | boolean\|null | Lesson is pending and not paid by card yet, so sign-off is allowed with the instructor's confirmation → show the "I confirm the pupil paid by an alternative method and accept the risks" tick and send `alternative_payment_confirmed: true`. `null` when there is no lesson |
 | `paid_by_alternative_method` | boolean\|null | Lesson was recorded as paid by an alternative method at sign-off (no payout). `null` when there is no lesson |
+| `is_provisional` | boolean | **Provisional (clashing) lesson.** A later week of a package booked onto a time that was already taken. Show the *"Potential clash – the DRIVE team will be in touch"* card. Clears when the lesson is moved or cancelled, or when the DRIVE team confirms it |
 | `payment_breakdown` | object | What the pupil pays for this lesson, itemised (see below) |
 
 **Payment Breakdown Object** (`payment_breakdown`, also returned on lesson detail, instructor day lessons and instructor calendar items):
@@ -4475,6 +4478,7 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 | `can_confirm_alternative_payment` | boolean\|null | Booking is still awaiting its first payment and the instructor can confirm the pupil is paying by an alternative method → show the action that calls `POST /students/{student}/orders/{order_id}/alternative-payment`. `null` when there is no lesson |
 | `can_sign_off_with_alternative_payment` | boolean\|null | Lesson is pending and not paid by card yet, so sign-off is allowed with the instructor's confirmation → show the "I confirm the pupil paid by an alternative method and accept the risks" tick and send `alternative_payment_confirmed: true`. `null` when there is no lesson |
 | `paid_by_alternative_method` | boolean\|null | Lesson was recorded as paid by an alternative method at sign-off (no payout). `null` when there is no lesson |
+| `is_provisional` | boolean | **Provisional (clashing) lesson.** A later week of a package booked onto a time that was already taken. Show the *"Potential clash – the DRIVE team will be in touch"* card. Clears when the lesson is moved or cancelled, or when the DRIVE team confirms it |
 | `payout_status` | string\|null | Instructor payout status: `pending`, `paid`, `failed`, or null |
 | `has_payout` | boolean | Whether a payout has been created for this lesson |
 | `calendar_date` | string\|null | Calendar date for the lesson slot (YYYY-MM-DD) |
@@ -5435,7 +5439,9 @@ The same `calendar_item_id` error is returned when the slot belongs to a differe
 
 **Error Response (a lesson time is already taken):** `422 Unprocessable Entity`
 
-Every week of the booking is checked, not just the first. If any week's lesson time overlaps another lesson (held, reserved, booked or completed), a blocked-out period or a practical test on the instructor's diary, the **whole booking is refused** and nothing is held or charged. Back-to-back lessons are allowed; travel blocks don't count as clashes.
+Only the **first** week is refused. If the first lesson's time overlaps another lesson (held, reserved, booked or completed), a blocked-out period or a practical test on the instructor's diary, the **whole booking is refused** and nothing is held or charged. Back-to-back lessons are allowed; travel blocks don't count as clashes.
+
+**Later weeks that clash are booked anyway (since 2026-10-21).** The lesson gets its own diary item next to whatever is already there (which is never changed) and is flagged **provisional**: `is_provisional: true` on the lesson and calendar item responses. The DRIVE bookings team contacts the pupil to rearrange it. The order response is unchanged, and the booking, payment and hold work exactly as for any other booking.
 
 ```json
 {
@@ -5446,7 +5452,7 @@ Every week of the booking is checked, not just the first. If any week's lesson t
 }
 ```
 
-The error key is `calendar_item_id` when the clash is in week 1 of a booking made from a chosen diary slot, and `first_lesson_date` otherwise. Show the message and ask the learner to pick another time.
+The error key is `calendar_item_id` when the booking was made from a chosen diary slot, and `first_lesson_date` otherwise. Show the message and ask the learner to pick another time.
 
 > **Mobile App Flow (student booking via mobile app — upfront or weekly):**
 > 1. POST to create order as an authenticated student → response includes `checkout_url`
@@ -7850,6 +7856,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 
 | 2026-10-20 | **Pupil date of birth.** New optional `date_of_birth` (`YYYY-MM-DD`, must be in the past, `null` clears it) on `PUT /api/v1/students/{student}`. Every student resource response gains `date_of_birth` (string or `null`, additive). Staff can also edit it on the web pupil profile. Who can update is unchanged (the pupil or their instructor). **App action:** show and edit date of birth on the pupil details screen. | Students (update, and every response using the student resource) |
 | 2026-10-20 | **Calendar items: `student_id`, and names on instructor-made drafts.** Every calendar item response (`GET /instructor/calendar/items` and the calendar item create/show/update responses) gains `student_id` (integer or `null`, additive), set for `booked`, `completed`, `draft` and `reserved` items. Use it with `order_id` to call `POST /students/{student}/orders/{order}/alternative-payment` from the diary. `student_name` is now also set on `draft` items the instructor or Head Office booked; it stays `null` on drafts from the pupil's own website/app checkout (the 2026-10-01 rule now only covers those). **App action:** show the confirm-alternative-payment action on diary items with `can_confirm_alternative_payment: true` using `student_id` + `order_id`, and label instructor-made drafts with `student_name`. | Calendar Items |
+| 2026-10-21 | **Provisional (clashing) lessons.** `POST /students/{student}/orders` (and the website/bookings-team checkout) now refuses a booking only when the **first** lesson clashes. A later week that lands on a time already taken (another pupil's lesson or hold, blocked-out time, a practical test) is booked anyway. It gets its own diary item next to what it clashes with, which is never changed, and is flagged provisional. The DRIVE bookings team contacts the pupil and rearranges it from the new Clashes report. **New additive field `is_provisional` (boolean)** on `GET /instructor/calendar/items` (and every calendar item response), `GET /instructor/lessons/{date}`, `GET /instructor/lessons?from=&to=`, `GET /students/{student}/lessons`, `GET /students/{student}/lessons/{lesson}` and the sign-off response. It becomes `false` once the lesson is moved (single or with future lessons), cancelled, or confirmed by the DRIVE team. Diary items may now overlap: two items can share the same time on the same day. Updating a calendar item without changing its `date` / `start_time` / `end_time` no longer runs the overlap check, so a stacked item and the one next to it can still be edited. Moving to a time that clashes is still a 422. The instructor no longer gets the "scheduling clash" email for booking-created clashes. **App action:** see `.claude/tasks/app-developer-provisional-lessons.md` (instructor diary card + pupil lesson card). | Orders (store), Calendar Items (`is_provisional` — NEW, update overlap rule), Instructor Day/Range Lessons, Student Lessons (index, show, sign-off) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

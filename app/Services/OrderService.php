@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Actions\Calendar\CloseOpenSlotOffersForItemsAction;
-use App\Actions\Calendar\DetectCalendarClashesAction;
 use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
 use App\Actions\Payment\ClaimPurchaseEventAction;
 use App\Actions\Payment\NotifyInstructorOfLessonPaidAction;
@@ -36,7 +35,6 @@ use App\Models\Order;
 use App\Models\Package;
 use App\Models\Student;
 use App\Models\User;
-use App\Notifications\CalendarClashDetectedNotification;
 use App\Notifications\ReleasedOrderPaidNotification;
 use App\Support\AlternativePayments;
 use App\Support\BookingPayments;
@@ -59,7 +57,6 @@ class OrderService extends BaseService
         protected SendOrderConfirmationEmailAction $sendConfirmationEmail,
         protected SendPaymentLinkEmailAction $sendPaymentLinkEmail,
         protected StripeService $stripeService,
-        protected DetectCalendarClashesAction $detectCalendarClashes,
         protected LogActivityAction $logActivity,
         protected InstructorService $instructorService,
         protected SendLessonInvoiceAction $sendLessonInvoice,
@@ -121,8 +118,6 @@ class OrderService extends BaseService
             $package->lessons_count,
             $anchorCalendarItemId
         );
-
-        $this->checkDraftItemClashes($student->instructor_id, $calendarItemIds, $startTime, $endTime);
 
         $order = ($this->createOrderFromApi)(
             $student,
@@ -296,46 +291,6 @@ class OrderService extends BaseService
         ]);
 
         return null;
-    }
-
-    /**
-     * Check each newly created draft calendar item for clashes and notify the instructor.
-     *
-     * @param  array<int, int>  $calendarItemIds
-     */
-    protected function checkDraftItemClashes(int $instructorId, array $calendarItemIds, string $startTime, string $endTime): void
-    {
-        $instructor = Instructor::with('user')->find($instructorId);
-
-        if (! $instructor) {
-            return;
-        }
-
-        foreach ($calendarItemIds as $itemId) {
-            $item = CalendarItem::with('calendar')->find($itemId);
-
-            if (! $item || ! $item->calendar) {
-                continue;
-            }
-
-            $date = $item->calendar->date->format('Y-m-d');
-            $clashes = ($this->detectCalendarClashes)($instructor, $date, $startTime, $endTime, $item->id);
-
-            if ($clashes->isNotEmpty()) {
-                $instructor->user->notify(new CalendarClashDetectedNotification($item, $clashes, $instructor));
-
-                ($this->logActivity)(
-                    $instructor,
-                    'Scheduling clash detected on '.Carbon::parse($date)->format('j M Y').' at '.$startTime.' — '.$clashes->count().' conflicting item(s)',
-                    'notification',
-                    [
-                        'new_item_id' => $item->id,
-                        'clashing_item_ids' => $clashes->pluck('id')->toArray(),
-                        'date' => $date,
-                    ]
-                );
-            }
-        }
     }
 
     /**

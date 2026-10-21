@@ -4,18 +4,42 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Actions\Lesson\ConfirmProvisionalLessonAction;
 use App\Actions\Report\GetCancelledLessonsAction;
+use App\Actions\Report\GetClashingLessonsAction;
 use App\Actions\Report\GetInstructorAvailabilityAnalyticsAction;
 use App\Actions\Report\GetInvoiceDueWithin48HoursAction;
+use App\Models\Lesson;
+use App\Models\User;
 use Illuminate\Support\Collection;
 
-class ReportService
+class ReportService extends BaseService
 {
     public function __construct(
         protected GetInstructorAvailabilityAnalyticsAction $getInstructorAvailabilityAnalytics,
         protected GetInvoiceDueWithin48HoursAction $getInvoiceDueWithin48Hours,
-        protected GetCancelledLessonsAction $getCancelledLessons
+        protected GetCancelledLessonsAction $getCancelledLessons,
+        protected GetClashingLessonsAction $getClashingLessons,
+        protected ConfirmProvisionalLessonAction $confirmProvisionalLesson,
     ) {}
+
+    /**
+     * Get open provisional lessons that clash with something in the diary.
+     *
+     * @return array{rows: Collection, generated_at: string}
+     */
+    public function getClashingLessons(): array
+    {
+        return ($this->getClashingLessons)();
+    }
+
+    /**
+     * Keep a provisional lesson in its slot and clear its flag.
+     */
+    public function confirmProvisionalLesson(Lesson $lesson, User $confirmedBy): Lesson
+    {
+        return ($this->confirmProvisionalLesson)($lesson, $confirmedBy);
+    }
 
     /**
      * Get instructor availability and booking analytics.

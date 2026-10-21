@@ -378,6 +378,12 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('reports.cancelled-lessons');
     Route::get('/reports/cancelled-lessons/export', [ReportController::class, 'exportCancelledLessons'])
         ->name('reports.cancelled-lessons.export');
+    Route::get('/reports/clashes', [ReportController::class, 'clashes'])
+        ->name('reports.clashes');
+    Route::get('/reports/clashes/export', [ReportController::class, 'exportClashes'])
+        ->name('reports.clashes.export');
+    Route::post('/reports/clashes/{lesson}/confirm', [ReportController::class, 'confirmClash'])
+        ->name('reports.clashes.confirm');
     // Push Notifications (Owner Only)
     Route::middleware([EnsureOwner::class])->group(function () {
         Route::get('/push-notifications', [PushNotificationController::class, 'index'])

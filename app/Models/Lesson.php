@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\LessonCancellationReason;
 use App\Enums\LessonStatus;
 use App\Support\BookingPayments;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -30,6 +31,7 @@ class Lesson extends Model
         'cancellation_reason',
         'cancellation_reason_code',
         'cancelled_at',
+        'provisional_at',
         'mileage',
         'student_lesson_number',
     ];
@@ -42,6 +44,7 @@ class Lesson extends Model
             'end_time' => 'datetime:H:i',
             'completed_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'provisional_at' => 'datetime',
             'status' => LessonStatus::class,
             'cancellation_reason_code' => LessonCancellationReason::class,
         ];
@@ -144,6 +147,29 @@ class Lesson extends Model
     public function isCancelled(): bool
     {
         return $this->status === LessonStatus::CANCELLED;
+    }
+
+    /**
+     * Whether this is a provisional lesson: booked as part of a package on a
+     * week that clashed with something already in the diary, waiting for the
+     * DRIVE team to rearrange it with the pupil.
+     */
+    public function isProvisional(): bool
+    {
+        return $this->provisional_at !== null
+            && in_array($this->status, [LessonStatus::DRAFT, LessonStatus::PENDING], true);
+    }
+
+    /**
+     * Open provisional lessons still sitting in the diary.
+     *
+     * @param  Builder<Lesson>  $query
+     */
+    public function scopeProvisional(Builder $query): void
+    {
+        $query->whereNotNull('provisional_at')
+            ->whereNotNull('calendar_item_id')
+            ->whereIn('status', [LessonStatus::DRAFT, LessonStatus::PENDING]);
     }
 
     /**

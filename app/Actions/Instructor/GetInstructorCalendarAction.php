@@ -134,6 +134,9 @@ class GetInstructorCalendarAction
                         'awaiting_payment' => $lesson
                             ? $lesson->order?->isPending() === true && ! $lesson->order->isImported()
                             : null,
+                        // Package week booked onto a time already taken: shown stacked,
+                        // marked provisional while the DRIVE team rearranges it
+                        'is_provisional' => $lesson?->isProvisional() === true,
                         'lesson_id' => $lessonId,
                         'order_id' => $orderId,
                         'future_siblings_count' => $futureSiblingsCount,

@@ -264,6 +264,12 @@ const editItemAwaitingPayment = computed(() => {
     return editItemIsBooking.value && item?.awaiting_payment === true
 })
 
+/** Whether the item being edited is a provisional (clashing) lesson. */
+const editItemIsProvisional = computed(() => {
+    const item = itemsMap.value.get(editForm.value.id)
+    return editItemIsBooking.value && item?.is_provisional === true
+})
+
 /** Whether the edit form should be stripped down to reschedule-only (date/time
  *  only, no status / notes / reason). Applies to all active bookings the
  *  instructor can move but not re-purpose: booked (paid or weekly-already-paid),
@@ -397,6 +403,7 @@ function toCalendarEvent(item: CalendarItemResponse): CalendarEvent {
         studentName: item.student_name,
         isPaid: item.is_paid,
         isCash: item.is_cash ?? null,
+        isProvisional: item.is_provisional ?? false,
         amountPence: item.amount_pence ?? null,
         notes: item.notes,
         unavailabilityReason: item.unavailability_reason,
@@ -441,6 +448,7 @@ async function loadCalendarRange(startDate: string, endDate: string) {
                     is_cash: item.is_cash ?? null,
                     is_late_cancellation: item.is_late_cancellation ?? null,
                     awaiting_payment: item.awaiting_payment ?? null,
+                    is_provisional: item.is_provisional ?? false,
                     lesson_id: item.lesson_id ?? null,
                     order_id: item.order_id ?? null,
                     future_siblings_count: item.future_siblings_count ?? 0,
@@ -1795,6 +1803,15 @@ onMounted(() => {
 
                 <!-- Regular slot edit form -->
                 <form v-else @submit.prevent="handleEditSubmit" class="mt-6 flex-1 space-y-6 overflow-y-auto px-6 py-4">
+                    <Alert v-if="editItemIsProvisional" variant="destructive">
+                        <AlertTriangle class="h-4 w-4" />
+                        <AlertTitle>Provisional booking – DRIVE team speaking to customer</AlertTitle>
+                        <AlertDescription>
+                            This lesson was booked onto a time that was already taken. Moving it to a new date or time
+                            confirms it and takes it off the Clashes report.
+                        </AlertDescription>
+                    </Alert>
+
                     <div class="space-y-2">
                         <Label for="edit-date">Date</Label>
                         <Input

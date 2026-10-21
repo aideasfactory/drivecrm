@@ -148,10 +148,13 @@ class CancelBookingAction
             }
 
             foreach ($cancelSet as $lesson) {
+                $wasProvisional = $lesson->isProvisional();
+
                 $lesson->status = LessonStatus::CANCELLED;
                 $lesson->cancellation_reason = $details;
                 $lesson->cancellation_reason_code = $reasonCode;
                 $lesson->cancelled_at = now();
+                $lesson->provisional_at = null;
 
                 $calendarItem = $lesson->calendarItem;
 
@@ -162,7 +165,15 @@ class CancelBookingAction
 
                 if ($calendarItem) {
                     $affectedDates->push($calendarItem->calendar?->date?->format('Y-m-d'));
-                    ($this->reopenCancelledLessonSlot)($calendarItem);
+
+                    // A provisional lesson's own slot sits on top of whatever it
+                    // clashed with, so it is removed rather than offered as free time.
+                    if ($wasProvisional && $calendarItem->created_by_hold === true) {
+                        $calendarItem->travelItem?->delete();
+                        $calendarItem->delete();
+                    } else {
+                        ($this->reopenCancelledLessonSlot)($calendarItem);
+                    }
                 }
             }
         });

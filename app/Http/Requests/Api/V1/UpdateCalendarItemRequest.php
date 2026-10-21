@@ -91,6 +91,12 @@ class UpdateCalendarItemRequest extends FormRequest
         $startTime = $this->input('start_time');
         $endTime = $this->input('end_time');
 
+        // An item that keeps its date and time can't create a new clash. This
+        // keeps a provisional booking, and whatever it sits next to, editable.
+        if ($calendarItem->isAt($date, $startTime, $endTime)) {
+            return;
+        }
+
         $calendar = $instructor->calendars()
             ->where('date', $date)
             ->first();

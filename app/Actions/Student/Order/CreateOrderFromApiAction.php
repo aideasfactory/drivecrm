@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Student\Order;
 
+use App\Actions\Lesson\FlagProvisionalLessonsAction;
 use App\Actions\Package\CalculatePackagePricingAction;
 use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
 use App\Enums\CalendarItemStatus;
@@ -123,6 +124,10 @@ class CreateOrderFromApiAction
                     ]);
                 }
             }
+
+            // Later weeks that clash with something already in the diary are
+            // booked anyway, flagged provisional for the DRIVE team to rearrange.
+            app(FlagProvisionalLessonsAction::class)($order);
 
             // A one-off/block booked after an existing block may be dated before
             // it — renumber so student_lesson_number stays chronological.
