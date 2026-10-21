@@ -13,9 +13,7 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Textarea } from '@/components/ui/textarea'
-import { Banknote, CalendarPlus, Clock, Loader2, Send } from 'lucide-vue-next'
+import { CalendarPlus, Clock, Loader2, Send } from 'lucide-vue-next'
 import { toast } from '@/components/ui/toast'
 import PackagePriceBreakdown from '@/components/Instructors/PackagePriceBreakdown.vue'
 
@@ -49,11 +47,8 @@ const props = withDefaults(defineProps<{
     studentId: number
     instructorId: number
     headerMode?: boolean
-    // Imported pupil with cash turned on + full-access owner: the server decides, and re-checks on submit.
-    canBookCash?: boolean
 }>(), {
     headerMode: false,
-    canBookCash: false,
 })
 
 const packages = ref<Package[]>([])
@@ -66,7 +61,6 @@ const errors = ref<Record<string, string>>({})
 
 const selectedPackageId = ref<number | null>(null)
 const paymentMode = ref('upfront')
-const cashNote = ref('')
 const firstLessonDate = ref('')
 const selectedSlotId = ref<number | null>(null)
 
@@ -75,8 +69,6 @@ const selectedPackage = computed(() =>
 )
 
 const weeklyAvailable = computed(() => selectedPackage.value?.allows_weekly_payment ?? true)
-
-const isCash = computed(() => paymentMode.value === 'cash')
 
 watch(weeklyAvailable, (available) => {
     if (!available && paymentMode.value === 'weekly') {
@@ -138,7 +130,6 @@ onMounted(() => {
 const openSheet = () => {
     selectedPackageId.value = null
     paymentMode.value = 'upfront'
-    cashNote.value = ''
     firstLessonDate.value = ''
     selectedSlotId.value = null
     slots.value = []
@@ -162,7 +153,6 @@ const handleSubmit = async () => {
             {
                 package_id: selectedPackageId.value,
                 payment_mode: paymentMode.value,
-                cash_note: isCash.value && cashNote.value.trim() !== '' ? cashNote.value.trim() : null,
                 first_lesson_date: firstLessonDate.value,
                 start_time: selectedSlot.value.start_time,
                 end_time: selectedSlot.value.end_time,
@@ -241,12 +231,7 @@ const handleSubmit = async () => {
                         Book Lessons
                     </SheetTitle>
                     <SheetDescription>
-                        <template v-if="isCash">
-                            Select a package, date, and available time slot. The booking is confirmed straight away and the student is emailed their cash booking confirmation.
-                        </template>
-                        <template v-else>
-                            Select a package, date, and available time slot. The student will receive an email to complete payment.
-                        </template>
+                        Select a package, date, and available time slot. The student will receive an email to complete payment.
                     </SheetDescription>
                 </SheetHeader>
 
@@ -307,46 +292,15 @@ const handleSubmit = async () => {
                             <option v-if="weeklyAvailable" value="weekly">
                                 Weekly — Invoices sent before each lesson
                             </option>
-                            <option v-if="canBookCash" value="cash">
-                                Cash — Student pays the instructor at each lesson
-                            </option>
                         </select>
-                        <p v-if="!weeklyAvailable && !isCash" class="text-xs text-muted-foreground">
-                            Single lesson bookings must be paid in full{{ canBookCash ? ' or in cash' : '' }}.
+                        <p v-if="!weeklyAvailable" class="text-xs text-muted-foreground">
+                            Single lesson bookings must be paid in full.
                         </p>
-                        <Alert v-if="isCash">
-                            <Banknote class="h-4 w-4" />
-                            <AlertTitle>Paid in cash</AlertTitle>
-                            <AlertDescription>
-                                No booking or digital fee will be charged and nothing goes through Stripe.
-                                The student pays the instructor
-                                <strong>{{ selectedPackage ? selectedPackage.formatted_lesson_price : 'the lesson price' }}</strong>
-                                per lesson in cash.
-                            </AlertDescription>
-                        </Alert>
                         <p
                             v-if="errors.payment_mode"
                             class="text-sm text-destructive"
                         >
                             {{ errors.payment_mode }}
-                        </p>
-                    </div>
-
-                    <!-- Cash note -->
-                    <div v-if="isCash" class="space-y-2">
-                        <Label for="bl_cash_note">Note (optional)</Label>
-                        <Textarea
-                            id="bl_cash_note"
-                            v-model="cashNote"
-                            :disabled="isSubmitting"
-                            maxlength="500"
-                            placeholder="e.g. Instructor requested"
-                        />
-                        <p
-                            v-if="errors.cash_note"
-                            class="text-sm text-destructive"
-                        >
-                            {{ errors.cash_note }}
                         </p>
                     </div>
 

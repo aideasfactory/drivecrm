@@ -86,7 +86,7 @@ return [
     ],
 
     'usercentrics' => [
-        'settings_id' => env('USERCENTRICS_SETTINGS_ID', 'QQGm7qReAQa3CR'),
+        'settings_id' => env('USERCENTRICS_SETTINGS_ID'),
     ],
 
 ];

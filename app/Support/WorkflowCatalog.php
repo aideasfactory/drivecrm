@@ -95,11 +95,29 @@ final class WorkflowCatalog
         $guaranteeFreeHours = (float) config('test_pass_guarantee.free_minimum_hours', 10);
         $guaranteePrice = '£'.number_format((float) config('test_pass_guarantee.price', 50), 2);
 
-        $paidMessages = [
+        $paidInFullMessages = [
+            self::email(EmailTemplateKey::LearnerOrderConfirmation, 'Learner, or the person who booked'),
+            self::email(EmailTemplateKey::LearnerWelcome, 'Learner', 'Only the first time they pay. Includes their login details.'),
+            self::email(EmailTemplateKey::LearnerPaidInFullPaymentReceived, 'Learner, or the person who booked'),
+            self::email(EmailTemplateKey::InstructorPaidInFullPaymentReceived, 'Instructor'),
+            self::push('Lessons paid', 'Instructor'),
+        ];
+
+        $weeklyFirstPaymentMessages = [
             self::email(EmailTemplateKey::LearnerOrderConfirmation, 'Learner, or the person who booked'),
             self::email(EmailTemplateKey::LearnerWelcome, 'Learner', 'Only the first time they pay. Includes their login details.'),
             self::email(EmailTemplateKey::LearnerLessonPaymentReceived, 'Learner, or the person who booked'),
             self::email(EmailTemplateKey::InstructorLessonPaymentReceived, 'Instructor'),
+            self::push('Lesson paid', 'Instructor'),
+        ];
+
+        $paidMessages = [
+            self::email(EmailTemplateKey::LearnerOrderConfirmation, 'Learner, or the person who booked'),
+            self::email(EmailTemplateKey::LearnerWelcome, 'Learner', 'Only the first time they pay. Includes their login details.'),
+            self::email(EmailTemplateKey::LearnerPaidInFullPaymentReceived, 'Learner, or the person who booked', 'Paid in full.'),
+            self::email(EmailTemplateKey::InstructorPaidInFullPaymentReceived, 'Instructor', 'Paid in full.'),
+            self::email(EmailTemplateKey::LearnerLessonPaymentReceived, 'Learner, or the person who booked', 'Paid weekly: the first week.'),
+            self::email(EmailTemplateKey::InstructorLessonPaymentReceived, 'Instructor', 'Paid weekly: the first week.'),
             self::push('Lesson paid', 'Instructor'),
         ];
 
@@ -111,12 +129,12 @@ final class WorkflowCatalog
                 self::step('They click to pay', "Their account is created and the lessons are held for {$holdMinutes} minutes while they pay on the secure Stripe checkout page.", [
                     self::none('Nothing is sent yet.'),
                 ]),
-                self::step('Payment goes through', "The booking is confirmed, the lessons go into the instructor's diary and the learner is linked to the instructor. Packages of {$guaranteeFreeHours} hours or more paid in full include the Pass Your Test Guarantee free.", $paidMessages),
+                self::step('Payment goes through', "The booking is confirmed, the lessons go into the instructor's diary and the learner is linked to the instructor. Packages of {$guaranteeFreeHours} hours or more paid in full include the Pass Your Test Guarantee free.", $paidInFullMessages),
                 self::step('If they do not pay in time', 'The lessons are released. See "Booking not paid in time".', []),
             ]),
 
             self::workflow('booking-weekly', self::GROUP_BOOKING, 'Learner books online and pays weekly', 'The learner pays for the first week at checkout, then pays for each following lesson by invoice before it takes place.', [
-                self::step('The learner books and pays for the first week', "Same as paying in full, except only the first week is taken at checkout. A Pass Your Test Guarantee on a weekly plan costs {$guaranteePrice}, added to the first payment.", $paidMessages),
+                self::step('The learner books and pays for the first week', "Same as paying in full, except only the first week is taken at checkout. A Pass Your Test Guarantee on a weekly plan costs {$guaranteePrice}, added to the first payment.", $weeklyFirstPaymentMessages),
                 self::step('Invoice for the next lesson', "As soon as the previous lesson is signed off (or by an hourly check as the due date approaches), the next lesson is invoiced. It is due {$weeklyDueHours} hours before the lesson starts.", [
                     self::email(EmailTemplateKey::LearnerLessonPaymentReminder, 'Learner, or the person who booked'),
                     self::push('Time to pay for your lesson', 'Learner'),
@@ -194,6 +212,7 @@ final class WorkflowCatalog
                     self::email(EmailTemplateKey::LearnerOrderConfirmation, 'Person who booked'),
                     self::email(EmailTemplateKey::LearnerLessonPaymentReminder, 'Person who booked'),
                     self::email(EmailTemplateKey::LearnerPaymentDueSoon, 'Person who booked'),
+                    self::email(EmailTemplateKey::LearnerPaidInFullPaymentReceived, 'Person who booked'),
                     self::email(EmailTemplateKey::LearnerLessonPaymentReceived, 'Person who booked'),
                 ]),
                 self::step('Login and lesson emails', 'The learner gets their own login, plus everything about the lessons themselves.', [

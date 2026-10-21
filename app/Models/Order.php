@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\LessonStatus;
 use App\Enums\OrderSource;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
@@ -427,6 +428,24 @@ class Order extends Model
             'guarantee_included_free' => (bool) $this->includes_test_pass_guarantee && ! $hasPaidGuarantee,
             'has_fees' => $this->hasFees(),
         ];
+    }
+
+    /**
+     * The order's lessons that have not been cancelled, in date order, as one
+     * email line each (e.g. "Lesson 1: Tuesday, October 27, 2026 at 10:00 AM").
+     */
+    public function bookedLessonsList(): string
+    {
+        return $this->lessons()
+            ->where('status', '!=', LessonStatus::CANCELLED)
+            ->orderBy('date')
+            ->orderBy('start_time')
+            ->get()
+            ->values()
+            ->map(fn (Lesson $lesson, int $index): string => 'Lesson '.($index + 1).': '
+                .$lesson->date->format('l, F j, Y')
+                .($lesson->start_time ? ' at '.$lesson->start_time->format('g:i A') : ''))
+            ->implode("\n");
     }
 
     /**

@@ -9,6 +9,7 @@ use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
 use App\Actions\Payment\ClaimPurchaseEventAction;
 use App\Actions\Payment\NotifyInstructorOfLessonPaidAction;
 use App\Actions\Payment\SendLessonInvoiceAction;
+use App\Actions\Payment\SendPaidInFullPaymentEmailsAction;
 use App\Actions\Payment\SendPaymentReceivedEmailsAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Actions\Student\GrantTestPassGuaranteeAction;
@@ -71,6 +72,7 @@ class OrderService extends BaseService
         protected ClaimPurchaseEventAction $claimPurchaseEvent,
         protected ConfirmCashOrderAction $confirmCashOrder,
         protected SendCashBookingConfirmationEmailAction $sendCashBookingConfirmationEmail,
+        protected SendPaidInFullPaymentEmailsAction $sendPaidInFullPaymentEmails,
     ) {}
 
     /**
@@ -728,13 +730,20 @@ class OrderService extends BaseService
     /**
      * Email the pupil and the instructor that the first payment landed and the
      * booking is confirmed. Sent once, by the call that confirms the order.
-     * Pay-in-full uses the first lesson's payment record (the same mail weekly
-     * already sends for week one). The Stripe invoice itself is emailed by
-     * Checkout because the session was created with invoice creation enabled.
+     * Pay-in-full sends its own emails with the full amount and every booked
+     * lesson; weekly sends the week-one lesson payment emails. The Stripe
+     * invoice itself is emailed by Checkout because the session was created
+     * with invoice creation enabled.
      */
     protected function sendFirstPaymentEmails(Order $order): void
     {
         $order->loadMissing(['student', 'instructor.user']);
+
+        if ($order->isUpfront()) {
+            ($this->sendPaidInFullPaymentEmails)($order);
+
+            return;
+        }
 
         $firstPayment = $order->firstLessonPayment();
 

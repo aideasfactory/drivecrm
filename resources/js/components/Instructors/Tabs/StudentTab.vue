@@ -231,7 +231,6 @@ onMounted(() => {
                             v-if="student.instructor_id"
                             :student-id="studentId"
                             :instructor-id="student.instructor_id"
-                            :can-book-cash="student.can_book_cash"
                             header-mode
                         />
                     </div>

@@ -270,6 +270,24 @@ final class EmailTemplateCatalog
                 'has_fees' => 'This payment includes a booking fee, digital fee or guarantee',
             ]),
 
+            self::entry(EmailTemplateKey::LearnerPaidInFullPaymentReceived, 'Payment confirmed (paid in full)', $audience, 'Sent when a learner pays for a whole package in full.', [
+                'recipient_name' => 'Greeting name (learner, or the contact who booked)',
+                'learner_name' => 'Learner full name',
+                'learner_first_name' => 'Learner first name',
+                'package_name' => 'Package name',
+                'lessons_count' => 'Number of lessons',
+                'instructor_name' => 'Instructor name',
+                'lesson_cost' => 'Lessons cost, excluding fees',
+                'booking_fee' => 'Booking fee (blank when none)',
+                'digital_fee' => 'Digital fee (blank when none)',
+                'guarantee_fee' => 'Pass Your Test Guarantee charge (blank when none or free)',
+                'total' => 'Total paid',
+                'lessons_list' => 'Every booked lesson with its date and time, one per line',
+            ], 'Payment Confirmed: Your {{lessons_count}} Driving Lessons Are Paid in Full', 'Hello {{recipient_name}}!', "We've received your payment of **{{total}}** for {{#if booked_by_contact}}**{{learner_name}}'s**{{else}}your{{/if}} driving lessons. They are paid in full.\n\n**Booking Details:**\nPackage: {{package_name}}\nNumber of lessons: {{lessons_count}}\nInstructor: {{instructor_name}}\n\n**Payment — paid in full:**\n".self::ORDER_COST_LINES."\n**Total paid: {{total}}**\n\n**Your lessons:**\n{{lessons_list}}\n\nThere is nothing more to pay for these lessons. Please arrive 5 minutes early.\nIf you need to make any changes, please contact us as soon as possible.", "Safe driving,\nThe Driving School Team", null, [
+                'booked_by_contact' => 'A contact (e.g. parent) booked on behalf of the learner',
+                'guarantee_included_free' => 'The Pass Your Test Guarantee is included free',
+            ]),
+
             self::entry(EmailTemplateKey::LearnerInstructorOnWay, 'Instructor on the way', $audience, 'Sent when the instructor taps “on my way” for a lesson.', [
                 'recipient_name' => 'Booker first name',
                 'instructor_name' => 'Instructor name',
@@ -416,6 +434,15 @@ final class EmailTemplateCatalog
                 'lesson_date' => 'Lesson date',
                 'lesson_time' => 'Lesson time',
             ], 'Payment Received: {{student_name}} — Lesson on {{lesson_date}}', 'Hello!', "**{{student_name}}** has paid for their upcoming lesson.\n\n**Lesson Details:**\nDate: {{lesson_date}}\nTime: {{lesson_time}}\nLesson fee: {{amount}}\n\nThis lesson is now confirmed and paid.", "Best regards,\nThe Driving School Team", null),
+
+            self::entry(EmailTemplateKey::InstructorPaidInFullPaymentReceived, 'Learner paid in full for a package', $audience, 'Sent to the instructor when a learner pays for a whole package in full. The amounts are the lesson fees the instructor receives, excluding the booking fee and digital fee.', [
+                'student_name' => 'Learner name',
+                'package_name' => 'Package name',
+                'lessons_count' => 'Number of lessons',
+                'lesson_fee' => 'Lesson fee the instructor receives for each lesson',
+                'amount' => 'Lesson fees the instructor receives for the whole package',
+                'lessons_list' => 'Every booked lesson with its date and time, one per line',
+            ], 'Payment Received: {{student_name}} — {{lessons_count}} Lessons Paid in Full', 'Hello!', "**{{student_name}}** has paid in full for {{lessons_count}} lessons.\n\n**Booking Details:**\nPackage: {{package_name}}\nNumber of lessons: {{lessons_count}}\nLesson fee: {{lesson_fee}} per lesson\nTotal lesson fees: {{amount}}\n\n**Lessons:**\n{{lessons_list}}\n\nThese lessons are now confirmed and paid. You receive each lesson fee when you sign that lesson off.", "Best regards,\nThe Driving School Team", null),
 
             self::entry(EmailTemplateKey::InstructorLessonSignedOff, 'Lesson signed off (instructor)', $audience, 'Sent to the instructor after they sign off a lesson.', [
                 'recipient_name' => 'Instructor name',
