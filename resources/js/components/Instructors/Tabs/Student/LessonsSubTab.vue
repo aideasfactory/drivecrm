@@ -64,6 +64,8 @@ interface Lesson {
     start_time: string | null
     end_time: string | null
     status: 'pending' | 'completed' | 'cancelled'
+    /** Package week booked onto a time already taken; the DRIVE team is rearranging it. */
+    is_provisional: boolean
     completed_at: string | null
     summary: string | null
     lesson_payment_id: number | null
@@ -508,6 +510,15 @@ onMounted(() => {
                                         class="h-3 w-3"
                                     />
                                     {{ lesson.status.charAt(0).toUpperCase() + lesson.status.slice(1) }}
+                                </Badge>
+                                <Badge
+                                    v-if="lesson.is_provisional"
+                                    variant="destructive"
+                                    class="mt-1 gap-1"
+                                    title="Booked onto a time that was already taken. The DRIVE team is speaking to the customer."
+                                >
+                                    <TriangleAlert class="h-3 w-3" />
+                                    Provisional – clash
                                 </Badge>
                             </TableCell>
                             <TableCell>

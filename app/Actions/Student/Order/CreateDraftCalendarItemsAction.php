@@ -24,8 +24,11 @@ class CreateDraftCalendarItemsAction
      * hold created it, so releasing an unpaid hold never leaves availability the
      * instructor did not offer.
      *
-     * The whole booking is refused if any week clashes with another lesson (held,
+     * The booking is refused if the first week clashes with another lesson (held,
      * reserved, booked or completed), a blocked-out period or a practical test.
+     * Later weeks are held even when they clash: the item sits alongside what is
+     * already there (which is never touched) and its lesson is flagged
+     * provisional by FlagProvisionalLessonsAction once the lessons exist.
      * Each day's calendar row is locked first, so two bookings for the same
      * instructor and day are checked one after the other.
      *
@@ -86,7 +89,9 @@ class CreateDraftCalendarItemsAction
                         ->first();
                 }
 
-                $this->ensureNoClash($calendar, $startTime, $endTime, $existingItem, $lessonDate, $i === 0 && $anchorCalendarItemId);
+                if ($i === 0) {
+                    $this->ensureNoClash($calendar, $startTime, $endTime, $existingItem, $lessonDate, (bool) $anchorCalendarItemId);
+                }
 
                 if ($existingItem) {
                     // Capture travel time from the first existing slot to propagate to new slots
@@ -133,9 +138,9 @@ class CreateDraftCalendarItemsAction
     }
 
     /**
-     * Refuse the booking when the lesson time overlaps anything on the day other
-     * than open availability: another lesson (held, reserved, booked or
-     * completed), a blocked-out period or a practical test. Travel blocks are
+     * Refuse the booking when the first lesson's time overlaps anything on the
+     * day other than open availability: another lesson (held, reserved, booked
+     * or completed), a blocked-out period or a practical test. Travel blocks are
      * not treated as clashes. The slot being taken over is ignored.
      *
      * @throws ValidationException
@@ -151,19 +156,8 @@ class CreateDraftCalendarItemsAction
         $hasClash = CalendarItem::query()
             ->where('calendar_id', $calendar->id)
             ->when($slotBeingTaken, fn ($query) => $query->whereKeyNot($slotBeingTaken->id))
-            ->where('start_time', '<', $endTime)
-            ->where('end_time', '>', $startTime)
-            ->where(fn ($query) => $query
-                ->whereIn('status', [
-                    CalendarItemStatus::DRAFT,
-                    CalendarItemStatus::RESERVED,
-                    CalendarItemStatus::BOOKED,
-                    CalendarItemStatus::COMPLETED,
-                ])
-                ->orWhere('item_type', CalendarItemType::PracticalTest)
-                ->orWhere(fn ($query) => $query
-                    ->where('item_type', CalendarItemType::Slot)
-                    ->where('is_available', false)))
+            ->overlapping($startTime, $endTime)
+            ->blocksBooking()
             ->lockForUpdate()
             ->exists();
 

@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Lesson;
 use App\Services\ReportService;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -59,6 +61,59 @@ class ReportController extends Controller
                 $filters['payment_status'],
             ),
             'filters' => $filters,
+        ]);
+    }
+
+    /**
+     * Display provisional lessons booked onto a time that was already taken.
+     */
+    public function clashes(): Response
+    {
+        return Inertia::render('Reports/Clashes', [
+            'report' => $this->reportService->getClashingLessons(),
+        ]);
+    }
+
+    /**
+     * Keep a provisional lesson where it is and take it off the Clashes report.
+     */
+    public function confirmClash(Request $request, Lesson $lesson): JsonResponse
+    {
+        $this->reportService->confirmProvisionalLesson($lesson, $request->user());
+
+        return response()->json(['message' => 'Lesson confirmed and removed from the Clashes report.']);
+    }
+
+    /**
+     * Download the Clashes report as a CSV file.
+     */
+    public function exportClashes(): StreamedResponse
+    {
+        $report = $this->reportService->getClashingLessons();
+
+        return response()->streamDownload(function () use ($report): void {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Learner', 'Phone', 'Email', 'Instructor', 'Clash Date', 'Clash Time', 'Package', 'Booked At', 'Booked By', 'Payment', 'Clashes With']);
+
+            foreach ($report['rows'] as $row) {
+                fputcsv($handle, [
+                    $row['learner_name'],
+                    $row['learner_phone'],
+                    $row['learner_email'],
+                    $row['instructor_name'],
+                    $row['lesson_date'],
+                    $row['lesson_time'],
+                    $row['package'],
+                    $row['booked_at'],
+                    $row['booked_by'],
+                    $row['awaiting_payment'] ? 'Awaiting payment' : 'Booked',
+                    $row['clashes_with'] === [] ? 'No longer clashing' : implode('; ', $row['clashes_with']),
+                ]);
+            }
+
+            fclose($handle);
+        }, 'clashes-'.CarbonImmutable::now()->format('Y-m-d').'.csv', [
+            'Content-Type' => 'text/csv',
         ]);
     }
 
@@ -207,6 +262,13 @@ class ReportController extends Controller
                 'description' => 'Lessons cancelled when an instructor\'s booked diary slot was removed.',
                 'icon' => 'CalendarX',
                 'route' => route('reports.cancelled-lessons'),
+            ],
+            [
+                'key' => 'clashes',
+                'title' => 'Clashes',
+                'description' => 'Provisional lessons booked onto a time that was already taken — contact the learner to rearrange.',
+                'icon' => 'CalendarClock',
+                'route' => route('reports.clashes'),
             ],
         ];
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Onboarding;
 
+use App\Actions\Lesson\FlagProvisionalLessonsAction;
 use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
 use App\Actions\Student\Order\CreateDraftCalendarItemsAction;
 use App\Enums\CalendarItemStatus;
@@ -37,6 +38,7 @@ class CreateOrderFromEnquiryAction
         protected ResolveEnquiryPriceUpliftAction $resolveEnquiryPriceUplift,
         protected CreateDraftCalendarItemsAction $createDraftCalendarItems,
         protected ReleaseLegacyStepFourHoldsAction $releaseLegacyStepFourHolds,
+        protected FlagProvisionalLessonsAction $flagProvisionalLessons,
     ) {}
 
     /**
@@ -191,6 +193,10 @@ class CreateOrderFromEnquiryAction
                 $endTime,
                 $calendarItemIds
             );
+
+            // Later weeks that clash with something already in the diary are
+            // booked anyway, flagged provisional for the DRIVE team to rearrange.
+            ($this->flagProvisionalLessons)($order);
 
             // A booking dated before the student's existing lessons must take an
             // earlier number — renumber so student_lesson_number stays chronological.

@@ -15,9 +15,10 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table'
-import { ChevronLeft, ChevronRight, Mail, Phone, X } from 'lucide-vue-next'
+import { ChevronLeft, ChevronRight, Flag, Mail, Phone, X } from 'lucide-vue-next'
 import { show as instructorsShow } from '@/routes/instructors'
 import { index } from '@/routes/lessons-booked'
+import { clashes as clashesReport } from '@/routes/reports'
 
 type PaymentState = 'unpaid' | 'paid' | 'expired' | 'cancelled'
 type Tab = 'staff' | 'all'
@@ -40,6 +41,8 @@ interface BookedLesson {
     source: string | null
     source_label: string
     booked_by_name: string | null
+    /** Lessons in this booking that clash with the diary and await rearranging by the DRIVE team. */
+    provisional_lessons_count: number
 }
 
 interface PaginationLink {
@@ -273,6 +276,13 @@ const breadcrumbs = [{ title: 'Lessons booked' }]
                                         {{ row.student_name }}
                                     </Link>
                                     <span v-else>{{ row.student_name }}</span>
+                                    <Link v-if="row.provisional_lessons_count > 0" :href="clashesReport().url" class="mt-1 block w-fit">
+                                        <Badge variant="destructive">
+                                            <Flag />
+                                            {{ row.provisional_lessons_count }}
+                                            {{ row.provisional_lessons_count === 1 ? 'clash' : 'clashes' }} — provisional
+                                        </Badge>
+                                    </Link>
                                 </TableCell>
                                 <TableCell class="whitespace-nowrap text-sm">
                                     {{ row.postcode ?? '—' }}

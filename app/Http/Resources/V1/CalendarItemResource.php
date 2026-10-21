@@ -50,6 +50,9 @@ class CalendarItemResource extends JsonResource
             'student_id' => $lesson?->order?->student_id,
             'student_name' => $this->studentName($lesson),
             'is_paid' => $this->isPaid($lesson),
+            // A package week booked onto a time already taken: shown stacked next
+            // to what it clashes with while the DRIVE team rearranges it.
+            'is_provisional' => $lesson?->isProvisional() === true,
             // True when the pupil pays the instructor in cash at the lesson
             // (no Stripe). The app shows "Cash – collect £X" using `amount_pence`.
             'is_cash' => $lesson ? $lesson->order?->isCash() === true : null,

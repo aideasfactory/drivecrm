@@ -158,7 +158,8 @@ class BuildBookedLessonRowsAction
      *     booked_at: string|null,
      *     source: string|null,
      *     source_label: string,
-     *     booked_by_name: string|null
+     *     booked_by_name: string|null,
+     *     provisional_lessons_count: int
      * }
      */
     private function row(Order $order, ?Enquiry $enquiry): array
@@ -190,6 +191,7 @@ class BuildBookedLessonRowsAction
             'source' => $order->source?->value,
             'source_label' => $order->source?->label() ?? OrderSource::unknownLabel(),
             'booked_by_name' => $order->bookedBy?->name,
+            'provisional_lessons_count' => $order->lessons->filter(fn (Lesson $lesson): bool => $lesson->isProvisional())->count(),
         ];
     }
 

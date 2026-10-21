@@ -26,6 +26,8 @@ export interface CalendarEvent {
     isPaid: boolean | null
     /** Pupil pays the instructor in cash at the lesson (no Stripe). */
     isCash?: boolean | null
+    /** Package week booked onto a time already taken; the DRIVE team is rearranging it. */
+    isProvisional?: boolean
     amountPence?: number | null
     notes: string | null
     unavailabilityReason: string | null
@@ -111,8 +113,16 @@ const hasBooking = computed(() => {
     return status === 'booked' || status === 'completed'
 })
 
+/** Whether this is a provisional (clashing) lesson the DRIVE team is rearranging */
+const isProvisional = computed(() => props.event.isProvisional === true)
+
 /** Status-based color classes */
 const colorClasses = computed(() => {
+    // Provisional (clashing) lesson — red dashed, whatever its booking status
+    if (isProvisional.value) {
+        return 'border-dashed border-red-400 bg-red-50 text-red-800 dark:border-red-600 dark:bg-red-900/20 dark:text-red-300'
+    }
+
     // Travel-time blocks — purple dashed
     if (isTravel.value) {
         return 'border-purple-300 bg-purple-100 text-purple-800 dark:border-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
@@ -163,6 +173,7 @@ const colorClasses = computed(() => {
 const statusLabel = computed(() => {
     if (isTravel.value) return 'Travel'
     if (isPracticalTest.value) return 'Practical Test'
+    if (isProvisional.value) return 'Provisional booking – DRIVE team speaking to customer'
 
     const status = props.event.status
 
@@ -222,8 +233,8 @@ function handlePointerDown(e: PointerEvent) {
         @pointerdown="handlePointerDown"
     >
         <div class="flex items-center gap-1 font-medium">
-            <!-- Clash warning indicator -->
-            <AlertTriangle v-if="hasClash" class="h-3 w-3 shrink-0 text-orange-500 dark:text-orange-400" />
+            <!-- Clash warning indicator (provisional lessons always show it) -->
+            <AlertTriangle v-if="hasClash || isProvisional" class="h-3 w-3 shrink-0 text-orange-500 dark:text-orange-400" />
             <!-- Travel icon for travel blocks -->
             <svg v-if="isTravel" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />

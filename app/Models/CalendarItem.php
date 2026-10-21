@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Enums\CalendarItemStatus;
 use App\Enums\CalendarItemType;
 use App\Enums\RecurrencePattern;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -97,6 +99,50 @@ class CalendarItem extends Model
         }
 
         return $this->isEmptyAvailability();
+    }
+
+    /**
+     * Whether this item is already at the given date and times, i.e. an update
+     * to these values would not move it.
+     */
+    public function isAt(string $date, string $startTime, string $endTime): bool
+    {
+        return $this->calendar?->date?->format('Y-m-d') === Carbon::parse($date)->format('Y-m-d')
+            && Carbon::parse($this->start_time)->format('H:i') === Carbon::parse($startTime)->format('H:i')
+            && Carbon::parse($this->end_time)->format('H:i') === Carbon::parse($endTime)->format('H:i');
+    }
+
+    /**
+     * Items a new booking clashes with: another lesson (held, reserved, booked
+     * or completed), a blocked-out period or a practical test. Open
+     * availability is not a clash.
+     *
+     * @param  Builder<CalendarItem>  $query
+     */
+    public function scopeBlocksBooking(Builder $query): void
+    {
+        $query->where(fn (Builder $query) => $query
+            ->whereIn('status', [
+                CalendarItemStatus::DRAFT,
+                CalendarItemStatus::RESERVED,
+                CalendarItemStatus::BOOKED,
+                CalendarItemStatus::COMPLETED,
+            ])
+            ->orWhere('item_type', CalendarItemType::PracticalTest)
+            ->orWhere(fn (Builder $query) => $query
+                ->where('item_type', CalendarItemType::Slot)
+                ->where('is_available', false)));
+    }
+
+    /**
+     * Items whose time window overlaps the given one (touching ends don't overlap).
+     *
+     * @param  Builder<CalendarItem>  $query
+     */
+    public function scopeOverlapping(Builder $query, string $startTime, string $endTime): void
+    {
+        $query->where('start_time', '<', $endTime)
+            ->where('end_time', '>', $startTime);
     }
 
     public function calendar(): BelongsTo

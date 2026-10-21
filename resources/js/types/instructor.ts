@@ -161,6 +161,8 @@ export interface CalendarItemResponse {
   is_late_cancellation?: boolean | null
   /** Booking still awaiting its first payment: cancelling cancels the whole booking. */
   awaiting_payment?: boolean | null
+  /** Package week booked onto a time already taken; the DRIVE team is rearranging it with the pupil. */
+  is_provisional?: boolean
   lesson_id: number | null
   order_id: number | null
   future_siblings_count: number
