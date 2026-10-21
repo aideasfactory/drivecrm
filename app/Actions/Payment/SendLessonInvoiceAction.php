@@ -33,15 +33,25 @@ class SendLessonInvoiceAction
         $student = $order->student;
         $user = $student->user;
 
-        // Guard: student must have a Stripe customer ID
+        // A pupil who never opened a card checkout (e.g. the instructor confirmed
+        // an alternative payment first) has no Stripe customer yet — create one
+        // so later weeks can still be invoiced and paid by card.
         if (! $user->stripe_customer_id) {
-            Log::warning('Cannot send lesson invoice: student has no Stripe customer ID', [
-                'lesson_payment_id' => $lessonPayment->id,
-                'lesson_id' => $lesson->id,
-                'student_id' => $student->id,
-            ]);
+            $customerResult = $this->stripeService->createOrGetCustomer($user);
 
-            return ['success' => false, 'error' => 'Student has no Stripe customer ID'];
+            if (! $customerResult['success']) {
+                Log::warning('Cannot send lesson invoice: Stripe customer could not be created', [
+                    'lesson_payment_id' => $lessonPayment->id,
+                    'lesson_id' => $lesson->id,
+                    'student_id' => $student->id,
+                    'error' => $customerResult['error'] ?? 'Unknown',
+                ]);
+
+                return ['success' => false, 'error' => 'Student has no Stripe customer ID'];
+            }
+
+            $user->stripe_customer_id = $customerResult['customer_id'];
+            $user->save();
         }
 
         $amountPence = (int) $lessonPayment->amount_pence;

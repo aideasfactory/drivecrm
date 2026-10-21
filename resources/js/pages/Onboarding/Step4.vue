@@ -232,6 +232,43 @@
                   </div>
                 </div>
 
+                <!-- Bookings team only: every package date from the chosen slot, with clashes -->
+                <Card v-if="showClashPreview && form.calendar_item_id">
+                  <CardHeader class="pb-3">
+                    <CardTitle class="flex items-center gap-2 text-base">
+                      <CalendarCheck class="h-5 w-5" />
+                      Package dates
+                    </CardTitle>
+                    <CardDescription>
+                      Weeks that clash are still booked, marked provisional. Move them from the instructor's diary after booking.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div v-if="loadingClashPreview" class="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Spinner class="h-4 w-4 animate-spin" />
+                      Checking the diary…
+                    </div>
+                    <ul v-else class="divide-y">
+                      <li v-for="week in clashPreview" :key="week.lesson_number" class="flex items-start justify-between gap-4 py-2 text-sm">
+                        <span class="font-medium">
+                          Lesson {{ week.lesson_number }} · {{ formatPreviewDate(week.date) }} · {{ week.start_time }}–{{ week.end_time }}
+                        </span>
+                        <span v-if="week.clashes.length === 0" class="flex items-center gap-1 text-muted-foreground">
+                          <CheckCircle2 class="h-4 w-4" />
+                          Free
+                        </span>
+                        <span v-else class="flex flex-col items-end gap-1 text-right">
+                          <Badge variant="destructive" class="gap-1">
+                            <TriangleAlert class="h-3 w-3" />
+                            Clash
+                          </Badge>
+                          <span v-for="clash in week.clashes" :key="clash" class="text-xs text-muted-foreground">{{ clash }}</span>
+                        </span>
+                      </li>
+                    </ul>
+                  </CardContent>
+                </Card>
+
                 <Alert v-if="page.props.flash?.error" variant="destructive">
                   <AlertTitle>Please choose another time</AlertTitle>
                   <AlertDescription>{{ page.props.flash.error }}</AlertDescription>
@@ -353,9 +390,9 @@ import { toast } from '@/components/ui/toast'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
-import { step3 } from '@/routes/onboarding'
+import { clashPreview as clashPreviewRoute, step3 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step4'
-import { ArrowLeft, ArrowRight, RefreshCw, Star, GraduationCap, Calendar, ChevronLeft, ChevronRight, Info, XCircle } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, RefreshCw, Star, GraduationCap, Calendar, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Info, TriangleAlert, XCircle } from 'lucide-vue-next'
 
 const props = defineProps({
   uuid: String,
@@ -364,10 +401,39 @@ const props = defineProps({
   availableInstructors: Array,
   disabledDates: Array,
   maxStepReached: { type: Number, default: 4 },
-  holdMinutes: { type: Number, default: 10 }
+  holdMinutes: { type: Number, default: 10 },
+  // Bookings team "Book lessons for a student" only
+  showClashPreview: { type: Boolean, default: false }
 })
 
 const page = usePage()
+
+// Package dates + clashes for the chosen slot (bookings team only)
+const clashPreview = ref([])
+const loadingClashPreview = ref(false)
+
+async function loadClashPreview() {
+  if (!props.showClashPreview || !form.calendar_item_id) {
+    clashPreview.value = []
+    return
+  }
+
+  loadingClashPreview.value = true
+  try {
+    const response = await axios.get(
+      clashPreviewRoute({ uuid: props.uuid || page.props.enquiry?.id || page.props.uuid }, { query: { calendar_item_id: form.calendar_item_id } }).url
+    )
+    clashPreview.value = response.data.weeks || []
+  } catch {
+    clashPreview.value = []
+  } finally {
+    loadingClashPreview.value = false
+  }
+}
+
+function formatPreviewDate(date) {
+  return new Date(date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+}
 
 const showInstructorDropdown = ref(false)
 const showCalendarSheet = ref(false)
@@ -536,6 +602,7 @@ watch(() => form.date, () => {
 })
 
 watch(() => form.calendar_item_id, () => {
+  loadClashPreview()
   if (initializing.value) return
   if (form.calendar_item_id) {
     toast({ title: 'Time slot selected' })
@@ -728,6 +795,11 @@ function submit() {
 }
 
 onMounted(() => {
+  // A slot saved on an earlier visit never triggers the slot watcher
+  if (form.calendar_item_id) {
+    loadClashPreview()
+  }
+
   if (form.date) {
     // Resuming with a previously saved date — bring it into view and
     // restore a slot selection if none was saved

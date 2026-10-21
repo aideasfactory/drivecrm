@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace App\Actions\Instructor;
 
 use App\Enums\CalendarItemType;
+use App\Enums\PaymentMode;
+use App\Enums\PaymentStatus;
 use App\Models\Calendar;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
+use App\Models\LessonPayment;
+use App\Support\BookingPayments;
 use Carbon\Carbon;
 
 class UpdateCalendarItemAction
@@ -150,6 +154,26 @@ class UpdateCalendarItemAction
             'end_time' => $endTime,
             ...($isMoved ? ['provisional_at' => null] : []),
         ]);
+
+        if ($isMoved) {
+            $this->syncWeeklyPaymentDueDates($calendarItem, $date, $startTime);
+        }
+    }
+
+    /**
+     * A moved weekly lesson that hasn't been invoiced yet is due relative to its
+     * new time, so a lesson moved earlier is still invoiced (by the hourly
+     * `lessons:send-invoices` run) in time to pay before it. Invoices already
+     * sent are left as they are.
+     */
+    private function syncWeeklyPaymentDueDates(CalendarItem $calendarItem, string $date, string $startTime): void
+    {
+        LessonPayment::query()
+            ->whereIn('lesson_id', $calendarItem->lessons()->select('id'))
+            ->where('status', PaymentStatus::DUE)
+            ->whereNull('stripe_invoice_id')
+            ->whereHas('lesson.order', fn ($query) => $query->where('payment_mode', PaymentMode::WEEKLY))
+            ->update(['due_date' => BookingPayments::weeklyPaymentDueDate($date, $startTime)]);
     }
 
     /**

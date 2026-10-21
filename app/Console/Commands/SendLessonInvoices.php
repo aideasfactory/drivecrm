@@ -43,9 +43,9 @@ class SendLessonInvoices extends Command
                 $query->where('status', OrderStatus::ACTIVE)
                     ->where('payment_mode', PaymentMode::WEEKLY);
             })
-            ->whereHas('lesson.order.student.user', function ($query) {
-                $query->whereNotNull('stripe_customer_id');
-            })
+            // Pupils without a Stripe customer yet are included: the invoice
+            // action creates one (e.g. after an alternative-payment week 1).
+            ->whereHas('lesson.order.student.user')
             ->with(['lesson.order.student.user', 'lesson.order.package'])
             ->get();
 

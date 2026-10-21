@@ -22,13 +22,30 @@ class FindBlockingCalendarItemsAction
      */
     public function __invoke(CalendarItem $calendarItem): Collection
     {
+        return $this->forTimeRange(
+            $calendarItem->calendar_id,
+            (string) $calendarItem->start_time,
+            (string) $calendarItem->end_time,
+            $calendarItem->id,
+        );
+    }
+
+    /**
+     * Find what a booking at this time on this diary day would clash with,
+     * ignoring an item (and its travel block) that is being booked or checked.
+     *
+     * @return Collection<int, CalendarItem>
+     */
+    public function forTimeRange(int $calendarId, string $startTime, string $endTime, ?int $excludeItemId = null): Collection
+    {
         return CalendarItem::query()
-            ->where('calendar_id', $calendarItem->calendar_id)
-            ->whereKeyNot($calendarItem->id)
-            ->where(fn (Builder $query) => $query
-                ->whereNull('parent_item_id')
-                ->orWhere('parent_item_id', '!=', $calendarItem->id))
-            ->overlapping((string) $calendarItem->start_time, (string) $calendarItem->end_time)
+            ->where('calendar_id', $calendarId)
+            ->when($excludeItemId, fn (Builder $query) => $query
+                ->whereKeyNot($excludeItemId)
+                ->where(fn (Builder $query) => $query
+                    ->whereNull('parent_item_id')
+                    ->orWhere('parent_item_id', '!=', $excludeItemId)))
+            ->overlapping($startTime, $endTime)
             ->blocksBooking()
             ->with(['lessons.order.student', 'parentItem.lessons.order.student', 'student'])
             ->orderBy('start_time')

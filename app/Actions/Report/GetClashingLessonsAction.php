@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Report;
 
+use App\Actions\Calendar\DescribeBlockingCalendarItemAction;
 use App\Actions\Calendar\FindBlockingCalendarItemsAction;
 use App\Enums\LessonStatus;
 use App\Enums\OrderSource;
@@ -17,6 +18,7 @@ class GetClashingLessonsAction
 {
     public function __construct(
         protected FindBlockingCalendarItemsAction $findBlockingCalendarItems,
+        protected DescribeBlockingCalendarItemAction $describeBlockingCalendarItem,
     ) {}
 
     /**
@@ -72,32 +74,11 @@ class GetClashingLessonsAction
             // the team can then mark it confirmed.
             'clashes_with' => $lesson->calendarItem
                 ? ($this->findBlockingCalendarItems)($lesson->calendarItem)
-                    ->map(fn (CalendarItem $item): string => $this->describe($item))
+                    ->map(fn (CalendarItem $item): string => ($this->describeBlockingCalendarItem)($item))
                     ->values()
                     ->all()
                 : [],
         ];
-    }
-
-    /**
-     * A short label for what the provisional lesson clashes with, e.g.
-     * "Jack Smith (10:00–11:00)" or "Blocked time: Holiday (09:00–17:00)".
-     */
-    protected function describe(CalendarItem $item): string
-    {
-        $time = substr((string) $item->start_time, 0, 5).'–'.substr((string) $item->end_time, 0, 5);
-        $lesson = $item->isTravel() ? $item->parentItem?->lessons->first() : $item->lessons->first();
-        $pupil = $this->studentName($lesson?->order?->student);
-
-        $label = match (true) {
-            $item->isPracticalTest() => 'Practical test'.(($name = $this->studentName($item->student)) ? ': '.$name : ''),
-            $item->isTravel() => 'Travel time'.($pupil ? ': '.$pupil : ''),
-            $pupil !== null => $pupil,
-            $item->status !== null => 'Booking',
-            default => 'Blocked time'.($item->unavailability_reason ? ': '.$item->unavailability_reason : ''),
-        };
-
-        return "{$label} ({$time})";
     }
 
     protected function studentName(?Student $student): ?string

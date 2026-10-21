@@ -673,6 +673,11 @@ Route::get('/onboarding/{uuid}/instructor/{instructor}/availability', [StepFourC
     ->middleware([ValidateEnquiryUuid::class])
     ->name('onboarding.instructor.availability');
 
+// Bookings team only (checked in the controller): clash preview for the package dates on step 4
+Route::get('/onboarding/{uuid}/clash-preview', [StepFourController::class, 'clashPreview'])
+    ->middleware(['auth', ValidateEnquiryUuid::class])
+    ->name('onboarding.clash-preview');
+
 // Booking Routes (Public — single-instructor coverage check landing page)
 Route::get('/booking', [BookingController::class, 'start'])
     ->name('booking.start');

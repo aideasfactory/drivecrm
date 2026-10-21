@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Actions\Instructor\GetInstructorCalendarItemsAction;
 use App\Actions\Instructor\GetInstructorCalendarItemsInRangeAction;
+use App\Actions\Onboarding\PreviewPackageClashesAction;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
 use Illuminate\Database\Eloquent\Collection;
@@ -14,8 +15,20 @@ class InstructorCalendarService extends BaseService
 {
     public function __construct(
         protected GetInstructorCalendarItemsAction $getCalendarItems,
-        protected GetInstructorCalendarItemsInRangeAction $getCalendarItemsInRange
+        protected GetInstructorCalendarItemsInRangeAction $getCalendarItemsInRange,
+        protected PreviewPackageClashesAction $previewPackageClashes,
     ) {}
+
+    /**
+     * Every weekly lesson date a package starting in this slot would get, and
+     * what each one clashes with. Read-only.
+     *
+     * @return list<array{lesson_number: int, date: string, start_time: string, end_time: string, clashes: list<string>}>
+     */
+    public function previewPackageClashes(CalendarItem $firstSlot, int $lessonsCount): array
+    {
+        return ($this->previewPackageClashes)($firstSlot, $lessonsCount);
+    }
 
     /**
      * Get calendar items for an instructor on a specific date.

@@ -8,13 +8,16 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Onboarding\StepFourRequest;
 use App\Jobs\SyncBookingEnquiryToBirdJob;
 use App\Models\CalendarItem;
+use App\Models\Enquiry;
 use App\Models\Instructor;
 use App\Models\Package;
 use App\Services\CalendarService;
+use App\Services\InstructorCalendarService;
 use App\Services\InstructorService;
 use App\Services\OrderService;
 use App\Support\BookingPayments;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -27,7 +30,44 @@ class StepFourController extends Controller
         private OrderService $orderService,
         private ReleaseLegacyStepFourHoldsAction $releaseLegacyStepFourHolds,
         private BuildPublicInstructorProfileAction $buildPublicInstructorProfile,
+        private InstructorCalendarService $instructorCalendarService,
     ) {}
+
+    /**
+     * Bookings team only: every weekly date the package would get from the
+     * chosen slot, and what each one clashes with (including other pupils'
+     * names), so clashes can be talked through on the phone. Read-only.
+     */
+    public function clashPreview(Request $request): JsonResponse
+    {
+        $enquiry = $request->get('enquiry');
+
+        abort_unless($this->canSeeClashes($request, $enquiry), 403);
+
+        $validated = $request->validate([
+            'calendar_item_id' => ['required', 'integer'],
+        ]);
+
+        $package = Package::find($enquiry->getStepData(3)['package_id'] ?? null);
+        $slot = CalendarItem::with('calendar')->find($validated['calendar_item_id']);
+
+        if (! $package || ! $slot?->calendar) {
+            return response()->json(['weeks' => []]);
+        }
+
+        return response()->json([
+            'weeks' => $this->instructorCalendarService->previewPackageClashes($slot, (int) $package->lessons_count),
+        ]);
+    }
+
+    /**
+     * Clash details name other pupils, so they are only shown to the staff
+     * member running a "Book lessons for a student" booking.
+     */
+    private function canSeeClashes(Request $request, Enquiry $enquiry): bool
+    {
+        return $enquiry->isStaffBooking() && $request->user()?->isOwner() === true;
+    }
 
     public function show(Request $request)
     {
@@ -73,6 +113,7 @@ class StepFourController extends Controller
             'availableInstructors' => $availableInstructors,
             'availability' => $availability,
             'holdMinutes' => BookingPayments::learnerHoldMinutes(),
+            'showClashPreview' => $this->canSeeClashes($request, $enquiry),
             'disabledDates' => [
                 now()->format('Y-m-d'),           // Today
                 now()->addDay()->format('Y-m-d'), // Tomorrow
