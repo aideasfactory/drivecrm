@@ -23,6 +23,7 @@ class LessonPayment extends Model
         'due_date',
         'paid_at',
         'stripe_invoice_id',
+        'invoice_cancelled_at',
         'stripe_charge_id',
     ];
 
@@ -36,6 +37,7 @@ class LessonPayment extends Model
             'alternative_payment_confirmed_at' => 'datetime',
             'due_date' => 'date',
             'paid_at' => 'datetime',
+            'invoice_cancelled_at' => 'datetime',
         ];
     }
 
@@ -71,6 +73,15 @@ class LessonPayment extends Model
     public function hasAlternativePaymentConfirmed(): bool
     {
         return $this->alternative_payment_confirmed_at !== null;
+    }
+
+    /**
+     * True when the lesson's invoice was voided because it was still unpaid a
+     * week after the lesson (`lessons:cancel-overdue-invoices`).
+     */
+    public function hasInvoiceCancelled(): bool
+    {
+        return $this->invoice_cancelled_at !== null;
     }
 
     /**

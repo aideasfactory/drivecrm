@@ -1014,6 +1014,8 @@ class OrderService extends BaseService
             ->where('lessons.order_id', $order->id)
             ->where('lessons.status', '!=', LessonStatus::CANCELLED)
             ->whereNotNull('lessons.date')
+            // Lessons more than a week old are never invoiced (see lessons:cancel-overdue-invoices).
+            ->whereDate('lessons.date', '>=', BookingPayments::overdueInvoiceCutoffDate())
             ->where('lesson_payments.status', PaymentStatus::DUE)
             ->whereNull('lesson_payments.stripe_invoice_id')
             ->whereNull('lesson_payments.alternative_payment_confirmed_at')

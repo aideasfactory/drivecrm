@@ -17,6 +17,9 @@ declare(strict_types=1);
  * - A paid lesson cancelled more than `late_cancellation_hours` before it
  *   starts is refunded. Inside that window the instructor chooses between
  *   refunding the pupil and being paid for the lesson.
+ * - A weekly lesson invoice still unpaid `overdue_invoice_cancel_days` after
+ *   the lesson date is voided, and no invoice is sent for a lesson older than
+ *   that (`lessons:cancel-overdue-invoices`).
  *
  * Always read these values through `App\Support\BookingPayments`.
  */
@@ -30,6 +33,8 @@ return [
     'weekly_payment_due_hours_before_lesson' => (int) env('BOOKING_WEEKLY_PAYMENT_DUE_HOURS_BEFORE_LESSON', 48),
 
     'late_cancellation_hours' => (int) env('BOOKING_LATE_CANCELLATION_HOURS', 48),
+
+    'overdue_invoice_cancel_days' => (int) env('BOOKING_OVERDUE_INVOICE_CANCEL_DAYS', 7),
 
     'timezone' => env('BOOKING_TIMEZONE', 'Europe/London'),
 ];

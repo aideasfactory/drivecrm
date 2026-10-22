@@ -125,6 +125,23 @@ final class BookingPayments
         return (int) self::now()->diffInHours(self::lessonStartsAt($lessonDate, $lessonStartTime), false);
     }
 
+    /**
+     * Lessons dated before this UK calendar date are too old to invoice: their
+     * open invoices are voided and no new invoice is sent.
+     */
+    public static function overdueInvoiceCutoffDate(): string
+    {
+        return self::now()
+            ->setTimezone(self::timezone())
+            ->subDays(self::overdueInvoiceCancelDays())
+            ->toDateString();
+    }
+
+    public static function overdueInvoiceCancelDays(): int
+    {
+        return (int) config('booking_payments.overdue_invoice_cancel_days', 7);
+    }
+
     public static function lateCancellationHours(): int
     {
         return (int) config('booking_payments.late_cancellation_hours', 48);

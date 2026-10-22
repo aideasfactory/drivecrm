@@ -583,6 +583,7 @@ lesson price). A cash order never has a `due` row.
 | `due_date` | date | NULLABLE | When payment is due (`BookingPayments::weeklyPaymentDueDate`, 48 hours before the lesson). Recalculated when the lesson is moved, while the row is still `due` and not yet invoiced (`UpdateCalendarItemAction`), so a lesson moved earlier is picked up by `lessons:send-invoices` in time |
 | `paid_at` | datetime | NULLABLE | When payment was received |
 | `stripe_invoice_id` | varchar(255) | NULLABLE | Stripe Invoice ID |
+| `invoice_cancelled_at` | timestamp | NULLABLE | When `lessons:cancel-overdue-invoices` voided this lesson's Stripe invoice because it was still `due` a week after the lesson date (`booking_payments.overdue_invoice_cancel_days`, default 7). Failsafe for lessons that didn't go ahead but were never cancelled; the lesson itself is not changed. `stripe_invoice_id` is kept (it points at the void invoice), the row stays `due`, staff can't resend it. Moving the lesson (`UpdateCalendarItemAction`) clears this and `stripe_invoice_id` so it is invoiced afresh. Migration `2026_10_22_193435_add_invoice_cancelled_at_to_lesson_payments_table` |
 | `stripe_charge_id` | varchar(255) | NULLABLE | Stripe Charge ID that funded this weekly lesson payment (the Invoice's `charge`, falling back to its payment intent's `latest_charge`). Persisted at payment time (`invoice.paid` webhook) so the lesson's payout Transfer can cite it as `source_transaction`, letting Stripe draw against that specific charge instead of the general available balance. 1:1 — one invoice charge funds one lesson payout. Nullable for legacy payments created before this column existed. |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
@@ -602,6 +603,10 @@ lesson price). A cash order never has a `due` row.
 - Created for each lesson in weekly payment mode
 - Weekly payments are charged via Stripe Subscriptions/Invoices
 - Payment must be completed before lesson can be marked as completed
+- **Overdue invoices**: no invoice is ever sent for a lesson dated more than 7 days ago (`SendLessonInvoices`,
+  `OrderService::sendNextDueInvoice`, cutoff `BookingPayments::overdueInvoiceCutoffDate()`), and an open invoice
+  still unpaid 7 days after its lesson is voided hourly by `lessons:cancel-overdue-invoices`
+  (`CancelOverdueLessonInvoiceAction`, sets `invoice_cancelled_at`, logs a `payment` activity on the student)
 - **Alternative payment method** (pupils with `students.cash_payments_enabled = true`, weekly orders only, rules in
   `App\Support\AlternativePayments`): confirming an unpaid booking sets the first lesson's
   `alternative_payment_confirmed_*`; an alternative sign-off voids any open invoice, then sets `status = paid`,

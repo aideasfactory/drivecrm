@@ -164,10 +164,18 @@ class UpdateCalendarItemAction
      * A moved weekly lesson that hasn't been invoiced yet is due relative to its
      * new time, so a lesson moved earlier is still invoiced (by the hourly
      * `lessons:send-invoices` run) in time to pay before it. Invoices already
-     * sent are left as they are.
+     * sent are left as they are, except one cancelled as overdue
+     * (`lessons:cancel-overdue-invoices`): the lesson is going ahead after all,
+     * so it is invoiced afresh for its new time.
      */
     private function syncWeeklyPaymentDueDates(CalendarItem $calendarItem, string $date, string $startTime): void
     {
+        LessonPayment::query()
+            ->whereIn('lesson_id', $calendarItem->lessons()->select('id'))
+            ->where('status', PaymentStatus::DUE)
+            ->whereNotNull('invoice_cancelled_at')
+            ->update(['stripe_invoice_id' => null, 'invoice_cancelled_at' => null]);
+
         LessonPayment::query()
             ->whereIn('lesson_id', $calendarItem->lessons()->select('id'))
             ->where('status', PaymentStatus::DUE)

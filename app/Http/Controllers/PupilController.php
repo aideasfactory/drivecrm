@@ -614,6 +614,10 @@ class PupilController extends Controller
             return response()->json(['message' => 'This lesson has already been paid.'], 422);
         }
 
+        if ($lessonPayment->hasInvoiceCancelled()) {
+            return response()->json(['message' => 'This invoice was cancelled because it was still unpaid a week after the lesson.'], 422);
+        }
+
         $result = $resendInvoice($lessonPayment);
 
         if (! $result['success']) {

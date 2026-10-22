@@ -71,6 +71,8 @@ interface Lesson {
     lesson_payment_id: number | null
     payment_status: 'due' | 'paid' | 'refunded' | null
     has_stripe_invoice: boolean
+    /** Voided automatically: still unpaid a week after the lesson. */
+    invoice_cancelled: boolean
     payment_mode: 'upfront' | 'weekly' | 'imported' | 'cash'
     payout_status: 'pending' | 'paid' | 'failed' | null
     has_payout: boolean
@@ -545,8 +547,15 @@ onMounted(() => {
                                         <HandCoins class="h-3 w-3" />
                                         Alt. payment allowed
                                     </Badge>
+                                    <Badge
+                                        v-if="lesson.payment_status === 'due' && lesson.invoice_cancelled"
+                                        variant="outline"
+                                        title="Still unpaid a week after the lesson, so the invoice was cancelled and the pupil can no longer pay it."
+                                    >
+                                        Invoice cancelled
+                                    </Badge>
                                     <Button
-                                        v-if="lesson.payment_status === 'due' && lesson.has_stripe_invoice"
+                                        v-else-if="lesson.payment_status === 'due' && lesson.has_stripe_invoice"
                                         variant="ghost"
                                         size="sm"
                                         class="h-7 gap-1 px-2 text-xs"
