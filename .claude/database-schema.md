@@ -1185,6 +1185,9 @@ Tracks payments received and expenses incurred by instructors. Supports recurrin
 | `instructor_id` | bigint unsigned | FOREIGN KEY → instructors.id, CASCADE DELETE, INDEXED | Owning instructor |
 | `vehicle_id` | bigint unsigned | NULLABLE, FOREIGN KEY → vehicles.id, NULL ON DELETE | Vehicle this row belongs to. Nullable because non-vehicle categories (advertising, phone, accountant fees, business insurance, etc.) don't carry one. Populated by `BackfillPrimaryVehicleAction` for historical rows. |
 | `type` | enum('payment','expense') | NOT NULL | Whether this is income or an expense |
+| `source` | varchar(32) | NOT NULL, DEFAULT 'manual' | `App\Enums\FinanceSource`: `manual` (entered by hand or imported), `stripe_payout` (a paid lesson payout), `cash_lesson` (a signed-off cash or alternative-payment lesson). Non-manual rows are **automatic and read-only** — update, delete and receipt changes are refused with 403. |
+| `source_id` | bigint unsigned | NULLABLE | For automatic rows: `payouts.id` when `source = stripe_payout`, `lessons.id` when `source = cash_lesson`. Null for manual rows. No FK (polymorphic by `source`). |
+| `linked_from_manual` | boolean | NOT NULL, DEFAULT false | True when an automatic row was linked from a payment the instructor had already entered by hand (same amount, matching date) rather than created — prevents double counting. If the source stops counting as income the row goes back to `manual` instead of being deleted. |
 | `category` | varchar(64) | NOT NULL, DEFAULT 'none' | Slug from `config/finances.php` — `expense_categories` when type=expense, `payment_categories` when type=payment. Joined to `category_tax_mapping.category` for HMRC bucket + VAT treatment + method-dependence. |
 | `payment_method` | varchar(32) | NULLABLE | Slug from `config('finances.payment_methods')` |
 | `description` | varchar(255) | NOT NULL | Description of the payment/expense |
@@ -1202,7 +1205,7 @@ Tracks payments received and expenses incurred by instructors. Supports recurrin
 | `created_at` | timestamp | NULLABLE | Created timestamp |
 | `updated_at` | timestamp | NULLABLE | Updated timestamp |
 
-**Indexes:** `(instructor_id, type)`, `(instructor_id, date)`, `(instructor_id, category)`, `(vehicle_id, date)`, `(recurrence_group_id)`
+**Indexes:** `(instructor_id, type)`, `(instructor_id, date)`, `(instructor_id, category)`, `(vehicle_id, date)`, `(recurrence_group_id)`, **UNIQUE** `(source, source_id)` (one automatic row per payout / lesson; manual rows have a null `source_id` so are not constrained)
 
 **Relationships:**
 - `instructor_finances.instructor_id` → `instructors.id` (CASCADE DELETE)
@@ -1212,6 +1215,7 @@ Tracks payments received and expenses incurred by instructors. Supports recurrin
 - Category slugs are config-backed (`config/finances.php`), not enum'd in the DB — lists can grow without migration. Validation at controller level gates the slug by `type`.
 - Receipts live on the private S3 disk. The `receipt_url` accessor returns a time-limited signed URL (TTL from `config('finances.receipt.signed_url_ttl_minutes')`).
 - Existing pre-migration rows were backfilled to `category = 'none'`.
+- **Automatic lesson income** (`source != manual`): written by `LessonIncomeFinanceObserver` (observes `Payout`, `Lesson`, `LessonPayment`, after commit, never throws) via `SyncPayoutFinanceEntryAction` / `SyncCashLessonFinanceEntryAction`. A paid payout → one `payment` row dated on `paid_at`, category `lesson_payout`, method `bank_transfer`. A completed lesson on a cash order, or one paid by an alternative method, with no payout → one `payment` row dated on `completed_at`, category `cash_lesson` (method `cash`) or `alternative_payment_lesson`. These categories live in `config('finances.automatic_payment_categories')` and cannot be chosen on create/update. Backfilled and reconciled nightly by `php artisan finances:sync-lesson-income`. HMRC ITSA turnover is still derived from completed lessons (only `expense` rows feed the HMRC buckets), so these rows never double-count in tax submissions.
 - `imported` ("Imported (legacy)") is the catch-all for rows brought in by the legacy importer — present in both category lists, tax-treated like `none` (`outside_scope`, not claimable, no ITSA bucket) and hidden from the picker (`selectable_in_picker = false`).
 - **Recurring series are materialised upfront at creation** (`CreateInstructorFinanceAction`): a recurring create generates `recurrence_iterations` records (first on `date`, subsequent dates stepped by frequency using no-overflow month/year arithmetic), all sharing a `recurrence_group_id`. Updates/deletes affect single records only — no series regeneration. Receipts attach to individual records (typically the first).
 

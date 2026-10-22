@@ -17,6 +17,10 @@ class InstructorFinanceResource extends JsonResource
         return [
             'id' => $this->id,
             'type' => $this->type,
+            'source' => $this->source?->value ?? 'manual',
+            'source_label' => $this->source_label,
+            'is_automatic' => $this->isAutomatic(),
+            'is_editable' => ! $this->isAutomatic(),
             'category' => $this->category,
             'category_label' => $this->category_label,
             'vehicle_id' => $this->vehicle_id,

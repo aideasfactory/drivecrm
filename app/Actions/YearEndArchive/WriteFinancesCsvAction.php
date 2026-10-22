@@ -15,7 +15,8 @@ class WriteFinancesCsvAction
      * and expense row dated within the tax year, including the rows excluded
      * from HMRC payloads (Simplified vehicle running costs, food_drink, etc.) —
      * because the accountant may still want them for end-of-year reconciliation
-     * and the instructor's own books.
+     * and the instructor's own books. `source` marks automatic lesson income
+     * (`stripe_payout`, `cash_lesson`) apart from hand-entered rows (`manual`).
      *
      * Returns the number of rows written (excluding the header).
      */
@@ -48,6 +49,7 @@ class WriteFinancesCsvAction
             'notes',
             'receipt_filename',
             'created_at',
+            'source',
         ]);
 
         $rows = DB::table('instructor_finances')
@@ -69,7 +71,8 @@ class WriteFinancesCsvAction
         $count = 0;
         foreach ($rows as $row) {
             $expenseLabel = config("finances.expense_categories.{$row->category}");
-            $paymentLabel = config("finances.payment_categories.{$row->category}");
+            $paymentLabel = config("finances.payment_categories.{$row->category}")
+                ?? config("finances.automatic_payment_categories.{$row->category}");
 
             fputcsv($handle, [
                 $row->date,
@@ -91,6 +94,7 @@ class WriteFinancesCsvAction
                 $row->notes,
                 $row->receipt_original_name,
                 $row->created_at,
+                $row->source ?? 'manual',
             ]);
             $count++;
         }

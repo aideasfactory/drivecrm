@@ -1646,6 +1646,10 @@ class InstructorController extends Controller
         return [
             'id' => $f->id,
             'type' => $f->type,
+            'source' => $f->source?->value ?? 'manual',
+            'source_label' => $f->source_label,
+            'is_automatic' => $f->isAutomatic(),
+            'is_editable' => ! $f->isAutomatic(),
             'category' => $f->category,
             'category_label' => $f->category_label,
             'vehicle_id' => $f->vehicle_id,

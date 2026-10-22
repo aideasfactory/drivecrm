@@ -41,6 +41,8 @@ import {
     Car,
     X,
     Route,
+    Zap,
+    Lock,
 } from 'lucide-vue-next'
 import { toast } from '@/components/ui/sonner'
 import type { InstructorDetail } from '@/types/instructor'
@@ -55,6 +57,10 @@ interface FinanceReceipt {
 interface InstructorFinance {
     id: number
     type: 'payment' | 'expense'
+    source: 'manual' | 'stripe_payout' | 'cash_lesson'
+    source_label: string
+    is_automatic: boolean
+    is_editable: boolean
     category: string
     category_label: string | null
     vehicle_id: number | null
@@ -729,6 +735,10 @@ onMounted(() => {
                                 </TableCell>
                                 <TableCell class="font-medium">
                                     {{ finance.description }}
+                                    <Badge v-if="finance.is_automatic" variant="secondary" class="ml-1 gap-1" :title="finance.source_label">
+                                        <Zap class="h-3 w-3" />
+                                        Auto
+                                    </Badge>
                                     <p v-if="finance.notes" class="mt-0.5 max-w-[200px] truncate text-xs text-muted-foreground">
                                         {{ finance.notes }}
                                     </p>
@@ -769,7 +779,7 @@ onMounted(() => {
                                     <span v-else class="text-muted-foreground">—</span>
                                 </TableCell>
                                 <TableCell class="text-right">
-                                    <div class="flex justify-end gap-1">
+                                    <div v-if="finance.is_editable" class="flex justify-end gap-1">
                                         <Button variant="ghost" size="sm" @click="openEditSheet(finance)">
                                             <Pencil class="h-3.5 w-3.5" />
                                         </Button>
@@ -777,6 +787,14 @@ onMounted(() => {
                                             <Trash2 class="h-3.5 w-3.5 text-destructive" />
                                         </Button>
                                     </div>
+                                    <span
+                                        v-else
+                                        class="inline-flex items-center gap-1 text-xs text-muted-foreground"
+                                        title="Added automatically from a lesson payment. It updates itself and cannot be edited or deleted."
+                                    >
+                                        <Lock class="h-3 w-3" />
+                                        Automatic
+                                    </span>
                                 </TableCell>
                             </TableRow>
                         </TableBody>

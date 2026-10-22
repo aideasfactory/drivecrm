@@ -28,6 +28,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('hmrc:check-refresh-health')->hourly();
         $schedule->command('hmrc:prune-year-end-archives')->dailyAt('02:00');
         $schedule->command('account:process-deletion-requests')->dailyAt('01:00');
+        // Backup for automatic finance income, which is normally written when a payout is paid or a cash lesson is signed off
+        $schedule->command('finances:sync-lesson-income')->dailyAt('03:00')->withoutOverlapping();
         // $schedule->command('bird:sync')->dailyAt('02:30');
     })
     ->withMiddleware(function (Middleware $middleware): void {
