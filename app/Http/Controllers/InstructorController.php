@@ -1423,7 +1423,8 @@ class InstructorController extends Controller
     }
 
     /**
-     * Get all finance records for an instructor.
+     * Get all finance records for an instructor, plus their lesson income
+     * (read-only, not stored as finance records).
      */
     public function finances(Instructor $instructor): JsonResponse
     {
@@ -1431,6 +1432,7 @@ class InstructorController extends Controller
 
         return response()->json([
             'finances' => $finances->map(fn (InstructorFinance $f) => $this->serializeFinance($f)),
+            'lesson_income' => $this->instructorService->getLessonIncome($instructor),
             'config' => $this->financeConfigPayload($instructor),
         ]);
     }

@@ -25,6 +25,7 @@ use App\Actions\Instructor\ForceCompleteAppOnboardingAction;
 use App\Actions\Instructor\GetGroupedStudentsAction;
 use App\Actions\Instructor\GetInstructorCalendarAction;
 use App\Actions\Instructor\GetInstructorCashLessonsAction;
+use App\Actions\Instructor\GetInstructorLessonIncomeAction;
 use App\Actions\Instructor\GetInstructorDayLessonsAction;
 use App\Actions\Instructor\GetInstructorFinancesAction;
 use App\Actions\Instructor\GetInstructorLessonsInRangeAction;
@@ -106,6 +107,7 @@ class InstructorService extends BaseService
         protected CreatePupilAction $createPupil,
         protected GetInstructorPayoutsAction $getInstructorPayouts,
         protected GetInstructorCashLessonsAction $getInstructorCashLessons,
+        protected GetInstructorLessonIncomeAction $getInstructorLessonIncome,
         protected GetInstructorDayLessonsAction $getInstructorDayLessons,
         protected GetInstructorLessonsInRangeAction $getInstructorLessonsInRange,
         protected GetGroupedStudentsAction $getGroupedStudents,
@@ -1147,6 +1149,15 @@ class InstructorService extends BaseService
     public function getFinances(Instructor $instructor): Collection
     {
         return ($this->getInstructorFinances)($instructor);
+    }
+
+    /**
+     * Get an instructor's lesson income (paid payouts, cash and alternative
+     * payments) for the Finances tab. Read-only, derived on the fly.
+     */
+    public function getLessonIncome(Instructor $instructor): Collection
+    {
+        return ($this->getInstructorLessonIncome)($instructor);
     }
 
     /**

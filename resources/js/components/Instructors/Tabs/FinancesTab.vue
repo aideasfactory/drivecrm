@@ -74,6 +74,21 @@ interface InstructorFinance {
     created_at: string | null
 }
 
+/** Lesson income derived from payouts / cash / alternative payments. Read-only. */
+interface LessonIncome {
+    key: string
+    source: 'payout' | 'cash' | 'alternative'
+    description: string
+    package_name: string | null
+    date: string | null
+    amount_pence: number
+    formatted_amount: string
+}
+
+type FinanceRow =
+    | { key: string; date: string; finance: InstructorFinance; income: null }
+    | { key: string; date: string; finance: null; income: LessonIncome }
+
 interface MileageLog {
     id: number
     date: string
@@ -123,6 +138,7 @@ const props = defineProps<Props>()
 type FilterType = 'all' | 'payment' | 'expense' | 'mileage'
 
 const finances = ref<InstructorFinance[]>([])
+const lessonIncome = ref<LessonIncome[]>([])
 const mileageLogs = ref<MileageLog[]>([])
 const config = ref<FinanceConfig | null>(null)
 const loading = ref(true)
@@ -202,10 +218,25 @@ const simplifiedDoubleClaimWarning = computed<string | null>(() => {
     return `${selectedVehicle.value.display_name} is on Simplified. Mileage already covers fuel, insurance, MOT, servicing, repairs, road tax and breakdown cover — claiming them separately would double-claim and won't be included on your HMRC payload.`
 })
 
-const filteredFinances = computed(() => {
-    if (activeFilter.value === 'all') return finances.value
+const incomeSourceLabels: Record<LessonIncome['source'], string> = {
+    payout: 'Stripe payout',
+    cash: 'Cash booking',
+    alternative: 'Alternative method',
+}
+
+// Manual records and lesson income in one list, newest first.
+const filteredRows = computed<FinanceRow[]>(() => {
     if (activeFilter.value === 'mileage') return []
-    return finances.value.filter((f) => f.type === activeFilter.value)
+
+    const records: FinanceRow[] = finances.value
+        .filter((f) => activeFilter.value === 'all' || f.type === activeFilter.value)
+        .map((f) => ({ key: `finance-${f.id}`, date: f.date, finance: f, income: null }))
+
+    const income: FinanceRow[] = activeFilter.value === 'expense'
+        ? []
+        : lessonIncome.value.map((i) => ({ key: i.key, date: i.date ?? '', finance: null, income: i }))
+
+    return [...records, ...income].sort((a, b) => b.date.localeCompare(a.date))
 })
 
 const summaryCards = computed(() => {
@@ -221,12 +252,13 @@ const summaryCards = computed(() => {
     }
 
     const all = finances.value
-    const totalPayments = all.filter((f) => f.type === 'payment').reduce((sum, f) => sum + f.amount_pence, 0)
+    const totalLessonIncome = lessonIncome.value.reduce((sum, i) => sum + i.amount_pence, 0)
+    const totalPayments = all.filter((f) => f.type === 'payment').reduce((sum, f) => sum + f.amount_pence, 0) + totalLessonIncome
     const totalExpenses = all.filter((f) => f.type === 'expense').reduce((sum, f) => sum + f.amount_pence, 0)
     const netBalance = totalPayments - totalExpenses
 
     return [
-        { title: 'Total Records', value: all.length.toString(), icon: Wallet },
+        { title: 'Total Records', value: (all.length + lessonIncome.value.length).toString(), icon: Wallet },
         { title: 'Total Payments', value: formatCurrency(totalPayments), icon: ArrowDownCircle },
         { title: 'Total Expenses', value: formatCurrency(totalExpenses), icon: ArrowUpCircle },
         { title: 'Net Balance', value: formatCurrency(netBalance), icon: PoundSterling },
@@ -348,6 +380,7 @@ const loadFinances = async () => {
     try {
         const response = await axios.get(`/instructors/${props.instructor.id}/finances`)
         finances.value = response.data.finances || []
+        lessonIncome.value = response.data.lesson_income || []
         config.value = response.data.config || null
     } catch {
         toast.error('Failed to load finances')
@@ -692,7 +725,7 @@ onMounted(() => {
                     </div>
 
                     <div
-                        v-else-if="filteredFinances.length === 0"
+                        v-else-if="filteredRows.length === 0"
                         class="flex min-h-[200px] flex-col items-center justify-center gap-3 text-muted-foreground"
                     >
                         <Receipt class="h-10 w-10" />
@@ -719,66 +752,91 @@ onMounted(() => {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            <TableRow v-for="finance in filteredFinances" :key="finance.id">
+                            <template v-for="row in filteredRows" :key="row.key">
+                            <TableRow v-if="row.finance">
                                 <TableCell>
-                                    <Badge :variant="finance.type === 'payment' ? 'default' : 'destructive'" class="gap-1">
-                                        <ArrowDownCircle v-if="finance.type === 'payment'" class="h-3 w-3" />
+                                    <Badge :variant="row.finance.type === 'payment' ? 'default' : 'destructive'" class="gap-1">
+                                        <ArrowDownCircle v-if="row.finance.type === 'payment'" class="h-3 w-3" />
                                         <ArrowUpCircle v-else class="h-3 w-3" />
-                                        {{ finance.type === 'payment' ? 'Payment' : 'Expense' }}
+                                        {{ row.finance.type === 'payment' ? 'Payment' : 'Expense' }}
                                     </Badge>
                                 </TableCell>
                                 <TableCell class="font-medium">
-                                    {{ finance.description }}
-                                    <p v-if="finance.notes" class="mt-0.5 max-w-[200px] truncate text-xs text-muted-foreground">
-                                        {{ finance.notes }}
+                                    {{ row.finance.description }}
+                                    <p v-if="row.finance.notes" class="mt-0.5 max-w-[200px] truncate text-xs text-muted-foreground">
+                                        {{ row.finance.notes }}
                                     </p>
                                 </TableCell>
                                 <TableCell>
-                                    <span v-if="finance.category_label && finance.category !== 'none'" class="text-sm">
-                                        {{ finance.category_label }}
+                                    <span v-if="row.finance.category_label && row.finance.category !== 'none'" class="text-sm">
+                                        {{ row.finance.category_label }}
                                     </span>
                                     <span v-else class="text-muted-foreground">—</span>
                                 </TableCell>
                                 <TableCell>
-                                    <span v-if="finance.payment_method_label" class="text-sm">
-                                        {{ finance.payment_method_label }}
+                                    <span v-if="row.finance.payment_method_label" class="text-sm">
+                                        {{ row.finance.payment_method_label }}
                                     </span>
                                     <span v-else class="text-muted-foreground">—</span>
                                 </TableCell>
-                                <TableCell>{{ formatDate(finance.date) }}</TableCell>
-                                <TableCell class="text-right font-medium">{{ finance.formatted_amount }}</TableCell>
+                                <TableCell>{{ formatDate(row.finance.date) }}</TableCell>
+                                <TableCell class="text-right font-medium">{{ row.finance.formatted_amount }}</TableCell>
                                 <TableCell>
-                                    <Badge v-if="finance.is_recurring" variant="outline" class="gap-1">
+                                    <Badge v-if="row.finance.is_recurring" variant="outline" class="gap-1">
                                         <RefreshCw class="h-3 w-3" />
-                                        {{ finance.recurrence_frequency_label || finance.recurrence_frequency }}<template v-if="finance.recurrence_iterations"> ×{{ finance.recurrence_iterations }}</template>
+                                        {{ row.finance.recurrence_frequency_label || row.finance.recurrence_frequency }}<template v-if="row.finance.recurrence_iterations"> ×{{ row.finance.recurrence_iterations }}</template>
                                     </Badge>
                                     <span v-else class="text-muted-foreground">—</span>
                                 </TableCell>
                                 <TableCell>
                                     <a
-                                        v-if="finance.receipt && finance.receipt.url"
-                                        :href="finance.receipt.url"
+                                        v-if="row.finance.receipt && row.finance.receipt.url"
+                                        :href="row.finance.receipt.url"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         class="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                                        :title="finance.receipt.original_name || 'View receipt'"
+                                        :title="row.finance.receipt.original_name || 'View receipt'"
                                     >
-                                        <component :is="receiptIconFor(finance.receipt.mime_type)" class="h-4 w-4" />
+                                        <component :is="receiptIconFor(row.finance.receipt.mime_type)" class="h-4 w-4" />
                                         <span class="sr-only">View receipt</span>
                                     </a>
                                     <span v-else class="text-muted-foreground">—</span>
                                 </TableCell>
                                 <TableCell class="text-right">
                                     <div class="flex justify-end gap-1">
-                                        <Button variant="ghost" size="sm" @click="openEditSheet(finance)">
+                                        <Button variant="ghost" size="sm" @click="openEditSheet(row.finance)">
                                             <Pencil class="h-3.5 w-3.5" />
                                         </Button>
-                                        <Button variant="ghost" size="sm" @click="deleteFinance(finance)">
+                                        <Button variant="ghost" size="sm" @click="deleteFinance(row.finance)">
                                             <Trash2 class="h-3.5 w-3.5 text-destructive" />
                                         </Button>
                                     </div>
                                 </TableCell>
                             </TableRow>
+                            <TableRow v-else>
+                                <TableCell>
+                                    <Badge variant="default" class="gap-1">
+                                        <ArrowDownCircle class="h-3 w-3" />
+                                        Lesson
+                                    </Badge>
+                                </TableCell>
+                                <TableCell class="font-medium">
+                                    {{ row.income.description }}
+                                    <p v-if="row.income.package_name" class="mt-0.5 max-w-[200px] truncate text-xs text-muted-foreground">
+                                        {{ row.income.package_name }}
+                                    </p>
+                                </TableCell>
+                                <TableCell class="text-sm">Lesson income</TableCell>
+                                <TableCell class="text-sm">{{ incomeSourceLabels[row.income.source] }}</TableCell>
+                                <TableCell>{{ formatDate(row.income.date) }}</TableCell>
+                                <TableCell class="text-right font-medium">{{ row.income.formatted_amount }}</TableCell>
+                                <TableCell><span class="text-muted-foreground">—</span></TableCell>
+                                <TableCell><span class="text-muted-foreground">—</span></TableCell>
+                                <TableCell class="text-right">
+                                    <span class="text-xs text-muted-foreground" title="Added automatically from signed-off lessons">Automatic</span>
+                                </TableCell>
+                            </TableRow>
+                            </template>
                         </TableBody>
                     </Table>
                 </template>
