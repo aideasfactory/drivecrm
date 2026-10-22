@@ -22,6 +22,8 @@ class LessonPayment extends Model
         'alternative_payment_confirmed_by',
         'due_date',
         'paid_at',
+        'auto_cancelled_at',
+        'auto_cancellation_reason',
         'stripe_invoice_id',
         'stripe_charge_id',
     ];
@@ -36,6 +38,7 @@ class LessonPayment extends Model
             'alternative_payment_confirmed_at' => 'datetime',
             'due_date' => 'date',
             'paid_at' => 'datetime',
+            'auto_cancelled_at' => 'datetime',
         ];
     }
 
@@ -71,6 +74,16 @@ class LessonPayment extends Model
     public function hasAlternativePaymentConfirmed(): bool
     {
         return $this->alternative_payment_confirmed_at !== null;
+    }
+
+    /**
+     * True when `lessons:auto-cancel-overdue-invoices` stopped this payment
+     * for being left unpaid too long after it fell due. It is then never
+     * invoiced or chased.
+     */
+    public function isAutoCancelled(): bool
+    {
+        return $this->auto_cancelled_at !== null;
     }
 
     /**

@@ -140,6 +140,24 @@ final class BookingPayments
         return (int) config('booking_payments.weekly_payment_due_hours_before_lesson', 48);
     }
 
+    public static function autoCancelOverdueInvoiceDays(): int
+    {
+        return max(1, (int) config('booking_payments.auto_cancel_overdue_invoice_days', 7));
+    }
+
+    /**
+     * The UK date a weekly lesson payment's `due_date` must be before to count
+     * as more than `auto_cancel_overdue_invoice_days` overdue. Such a payment
+     * is cancelled by `lessons:auto-cancel-overdue-invoices` and never invoiced.
+     */
+    public static function overdueInvoiceCutoffDate(): string
+    {
+        return self::now()
+            ->setTimezone(self::timezone())
+            ->subDays(self::autoCancelOverdueInvoiceDays())
+            ->toDateString();
+    }
+
     public static function timezone(): string
     {
         return (string) config('booking_payments.timezone', 'Europe/London');
