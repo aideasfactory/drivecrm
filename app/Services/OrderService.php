@@ -1017,6 +1017,8 @@ class OrderService extends BaseService
             ->where('lesson_payments.status', PaymentStatus::DUE)
             ->whereNull('lesson_payments.stripe_invoice_id')
             ->whereNull('lesson_payments.alternative_payment_confirmed_at')
+            ->whereNull('lesson_payments.auto_cancelled_at')
+            ->where('lesson_payments.due_date', '>=', BookingPayments::overdueInvoiceCutoffDate())
             ->orderBy('lessons.date')
             ->orderBy('lessons.start_time')
             ->select('lesson_payments.*')

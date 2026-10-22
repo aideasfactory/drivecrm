@@ -33,6 +33,10 @@ class ResendLessonInvoiceAction
             return ['success' => false, 'error' => 'No invoice exists for this lesson payment'];
         }
 
+        if ($lessonPayment->isAutoCancelled()) {
+            return ['success' => false, 'error' => 'This invoice was cancelled automatically because it was long overdue, so it cannot be resent.'];
+        }
+
         $lesson = $lessonPayment->lesson;
         $order = $lesson->order;
         $student = $order->student;

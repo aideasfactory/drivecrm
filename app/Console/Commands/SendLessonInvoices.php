@@ -10,6 +10,7 @@ use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use App\Enums\PaymentStatus;
 use App\Models\LessonPayment;
+use App\Support\BookingPayments;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
@@ -34,7 +35,10 @@ class SendLessonInvoices extends Command
             ->whereNull('stripe_invoice_id')
             // Confirmed as paid by an alternative method: never invoiced.
             ->whereNull('alternative_payment_confirmed_at')
+            ->whereNull('auto_cancelled_at')
             ->where('due_date', '<=', now()->addHours(48))
+            // Long overdue: cancelled by lessons:auto-cancel-overdue-invoices, never invoiced this late.
+            ->where('due_date', '>=', BookingPayments::overdueInvoiceCutoffDate())
             ->whereHas('lesson', function ($query) {
                 $query->whereNotNull('date')
                     ->where('status', '!=', LessonStatus::CANCELLED);

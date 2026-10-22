@@ -28,6 +28,10 @@ class SendLessonInvoiceAction
      */
     public function __invoke(LessonPayment $lessonPayment): array
     {
+        if ($lessonPayment->isAutoCancelled()) {
+            return ['success' => false, 'error' => 'This lesson payment was cancelled automatically for being long overdue'];
+        }
+
         $lesson = $lessonPayment->lesson;
         $order = $lesson->order;
         $student = $order->student;

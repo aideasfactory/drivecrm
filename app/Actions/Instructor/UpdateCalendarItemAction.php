@@ -165,9 +165,24 @@ class UpdateCalendarItemAction
      * new time, so a lesson moved earlier is still invoiced (by the hourly
      * `lessons:send-invoices` run) in time to pay before it. Invoices already
      * sent are left as they are.
+     *
+     * A payment auto-cancelled for being long overdue is revived: moving the
+     * lesson shows it is still happening, so it is invoiced afresh (its old
+     * Stripe invoice is already void) against the new date.
      */
     private function syncWeeklyPaymentDueDates(CalendarItem $calendarItem, string $date, string $startTime): void
     {
+        LessonPayment::query()
+            ->whereIn('lesson_id', $calendarItem->lessons()->select('id'))
+            ->where('status', PaymentStatus::DUE)
+            ->whereNotNull('auto_cancelled_at')
+            ->whereHas('lesson.order', fn ($query) => $query->where('payment_mode', PaymentMode::WEEKLY))
+            ->update([
+                'auto_cancelled_at' => null,
+                'auto_cancellation_reason' => null,
+                'stripe_invoice_id' => null,
+            ]);
+
         LessonPayment::query()
             ->whereIn('lesson_id', $calendarItem->lessons()->select('id'))
             ->where('status', PaymentStatus::DUE)

@@ -32,7 +32,8 @@ class GetPaymentRemindersDueAction
             ->whereHas('lessonPayment', function ($query): void {
                 $query->where('status', PaymentStatus::DUE->value)
                     // Confirmed as paid by an alternative method: never chased.
-                    ->whereNull('alternative_payment_confirmed_at');
+                    ->whereNull('alternative_payment_confirmed_at')
+                    ->whereNull('auto_cancelled_at');
             })
             ->whereNotIn('status', [
                 LessonStatus::DRAFT->value,
