@@ -38,10 +38,11 @@ class AlternativePaymentService extends BaseService
     ) {}
 
     /**
-     * Confirm a weekly booking still awaiting its first payment as paid by an
-     * alternative method. Closes the Stripe Checkout page, then activates the
-     * order. If the page turns out to have been paid, the booking is confirmed
-     * as a card booking instead and nothing else happens.
+     * Confirm a weekly or pay-in-full booking still awaiting its first payment
+     * as paid by an alternative method. Closes the Stripe Checkout page, then
+     * activates the order (pay in full also records every lesson as paid). If
+     * the page turns out to have been paid, the booking is confirmed as a card
+     * booking instead and nothing else happens.
      *
      * @throws ValidationException When the booking can't be confirmed this way.
      */
@@ -170,8 +171,8 @@ class AlternativePaymentService extends BaseService
             return 'Alternative payments are not turned on for this pupil. Ask Head Office.';
         }
 
-        if (! $order->isWeekly()) {
-            return 'Only pay-as-you-go (weekly) bookings can be paid by an alternative method.';
+        if (! $order->isWeekly() && ! $order->isUpfront()) {
+            return 'Only pay-as-you-go or pay-in-full bookings can be paid by an alternative method.';
         }
 
         if (! $order->isPending()) {
@@ -187,9 +188,14 @@ class AlternativePaymentService extends BaseService
         $metadata = [
             'order_id' => $order->id,
             'alternative_payment' => true,
+            'payment_mode' => $order->payment_mode->value,
             'confirmed_by_user_id' => $confirmedBy->id,
         ];
         $details = "{$order->package_name} ({$order->package_lessons_count} lessons)";
+
+        if ($order->isUpfront()) {
+            $details .= ', paid in full: all lessons recorded as paid';
+        }
 
         if ($student) {
             ($this->logActivity)(

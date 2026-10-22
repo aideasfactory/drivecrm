@@ -84,6 +84,7 @@ interface Lesson {
 
 interface AlternativePaymentBooking {
     order_id: number
+    payment_mode: 'weekly' | 'upfront'
     package_name: string | null
     lessons_count: number
     first_lesson_date: string | null
@@ -408,6 +409,7 @@ onMounted(() => {
                 <p class="text-sm text-muted-foreground">
                     Alternative payments are on for this pupil. If they are paying the instructor directly, confirm
                     the booking here. Until then it waits for a card payment and is not cancelled automatically.
+                    Pay-in-full bookings are paid for all their lessons when confirmed.
                 </p>
             </CardHeader>
             <CardContent>
@@ -418,6 +420,7 @@ onMounted(() => {
                             <TableHead>Time</TableHead>
                             <TableHead>Package</TableHead>
                             <TableHead>Lessons</TableHead>
+                            <TableHead>Payment</TableHead>
                             <TableHead class="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -429,6 +432,11 @@ onMounted(() => {
                             </TableCell>
                             <TableCell>{{ booking.package_name || '—' }}</TableCell>
                             <TableCell class="tabular-nums">{{ booking.lessons_count }}</TableCell>
+                            <TableCell>
+                                <Badge variant="outline">
+                                    {{ booking.payment_mode === 'upfront' ? 'Pay in full' : 'Weekly' }}
+                                </Badge>
+                            </TableCell>
                             <TableCell class="text-right">
                                 <Button variant="outline" size="sm" class="gap-1" @click="openConfirmBooking(booking)">
                                     <HandCoins class="h-4 w-4" />
@@ -755,7 +763,15 @@ onMounted(() => {
                     <Alert>
                         <TriangleAlert class="h-4 w-4" />
                         <AlertTitle>The pupil will pay the instructor directly</AlertTitle>
-                        <AlertDescription>
+                        <AlertDescription v-if="confirmBookingTarget?.payment_mode === 'upfront'">
+                            This is a pay-in-full booking. Confirming it cancels the pupil's card payment link and
+                            marks all {{ confirmBookingTarget.lessons_count }}
+                            {{ confirmBookingTarget.lessons_count === 1 ? 'lesson' : 'lessons' }} as paid
+                            ({{ formatCurrency(confirmBookingTarget.amount_pence) }}, no booking or digital fees). Only
+                            confirm once the instructor has the full amount. The instructor isn't paid through Drive for
+                            these lessons, and late cancellations or no-shows aren't covered.
+                        </AlertDescription>
+                        <AlertDescription v-else>
                             This confirms the booking and cancels the pupil's card payment link. The instructor isn't
                             paid through Drive for lessons paid this way, and late cancellations or no-shows aren't
                             covered. Later lessons are still invoiced as normal.
@@ -769,7 +785,12 @@ onMounted(() => {
                             class="mt-0.5"
                         />
                         <Label for="confirm_booking_risks" class="cursor-pointer leading-snug">
-                            I confirm the pupil is paying by an alternative method and I accept the risks.
+                            <template v-if="confirmBookingTarget?.payment_mode === 'upfront'">
+                                I confirm the pupil has paid in full by an alternative method and I accept the risks.
+                            </template>
+                            <template v-else>
+                                I confirm the pupil is paying by an alternative method and I accept the risks.
+                            </template>
                         </Label>
                     </div>
                 </div>

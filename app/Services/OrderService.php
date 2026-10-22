@@ -917,8 +917,8 @@ class OrderService extends BaseService
     /**
      * Release every unpaid order whose hold has run out.
      *
-     * Weekly bookings made by staff or the instructor for a pupil with
-     * alternative payments turned on are never released automatically: the
+     * Weekly and pay-in-full bookings made by staff or the instructor for a
+     * pupil with alternative payments turned on are never released automatically: the
      * instructor may confirm them as paid by an alternative method at any time
      * up to the lesson. Learner self-bookings (website, learner app) are
      * released as normal. Turning the pupil's switch off puts them back here.
@@ -936,7 +936,7 @@ class OrderService extends BaseService
             ->whereNotNull('payment_hold_expires_at')
             ->where('payment_hold_expires_at', '<=', now())
             ->whereNot(fn ($query) => $query
-                ->where('payment_mode', PaymentMode::WEEKLY)
+                ->whereIn('payment_mode', AlternativePayments::paymentModeValues())
                 ->whereHas('student', fn ($student) => $student->where('cash_payments_enabled', true))
                 ->where(fn ($source) => $source
                     ->whereNull('source')

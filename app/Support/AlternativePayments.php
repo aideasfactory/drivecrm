@@ -6,6 +6,7 @@ namespace App\Support;
 
 use App\Enums\LessonStatus;
 use App\Enums\OrderSource;
+use App\Enums\PaymentMode;
 use App\Models\Lesson;
 use App\Models\Order;
 use App\Models\Student;
@@ -19,8 +20,10 @@ use App\Models\Student;
  * Bookings stay card bookings: the pupil is invoiced and reminded as usual
  * and can pay by card at any time. The instructor can confirm a booking that
  * is still awaiting its first payment, and sign off an unpaid lesson by
- * confirming the pupil paid another way. Weekly (pay-as-you-go) orders only:
- * a pay-in-full payment covers the whole block.
+ * confirming the pupil paid another way. Weekly (pay-as-you-go) and pay-in-full
+ * orders: confirming a pay-in-full booking records every lesson as paid by the
+ * alternative method there and then, since the pupil pays the whole block up
+ * front.
  */
 final class AlternativePayments
 {
@@ -31,6 +34,24 @@ final class AlternativePayments
      * @var list<OrderSource>
      */
     private const LEARNER_SOURCES = [OrderSource::WEBSITE, OrderSource::LEARNER_APP];
+
+    /**
+     * Payment modes that can use the alternative payment method.
+     *
+     * @var list<PaymentMode>
+     */
+    private const PAYMENT_MODES = [PaymentMode::WEEKLY, PaymentMode::UPFRONT];
+
+    /**
+     * The payment modes that can use the alternative method as stored values,
+     * for queries.
+     *
+     * @return list<string>
+     */
+    public static function paymentModeValues(): array
+    {
+        return array_map(fn (PaymentMode $mode): string => $mode->value, self::PAYMENT_MODES);
+    }
 
     /**
      * The learner self-booking sources as stored values, for queries.
@@ -56,7 +77,7 @@ final class AlternativePayments
     public static function allowedForOrder(?Order $order): bool
     {
         return $order !== null
-            && $order->isWeekly()
+            && in_array($order->payment_mode, self::PAYMENT_MODES, true)
             && self::allowedForStudent($order->student);
     }
 

@@ -20,6 +20,11 @@ use Illuminate\Support\Collection;
  * Emails Head Office when paid lessons are cancelled. Nothing is refunded or
  * paid out automatically: Head Office contacts the pupil and instructor, then
  * refunds the pupil or pays the instructor by hand.
+ *
+ * Lessons paid by the alternative method (the pupil paid the instructor
+ * directly, e.g. a pay-in-full booking the instructor confirmed) are listed
+ * apart: Drive never took that money, so there is nothing to refund in Stripe
+ * and any refund is owed by the instructor.
  */
 class CancelledPaidLessonsReviewNotification extends Notification implements ShouldQueue
 {
@@ -58,10 +63,18 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
         $paymentMode = $this->order?->payment_mode?->value ?? 'unknown';
         $details = trim((string) $this->details);
 
+        [$alternativeLessons, $cardLessons] = $this->paidLessons
+            ->partition(fn (Lesson $lesson): bool => $lesson->lessonPayment?->isPaidByAlternativeMethod() === true);
+        $alternativeOnly = $cardLessons->isEmpty();
+
         $message = (new MailMessage)
-            ->subject('Action Required: Review Cancelled Paid Lesson(s)')
+            ->subject($alternativeOnly
+                ? 'Action Required: Review Cancelled Lesson(s) Paid to the Instructor'
+                : 'Action Required: Review Cancelled Paid Lesson(s)')
             ->greeting('Cancelled paid lessons to review')
-            ->line('A booking has been cancelled and one or more **paid** lessons need a decision. Nothing has been refunded to the pupil and the instructor has not been paid for these lessons.')
+            ->line($alternativeOnly
+                ? 'A booking has been cancelled and one or more lessons the pupil **paid the instructor for directly** (alternative payment method) need a decision. Drive did not take this money, so there is nothing to refund in Stripe.'
+                : 'A booking has been cancelled and one or more **paid** lessons need a decision. Nothing has been refunded to the pupil and the instructor has not been paid for these lessons.')
             ->line('')
             ->line("**Student:** {$studentName}")
             ->line("**Instructor:** {$instructorName}")
@@ -71,12 +84,50 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
             ->line('')
             ->line('**Reason:** '.$this->reasonCode->label())
             ->line('**Who cancelled:** '.$this->reasonCode->cancelledByLabel())
-            ->line('**Details:** '.($details === '' ? 'None given' : $details))
-            ->line('')
+            ->line('**Details:** '.($details === '' ? 'None given' : $details));
+
+        if ($cardLessons->isNotEmpty()) {
+            $this->addCardLessons($message, $cardLessons);
+        }
+
+        if ($alternativeLessons->isNotEmpty()) {
+            $this->addAlternativeLessons($message, $alternativeLessons);
+        }
+
+        if ($this->guaranteeRemoved) {
+            $message->line('')
+                ->line("The Pass Your Test Guarantee has been removed from the pupil's account. Re-grant it if the pupil is not refunded.");
+        }
+
+        $message->line('');
+
+        if ($cardLessons->isNotEmpty()) {
+            $message->line('**What to do:** contact the pupil and the instructor to confirm what happened. If the instructor cancelled, refund the pupil in Stripe. If the pupil cancelled with less than '.BookingPayments::lateCancellationHours().' hours\' notice, decide whether to refund the pupil or pay the instructor for the lesson.');
+        }
+
+        if ($alternativeLessons->isNotEmpty()) {
+            $message->line('**'.($cardLessons->isNotEmpty() ? 'For the lessons paid to the instructor' : 'What to do').':** contact the pupil and the instructor to confirm what happened. If the pupil is owed their money back (for example, the instructor cancelled), the instructor must return it to them directly. If the pupil cancelled with less than '.BookingPayments::lateCancellationHours().' hours\' notice, the instructor may keep it.');
+        }
+
+        $message->line('')
+            ->line('Nothing has been refunded or paid out automatically.')
+            ->salutation('— '.config('app.name'));
+
+        return $message;
+    }
+
+    /**
+     * List the card-paid lessons with the fee split and the Stripe refund.
+     *
+     * @param  Collection<int, Lesson>  $lessons
+     */
+    protected function addCardLessons(MailMessage $message, Collection $lessons): void
+    {
+        $message->line('')
             ->line('**Paid lessons cancelled:**');
 
         $totals = ['paid' => 0, 'lesson' => 0, 'booking_fee' => 0, 'digital_fee' => 0, 'test_pass_guarantee' => 0];
-        foreach ($this->paidLessons as $lesson) {
+        foreach ($lessons as $lesson) {
             $breakdown = $this->paidBreakdown($lesson);
 
             foreach ($totals as $key => $value) {
@@ -98,22 +149,36 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
             $message->line('Pass Your Test Guarantee: '.$this->formatPence($totals['test_pass_guarantee']));
         }
 
-        $message->line('Booking fee (retained, not refunded): '.$this->formatPence($totals['booking_fee']));
+        $message->line('Booking fee (retained, not refunded): '.$this->formatPence($totals['booking_fee']))
+            ->line('')
+            ->line('**Amount to refund if the pupil is refunded:** '.$this->formatPence($refundPence));
+    }
 
-        if ($this->guaranteeRemoved) {
-            $message->line('')
-                ->line("The Pass Your Test Guarantee has been removed from the pupil's account. Re-grant it if the pupil is not refunded.");
+    /**
+     * List the lessons the pupil paid the instructor for directly. No fees
+     * were charged and Drive holds none of the money.
+     *
+     * @param  Collection<int, Lesson>  $lessons
+     */
+    protected function addAlternativeLessons(MailMessage $message, Collection $lessons): void
+    {
+        $message->line('')
+            ->line('**Lessons paid to the instructor directly (alternative payment method) cancelled:**');
+
+        $totalPence = 0;
+        foreach ($lessons as $lesson) {
+            $paidPence = (int) ($lesson->lessonPayment?->amount_pence ?? 0);
+            $totalPence += $paidPence;
+            $confirmedBy = $lesson->lessonPayment?->alternativePaymentConfirmedBy?->name;
+
+            $message->line('• '.$this->formatLessonTime($lesson).' — paid '.$this->formatPence($paidPence).' to the instructor'
+                .($confirmedBy ? " (confirmed by {$confirmedBy})" : '')
+                .' — '.$this->formatNotice($lesson));
         }
 
         $message->line('')
-            ->line('**Amount to refund if the pupil is refunded:** '.$this->formatPence($refundPence))
-            ->line('')
-            ->line('**What to do:** contact the pupil and the instructor to confirm what happened. If the instructor cancelled, refund the pupil in Stripe. If the pupil cancelled with less than '.BookingPayments::lateCancellationHours().' hours\' notice, decide whether to refund the pupil or pay the instructor for the lesson.')
-            ->line('')
-            ->line('Nothing has been refunded or paid out automatically.')
-            ->salutation('— '.config('app.name'));
-
-        return $message;
+            ->line('**Total paid to the instructor for cancelled lessons:** '.$this->formatPence($totalPence).' (no booking or digital fees)')
+            ->line('**Amount the instructor returns if the pupil is refunded:** '.$this->formatPence($totalPence));
     }
 
     /**
@@ -165,12 +230,7 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
      */
     protected function formatLesson(Lesson $lesson, array $breakdown): string
     {
-        $date = $lesson->date?->format('l, j F Y') ?? 'Date unknown';
-        $time = ($lesson->start_time && $lesson->end_time)
-            ? ' at '.$lesson->start_time->format('H:i').' - '.$lesson->end_time->format('H:i')
-            : '';
-
-        $line = "{$date}{$time} — paid ".$this->formatPence($breakdown['paid']);
+        $line = $this->formatLessonTime($lesson).' — paid '.$this->formatPence($breakdown['paid']);
 
         if ($breakdown['booking_fee'] > 0 || $breakdown['digital_fee'] > 0 || $breakdown['test_pass_guarantee'] > 0) {
             $parts = [
@@ -187,6 +247,16 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
         }
 
         return $line;
+    }
+
+    protected function formatLessonTime(Lesson $lesson): string
+    {
+        $date = $lesson->date?->format('l, j F Y') ?? 'Date unknown';
+        $time = ($lesson->start_time && $lesson->end_time)
+            ? ' at '.$lesson->start_time->format('H:i').' - '.$lesson->end_time->format('H:i')
+            : '';
+
+        return $date.$time;
     }
 
     protected function formatPence(int $pence): string

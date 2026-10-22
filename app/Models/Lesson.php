@@ -258,8 +258,9 @@ class Lesson extends Model
      * of it that is the Pass Your Test Guarantee. Weekly lessons use their
      * instalment. Upfront lessons use their share of the order total, since
      * upfront payment records created before fees were apportioned hold the
-     * lesson price alone. Orders without a stored total (legacy, imported)
-     * fall back to the lesson price.
+     * lesson price alone. Lessons paid by an alternative method use their
+     * payment (the lesson price, fees waived). Orders without a stored total
+     * (legacy, imported) fall back to the lesson price.
      *
      * @return array{0: int, 1: int}
      */
@@ -268,7 +269,7 @@ class Lesson extends Model
         $order = $this->order;
         $payment = $this->lessonPayment;
 
-        if ($payment && ($order?->isUpfront() !== true || (int) $payment->amount_pence > (int) $this->amount_pence)) {
+        if ($payment && ($order?->isUpfront() !== true || $payment->isPaidByAlternativeMethod() || (int) $payment->amount_pence > (int) $this->amount_pence)) {
             return [(int) $payment->amount_pence, (int) $payment->test_pass_guarantee_pence];
         }
 
