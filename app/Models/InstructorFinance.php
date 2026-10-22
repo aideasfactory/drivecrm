@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\FinanceSource;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,10 +14,18 @@ class InstructorFinance extends Model
 {
     use HasFactory;
 
+    protected $attributes = [
+        'source' => 'manual',
+        'linked_from_manual' => false,
+    ];
+
     protected $fillable = [
         'instructor_id',
         'vehicle_id',
         'type',
+        'source',
+        'source_id',
+        'linked_from_manual',
         'category',
         'payment_method',
         'description',
@@ -37,6 +46,9 @@ class InstructorFinance extends Model
     {
         return [
             'amount_pence' => 'integer',
+            'source' => FinanceSource::class,
+            'source_id' => 'integer',
+            'linked_from_manual' => 'boolean',
             'is_recurring' => 'boolean',
             'recurrence_iterations' => 'integer',
             'date' => 'date',
@@ -73,7 +85,23 @@ class InstructorFinance extends Model
 
         $source = $this->type === 'payment' ? 'payment_categories' : 'expense_categories';
 
-        return config("finances.{$source}.{$this->category}");
+        return config("finances.{$source}.{$this->category}")
+            ?? config("finances.automatic_payment_categories.{$this->category}");
+    }
+
+    /**
+     * Written by the system from a payout or a signed-off cash / alternative
+     * lesson. These rows are read-only: they cannot be edited, deleted or
+     * given a receipt.
+     */
+    public function isAutomatic(): bool
+    {
+        return $this->source instanceof FinanceSource && $this->source->isAutomatic();
+    }
+
+    public function getSourceLabelAttribute(): string
+    {
+        return ($this->source ?? FinanceSource::Manual)->label();
     }
 
     /**
@@ -125,5 +153,15 @@ class InstructorFinance extends Model
     public function scopeExpenses($query)
     {
         return $query->where('type', 'expense');
+    }
+
+    public function scopeManual($query)
+    {
+        return $query->where('source', FinanceSource::Manual->value);
+    }
+
+    public function scopeAutomatic($query)
+    {
+        return $query->where('source', '!=', FinanceSource::Manual->value);
     }
 }

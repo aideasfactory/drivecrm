@@ -41,6 +41,15 @@ return [
         'pupil_transfer_referral' => 'Pupil Transfer Referral',
     ],
 
+    // System-only categories for automatic income rows (lesson payouts and
+    // cash / alternative-payment lessons). Never offered in the pickers and
+    // not accepted on create/update.
+    'automatic_payment_categories' => [
+        'lesson_payout' => 'Lesson Payout',
+        'cash_lesson' => 'Cash Lesson',
+        'alternative_payment_lesson' => 'Lesson (Alternative Payment)',
+    ],
+
     'payment_methods' => [
         'bank_transfer' => 'Bank Transfer',
         'card' => 'Card',

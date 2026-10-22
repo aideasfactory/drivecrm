@@ -58,6 +58,7 @@ use App\Enums\LessonCancellationReason;
 use App\Enums\MessageType;
 use App\Enums\RecurrencePattern;
 use App\Enums\UserRole;
+use App\Exceptions\AutomaticFinanceEntryException;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
 use App\Models\InstructorFinance;
@@ -1158,35 +1159,61 @@ class InstructorService extends BaseService
     }
 
     /**
-     * Update an existing finance record.
+     * Update an existing finance record. Automatic records are read-only.
+     *
+     * @throws AutomaticFinanceEntryException
      */
     public function updateFinance(InstructorFinance $finance, array $data): InstructorFinance
     {
+        $this->ensureManualFinance($finance);
+
         return ($this->updateInstructorFinance)($finance, $data);
     }
 
     /**
-     * Delete a finance record.
+     * Delete a finance record. Automatic records are read-only.
+     *
+     * @throws AutomaticFinanceEntryException
      */
     public function deleteFinance(InstructorFinance $finance): bool
     {
+        $this->ensureManualFinance($finance);
+
         return ($this->deleteInstructorFinance)($finance);
     }
 
     /**
      * Upload (or replace) the receipt attached to a finance record.
+     *
+     * @throws AutomaticFinanceEntryException
      */
     public function uploadFinanceReceipt(InstructorFinance $finance, UploadedFile $file): InstructorFinance
     {
+        $this->ensureManualFinance($finance);
+
         return ($this->uploadFinanceReceipt)($finance, $file);
     }
 
     /**
      * Remove the receipt attached to a finance record.
+     *
+     * @throws AutomaticFinanceEntryException
      */
     public function deleteFinanceReceipt(InstructorFinance $finance): InstructorFinance
     {
+        $this->ensureManualFinance($finance);
+
         return ($this->deleteFinanceReceipt)($finance);
+    }
+
+    /**
+     * @throws AutomaticFinanceEntryException
+     */
+    private function ensureManualFinance(InstructorFinance $finance): void
+    {
+        if ($finance->isAutomatic()) {
+            throw new AutomaticFinanceEntryException;
+        }
     }
 
     /**

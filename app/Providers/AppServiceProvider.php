@@ -3,7 +3,11 @@
 namespace App\Providers;
 
 use App\Models\Enquiry;
+use App\Models\Lesson;
+use App\Models\LessonPayment;
+use App\Models\Payout;
 use App\Observers\EnquiryObserver;
+use App\Observers\LessonIncomeFinanceObserver;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +34,9 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
         $this->registerMandrillTransport();
         Enquiry::observe(EnquiryObserver::class);
+        Payout::observe(LessonIncomeFinanceObserver::class);
+        Lesson::observe(LessonIncomeFinanceObserver::class);
+        LessonPayment::observe(LessonIncomeFinanceObserver::class);
     }
 
     /**
