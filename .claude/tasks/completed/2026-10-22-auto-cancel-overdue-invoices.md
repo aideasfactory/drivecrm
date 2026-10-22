@@ -23,7 +23,7 @@ no more invoices, reminders or resends. Instructors still cancel lessons properl
 - ✓ Guards: `SendLessonInvoiceAction`, `SendLessonInvoices`, `OrderService::sendNextDueInvoice` (also never invoice past the cutoff), `GetPaymentRemindersDueAction`, `ResendLessonInvoiceAction`, `PupilController::resendLessonInvoice`
 - ✓ Moving the lesson (`UpdateCalendarItemAction`) revives an auto-cancelled payment so it is invoiced afresh
 - ✓ Lessons tab: "Invoice auto-cancelled" badge, Resend hidden. Mobile API unchanged (`LessonResource` whitelists fields)
-- ✓ `.claude/database-schema.md` updated (local, untracked)
+- ✓ `.claude/database-schema.md` updated
 
 ## Reflection
 Additive and reversible: no status enum change, no amount change, no webhook change. The cause of the late invoice
