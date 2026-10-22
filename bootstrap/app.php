@@ -21,6 +21,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('orders:release-expired-holds')->everyMinute()->withoutOverlapping();
         $schedule->command('push:send-queued')->everyMinute();
         $schedule->command('reminders:send')->everyFiveMinutes()->withoutOverlapping();
+        // Backstop: stop weekly invoices left unpaid 7+ days after they fell due. Runs before the invoice catch-up.
+        $schedule->command('lessons:auto-cancel-overdue-invoices')->hourly()->withoutOverlapping();
         // Backup for weekly invoices, which are normally sent when the previous lesson is signed off
         $schedule->command('lessons:send-invoices')->hourly()->withoutOverlapping();
         $schedule->command('hmrc:monitor-token-expiry')->dailyAt('07:00');
