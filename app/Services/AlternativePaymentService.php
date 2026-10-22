@@ -38,7 +38,7 @@ class AlternativePaymentService extends BaseService
     ) {}
 
     /**
-     * Confirm a weekly booking still awaiting its first payment as paid by an
+     * Confirm a weekly or one-off booking still awaiting its first payment as paid by an
      * alternative method. Closes the Stripe Checkout page, then activates the
      * order. If the page turns out to have been paid, the booking is confirmed
      * as a card booking instead and nothing else happens.
@@ -170,8 +170,8 @@ class AlternativePaymentService extends BaseService
             return 'Alternative payments are not turned on for this pupil. Ask Head Office.';
         }
 
-        if (! $order->isWeekly()) {
-            return 'Only pay-as-you-go (weekly) bookings can be paid by an alternative method.';
+        if (! AlternativePayments::supportsOrder($order)) {
+            return 'Only pay-as-you-go (weekly) and one-off lesson bookings can be paid by an alternative method.';
         }
 
         if (! $order->isPending()) {

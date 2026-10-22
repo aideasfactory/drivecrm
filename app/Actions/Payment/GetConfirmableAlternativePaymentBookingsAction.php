@@ -6,7 +6,6 @@ namespace App\Actions\Payment;
 
 use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
-use App\Enums\PaymentMode;
 use App\Models\Order;
 use App\Models\Student;
 use App\Support\AlternativePayments;
@@ -15,7 +14,7 @@ use Illuminate\Support\Collection;
 class GetConfirmableAlternativePaymentBookingsAction
 {
     /**
-     * The pupil's weekly bookings still awaiting their first payment that the
+     * The pupil's weekly and one-off bookings still awaiting their first payment that the
      * instructor can confirm as paid by an alternative method, earliest lesson
      * first. Empty when alternative payments are off for the pupil.
      *
@@ -27,9 +26,8 @@ class GetConfirmableAlternativePaymentBookingsAction
             return collect();
         }
 
-        return $student->orders()
+        return AlternativePayments::whereSupportedOrder($student->orders())
             ->where('status', OrderStatus::PENDING)
-            ->where('payment_mode', PaymentMode::WEEKLY)
             ->with(['lessons' => fn ($query) => $query
                 ->where('status', '!=', LessonStatus::CANCELLED)
                 ->orderBy('date')

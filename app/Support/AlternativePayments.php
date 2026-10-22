@@ -6,9 +6,12 @@ namespace App\Support;
 
 use App\Enums\LessonStatus;
 use App\Enums\OrderSource;
+use App\Enums\PaymentMode;
 use App\Models\Lesson;
 use App\Models\Order;
 use App\Models\Student;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Rules for the alternative payment method: a pupil paying the instructor
@@ -19,8 +22,9 @@ use App\Models\Student;
  * Bookings stay card bookings: the pupil is invoiced and reminded as usual
  * and can pay by card at any time. The instructor can confirm a booking that
  * is still awaiting its first payment, and sign off an unpaid lesson by
- * confirming the pupil paid another way. Weekly (pay-as-you-go) orders only:
- * a pay-in-full payment covers the whole block.
+ * confirming the pupil paid another way. Weekly (pay-as-you-go) and one-off
+ * (single lesson) orders only: a pay-in-full payment for a block covers
+ * several lessons at once.
  */
 final class AlternativePayments
 {
@@ -51,12 +55,36 @@ final class AlternativePayments
     }
 
     /**
+     * Whether the order's kind can use the alternative payment method:
+     * weekly (pay-as-you-go) or a one-off single lesson.
+     */
+    public static function supportsOrder(Order $order): bool
+    {
+        return $order->isWeekly() || $order->isOneOff();
+    }
+
+    /**
+     * Limit an orders query to the kinds {@see supportsOrder()} accepts.
+     *
+     * @param  Builder<Order>|HasMany<Order, Student>  $query
+     * @return Builder<Order>|HasMany<Order, Student>
+     */
+    public static function whereSupportedOrder(Builder|HasMany $query): Builder|HasMany
+    {
+        return $query->where(fn ($orders) => $orders
+            ->where('payment_mode', PaymentMode::WEEKLY)
+            ->orWhere(fn ($oneOff) => $oneOff
+                ->where('payment_mode', PaymentMode::UPFRONT)
+                ->where('package_lessons_count', 1)));
+    }
+
+    /**
      * Whether the order can use the alternative payment method at all.
      */
     public static function allowedForOrder(?Order $order): bool
     {
         return $order !== null
-            && $order->isWeekly()
+            && self::supportsOrder($order)
             && self::allowedForStudent($order->student);
     }
 
@@ -82,8 +110,8 @@ final class AlternativePayments
 
     /**
      * Whether this lesson can be signed off by confirming the pupil paid by an
-     * alternative method: a pending lesson on an active weekly order whose
-     * payment has not been made.
+     * alternative method: a pending lesson on an active weekly or one-off
+     * order whose payment has not been made.
      */
     public static function canSignOffWithAlternativePayment(?Lesson $lesson): bool
     {

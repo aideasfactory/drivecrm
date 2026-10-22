@@ -268,6 +268,15 @@ class Order extends Model
     }
 
     /**
+     * Check if this is a one-off (single lesson) booking. Single-lesson
+     * packages can only be paid in full.
+     */
+    public function isOneOff(): bool
+    {
+        return $this->isUpfront() && (int) $this->package_lessons_count === 1;
+    }
+
+    /**
      * Check if the order holds lessons imported from another system.
      * Imported orders have no Stripe payment and never create payouts.
      */

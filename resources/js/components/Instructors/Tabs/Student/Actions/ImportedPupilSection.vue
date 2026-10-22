@@ -62,7 +62,7 @@ const toggleCashPayments = async () => {
                 </li>
                 <li>
                     The instructor can confirm a booking that hasn't been paid, and sign off an unpaid pay-as-you-go
-                    lesson by confirming the pupil paid them another way. They accept the risk each time.
+                    or one-off lesson by confirming the pupil paid them another way. They accept the risk each time.
                 </li>
                 <li>Unpaid bookings for this pupil are not cancelled automatically.</li>
                 <li>

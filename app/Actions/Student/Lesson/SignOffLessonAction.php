@@ -41,7 +41,7 @@ class SignOffLessonAction
      * and never create a payout, so `payout` is null for them. Cash orders
      * (paid to the instructor at the lesson) skip the same guards and create
      * no payout; their lesson is recorded as paid in cash instead. A weekly
-     * lesson paid by an alternative method (recorded before sign-off by
+     * or one-off lesson paid by an alternative method (recorded before sign-off by
      * AlternativePaymentService::prepareSignOff) skips the onboarding guard and
      * creates no payout either: the pupil paid the instructor directly.
      *
@@ -84,6 +84,12 @@ class SignOffLessonAction
         } elseif ($lesson->order->isUpfront()) {
             if (! $lesson->order->isActive()) {
                 throw new Exception('Cannot sign off lesson. The order has not been paid for.');
+            }
+
+            // A one-off confirmed for an alternative payment is active but unpaid
+            // until AlternativePaymentService::prepareSignOff records the payment.
+            if ($lesson->lessonPayment?->isDue() === true) {
+                throw new Exception('Cannot sign off lesson. Payment has not been received yet.');
             }
         }
 

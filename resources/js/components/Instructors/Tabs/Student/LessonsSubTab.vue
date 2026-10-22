@@ -749,7 +749,8 @@ onMounted(() => {
                         <AlertDescription>
                             This confirms the booking and cancels the pupil's card payment link. The instructor isn't
                             paid through Drive for lessons paid this way, and late cancellations or no-shows aren't
-                            covered. Later lessons are still invoiced as normal.
+                            covered.<template v-if="(confirmBookingTarget?.lessons_count ?? 0) > 1">
+                                Later lessons are still invoiced as normal.</template>
                         </AlertDescription>
                     </Alert>
                     <div class="flex items-start gap-3 rounded-md border border-input p-3">

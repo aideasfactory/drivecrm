@@ -141,7 +141,7 @@ class StudentOrderController extends Controller
      * Confirm a booking awaiting its first payment as paid by an alternative
      * method (pupil pays the instructor directly). Only the pupil's instructor,
      * only for pupils whose alternative payments an owner turned on, weekly
-     * orders only. Closes the Stripe payment page and activates the order.
+     * and one-off orders only. Closes the Stripe payment page and activates the order.
      */
     public function confirmAlternativePayment(ConfirmAlternativePaymentRequest $request, Student $student, Order $order): JsonResponse
     {
