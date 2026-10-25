@@ -67,13 +67,17 @@ class ReadImportBundleAction
                     continue;
                 }
 
-                $contents = $zip->getFromIndex($i);
+                $stream = $zip->getStreamIndex($i);
 
-                if ($contents === false) {
+                if ($stream === false) {
                     throw new RuntimeException("Could not read {$name} from the zip.");
                 }
 
-                $bundle[$section] = $this->parseCsv($contents);
+                try {
+                    $bundle[$section] = $this->parseCsv($stream);
+                } finally {
+                    fclose($stream);
+                }
                 $found = true;
             }
         } finally {
@@ -88,16 +92,14 @@ class ReadImportBundleAction
     }
 
     /**
+     * Parse a CSV straight from the zip entry's stream, so the file is never
+     * held in memory as a whole alongside its rows.
+     *
+     * @param  resource  $handle
      * @return array<int, array<string, string|int>>
      */
-    protected function parseCsv(string $contents): array
+    protected function parseCsv($handle): array
     {
-        $contents = preg_replace('/^\xEF\xBB\xBF/', '', $contents) ?? $contents;
-
-        $handle = fopen('php://temp', 'r+');
-        fwrite($handle, $contents);
-        rewind($handle);
-
         $headers = null;
         $rows = [];
         $line = 0;
@@ -106,6 +108,7 @@ class ReadImportBundleAction
             $line++;
 
             if ($headers === null) {
+                $record[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string) ($record[0] ?? '')) ?? $record[0];
                 $headers = array_map(fn ($header) => strtolower(trim((string) $header)), $record);
 
                 continue;
@@ -127,8 +130,6 @@ class ReadImportBundleAction
             $row['_line'] = $line;
             $rows[] = $row;
         }
-
-        fclose($handle);
 
         return $rows;
     }

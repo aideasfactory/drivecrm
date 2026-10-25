@@ -286,8 +286,8 @@ class ValidateImportBundleAction
             }
 
             $amount = ImportValues::pence($this->value($row, 'amount'));
-            if ($amount === null || $amount === 0) {
-                $this->fail('finances.csv', $row, "Invalid amount '{$this->value($row, 'amount')}' (positive pounds, e.g. 35.00).");
+            if ($amount === null) {
+                $this->fail('finances.csv', $row, "Invalid amount '{$this->value($row, 'amount')}' (pounds, 0 or more, e.g. 35.00).");
             }
 
             if (mb_strlen($this->value($row, 'description')) > 255) {

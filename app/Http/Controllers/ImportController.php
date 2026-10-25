@@ -21,6 +21,8 @@ use Throwable;
  */
 class ImportController extends Controller
 {
+    private const MEMORY_LIMIT = '1024M';
+
     public function __construct(
         protected ImportService $importService,
     ) {}
@@ -45,6 +47,8 @@ class ImportController extends Controller
      */
     public function check(ImportBundleRequest $request): JsonResponse
     {
+        $this->raiseMemoryLimit();
+
         try {
             $result = $this->importService->checkBundle($this->uploadedZipPath($request));
         } catch (RuntimeException $exception) {
@@ -71,6 +75,7 @@ class ImportController extends Controller
     public function store(ImportBundleRequest $request): JsonResponse
     {
         set_time_limit(300);
+        $this->raiseMemoryLimit();
 
         try {
             $zipPath = $this->uploadedZipPath($request);
@@ -106,6 +111,15 @@ class ImportController extends Controller
             'import_run_id' => $import['run']->id,
             'totals' => $import['totals'],
         ]);
+    }
+
+    /**
+     * A bundle's rows are all held in memory while it is checked and
+     * imported, which outgrows the default limit for large diaries.
+     */
+    private function raiseMemoryLimit(): void
+    {
+        ini_set('memory_limit', self::MEMORY_LIMIT);
     }
 
     /**

@@ -287,7 +287,7 @@ class BuildImportTemplateAction
                 'category' => 'For payments: '.implode(', ', array_keys((array) config('finances.payment_categories'))).'. For expenses: '.implode(', ', array_keys((array) config('finances.expense_categories'))).'.',
                 'payment_method' => $list(array_keys((array) config('finances.payment_methods'))),
                 'date' => $date,
-                'amount' => 'Positive pounds, e.g. 35.00.',
+                'amount' => 'Pounds, 0 or more, e.g. 35.00 (0.00 is allowed).',
                 'description' => 'Up to 255 characters.',
                 'receipt_file' => 'Path of a '.implode('/', (array) config('finances.receipt.allowed_mimes')).' file inside the zip, e.g. '.self::EXAMPLE_RECEIPT.'. Max '.((int) config('finances.receipt.max_size_kb') / 1024).'MB. File names must be unique.',
             ],
