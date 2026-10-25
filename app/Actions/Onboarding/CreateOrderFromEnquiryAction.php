@@ -57,6 +57,8 @@ class CreateOrderFromEnquiryAction
     ): Order {
         ($this->releaseLegacyStepFourHolds)($enquiry);
 
+        $paymentMode = $package->paymentModeFor($paymentMode);
+
         try {
             DB::beginTransaction();
 

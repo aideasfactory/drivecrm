@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\PaymentMode;
 use App\Support\Fees;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -115,6 +116,20 @@ class Package extends Model
     public function allowsWeeklyPayment(): bool
     {
         return $this->lessons_count > 1;
+    }
+
+    /**
+     * The payment mode an order for this package is created with: weekly is
+     * turned into pay in full when the package has a single lesson, so no
+     * booking route can create a one-lesson weekly order.
+     */
+    public function paymentModeFor(PaymentMode $requested): PaymentMode
+    {
+        if ($requested === PaymentMode::WEEKLY && ! $this->allowsWeeklyPayment()) {
+            return PaymentMode::UPFRONT;
+        }
+
+        return $requested;
     }
 
     /**
