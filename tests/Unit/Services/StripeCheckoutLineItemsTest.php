@@ -21,6 +21,15 @@ beforeEach(function () {
         {
             return $this->buildCheckoutLineItems($order, $package, $chargeAmountPence);
         }
+
+        /**
+         * @param  array{lesson: int, booking_fee: int, digital_fee: int}  $breakdown
+         * @return list<array{amount: int, description: string, component: string}>
+         */
+        public function invoiceLineItemsFor(int $amountPence, array $breakdown, bool $isInstalment): array
+        {
+            return $this->buildInvoiceLineItems($amountPence, $breakdown, '10 Lesson Package', '26 Oct 2026 17:30', $isInstalment);
+        }
     };
 
     $this->package = new Package(['name' => '10 Lesson Package', 'lessons_count' => 10]);
@@ -78,6 +87,19 @@ it('falls back to a single line item when the components do not add up to the ch
     expect($items)->toHaveCount(1)
         ->and($items[0]['price_data']['unit_amount'])->toBe(70000);
 });
+
+it('labels invoice fee lines as a weekly instalment only for real instalments', function (bool $isInstalment, string $bookingLabel, string $digitalLabel) {
+    $items = $this->service->invoiceLineItemsFor(8109, ['lesson' => 7400, 'booking_fee' => 349, 'digital_fee' => 360], $isInstalment);
+
+    expect(array_column($items, 'description'))->toBe([
+        'Lesson cost — 10 Lesson Package on 26 Oct 2026 17:30',
+        $bookingLabel,
+        $digitalLabel,
+    ]);
+})->with([
+    'instalment' => [true, 'Booking fee (weekly instalment)', 'Digital services fee (weekly instalment)'],
+    'single payment' => [false, 'Booking fee', 'Digital services fee'],
+]);
 
 it('uses product data when the package has no Stripe product', function () {
     $this->package->stripe_product_id = null;

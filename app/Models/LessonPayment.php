@@ -207,19 +207,24 @@ class LessonPayment extends Model
             return [];
         }
 
-        return self::breakdownLines(self::weeklyBreakdown($order, (int) $this->amount_pence, (int) $this->test_pass_guarantee_pence));
+        return self::breakdownLines(
+            self::weeklyBreakdown($order, (int) $this->amount_pence, (int) $this->test_pass_guarantee_pence),
+            $order->isInstalmentPlan(),
+        );
     }
 
     /**
      * Format a payment breakdown as markdown lines, ending with a blank line so
      * the amount line that follows in the template stays separated. Returns an
-     * empty array when there are no fee components.
+     * empty array when there are no fee components. Fee lines are only
+     * labelled "(weekly instalment)" when `$isInstalment` is true.
      *
      * @param  array{lesson?: int, booking_fee?: int, digital_fee?: int, test_pass_guarantee?: int}  $breakdown
      * @return list<string>
      */
-    public static function breakdownLines(array $breakdown): array
+    public static function breakdownLines(array $breakdown, bool $isInstalment = false): array
     {
+        $instalmentLabel = $isInstalment ? ' (weekly instalment)' : '';
         $lesson = (int) ($breakdown['lesson'] ?? 0);
         $bookingFee = (int) ($breakdown['booking_fee'] ?? 0);
         $digitalFee = (int) ($breakdown['digital_fee'] ?? 0);
@@ -236,11 +241,11 @@ class LessonPayment extends Model
         }
 
         if ($bookingFee > 0) {
-            $lines[] = 'Booking fee (weekly instalment): '.self::formatPence($bookingFee);
+            $lines[] = "Booking fee{$instalmentLabel}: ".self::formatPence($bookingFee);
         }
 
         if ($digitalFee > 0) {
-            $lines[] = 'Digital services fee (weekly instalment): '.self::formatPence($digitalFee);
+            $lines[] = "Digital services fee{$instalmentLabel}: ".self::formatPence($digitalFee);
         }
 
         if ($testPassGuarantee > 0) {
@@ -255,7 +260,7 @@ class LessonPayment extends Model
     /**
      * This payment's cost components as individual email placeholder values.
      *
-     * @return array{lesson_cost: string, booking_fee: string, digital_fee: string, guarantee_fee: string, has_fees: bool}
+     * @return array{lesson_cost: string, booking_fee: string, digital_fee: string, guarantee_fee: string, has_fees: bool, is_instalment: bool}
      */
     public function costBreakdownPlaceholders(): array
     {
@@ -265,18 +270,22 @@ class LessonPayment extends Model
             return self::breakdownPlaceholders([]);
         }
 
-        return self::breakdownPlaceholders(self::weeklyBreakdown($order, (int) $this->amount_pence, (int) $this->test_pass_guarantee_pence));
+        return self::breakdownPlaceholders(
+            self::weeklyBreakdown($order, (int) $this->amount_pence, (int) $this->test_pass_guarantee_pence),
+            $order->isInstalmentPlan(),
+        );
     }
 
     /**
      * A payment breakdown as individual email placeholder values. Amounts are
      * blank when zero so templates can wrap each line in `{{#if booking_fee}}…{{/if}}`;
      * `has_fees` matches when {@see breakdownLines()} would print a breakdown.
+     * `is_instalment` drives the "(weekly instalment)" fee label.
      *
      * @param  array{lesson?: int, booking_fee?: int, digital_fee?: int, test_pass_guarantee?: int}  $breakdown
-     * @return array{lesson_cost: string, booking_fee: string, digital_fee: string, guarantee_fee: string, has_fees: bool}
+     * @return array{lesson_cost: string, booking_fee: string, digital_fee: string, guarantee_fee: string, has_fees: bool, is_instalment: bool}
      */
-    public static function breakdownPlaceholders(array $breakdown): array
+    public static function breakdownPlaceholders(array $breakdown, bool $isInstalment = false): array
     {
         $lesson = (int) ($breakdown['lesson'] ?? 0);
         $bookingFee = (int) ($breakdown['booking_fee'] ?? 0);
@@ -289,6 +298,7 @@ class LessonPayment extends Model
             'digital_fee' => $digitalFee > 0 ? self::formatPence($digitalFee) : '',
             'guarantee_fee' => $testPassGuarantee > 0 ? self::formatPence($testPassGuarantee) : '',
             'has_fees' => $bookingFee > 0 || $digitalFee > 0 || $testPassGuarantee > 0,
+            'is_instalment' => $isInstalment,
         ];
     }
 
