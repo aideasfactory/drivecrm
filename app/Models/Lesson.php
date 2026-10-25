@@ -197,6 +197,22 @@ class Lesson extends Model
     }
 
     /**
+     * Whether this lesson's start time (UK time) has been reached, so it can be
+     * signed off. A lesson with no date has nothing to wait for.
+     */
+    public function hasStarted(): bool
+    {
+        if (! $this->date) {
+            return true;
+        }
+
+        return BookingPayments::hasLessonStarted(
+            $this->date->toDateString(),
+            $this->start_time?->format('H:i'),
+        );
+    }
+
+    /**
      * Whole hours of notice if this lesson were cancelled now; negative once it
      * has started, null when it has no date.
      */

@@ -565,6 +565,15 @@ class PupilController extends Controller
             return response()->json(['message' => 'This lesson has already been completed.'], 422);
         }
 
+        // Checked before the alternative payment step, which voids the Stripe invoice
+        if (! $lesson->hasStarted()) {
+            $startsAt = $lesson->date->format('j M Y').($lesson->start_time ? ' at '.$lesson->start_time->format('H:i') : '');
+
+            return response()->json([
+                'message' => "This lesson can't be signed off until it has started ({$startsAt}).",
+            ], 422);
+        }
+
         $instructor = $lesson->instructor;
 
         if (! $instructor) {

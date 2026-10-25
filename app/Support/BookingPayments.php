@@ -118,6 +118,14 @@ final class BookingPayments
     }
 
     /**
+     * Whether a lesson's start time (UK time) has been reached.
+     */
+    public static function hasLessonStarted(string $lessonDate, ?string $lessonStartTime): bool
+    {
+        return self::now()->greaterThanOrEqualTo(self::lessonStartsAt($lessonDate, $lessonStartTime));
+    }
+
+    /**
      * Whole hours from now until a lesson starts; negative once it has started.
      */
     public static function hoursUntilLesson(string $lessonDate, ?string $lessonStartTime): int
