@@ -66,6 +66,8 @@ interface Lesson {
     status: 'pending' | 'completed' | 'cancelled'
     /** Package week booked onto a time already taken; the DRIVE team is rearranging it. */
     is_provisional: boolean
+    /** Start time (UK) reached; a lesson can't be signed off before it. */
+    has_started: boolean
     completed_at: string | null
     summary: string | null
     lesson_payment_id: number | null
@@ -256,7 +258,9 @@ const openSignOffSheet = (lesson: Lesson) => {
 }
 
 const canSignOff = (lesson: Lesson): boolean =>
-    lesson.status === 'pending' && (lesson.payment_status === 'paid' || lesson.can_sign_off_with_alternative_payment)
+    lesson.status === 'pending' &&
+    lesson.has_started &&
+    (lesson.payment_status === 'paid' || lesson.can_sign_off_with_alternative_payment)
 
 const signOffNeedsAlternativeConfirmation = computed(
     () => signOffTarget.value?.can_sign_off_with_alternative_payment === true,
@@ -587,6 +591,12 @@ onMounted(() => {
                                     <ClipboardCheck class="h-4 w-4" />
                                     Sign Off
                                 </Button>
+                                <span
+                                    v-else-if="lesson.status === 'pending' && !lesson.has_started"
+                                    class="text-xs text-muted-foreground"
+                                >
+                                    Not started yet
+                                </span>
                                 <span
                                     v-else-if="lesson.status === 'pending'"
                                     class="text-xs text-muted-foreground"

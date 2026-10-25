@@ -405,12 +405,12 @@ class PupilController extends Controller
     }
 
     /**
-     * Get all lessons for a student, plus any bookings awaiting their first
-     * payment that can be confirmed as paid by an alternative method.
+     * Get all lessons for a student, oldest first, plus any bookings awaiting
+     * their first payment that can be confirmed as paid by an alternative method.
      */
     public function lessons(Student $student, LessonSignOffService $service): JsonResponse
     {
-        $lessons = $service->getStudentLessons($student);
+        $lessons = $service->getStudentLessons($student, ['sort' => 'asc']);
 
         return response()->json([
             'lessons' => $lessons,
@@ -563,6 +563,15 @@ class PupilController extends Controller
         // Lesson must be pending
         if ($lesson->isCompleted()) {
             return response()->json(['message' => 'This lesson has already been completed.'], 422);
+        }
+
+        // Checked before the alternative payment step, which voids the Stripe invoice
+        if (! $lesson->hasStarted()) {
+            $startsAt = $lesson->date->format('j M Y').($lesson->start_time ? ' at '.$lesson->start_time->format('H:i') : '');
+
+            return response()->json([
+                'message' => "This lesson can't be signed off until it has started ({$startsAt}).",
+            ], 422);
         }
 
         $instructor = $lesson->instructor;
