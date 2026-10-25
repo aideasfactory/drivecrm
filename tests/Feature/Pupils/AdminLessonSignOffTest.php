@@ -113,3 +113,20 @@ test('the lessons list tells the admin tab whether each lesson has started', fun
     expect($lessons[$futureLesson->id]['has_started'])->toBeFalse()
         ->and($lessons[$pastLesson->id]['has_started'])->toBeTrue();
 });
+
+test('the lessons list is sorted oldest first', function () {
+    [$student, $futureLesson] = paidInFullLesson('2026-07-22', '10:00');
+    $pastLesson = Lesson::factory()->create([
+        'order_id' => $futureLesson->order_id,
+        'instructor_id' => $futureLesson->instructor_id,
+        'date' => '2026-07-08',
+        'start_time' => '10:00',
+    ]);
+
+    $lessonIds = $this->actingAs($this->owner)
+        ->getJson(route('students.lessons', $student))
+        ->assertSuccessful()
+        ->json('lessons.*.id');
+
+    expect($lessonIds)->toBe([$pastLesson->id, $futureLesson->id]);
+});

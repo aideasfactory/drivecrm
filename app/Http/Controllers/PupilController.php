@@ -405,12 +405,12 @@ class PupilController extends Controller
     }
 
     /**
-     * Get all lessons for a student, plus any bookings awaiting their first
-     * payment that can be confirmed as paid by an alternative method.
+     * Get all lessons for a student, oldest first, plus any bookings awaiting
+     * their first payment that can be confirmed as paid by an alternative method.
      */
     public function lessons(Student $student, LessonSignOffService $service): JsonResponse
     {
-        $lessons = $service->getStudentLessons($student);
+        $lessons = $service->getStudentLessons($student, ['sort' => 'asc']);
 
         return response()->json([
             'lessons' => $lessons,
