@@ -30,6 +30,8 @@ class LessonResource extends JsonResource
             'end_time' => $this['end_time'],
             'status' => $this['status'],
             'is_provisional' => $this['is_provisional'],
+            'is_banked' => $this['is_banked'],
+            'banked_at' => $this['banked_at'],
             'completed_at' => $this['completed_at'],
             'card_status' => $this['card_status'],
             'has_reflective_log' => $this['has_reflective_log'],

@@ -4,7 +4,9 @@ import axios from 'axios'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -48,9 +50,18 @@ import {
     ShoppingCart,
     HandCoins,
     TriangleAlert,
+    Archive,
+    CalendarPlus,
+    CalendarX,
 } from 'lucide-vue-next'
 import { toast } from '@/components/ui/sonner'
-import { confirmAlternativePayment } from '@/actions/App/Http/Controllers/PupilController'
+import {
+    cancelBankedLesson,
+    confirmAlternativePayment,
+    rebookBankedLesson,
+} from '@/actions/App/Http/Controllers/PupilController'
+import { cancellationReasons as cancellationReasonsRoute } from '@/actions/App/Http/Controllers/InstructorController'
+import type { CancellationReasonOption } from '@/types/instructor'
 
 interface Lesson {
     id: number
@@ -66,6 +77,10 @@ interface Lesson {
     status: 'pending' | 'completed' | 'cancelled'
     /** Package week booked onto a time already taken; the DRIVE team is rearranging it. */
     is_provisional: boolean
+    /** Kept in its booking to rebook later: no date until the instructor rebooks it. */
+    is_banked: boolean
+    banked_at: string | null
+    banked_reason: string | null
     /** Start time (UK) reached; a lesson can't be signed off before it. */
     has_started: boolean
     completed_at: string | null
@@ -132,9 +147,36 @@ const viewSummaryTarget = ref<Lesson | null>(null)
 // Resend invoice state
 const resendingInvoiceId = ref<number | null>(null)
 
+// Rebook (banked lesson) sheet state
+const isRebookSheetOpen = ref(false)
+const rebookTarget = ref<Lesson | null>(null)
+const rebookForm = ref({ date: '', start_time: '', end_time: '' })
+const isRebooking = ref(false)
+const rebookErrors = ref<Record<string, string>>({})
+
+// Cancel banked lesson dialog state
+const isCancelBankedOpen = ref(false)
+const cancelBankedTarget = ref<Lesson | null>(null)
+const cancelBankedReasonCode = ref('')
+const cancelBankedDetails = ref('')
+const isCancellingBanked = ref(false)
+const cancellationReasons = ref<CancellationReasonOption[]>([])
+const cancellationReasonsLoading = ref(false)
+
 // Computed
 const pendingLessons = computed(() => lessons.value.filter((l) => l.status === 'pending'))
 const completedLessons = computed(() => lessons.value.filter((l) => l.status === 'completed'))
+const bankedLessons = computed(() => lessons.value.filter((l) => l.is_banked))
+const todayIso = new Date().toISOString().slice(0, 10)
+
+const selectedCancelBankedReason = computed(() =>
+    cancellationReasons.value.find((reason) => reason.value === cancelBankedReasonCode.value) ?? null,
+)
+
+const cancelBankedIsComplete = computed(() => {
+    const reason = selectedCancelBankedReason.value
+    return reason !== null && (!reason.details_required || cancelBankedDetails.value.trim() !== '')
+})
 
 // Purchase lessons URL
 const canPurchaseLessons = computed(() => {
@@ -265,6 +307,83 @@ const canSignOff = (lesson: Lesson): boolean =>
 const signOffNeedsAlternativeConfirmation = computed(
     () => signOffTarget.value?.can_sign_off_with_alternative_payment === true,
 )
+
+// Rebook a lesson that was kept in its booking to rebook later
+const openRebookSheet = (lesson: Lesson) => {
+    rebookTarget.value = lesson
+    rebookForm.value = { date: '', start_time: '', end_time: '' }
+    rebookErrors.value = {}
+    isRebookSheetOpen.value = true
+}
+
+const handleRebook = async () => {
+    if (!rebookTarget.value) return
+
+    isRebooking.value = true
+    rebookErrors.value = {}
+    try {
+        const response = await axios.post(
+            rebookBankedLesson.url({ student: props.studentId, lesson: rebookTarget.value.id }),
+            rebookForm.value,
+        )
+        toast.success(response.data.message || 'Lesson rebooked')
+        isRebookSheetOpen.value = false
+        rebookTarget.value = null
+        await loadLessons()
+    } catch (error: any) {
+        const data = error.response?.data
+        if (data?.errors) {
+            rebookErrors.value = Object.fromEntries(
+                Object.entries(data.errors).map(([field, messages]) => [field, (messages as string[])[0]]),
+            )
+        }
+        toast.error(data?.message || 'Failed to rebook lesson')
+    } finally {
+        isRebooking.value = false
+    }
+}
+
+// Cancel a lesson that was kept to rebook later
+const openCancelBanked = async (lesson: Lesson) => {
+    cancelBankedTarget.value = lesson
+    cancelBankedReasonCode.value = ''
+    cancelBankedDetails.value = ''
+    isCancelBankedOpen.value = true
+
+    const instructorId = props.instructorId ?? lesson.instructor_id
+    if (cancellationReasons.value.length > 0 || !instructorId) return
+
+    cancellationReasonsLoading.value = true
+    try {
+        const response = await axios.get(cancellationReasonsRoute.url(instructorId))
+        cancellationReasons.value = Array.isArray(response.data?.data) ? response.data.data : []
+    } catch {
+        toast.error('Failed to load cancellation reasons')
+    } finally {
+        cancellationReasonsLoading.value = false
+    }
+}
+
+const handleCancelBanked = async () => {
+    if (!cancelBankedTarget.value || !cancelBankedIsComplete.value) return
+
+    isCancellingBanked.value = true
+    try {
+        const response = await axios.post(
+            cancelBankedLesson.url({ student: props.studentId, lesson: cancelBankedTarget.value.id }),
+            { reason_code: cancelBankedReasonCode.value, reason: cancelBankedDetails.value.trim() },
+        )
+        toast.success(response.data.message || 'Lesson cancelled')
+        isCancelBankedOpen.value = false
+        cancelBankedTarget.value = null
+        await loadLessons()
+    } catch (error: any) {
+        const data = error.response?.data
+        toast.error(data?.errors?.reason?.[0] || data?.message || 'Failed to cancel lesson')
+    } finally {
+        isCancellingBanked.value = false
+    }
+}
 
 // Confirm a booking awaiting its first payment as paid by an alternative method
 const openConfirmBooking = (booking: AlternativePaymentBooking) => {
@@ -453,6 +572,66 @@ onMounted(() => {
             </CardContent>
         </Card>
 
+        <!-- Lessons kept in their booking to rebook later -->
+        <Card v-if="!loading && bankedLessons.length > 0" class="border-primary/40">
+            <CardHeader>
+                <CardTitle class="flex items-center gap-2">
+                    <Archive class="h-5 w-5" />
+                    Lessons to Rebook ({{ bankedLessons.length }})
+                </CardTitle>
+                <p class="text-sm text-muted-foreground">
+                    These lessons were taken out of the diary but kept in the pupil's booking at the price they paid.
+                    Agree a new date with the pupil and rebook each one. They can't be signed off until they're rebooked.
+                </p>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Lesson #</TableHead>
+                            <TableHead>Package</TableHead>
+                            <TableHead>Amount</TableHead>
+                            <TableHead>Payment</TableHead>
+                            <TableHead>Kept Since</TableHead>
+                            <TableHead>Reason</TableHead>
+                            <TableHead class="text-right">Actions</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        <TableRow v-for="lesson in bankedLessons" :key="lesson.id">
+                            <TableCell class="font-medium tabular-nums">#{{ lesson.student_lesson_number }}</TableCell>
+                            <TableCell>{{ lesson.package_name }}</TableCell>
+                            <TableCell>{{ formatCurrency(lesson.amount_pence) }}</TableCell>
+                            <TableCell>
+                                <Badge :variant="paymentBadgeVariant(lesson.payment_status)" class="gap-1">
+                                    <PoundSterling class="h-3 w-3" />
+                                    {{ lesson.payment_status
+                                        ? lesson.payment_status.charAt(0).toUpperCase() + lesson.payment_status.slice(1)
+                                        : '—' }}
+                                </Badge>
+                            </TableCell>
+                            <TableCell>{{ formatDate(lesson.banked_at ? lesson.banked_at.slice(0, 10) : null) }}</TableCell>
+                            <TableCell class="max-w-[220px] truncate text-sm text-muted-foreground" :title="lesson.banked_reason ?? ''">
+                                {{ lesson.banked_reason || '—' }}
+                            </TableCell>
+                            <TableCell class="text-right">
+                                <div class="flex justify-end gap-2">
+                                    <Button size="sm" class="gap-1" @click="openRebookSheet(lesson)">
+                                        <CalendarPlus class="h-4 w-4" />
+                                        Rebook
+                                    </Button>
+                                    <Button size="sm" variant="ghost" class="gap-1" @click="openCancelBanked(lesson)">
+                                        <CalendarX class="h-4 w-4" />
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+
         <!-- Lessons Table -->
         <Card>
             <CardHeader class="flex flex-row items-center justify-between">
@@ -506,7 +685,11 @@ onMounted(() => {
                                 #{{ lesson.student_lesson_number }}
                             </TableCell>
                             <TableCell class="font-medium">
-                                {{ formatDate(lesson.date) }}
+                                <Badge v-if="lesson.is_banked" variant="outline" class="gap-1">
+                                    <Archive class="h-3 w-3" />
+                                    To rebook
+                                </Badge>
+                                <template v-else>{{ formatDate(lesson.date) }}</template>
                             </TableCell>
                             <TableCell>
                                 {{ formatTime(lesson.start_time, lesson.end_time) }}
@@ -582,7 +765,17 @@ onMounted(() => {
                             </TableCell>
                             <TableCell class="text-right">
                                 <Button
-                                    v-if="canSignOff(lesson)"
+                                    v-if="lesson.is_banked"
+                                    variant="outline"
+                                    size="sm"
+                                    @click="openRebookSheet(lesson)"
+                                    class="gap-1"
+                                >
+                                    <CalendarPlus class="h-4 w-4" />
+                                    Rebook
+                                </Button>
+                                <Button
+                                    v-else-if="canSignOff(lesson)"
                                     variant="outline"
                                     size="sm"
                                     @click="openSignOffSheet(lesson)"
@@ -846,6 +1039,164 @@ onMounted(() => {
                         {{ viewSummaryTarget.summary }}
                     </div>
                 </div>
+            </DialogContent>
+        </Dialog>
+
+        <!-- Rebook Banked Lesson Sheet (Slide-out) -->
+        <Sheet v-model:open="isRebookSheetOpen">
+            <SheetContent side="right">
+                <SheetHeader>
+                    <SheetTitle class="flex items-center gap-2">
+                        <CalendarPlus class="h-5 w-5" />
+                        Rebook Lesson
+                    </SheetTitle>
+                    <SheetDescription>
+                        Put this lesson back in the instructor's diary. It stays part of the pupil's booking at the price
+                        they paid, and the pupil is emailed the new date.
+                    </SheetDescription>
+                </SheetHeader>
+
+                <form v-if="rebookTarget" class="mt-6 flex-1 space-y-6 overflow-y-auto px-6 py-4" @submit.prevent="handleRebook">
+                    <div class="rounded-md border p-4 space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-muted-foreground">Lesson</span>
+                            <span class="font-medium">#{{ rebookTarget.student_lesson_number }}</span>
+                        </div>
+                        <Separator />
+                        <div class="flex justify-between">
+                            <span class="text-muted-foreground">Package</span>
+                            <span class="font-medium">{{ rebookTarget.package_name }}</span>
+                        </div>
+                        <Separator />
+                        <div class="flex justify-between">
+                            <span class="text-muted-foreground">Amount</span>
+                            <span class="font-medium">{{ formatCurrency(rebookTarget.amount_pence) }}</span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <Label for="rebook_date">Date *</Label>
+                        <Input id="rebook_date" v-model="rebookForm.date" type="date" :min="todayIso" :disabled="isRebooking" required />
+                        <p v-if="rebookErrors.date" class="text-destructive text-sm">{{ rebookErrors.date }}</p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <Label for="rebook_start">Start time *</Label>
+                            <Input id="rebook_start" v-model="rebookForm.start_time" type="time" :disabled="isRebooking" required />
+                            <p v-if="rebookErrors.start_time" class="text-destructive text-sm">{{ rebookErrors.start_time }}</p>
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="rebook_end">End time *</Label>
+                            <Input id="rebook_end" v-model="rebookForm.end_time" type="time" :disabled="isRebooking" required />
+                            <p v-if="rebookErrors.end_time" class="text-destructive text-sm">{{ rebookErrors.end_time }}</p>
+                        </div>
+                    </div>
+
+                    <p v-if="rebookErrors.first_lesson_date || rebookErrors.lesson" class="text-destructive text-sm">
+                        {{ rebookErrors.first_lesson_date || rebookErrors.lesson }}
+                    </p>
+
+                    <p class="text-muted-foreground text-xs">
+                        An open slot at exactly this time is used; otherwise a new one is added. Times that clash with
+                        another lesson, blocked-out time or a test can't be used. A weekly lesson is invoiced as normal
+                        before it.
+                    </p>
+
+                    <SheetFooter class="px-0">
+                        <Button
+                            type="submit"
+                            class="min-w-[140px]"
+                            :disabled="isRebooking || !rebookForm.date || !rebookForm.start_time || !rebookForm.end_time"
+                        >
+                            <Loader2 v-if="isRebooking" class="mr-2 h-4 w-4 animate-spin" />
+                            <CalendarPlus v-else class="mr-2 h-4 w-4" />
+                            Rebook Lesson
+                        </Button>
+                    </SheetFooter>
+                </form>
+            </SheetContent>
+        </Sheet>
+
+        <!-- Cancel Banked Lesson Dialog -->
+        <Dialog v-model:open="isCancelBankedOpen">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle class="flex items-center gap-2">
+                        <CalendarX class="h-5 w-5" />
+                        Cancel Lesson
+                    </DialogTitle>
+                    <DialogDescription>
+                        This cancels lesson #{{ cancelBankedTarget?.student_lesson_number }} for good instead of rebooking
+                        it. The pupil will be emailed. This action cannot be undone.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div class="space-y-4">
+                    <Alert variant="destructive">
+                        <TriangleAlert class="h-4 w-4" />
+                        <AlertTitle>What cancelling does</AlertTitle>
+                        <AlertDescription>
+                            <ul class="mt-1 list-disc space-y-1 pl-4">
+                                <li>
+                                    The lesson leaves the pupil's <strong>{{ cancelBankedTarget?.package_name }}</strong>
+                                    booking for good. Any package or introductory rate on it is lost.
+                                </li>
+                                <li v-if="cancelBankedTarget?.payment_status === 'paid'">
+                                    It has been paid for, so Head Office is told to refund the pupil (everything except the
+                                    booking fee).
+                                </li>
+                                <li v-else>It hasn't been paid for, so the pupil won't be charged for it.</li>
+                            </ul>
+                        </AlertDescription>
+                    </Alert>
+
+                    <div class="space-y-2">
+                        <Label for="cancel-banked-reason">Reason for cancelling *</Label>
+                        <select
+                            id="cancel-banked-reason"
+                            v-model="cancelBankedReasonCode"
+                            :disabled="cancellationReasonsLoading"
+                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                            <option value="" disabled>{{ cancellationReasonsLoading ? 'Loading reasons...' : 'Choose a reason...' }}</option>
+                            <option v-for="reason in cancellationReasons" :key="reason.value" :value="reason.value">
+                                {{ reason.label }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="space-y-2">
+                        <Label for="cancel-banked-details">
+                            Details
+                            <span v-if="selectedCancelBankedReason?.details_required" class="text-destructive">*</span>
+                            <span v-else class="text-muted-foreground">(optional)</span>
+                        </Label>
+                        <Textarea
+                            id="cancel-banked-details"
+                            v-model="cancelBankedDetails"
+                            placeholder="Anything Head Office should know (the student will see this too)"
+                            class="min-h-[80px]"
+                            maxlength="1000"
+                        />
+                    </div>
+                </div>
+
+                <DialogFooter>
+                    <Button variant="outline" :disabled="isCancellingBanked" @click="isCancelBankedOpen = false">
+                        Keep to rebook
+                    </Button>
+                    <Button
+                        variant="destructive"
+                        class="min-w-[130px]"
+                        :disabled="isCancellingBanked || !cancelBankedIsComplete"
+                        @click="handleCancelBanked"
+                    >
+                        <Loader2 v-if="isCancellingBanked" class="mr-2 h-4 w-4 animate-spin" />
+                        <CalendarX v-else class="mr-2 h-4 w-4" />
+                        Cancel Lesson
+                    </Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     </div>

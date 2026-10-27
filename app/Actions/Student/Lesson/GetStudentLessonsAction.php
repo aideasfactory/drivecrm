@@ -78,6 +78,9 @@ class GetStudentLessonsAction
                     'end_time' => $lesson->end_time?->format('H:i'),
                     'status' => $lesson->status->value,
                     'is_provisional' => $lesson->isProvisional(),
+                    'is_banked' => $lesson->isBanked(),
+                    'banked_at' => $lesson->banked_at?->toISOString(),
+                    'banked_reason' => $lesson->banked_reason,
                     'has_started' => $lesson->hasStarted(),
                     'completed_at' => $lesson->completed_at?->toISOString(),
                     'summary' => $lesson->summary,
@@ -117,6 +120,8 @@ class GetStudentLessonsAction
                 $cardStatus = LessonCardStatus::Draft->value;
             } elseif ($isCompleted) {
                 $cardStatus = LessonCardStatus::SignedOff->value;
+            } elseif ($lesson['is_banked']) {
+                $cardStatus = LessonCardStatus::Banked->value;
             } elseif ($isPast) {
                 $cardStatus = LessonCardStatus::NeedsSignOff->value;
             } elseif (! $nextLessonFound && ($isToday || ($lessonDate && $lessonDate->gt($today)))) {

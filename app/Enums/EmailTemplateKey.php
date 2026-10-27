@@ -16,6 +16,8 @@ enum EmailTemplateKey: string
     case LearnerLessonSignedOff = 'learner.lesson_signed_off';
     case LearnerLessonsBulkRescheduled = 'learner.lessons_bulk_rescheduled';
     case LearnerLessonRescheduled = 'learner.lesson_rescheduled';
+    case LearnerLessonsBanked = 'learner.lessons_banked';
+    case LearnerBankedLessonRebooked = 'learner.banked_lesson_rebooked';
     case LearnerLessonPaymentReminder = 'learner.lesson_payment_reminder';
     case LearnerLessonPaymentReceived = 'learner.lesson_payment_received';
     case LearnerPaidInFullPaymentReceived = 'learner.paid_in_full_payment_received';

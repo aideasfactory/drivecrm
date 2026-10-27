@@ -34,6 +34,8 @@ class LessonDetailResource extends JsonResource
             'end_time' => $this->end_time?->format('H:i'),
             'status' => $this->status->value,
             'is_provisional' => $this->resource->isProvisional(),
+            'is_banked' => $this->resource->isBanked(),
+            'banked_at' => $this->banked_at?->toISOString(),
             'completed_at' => $this->completed_at?->toISOString(),
             'summary' => $this->summary,
             'payment_status' => $this->lessonPayment?->status?->value ?? ($this->order?->isPrepaid() ? 'paid' : null),

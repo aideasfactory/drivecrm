@@ -34,7 +34,9 @@ use App\Enums\OrderSource;
 use App\Enums\PaymentMode;
 use App\Http\Requests\AdminResetPasswordRequest;
 use App\Http\Requests\Api\V1\ConfirmAlternativePaymentRequest;
+use App\Http\Requests\CancelBankedLessonRequest;
 use App\Http\Requests\DeleteStudentProfileRequest;
+use App\Http\Requests\RebookBankedLessonRequest;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\StorePickupPointRequest;
 use App\Http\Requests\UpdatePickupPointRequest;
@@ -54,6 +56,7 @@ use App\Models\StudentChecklistItem;
 use App\Models\StudentPickupPoint;
 use App\Services\AlternativePaymentService;
 use App\Services\InstructorCalendarService;
+use App\Services\InstructorService;
 use App\Services\LessonSignOffService;
 use App\Services\OrderService;
 use App\Services\StudentService;
@@ -68,7 +71,8 @@ class PupilController extends Controller
 {
     public function __construct(
         protected StudentService $studentService,
-        protected AlternativePaymentService $alternativePaymentService
+        protected AlternativePaymentService $alternativePaymentService,
+        protected InstructorService $instructorService,
     ) {}
 
     /**
@@ -566,6 +570,12 @@ class PupilController extends Controller
         }
 
         // Checked before the alternative payment step, which voids the Stripe invoice
+        if ($lesson->isBanked()) {
+            return response()->json([
+                'message' => "This lesson is waiting to be rebooked, so it can't be signed off yet.",
+            ], 422);
+        }
+
         if (! $lesson->hasStarted()) {
             $startsAt = $lesson->date->format('j M Y').($lesson->start_time ? ' at '.$lesson->start_time->format('H:i') : '');
 
@@ -634,6 +644,57 @@ class PupilController extends Controller
         }
 
         return response()->json(['message' => 'Invoice email has been resent.']);
+    }
+
+    /**
+     * Put a lesson kept to rebook later back in the diary at a new date and time.
+     */
+    public function rebookBankedLesson(RebookBankedLessonRequest $request, Student $student, Lesson $lesson): JsonResponse
+    {
+        if ($lesson->order?->student_id !== $student->id) {
+            return response()->json(['message' => 'Lesson not found for this student.'], 404);
+        }
+
+        $lesson = $this->instructorService->rebookBankedLesson(
+            $lesson,
+            $request->validated('date'),
+            $request->validated('start_time'),
+            $request->validated('end_time'),
+            $request->user(),
+        );
+
+        return response()->json([
+            'message' => 'Lesson rebooked for '.$lesson->date->format('D j M Y').'. The pupil has been emailed.',
+        ]);
+    }
+
+    /**
+     * Cancel a lesson kept to rebook later. A paid one goes to Head Office to refund.
+     */
+    public function cancelBankedLesson(CancelBankedLessonRequest $request, Student $student, Lesson $lesson): JsonResponse
+    {
+        if ($lesson->order?->student_id !== $student->id) {
+            return response()->json(['message' => 'Lesson not found for this student.'], 404);
+        }
+
+        try {
+            $result = $this->instructorService->cancelBankedLesson(
+                $lesson,
+                $request->reasonCode(),
+                $request->validated('reason'),
+                $request->user(),
+            );
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'message' => $result['refund_required_count'] > 0
+                ? 'Lesson cancelled. Head Office has been asked to refund the pupil.'
+                : 'Lesson cancelled. The pupil has been notified.',
+            'cancelled_count' => $result['cancelled_count'],
+            'refund_required_count' => $result['refund_required_count'],
+        ]);
     }
 
     /**

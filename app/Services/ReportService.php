@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Actions\Lesson\ConfirmProvisionalLessonAction;
+use App\Actions\Report\GetBankedLessonsReportAction;
 use App\Actions\Report\GetCancelledLessonsAction;
 use App\Actions\Report\GetClashingLessonsAction;
 use App\Actions\Report\GetInstructorAvailabilityAnalyticsAction;
@@ -21,7 +22,18 @@ class ReportService extends BaseService
         protected GetCancelledLessonsAction $getCancelledLessons,
         protected GetClashingLessonsAction $getClashingLessons,
         protected ConfirmProvisionalLessonAction $confirmProvisionalLesson,
+        protected GetBankedLessonsReportAction $getBankedLessonsReport,
     ) {}
+
+    /**
+     * Get every lesson kept in its booking to rebook later.
+     *
+     * @return array{rows: Collection, generated_at: string}
+     */
+    public function getBankedLessons(): array
+    {
+        return ($this->getBankedLessonsReport)();
+    }
 
     /**
      * Get open provisional lessons that clash with something in the diary.

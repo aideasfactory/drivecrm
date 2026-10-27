@@ -62,6 +62,10 @@ class CalendarItemResource extends JsonResource
             // True when the booking is still awaiting its first payment: cancelling
             // any lesson cancels the whole booking (`scope` is ignored).
             'awaiting_payment' => $lesson ? $lesson->order?->isPending() === true && ! $lesson->order->isImported() : null,
+            // True when the lesson can be taken out of the diary but kept in its
+            // booking to rebook later (POST .../bank). False for an unpaid booking.
+            'can_bank' => $lesson?->canBeBanked() === true,
+            'package_name' => $lesson?->order?->package_name,
             // Alternative payment method (pupil pays the instructor directly, owner
             // switch on the pupil): what the instructor can do about payment.
             ...AlternativePayments::lessonFlags($lesson),

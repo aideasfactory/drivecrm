@@ -34,7 +34,7 @@ class GetInstructorCalendarAction
             ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->with(['items' => function ($query) {
                 $query->orderBy('start_time');
-            }, 'items.lessons.order.student', 'items.lessons.order.lessons.payout', 'items.lessons.lessonPayment', 'items.lessons.reflectiveLog', 'items.slotOffer'])
+            }, 'items.lessons.order.student', 'items.lessons.order.lessons.payout', 'items.lessons.payout', 'items.lessons.lessonPayment', 'items.lessons.reflectiveLog', 'items.slotOffer'])
             ->orderBy('date')
             ->get();
 
@@ -137,6 +137,9 @@ class GetInstructorCalendarAction
                         // Package week booked onto a time already taken: shown stacked,
                         // marked provisional while the DRIVE team rearranges it
                         'is_provisional' => $lesson?->isProvisional() === true,
+                        // Can be kept in its booking to rebook later instead of cancelled
+                        'can_bank' => $lesson?->canBeBanked() === true,
+                        'package_name' => $lesson?->order?->package_name,
                         'lesson_id' => $lessonId,
                         'order_id' => $orderId,
                         'future_siblings_count' => $futureSiblingsCount,
