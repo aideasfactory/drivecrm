@@ -8,6 +8,7 @@ use App\Enums\EmailTemplateKey;
 use App\Mail\RendersTemplatedMail;
 use App\Models\Instructor;
 use App\Models\Student;
+use App\Support\BookingPayments;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -21,6 +22,7 @@ class LessonsBankedNotification extends Notification implements ShouldQueue
     /**
      * @param  array<int, string>  $originalSlots  Each lesson as it was booked (the lessons no longer have a date).
      * @param  string  $reason  The reason label plus any details.
+     * @param  string  $rebookBy  Formatted date after which unrebooked lessons are cancelled and refunded.
      */
     public function __construct(
         public Student $student,
@@ -28,6 +30,7 @@ class LessonsBankedNotification extends Notification implements ShouldQueue
         public array $originalSlots,
         public string $packageName,
         public string $reason,
+        public string $rebookBy,
     ) {}
 
     /**
@@ -51,6 +54,8 @@ class LessonsBankedNotification extends Notification implements ShouldQueue
                 'lesson_list' => collect($this->originalSlots)->map(fn (string $slot): string => '• '.$slot)->implode("\n"),
                 'package_name' => $this->packageName,
                 'reason' => $this->reason,
+                'rebook_by' => $this->rebookBy,
+                'expiry_months' => BookingPayments::bankedLessonExpiryMonths(),
                 'app_name' => config('app.name'),
                 'multiple_lessons' => $count !== 1,
             ],

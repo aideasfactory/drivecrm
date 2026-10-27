@@ -323,7 +323,11 @@ final class WorkflowCatalog
                 self::step('The instructor rebooks a lesson', 'They pick a new date and time from the learner\'s lessons (CRM or app). A weekly lesson is then invoiced as normal before it.', [
                     self::email(EmailTemplateKey::LearnerBankedLessonRebooked, 'Learner'),
                 ]),
-                self::step('Keeping track', 'Every lesson waiting to be rebooked is listed on the Banked lessons report. They never expire.', []),
+                self::step('Keeping track', 'Every lesson waiting to be rebooked is listed on the Banked lessons report with the date it must be rebooked by.', []),
+                self::step('Not rebooked in time', 'A lesson still not rebooked 12 months after it was kept is cancelled automatically each morning. The learner gets the usual cancellation email and, if it was paid for, head office is asked to refund it (everything except the booking fee).', [
+                    self::email(EmailTemplateKey::LearnerBookingCancelled, 'Learner'),
+                    self::adminEmail('Action Required: Review Cancelled Paid Lesson(s)', 'Head office'),
+                ]),
             ]),
 
             self::workflow('lessons-cancelled', self::GROUP_CHANGES, 'Lessons cancelled', 'An instructor or head office cancels one or more lessons and picks a reason, which also records who cancelled (pupil, instructor or other). Paid lessons are never refunded or paid out automatically: head office reviews each one.', [

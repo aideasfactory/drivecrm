@@ -18,10 +18,10 @@ class GetBankedLessonsReportAction
 
     /**
      * Every lesson kept in its booking to rebook later, longest waiting
-     * first, for Head Office to chase the instructor to rebook. Banked
-     * lessons never expire, so this is the only place they surface in bulk.
+     * first, for Head Office to chase the instructor to rebook before they
+     * expire (`lessons:expire-banked` cancels and refunds them).
      *
-     * @return array{rows: Collection<int, array{lesson_id: int, student_id: ?int, instructor_id: ?int, learner_name: string, learner_phone: ?string, learner_email: ?string, instructor_name: ?string, package: ?string, order_id: ?int, amount_pence: int, payment_status: ?string, banked_at: ?string, days_waiting: int, banked_by: ?string, reason: ?string}>, generated_at: string}
+     * @return array{rows: Collection<int, array{lesson_id: int, student_id: ?int, instructor_id: ?int, learner_name: string, learner_phone: ?string, learner_email: ?string, instructor_name: ?string, package: ?string, order_id: ?int, amount_pence: int, payment_status: ?string, banked_at: ?string, days_waiting: int, expires_at: ?string, banked_by: ?string, reason: ?string}>, generated_at: string}
      */
     public function __invoke(): array
     {
@@ -38,7 +38,7 @@ class GetBankedLessonsReportAction
     }
 
     /**
-     * @return array{lesson_id: int, student_id: ?int, instructor_id: ?int, learner_name: string, learner_phone: ?string, learner_email: ?string, instructor_name: ?string, package: ?string, order_id: ?int, amount_pence: int, payment_status: ?string, banked_at: ?string, days_waiting: int, banked_by: ?string, reason: ?string}
+     * @return array{lesson_id: int, student_id: ?int, instructor_id: ?int, learner_name: string, learner_phone: ?string, learner_email: ?string, instructor_name: ?string, package: ?string, order_id: ?int, amount_pence: int, payment_status: ?string, banked_at: ?string, days_waiting: int, expires_at: ?string, banked_by: ?string, reason: ?string}
      */
     protected function row(Lesson $lesson, CarbonImmutable $now): array
     {
@@ -62,6 +62,7 @@ class GetBankedLessonsReportAction
             'payment_status' => $lesson->lessonPayment?->status?->value ?? ($order?->isPrepaid() ? 'paid' : null),
             'banked_at' => $lesson->banked_at?->toIso8601String(),
             'days_waiting' => (int) $lesson->banked_at?->diffInDays($now),
+            'expires_at' => $lesson->bankedExpiresAt()?->toIso8601String(),
             'banked_by' => $lesson->bankedBy?->name,
             'reason' => $lesson->banked_reason,
         ];

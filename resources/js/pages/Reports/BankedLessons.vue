@@ -23,6 +23,7 @@ interface BankedLessonRow {
     payment_status: 'due' | 'paid' | 'refunded' | null;
     banked_at: string | null;
     days_waiting: number;
+    expires_at: string | null;
     banked_by: string | null;
     reason: string | null;
 }
@@ -52,9 +53,9 @@ const formatCurrency = (pence: number): string =>
                 <div>
                     <h1 class="text-2xl font-bold tracking-tight">Banked Lessons</h1>
                     <p class="text-sm text-muted-foreground">
-                        Lessons taken out of the diary but kept in the pupil's booking at the price they paid. They never
-                        expire. Ask the instructor to agree a new date and rebook them from the pupil's Lessons tab or the
-                        app; they drop off this list once rebooked or cancelled.
+                        Lessons taken out of the diary but kept in the pupil's booking at the price they paid. Ask the
+                        instructor to agree a new date and rebook them from the pupil's Lessons tab or the app. Any not
+                        rebooked by their "Rebook by" date are cancelled automatically and sent to Head Office to refund.
                     </p>
                 </div>
                 <Button v-if="report.rows.length > 0" as="a" :href="exportUrl" variant="outline">
@@ -80,6 +81,7 @@ const formatCurrency = (pence: number): string =>
                                 <TableHead>Package</TableHead>
                                 <TableHead>Lesson Price</TableHead>
                                 <TableHead>Kept Since</TableHead>
+                                <TableHead>Rebook By</TableHead>
                                 <TableHead>Reason</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -134,6 +136,7 @@ const formatCurrency = (pence: number): string =>
                                         <template v-if="row.banked_by"> · by {{ row.banked_by }}</template>
                                     </div>
                                 </TableCell>
+                                <TableCell class="text-sm">{{ formatDate(row.expires_at) }}</TableCell>
                                 <TableCell class="max-w-[260px] text-sm text-muted-foreground">{{ row.reason ?? '—' }}</TableCell>
                             </TableRow>
                         </TableBody>

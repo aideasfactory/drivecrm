@@ -2106,8 +2106,8 @@ onMounted(() => {
                         <AlertTitle>The pupil keeps this lesson</AlertTitle>
                         <AlertDescription>
                             It keeps its package price and payment, won't be invoiced or chased while it has no date,
-                            and can't be signed off until it's rebooked. It's listed on the Banked lessons report until
-                            then.
+                            and can't be signed off until it's rebooked. It must be rebooked within 12 months, or it's
+                            cancelled and the pupil is refunded.
                         </AlertDescription>
                     </Alert>
 

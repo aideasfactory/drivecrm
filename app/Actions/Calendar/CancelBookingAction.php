@@ -112,7 +112,8 @@ class CancelBookingAction
      * Cancel a banked lesson (kept in its booking to rebook later, so it has no
      * diary slot) the same way as a booked one: a paid lesson goes to Head
      * Office for review, an unpaid one is simply cancelled. Its invoice was
-     * voided when it was banked; any open one is still stopped first.
+     * voided when it was banked; any open one is still stopped first. No
+     * actor when the system cancels it (`lessons:expire-banked`).
      *
      * @return array{cancelled_count: int, refund_required_count: int, payout_count: int}
      */
@@ -120,7 +121,7 @@ class CancelBookingAction
         Lesson $lesson,
         LessonCancellationReason $reasonCode,
         ?string $details,
-        User $actor,
+        ?User $actor,
     ): array {
         $lesson->loadMissing(['order.student.user', 'order.instructor', 'lessonPayment', 'payout']);
 
@@ -157,7 +158,7 @@ class CancelBookingAction
         ?Instructor $instructor,
         LessonCancellationReason $reasonCode,
         ?string $details,
-        User $actor,
+        ?User $actor,
         bool $isUnpaidBooking,
     ): array {
         /** @var Collection<int, LessonCancellationOutcome> $outcomes */
@@ -518,7 +519,7 @@ class CancelBookingAction
         ?string $details,
         array $hoursNotice,
         bool $orderCancelled,
-        User $actor,
+        ?User $actor,
         bool $guaranteeRemoved = false,
     ): void {
         $student = $order?->student;
@@ -545,7 +546,7 @@ class CancelBookingAction
                     'reason_code' => $reasonCode->value,
                     'head_office_review_lesson_ids' => $refundLessons->pluck('id')->all(),
                     'order_cancelled' => $orderCancelled,
-                    'cancelled_by_user_id' => $actor->id,
+                    'cancelled_by_user_id' => $actor?->id,
                 ],
                 "Cancelled {$cancelSet->count()} lesson(s): {$reason}",
             );
@@ -561,7 +562,7 @@ class CancelBookingAction
                     $reasonCode,
                     $details,
                     $hoursNotice,
-                    $actor->name,
+                    $actor?->name ?? 'System',
                     $guaranteeRemoved,
                 ));
         }

@@ -80,6 +80,7 @@ class GetStudentLessonsAction
                     'is_provisional' => $lesson->isProvisional(),
                     'is_banked' => $lesson->isBanked(),
                     'banked_at' => $lesson->banked_at?->toISOString(),
+                    'banked_expires_at' => $lesson->bankedExpiresAt()?->toISOString(),
                     'banked_reason' => $lesson->banked_reason,
                     'has_started' => $lesson->hasStarted(),
                     'completed_at' => $lesson->completed_at?->toISOString(),

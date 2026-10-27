@@ -35,6 +35,7 @@ class BankedLessonResource extends JsonResource
             'payment_mode' => $this->order?->payment_mode->value,
             'payment_status' => $this->lessonPayment?->status?->value ?? ($this->order?->isPrepaid() ? 'paid' : null),
             'banked_at' => $this->banked_at?->toISOString(),
+            'expires_at' => $this->resource->bankedExpiresAt()?->toISOString(),
             'banked_reason' => $this->banked_reason,
             'banked_by_name' => $this->bankedBy?->name,
         ];

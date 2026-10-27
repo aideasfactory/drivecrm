@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\LessonCancellationReason;
 use App\Enums\LessonStatus;
 use App\Support\BookingPayments;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -204,6 +205,17 @@ class Lesson extends Model
             && $this->banked_at === null
             && $this->payout === null
             && $this->order?->isActive() === true;
+    }
+
+    /**
+     * When a banked lesson is cancelled and refunded if it still hasn't been
+     * rebooked (`lessons:expire-banked`). Null when not banked.
+     */
+    public function bankedExpiresAt(): ?CarbonInterface
+    {
+        return $this->isBanked()
+            ? $this->banked_at->copy()->addMonthsNoOverflow(BookingPayments::bankedLessonExpiryMonths())
+            : null;
     }
 
     /**

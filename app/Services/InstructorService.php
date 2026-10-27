@@ -561,7 +561,7 @@ class InstructorService extends BaseService
      *
      * @return array{cancelled_count: int, refund_required_count: int, payout_count: int}
      */
-    public function cancelBankedLesson(Lesson $lesson, LessonCancellationReason $reasonCode, ?string $details, User $actor): array
+    public function cancelBankedLesson(Lesson $lesson, LessonCancellationReason $reasonCode, ?string $details, ?User $actor): array
     {
         return $this->cancelBooking->cancelBankedLesson($lesson, $reasonCode, $details, $actor);
     }

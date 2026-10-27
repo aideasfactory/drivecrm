@@ -80,6 +80,7 @@ interface Lesson {
     /** Kept in its booking to rebook later: no date until the instructor rebooks it. */
     is_banked: boolean
     banked_at: string | null
+    banked_expires_at: string | null
     banked_reason: string | null
     /** Start time (UK) reached; a lesson can't be signed off before it. */
     has_started: boolean
@@ -581,7 +582,8 @@ onMounted(() => {
                 </CardTitle>
                 <p class="text-sm text-muted-foreground">
                     These lessons were taken out of the diary but kept in the pupil's booking at the price they paid.
-                    Agree a new date with the pupil and rebook each one. They can't be signed off until they're rebooked.
+                    Agree a new date with the pupil and rebook each one. They can't be signed off until they're rebooked,
+                    and any not rebooked by their "Rebook by" date are cancelled and refunded automatically.
                 </p>
             </CardHeader>
             <CardContent>
@@ -593,6 +595,7 @@ onMounted(() => {
                             <TableHead>Amount</TableHead>
                             <TableHead>Payment</TableHead>
                             <TableHead>Kept Since</TableHead>
+                            <TableHead>Rebook By</TableHead>
                             <TableHead>Reason</TableHead>
                             <TableHead class="text-right">Actions</TableHead>
                         </TableRow>
@@ -611,6 +614,7 @@ onMounted(() => {
                                 </Badge>
                             </TableCell>
                             <TableCell>{{ formatDate(lesson.banked_at ? lesson.banked_at.slice(0, 10) : null) }}</TableCell>
+                            <TableCell>{{ formatDate(lesson.banked_expires_at ? lesson.banked_expires_at.slice(0, 10) : null) }}</TableCell>
                             <TableCell class="max-w-[220px] truncate text-sm text-muted-foreground" :title="lesson.banked_reason ?? ''">
                                 {{ lesson.banked_reason || '—' }}
                             </TableCell>

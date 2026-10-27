@@ -295,6 +295,7 @@ class BankLessonsAction
             array_values($originalSlots),
             $order?->package_name ?? 'lesson',
             $reasonText,
+            $bankSet->first()->bankedExpiresAt()?->format('j F Y') ?? '',
         ));
     }
 
