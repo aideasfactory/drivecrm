@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Services\ImportService;
+use App\Support\ImportValues;
 use Illuminate\Console\Command;
 
 class SendImportedWelcomeEmails extends Command
@@ -16,6 +17,8 @@ class SendImportedWelcomeEmails extends Command
      */
     protected $signature = 'import:send-welcome-emails
         {--instructor=* : Only this instructor and their students (CRM instructor ID or import instructor_ref; repeatable)}
+        {--email=* : Only the instructor with this email (repeatable, or comma-separated). Instructors only unless --only says otherwise}
+        {--emails-file= : CSV/text file of instructor emails (any column, header optional). Instructors only unless --only says otherwise}
         {--only=all : Who to email: all, instructors or students}
         {--dry-run : List who would be emailed without sending anything}';
 
@@ -50,6 +53,35 @@ class SendImportedWelcomeEmails extends Command
             }
 
             $instructorIds[] = $instructorId;
+        }
+
+        $emails = $this->requestedEmails();
+
+        if ($emails === null) {
+            return self::FAILURE;
+        }
+
+        if ($emails !== []) {
+            // An email list means "these instructors" — don't also email their students unless asked.
+            if (! $this->input->hasParameterOption('--only')) {
+                $only = 'instructors';
+            }
+
+            $found = $importService->getInstructorIdsByEmail($emails);
+            $missing = array_values(array_diff($emails, array_keys($found)));
+
+            if ($missing !== []) {
+                $this->warn(count($missing).' email(s) are not an instructor and will be ignored:');
+                $this->line('  '.implode("\n  ", $missing));
+            }
+
+            if ($found === []) {
+                $this->error('None of the emails belong to an instructor.');
+
+                return self::FAILURE;
+            }
+
+            $instructorIds = array_merge($instructorIds, array_values($found));
         }
 
         $users = $importService->getPendingWelcomeUsers($instructorIds, $only);
@@ -94,5 +126,28 @@ class SendImportedWelcomeEmails extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Lowercased emails from --email and --emails-file, or null when the file can't be read.
+     *
+     * @return array<int, string>|null
+     */
+    private function requestedEmails(): ?array
+    {
+        $text = implode(',', (array) $this->option('email'));
+
+        $file = $this->option('emails-file');
+        if (is_string($file) && $file !== '') {
+            if (! is_readable($file)) {
+                $this->error("Can't read {$file}.");
+
+                return null;
+            }
+
+            $text .= "\n".file_get_contents($file);
+        }
+
+        return ImportValues::emails($text);
     }
 }

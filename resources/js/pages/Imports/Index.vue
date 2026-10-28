@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Head } from '@inertiajs/vue3'
 import axios from 'axios'
 import AppLayout from '@/layouts/AppLayout.vue'
+import WelcomeEmailsCard from '@/components/Imports/WelcomeEmailsCard.vue'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -612,6 +613,9 @@ const breadcrumbs = [{ title: 'Data Import' }]
                     </div>
                 </CardContent>
             </Card>
+
+            <!-- Welcome emails for selected instructors -->
+            <WelcomeEmailsCard :import-running="runActive" />
         </div>
 
         <!-- Confirm import -->

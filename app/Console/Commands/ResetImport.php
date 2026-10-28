@@ -15,6 +15,7 @@ class ResetImport extends Command
      * @var string
      */
     protected $signature = 'import:reset
+        {--status : Only show queued/running imports and their progress; change nothing}
         {--force : Skip the confirmation}';
 
     /**
@@ -38,6 +39,10 @@ class ResetImport extends Command
                 ($run->totals['instructors_done'] ?? 0).' of '.($run->totals['instructors_to_import'] ?? '?').' instructors',
                 $run->updated_at?->diffForHumans(),
             ])->all());
+        }
+
+        if ($this->option('status')) {
+            return self::SUCCESS;
         }
 
         $this->warn('Only reset when the import has really stopped. If it is still running, a new upload would overlap it and could create duplicates.');

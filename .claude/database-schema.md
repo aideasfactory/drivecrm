@@ -1562,8 +1562,8 @@ One execution of the legacy importer (a Data Import page upload).
 | `user_id` | bigint unsigned | NULLABLE, FK → users.id (NULL ON DELETE) | Owner who uploaded it |
 | `source` | varchar(16) | NOT NULL | `upload` (Data Import page — currently the only source) |
 | `file_name` | varchar(255) | NULLABLE | Original zip file name |
-| `status` | varchar(16) | DEFAULT 'running' | `running`, `completed`, `failed` |
-| `totals` | json | NULLABLE | Counts created: instructors_created, instructors_linked, locations, students, lessons, diary_blocks, finances, receipts |
+| `status` | varchar(16) | DEFAULT 'running' | `queued` (waiting for `ImportBundleJob`; imports run one at a time), `running`, `completed`, `failed` |
+| `totals` | json | NULLABLE | Counts created: instructors_created, instructors_linked, locations, students, students_skipped, lessons, lessons_skipped, diary_blocks, finances, receipts. While `running` also `instructors_done` / `instructors_to_import` (progress) |
 | `error` | text | NULLABLE | Exception message when `failed` (instructors before the failure stay imported) |
 | `completed_at` | timestamp | NULLABLE | When the run finished (either outcome) |
 | `created_at` / `updated_at` | timestamp | - | Timestamps |

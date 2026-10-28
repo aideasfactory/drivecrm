@@ -17,6 +17,19 @@ use Illuminate\Support\Str;
 final class ImportValues
 {
     /**
+     * Every email address in a block of text (a CSV of any shape, a pasted
+     * list), lowercased and de-duplicated.
+     *
+     * @return array<int, string>
+     */
+    public static function emails(string $text): array
+    {
+        preg_match_all('/[^\s,;"\'<>]+@[^\s,;"\'<>]+/', $text, $matches);
+
+        return array_values(array_unique(array_map('strtolower', $matches[0])));
+    }
+
+    /**
      * Hash of a random password nobody knows, for an imported account.
      *
      * It is never used to sign in — the welcome email replaces it (password

@@ -515,6 +515,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
             ->name('imports.store');
         Route::get('/imports/runs/{importRun}', [ImportController::class, 'show'])
             ->name('imports.runs.show');
+        Route::post('/imports/welcome-emails', [ImportController::class, 'welcomeEmails'])
+            ->name('imports.welcome-emails');
     });
 
     Route::get('/integrations', [IntegrationController::class, 'index'])

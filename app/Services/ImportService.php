@@ -29,6 +29,7 @@ use App\Support\ImportValues;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -176,6 +177,18 @@ class ImportService extends BaseService
             $instructorsDone = 0;
 
             foreach ($grouped as $instructorRef => $sections) {
+                if ($progress) {
+                    $progress(sprintf(
+                        '[%s] starting (%d of %d): %d student(s), %d diary row(s), %d finance row(s).',
+                        $instructorRef,
+                        $instructorsDone + 1,
+                        count($grouped),
+                        count($sections['students']),
+                        count($sections['diary']),
+                        count($sections['finances']),
+                    ));
+                }
+
                 $counts = DB::transaction(fn () => $this->importInstructorSections(
                     $instructorRef,
                     $sections,
@@ -303,7 +316,16 @@ class ImportService extends BaseService
                 return;
             }
 
-            $this->importBundle($run, $result['bundle'], $localZipPath);
+            Log::info("Import run {$run->id}: starting.");
+
+            $this->importBundle(
+                $run,
+                $result['bundle'],
+                $localZipPath,
+                fn (string $line) => Log::info("Import run {$run->id}: {$line}"),
+            );
+
+            Log::info("Import run {$run->id}: completed.");
         } catch (RuntimeException $exception) {
             $this->failQueuedImport($run, $storedZipPath, $exception);
         } finally {
@@ -375,6 +397,46 @@ class ImportService extends BaseService
     public function getPendingWelcomeUsers(array $instructorIds = [], string $only = 'all'): Collection
     {
         return ($this->getPendingImportedUsers)($instructorIds, $only);
+    }
+
+    /**
+     * Instructor IDs for the given emails; emails that aren't an instructor are left out.
+     *
+     * @param  array<int, string>  $emails
+     * @return array<string, int> lowercased email => instructor ID
+     */
+    public function getInstructorIdsByEmail(array $emails): array
+    {
+        return Instructor::query()
+            ->join('users', 'users.id', '=', 'instructors.user_id')
+            ->whereIn('users.email', $emails)
+            ->pluck('instructors.id', 'users.email')
+            ->mapWithKeys(fn (int $id, string $email) => [strtolower($email) => $id])
+            ->all();
+    }
+
+    /**
+     * Split a list of emails into instructors still waiting for their welcome
+     * email, instructors already emailed, and emails that aren't an instructor.
+     *
+     * @param  array<int, string>  $emails  Lowercased
+     * @return array{pending: Collection<int, User>, already_sent: array<int, string>, not_instructors: array<int, string>}
+     */
+    public function previewInstructorWelcomeEmails(array $emails): array
+    {
+        $found = $this->getInstructorIdsByEmail($emails);
+
+        $pending = $found === []
+            ? new Collection
+            : $this->getPendingWelcomeUsers(array_values($found), 'instructors');
+
+        $pendingEmails = $pending->map(fn (User $user) => strtolower($user->email))->all();
+
+        return [
+            'pending' => $pending,
+            'already_sent' => array_values(array_diff(array_keys($found), $pendingEmails)),
+            'not_instructors' => array_values(array_diff($emails, array_keys($found))),
+        ];
     }
 
     /**

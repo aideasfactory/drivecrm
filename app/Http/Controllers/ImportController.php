@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ImportBundleRequest;
+use App\Http\Requests\ImportWelcomeEmailsRequest;
 use App\Models\ImportRun;
+use App\Models\User;
 use App\Services\ImportService;
+use App\Support\ImportValues;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -97,6 +100,45 @@ class ImportController extends Controller
             'message' => 'Import started. It runs in the background — you can leave this page.',
             'run' => $this->runPayload($run),
         ], 202);
+    }
+
+    /**
+     * Welcome emails for a CSV of instructor emails: preview who would be
+     * emailed, then (with `send`) queue the emails. Only imported instructors
+     * still waiting for theirs are emailed — never their students, never twice.
+     */
+    public function welcomeEmails(ImportWelcomeEmailsRequest $request): JsonResponse
+    {
+        $emails = ImportValues::emails((string) file_get_contents($request->file('file')->getRealPath()));
+
+        if ($emails === []) {
+            return response()->json(['message' => 'No email addresses found in the file.'], 422);
+        }
+
+        $preview = $this->importService->previewInstructorWelcomeEmails($emails);
+
+        $sent = 0;
+        $failed = [];
+
+        if ($request->boolean('send')) {
+            foreach ($preview['pending'] as $user) {
+                if ($this->importService->sendWelcomeEmail($user)) {
+                    $sent++;
+                } else {
+                    $failed[] = $user->email;
+                }
+            }
+        }
+
+        return response()->json([
+            'pending' => $preview['pending']
+                ->map(fn (User $user) => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email])
+                ->values(),
+            'already_sent' => $preview['already_sent'],
+            'not_instructors' => $preview['not_instructors'],
+            'sent' => $sent,
+            'failed' => $failed,
+        ]);
     }
 
     /**
