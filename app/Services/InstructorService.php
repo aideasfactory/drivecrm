@@ -25,9 +25,9 @@ use App\Actions\Instructor\ForceCompleteAppOnboardingAction;
 use App\Actions\Instructor\GetGroupedStudentsAction;
 use App\Actions\Instructor\GetInstructorCalendarAction;
 use App\Actions\Instructor\GetInstructorCashLessonsAction;
-use App\Actions\Instructor\GetInstructorLessonIncomeAction;
 use App\Actions\Instructor\GetInstructorDayLessonsAction;
 use App\Actions\Instructor\GetInstructorFinancesAction;
+use App\Actions\Instructor\GetInstructorLessonIncomeAction;
 use App\Actions\Instructor\GetInstructorLessonsInRangeAction;
 use App\Actions\Instructor\GetInstructorLocationsAction;
 use App\Actions\Instructor\GetInstructorPackagesAction;
@@ -50,6 +50,9 @@ use App\Actions\Instructor\UpdateInstructorFinanceAction;
 use App\Actions\Instructor\UpdateInstructorProfileAction;
 use App\Actions\Instructor\UploadFinanceReceiptAction;
 use App\Actions\Instructor\UploadInstructorProfilePictureAction;
+use App\Actions\Lesson\BankLessonsAction;
+use App\Actions\Lesson\GetBankedLessonsAction;
+use App\Actions\Lesson\RebookBankedLessonAction;
 use App\Actions\Lesson\UpdateLessonMileageAction;
 use App\Actions\ProgressTracker\SeedInstructorProgressTrackerAction;
 use App\Actions\Shared\LogActivityAction;
@@ -76,6 +79,7 @@ use App\Notifications\InstructorOnWayNotification;
 use App\Notifications\LessonRescheduledNotification;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\CursorPaginator;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -136,6 +140,9 @@ class InstructorService extends BaseService
         protected SeedInstructorProgressTrackerAction $seedInstructorProgressTracker,
         protected SendInstructorWelcomeEmailAction $sendInstructorWelcomeEmail,
         protected CancelBookingAction $cancelBooking,
+        protected BankLessonsAction $bankLessons,
+        protected RebookBankedLessonAction $rebookBankedLesson,
+        protected GetBankedLessonsAction $getBankedLessons,
         protected RecalculateStudentLessonNumbersAction $recalculateStudentLessonNumbers,
         protected StartStripeOnboardingAction $startStripeOnboarding,
         protected SyncStripeAccountStatusAction $syncStripeAccountStatus,
@@ -527,6 +534,46 @@ class InstructorService extends BaseService
     public function cancelBooking(CalendarItem $calendarItem, LessonCancellationReason $reasonCode, ?string $details, bool $applyToFutureInOrder, User $actor): array
     {
         return ($this->cancelBooking)($calendarItem, $reasonCode, $details, $applyToFutureInOrder, $actor);
+    }
+
+    /**
+     * Take a booked lesson (and optionally the later ones in its booking) out
+     * of the diary but keep it in the booking to rebook later, at the same
+     * price and payment.
+     *
+     * @return array{banked_count: int, lessons: Collection<int, Lesson>}
+     */
+    public function bankLessons(CalendarItem $calendarItem, LessonCancellationReason $reasonCode, ?string $details, bool $applyToFutureInOrder, User $actor): array
+    {
+        return ($this->bankLessons)($calendarItem, $reasonCode, $details, $applyToFutureInOrder, $actor);
+    }
+
+    /**
+     * Put a banked lesson back in the diary at a new date and time.
+     */
+    public function rebookBankedLesson(Lesson $lesson, string $date, string $startTime, string $endTime, User $actor): Lesson
+    {
+        return ($this->rebookBankedLesson)($lesson, $date, $startTime, $endTime, $actor);
+    }
+
+    /**
+     * Cancel a banked lesson outright: paid ones go to Head Office for a refund.
+     *
+     * @return array{cancelled_count: int, refund_required_count: int, payout_count: int}
+     */
+    public function cancelBankedLesson(Lesson $lesson, LessonCancellationReason $reasonCode, ?string $details, ?User $actor): array
+    {
+        return $this->cancelBooking->cancelBankedLesson($lesson, $reasonCode, $details, $actor);
+    }
+
+    /**
+     * The instructor's lessons waiting to be rebooked, oldest first.
+     *
+     * @return EloquentCollection<int, Lesson>
+     */
+    public function getBankedLessons(Instructor $instructor): EloquentCollection
+    {
+        return ($this->getBankedLessons)($instructor);
     }
 
     /**

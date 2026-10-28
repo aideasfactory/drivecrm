@@ -235,6 +235,30 @@ final class EmailTemplateCatalog
                 'app_name' => 'Application name',
             ], 'Your Driving Lesson Has Been Rescheduled', 'Hello {{recipient_name}}!', "Your driving lesson with **{{instructor_name}}** has been rescheduled.\n\n**Previous:**\n{{old_when}}\n\n**New:**\n{{new_when}}\n{{#if notes}}\n**Notes from your instructor:**\n{{notes}}{{/if}}\n\nIf this new time does not work for you, please contact your instructor to arrange an alternative.", "Safe driving,\nThe {{app_name}} Team", null),
 
+            self::entry(EmailTemplateKey::LearnerLessonsBanked, 'Lessons kept to rebook later', $audience, 'Sent when an instructor takes lessons out of the diary but keeps them in the booking to rebook later.', [
+                'recipient_name' => 'Learner first name',
+                'instructor_name' => 'Instructor name',
+                'lesson_count' => 'Number of lessons kept to rebook',
+                'lesson_list' => 'Bulleted list of the lessons as they were booked',
+                'package_name' => 'Package name',
+                'reason' => 'Reason (and any details the instructor added)',
+                'rebook_by' => 'Date the lessons must be rebooked by',
+                'expiry_months' => 'Months the lessons can wait to be rebooked',
+                'app_name' => 'Application name',
+            ], 'Your Driving {{#if multiple_lessons}}Lessons{{else}}Lesson{{/if}} Will Be Rebooked', 'Hello {{recipient_name}},', "**{{instructor_name}}** can no longer take the following {{#if multiple_lessons}}lessons{{else}}lesson{{/if}} at the booked time:\n\n{{lesson_list}}\n\n**Reason:**\n{{reason}}\n\nDon't worry: {{#if multiple_lessons}}these lessons stay{{else}}this lesson stays{{/if}} in your {{package_name}} booking at the price you booked. Nothing has been cancelled and you won't be charged again. Your instructor will rebook {{#if multiple_lessons}}them{{else}}it{{/if}} with you and you'll get an email with the new date.\n\n{{#if multiple_lessons}}These lessons need{{else}}This lesson needs{{/if}} to be rebooked within {{expiry_months}} months, by **{{rebook_by}}**. If {{#if multiple_lessons}}they aren't{{else}}it isn't{{/if}} rebooked by then, {{#if multiple_lessons}}they'll{{else}}it'll{{/if}} be cancelled and you'll be refunded for what you paid (except the booking fee).\n\nIf you have any questions, please get in touch with your instructor.", "Kind regards,\nThe {{app_name}} Team", null, [
+                'multiple_lessons' => 'More than one lesson was kept to rebook',
+            ]),
+
+            self::entry(EmailTemplateKey::LearnerBankedLessonRebooked, 'Kept lesson rebooked', $audience, 'Sent when an instructor rebooks a lesson that was kept in the booking to rebook later.', [
+                'recipient_name' => 'Learner first name',
+                'instructor_name' => 'Instructor name',
+                'new_when' => 'New date and time',
+                'new_date' => 'New date',
+                'new_time' => 'New time range',
+                'package_name' => 'Package name',
+                'app_name' => 'Application name',
+            ], 'Your Driving Lesson Has Been Rebooked', 'Hello {{recipient_name}}!', "Good news! Your {{package_name}} lesson with **{{instructor_name}}** has been rebooked for:\n\n**{{new_when}}**\n\nIt is part of your existing booking at the price you booked.\n\nIf this time does not work for you, please contact your instructor to arrange an alternative.", "Safe driving,\nThe {{app_name}} Team", null),
+
             self::entry(EmailTemplateKey::LearnerLessonPaymentReminder, 'Lesson payment required', $audience, 'Sent when a weekly lesson invoice is waiting to be paid.', [
                 'recipient_name' => 'Greeting name (learner, or the contact who booked)',
                 'learner_name' => 'Learner full name',

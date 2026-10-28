@@ -20,6 +20,9 @@ declare(strict_types=1);
  * - A weekly lesson invoice still unpaid `overdue_invoice_cancel_days` after
  *   the lesson date is voided, and no invoice is sent for a lesson older than
  *   that (`lessons:cancel-overdue-invoices`).
+ * - A banked lesson (kept to rebook later) not rebooked within
+ *   `banked_lesson_expiry_months` is cancelled and sent to Head Office to
+ *   refund (`lessons:expire-banked`).
  *
  * Always read these values through `App\Support\BookingPayments`.
  */
@@ -35,6 +38,8 @@ return [
     'late_cancellation_hours' => (int) env('BOOKING_LATE_CANCELLATION_HOURS', 48),
 
     'overdue_invoice_cancel_days' => (int) env('BOOKING_OVERDUE_INVOICE_CANCEL_DAYS', 7),
+
+    'banked_lesson_expiry_months' => (int) env('BOOKING_BANKED_LESSON_EXPIRY_MONTHS', 12),
 
     'timezone' => env('BOOKING_TIMEZONE', 'Europe/London'),
 ];

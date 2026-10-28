@@ -22,6 +22,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
+use RuntimeException;
 
 class LessonSignOffService extends BaseService
 {
@@ -68,6 +69,11 @@ class LessonSignOffService extends BaseService
      */
     public function signOffLesson(Lesson $lesson, Instructor $instructor, string $summary = ''): array
     {
+        // A lesson kept to rebook later has no date: it hasn't happened yet.
+        if ($lesson->isBanked()) {
+            throw new RuntimeException("This lesson is waiting to be rebooked, so it can't be signed off yet.");
+        }
+
         $lesson->load(['order.student']);
 
         // Save the instructor's lesson summary before sign-off

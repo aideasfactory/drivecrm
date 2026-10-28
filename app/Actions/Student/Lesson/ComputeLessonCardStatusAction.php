@@ -29,6 +29,10 @@ class ComputeLessonCardStatusAction
             return LessonCardStatus::SignedOff;
         }
 
+        if ($lesson->isBanked()) {
+            return LessonCardStatus::Banked;
+        }
+
         if ($lesson->date && $lesson->date->lt($today)) {
             return LessonCardStatus::NeedsSignOff;
         }

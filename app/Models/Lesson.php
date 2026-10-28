@@ -6,6 +6,7 @@ use App\Enums\LessonCancellationReason;
 use App\Enums\LessonStatus;
 use App\Enums\ProvisionalLessonHandler;
 use App\Support\BookingPayments;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -33,6 +34,9 @@ class Lesson extends Model
         'cancellation_reason_code',
         'cancelled_at',
         'provisional_at',
+        'banked_at',
+        'banked_reason',
+        'banked_by_user_id',
         'mileage',
         'student_lesson_number',
     ];
@@ -46,6 +50,7 @@ class Lesson extends Model
             'completed_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'provisional_at' => 'datetime',
+            'banked_at' => 'datetime',
             'status' => LessonStatus::class,
             'cancellation_reason_code' => LessonCancellationReason::class,
         ];
@@ -81,6 +86,14 @@ class Lesson extends Model
     public function payout(): HasOne
     {
         return $this->hasOne(Payout::class);
+    }
+
+    /**
+     * Get the user who took this lesson out of the diary to rebook later.
+     */
+    public function bankedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'banked_by_user_id');
     }
 
     /**
@@ -190,6 +203,50 @@ class Lesson extends Model
     }
 
     /**
+     * Whether this lesson is banked: taken out of the diary to be rebooked
+     * later. It stays in its booking at the same price and payment, with no
+     * date or diary slot until the instructor rebooks it.
+     */
+    public function isBanked(): bool
+    {
+        return $this->banked_at !== null && $this->status === LessonStatus::PENDING;
+    }
+
+    /**
+     * Whether this diary lesson can be taken out of the diary and kept to
+     * rebook later: open, on a confirmed (active) booking, not paid out.
+     */
+    public function canBeBanked(): bool
+    {
+        return $this->status === LessonStatus::PENDING
+            && $this->banked_at === null
+            && $this->payout === null
+            && $this->order?->isActive() === true;
+    }
+
+    /**
+     * When a banked lesson is cancelled and refunded if it still hasn't been
+     * rebooked (`lessons:expire-banked`). Null when not banked.
+     */
+    public function bankedExpiresAt(): ?CarbonInterface
+    {
+        return $this->isBanked()
+            ? $this->banked_at->copy()->addMonthsNoOverflow(BookingPayments::bankedLessonExpiryMonths())
+            : null;
+    }
+
+    /**
+     * Open lessons waiting to be rebooked.
+     *
+     * @param  Builder<Lesson>  $query
+     */
+    public function scopeBanked(Builder $query): void
+    {
+        $query->whereNotNull('banked_at')
+            ->where('status', LessonStatus::PENDING);
+    }
+
+    /**
      * Check if lesson has been paid for.
      */
     public function isPaid(): bool
@@ -215,10 +272,15 @@ class Lesson extends Model
 
     /**
      * Whether this lesson's start time (UK time) has been reached, so it can be
-     * signed off. A lesson with no date has nothing to wait for.
+     * signed off. A lesson with no date has nothing to wait for, except a
+     * banked one, which can't be signed off until it is rebooked.
      */
     public function hasStarted(): bool
     {
+        if ($this->isBanked()) {
+            return false;
+        }
+
         if (! $this->date) {
             return true;
         }

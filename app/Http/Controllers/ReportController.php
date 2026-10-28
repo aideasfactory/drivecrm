@@ -75,6 +75,16 @@ class ReportController extends Controller
     }
 
     /**
+     * Display lessons kept in their booking to rebook later.
+     */
+    public function bankedLessons(): Response
+    {
+        return Inertia::render('Reports/BankedLessons', [
+            'report' => $this->reportService->getBankedLessons(),
+        ]);
+    }
+
+    /**
      * Keep a provisional lesson where it is and take it off the Clashes report.
      */
     public function confirmClash(Request $request, Lesson $lesson): JsonResponse
@@ -114,6 +124,41 @@ class ReportController extends Controller
 
             fclose($handle);
         }, 'clashes-'.CarbonImmutable::now()->format('Y-m-d').'.csv', [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
+    /**
+     * Download the lessons waiting to be rebooked as a CSV file.
+     */
+    public function exportBankedLessons(): StreamedResponse
+    {
+        $report = $this->reportService->getBankedLessons();
+
+        return response()->streamDownload(function () use ($report): void {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Learner', 'Phone', 'Email', 'Instructor', 'Package', 'Booking', 'Lesson Price', 'Payment Status', 'Kept Since', 'Days Waiting', 'Rebook By', 'Kept By', 'Reason']);
+
+            foreach ($report['rows'] as $row) {
+                fputcsv($handle, [
+                    $row['learner_name'],
+                    $row['learner_phone'],
+                    $row['learner_email'],
+                    $row['instructor_name'],
+                    $row['package'],
+                    $row['order_id'] ? '#'.$row['order_id'] : '',
+                    number_format($row['amount_pence'] / 100, 2),
+                    $row['payment_status'],
+                    $row['banked_at'],
+                    $row['days_waiting'],
+                    $row['expires_at'],
+                    $row['banked_by'],
+                    $row['reason'],
+                ]);
+            }
+
+            fclose($handle);
+        }, 'banked-lessons-'.CarbonImmutable::now()->format('Y-m-d').'.csv', [
             'Content-Type' => 'text/csv',
         ]);
     }
@@ -270,6 +315,13 @@ class ReportController extends Controller
                 'description' => 'Provisional lessons booked onto a time that was already taken — contact the learner to rearrange.',
                 'icon' => 'CalendarClock',
                 'route' => route('reports.clashes'),
+            ],
+            [
+                'key' => 'banked-lessons',
+                'title' => 'Banked Lessons',
+                'description' => 'Lessons kept in the pupil\'s booking to rebook later — chase the instructor to rebook them.',
+                'icon' => 'Archive',
+                'route' => route('reports.banked-lessons'),
             ],
         ];
     }

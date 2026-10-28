@@ -2,7 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Link } from '@inertiajs/vue3';
-import { CalendarCheck, CalendarClock, CalendarX, ReceiptText, ChevronRight, BarChart3 } from 'lucide-vue-next';
+import { Archive, CalendarCheck, CalendarClock, CalendarX, ReceiptText, ChevronRight, BarChart3 } from 'lucide-vue-next';
 import type { Component } from 'vue';
 
 interface ReportLink {
@@ -20,6 +20,7 @@ interface Props {
 defineProps<Props>();
 
 const iconMap: Record<string, Component> = {
+    Archive,
     CalendarCheck,
     CalendarClock,
     CalendarX,

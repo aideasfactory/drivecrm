@@ -48,6 +48,11 @@ class LessonSignOffController extends Controller
             return response()->json(['message' => 'No instructor assigned to this lesson.'], 422);
         }
 
+        // Checked before the alternative payment step, which voids the Stripe invoice
+        if ($lesson->isBanked()) {
+            return response()->json(['message' => "This lesson is waiting to be rebooked, so it can't be signed off yet."], 422);
+        }
+
         $summary = $request->validated('summary');
 
         $this->alternativePaymentService->prepareSignOff(

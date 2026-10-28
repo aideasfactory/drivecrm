@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Actions\Calendar\MoveLessonAndFutureSiblingsAction;
 use App\Enums\RecurrencePattern;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\BankLessonsRequest;
 use App\Http\Requests\Api\V1\DeleteCalendarItemRequest;
 use App\Http\Requests\Api\V1\FillAvailableSlotsRequest;
 use App\Http\Requests\Api\V1\GetCalendarItemsRequest;
@@ -67,6 +68,7 @@ class InstructorCalendarController extends Controller
             'calendar',
             'lessons.order.student',
             'lessons.order.lessons.payout',
+            'lessons.payout',
             'lessons.lessonPayment',
             'slotOffer',
         ]);
@@ -296,6 +298,41 @@ class InstructorCalendarController extends Controller
                 'message' => $e->getMessage(),
             ], 400);
         }
+    }
+
+    /**
+     * Take a booked lesson out of the diary but keep it in its booking to
+     * rebook later, at the same price and payment. `scope=future` also takes
+     * every later open lesson in the same booking. Only for a confirmed
+     * booking (`can_bank` on the diary item); an unpaid one must be cancelled.
+     */
+    public function bank(BankLessonsRequest $request, CalendarItem $calendarItem): JsonResponse
+    {
+        $instructor = $request->user()->instructor;
+
+        if ($calendarItem->calendar->instructor_id !== $instructor->id) {
+            return response()->json([
+                'message' => 'Calendar item not found.',
+            ], 404);
+        }
+
+        try {
+            $result = $this->instructorService->bankLessons(
+                $calendarItem,
+                $request->reasonCode(),
+                $request->validated('reason'),
+                $request->appliesToFutureInOrder(),
+                $request->user(),
+            );
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+
+        return response()->json([
+            'message' => "{$result['banked_count']} lesson(s) kept in the booking to rebook later. The student has been emailed.",
+            'banked_count' => $result['banked_count'],
+            'banked_lesson_ids' => $result['lessons']->pluck('id')->values(),
+        ]);
     }
 
     /**

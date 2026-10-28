@@ -20,6 +20,7 @@ class RecalculateStudentLessonNumbersAction
      * for open lessons continues after the student's highest completed lesson
      * number. Cancelled lessons keep their historical number; they are excluded
      * from every lesson list so they never hold a slot in the sequence.
+     * Banked lessons (kept to rebook later, no date) are numbered last.
      *
      * @return int The number of lessons whose number changed
      */
@@ -33,6 +34,8 @@ class RecalculateStudentLessonNumbersAction
             $openLessons = $this->studentLessons($studentId)
                 ->whereNotIn('status', [LessonStatus::COMPLETED, LessonStatus::CANCELLED])
                 ->lockForUpdate()
+                // Banked lessons (no date until rebooked) come after every dated lesson.
+                ->orderByRaw('date IS NULL')
                 ->orderBy('date')
                 ->orderBy('start_time')
                 ->orderBy('id')

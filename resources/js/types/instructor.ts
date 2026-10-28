@@ -163,6 +163,10 @@ export interface CalendarItemResponse {
   awaiting_payment?: boolean | null
   /** Package week booked onto a time already taken; the DRIVE team is rearranging it with the pupil. */
   is_provisional?: boolean
+  /** Can be taken out of the diary but kept in its booking to rebook later (confirmed booking only). */
+  can_bank?: boolean
+  /** Name of the package the lesson belongs to. */
+  package_name?: string | null
   /** Who rearranges a provisional lesson: the instructor when they booked the clash, otherwise the DRIVE team. */
   provisional_handled_by?: 'instructor' | 'drive_team' | null
   lesson_id: number | null

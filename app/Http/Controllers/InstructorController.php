@@ -24,6 +24,7 @@ use App\Http\Controllers\Hmrc\Itsa\ItsaController;
 use App\Http\Controllers\Hmrc\Vat\VatController;
 use App\Http\Controllers\Hmrc\Vehicles\VehicleController;
 use App\Http\Requests\AdminResetPasswordRequest;
+use App\Http\Requests\BankLessonsRequest;
 use App\Http\Requests\FillAvailableSlotsRequest;
 use App\Http\Requests\ImportInstructorsCsvRequest;
 use App\Http\Requests\ImportLocationsCsvRequest;
@@ -833,6 +834,36 @@ class InstructorController extends Controller
                 'message' => $e->getMessage(),
             ], 400);
         }
+    }
+
+    /**
+     * Take a booked lesson out of the diary but keep it in its booking to
+     * rebook later (scope `future` also takes the later lessons in the booking).
+     */
+    public function bankCalendarItem(BankLessonsRequest $request, Instructor $instructor, CalendarItem $calendarItem): JsonResponse
+    {
+        if ($calendarItem->calendar->instructor_id !== $instructor->id) {
+            return response()->json([
+                'message' => 'Calendar item not found for this instructor.',
+            ], 404);
+        }
+
+        try {
+            $result = $this->instructorService->bankLessons(
+                $calendarItem,
+                $request->reasonCode(),
+                $request->validated('reason'),
+                $request->appliesToFutureInOrder(),
+                $request->user(),
+            );
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+
+        return response()->json([
+            'message' => "{$result['banked_count']} lesson(s) kept in the booking to rebook later. The student has been emailed.",
+            'banked_count' => $result['banked_count'],
+        ]);
     }
 
     /**

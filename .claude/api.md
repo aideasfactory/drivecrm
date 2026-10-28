@@ -31,6 +31,10 @@
     - [Packages (Create)](#post-apiv1instructorpackages)
     - [Packages (Update)](#put-apiv1instructorpackagespackage)
     - [Calendar Items](#get-apiv1instructorcalendaritems)
+    - [Rebook Later / Bank Lesson](#post-apiv1instructorcalendaritemscalendaritembank)
+    - [Banked Lessons (List)](#get-apiv1instructorbanked-lessons)
+    - [Rebook Banked Lesson](#post-apiv1instructorlessonslessonrebook)
+    - [Cancel Banked Lesson](#post-apiv1instructorlessonslessoncancel-banked)
     - [Offer Slot (Create)](#post-apiv1instructorcalendaritemscalendaritemoffers)
     - [Offer Slot (Withdraw)](#delete-apiv1instructorcalendaritemscalendaritemoffers)
     - [Finances (Config)](#get-apiv1instructorfinancesconfig)
@@ -2473,6 +2477,8 @@ Returns the authenticated instructor's calendar items for a specific date, **or*
 | `can_sign_off_with_alternative_payment` | boolean\|null | Lesson is pending and not paid by card yet, so sign-off is allowed with the instructor's confirmation → show the "I confirm the pupil paid by an alternative method and accept the risks" tick and send `alternative_payment_confirmed: true`. `null` when there is no lesson |
 | `paid_by_alternative_method` | boolean\|null | Lesson was recorded as paid by an alternative method (no payout): at sign-off for weekly bookings, or when a pay-in-full booking was confirmed. `null` when there is no lesson |
 | `is_provisional` | boolean | **Provisional (clashing) lesson.** A later week of a package booked onto a time that was already taken. It is listed alongside the item it clashes with (same or overlapping time). Show it with the provisional treatment and the label *"Provisional booking – DRIVE team speaking to customer"*. The instructor doesn't need to do anything. `false` when there is no lesson. Clears when the lesson is moved or cancelled, or when the DRIVE team confirms it |
+| `can_bank` | boolean | The lesson can be taken out of the diary but kept in its booking to rebook later (`POST /calendar/items/{calendarItem}/bank`). `true` only for an open lesson on a confirmed booking with no payout; `false` for unpaid bookings and when there is no lesson. Show "Rebook later (keep in package)" on the lesson's action sheet when `true` |
+| `package_name` | string\|null | The lesson's package. Use it on the cancel sheet: *"This lesson leaves the {package_name} booking for good"* |
 | `provisional_handled_by` | string\|null | Who rearranges a provisional lesson. `instructor` when the instructor booked the clash themselves (instructor app, or the CRM signed in as the instructor): label *"Double booked – please rearrange with the pupil"* and ask the instructor to contact the pupil. `drive_team` otherwise (pupil, website or bookings team): keep *"Provisional booking – DRIVE team speaking to customer"*. `null` when the lesson is not provisional |
 | `is_late_cancellation` | boolean\|null | `true` when cancelling now is **less than 48 hours** before the lesson starts (UK time). When `true` **and** `is_paid` is `true`, the cancel sheet shows a **Refund Lesson** tickbox (sent as `refund_lesson` on DELETE). `null` for availability slots and completed lessons |
 | `amount_pence` | integer\|null | Lesson price in pence, **before fees** (e.g., 3500 = £35.00). This is not what the pupil paid — use `payment_breakdown` for that |
@@ -2939,6 +2945,166 @@ The reasons an instructor can pick when cancelling a booked lesson. Show them as
 | `label` | string | Text to show |
 | `cancelled_by` | string | `pupil`, `instructor` or `other`. Useful for grouping the list |
 | `details_required` | boolean | When `true`, the details box (`reason`) must be filled in |
+
+---
+
+#### `POST /api/v1/instructor/calendar/items/{calendarItem}/bank`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+**"Rebook later (keep in package)".** Takes a booked lesson out of the diary **without cancelling it**, so the pupil keeps it in their booking at the price they paid (e.g. a Drive introductory-rate package). Use it when the lesson can't go ahead but there's no new date yet; use `PUT /calendar/items/{calendarItem}` when there is one, and `DELETE` only to cancel for good.
+
+Offer it on the lesson's action sheet whenever the diary item has `can_bank: true` (a confirmed booking: `false` for unpaid bookings, completed or paid-out lessons). Uses the same reasons as cancelling (`GET /api/v1/instructor/lesson-cancellation-reasons`).
+
+What happens to each banked lesson:
+
+- It stays `pending` with its price and payment unchanged (paid stays paid; a weekly lesson still owed stays owed). Nothing is refunded, charged or paid out.
+- Its `date`, `start_time`, `end_time` become `null`, it leaves the diary and **the slot goes back to open availability** (as on a cancel). It no longer appears in `GET /calendar/items` or `GET /instructor/lessons`.
+- An open weekly invoice is voided first. If it turns out already paid, the lesson is banked as paid. If Stripe can't be reached nothing is banked (400).
+- While banked it is never invoiced or reminded, and **it can't be signed off** (422).
+- **It expires after 12 months** (`booking_payments.banked_lesson_expiry_months`). A lesson still not rebooked is cancelled automatically by the daily `lessons:expire-banked` job (reason `banked_expired`, *"Not rebooked in time"*): the pupil gets the normal cancellation email and a paid lesson goes to Head Office to refund (everything except the booking fee). The pupil's "rebook later" email states the rebook-by date.
+- The pupil is emailed ("your lesson will be rebooked, it stays in your booking at the price you booked"). A `Banked/Rebook later` note is added to the instructor's profile.
+- It shows on `GET /api/v1/instructor/banked-lessons`, on the pupil's lessons with `is_banked: true` / `card_status: "banked"`, and on Head Office's Banked lessons report until rebooked.
+
+**Path Parameters:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `calendarItem` | integer | Calendar item ID of the booked lesson |
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `reason_code` | string | Yes | A `value` from `GET /api/v1/instructor/lesson-cancellation-reasons` |
+| `reason` | string | When the reason has `details_required` (`other`) | Free-text details, max 1000 chars. The pupil sees it in their email |
+| `scope` | string | No | `single` (default) = this lesson; `future` = this lesson and every later open lesson in the same booking |
+
+**Example:**
+```json
+POST /api/v1/instructor/calendar/items/42/bank
+{
+  "reason_code": "instructor_unavailable",
+  "reason": "Away on a course that week.",
+  "scope": "single"
+}
+```
+
+**Response (200):**
+```json
+{
+  "message": "1 lesson(s) kept in the booking to rebook later. The student has been emailed.",
+  "banked_count": 1,
+  "banked_lesson_ids": [318]
+}
+```
+
+**Error — Can't be banked (400):** unpaid booking, completed / paid-out lesson, or Stripe couldn't void an invoice. Nothing changed.
+```json
+{ "message": "This booking hasn't been paid yet, so its lessons can't be kept to rebook later. Move it or cancel it instead." }
+```
+
+**Error — Validation (422):** missing / unknown `reason_code`, or `reason` missing for `other`.
+
+**Error — Not found / not owned (404):** `{ "message": "Calendar item not found." }`
+
+---
+
+#### `GET /api/v1/instructor/banked-lessons`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+The authenticated instructor's lessons waiting to be rebooked, longest waiting first. Use it for a "Lessons to rebook" list so instructors are prompted to rebook them.
+
+**Response (200):**
+```json
+{
+  "data": [
+    {
+      "id": 318,
+      "student_lesson_number": 9,
+      "order_id": 77,
+      "student_id": 12,
+      "student_name": "Jo Bloggs",
+      "package_name": "10 Lesson Introductory Offer",
+      "amount_pence": 3200,
+      "payment_mode": "upfront",
+      "payment_status": "paid",
+      "banked_at": "2026-10-27T11:02:13.000000Z",
+      "expires_at": "2027-10-27T11:02:13.000000Z",
+      "banked_reason": "Instructor unavailable: Away on a course that week.",
+      "banked_by_name": "Sam Smith"
+    }
+  ]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `payment_status` | string\|null | `paid`, `due` or `null`, as on the lessons list |
+| `banked_at` | string | When it was taken out of the diary (ISO 8601) |
+| `expires_at` | string | Rebook by this date (ISO 8601) or it is cancelled and refunded automatically |
+| `banked_reason` | string\|null | Reason label plus details |
+
+---
+
+#### `POST /api/v1/instructor/lessons/{lesson}/rebook`
+
+**Auth required:** Yes (Bearer token — instructor only; the lesson must be theirs)
+
+Puts a banked lesson back in the diary. An open slot at exactly that time is used, otherwise a new one is created. A clash with another lesson, blocked-out time or a practical test is refused (422). Empty availability the lesson overlaps is taken over. The slot becomes `booked`, or `reserved` for a weekly lesson not yet paid; a weekly lesson still owed is invoiced as normal (48 hours before). Price and payment are unchanged. The pupil is emailed the new date.
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `date` | string | Yes | `Y-m-d`, today or later |
+| `start_time` | string | Yes | `H:i` |
+| `end_time` | string | Yes | `H:i`, after `start_time` |
+
+**Response (200):**
+```json
+{
+  "message": "Lesson rebooked. The student has been emailed.",
+  "lesson_id": 318,
+  "calendar_item_id": 9051,
+  "date": "2026-11-10",
+  "start_time": "10:00",
+  "end_time": "11:00"
+}
+```
+
+**Error — Not banked / time taken (422):**
+```json
+{
+  "message": "This time is no longer available on Tuesday 10 November 2026. Please choose another time.",
+  "errors": { "first_lesson_date": ["This time is no longer available on Tuesday 10 November 2026. Please choose another time."] }
+}
+```
+Also `errors.lesson`: `"This lesson is not waiting to be rebooked."`.
+
+**Error — Not your lesson (403).**
+
+---
+
+#### `POST /api/v1/instructor/lessons/{lesson}/cancel-banked`
+
+**Auth required:** Yes (Bearer token — instructor only; the lesson must be theirs)
+
+Cancels a banked lesson for good instead of rebooking it. Same outcome as cancelling a booked lesson: a paid lesson is sent to Head Office to refund the pupil (everything except the booking fee), an unpaid one is simply cancelled, the pupil is emailed, nothing is paid to the instructor.
+
+**Request Body:** `reason_code` (required) and `reason` (required for `other`), as on the bank endpoint.
+
+**Response (200):**
+```json
+{
+  "message": "1 lesson cancelled. The student has been notified.",
+  "cancelled_count": 1,
+  "refund_required_count": 1
+}
+```
+
+**Error (422):** `{ "message": "This lesson is not waiting to be rebooked." }`, or validation errors. **403** when not your lesson.
 
 ---
 
@@ -4361,6 +4527,9 @@ Returns lessons for a given student across all their orders. Supports optional f
 | `can_sign_off_with_alternative_payment` | boolean\|null | Lesson is pending and not paid by card yet, so sign-off is allowed with the instructor's confirmation → show the "I confirm the pupil paid by an alternative method and accept the risks" tick and send `alternative_payment_confirmed: true`. `null` when there is no lesson |
 | `paid_by_alternative_method` | boolean\|null | Lesson was recorded as paid by an alternative method (no payout): at sign-off for weekly bookings, or when a pay-in-full booking was confirmed. `null` when there is no lesson |
 | `is_provisional` | boolean | **Provisional (clashing) lesson.** A later week of a package booked onto a time that was already taken. Show the *"Potential clash – the DRIVE team will be in touch"* card. Clears when the lesson is moved or cancelled, or when the DRIVE team confirms it |
+| `is_banked` | boolean | **Kept to rebook later.** The instructor took the lesson out of the diary but kept it in the booking at the price paid. `date`, `start_time`, `end_time` are `null` and `card_status` is `banked` until the instructor rebooks it. It can't be signed off |
+| `banked_at` | string\|null | When it was banked (ISO 8601) |
+| `banked_expires_at` | string\|null | Rebook-by date (ISO 8601): not rebooked by then, it is cancelled and refunded automatically |
 | `provisional_handled_by` | string\|null | Who rearranges a provisional lesson. `instructor` when the pupil's instructor booked the clash: show *"Potential clash – your instructor will be in touch"*. `drive_team` otherwise: keep *"Potential clash – the DRIVE team will be in touch"*. `null` when the lesson is not provisional |
 | `payment_breakdown` | object | What the pupil pays for this lesson, itemised (see below) |
 
@@ -4387,6 +4556,7 @@ The parts always add up to `total_pence`. They are pro-rated from the order's st
 | `current` | Orange | The next lesson (today or future) — the one to sign off next |
 | `upcoming` | Blue | Future lessons beyond the next one |
 | `draft` | Grey | Booking (upfront or weekly) awaiting its first payment. Only returned when `include_drafts=true`. Draft lessons never consume the `current` slot — the "next lesson to sign off" is still the next non-draft lesson. |
+| `banked` | Grey | Kept in the booking to rebook later (`is_banked: true`, no date). Pupil: *"Your instructor will rebook this lesson. It stays in your booking at the price you paid."* Instructor: show a **Rebook** action. Never offer sign-off. |
 
 ---
 
@@ -4490,11 +4660,14 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 | `can_sign_off_with_alternative_payment` | boolean\|null | Lesson is pending and not paid by card yet, so sign-off is allowed with the instructor's confirmation → show the "I confirm the pupil paid by an alternative method and accept the risks" tick and send `alternative_payment_confirmed: true`. `null` when there is no lesson |
 | `paid_by_alternative_method` | boolean\|null | Lesson was recorded as paid by an alternative method (no payout): at sign-off for weekly bookings, or when a pay-in-full booking was confirmed. `null` when there is no lesson |
 | `is_provisional` | boolean | **Provisional (clashing) lesson.** A later week of a package booked onto a time that was already taken. Show the *"Potential clash – the DRIVE team will be in touch"* card. Clears when the lesson is moved or cancelled, or when the DRIVE team confirms it |
+| `is_banked` | boolean | **Kept to rebook later.** The instructor took the lesson out of the diary but kept it in the booking at the price paid. `date`, `start_time`, `end_time` are `null` and `card_status` is `banked` until the instructor rebooks it. It can't be signed off |
+| `banked_at` | string\|null | When it was banked (ISO 8601) |
+| `banked_expires_at` | string\|null | Rebook-by date (ISO 8601): not rebooked by then, it is cancelled and refunded automatically |
 | `provisional_handled_by` | string\|null | Who rearranges a provisional lesson. `instructor` when the pupil's instructor booked the clash: show *"Potential clash – your instructor will be in touch"*. `drive_team` otherwise: keep *"Potential clash – the DRIVE team will be in touch"*. `null` when the lesson is not provisional |
 | `payout_status` | string\|null | Instructor payout status: `pending`, `paid`, `failed`, or null |
 | `has_payout` | boolean | Whether a payout has been created for this lesson |
 | `calendar_date` | string\|null | Calendar date for the lesson slot (YYYY-MM-DD) |
-| `card_status` | string | Computed UI card status: `signed_off`, `needs_sign_off`, `current`, `upcoming`, `draft`. Draft lessons never consume the `current` slot |
+| `card_status` | string | Computed UI card status: `signed_off`, `needs_sign_off`, `current`, `upcoming`, `draft`, `banked`. Draft lessons never consume the `current` slot |
 | `has_reflective_log` | boolean | Leftover four-prompt log present and complete. **Do not** gate sign-off on this — use `status` / `card_status` / `summary` |
 | `reflective_log` | object\|null | The reflective log data (see below) |
 | `resources` | array | List of resources attached to this lesson (see below) |
@@ -6605,6 +6778,10 @@ The `role` field is always returned in user responses. Use it to determine which
 | PUT | `/api/v1/instructor/calendar/items/{calendarItem}` | Yes | Instructor | Update / move / reschedule calendar item (single or bulk) |
 | DELETE | `/api/v1/instructor/calendar/items/{calendarItem}` | Yes | Instructor | Delete empty slot, or cancel a booking (`reason_code` + optional `reason` details) |
 | GET | `/api/v1/instructor/lesson-cancellation-reasons` | Yes | Instructor | Reasons to pick from when cancelling a booking |
+| POST | `/api/v1/instructor/calendar/items/{calendarItem}/bank` | Yes | Instructor | Rebook later: take a booked lesson out of the diary but keep it in the booking |
+| GET | `/api/v1/instructor/banked-lessons` | Yes | Instructor | Lessons waiting to be rebooked |
+| POST | `/api/v1/instructor/lessons/{lesson}/rebook` | Yes | Instructor | Put a banked lesson back in the diary |
+| POST | `/api/v1/instructor/lessons/{lesson}/cancel-banked` | Yes | Instructor | Cancel a banked lesson for good |
 | POST | `/api/v1/instructor/calendar/items/{calendarItem}/offers` | Yes | Instructor | Offer an empty diary slot at short notice |
 | DELETE | `/api/v1/instructor/calendar/items/{calendarItem}/offers` | Yes | Instructor | Withdraw an open short-notice offer |
 | GET | `/api/v1/instructor/finances` | Yes | Instructor | List finance records |
@@ -7874,6 +8051,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-10-20 | **Calendar items: `student_id`, and names on instructor-made drafts.** Every calendar item response (`GET /instructor/calendar/items` and the calendar item create/show/update responses) gains `student_id` (integer or `null`, additive), set for `booked`, `completed`, `draft` and `reserved` items. Use it with `order_id` to call `POST /students/{student}/orders/{order}/alternative-payment` from the diary. `student_name` is now also set on `draft` items the instructor or Head Office booked; it stays `null` on drafts from the pupil's own website/app checkout (the 2026-10-01 rule now only covers those). **App action:** show the confirm-alternative-payment action on diary items with `can_confirm_alternative_payment: true` using `student_id` + `order_id`, and label instructor-made drafts with `student_name`. | Calendar Items |
 | 2026-10-21 | **Provisional (clashing) lessons.** `POST /students/{student}/orders` (and the website/bookings-team checkout) now refuses a booking only when the **first** lesson clashes. A later week that lands on a time already taken (another pupil's lesson or hold, blocked-out time, a practical test) is booked anyway. It gets its own diary item next to what it clashes with, which is never changed, and is flagged provisional. The DRIVE bookings team contacts the pupil and rearranges it from the new Clashes report. **New additive field `is_provisional` (boolean)** on `GET /instructor/calendar/items` (and every calendar item response), `GET /instructor/lessons/{date}`, `GET /instructor/lessons?from=&to=`, `GET /students/{student}/lessons`, `GET /students/{student}/lessons/{lesson}` and the sign-off response. It becomes `false` once the lesson is moved (single or with future lessons), cancelled, or confirmed by the DRIVE team. Diary items may now overlap: two items can share the same time on the same day. Updating a calendar item without changing its `date` / `start_time` / `end_time` no longer runs the overlap check, so a stacked item and the one next to it can still be edited. Moving to a time that clashes is still a 422. The instructor no longer gets the "scheduling clash" email for booking-created clashes. **App action:** see `.claude/tasks/app-developer-provisional-lessons.md` (instructor diary card + pupil lesson card). | Orders (store), Calendar Items (`is_provisional` — NEW, update overlap rule), Instructor Day/Range Lessons, Student Lessons (index, show, sign-off) |
 | 2026-10-22 | **Alternative payment method: pay-in-full bookings.** `POST /students/{student}/orders/{order}/alternative-payment` now also accepts **pay-in-full** (`upfront`) bookings, not just weekly. Confirming one records **every lesson** as paid by an alternative method straight away (`payment_status: "paid"`, `paid_by_alternative_method: true`, lesson price, no fees, no guarantee); they sign off normally with no payout. `alternative_payment_allowed` and `can_confirm_alternative_payment` can now be `true` on pay-in-full lessons / calendar items. The "weekly only" 422 now reads `Only pay-as-you-go or pay-in-full bookings can be paid by an alternative method.` Staff/instructor pay-in-full bookings of these pupils are no longer released automatically while awaiting payment. **App action:** show the confirm action on pay-in-full bookings too, and use pay-in-full wording (all lessons marked paid, no later invoices). | Orders (alternative-payment), Student Lessons, Instructor Day Lessons, Calendar Items |
+| 2026-10-27 | **Banked lessons ("Rebook later (keep in package)").** New `POST /instructor/calendar/items/{calendarItem}/bank` takes a booked lesson (or it + later ones, `scope=future`) out of the diary without cancelling it: the pupil keeps it in their booking at the price paid; no refund, charge or payout; open weekly invoice voided; the slot reopens. New `GET /instructor/banked-lessons`, `POST /instructor/lessons/{lesson}/rebook`, `POST /instructor/lessons/{lesson}/cancel-banked`. **New additive fields:** `can_bank` + `package_name` on every calendar item; `is_banked` + `banked_at` on `GET /students/{student}/lessons` and `/lessons/{lesson}`. `banked_expires_at` on student lessons and `expires_at` on banked lessons: banked lessons not rebooked within 12 months are cancelled automatically (daily `lessons:expire-banked`, reason `banked_expired` — system only, not in the reasons list) and paid ones go to Head Office to refund. **New `card_status` value `banked`** (no `date` / `start_time` / `end_time`) — treat unknown card statuses safely. Signing off a banked lesson returns 422 `This lesson is waiting to be rebooked, so it can't be signed off yet.` **App action:** see `.claude/tasks/app-developer-banked-lessons.md`. | Calendar Items (bank — NEW, `can_bank`, `package_name`), Instructor Banked Lessons (NEW), Lessons (rebook, cancel-banked — NEW), Student Lessons (`is_banked`, `banked_at`, `card_status`), Sign-off |
 | 2026-10-28 | **Instructor-booked clashes.** New additive field `provisional_handled_by` (`instructor` \| `drive_team` \| `null`) next to every `is_provisional`: `GET /instructor/calendar/items` (and every calendar item response), `GET /instructor/lessons/{date}`, `GET /instructor/lessons?from=&to=`, `GET /students/{student}/lessons`, `GET /students/{student}/lessons/{lesson}` and the sign-off response. `instructor` when the instructor booked the clash themselves (order `source` = instructor app, or CRM booked by an instructor user); they rearrange it with the pupil. Booking, payment and the provisional rules are unchanged. **App action:** see `.claude/tasks/app-developer-provisional-lessons.md` ("Instructor-booked clashes"). | Calendar Items, Instructor Day/Range Lessons, Student Lessons (index, show, sign-off) |
 | 2026-10-28 | **Lesson income in app Finances.** `GET /instructor/finances/summary` now returns a read-only `lesson_income` list (paid Stripe payouts + cash/alternative-payment sign-offs in the date range, by lesson date) and `stats.total_lesson_income_pence` / `_formatted`. `stats.total_payments_*` and `stats.net_balance_*` now **include** lesson income, matching the CRM Finances tab. Manual finance CRUD is unchanged. **App action:** show `lesson_income` rows (amount, pupil, date) on the Finances screen, read-only; see `.claude/tasks/finances-lesson-income.md` in the app repo. | Instructor Finances (summary) |
 ---

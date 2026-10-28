@@ -147,6 +147,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('instructors.calendar.items.update');
     Route::delete('/instructors/{instructor}/calendar/items/{calendarItem}', [InstructorController::class, 'destroyCalendarItem'])
         ->name('instructors.calendar.items.destroy');
+    Route::post('/instructors/{instructor}/calendar/items/{calendarItem}/bank', [InstructorController::class, 'bankCalendarItem'])
+        ->name('instructors.calendar.items.bank');
     Route::get('/instructors/{instructor}/lesson-cancellation-reasons', [InstructorController::class, 'cancellationReasons'])
         ->name('instructors.lesson-cancellation-reasons.index');
     Route::post('/instructors/{instructor}/calendar/items/{calendarItem}/offers', [InstructorController::class, 'storeSlotOffer'])
@@ -327,6 +329,10 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('students.lessons.sign-off');
     Route::post('/students/{student}/lessons/{lesson}/resend-invoice', [PupilController::class, 'resendLessonInvoice'])
         ->name('students.lessons.resend-invoice');
+    Route::post('/students/{student}/lessons/{lesson}/rebook', [PupilController::class, 'rebookBankedLesson'])
+        ->name('students.lessons.rebook');
+    Route::post('/students/{student}/lessons/{lesson}/cancel-banked', [PupilController::class, 'cancelBankedLesson'])
+        ->name('students.lessons.cancel-banked');
     Route::post('/students/{student}/orders/{order}/alternative-payment', [PupilController::class, 'confirmAlternativePayment'])
         ->name('students.orders.alternative-payment');
 
@@ -384,6 +390,10 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('reports.clashes.export');
     Route::post('/reports/clashes/{lesson}/confirm', [ReportController::class, 'confirmClash'])
         ->name('reports.clashes.confirm');
+    Route::get('/reports/banked-lessons', [ReportController::class, 'bankedLessons'])
+        ->name('reports.banked-lessons');
+    Route::get('/reports/banked-lessons/export', [ReportController::class, 'exportBankedLessons'])
+        ->name('reports.banked-lessons.export');
     // Push Notifications (Owner Only)
     Route::middleware([EnsureOwner::class])->group(function () {
         Route::get('/push-notifications', [PushNotificationController::class, 'index'])

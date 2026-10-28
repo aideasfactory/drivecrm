@@ -19,6 +19,8 @@ enum LessonCancellationReason: string
     case VehicleProblem = 'vehicle_problem';
     case Weather = 'weather';
     case Other = 'other';
+    /** Set by `lessons:expire-banked`, never picked by a person. */
+    case BankedExpired = 'banked_expired';
 
     public function label(): string
     {
@@ -32,6 +34,7 @@ enum LessonCancellationReason: string
             self::VehicleProblem => 'Car problem',
             self::Weather => 'Weather / unsafe conditions',
             self::Other => 'Other',
+            self::BankedExpired => 'Not rebooked in time',
         };
     }
 
@@ -43,7 +46,7 @@ enum LessonCancellationReason: string
         return match ($this) {
             self::PupilRequest, self::PupilUnwell, self::PupilNoShow, self::PupilStoppedLessons => 'pupil',
             self::InstructorUnavailable, self::InstructorUnwell, self::VehicleProblem => 'instructor',
-            self::Weather, self::Other => 'other',
+            self::Weather, self::Other, self::BankedExpired => 'other',
         };
     }
 
@@ -75,6 +78,8 @@ enum LessonCancellationReason: string
     }
 
     /**
+     * The reasons a person can pick (not the system-only `banked_expired`).
+     *
      * @return array<int, array{value: string, label: string, cancelled_by: string, details_required: bool}>
      */
     public static function options(): array
@@ -86,7 +91,7 @@ enum LessonCancellationReason: string
                 'cancelled_by' => $case->cancelledBy(),
                 'details_required' => $case->requiresDetails(),
             ],
-            self::cases(),
+            array_values(array_filter(self::cases(), fn (self $case): bool => $case !== self::BankedExpired)),
         );
     }
 

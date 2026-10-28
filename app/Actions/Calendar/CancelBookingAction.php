@@ -109,6 +109,44 @@ class CancelBookingAction
     }
 
     /**
+     * Cancel a banked lesson (kept in its booking to rebook later, so it has no
+     * diary slot) the same way as a booked one: a paid lesson goes to Head
+     * Office for review, an unpaid one is simply cancelled. Its invoice was
+     * voided when it was banked; any open one is still stopped first. No
+     * actor when the system cancels it (`lessons:expire-banked`).
+     *
+     * @return array{cancelled_count: int, refund_required_count: int, payout_count: int}
+     */
+    public function cancelBankedLesson(
+        Lesson $lesson,
+        LessonCancellationReason $reasonCode,
+        ?string $details,
+        ?User $actor,
+    ): array {
+        $lesson->loadMissing(['order.student.user', 'order.instructor', 'lessonPayment', 'payout']);
+
+        if (! $lesson->isBanked()) {
+            throw new RuntimeException('This lesson is not waiting to be rebooked.');
+        }
+
+        if ($this->isProtected($lesson)) {
+            throw new RuntimeException('This lesson is completed or already paid out and cannot be cancelled.');
+        }
+
+        $cancelSet = new Collection([$lesson]);
+
+        $voidedPayments = $this->stopOpenInvoices($cancelSet);
+
+        try {
+            return $this->cancelLessons($cancelSet, $lesson->order, $lesson->order?->instructor, $reasonCode, $details, $actor, false);
+        } catch (Throwable $e) {
+            $this->forgetVoidedInvoices($voidedPayments);
+
+            throw $e;
+        }
+    }
+
+    /**
      * Cancel the lessons once nothing can be paid for them any more.
      *
      * @param  Collection<int, Lesson>  $cancelSet
@@ -120,7 +158,7 @@ class CancelBookingAction
         ?Instructor $instructor,
         LessonCancellationReason $reasonCode,
         ?string $details,
-        User $actor,
+        ?User $actor,
         bool $isUnpaidBooking,
     ): array {
         /** @var Collection<int, LessonCancellationOutcome> $outcomes */
@@ -481,7 +519,7 @@ class CancelBookingAction
         ?string $details,
         array $hoursNotice,
         bool $orderCancelled,
-        User $actor,
+        ?User $actor,
         bool $guaranteeRemoved = false,
     ): void {
         $student = $order?->student;
@@ -508,7 +546,7 @@ class CancelBookingAction
                     'reason_code' => $reasonCode->value,
                     'head_office_review_lesson_ids' => $refundLessons->pluck('id')->all(),
                     'order_cancelled' => $orderCancelled,
-                    'cancelled_by_user_id' => $actor->id,
+                    'cancelled_by_user_id' => $actor?->id,
                 ],
                 "Cancelled {$cancelSet->count()} lesson(s): {$reason}",
             );
@@ -524,7 +562,7 @@ class CancelBookingAction
                     $reasonCode,
                     $details,
                     $hoursNotice,
-                    $actor->name,
+                    $actor?->name ?? 'System',
                     $guaranteeRemoved,
                 ));
         }

@@ -117,7 +117,8 @@ Students (Many) ──── (0..1) Orders   [students.test_pass_guarantee_order
 6. **lessons** - Individual lessons
    - Many-to-one with `orders` (parent order)
    - Many-to-one with `instructors` (who conducts)
-   - Many-to-one with `calendar_items` (scheduled time slot)
+   - Many-to-one with `calendar_items` (scheduled time slot; NULL while banked)
+   - Many-to-one with `users` (`banked_by_user_id`, who banked it to rebook later)
    - One-to-one with `lesson_payments` (payment tracking for weekly mode)
    - One-to-one with `payouts` (instructor payout)
    - One-to-one with `reflective_logs` (student's reflective log)
@@ -522,9 +523,12 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 | `completed_at` | datetime | NULLABLE | When lesson was completed |
 | `summary` | text | NULLABLE | Instructor's summary of the lesson (written at sign-off, used for AI resource matching) |
 | `cancellation_reason` | text | NULLABLE | Free-text details the canceller added (required when the reason is `other`). Retained for history. Before 2026-10-19 this held the whole free-text reason |
-| `cancellation_reason_code` | varchar(50) | NULLABLE | Structured cancellation reason, cast to `App\Enums\LessonCancellationReason` (`pupil_request`, `pupil_unwell`, `pupil_no_show`, `pupil_stopped_lessons`, `instructor_unavailable`, `instructor_unwell`, `vehicle_problem`, `weather`, `other`). Each reason maps to who cancelled (pupil / instructor / other). NULL for lessons cancelled before 2026-10-19 |
+| `cancellation_reason_code` | varchar(50) | NULLABLE | Structured cancellation reason, cast to `App\Enums\LessonCancellationReason` (`pupil_request`, `pupil_unwell`, `pupil_no_show`, `pupil_stopped_lessons`, `instructor_unavailable`, `instructor_unwell`, `vehicle_problem`, `weather`, `other`, and system-only `banked_expired`). Each reason maps to who cancelled (pupil / instructor / other). NULL for lessons cancelled before 2026-10-19 |
 | `cancelled_at` | timestamp | NULLABLE | When the lesson was cancelled |
 | `provisional_at` | timestamp | NULLABLE, INDEX | Set when the lesson was booked as a **later week of a package** onto a time that already clashed with something in the instructor's diary (another lesson or hold, blocked-out time, a practical test). The lesson is booked anyway as its own diary item, stacked next to what it clashes with, and the DRIVE bookings team rearranges it with the pupil. Cleared when the lesson is moved, cancelled or marked confirmed from the Clashes report. NULL = not provisional |
+| `banked_at` | timestamp | NULLABLE, INDEX | Set when the lesson is **banked** ("Rebook later (keep in package)"): taken out of the diary without being cancelled, so the pupil keeps it in their booking at the price they paid. While set (and `status = pending`) `date`, `start_time`, `end_time` and `calendar_item_id` are NULL. Cleared when the lesson is rebooked. Migration `2026_10_27_115423_add_banked_columns_to_lessons_table` |
+| `banked_reason` | varchar(1100) | NULLABLE | Reason label plus any details given when banking (`LessonCancellationReason::describe`). Cleared on rebook |
+| `banked_by_user_id` | bigint unsigned | FOREIGN KEY (users.id), NULLABLE, ON DELETE SET NULL | Who banked it. Cleared on rebook |
 | `mileage` | unsigned integer | NULLABLE | Miles driven during this lesson |
 | `student_lesson_number` | unsigned integer | NOT NULL, INDEX | Per-student running lesson number — starts at 1 for each student and increments across all their orders. Used as the user-facing lesson reference for support queries. Stable for life (cancelled / cleaned drafts keep their number; gaps are allowed). |
 | `status` | enum('draft', 'pending', 'completed', 'cancelled') | DEFAULT 'pending' | Lesson status |
@@ -537,10 +541,12 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 - Index on `calendar_item_id`
 - Index on `student_lesson_number`
 - Index on `provisional_at`
+- Index on `banked_at`
 
 **Relationships:**
 - Belongs to one `Order`
 - Belongs to one `Instructor`
+- Belongs to one `User` as `bankedBy` (nullable — who banked it)
 - Belongs to one `CalendarItem` (optional - links to specific calendar slot)
 - Has one `LessonPayment`
 - Has one `Payout`
@@ -560,6 +566,7 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 - `summary` is written by the instructor at sign-off time; used by AI (AWS Bedrock Nova) to match against resource tags and recommend relevant videos/PDFs to the student
 - `mileage` is recorded by the instructor after the lesson is completed, via the schedule view
 - **Provisional lessons** (`provisional_at` set): `FlagProvisionalLessonsAction` flags a new booking's lessons whose diary item overlaps a blocker (`CalendarItem::blocksBooking()`) straight after the lessons are created (`CreateOrderFromApiAction`, `CreateOrderFromEnquiryAction`). Only the later booking is flagged; what it clashes with is never changed. `Lesson::isProvisional()` / `scopeProvisional()` only count open (`draft` / `pending`) lessons still in the diary. Moving the lesson (`UpdateCalendarItemAction`, single or with future lessons) clears it. Cancelling clears it and **deletes** the lesson's diary item (and travel block) when the booking created it (`created_by_hold = true`) instead of reopening it as availability. `ConfirmProvisionalLessonAction` (Clashes report "Mark confirmed") clears it. No status or payment change
+- **Banked lessons** ("Rebook later (keep in package)", `BankLessonsAction`, `Lesson::isBanked()` / `scopeBanked()` / `canBeBanked()`): only an open (`pending`) lesson on an **active** order with no payout can be banked (this lesson, or this + later lessons in the order). Any open Stripe invoice is voided first (one found paid is recorded paid); then `date`/times/`calendar_item_id`/`provisional_at` are nulled, `banked_*` set, the slot reopened (or deleted when it was a provisional hold), and every `due` lesson payment gets `stripe_invoice_id`, `invoice_cancelled_at` and `due_date` cleared. `status`, `amount_pence` and paid payments are untouched. With no date the lesson is never invoiced, reminded or overdue-voided (all those queries need `lessons.date`), `hasStarted()` is false and every sign-off path refuses it. It keeps the order open (not completed / cancelled), is numbered after dated lessons, moves with the pupil on a transfer and is listed on the Banked lessons report. **Expiry:** `Lesson::bankedExpiresAt()` = `banked_at` + `booking_payments.banked_lesson_expiry_months` (12); the daily `lessons:expire-banked` command cancels expired ones via `CancelBookingAction::cancelBankedLesson` with reason `banked_expired` (system-only, excluded from `LessonCancellationReason::options()`) and no actor, so paid ones go to Head Office to refund. `RebookBankedLessonAction` puts it back: slot via `CreateDraftCalendarItemsAction` (clash-checked), marked `booked` (or `reserved` for an unpaid weekly lesson), overlapped empty availability consumed, `banked_*` cleared, weekly `due_date` recalculated. `CancelBookingAction::cancelBankedLesson` cancels one outright (normal cancel outcome)
 - `student_lesson_number` is assigned at lesson creation time inside the order's transaction. Computed as `MAX(student_lesson_number) + 1` over the student's existing lessons (across all orders), with `lockForUpdate()` on the existing rows to serialise concurrent same-student order creations. Numbers are immutable after assignment — a cancelled or cleaned-up draft lesson keeps its number, so gaps in the sequence are expected and intentional
 
 ---

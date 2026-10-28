@@ -11,4 +11,6 @@ enum LessonCardStatus: string
     case Current = 'current';
     case Upcoming = 'upcoming';
     case Draft = 'draft';
+    /** Kept in the booking to rebook later: no date until the instructor rebooks it. */
+    case Banked = 'banked';
 }

@@ -24,6 +24,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // Backup for weekly invoices, which are normally sent when the previous lesson is signed off
         $schedule->command('lessons:send-invoices')->hourly()->withoutOverlapping();
         $schedule->command('lessons:cancel-overdue-invoices')->hourly()->withoutOverlapping();
+        // Banked lessons not rebooked in time: cancelled, paid ones sent to Head Office to refund
+        $schedule->command('lessons:expire-banked')->dailyAt('09:00')->withoutOverlapping();
         $schedule->command('hmrc:monitor-token-expiry')->dailyAt('07:00');
         $schedule->command('hmrc:sync-itsa-obligations')->dailyAt('07:15');
         $schedule->command('hmrc:check-refresh-health')->hourly();

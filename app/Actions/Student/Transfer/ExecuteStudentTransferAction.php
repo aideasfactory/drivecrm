@@ -96,6 +96,13 @@ class ExecuteStudentTransferAction
                     ->update(['instructor_id' => $destination->id]);
             }
 
+            // Lessons waiting to be rebooked have no date, so they follow the pupil too.
+            Lesson::query()
+                ->banked()
+                ->where('instructor_id', $sourceInstructor->id)
+                ->whereHas('order', fn ($q) => $q->where('student_id', $student->id))
+                ->update(['instructor_id' => $destination->id]);
+
             $student->update(['instructor_id' => $destination->id]);
         });
 

@@ -150,6 +150,14 @@ final class BookingPayments
         return (int) config('booking_payments.overdue_invoice_cancel_days', 7);
     }
 
+    /**
+     * Months a banked lesson can wait to be rebooked before it is cancelled and refunded.
+     */
+    public static function bankedLessonExpiryMonths(): int
+    {
+        return (int) config('booking_payments.banked_lesson_expiry_months', 12);
+    }
+
     public static function lateCancellationHours(): int
     {
         return (int) config('booking_payments.late_cancellation_hours', 48);
