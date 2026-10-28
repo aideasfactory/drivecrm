@@ -16,6 +16,8 @@ class ImportRun extends Model
 {
     public const SOURCE_UPLOAD = 'upload';
 
+    public const STATUS_QUEUED = 'queued';
+
     public const STATUS_RUNNING = 'running';
 
     public const STATUS_COMPLETED = 'completed';

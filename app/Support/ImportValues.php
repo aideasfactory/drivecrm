@@ -6,6 +6,8 @@ namespace App\Support;
 
 use Carbon\CarbonImmutable;
 use DateTimeImmutable;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 /**
  * Lenient parsing of the plain-text values found in legacy import CSVs.
@@ -14,6 +16,19 @@ use DateTimeImmutable;
  */
 final class ImportValues
 {
+    /**
+     * Hash of a random password nobody knows, for an imported account.
+     *
+     * It is never used to sign in — the welcome email replaces it (password
+     * set-up link or a fresh temporary password) — so the lowest bcrypt cost
+     * is used: ~1ms instead of ~230ms per account, which dominated large
+     * imports. 48 random characters can't be guessed whatever the cost.
+     */
+    public static function placeholderPasswordHash(): string
+    {
+        return Hash::make(Str::random(48), ['rounds' => 4]);
+    }
+
     /**
      * Parse a date written as YYYY-MM-DD or UK DD/MM/YYYY (leading zeros optional).
      */

@@ -17,6 +17,7 @@ use App\Actions\Import\SendImportedWelcomeEmailAction;
 use App\Actions\Import\SyncImportedOrderAction;
 use App\Actions\Import\ValidateImportBundleAction;
 use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
+use App\Jobs\ImportBundleJob;
 use App\Models\ImportMapping;
 use App\Models\ImportRun;
 use App\Models\Instructor;
@@ -26,7 +27,10 @@ use App\Models\Student;
 use App\Models\User;
 use App\Support\ImportValues;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
 use ZipArchive;
@@ -34,6 +38,15 @@ use ZipArchive;
 class ImportService extends BaseService
 {
     /** Counters reported per run (also stored on import_runs.totals). */
+    /**
+     * The uploaded zip waits here for the queue worker, which may not share
+     * the web server's disk. The bucket is public, so the name is random and
+     * the zip is deleted as soon as the run ends.
+     */
+    protected const UPLOAD_DISK = 's3';
+
+    protected const UPLOAD_DIRECTORY = 'imports';
+
     protected const TOTAL_KEYS = [
         'instructors_created',
         'instructors_linked',
@@ -134,28 +147,25 @@ class ImportService extends BaseService
      * If an instructor fails, earlier instructors stay imported, the run is
      * marked failed and the exception is rethrown — re-running picks up the rest.
      *
+     * @param  ImportRun  $run  From queueImport()
      * @param  array<string, array<int|string, mixed>>  $bundle  A bundle that passed validateBundle()
      * @param  string  $zipPath  The zip the bundle was read from (receipts are copied out of it)
-     * @param  string  $source  ImportRun::SOURCE_UPLOAD (the Data Import page)
      * @param  (callable(string): void)|null  $progress  Receives one line per instructor
      * @return array{run: ImportRun, totals: array<string, int>}
      */
     public function importBundle(
+        ImportRun $run,
         array $bundle,
         string $zipPath,
-        string $source,
-        ?int $userId = null,
-        ?string $fileName = null,
         ?callable $progress = null,
     ): array {
-        $run = ImportRun::create([
-            'user_id' => $userId,
-            'source' => $source,
-            'file_name' => $fileName,
-            'status' => ImportRun::STATUS_RUNNING,
-        ]);
-
         $totals = array_fill_keys(self::TOTAL_KEYS, 0);
+        $grouped = $this->groupByInstructor($bundle);
+
+        $run->update([
+            'status' => ImportRun::STATUS_RUNNING,
+            'totals' => $totals + ['instructors_done' => 0, 'instructors_to_import' => count($grouped)],
+        ]);
 
         $zip = new ZipArchive;
         if ($zip->open($zipPath) !== true) {
@@ -163,7 +173,9 @@ class ImportService extends BaseService
         }
 
         try {
-            foreach ($this->groupByInstructor($bundle) as $instructorRef => $sections) {
+            $instructorsDone = 0;
+
+            foreach ($grouped as $instructorRef => $sections) {
                 $counts = DB::transaction(fn () => $this->importInstructorSections(
                     $instructorRef,
                     $sections,
@@ -175,6 +187,13 @@ class ImportService extends BaseService
                 foreach ($counts as $key => $count) {
                     $totals[$key] += $count;
                 }
+
+                $instructorsDone++;
+
+                // Progress for the Data Import page while the job runs.
+                $run->update([
+                    'totals' => $totals + ['instructors_done' => $instructorsDone, 'instructors_to_import' => count($grouped)],
+                ]);
 
                 if ($progress) {
                     $progress(sprintf(
@@ -209,6 +228,141 @@ class ImportService extends BaseService
         ]);
 
         return ['run' => $run, 'totals' => $totals];
+    }
+
+    /**
+     * Store an uploaded bundle and queue it for import. The run starts as
+     * `queued`; ImportBundleJob runs imports one at a time.
+     */
+    public function queueImport(UploadedFile $file, ?int $userId): ImportRun
+    {
+        $storedZipPath = $file->storeAs(
+            self::UPLOAD_DIRECTORY,
+            Str::random(40).'.zip',
+            self::UPLOAD_DISK,
+        );
+
+        if ($storedZipPath === false) {
+            throw new RuntimeException('Could not store the uploaded zip.');
+        }
+
+        $run = ImportRun::create([
+            'user_id' => $userId,
+            'source' => ImportRun::SOURCE_UPLOAD,
+            'file_name' => $file->getClientOriginalName(),
+            'status' => ImportRun::STATUS_QUEUED,
+        ]);
+
+        ImportBundleJob::dispatch($run, $storedZipPath);
+
+        return $run;
+    }
+
+    /**
+     * Run a queued import (called by ImportBundleJob). The bundle is checked
+     * again first, since data may have changed since the page's check.
+     *
+     * A run still `running` was killed part-way (worker died); this attempt
+     * carries on with it — rows already imported are skipped. A finished or
+     * reset run is left alone.
+     *
+     * @throws Throwable When the import fails part-way (the run is marked failed)
+     */
+    public function runQueuedImport(ImportRun $run, string $storedZipPath): void
+    {
+        $run->refresh();
+
+        if (! in_array($run->status, [ImportRun::STATUS_QUEUED, ImportRun::STATUS_RUNNING], true)) {
+            Storage::disk(self::UPLOAD_DISK)->delete($storedZipPath);
+
+            return;
+        }
+
+        ini_set('memory_limit', '1024M');
+
+        $localZipPath = tempnam(sys_get_temp_dir(), 'drivecrm-import-');
+
+        try {
+            $stream = Storage::disk(self::UPLOAD_DISK)->readStream($storedZipPath);
+
+            if ($stream === null) {
+                throw new RuntimeException('The uploaded zip is no longer available. Upload it again.');
+            }
+
+            file_put_contents($localZipPath, $stream);
+
+            $result = $this->checkBundle($localZipPath);
+
+            if ($result['errors'] !== []) {
+                $run->update([
+                    'status' => ImportRun::STATUS_FAILED,
+                    'error' => count($result['errors']).' problem(s) found. Check the file again to see them. Nothing was imported.',
+                    'completed_at' => now(),
+                ]);
+
+                return;
+            }
+
+            $this->importBundle($run, $result['bundle'], $localZipPath);
+        } catch (RuntimeException $exception) {
+            $this->failQueuedImport($run, $storedZipPath, $exception);
+        } finally {
+            @unlink($localZipPath);
+            Storage::disk(self::UPLOAD_DISK)->delete($storedZipPath);
+        }
+    }
+
+    /**
+     * Imports that are queued or running.
+     *
+     * @return Collection<int, ImportRun>
+     */
+    public function getActiveRuns(): Collection
+    {
+        return ImportRun::query()
+            ->whereIn('status', [ImportRun::STATUS_QUEUED, ImportRun::STATUS_RUNNING])
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * Unstick imports whose worker died: mark them failed and free the
+     * one-at-a-time lock. A job still waiting for them then finds the run
+     * finished and just deletes its zip.
+     *
+     * @return int Runs reset
+     */
+    public function resetActiveRuns(): int
+    {
+        $count = ImportRun::query()
+            ->whereIn('status', [ImportRun::STATUS_QUEUED, ImportRun::STATUS_RUNNING])
+            ->update([
+                'status' => ImportRun::STATUS_FAILED,
+                'error' => 'Reset after the import stopped. Upload the zip again to carry on.',
+                'completed_at' => now(),
+            ]);
+
+        ImportBundleJob::releaseOverlapLock();
+
+        return $count;
+    }
+
+    /**
+     * Mark a queued import failed (unless it already finished) and remove its zip.
+     */
+    public function failQueuedImport(ImportRun $run, string $storedZipPath, ?Throwable $exception): void
+    {
+        $run->refresh();
+
+        if (in_array($run->status, [ImportRun::STATUS_QUEUED, ImportRun::STATUS_RUNNING], true)) {
+            $run->update([
+                'status' => ImportRun::STATUS_FAILED,
+                'error' => $exception?->getMessage() ?? 'The import stopped before it finished.',
+                'completed_at' => now(),
+            ]);
+        }
+
+        Storage::disk(self::UPLOAD_DISK)->delete($storedZipPath);
     }
 
     /**

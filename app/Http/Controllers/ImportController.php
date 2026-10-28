@@ -16,8 +16,8 @@ use Throwable;
 
 /**
  * Owner-only Data Import page: download the template, check a bundle zip,
- * then import it. The uploaded zip is never stored — the browser sends it for
- * the check and again for the import.
+ * then import it. The check reads the upload in the request; the import
+ * stores the zip just long enough for ImportBundleJob to run it.
  */
 class ImportController extends Controller
 {
@@ -29,7 +29,11 @@ class ImportController extends Controller
 
     public function index(): Response
     {
-        return Inertia::render('Imports/Index');
+        $latestRun = ImportRun::query()->latest('id')->first();
+
+        return Inertia::render('Imports/Index', [
+            'latestRun' => $latestRun ? $this->runPayload($latestRun) : null,
+        ]);
     }
 
     /**
@@ -71,49 +75,52 @@ class ImportController extends Controller
     }
 
     /**
-     * Validate and import an uploaded bundle. Nothing is written unless the
-     * whole bundle is valid. No emails are sent.
+     * Queue an uploaded bundle for import. The page has already checked it;
+     * the job checks it again before writing anything. No emails are sent.
+     *
+     * Imports run one at a time in the background — a second upload waits
+     * behind the first — and re-running skips everything already imported.
      */
     public function store(ImportBundleRequest $request): JsonResponse
     {
-        set_time_limit(300);
-        $this->raiseMemoryLimit();
-
         try {
-            $zipPath = $this->uploadedZipPath($request);
-            $result = $this->importService->checkBundle($zipPath);
-        } catch (RuntimeException $exception) {
-            return response()->json(['message' => $this->checkFailureMessage($exception)], 422);
+            $run = $this->importService->queueImport($request->file('file'), $request->user()->id);
         } catch (Throwable $exception) {
             report($exception);
 
             return response()->json([
-                'message' => 'Could not check the file. Nothing was imported.',
+                'message' => 'Could not start the import. Try again.',
             ], 500);
         }
 
-        if ($result['errors'] !== []) {
-            return response()->json([
-                'message' => 'The file has problems. Nothing was imported.',
-                'row_counts' => $result['row_counts'],
-                'errors' => $result['errors'],
-                'skipped' => $result['skipped'],
-            ], 422);
-        }
-
-        $import = $this->importService->importBundle(
-            $result['bundle'],
-            $zipPath,
-            ImportRun::SOURCE_UPLOAD,
-            $request->user()->id,
-            $request->file('file')->getClientOriginalName(),
-        );
-
         return response()->json([
-            'message' => 'Import complete. No emails have been sent.',
-            'import_run_id' => $import['run']->id,
-            'totals' => $import['totals'],
-        ]);
+            'message' => 'Import started. It runs in the background — you can leave this page.',
+            'run' => $this->runPayload($run),
+        ], 202);
+    }
+
+    /**
+     * Progress of one import run, polled by the Data Import page.
+     */
+    public function show(ImportRun $importRun): JsonResponse
+    {
+        return response()->json(['run' => $this->runPayload($importRun)]);
+    }
+
+    /**
+     * @return array{id: int, status: string, file_name: string|null, totals: array<string, int>|null, error: string|null, created_at: string|null, completed_at: string|null}
+     */
+    private function runPayload(ImportRun $run): array
+    {
+        return [
+            'id' => $run->id,
+            'status' => $run->status,
+            'file_name' => $run->file_name,
+            'totals' => $run->totals,
+            'error' => $run->error,
+            'created_at' => $run->created_at?->toIso8601String(),
+            'completed_at' => $run->completed_at?->toIso8601String(),
+        ];
     }
 
     /**

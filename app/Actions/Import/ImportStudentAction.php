@@ -10,8 +10,7 @@ use App\Models\ImportRun;
 use App\Models\Instructor;
 use App\Models\Student;
 use App\Models\User;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
+use App\Support\ImportValues;
 
 class ImportStudentAction
 {
@@ -50,7 +49,7 @@ class ImportStudentAction
         $user = User::create([
             'name' => "{$firstName} {$surname}",
             'email' => $email,
-            'password' => Hash::make(Str::random(48)),
+            'password' => ImportValues::placeholderPasswordHash(),
             'password_change_required' => true,
             'welcome_email_pending' => true,
             'imported_at' => now(),

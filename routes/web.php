@@ -513,6 +513,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
             ->name('imports.check');
         Route::post('/imports', [ImportController::class, 'store'])
             ->name('imports.store');
+        Route::get('/imports/runs/{importRun}', [ImportController::class, 'show'])
+            ->name('imports.runs.show');
     });
 
     Route::get('/integrations', [IntegrationController::class, 'index'])

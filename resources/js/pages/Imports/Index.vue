@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Head } from '@inertiajs/vue3'
 import axios from 'axios'
 import AppLayout from '@/layouts/AppLayout.vue'
@@ -31,6 +31,7 @@ import {
     TableRow,
 } from '@/components/ui/table'
 import { check, store, template } from '@/routes/imports'
+import { show as showRun } from '@/routes/imports/runs'
 import {
     AlertCircle,
     CheckCircle2,
@@ -48,6 +49,20 @@ interface BundleError {
     line: number
     message: string
 }
+
+interface ImportRunState {
+    id: number
+    status: 'queued' | 'running' | 'completed' | 'failed'
+    file_name: string | null
+    totals: Record<string, number> | null
+    error: string | null
+    created_at: string | null
+    completed_at: string | null
+}
+
+const props = defineProps<{
+    latestRun: ImportRunState | null
+}>()
 
 interface CheckResult {
     valid: boolean
@@ -84,19 +99,79 @@ const checking = ref(false)
 const importing = ref(false)
 const checkResult = ref<CheckResult | null>(null)
 const checkError = ref<string | null>(null)
-const importTotals = ref<Record<string, number> | null>(null)
+const run = ref<ImportRunState | null>(props.latestRun)
 const confirmOpen = ref(false)
 
+const POLL_INTERVAL_MS = 3000
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+const runActive = computed(() => run.value?.status === 'queued' || run.value?.status === 'running')
+const importTotals = computed(() => (run.value?.status === 'completed' ? run.value.totals : null))
+
 const canImport = computed(
-    () => checkResult.value?.valid === true && !importing.value && importTotals.value === null,
+    () => checkResult.value?.valid === true && !importing.value && !runActive.value,
 )
+
+const stopPolling = () => {
+    if (pollTimer) {
+        clearInterval(pollTimer)
+        pollTimer = null
+    }
+}
+
+const pollRun = async () => {
+    if (!run.value) {
+        stopPolling()
+        return
+    }
+
+    try {
+        const response = await axios.get(showRun.url(run.value.id), {
+            headers: { Accept: 'application/json' },
+        })
+        run.value = response.data.run as ImportRunState
+    } catch {
+        // Keep polling; a blip shouldn't hide a running import.
+        return
+    }
+
+    if (!runActive.value) {
+        stopPolling()
+
+        if (run.value?.status === 'completed') {
+            toast.success('Import complete. No emails have been sent.')
+        } else if (run.value?.status === 'failed') {
+            toast.error('The import stopped before it finished.')
+        }
+    }
+}
+
+const startPolling = () => {
+    stopPolling()
+    pollTimer = setInterval(pollRun, POLL_INTERVAL_MS)
+}
+
+/** Forget a finished run when a new file is chosen; a live one stays on screen. */
+const clearFinishedRun = () => {
+    if (!runActive.value) {
+        run.value = null
+    }
+}
+
+onMounted(() => {
+    if (runActive.value) {
+        startPolling()
+    }
+})
+
+onUnmounted(stopPolling)
 
 const handleFileSelect = (event: Event) => {
     const target = event.target as HTMLInputElement
     selectedFile.value = target.files?.[0] ?? null
     checkResult.value = null
     checkError.value = null
-    importTotals.value = null
+    clearFinishedRun()
 }
 
 const chosenFile = (): File | null => selectedFile.value ?? fileInput.value?.files?.[0] ?? null
@@ -169,7 +244,7 @@ const handleCheck = async () => {
     checking.value = true
     checkResult.value = null
     checkError.value = null
-    importTotals.value = null
+    clearFinishedRun()
 
     try {
         const response = await axios.post(check.url(), buildFormData(file), {
@@ -247,24 +322,14 @@ const handleImport = async () => {
             },
             withXSRFToken: true,
         })
-        importTotals.value = response.data.totals
+        run.value = response.data.run as ImportRunState
         confirmOpen.value = false
         toast.success(response.data.message)
+        startPolling()
     } catch (error: unknown) {
         confirmOpen.value = false
 
-        const responseData = (error as { response?: { data?: { errors?: unknown; row_counts?: Record<string, number>; skipped?: BundleError[] } } }).response?.data
-
-        if (Array.isArray(responseData?.errors)) {
-            checkResult.value = {
-                valid: false,
-                row_counts: responseData.row_counts ?? {},
-                errors: responseData.errors,
-                skipped: responseData.skipped ?? [],
-            }
-        }
-
-        const message = errorMessage(error, 'The import failed. Nothing was imported.')
+        const message = errorMessage(error, 'Could not start the import. Try again.')
         checkError.value = message
         toast.error(message)
     } finally {
@@ -276,7 +341,7 @@ const resetUpload = () => {
     selectedFile.value = null
     checkResult.value = null
     checkError.value = null
-    importTotals.value = null
+    clearFinishedRun()
     if (fileInput.value) {
         fileInput.value.value = ''
     }
@@ -478,32 +543,58 @@ const breadcrumbs = [{ title: 'Data Import' }]
                 </CardContent>
             </Card>
 
-            <!-- Step 3: result -->
-            <Card v-if="importTotals" class="max-w-3xl">
+            <!-- Step 3: background import -->
+            <Card v-if="run" class="max-w-3xl">
                 <CardHeader>
                     <CardTitle class="flex items-center gap-2">
-                        <CheckCircle2 class="h-5 w-5" />
-                        Import complete
+                        <Loader2 v-if="runActive" class="h-5 w-5 animate-spin" />
+                        <CheckCircle2 v-else-if="run.status === 'completed'" class="h-5 w-5" />
+                        <AlertCircle v-else class="h-5 w-5" />
+                        <template v-if="run.status === 'queued'">Import waiting to start</template>
+                        <template v-else-if="run.status === 'running'">Importing…</template>
+                        <template v-else-if="run.status === 'completed'">Import complete</template>
+                        <template v-else>Import stopped</template>
                     </CardTitle>
                     <CardDescription>
-                        Counts are rows newly created by this upload.
+                        <span v-if="run.file_name" class="font-mono">{{ run.file_name }}</span>
+                        <template v-if="run.status === 'queued'">
+                            — queued. It starts when any earlier import has finished.
+                        </template>
+                        <template v-else-if="run.status === 'running'">
+                            — {{ run.totals?.instructors_done ?? 0 }} of
+                            {{ run.totals?.instructors_to_import ?? '?' }} instructors done.
+                            It runs in the background, so you can leave this page.
+                        </template>
+                        <template v-else-if="run.status === 'completed'">
+                            — counts are rows newly created by this run.
+                        </template>
                     </CardDescription>
                 </CardHeader>
                 <CardContent class="flex flex-col gap-4">
-                    <div class="rounded-lg border">
+                    <Alert v-if="run.status === 'failed'" variant="destructive">
+                        <AlertCircle class="h-4 w-4" />
+                        <AlertTitle>The import stopped before it finished</AlertTitle>
+                        <AlertDescription>
+                            {{ run.error || 'Unknown error.' }} Instructors finished before
+                            this are kept. Run the import again to carry on — anything already
+                            imported is skipped.
+                        </AlertDescription>
+                    </Alert>
+
+                    <div v-if="run.totals" class="rounded-lg border">
                         <Table>
                             <TableBody>
                                 <TableRow v-for="(label, key) in TOTAL_LABELS" :key="key">
                                     <TableCell>{{ label }}</TableCell>
                                     <TableCell class="text-right font-semibold">
-                                        {{ importTotals[key] ?? 0 }}
+                                        {{ run.totals[key] ?? 0 }}
                                     </TableCell>
                                 </TableRow>
                             </TableBody>
                         </Table>
                     </div>
 
-                    <Alert>
+                    <Alert v-if="run.status === 'completed'">
                         <Mail class="h-4 w-4" />
                         <AlertTitle>Welcome emails are on hold</AlertTitle>
                         <AlertDescription>
@@ -513,7 +604,7 @@ const breadcrumbs = [{ title: 'Data Import' }]
                         </AlertDescription>
                     </Alert>
 
-                    <div>
+                    <div v-if="!runActive">
                         <Button variant="outline" @click="resetUpload">
                             <Upload class="mr-2 h-4 w-4" />
                             Import another file
@@ -545,7 +636,7 @@ const breadcrumbs = [{ title: 'Data Import' }]
                     <Button type="button" :disabled="importing" class="min-w-[140px]" @click="handleImport">
                         <Loader2 v-if="importing" class="mr-2 h-4 w-4 animate-spin" />
                         <Upload v-else class="mr-2 h-4 w-4" />
-                        {{ importing ? 'Importing...' : 'Import' }}
+                        {{ importing ? 'Uploading...' : 'Import' }}
                     </Button>
                 </DialogFooter>
             </DialogContent>

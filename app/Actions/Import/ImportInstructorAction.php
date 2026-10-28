@@ -11,8 +11,7 @@ use App\Models\ImportMapping;
 use App\Models\ImportRun;
 use App\Models\Instructor;
 use App\Models\User;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
+use App\Support\ImportValues;
 
 class ImportInstructorAction
 {
@@ -60,7 +59,7 @@ class ImportInstructorAction
         $user = User::create([
             'name' => (string) $row['name'],
             'email' => $email,
-            'password' => Hash::make(Str::random(48)),
+            'password' => ImportValues::placeholderPasswordHash(),
             'password_change_required' => true,
             'welcome_email_pending' => true,
             'imported_at' => now(),
