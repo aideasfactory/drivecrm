@@ -77,4 +77,13 @@ final class ImportValues
 
         return preg_match('/^[A-Z]{1,2}[0-9]{1,2}[A-Z]?$/', $sector) ? $sector : null;
     }
+
+    /**
+     * The instructor ID from a Drive+ import ref ("DRIVE-24" → 24), or null if
+     * the ref is not one. Shown on the instructor's page as their import ref.
+     */
+    public static function driveInstructorId(string $ref): ?int
+    {
+        return preg_match('/^DRIVE-(\d+)$/', trim($ref), $matches) ? (int) $matches[1] : null;
+    }
 }

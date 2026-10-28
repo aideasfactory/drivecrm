@@ -229,7 +229,7 @@ class ImportService extends BaseService
     }
 
     /**
-     * Resolve an instructor from a CRM instructor ID or an import instructor_ref.
+     * Resolve an instructor from a CRM instructor ID, a DRIVE-<id> ref or an import instructor_ref.
      */
     public function resolveInstructorId(string $idOrRef): ?int
     {
@@ -239,9 +239,9 @@ class ImportService extends BaseService
             return $mappedId;
         }
 
-        return ctype_digit($idOrRef) && Instructor::query()->whereKey((int) $idOrRef)->exists()
-            ? (int) $idOrRef
-            : null;
+        $id = ImportValues::driveInstructorId($idOrRef) ?? (ctype_digit($idOrRef) ? (int) $idOrRef : null);
+
+        return $id !== null && Instructor::query()->whereKey($id)->exists() ? $id : null;
     }
 
     /**
@@ -371,6 +371,14 @@ class ImportService extends BaseService
      */
     protected function resolveInstructor(string $instructorRef, ?array $row, ImportRun $run, array &$counts): Instructor
     {
+        $driveInstructorId = ImportValues::driveInstructorId($instructorRef);
+
+        if ($driveInstructorId !== null) {
+            $counts['instructors_linked']++;
+
+            return Instructor::query()->findOrFail($driveInstructorId);
+        }
+
         if ($row === null) {
             return Instructor::query()->findOrFail(
                 ImportMapping::modelIdFor(ImportMapping::ENTITY_INSTRUCTOR, $instructorRef)

@@ -265,7 +265,7 @@ class BuildImportTemplateAction
             ],
             'students' => [
                 'student_ref' => 'Your unique ID for the student. diary.csv links to it.',
-                'instructor_ref' => 'Must match an instructor in instructors.csv or an earlier import.',
+                'instructor_ref' => 'Must match an instructor in instructors.csv, an earlier import, or an existing Drive+ instructor\'s import ref (e.g. DRIVE-24).',
                 'email' => 'Unique, and must not belong to an existing account.',
                 'contact_email' => 'Parent/guardian contact, optional.',
                 'status' => $list(ValidateImportBundleAction::STUDENT_STATUSES).' Default: active.',
@@ -306,6 +306,7 @@ class BuildImportTemplateAction
             '- Every file is optional, but the zip must contain at least one of: '.implode(', ', ReadImportBundleAction::FILES).'.',
             '- The first row of each file is the header row. Column names are not case-sensitive and columns can be in any order. Unknown columns are ignored.',
             '- Refs (instructor_ref, student_ref, ...) are your own IDs from the old system. Rows already imported in an earlier run are skipped, so re-uploading is safe.',
+            '- Instructor already on Drive+? Leave them out of instructors.csv and use their import ref (shown on their instructor page, e.g. DRIVE-24) as the instructor_ref in the other files. Their students, diary, coverage and finances are added to the existing instructor.',
             '- Nothing is imported unless every row is valid. No emails are sent by the import.',
             '- The example files in this zip link to each other and form a valid bundle. Replace the example rows with your data.',
         ];
