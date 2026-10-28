@@ -1853,11 +1853,17 @@ When both `from` and `to` are omitted, the response covers **the last 30 days** 
   "finances": [
     { "id": 12, "type": "expense", "category": "fuel", "category_label": "Fuel", "payment_method": "card", "payment_method_label": "Card", "description": "BP Fillup", "amount_pence": 7500, "formatted_amount": "£75.00", "is_recurring": false, "recurrence_frequency": null, "recurrence_frequency_label": null, "recurrence_iterations": null, "recurrence_group_id": null, "date": "2026-04-22", "notes": null, "receipt": { "url": "https://...", "original_name": "receipt.pdf", "mime_type": "application/pdf", "size_bytes": 45123 }, "created_at": "2026-04-22T08:12:00+00:00", "updated_at": "2026-04-22T08:12:00+00:00" }
   ],
+  "lesson_income": [
+    { "key": "payout-311", "source": "payout", "description": "Lesson – Sarah Jones", "package_name": "Test Ready", "date": "2026-04-20", "amount_pence": 3500, "formatted_amount": "£35.00" },
+    { "key": "lesson-982", "source": "cash", "description": "Lesson – Tom Reid", "package_name": null, "date": "2026-04-18", "amount_pence": 4000, "formatted_amount": "£40.00" }
+  ],
   "mileage": [
     { "id": 5, "date": "2026-04-22", "start_mileage": 45210, "end_mileage": 45250, "miles": 40, "type": "business", "type_label": "Business", "notes": null, "created_at": "2026-04-22T16:00:00+00:00", "updated_at": "2026-04-22T16:00:00+00:00" }
   ],
   "stats": {
     "total_records": 42,
+    "total_lesson_income_pence": 7500,
+    "total_lesson_income_formatted": "£75.00",
     "total_payments_pence": 123456,
     "total_payments_formatted": "£1,234.56",
     "total_expenses_pence": 65432,
@@ -1875,7 +1881,9 @@ When both `from` and `to` are omitted, the response covers **the last 30 days** 
 **Notes:**
 - `/summary` is unpaginated within its date range — intended for the overview screen where stats need to reflect the full window.
 - For infinite-scroll through history, use `/finances` and `/mileage` list endpoints instead, which cursor-paginate.
-- `stats.total_records` counts finance rows only (not mileage).
+- `stats.total_records` counts finance rows only (not mileage, not lesson income).
+- `lesson_income` is the money the instructor received for lessons in the date range (by lesson date), newest first. It is **read-only** and derived on the fly, not stored as finance records, so it has no `id` and can't be edited, deleted or given a receipt. `source`: `payout` (card lesson, Stripe payout paid), `cash` or `alternative` (pupil paid the instructor directly, lesson signed off). Card lessons appear only once their payout is paid. Never `POST` these to `/finances`, as they would be counted twice.
+- `stats.total_payments_pence` and `stats.net_balance_pence` **include** lesson income (matches the CRM Finances tab). `stats.total_lesson_income_pence` gives the lesson-income part on its own.
 
 ---
 
@@ -7867,6 +7875,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-10-21 | **Provisional (clashing) lessons.** `POST /students/{student}/orders` (and the website/bookings-team checkout) now refuses a booking only when the **first** lesson clashes. A later week that lands on a time already taken (another pupil's lesson or hold, blocked-out time, a practical test) is booked anyway. It gets its own diary item next to what it clashes with, which is never changed, and is flagged provisional. The DRIVE bookings team contacts the pupil and rearranges it from the new Clashes report. **New additive field `is_provisional` (boolean)** on `GET /instructor/calendar/items` (and every calendar item response), `GET /instructor/lessons/{date}`, `GET /instructor/lessons?from=&to=`, `GET /students/{student}/lessons`, `GET /students/{student}/lessons/{lesson}` and the sign-off response. It becomes `false` once the lesson is moved (single or with future lessons), cancelled, or confirmed by the DRIVE team. Diary items may now overlap: two items can share the same time on the same day. Updating a calendar item without changing its `date` / `start_time` / `end_time` no longer runs the overlap check, so a stacked item and the one next to it can still be edited. Moving to a time that clashes is still a 422. The instructor no longer gets the "scheduling clash" email for booking-created clashes. **App action:** see `.claude/tasks/app-developer-provisional-lessons.md` (instructor diary card + pupil lesson card). | Orders (store), Calendar Items (`is_provisional` — NEW, update overlap rule), Instructor Day/Range Lessons, Student Lessons (index, show, sign-off) |
 | 2026-10-22 | **Alternative payment method: pay-in-full bookings.** `POST /students/{student}/orders/{order}/alternative-payment` now also accepts **pay-in-full** (`upfront`) bookings, not just weekly. Confirming one records **every lesson** as paid by an alternative method straight away (`payment_status: "paid"`, `paid_by_alternative_method: true`, lesson price, no fees, no guarantee); they sign off normally with no payout. `alternative_payment_allowed` and `can_confirm_alternative_payment` can now be `true` on pay-in-full lessons / calendar items. The "weekly only" 422 now reads `Only pay-as-you-go or pay-in-full bookings can be paid by an alternative method.` Staff/instructor pay-in-full bookings of these pupils are no longer released automatically while awaiting payment. **App action:** show the confirm action on pay-in-full bookings too, and use pay-in-full wording (all lessons marked paid, no later invoices). | Orders (alternative-payment), Student Lessons, Instructor Day Lessons, Calendar Items |
 | 2026-10-28 | **Instructor-booked clashes.** New additive field `provisional_handled_by` (`instructor` \| `drive_team` \| `null`) next to every `is_provisional`: `GET /instructor/calendar/items` (and every calendar item response), `GET /instructor/lessons/{date}`, `GET /instructor/lessons?from=&to=`, `GET /students/{student}/lessons`, `GET /students/{student}/lessons/{lesson}` and the sign-off response. `instructor` when the instructor booked the clash themselves (order `source` = instructor app, or CRM booked by an instructor user); they rearrange it with the pupil. Booking, payment and the provisional rules are unchanged. **App action:** see `.claude/tasks/app-developer-provisional-lessons.md` ("Instructor-booked clashes"). | Calendar Items, Instructor Day/Range Lessons, Student Lessons (index, show, sign-off) |
+| 2026-10-28 | **Lesson income in app Finances.** `GET /instructor/finances/summary` now returns a read-only `lesson_income` list (paid Stripe payouts + cash/alternative-payment sign-offs in the date range, by lesson date) and `stats.total_lesson_income_pence` / `_formatted`. `stats.total_payments_*` and `stats.net_balance_*` now **include** lesson income, matching the CRM Finances tab. Manual finance CRUD is unchanged. **App action:** show `lesson_income` rows (amount, pupil, date) on the Finances screen, read-only; see `.claude/tasks/finances-lesson-income.md` in the app repo. | Instructor Finances (summary) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

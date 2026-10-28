@@ -1291,11 +1291,13 @@ class InstructorService extends BaseService
     }
 
     /**
-     * Full-range finances + mileage + stats for the overview screen.
+     * Full-range finances + lesson income + mileage + stats for the overview
+     * screen. Lesson income is read-only and counts towards total payments.
      *
      * @return array{
      *     date_range: array{from: string, to: string, default_applied: bool},
      *     finances: Collection,
+     *     lesson_income: Collection,
      *     mileage: Collection,
      *     stats: array<string, int|string>
      * }
@@ -1318,7 +1320,14 @@ class InstructorService extends BaseService
             ->orderByDesc('id')
             ->get();
 
-        $totalPayments = (int) $finances->where('type', 'payment')->sum('amount_pence');
+        $lessonIncome = $this->getLessonIncome($instructor)
+            ->filter(fn (array $income): bool => $income['date'] !== null
+                && $income['date'] >= $fromDate
+                && $income['date'] <= $toDate)
+            ->values();
+
+        $totalLessonIncome = (int) $lessonIncome->sum('amount_pence');
+        $totalPayments = (int) $finances->where('type', 'payment')->sum('amount_pence') + $totalLessonIncome;
         $totalExpenses = (int) $finances->where('type', 'expense')->sum('amount_pence');
         $businessMiles = (int) $mileage->where('type', 'business')->sum('miles');
         $personalMiles = (int) $mileage->where('type', 'personal')->sum('miles');
@@ -1330,9 +1339,12 @@ class InstructorService extends BaseService
                 'default_applied' => $range['default_applied'],
             ],
             'finances' => $finances,
+            'lesson_income' => $lessonIncome,
             'mileage' => $mileage,
             'stats' => [
                 'total_records' => $finances->count(),
+                'total_lesson_income_pence' => $totalLessonIncome,
+                'total_lesson_income_formatted' => '£'.number_format($totalLessonIncome / 100, 2),
                 'total_payments_pence' => $totalPayments,
                 'total_payments_formatted' => '£'.number_format($totalPayments / 100, 2),
                 'total_expenses_pence' => $totalExpenses,
