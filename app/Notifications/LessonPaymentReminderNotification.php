@@ -54,7 +54,7 @@ class LessonPaymentReminderNotification extends Notification implements ShouldQu
                 'package_name' => $order->package_name,
                 'lesson_date' => $lessonDate,
                 'lesson_time' => $lessonTime,
-                ...LessonPayment::breakdownPlaceholders($this->breakdown ?? []),
+                ...LessonPayment::breakdownPlaceholders($this->breakdown ?? [], $order->isInstalmentPlan()),
                 'amount' => $amount,
                 'booked_by_contact' => $this->isBookedByContact,
             ],

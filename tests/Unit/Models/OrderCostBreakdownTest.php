@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\PaymentMode;
 use App\Models\Lesson;
 use App\Models\LessonPayment;
 use App\Models\Order;
@@ -50,13 +51,36 @@ it('falls back to the package total for the weekly instalment on legacy orders',
 });
 
 it('formats a payment breakdown with a trailing blank line', function () {
-    expect(LessonPayment::breakdownLines(['lesson' => 6000, 'booking_fee' => 200, 'digital_fee' => 399]))->toBe([
+    expect(LessonPayment::breakdownLines(['lesson' => 6000, 'booking_fee' => 200, 'digital_fee' => 399], true))->toBe([
         '**Cost breakdown:**',
         'Lesson cost: £60.00',
         'Booking fee (weekly instalment): £2.00',
         'Digital services fee (weekly instalment): £3.99',
         '',
     ]);
+});
+
+it('does not label fees as a weekly instalment when the payment is not one', function () {
+    expect(LessonPayment::breakdownLines(['lesson' => 7400, 'booking_fee' => 349, 'digital_fee' => 360]))->toBe([
+        '**Cost breakdown:**',
+        'Lesson cost: £74.00',
+        'Booking fee: £3.49',
+        'Digital services fee: £3.60',
+        '',
+    ]);
+});
+
+it('flags instalment payments in the email placeholders', function () {
+    $breakdown = ['lesson' => 6000, 'booking_fee' => 200, 'digital_fee' => 399];
+
+    expect(LessonPayment::breakdownPlaceholders($breakdown, true)['is_instalment'])->toBeTrue()
+        ->and(LessonPayment::breakdownPlaceholders($breakdown)['is_instalment'])->toBeFalse();
+});
+
+it('only treats weekly orders with more than one lesson as instalment plans', function () {
+    expect(feeOrder(['payment_mode' => PaymentMode::WEEKLY])->isInstalmentPlan())->toBeTrue()
+        ->and(feeOrder(['payment_mode' => PaymentMode::WEEKLY, 'package_lessons_count' => 1])->isInstalmentPlan())->toBeFalse()
+        ->and(feeOrder(['payment_mode' => PaymentMode::UPFRONT])->isInstalmentPlan())->toBeFalse();
 });
 
 it('returns no payment breakdown lines when there are no fees', function () {

@@ -19,7 +19,7 @@ final class EmailTemplateCatalog
      * Single-payment cost lines, shown only when the payment carries fees. The
      * trailing newline keeps a blank line before the amount that follows.
      */
-    private const PAYMENT_COST_LINES = "{{#if has_fees}}**Cost breakdown:**{{#if lesson_cost}}\nLesson cost: {{lesson_cost}}{{/if}}{{#if booking_fee}}\nBooking fee (weekly instalment): {{booking_fee}}{{/if}}{{#if digital_fee}}\nDigital services fee (weekly instalment): {{digital_fee}}{{/if}}{{#if guarantee_fee}}\nPass Your Test Guarantee: {{guarantee_fee}}{{/if}}\n{{/if}}";
+    private const PAYMENT_COST_LINES = "{{#if has_fees}}**Cost breakdown:**{{#if lesson_cost}}\nLesson cost: {{lesson_cost}}{{/if}}{{#if booking_fee}}\nBooking fee{{#if is_instalment}} (weekly instalment){{/if}}: {{booking_fee}}{{/if}}{{#if digital_fee}}\nDigital services fee{{#if is_instalment}} (weekly instalment){{/if}}: {{digital_fee}}{{/if}}{{#if guarantee_fee}}\nPass Your Test Guarantee: {{guarantee_fee}}{{/if}}\n{{/if}}";
 
     /**
      * @return array{
@@ -168,6 +168,7 @@ final class EmailTemplateCatalog
                 'booked_by_contact' => 'A contact (e.g. parent) is paying on behalf of the learner',
                 'booked_by_staff' => 'The head-office bookings team made the booking',
                 'pay_weekly' => 'The order is paid weekly (the amount due now is the first week)',
+                'is_instalment' => 'The amount due now is the first weekly instalment of a multi-lesson package',
                 'has_fees' => 'The amount due now includes a booking fee, digital fee or guarantee',
                 'guarantee_included_free' => 'The Pass Your Test Guarantee is included free (paid in full only)',
             ]),
@@ -187,6 +188,7 @@ final class EmailTemplateCatalog
             ], 'Payment Due Soon: Your Driving Lesson on {{lesson_date}}', 'Hello {{recipient_name}}!', "This is a reminder that payment is due for {{#if booked_by_contact}}**{{learner_name}}'s**{{else}}your{{/if}} upcoming driving lesson on **{{lesson_date}}** at **{{lesson_time}}**.\n\n**Lesson Details:**\nPackage: {{package_name}}\nDate: {{lesson_date}}\nTime: {{lesson_time}}\n".self::PAYMENT_COST_LINES."\nAmount due: {{amount}}\n\nYour lesson is in less than 48 hours. Please complete your payment using the link below to secure it.\n\n{{action_button}}\n\nIf you have already paid, please disregard this email.", "Safe driving,\nThe Driving School Team", 'Pay Now', [
                 'booked_by_contact' => 'A contact (e.g. parent) booked on behalf of the learner',
                 'has_fees' => 'This payment includes a booking fee, digital fee or guarantee',
+                'is_instalment' => 'This payment is one weekly instalment of a multi-lesson package',
             ]),
 
             self::entry(EmailTemplateKey::LearnerBookingCancelled, 'Booking cancelled', $audience, 'Sent to the learner when lessons are cancelled.', [
@@ -250,6 +252,7 @@ final class EmailTemplateCatalog
             ], 'Payment Required: Your Driving Lesson on {{lesson_date}}', 'Hello {{recipient_name}}!', "This is a friendly reminder that payment is required for {{#if booked_by_contact}}**{{learner_name}}'s**{{else}}your{{/if}} upcoming driving lesson on **{{lesson_date}}** at **{{lesson_time}}**.\n\n**Lesson Details:**\nPackage: {{package_name}}\nDate: {{lesson_date}}\nTime: {{lesson_time}}\n".self::PAYMENT_COST_LINES."\n**Amount due: {{amount}}**\n\nPlease complete your payment using the link below to secure your lesson.\n\n{{action_button}}\n\nIf you have already paid, please disregard this email.", "Safe driving,\nThe Driving School Team", 'Pay Now', [
                 'booked_by_contact' => 'A contact (e.g. parent) booked on behalf of the learner',
                 'has_fees' => 'This payment includes a booking fee, digital fee or guarantee',
+                'is_instalment' => 'This payment is one weekly instalment of a multi-lesson package',
             ]),
 
             self::entry(EmailTemplateKey::LearnerLessonPaymentReceived, 'Lesson payment confirmed', $audience, 'Sent when a weekly lesson payment succeeds.', [
@@ -268,6 +271,7 @@ final class EmailTemplateCatalog
             ], 'Payment Confirmed: Your Driving Lesson on {{lesson_date}}', 'Hello {{recipient_name}}!', "We've received your payment of **{{amount}}** for {{#if booked_by_contact}}**{{learner_name}}'s**{{else}}your{{/if}} driving lesson on **{{lesson_date}}** at **{{lesson_time}}**.\n\n**Lesson Details:**\nPackage: {{package_name}}\nDate: {{lesson_date}}\nTime: {{lesson_time}}\nInstructor: {{instructor_name}}\n".self::PAYMENT_COST_LINES."\nAmount paid: {{amount}}\n\nYour lesson is confirmed. Please arrive 5 minutes early.\nIf you need to make any changes, please contact us as soon as possible.", "Safe driving,\nThe Driving School Team", null, [
                 'booked_by_contact' => 'A contact (e.g. parent) booked on behalf of the learner',
                 'has_fees' => 'This payment includes a booking fee, digital fee or guarantee',
+                'is_instalment' => 'This payment is one weekly instalment of a multi-lesson package',
             ]),
 
             self::entry(EmailTemplateKey::LearnerPaidInFullPaymentReceived, 'Payment confirmed (paid in full)', $audience, 'Sent when a learner pays for a whole package in full.', [

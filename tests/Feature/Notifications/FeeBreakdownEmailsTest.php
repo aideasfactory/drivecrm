@@ -98,6 +98,33 @@ it('itemises fees in the payment due soon email', function () {
         ->and($html)->toContain('£65.99');
 });
 
+it('does not label fees as a weekly instalment on a single-lesson weekly order', function () {
+    $order = feeOrderFor($this->student, $this->instructor, PaymentMode::WEEKLY);
+    $order->update([
+        'package_total_price_pence' => 7400,
+        'package_lesson_price_pence' => 7400,
+        'package_lessons_count' => 1,
+        'booking_fee_pence' => 349,
+        'digital_fee_pence' => 360,
+        'total_price_pence' => 8109,
+    ]);
+
+    $payment = LessonPayment::factory()->create([
+        'lesson_id' => $order->lessons()->first()->id,
+        'amount_pence' => 8109,
+        'status' => PaymentStatus::DUE,
+        'due_date' => now()->addDays(2),
+    ]);
+
+    $html = (string) (new PaymentDueSoonNotification($payment, $this->student, 'https://invoice.test', false))
+        ->toMail($this->notifiable)
+        ->render();
+
+    expect($html)->toContain('Booking fee: £3.49')
+        ->and($html)->toContain('Digital services fee: £3.60')
+        ->and($html)->not->toContain('weekly instalment');
+});
+
 it('itemises fees in the payment confirmed email', function () {
     $payment = weeklyFeePayment(feeOrderFor($this->student, $this->instructor, PaymentMode::WEEKLY));
 

@@ -268,6 +268,16 @@ class Order extends Model
     }
 
     /**
+     * Whether the order is really paid in instalments: weekly with more than
+     * one lesson. Older one-lesson weekly orders take a single payment of the
+     * whole total, so their fees are not labelled as instalments.
+     */
+    public function isInstalmentPlan(): bool
+    {
+        return $this->isWeekly() && (int) $this->package_lessons_count > 1;
+    }
+
+    /**
      * Check if the order holds lessons imported from another system.
      * Imported orders have no Stripe payment and never create payouts.
      */

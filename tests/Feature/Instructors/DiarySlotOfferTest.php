@@ -90,7 +90,7 @@ test('admin can add a booking from an empty diary slot', function () {
 
     $response = $this->postJson(route('students.orders.store', $student), [
         'package_id' => $package->id,
-        'payment_mode' => PaymentMode::WEEKLY->value,
+        'payment_mode' => PaymentMode::UPFRONT->value,
         'calendar_item_id' => $item->id,
     ]);
 

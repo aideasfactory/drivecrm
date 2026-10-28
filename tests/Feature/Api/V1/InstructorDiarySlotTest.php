@@ -10,6 +10,7 @@ use App\Models\Calendar;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
 use App\Models\Lesson;
+use App\Models\LessonPayment;
 use App\Models\Order;
 use App\Models\Package;
 use App\Models\SlotOffer;
@@ -137,6 +138,57 @@ test('an instructor can book a student onto a specific open diary slot', functio
     $item->refresh();
     expect($item->status)->toBe(CalendarItemStatus::RESERVED)
         ->and($item->lessons()->count())->toBe(1);
+});
+
+test('an instructor app booking of a single lesson is paid in full even when weekly is sent', function () {
+    ['instructor' => $instructor, 'token' => $token] = diaryInstructorToken();
+    $item = diaryOpenSlot($instructor);
+    ['student' => $student] = diaryStudentToken($instructor);
+    $package = Package::factory()->forInstructor($instructor)->create([
+        'lessons_count' => 1,
+        'total_price_pence' => 7400,
+        'active' => true,
+    ]);
+
+    $this->withHeaders([
+        'Authorization' => 'Bearer '.$token,
+    ])->postJson("/api/v1/students/{$student->id}/orders", [
+        'package_id' => $package->id,
+        'payment_mode' => PaymentMode::WEEKLY->value,
+        'calendar_item_id' => $item->id,
+    ])->assertCreated()
+        ->assertJsonPath('data.payment_mode', PaymentMode::UPFRONT->value);
+
+    $order = Order::query()->where('student_id', $student->id)->sole();
+
+    expect($order->payment_mode)->toBe(PaymentMode::UPFRONT)
+        ->and(LessonPayment::query()->whereIn('lesson_id', $order->lessons()->pluck('id'))->count())->toBe(0);
+});
+
+test('accepting a single-lesson slot offer as weekly is paid in full', function () {
+    ['instructor' => $instructor] = diaryInstructorToken();
+    $item = diaryOpenSlot($instructor);
+    ['student' => $student, 'token' => $studentToken] = diaryStudentToken($instructor);
+    $package = Package::factory()->forInstructor($instructor)->create([
+        'lessons_count' => 1,
+        'total_price_pence' => 3500,
+        'active' => true,
+    ]);
+
+    $offer = SlotOffer::factory()->create([
+        'calendar_item_id' => $item->id,
+        'instructor_id' => $instructor->id,
+        'package_id' => $package->id,
+        'status' => SlotOfferStatus::Open,
+    ]);
+
+    $this->withHeaders([
+        'Authorization' => 'Bearer '.$studentToken,
+    ])->postJson("/api/v1/student/slot-offers/{$offer->id}/accept", [
+        'payment_mode' => PaymentMode::WEEKLY->value,
+    ])->assertCreated();
+
+    expect(Order::query()->where('student_id', $student->id)->sole()->payment_mode)->toBe(PaymentMode::UPFRONT);
 });
 
 test('booking onto a taken diary slot returns a validation error', function () {

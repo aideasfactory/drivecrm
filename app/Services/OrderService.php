@@ -86,6 +86,8 @@ class OrderService extends BaseService
      * first payment is due (48 hours before the first lesson).
      *
      * Pay in full charges the whole order; pay weekly charges the first week.
+     * A single-lesson package is always paid in full, even if weekly is asked
+     * for (e.g. by an older app build).
      *
      * Cash (pupils with cash payments turned on, booked by a full-access owner only) takes no
      * payment at all: the order is confirmed straight away with no hold, and
@@ -111,6 +113,8 @@ class OrderService extends BaseService
                 'payment_mode' => 'Cash bookings are only for pupils with cash payments turned on, booked by an owner with full access.',
             ]);
         }
+
+        $paymentMode = $package->paymentModeFor($paymentMode);
 
         $calendarItemIds = ($this->createDraftCalendarItems)(
             $student->instructor_id,

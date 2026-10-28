@@ -439,7 +439,7 @@ class StripeService
                 'product_data' => ['name' => $item['description']],
             ],
             'quantity' => 1,
-        ], $this->buildInvoiceLineItems($amountPence, $breakdown, $packageName, $lessonDateLabel));
+        ], $this->buildInvoiceLineItems($amountPence, $breakdown, $packageName, $lessonDateLabel, $order->isInstalmentPlan()));
 
         $metadata = [
             'order_id' => $order->id,
@@ -966,7 +966,8 @@ class StripeService
                 $amountPence,
                 $breakdown,
                 $packageName,
-                $lessonDateLabel
+                $lessonDateLabel,
+                $lesson->order->isInstalmentPlan()
             );
 
             $sharedMetadata = [
@@ -1017,13 +1018,15 @@ class StripeService
      * provided with non-zero fee components, each becomes its own itemised
      * line so the student sees the cost breakdown on the hosted invoice.
      * If the breakdown is missing or has no fee components, a single
-     * "lesson payment" line item is returned.
+     * "lesson payment" line item is returned. Fee lines are only labelled
+     * "(weekly instalment)" when `$isInstalment` is true.
      *
      * @param  array{lesson: int, booking_fee: int, digital_fee: int, test_pass_guarantee?: int}|null  $breakdown
      * @return list<array{amount: int, description: string, component: string}>
      */
-    protected function buildInvoiceLineItems(int $amountPence, ?array $breakdown, string $packageName, string $lessonDateLabel): array
+    protected function buildInvoiceLineItems(int $amountPence, ?array $breakdown, string $packageName, string $lessonDateLabel, bool $isInstalment = false): array
     {
+        $instalmentLabel = $isInstalment ? ' (weekly instalment)' : '';
         $lessonComponent = (int) ($breakdown['lesson'] ?? 0);
         $bookingComponent = (int) ($breakdown['booking_fee'] ?? 0);
         $digitalComponent = (int) ($breakdown['digital_fee'] ?? 0);
@@ -1054,7 +1057,7 @@ class StripeService
         if ($bookingComponent > 0) {
             $items[] = [
                 'amount' => $bookingComponent,
-                'description' => 'Booking fee (weekly instalment)',
+                'description' => "Booking fee{$instalmentLabel}",
                 'component' => 'booking_fee',
             ];
         }
@@ -1062,7 +1065,7 @@ class StripeService
         if ($digitalComponent > 0) {
             $items[] = [
                 'amount' => $digitalComponent,
-                'description' => 'Digital services fee (weekly instalment)',
+                'description' => "Digital services fee{$instalmentLabel}",
                 'component' => 'digital_fee',
             ];
         }
