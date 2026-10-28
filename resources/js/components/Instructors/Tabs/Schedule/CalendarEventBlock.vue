@@ -28,6 +28,8 @@ export interface CalendarEvent {
     isCash?: boolean | null
     /** Package week booked onto a time already taken; the DRIVE team is rearranging it. */
     isProvisional?: boolean
+    /** Who rearranges it: the instructor when they booked the clash, otherwise the DRIVE team. */
+    provisionalHandledBy?: 'instructor' | 'drive_team' | null
     amountPence?: number | null
     notes: string | null
     unavailabilityReason: string | null
@@ -173,7 +175,11 @@ const colorClasses = computed(() => {
 const statusLabel = computed(() => {
     if (isTravel.value) return 'Travel'
     if (isPracticalTest.value) return 'Practical Test'
-    if (isProvisional.value) return 'Provisional booking – DRIVE team speaking to customer'
+    if (isProvisional.value) {
+        return props.event.provisionalHandledBy === 'instructor'
+            ? 'Double booked – please rearrange with the pupil'
+            : 'Provisional booking – DRIVE team speaking to customer'
+    }
 
     const status = props.event.status
 

@@ -66,6 +66,8 @@ interface Lesson {
     status: 'pending' | 'completed' | 'cancelled'
     /** Package week booked onto a time already taken; the DRIVE team is rearranging it. */
     is_provisional: boolean
+    /** Who rearranges it: the instructor when they booked the clash, otherwise the DRIVE team. */
+    provisional_handled_by: 'instructor' | 'drive_team' | null
     /** Start time (UK) reached; a lesson can't be signed off before it. */
     has_started: boolean
     completed_at: string | null
@@ -529,10 +531,14 @@ onMounted(() => {
                                     v-if="lesson.is_provisional"
                                     variant="destructive"
                                     class="mt-1 gap-1"
-                                    title="Booked onto a time that was already taken. The DRIVE team is speaking to the customer."
+                                    :title="
+                                        lesson.provisional_handled_by === 'instructor'
+                                            ? 'Double booked – please rearrange with the pupil.'
+                                            : 'Booked onto a time that was already taken. The DRIVE team is speaking to the customer.'
+                                    "
                                 >
                                     <TriangleAlert class="h-3 w-3" />
-                                    Provisional – clash
+                                    {{ lesson.provisional_handled_by === 'instructor' ? 'Double booked' : 'Provisional – clash' }}
                                 </Badge>
                             </TableCell>
                             <TableCell>

@@ -8,6 +8,7 @@ use App\Actions\Calendar\DescribeBlockingCalendarItemAction;
 use App\Actions\Calendar\FindBlockingCalendarItemsAction;
 use App\Enums\LessonStatus;
 use App\Enums\OrderSource;
+use App\Enums\ProvisionalLessonHandler;
 use App\Models\CalendarItem;
 use App\Models\Lesson;
 use App\Models\Student;
@@ -26,7 +27,7 @@ class GetClashingLessonsAction
      * booked onto a time already taken in the instructor's diary. Only the
      * later booking is listed, never what it clashes with. Soonest first.
      *
-     * @return array{rows: Collection<int, array{lesson_id: int, student_id: ?int, instructor_id: ?int, learner_name: string, learner_phone: ?string, learner_email: ?string, instructor_name: ?string, lesson_date: string, lesson_time: string, package: ?string, booked_at: ?string, booked_by: string, awaiting_payment: bool, clashes_with: array<int, string>}>, generated_at: string}
+     * @return array{rows: Collection<int, array{lesson_id: int, student_id: ?int, instructor_id: ?int, learner_name: string, learner_phone: ?string, learner_email: ?string, instructor_name: ?string, lesson_date: string, lesson_time: string, package: ?string, booked_at: ?string, booked_by: string, handled_by: string, awaiting_payment: bool, clashes_with: array<int, string>}>, generated_at: string}
      */
     public function __invoke(): array
     {
@@ -46,7 +47,7 @@ class GetClashingLessonsAction
     }
 
     /**
-     * @return array{lesson_id: int, student_id: ?int, instructor_id: ?int, learner_name: string, learner_phone: ?string, learner_email: ?string, instructor_name: ?string, lesson_date: string, lesson_time: string, package: ?string, booked_at: ?string, booked_by: string, awaiting_payment: bool, clashes_with: array<int, string>}
+     * @return array{lesson_id: int, student_id: ?int, instructor_id: ?int, learner_name: string, learner_phone: ?string, learner_email: ?string, instructor_name: ?string, lesson_date: string, lesson_time: string, package: ?string, booked_at: ?string, booked_by: string, handled_by: string, awaiting_payment: bool, clashes_with: array<int, string>}
      */
     protected function row(Lesson $lesson): array
     {
@@ -69,6 +70,8 @@ class GetClashingLessonsAction
             'package' => $order?->package_name,
             'booked_at' => $order?->created_at?->toIso8601String(),
             'booked_by' => $order?->bookedBy?->name ?? $order?->source?->label() ?? OrderSource::unknownLabel(),
+            // Instructor when they booked the clash themselves (they rearrange it)
+            'handled_by' => ($lesson->provisionalHandledBy() ?? ProvisionalLessonHandler::DRIVE_TEAM)->label(),
             'awaiting_payment' => $lesson->status === LessonStatus::DRAFT,
             // Empty when whatever it clashed with has since moved or gone —
             // the team can then mark it confirmed.

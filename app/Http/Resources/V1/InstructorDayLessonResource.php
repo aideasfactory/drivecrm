@@ -32,6 +32,7 @@ class InstructorDayLessonResource extends JsonResource
             'end_time' => $this->end_time?->format('H:i'),
             'status' => $this->status->value,
             'is_provisional' => $this->resource->isProvisional(),
+            'provisional_handled_by' => $this->resource->provisionalHandledBy()?->value,
             'completed_at' => $this->completed_at?->toISOString(),
             'summary' => $this->summary,
             'amount_pence' => $this->amount_pence,

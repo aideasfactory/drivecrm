@@ -53,6 +53,8 @@ class CalendarItemResource extends JsonResource
             // A package week booked onto a time already taken: shown stacked next
             // to what it clashes with while the DRIVE team rearranges it.
             'is_provisional' => $lesson?->isProvisional() === true,
+            // Who rearranges it: `instructor` (they booked the clash) or `drive_team`.
+            'provisional_handled_by' => $lesson?->provisionalHandledBy()?->value,
             // True when the pupil pays the instructor in cash at the lesson
             // (no Stripe). The app shows "Cash – collect £X" using `amount_pence`.
             'is_cash' => $lesson ? $lesson->order?->isCash() === true : null,

@@ -163,6 +163,8 @@ export interface CalendarItemResponse {
   awaiting_payment?: boolean | null
   /** Package week booked onto a time already taken; the DRIVE team is rearranging it with the pupil. */
   is_provisional?: boolean
+  /** Who rearranges a provisional lesson: the instructor when they booked the clash, otherwise the DRIVE team. */
+  provisional_handled_by?: 'instructor' | 'drive_team' | null
   lesson_id: number | null
   order_id: number | null
   future_siblings_count: number

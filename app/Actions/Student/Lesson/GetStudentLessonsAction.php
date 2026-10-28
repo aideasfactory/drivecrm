@@ -78,6 +78,7 @@ class GetStudentLessonsAction
                     'end_time' => $lesson->end_time?->format('H:i'),
                     'status' => $lesson->status->value,
                     'is_provisional' => $lesson->isProvisional(),
+                    'provisional_handled_by' => $lesson->provisionalHandledBy()?->value,
                     'has_started' => $lesson->hasStarted(),
                     'completed_at' => $lesson->completed_at?->toISOString(),
                     'summary' => $lesson->summary,
