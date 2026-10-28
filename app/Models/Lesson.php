@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\LessonCancellationReason;
 use App\Enums\LessonStatus;
+use App\Enums\ProvisionalLessonHandler;
 use App\Support\BookingPayments;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -171,6 +172,22 @@ class Lesson extends Model
     {
         return $this->provisional_at !== null
             && in_array($this->status, [LessonStatus::DRAFT, LessonStatus::PENDING], true);
+    }
+
+    /**
+     * Who rearranges a provisional lesson with the pupil: the instructor when
+     * they booked the clash themselves, otherwise the DRIVE team. Null when
+     * the lesson is not provisional.
+     */
+    public function provisionalHandledBy(): ?ProvisionalLessonHandler
+    {
+        if (! $this->isProvisional()) {
+            return null;
+        }
+
+        return $this->order?->wasBookedByInstructor() === true
+            ? ProvisionalLessonHandler::INSTRUCTOR
+            : ProvisionalLessonHandler::DRIVE_TEAM;
     }
 
     /**

@@ -7,8 +7,8 @@ namespace App\Actions\Import;
 use App\Enums\InstructorStatus;
 use App\Enums\PdiStatus;
 use App\Enums\TransmissionType;
-use App\Enums\UserRole;
 use App\Models\ImportMapping;
+use App\Models\Instructor;
 use App\Models\User;
 use App\Support\ImportValues;
 
@@ -35,7 +35,7 @@ class ValidateImportBundleAction
     {
         $this->errors = [];
 
-        $instructorRefs = $this->validateInstructors($bundle['instructors']);
+        $instructorRefs = $this->validateInstructors($bundle['instructors']) + $this->driveInstructorRefs($bundle);
         $this->validateCoverage($bundle['coverage'], $instructorRefs);
         $studentInstructors = $this->validateStudents($bundle['students'], $instructorRefs);
         $this->validateDiary($bundle['diary'], $instructorRefs, $studentInstructors);
@@ -58,6 +58,12 @@ class ValidateImportBundleAction
             $email = strtolower($this->value($row, 'email'));
 
             if (! $this->requireFields('instructors.csv', $row, ['instructor_ref', 'name', 'email'])) {
+                continue;
+            }
+
+            if (ImportValues::driveInstructorId($ref) !== null) {
+                $this->fail('instructors.csv', $row, "'{$ref}' is an existing Drive+ instructor. Leave them out of instructors.csv and use the ref in the other files.");
+
                 continue;
             }
 
@@ -84,21 +90,26 @@ class ValidateImportBundleAction
                 continue;
             }
 
-            $existingUser = User::query()->where('email', $email)->first();
+            // Any account with an instructor profile (including an owner who also
+            // teaches) is linked as-is. An account without one can't be reused,
+            // and a second user can't be created on the same email.
+            $existingUser = User::query()->with('instructor')->where('email', $email)->first();
 
-            if ($existingUser && $existingUser->role !== UserRole::INSTRUCTOR) {
-                $this->fail('instructors.csv', $row, "Email '{$email}' belongs to an existing non-instructor account.");
+            if ($existingUser?->instructor) {
+                continue;
+            }
+
+            if ($existingUser) {
+                $this->fail('instructors.csv', $row, "Email '{$email}' belongs to an existing account that has no instructor profile.");
 
                 continue;
             }
 
             // A new instructor needs a transmission type; an existing one is linked as-is.
-            if (! $existingUser) {
-                if ($this->value($row, 'transmission_type') === '') {
-                    $this->fail('instructors.csv', $row, 'transmission_type is required for a new instructor.');
-                } else {
-                    $this->checkEnum('instructors.csv', $row, 'transmission_type', TransmissionType::values());
-                }
+            if ($this->value($row, 'transmission_type') === '') {
+                $this->fail('instructors.csv', $row, 'transmission_type is required for a new instructor.');
+            } else {
+                $this->checkEnum('instructors.csv', $row, 'transmission_type', TransmissionType::values());
             }
         }
 
@@ -369,6 +380,37 @@ class ValidateImportBundleAction
         if (! isset($known[$ref])) {
             $this->fail($file, $row, "Unknown {$field} '{$ref}'.");
         }
+    }
+
+    /**
+     * DRIVE-<id> refs used anywhere in the bundle that point at an existing
+     * instructor. A ref with no matching instructor is left out, so the row
+     * using it is reported as unknown.
+     *
+     * @param  array<string, array<int|string, mixed>>  $bundle
+     * @return array<string, true>
+     */
+    protected function driveInstructorRefs(array $bundle): array
+    {
+        $ids = [];
+
+        foreach (array_keys(ReadImportBundleAction::FILES) as $section) {
+            foreach ($bundle[$section] as $row) {
+                $ref = $this->value($row, 'instructor_ref');
+                $id = ImportValues::driveInstructorId($ref);
+
+                if ($id !== null) {
+                    $ids[$ref] = $id;
+                }
+            }
+        }
+
+        $existing = Instructor::query()->whereKey(array_unique($ids))->pluck('id')->flip();
+
+        return collect($ids)
+            ->filter(fn (int $id) => $existing->has($id))
+            ->map(fn () => true)
+            ->all();
     }
 
     /**

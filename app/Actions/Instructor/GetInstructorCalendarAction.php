@@ -140,6 +140,7 @@ class GetInstructorCalendarAction
                         // Can be kept in its booking to rebook later instead of cancelled
                         'can_bank' => $lesson?->canBeBanked() === true,
                         'package_name' => $lesson?->order?->package_name,
+                        'provisional_handled_by' => $lesson?->provisionalHandledBy()?->value,
                         'lesson_id' => $lessonId,
                         'order_id' => $orderId,
                         'future_siblings_count' => $futureSiblingsCount,

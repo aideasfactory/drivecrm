@@ -33,6 +33,7 @@ class LessonResource extends JsonResource
             'is_banked' => $this['is_banked'],
             'banked_at' => $this['banked_at'],
             'banked_expires_at' => $this['banked_expires_at'],
+            'provisional_handled_by' => $this['provisional_handled_by'],
             'completed_at' => $this['completed_at'],
             'card_status' => $this['card_status'],
             'has_reflective_log' => $this['has_reflective_log'],

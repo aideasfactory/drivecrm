@@ -292,6 +292,11 @@ const editItemIsProvisional = computed(() => {
     return editItemIsBooking.value && item?.is_provisional === true
 })
 
+/** Whether the instructor booked the clash themselves, so they rearrange it (not the DRIVE team). */
+const editItemProvisionalByInstructor = computed(() => {
+    return itemsMap.value.get(editForm.value.id)?.provisional_handled_by === 'instructor'
+})
+
 /** Whether the edit form should be stripped down to reschedule-only (date/time
  *  only, no status / notes / reason). Applies to all active bookings the
  *  instructor can move but not re-purpose: booked (paid or weekly-already-paid),
@@ -426,6 +431,7 @@ function toCalendarEvent(item: CalendarItemResponse): CalendarEvent {
         isPaid: item.is_paid,
         isCash: item.is_cash ?? null,
         isProvisional: item.is_provisional ?? false,
+        provisionalHandledBy: item.provisional_handled_by ?? null,
         amountPence: item.amount_pence ?? null,
         notes: item.notes,
         unavailabilityReason: item.unavailability_reason,
@@ -473,6 +479,7 @@ async function loadCalendarRange(startDate: string, endDate: string) {
                     is_provisional: item.is_provisional ?? false,
                     can_bank: item.can_bank ?? false,
                     package_name: item.package_name ?? null,
+                    provisional_handled_by: item.provisional_handled_by ?? null,
                     lesson_id: item.lesson_id ?? null,
                     order_id: item.order_id ?? null,
                     future_siblings_count: item.future_siblings_count ?? 0,
@@ -1866,10 +1873,19 @@ onMounted(() => {
                 <form v-else @submit.prevent="handleEditSubmit" class="mt-6 flex-1 space-y-6 overflow-y-auto px-6 py-4">
                     <Alert v-if="editItemIsProvisional" variant="destructive">
                         <AlertTriangle class="h-4 w-4" />
-                        <AlertTitle>Provisional booking – DRIVE team speaking to customer</AlertTitle>
+                        <AlertTitle>
+                            {{
+                                editItemProvisionalByInstructor
+                                    ? 'Double booked – please rearrange with the pupil'
+                                    : 'Provisional booking – DRIVE team speaking to customer'
+                            }}
+                        </AlertTitle>
                         <AlertDescription>
-                            This lesson was booked onto a time that was already taken. Moving it to a new date or time
-                            confirms it and takes it off the Clashes report.
+                            This lesson was booked onto a time that was already taken.
+                            <template v-if="editItemProvisionalByInstructor">
+                                Please contact the pupil and move it to a new date or time.
+                            </template>
+                            Moving it to a new date or time confirms it and takes it off the Clashes report.
                         </AlertDescription>
                     </Alert>
 

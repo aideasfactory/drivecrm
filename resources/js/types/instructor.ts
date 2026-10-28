@@ -167,6 +167,8 @@ export interface CalendarItemResponse {
   can_bank?: boolean
   /** Name of the package the lesson belongs to. */
   package_name?: string | null
+  /** Who rearranges a provisional lesson: the instructor when they booked the clash, otherwise the DRIVE team. */
+  provisional_handled_by?: 'instructor' | 'drive_team' | null
   lesson_id: number | null
   order_id: number | null
   future_siblings_count: number

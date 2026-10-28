@@ -55,7 +55,7 @@ class InstructorFinanceController extends Controller
     }
 
     /**
-     * Overview screen: full-range finances + mileage + stats.
+     * Overview screen: full-range finances + lesson income + mileage + stats.
      */
     public function summary(Request $request): JsonResponse
     {
@@ -75,6 +75,7 @@ class InstructorFinanceController extends Controller
         return response()->json([
             'date_range' => $summary['date_range'],
             'finances' => InstructorFinanceResource::collection($summary['finances'])->resolve(),
+            'lesson_income' => $summary['lesson_income'],
             'mileage' => MileageLogResource::collection($summary['mileage'])->resolve(),
             'stats' => $summary['stats'],
         ]);

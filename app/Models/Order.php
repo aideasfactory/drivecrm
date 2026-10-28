@@ -225,6 +225,16 @@ class Order extends Model
     }
 
     /**
+     * Whether an instructor booked this order: in the instructor app, or from
+     * the CRM while signed in as an instructor.
+     */
+    public function wasBookedByInstructor(): bool
+    {
+        return $this->source === OrderSource::INSTRUCTOR_APP
+            || ($this->source === OrderSource::CRM && $this->bookedBy?->isInstructor() === true);
+    }
+
+    /**
      * Check if order is pending.
      */
     public function isPending(): bool

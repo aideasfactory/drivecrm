@@ -82,6 +82,7 @@ class GetStudentLessonsAction
                     'banked_at' => $lesson->banked_at?->toISOString(),
                     'banked_expires_at' => $lesson->bankedExpiresAt()?->toISOString(),
                     'banked_reason' => $lesson->banked_reason,
+                    'provisional_handled_by' => $lesson->provisionalHandledBy()?->value,
                     'has_started' => $lesson->hasStarted(),
                     'completed_at' => $lesson->completed_at?->toISOString(),
                     'summary' => $lesson->summary,

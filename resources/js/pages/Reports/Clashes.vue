@@ -26,6 +26,7 @@ interface ClashRow {
     package: string | null;
     booked_at: string | null;
     booked_by: string;
+    handled_by: string;
     awaiting_payment: boolean;
     clashes_with: string[];
 }
@@ -75,7 +76,8 @@ const handleConfirm = async (): Promise<void> => {
                     <h1 class="text-2xl font-bold tracking-tight">Clashes</h1>
                     <p class="text-sm text-muted-foreground">
                         Provisional lessons booked onto a time already taken in the instructor's diary. Contact the
-                        learner and move or cancel the lesson — it drops off this list once it's resolved.
+                        learner and move or cancel the lesson — it drops off this list once it's resolved. Clashes an
+                        instructor booked themselves are theirs to rearrange.
                     </p>
                 </div>
                 <Button v-if="report.rows.length > 0" as="a" :href="exportUrl" variant="outline">
@@ -102,6 +104,7 @@ const handleConfirm = async (): Promise<void> => {
                                 <TableHead>Clashes With</TableHead>
                                 <TableHead>Package</TableHead>
                                 <TableHead>Booked</TableHead>
+                                <TableHead>Handled By</TableHead>
                                 <TableHead class="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -158,6 +161,9 @@ const handleConfirm = async (): Promise<void> => {
                                 <TableCell>
                                     <div class="text-sm">{{ formatDate(row.booked_at) }}</div>
                                     <div class="text-xs text-muted-foreground">by {{ row.booked_by }}</div>
+                                </TableCell>
+                                <TableCell>
+                                    <Badge :variant="row.handled_by === 'Instructor' ? 'secondary' : 'outline'">{{ row.handled_by }}</Badge>
                                 </TableCell>
                                 <TableCell class="text-right">
                                     <Button size="sm" variant="outline" @click="confirmTarget = row">

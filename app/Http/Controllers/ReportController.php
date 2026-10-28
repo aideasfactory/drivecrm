@@ -103,7 +103,7 @@ class ReportController extends Controller
 
         return response()->streamDownload(function () use ($report): void {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Learner', 'Phone', 'Email', 'Instructor', 'Clash Date', 'Clash Time', 'Package', 'Booked At', 'Booked By', 'Payment', 'Clashes With']);
+            fputcsv($handle, ['Learner', 'Phone', 'Email', 'Instructor', 'Clash Date', 'Clash Time', 'Package', 'Booked At', 'Booked By', 'Handled By', 'Payment', 'Clashes With']);
 
             foreach ($report['rows'] as $row) {
                 fputcsv($handle, [
@@ -116,6 +116,7 @@ class ReportController extends Controller
                     $row['package'],
                     $row['booked_at'],
                     $row['booked_by'],
+                    $row['handled_by'],
                     $row['awaiting_payment'] ? 'Awaiting payment' : 'Booked',
                     $row['clashes_with'] === [] ? 'No longer clashing' : implode('; ', $row['clashes_with']),
                 ]);

@@ -71,6 +71,18 @@ const copyPin = async () => {
     }
 }
 
+// Used as instructor_ref in a data import to add rows to this existing instructor
+const importRef = computed(() => `DRIVE-${props.instructor.id}`)
+
+const copyImportRef = async () => {
+    try {
+        await navigator.clipboard.writeText(importRef.value)
+        toast({ title: 'Import ref copied to clipboard' })
+    } catch {
+        toast({ title: 'Failed to copy import ref', variant: 'destructive' })
+    }
+}
+
 const getInitials = (name: string) => {
     return name
         .split(' ')
@@ -197,6 +209,22 @@ onMounted(() => {
                                 class="h-8 w-8"
                                 aria-label="Copy instructor code"
                                 @click="copyPin"
+                            >
+                                <Copy class="h-4 w-4" />
+                            </Button>
+                        </div>
+
+                        <div v-if="isOwner" class="flex items-center gap-2">
+                            <span class="text-muted-foreground">Import ref</span>
+                            <Badge variant="outline" class="font-mono">
+                                {{ importRef }}
+                            </Badge>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                class="h-8 w-8"
+                                aria-label="Copy import ref"
+                                @click="copyImportRef"
                             >
                                 <Copy class="h-4 w-4" />
                             </Button>
