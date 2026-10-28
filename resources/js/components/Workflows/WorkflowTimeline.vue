@@ -18,6 +18,7 @@ defineProps<Props>()
 
 const emit = defineEmits<{
     (e: 'open-template', key: string): void
+    (e: 'preview-template', key: string): void
 }>()
 </script>
 
@@ -62,6 +63,9 @@ const emit = defineEmits<{
                                 :key="messageIndex"
                                 :message="message"
                                 @open-template="emit('open-template', $event)"
+                                @preview-template="
+                                    emit('preview-template', $event)
+                                "
                             />
                         </div>
                     </div>

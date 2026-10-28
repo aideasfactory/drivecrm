@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Pencil } from 'lucide-vue-next'
+import { Eye, Pencil } from 'lucide-vue-next'
 import { channels } from '@/components/Workflows/channels'
 import type { WorkflowMessage } from '@/types/workflow'
 
@@ -14,6 +14,7 @@ const props = defineProps<Props>()
 
 const emit = defineEmits<{
     (e: 'open-template', key: string): void
+    (e: 'preview-template', key: string): void
 }>()
 
 const channel = computed(() => channels[props.message.channel])
@@ -59,16 +60,30 @@ const channel = computed(() => channels[props.message.channel])
                 </p>
             </div>
         </div>
-        <Button
+        <div
             v-if="message.channel === 'email' && message.template"
-            type="button"
-            variant="outline"
-            size="sm"
-            class="shrink-0 cursor-pointer self-start sm:self-center"
-            @click="emit('open-template', message.template)"
+            class="flex shrink-0 gap-2 self-start sm:self-center"
         >
-            <Pencil class="mr-2 h-3 w-3" />
-            View email
-        </Button>
+            <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                class="cursor-pointer"
+                @click="emit('preview-template', message.template)"
+            >
+                <Eye class="mr-2 h-3 w-3" />
+                Preview email
+            </Button>
+            <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                class="cursor-pointer"
+                @click="emit('open-template', message.template)"
+            >
+                <Pencil class="mr-2 h-3 w-3" />
+                Edit email
+            </Button>
+        </div>
     </div>
 </template>

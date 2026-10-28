@@ -410,6 +410,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
             ->name('email-templates.update');
         Route::post('/email-templates/{emailTemplate}/restore', [EmailTemplateController::class, 'restore'])
             ->name('email-templates.restore');
+        Route::post('/email-templates/{key}/preview', [EmailTemplateController::class, 'preview'])
+            ->name('email-templates.preview');
     });
 
     // Workflows (Owner Only) — plain-English reference of every journey and what it sends

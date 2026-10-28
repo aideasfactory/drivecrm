@@ -30,6 +30,7 @@ import { channels } from '@/components/Workflows/channels'
 import EditEmailTemplateSheet, {
     type EmailTemplateItem,
 } from '@/components/EmailTemplates/EditEmailTemplateSheet.vue'
+import EmailPreviewDialog from '@/components/EmailTemplates/EmailPreviewDialog.vue'
 import type { Workflow, WorkflowChannel } from '@/types/workflow'
 
 interface Props {
@@ -42,6 +43,8 @@ const props = defineProps<Props>()
 const selectedKey = ref<string>(props.workflows[0]?.key ?? '')
 const isEditSheetOpen = ref(false)
 const editingTemplateKey = ref<string | null>(null)
+const isPreviewOpen = ref(false)
+const previewTemplateKey = ref<string | null>(null)
 
 const channelLegend = Object.entries(channels) as [
     WorkflowChannel,
@@ -86,6 +89,18 @@ const editingTemplate = computed(
             (template) => template.key === editingTemplateKey.value,
         ) ?? null,
 )
+
+const previewTemplate = computed(
+    () =>
+        props.templates.find(
+            (template) => template.key === previewTemplateKey.value,
+        ) ?? null,
+)
+
+const openPreview = (key: string) => {
+    previewTemplateKey.value = key
+    isPreviewOpen.value = true
+}
 
 const openTemplate = (key: string) => {
     editingTemplateKey.value = key
@@ -192,6 +207,7 @@ const breadcrumbs = [{ title: 'Workflows' }]
                 v-if="selectedWorkflow"
                 :workflow="selectedWorkflow"
                 @open-template="openTemplate"
+                @preview-template="openPreview"
             />
 
             <div class="flex flex-col gap-2 sm:flex-row sm:justify-between">
@@ -250,6 +266,12 @@ const breadcrumbs = [{ title: 'Workflows' }]
             :template="editingTemplate"
             @update:open="isEditSheetOpen = $event"
             @saved="handleSaved"
+        />
+
+        <EmailPreviewDialog
+            :open="isPreviewOpen"
+            :template="previewTemplate"
+            @update:open="isPreviewOpen = $event"
         />
     </AppLayout>
 </template>

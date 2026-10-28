@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Actions\EmailTemplate\BuildTemplatedMailMessageAction;
 use App\Actions\EmailTemplate\ListEmailTemplatesAction;
+use App\Actions\EmailTemplate\PreviewEmailTemplateAction;
 use App\Actions\EmailTemplate\RenderEmailTemplateAction;
 use App\Actions\EmailTemplate\RestoreEmailTemplateAction;
 use App\Actions\EmailTemplate\UpdateEmailTemplateAction;
@@ -24,6 +25,7 @@ class EmailTemplateService extends BaseService
         protected RestoreEmailTemplateAction $restoreEmailTemplate,
         protected RenderEmailTemplateAction $renderEmailTemplate,
         protected BuildTemplatedMailMessageAction $buildTemplatedMailMessage,
+        protected PreviewEmailTemplateAction $previewEmailTemplate,
     ) {}
 
     /**
@@ -45,6 +47,16 @@ class EmailTemplateService extends BaseService
     public function restore(EmailTemplate $emailTemplate): EmailTemplate
     {
         return ($this->restoreEmailTemplate)($emailTemplate);
+    }
+
+    /**
+     * @param  array{subject?: ?string, greeting?: ?string, body?: ?string, salutation?: ?string, action_text?: ?string}  $copy
+     * @param  list<string>  $enabledConditions
+     * @return array{subject: string, html: string}
+     */
+    public function preview(EmailTemplateKey $key, array $copy = [], array $enabledConditions = []): array
+    {
+        return ($this->previewEmailTemplate)($key, $copy, $enabledConditions);
     }
 
     /**

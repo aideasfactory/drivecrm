@@ -14,7 +14,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { toast } from '@/components/ui/sonner'
-import { Mail, Loader2, Save, RotateCcw, Plus } from 'lucide-vue-next'
+import { Mail, Loader2, Save, RotateCcw, Plus, Eye } from 'lucide-vue-next'
+import EmailPreviewDialog from '@/components/EmailTemplates/EmailPreviewDialog.vue'
 import {
     update as updateEmailTemplate,
     restore as restoreEmailTemplate,
@@ -56,6 +57,7 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 const saving = ref(false)
+const isPreviewOpen = ref(false)
 const restoring = ref(false)
 const errors = reactive<Record<string, string>>({})
 
@@ -416,6 +418,16 @@ const handleOpenChange = (value: boolean) => {
                         variant="outline"
                         :disabled="saving || restoring"
                         class="cursor-pointer"
+                        @click="isPreviewOpen = true"
+                    >
+                        <Eye class="mr-2 h-4 w-4" />
+                        Preview
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        :disabled="saving || restoring"
+                        class="cursor-pointer"
                         @click="handleOpenChange(false)"
                     >
                         Cancel
@@ -434,6 +446,13 @@ const handleOpenChange = (value: boolean) => {
                     </Button>
                 </div>
             </form>
+
+            <EmailPreviewDialog
+                :open="isPreviewOpen"
+                :template="template"
+                :copy="form"
+                @update:open="isPreviewOpen = $event"
+            />
         </SheetContent>
     </Sheet>
 </template>
