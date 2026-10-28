@@ -52,6 +52,8 @@ class ValidateImportBundleAction
     {
         $refs = [];
         $emails = [];
+        $mappedRefs = $this->mappedRefs(ImportMapping::ENTITY_INSTRUCTOR);
+        $existingUsers = $this->existingUsersByEmail($rows);
 
         foreach ($rows as $row) {
             $ref = $this->value($row, 'instructor_ref');
@@ -86,20 +88,20 @@ class ValidateImportBundleAction
             $this->checkEnum('instructors.csv', $row, 'status', InstructorStatus::values());
             $this->checkEnum('instructors.csv', $row, 'pdi_status', PdiStatus::values());
 
-            if (ImportMapping::modelIdFor(ImportMapping::ENTITY_INSTRUCTOR, $ref) !== null) {
+            if (isset($mappedRefs[$ref])) {
                 continue;
             }
 
             // Any account with an instructor profile (including an owner who also
             // teaches) is linked as-is. An account without one can't be reused,
             // and a second user can't be created on the same email.
-            $existingUser = User::query()->with('instructor')->where('email', $email)->first();
+            $hasInstructorProfile = $existingUsers[$email] ?? null;
 
-            if ($existingUser?->instructor) {
+            if ($hasInstructorProfile === true) {
                 continue;
             }
 
-            if ($existingUser) {
+            if ($hasInstructorProfile === false) {
                 $this->fail('instructors.csv', $row, "Email '{$email}' belongs to an existing account that has no instructor profile.");
 
                 continue;
@@ -113,7 +115,7 @@ class ValidateImportBundleAction
             }
         }
 
-        return $refs + $this->mappedRefs(ImportMapping::ENTITY_INSTRUCTOR);
+        return $refs + $mappedRefs;
     }
 
     /**
@@ -144,6 +146,8 @@ class ValidateImportBundleAction
     {
         $students = [];
         $emails = [];
+        $mappedRefs = $this->mappedRefs(ImportMapping::ENTITY_STUDENT);
+        $existingUsers = $this->existingUsersByEmail($rows);
 
         foreach ($rows as $row) {
             if (! $this->requireFields('students.csv', $row, ['student_ref', 'instructor_ref', 'first_name', 'surname', 'email'])) {
@@ -178,13 +182,12 @@ class ValidateImportBundleAction
 
             $this->checkEnum('students.csv', $row, 'status', self::STUDENT_STATUSES);
 
-            if (ImportMapping::modelIdFor(ImportMapping::ENTITY_STUDENT, $ref) === null
-                && User::query()->where('email', $email)->exists()) {
+            if (! isset($mappedRefs[$ref]) && isset($existingUsers[$email])) {
                 $this->fail('students.csv', $row, "Email '{$email}' is already used by an existing account.");
             }
         }
 
-        foreach (array_keys($this->mappedRefs(ImportMapping::ENTITY_STUDENT)) as $ref) {
+        foreach (array_keys($mappedRefs) as $ref) {
             $students[$ref] ??= null;
         }
 
@@ -411,6 +414,36 @@ class ValidateImportBundleAction
             ->filter(fn (int $id) => $existing->has($id))
             ->map(fn () => true)
             ->all();
+    }
+
+    /**
+     * Existing accounts for the rows' emails, loaded in chunks so a large
+     * bundle is checked in a handful of queries rather than one per row.
+     *
+     * @param  array<int, array<string, string|int>>  $rows
+     * @return array<string, bool> lowercased email => whether the account has an instructor profile
+     */
+    protected function existingUsersByEmail(array $rows): array
+    {
+        $emails = collect($rows)
+            ->map(fn (array $row) => strtolower($this->value($row, 'email')))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $existing = [];
+
+        foreach ($emails->chunk(1000) as $chunk) {
+            User::query()
+                ->whereIn('email', $chunk->all())
+                ->withExists('instructor')
+                ->get(['id', 'email'])
+                ->each(function (User $user) use (&$existing): void {
+                    $existing[strtolower($user->email)] = (bool) $user->instructor_exists;
+                });
+        }
+
+        return $existing;
     }
 
     /**

@@ -47,6 +47,7 @@ class ImportController extends Controller
      */
     public function check(ImportBundleRequest $request): JsonResponse
     {
+        set_time_limit(300);
         $this->raiseMemoryLimit();
 
         try {
