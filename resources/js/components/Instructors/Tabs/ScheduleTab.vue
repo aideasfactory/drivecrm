@@ -276,6 +276,13 @@ const editItemCanBank = computed(() => {
 /** The package the booking being removed belongs to. */
 const editItemPackageName = computed(() => itemsMap.value.get(editForm.value.id)?.package_name ?? null)
 
+/** Date and time of the booked lesson, for the actions dialog, e.g. "Friday 30 October 2026 · 08:00 – 10:00". */
+const bookedSlotWhen = computed(() =>
+    editForm.value.date
+        ? `${formatDayLabel(new Date(`${editForm.value.date}T00:00:00`))} · ${editForm.value.start_time} – ${editForm.value.end_time}`
+        : '',
+)
+
 /** Whether the dialog is keeping the booking to rebook later rather than cancelling it. */
 const isBanking = computed(() => editItemIsBooking.value && removalMode.value === 'bank' && editItemCanBank.value)
 
@@ -2017,21 +2024,20 @@ onMounted(() => {
 
         <!-- Delete Confirmation Dialog -->
         <Dialog v-model:open="isDeleteDialogOpen">
-            <DialogContent>
+            <DialogContent
+                :class="editItemIsBooking ? 'max-h-[90vh] overflow-y-auto sm:max-w-4xl' : ''"
+                @open-auto-focus.prevent
+            >
                 <DialogHeader>
                     <DialogTitle>
                         {{ isBanking ? 'Rebook Later (Keep in Package)' : editItemIsBooking ? 'Cancel Lesson' : 'Remove Time Slot' }}
                     </DialogTitle>
                     <DialogDescription>
-                        <template v-if="isBanking">
-                            The lesson comes out of the diary but stays in the pupil's
-                            {{ editItemPackageName ?? '' }} booking at the price they paid. Nothing is refunded or
-                            charged again. Rebook it from the pupil's Lessons tab once you've agreed a new date. The
-                            student will be emailed.
-                        </template>
-                        <template v-else-if="editItemIsBooking">
-                            This cancels the lesson for good and removes it from the diary, leaving the slot open to
-                            offer to other pupils. The student will be emailed. This action cannot be undone.
+                        <template v-if="editItemIsBooking">
+                            <span v-if="itemsMap.get(editForm.id)?.student_name" class="font-medium text-foreground">
+                                {{ itemsMap.get(editForm.id)?.student_name }} ·
+                            </span>
+                            {{ bookedSlotWhen }}<template v-if="editItemPackageName"> · {{ editItemPackageName }}</template>
                         </template>
                         <template v-else>
                             Are you sure you want to remove this time slot? This action cannot be undone.
@@ -2039,150 +2045,162 @@ onMounted(() => {
                     </DialogDescription>
                 </DialogHeader>
 
-                <div class="py-4 space-y-2">
+                <div v-if="!editItemIsBooking" class="py-4 space-y-2">
                     <p class="text-sm text-muted-foreground">
                         <strong>Date:</strong> {{ editForm.date }}
                     </p>
                     <p class="text-sm text-muted-foreground">
                         <strong>Time:</strong> {{ editForm.start_time }} - {{ editForm.end_time }}
                     </p>
-                    <p v-if="!editItemIsBooking" class="text-sm text-muted-foreground">
+                    <p class="text-sm text-muted-foreground">
                         <strong>Status:</strong> {{ editForm.is_available ? 'Available' : 'Unavailable' }}
                     </p>
-                    <p v-if="!editItemIsBooking && editForm.notes" class="text-sm text-muted-foreground">
+                    <p v-if="editForm.notes" class="text-sm text-muted-foreground">
                         <strong>Notes:</strong> {{ editForm.notes }}
                     </p>
-                    <p v-if="!editItemIsBooking && !editForm.is_available && editForm.unavailability_reason" class="text-sm text-muted-foreground">
+                    <p v-if="!editForm.is_available && editForm.unavailability_reason" class="text-sm text-muted-foreground">
                         <strong>Reason:</strong> {{ editForm.unavailability_reason }}
                     </p>
                 </div>
 
-                <!-- Booking cancellation: required reason + scope -->
-                <div v-if="editItemIsBooking" class="space-y-4 border-t border-border pt-4">
-                    <div class="space-y-2">
-                        <Label for="cancel-reason-code">
-                            {{ isBanking ? 'Reason for moving it out of the diary' : 'Reason for cancelling' }}
-                            <span class="text-destructive">*</span>
-                        </Label>
-                        <select
-                            id="cancel-reason-code"
-                            v-model="cancelReasonCode"
-                            :disabled="cancellationReasonsLoading"
-                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        >
-                            <option value="" disabled>{{ cancellationReasonsLoading ? 'Loading reasons...' : 'Choose a reason...' }}</option>
-                            <optgroup v-for="group in cancellationReasonGroups" :key="group.key" :label="group.label">
-                                <option
-                                    v-for="reason in cancellationReasons.filter((option) => option.cancelled_by === group.key)"
-                                    :key="reason.value"
-                                    :value="reason.value"
-                                >
-                                    {{ reason.label }}
-                                </option>
-                            </optgroup>
-                        </select>
-                    </div>
-
-                    <div class="space-y-2">
-                        <Label for="cancel-reason">
-                            Details
-                            <span v-if="selectedCancellationReason?.details_required" class="text-destructive">*</span>
-                            <span v-else class="text-muted-foreground">(optional)</span>
-                        </Label>
-                        <Textarea
-                            id="cancel-reason"
-                            v-model="cancelReason"
-                            placeholder="Anything Head Office should know (the student will see this too)"
-                            class="min-h-[80px]"
-                            maxlength="1000"
-                        />
-                        <p class="text-xs text-muted-foreground">
-                            {{ cancelReason.length }}/1000 characters
-                        </p>
-                    </div>
-
-                    <Alert v-if="isBanking">
-                        <Archive class="h-4 w-4" />
-                        <AlertTitle>The pupil keeps this lesson</AlertTitle>
-                        <AlertDescription>
-                            It keeps its package price and payment, won't be invoiced or chased while it has no date,
-                            and can't be signed off until it's rebooked. It must be rebooked within 12 months, or it's
-                            cancelled and the pupil is refunded.
-                        </AlertDescription>
-                    </Alert>
-
-                    <template v-else>
-                        <Alert variant="destructive">
-                            <AlertTriangle class="h-4 w-4" />
-                            <AlertTitle>What cancelling does</AlertTitle>
+                <!-- Booking: what happens (left) + reason and scope (right) -->
+                <div v-if="editItemIsBooking" class="grid gap-6 border-t border-border pt-4 md:grid-cols-2">
+                    <div class="space-y-4">
+                        <Alert v-if="isBanking">
+                            <Archive class="h-4 w-4" />
+                            <AlertTitle>The pupil keeps this lesson</AlertTitle>
                             <AlertDescription>
                                 <ul class="mt-1 list-disc space-y-1 pl-4">
-                                    <li v-if="editItemPackageName">
-                                        The lesson leaves the pupil's <strong>{{ editItemPackageName }}</strong> booking for
-                                        good. Any package or introductory rate on it is lost: a replacement would be a new
-                                        booking at the current price.
+                                    <li>
+                                        It comes out of the diary but stays in the pupil's
+                                        <strong v-if="editItemPackageName">{{ editItemPackageName }}</strong><template v-else>package</template>
+                                        booking at the price they paid. Nothing is refunded or charged again.
                                     </li>
-                                    <li v-if="editItemIsPaid">
-                                        It has been paid for, so Head Office is told to refund the pupil (everything except
-                                        the booking fee).
-                                    </li>
-                                    <li v-else-if="!editItemAwaitingPayment">
-                                        It hasn't been paid for, so it is simply cancelled and the pupil won't be charged.
-                                    </li>
-                                    <li>Nothing is paid to the instructor for a cancelled lesson.</li>
+                                    <li>It isn't invoiced or chased while it has no date, and can't be signed off until it's rebooked.</li>
+                                    <li>Rebook it from the pupil's Lessons tab once you've agreed a new date.</li>
+                                    <li>It must be rebooked within 12 months, or it's cancelled and the pupil is refunded.</li>
+                                    <li>The pupil is emailed.</li>
                                 </ul>
                             </AlertDescription>
                         </Alert>
 
-                        <div
-                            v-if="editItemCanBank"
-                            class="flex items-start justify-between gap-3 rounded-md border border-primary/40 bg-primary/5 p-3"
-                        >
-                            <div class="text-sm">
-                                <div class="font-medium">Just need to change the date?</div>
-                                <div class="text-muted-foreground">
-                                    Keep the lesson in the booking and rebook it later instead. The pupil keeps the price
-                                    they paid.
+                        <template v-else>
+                            <Alert variant="destructive">
+                                <AlertTriangle class="h-4 w-4" />
+                                <AlertTitle>What cancelling does</AlertTitle>
+                                <AlertDescription>
+                                    <ul class="mt-1 list-disc space-y-1 pl-4">
+                                        <li v-if="editItemPackageName">
+                                            The lesson leaves the pupil's <strong>{{ editItemPackageName }}</strong> booking for
+                                            good. Any package or introductory rate on it is lost: a replacement would be a new
+                                            booking at the current price.
+                                        </li>
+                                        <li v-if="editItemIsPaid">
+                                            It has been paid for, so Head Office is told to refund the pupil (everything except
+                                            the booking fee).
+                                        </li>
+                                        <li v-else-if="!editItemAwaitingPayment">
+                                            It hasn't been paid for, so it is simply cancelled and the pupil won't be charged.
+                                        </li>
+                                        <li>Nothing is paid to the instructor for a cancelled lesson.</li>
+                                        <li>The slot is freed and the pupil is emailed. This can't be undone.</li>
+                                    </ul>
+                                </AlertDescription>
+                            </Alert>
+
+                            <div
+                                v-if="editItemCanBank"
+                                class="flex items-start justify-between gap-3 rounded-md border border-primary/40 bg-primary/5 p-3"
+                            >
+                                <div class="text-sm">
+                                    <div class="font-medium">Just need to change the date?</div>
+                                    <div class="text-muted-foreground">
+                                        Keep the lesson in the booking and rebook it later instead.
+                                    </div>
                                 </div>
+                                <Button variant="outline" size="sm" class="shrink-0" @click="removalMode = 'bank'">
+                                    <Archive class="mr-2 h-4 w-4" />
+                                    Rebook later
+                                </Button>
                             </div>
-                            <Button variant="outline" size="sm" class="shrink-0" @click="removalMode = 'bank'">
-                                <Archive class="mr-2 h-4 w-4" />
-                                Rebook later
-                            </Button>
+                        </template>
+
+                        <Alert v-if="editItemAwaitingPayment" variant="destructive">
+                            <AlertTriangle class="h-4 w-4" />
+                            <AlertTitle>The whole booking will be cancelled</AlertTitle>
+                            <AlertDescription>
+                                This booking hasn't been paid yet, so every lesson in it will be cancelled and its
+                                payment link will stop working.
+                            </AlertDescription>
+                        </Alert>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="space-y-2">
+                            <Label for="cancel-reason-code">
+                                {{ isBanking ? 'Reason for moving it out of the diary' : 'Reason for cancelling' }}
+                                <span class="text-destructive">*</span>
+                            </Label>
+                            <select
+                                id="cancel-reason-code"
+                                v-model="cancelReasonCode"
+                                :disabled="cancellationReasonsLoading"
+                                class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            >
+                                <option value="" disabled>{{ cancellationReasonsLoading ? 'Loading reasons...' : 'Choose a reason...' }}</option>
+                                <optgroup v-for="group in cancellationReasonGroups" :key="group.key" :label="group.label">
+                                    <option
+                                        v-for="reason in cancellationReasons.filter((option) => option.cancelled_by === group.key)"
+                                        :key="reason.value"
+                                        :value="reason.value"
+                                    >
+                                        {{ reason.label }}
+                                    </option>
+                                </optgroup>
+                            </select>
                         </div>
-                    </template>
 
-                    <Alert v-if="editItemAwaitingPayment" variant="destructive">
-                        <AlertTriangle class="h-4 w-4" />
-                        <AlertTitle>The whole booking will be cancelled</AlertTitle>
-                        <AlertDescription>
-                            This booking hasn't been paid yet, so every lesson in it will be cancelled and its
-                            payment link will stop working.
-                        </AlertDescription>
-                    </Alert>
+                        <div class="space-y-2">
+                            <Label for="cancel-reason">
+                                Details
+                                <span v-if="selectedCancellationReason?.details_required" class="text-destructive">*</span>
+                                <span v-else class="text-muted-foreground">(optional)</span>
+                            </Label>
+                            <Textarea
+                                id="cancel-reason"
+                                v-model="cancelReason"
+                                placeholder="Anything Head Office should know (the student will see this too)"
+                                class="min-h-[72px]"
+                                maxlength="1000"
+                            />
+                            <p class="text-xs text-muted-foreground">
+                                {{ cancelReason.length }}/1000 characters
+                            </p>
+                        </div>
 
-                    <div v-else class="space-y-2">
-                        <Label class="text-sm font-medium">{{ isBanking ? 'Which lessons' : 'Cancellation scope' }}</Label>
-                        <label class="flex cursor-pointer items-center gap-3 rounded-md border border-input px-3 py-2.5 transition-colors hover:bg-muted/50" :class="{ 'border-primary bg-primary/5': deleteScope === 'single' }">
-                            <input type="radio" v-model="deleteScope" value="single" class="accent-primary" />
-                            <div>
-                                <div class="text-sm font-medium">This lesson only</div>
-                                <div class="text-xs text-muted-foreground">
-                                    {{ isBanking ? 'Keep just this lesson to rebook later' : 'Cancel just this lesson' }}
+                        <div v-if="!editItemAwaitingPayment" class="space-y-2">
+                            <Label class="text-sm font-medium">{{ isBanking ? 'Which lessons' : 'Cancellation scope' }}</Label>
+                            <label class="flex cursor-pointer items-center gap-3 rounded-md border border-input px-3 py-2.5 transition-colors hover:bg-muted/50" :class="{ 'border-primary bg-primary/5': deleteScope === 'single' }">
+                                <input type="radio" v-model="deleteScope" value="single" class="accent-primary" />
+                                <div>
+                                    <div class="text-sm font-medium">This lesson only</div>
+                                    <div class="text-xs text-muted-foreground">
+                                        {{ isBanking ? 'Keep just this lesson to rebook later' : 'Cancel just this lesson' }}
+                                    </div>
                                 </div>
-                            </div>
-                        </label>
-                        <label class="flex cursor-pointer items-center gap-3 rounded-md border border-input px-3 py-2.5 transition-colors hover:bg-muted/50" :class="{ 'border-primary bg-primary/5': deleteScope === 'future' }">
-                            <input type="radio" v-model="deleteScope" value="future" class="accent-primary" />
-                            <div>
-                                <div class="text-sm font-medium">This and all future lessons in this booking</div>
-                                <div class="text-xs text-muted-foreground">
-                                    {{ isBanking
-                                        ? 'Take this and every upcoming lesson in the booking out of the diary, all kept to rebook'
-                                        : 'Cancel this lesson and every upcoming lesson in the same booking' }}
+                            </label>
+                            <label class="flex cursor-pointer items-center gap-3 rounded-md border border-input px-3 py-2.5 transition-colors hover:bg-muted/50" :class="{ 'border-primary bg-primary/5': deleteScope === 'future' }">
+                                <input type="radio" v-model="deleteScope" value="future" class="accent-primary" />
+                                <div>
+                                    <div class="text-sm font-medium">This and all future lessons in this booking</div>
+                                    <div class="text-xs text-muted-foreground">
+                                        {{ isBanking
+                                            ? 'Every upcoming lesson in the booking is kept to rebook'
+                                            : 'Cancel this lesson and every upcoming lesson in the same booking' }}
+                                    </div>
                                 </div>
-                            </div>
-                        </label>
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -2312,32 +2330,47 @@ onMounted(() => {
         </Dialog>
 
         <Dialog v-model:open="isBookedSlotActionsOpen">
-            <DialogContent class="sm:max-w-sm">
+            <DialogContent class="sm:max-w-md" @open-auto-focus.prevent>
                 <DialogHeader>
-                    <DialogTitle>Booked lesson</DialogTitle>
+                    <DialogTitle>{{ itemsMap.get(editForm.id)?.student_name ?? 'Booked lesson' }}</DialogTitle>
                     <DialogDescription>
-                        {{ editForm.date }} · {{ editForm.start_time }} – {{ editForm.end_time }}
+                        {{ bookedSlotWhen }}<template v-if="editItemPackageName"> · {{ editItemPackageName }}</template>
                     </DialogDescription>
                 </DialogHeader>
                 <div class="flex flex-col gap-2">
-                    <Button class="w-full justify-start" @click="openBookedSlotMove">
-                        <Move class="mr-2 h-4 w-4" />
-                        Move to another date
-                    </Button>
-                    <Button v-if="editItemCanBank" variant="outline" class="h-auto w-full justify-start py-2" @click="openBookedSlotBank">
-                        <Archive class="mr-2 h-4 w-4 shrink-0" />
-                        <span class="text-left">
-                            <span class="block">Rebook later (keep in package)</span>
-                            <span class="block text-xs font-normal text-muted-foreground">No new date yet: the pupil keeps the lesson and its price</span>
+                    <Button
+                        variant="outline"
+                        class="h-auto w-full items-start justify-start gap-3 whitespace-normal px-4 py-3 text-left"
+                        @click="openBookedSlotMove"
+                    >
+                        <Move class="mt-0.5 h-4 w-4 shrink-0" />
+                        <span>
+                            <span class="block font-medium">Move to another date</span>
+                            <span class="block text-xs font-normal text-muted-foreground">You've agreed a new date and time with the pupil</span>
                         </span>
                     </Button>
-                    <Button variant="destructive" class="w-full justify-start" @click="openBookedSlotDelete">
-                        <CalendarX class="mr-2 h-4 w-4" />
-                        Cancel lesson
+                    <Button
+                        v-if="editItemCanBank"
+                        variant="outline"
+                        class="h-auto w-full items-start justify-start gap-3 whitespace-normal px-4 py-3 text-left"
+                        @click="openBookedSlotBank"
+                    >
+                        <Archive class="mt-0.5 h-4 w-4 shrink-0" />
+                        <span>
+                            <span class="block font-medium">Rebook later (keep in package)</span>
+                            <span class="block text-xs font-normal text-muted-foreground">No new date yet. The pupil keeps the lesson at the price they paid</span>
+                        </span>
                     </Button>
-                    <Button variant="ghost" class="w-full" @click="isBookedSlotActionsOpen = false">
-                        <X class="mr-2 h-4 w-4" />
-                        Close
+                    <Button
+                        variant="outline"
+                        class="h-auto w-full items-start justify-start gap-3 whitespace-normal px-4 py-3 text-left text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        @click="openBookedSlotDelete"
+                    >
+                        <CalendarX class="mt-0.5 h-4 w-4 shrink-0" />
+                        <span>
+                            <span class="block font-medium">Cancel lesson</span>
+                            <span class="block text-xs font-normal text-muted-foreground">Removes it from the package for good</span>
+                        </span>
                     </Button>
                 </div>
             </DialogContent>
