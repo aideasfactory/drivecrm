@@ -22,8 +22,11 @@ class ImportStudentAction
      * `import:send-welcome-emails` later issues a temporary password and sends
      * the usual student welcome email.
      *
+     * A student with an invalid email, or one that already has a Drive+
+     * account, is skipped (student null) — the existing account is left alone.
+     *
      * @param  array<string, string|int>  $row
-     * @return array{student: Student, created: bool}
+     * @return array{student: Student|null, created: bool}
      */
     public function __invoke(Instructor $instructor, array $row, ImportRun $run): array
     {
@@ -35,6 +38,11 @@ class ImportStudentAction
         }
 
         $email = strtolower((string) $row['email']);
+
+        if (! filter_var($email, FILTER_VALIDATE_EMAIL) || User::query()->where('email', $email)->exists()) {
+            return ['student' => null, 'created' => false];
+        }
+
         $firstName = (string) $row['first_name'];
         $surname = (string) $row['surname'];
         $status = $this->nullable($row, 'status') ?? 'active';

@@ -79,6 +79,29 @@ final class ImportValues
     }
 
     /**
+     * Normalise a postcode_sector cell that may hold several sectors joined by
+     * a separator ("CW8.CW9" → ["CW8", "CW9"], "PR7." → ["PR7"]). Null if any
+     * part is not a sector, or there are none.
+     *
+     * @return array<int, string>|null
+     */
+    public static function postcodeSectors(string $value): ?array
+    {
+        $parts = array_filter(
+            array_map('trim', preg_split('/[.,;\/|]/', $value)),
+            fn (string $part) => $part !== '',
+        );
+
+        $sectors = array_map(fn (string $part) => self::postcodeSector($part), $parts);
+
+        if ($sectors === [] || in_array(null, $sectors, true)) {
+            return null;
+        }
+
+        return array_values(array_unique($sectors));
+    }
+
+    /**
      * The instructor ID from a Drive+ import ref ("DRIVE-24" → 24), or null if
      * the ref is not one. Shown on the instructor's page as their import ref.
      */

@@ -21,12 +21,18 @@ class ValidateImportBundleAction
     /** @var array<int, array{file: string, line: int, message: string}> */
     protected array $errors = [];
 
+    /** @var array<int, array{file: string, line: int, message: string}> */
+    protected array $skipped = [];
+
     /**
      * Check every row of a bundle before anything is written.
      *
      * Refs must resolve within the bundle or against an earlier import run
      * (import_mappings). Rows whose ref was already imported are not
-     * re-checked against the database — the importer skips them.
+     * re-checked against the database — the importer skips them. Some rows
+     * are not errors but are left out of the import and listed in skipped():
+     * students with an invalid email or one already on Drive+ (plus their
+     * diary rows), and coverage rows with an invalid postcode sector.
      *
      * @param  array<string, array<int|string, mixed>>  $bundle  From ReadImportBundleAction
      * @return array<int, array{file: string, line: int, message: string}>
@@ -34,6 +40,7 @@ class ValidateImportBundleAction
     public function __invoke(array $bundle): array
     {
         $this->errors = [];
+        $this->skipped = [];
 
         $instructorRefs = $this->validateInstructors($bundle['instructors']) + $this->driveInstructorRefs($bundle);
         $this->validateCoverage($bundle['coverage'], $instructorRefs);
@@ -131,8 +138,8 @@ class ValidateImportBundleAction
 
             $this->checkRef('coverage.csv', $row, 'instructor_ref', $instructorRefs);
 
-            if (ImportValues::postcodeSector($this->value($row, 'postcode_sector')) === null) {
-                $this->fail('coverage.csv', $row, "Invalid postcode sector '{$this->value($row, 'postcode_sector')}' (expected e.g. EH12).");
+            if (ImportValues::postcodeSectors($this->value($row, 'postcode_sector')) === null) {
+                $this->skip('coverage.csv', $row, "Invalid postcode sector '{$this->value($row, 'postcode_sector')}' (expected e.g. EH12). Row will be skipped.");
             }
         }
     }
@@ -172,7 +179,9 @@ class ValidateImportBundleAction
             $emails[$email] = true;
 
             if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                $this->fail('students.csv', $row, "Invalid email '{$email}'.");
+                $this->skip('students.csv', $row, "Invalid email '{$email}'. Student and their diary lessons will be skipped.");
+
+                continue;
             }
 
             $contactEmail = $this->value($row, 'contact_email');
@@ -183,7 +192,7 @@ class ValidateImportBundleAction
             $this->checkEnum('students.csv', $row, 'status', self::STUDENT_STATUSES);
 
             if (! isset($mappedRefs[$ref]) && isset($existingUsers[$email])) {
-                $this->fail('students.csv', $row, "Email '{$email}' is already used by an existing account.");
+                $this->skip('students.csv', $row, "Email '{$email}' is already on Drive+. Student and their diary lessons will be skipped.");
             }
         }
 
@@ -417,6 +426,16 @@ class ValidateImportBundleAction
     }
 
     /**
+     * Rows from the last check that will be left out of the import.
+     *
+     * @return array<int, array{file: string, line: int, message: string}>
+     */
+    public function skipped(): array
+    {
+        return $this->skipped;
+    }
+
+    /**
      * Existing accounts for the rows' emails, loaded in chunks so a large
      * bundle is checked in a handful of queries rather than one per row.
      *
@@ -472,6 +491,18 @@ class ValidateImportBundleAction
     protected function fail(string $file, array $row, string $message): void
     {
         $this->errors[] = [
+            'file' => $file,
+            'line' => (int) ($row['_line'] ?? 0),
+            'message' => $message,
+        ];
+    }
+
+    /**
+     * @param  array<string, string|int>  $row
+     */
+    protected function skip(string $file, array $row, string $message): void
+    {
+        $this->skipped[] = [
             'file' => $file,
             'line' => (int) ($row['_line'] ?? 0),
             'message' => $message,

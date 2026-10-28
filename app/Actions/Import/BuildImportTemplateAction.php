@@ -261,7 +261,7 @@ class BuildImportTemplateAction
                 'transmission_type' => $list(TransmissionType::values()).' Required for a new instructor.',
             ],
             'coverage' => [
-                'postcode_sector' => 'Outward code the instructor covers, e.g. EH12. One row per sector.',
+                'postcode_sector' => 'Outward code the instructor covers, e.g. EH12. One row per sector, or several in one cell separated by a dot or comma (CW8.CW9).',
             ],
             'students' => [
                 'student_ref' => 'Your unique ID for the student. diary.csv links to it.',

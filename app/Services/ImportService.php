@@ -39,7 +39,9 @@ class ImportService extends BaseService
         'instructors_linked',
         'locations',
         'students',
+        'students_skipped',
         'lessons',
+        'lessons_skipped',
         'diary_blocks',
         'finances',
         'receipts',
@@ -78,7 +80,7 @@ class ImportService extends BaseService
      * `row_counts` has one entry per CSV plus `receipts` — how many rows
      * reference a receipt file.
      *
-     * @return array{bundle: array<string, array<int|string, mixed>>, row_counts: array<string, int>, errors: array<int, array{file: string, line: int, message: string}>}
+     * @return array{bundle: array<string, array<int|string, mixed>>, row_counts: array<string, int>, errors: array<int, array{file: string, line: int, message: string}>, skipped: array<int, array{file: string, line: int, message: string}>}
      */
     public function checkBundle(string $zipPath): array
     {
@@ -97,6 +99,7 @@ class ImportService extends BaseService
             'bundle' => $bundle,
             'row_counts' => $rowCounts,
             'errors' => $this->validateBundle($bundle),
+            'skipped' => $this->validateImportBundle->skipped(),
         ];
     }
 
@@ -267,12 +270,25 @@ class ImportService extends BaseService
             $run,
         );
 
+        $skippedStudentRefs = [];
+
         foreach ($sections['students'] as $row) {
             $result = ($this->importStudent)($instructor, $row, $run);
             $counts['students'] += (int) $result['created'];
+
+            if ($result['student'] === null) {
+                $skippedStudentRefs[(string) $row['student_ref']] = true;
+                $counts['students_skipped']++;
+            }
         }
 
-        [$lessons, $blocks, $dates] = $this->importDiary($instructor, $sections['diary'], $run);
+        $diaryRows = array_filter(
+            $sections['diary'],
+            fn (array $row) => ! isset($skippedStudentRefs[trim((string) ($row['student_ref'] ?? ''))]),
+        );
+        $counts['lessons_skipped'] = count($sections['diary']) - count($diaryRows);
+
+        [$lessons, $blocks, $dates] = $this->importDiary($instructor, $diaryRows, $run);
         $counts['lessons'] = $lessons;
         $counts['diary_blocks'] = $blocks;
 

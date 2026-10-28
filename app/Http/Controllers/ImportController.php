@@ -66,6 +66,7 @@ class ImportController extends Controller
             'valid' => $result['errors'] === [],
             'row_counts' => $result['row_counts'],
             'errors' => $result['errors'],
+            'skipped' => $result['skipped'],
         ]);
     }
 
@@ -96,6 +97,7 @@ class ImportController extends Controller
                 'message' => 'The file has problems. Nothing was imported.',
                 'row_counts' => $result['row_counts'],
                 'errors' => $result['errors'],
+                'skipped' => $result['skipped'],
             ], 422);
         }
 

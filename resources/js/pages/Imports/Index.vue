@@ -53,6 +53,7 @@ interface CheckResult {
     valid: boolean
     row_counts: Record<string, number>
     errors: BundleError[]
+    skipped: BundleError[]
 }
 
 const FILE_LABELS: Record<string, string> = {
@@ -69,7 +70,9 @@ const TOTAL_LABELS: Record<string, string> = {
     instructors_linked: 'Existing instructors linked',
     locations: 'Coverage sectors added',
     students: 'Students created',
+    students_skipped: 'Students skipped (invalid email or already on Drive+)',
     lessons: 'Diary lessons',
+    lessons_skipped: 'Diary lessons skipped (student skipped)',
     diary_blocks: 'Unavailable diary blocks',
     finances: 'Finance entries',
     receipts: 'Receipts attached',
@@ -136,7 +139,7 @@ const asCheckResult = (data: unknown): CheckResult | null => {
         return null
     }
 
-    const body = data as { valid?: unknown; row_counts?: unknown; errors?: unknown }
+    const body = data as { valid?: unknown; row_counts?: unknown; errors?: unknown; skipped?: unknown }
 
     if (typeof body.valid !== 'boolean') {
         return null
@@ -149,6 +152,7 @@ const asCheckResult = (data: unknown): CheckResult | null => {
                 ? (body.row_counts as Record<string, number>)
                 : {},
         errors: Array.isArray(body.errors) ? (body.errors as BundleError[]) : [],
+        skipped: Array.isArray(body.skipped) ? (body.skipped as BundleError[]) : [],
     }
 }
 
@@ -249,13 +253,14 @@ const handleImport = async () => {
     } catch (error: unknown) {
         confirmOpen.value = false
 
-        const responseData = (error as { response?: { data?: { errors?: unknown; row_counts?: Record<string, number> } } }).response?.data
+        const responseData = (error as { response?: { data?: { errors?: unknown; row_counts?: Record<string, number>; skipped?: BundleError[] } } }).response?.data
 
         if (Array.isArray(responseData?.errors)) {
             checkResult.value = {
                 valid: false,
                 row_counts: responseData.row_counts ?? {},
                 errors: responseData.errors,
+                skipped: responseData.skipped ?? [],
             }
         }
 
@@ -403,6 +408,40 @@ const breadcrumbs = [{ title: 'Data Import' }]
                             will be skipped, not duplicated.
                         </AlertDescription>
                     </Alert>
+
+                    <!-- Skipped: students already on Drive+ -->
+                    <div v-if="checkResult && checkResult.skipped.length > 0" class="flex flex-col gap-2">
+                        <Alert>
+                            <AlertCircle class="h-4 w-4" />
+                            <AlertTitle>{{ checkResult.skipped.length }} row(s) will be skipped</AlertTitle>
+                            <AlertDescription>
+                                These rows won't be imported, but they don't stop the rest of the file.
+                                A skipped student's diary lessons are skipped too; a student already on
+                                Drive+ keeps their existing account.
+                            </AlertDescription>
+                        </Alert>
+                        <div class="max-h-64 overflow-y-auto rounded-lg border">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead class="w-36">File</TableHead>
+                                        <TableHead class="w-16">Line</TableHead>
+                                        <TableHead>Note</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    <TableRow
+                                        v-for="(notice, index) in checkResult.skipped"
+                                        :key="index"
+                                    >
+                                        <TableCell class="font-mono text-xs">{{ notice.file }}</TableCell>
+                                        <TableCell class="font-mono text-xs">{{ notice.line || '—' }}</TableCell>
+                                        <TableCell class="text-sm">{{ notice.message }}</TableCell>
+                                    </TableRow>
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </div>
 
                     <!-- Errors -->
                     <div v-if="checkResult && !checkResult.valid" class="flex flex-col gap-2">
