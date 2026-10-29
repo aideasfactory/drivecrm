@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Actions\Import\BuildImportTemplateAction;
+use App\Actions\Import\FixImportedPupilsAction;
 use App\Actions\Import\GetPendingImportedUsersAction;
 use App\Actions\Import\ImportCoverageAction;
 use App\Actions\Import\ImportDiaryItemAction;
@@ -73,6 +74,7 @@ class ImportService extends BaseService
         protected ImportFinanceAction $importFinance,
         protected RecalculateStudentLessonNumbersAction $recalculateStudentLessonNumbers,
         protected InstructorCalendarService $instructorCalendarService,
+        protected FixImportedPupilsAction $fixImportedPupils,
         protected GetPendingImportedUsersAction $getPendingImportedUsers,
         protected SendImportedWelcomeEmailAction $sendImportedWelcomeEmail,
         protected BuildImportTemplateAction $buildImportTemplate,
@@ -437,6 +439,16 @@ class ImportService extends BaseService
             'already_sent' => array_values(array_diff(array_keys($found), $pendingEmails)),
             'not_instructors' => array_values(array_diff($emails, array_keys($found))),
         ];
+    }
+
+    /**
+     * One-off clean-up of imported pupils and instructors (see FixImportedPupilsAction).
+     *
+     * @return array{pupils: int, alternative_payments_turned_on: int, pupil_phones_fixed: int, instructors: int, instructor_phones_fixed: int, examples: array<int, array{0: string, 1: string, 2: string, 3: string}>}
+     */
+    public function fixImportedPupils(bool $dryRun = false, ?User $changedBy = null): array
+    {
+        return ($this->fixImportedPupils)($dryRun, $changedBy);
     }
 
     /**

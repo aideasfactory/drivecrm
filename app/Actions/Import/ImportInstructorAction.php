@@ -68,7 +68,7 @@ class ImportInstructorAction
 
         $instructor = Instructor::create([
             'user_id' => $user->id,
-            'phone' => $this->nullable($row, 'phone'),
+            'phone' => ImportValues::ukPhone($this->nullable($row, 'phone')),
             'bio' => $this->nullable($row, 'bio'),
             'address' => $this->nullable($row, 'address'),
             'postcode' => $postcode ? strtoupper($postcode) : null,

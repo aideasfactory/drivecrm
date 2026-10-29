@@ -17,6 +17,30 @@ use Illuminate\Support\Str;
 final class ImportValues
 {
     /**
+     * Restore a UK phone number whose leading 0 was lost (a spreadsheet saved
+     * it as a number): "7818945470" → "07818945470", "447963180831" →
+     * "07963180831". Anything else is returned unchanged.
+     */
+    public static function ukPhone(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $digits = str_replace(' ', '', trim($value));
+
+        if (preg_match('/^[1-9]\d{9}$/', $digits)) {
+            return '0'.$digits;
+        }
+
+        if (preg_match('/^44([1-9]\d{9})$/', $digits, $matches)) {
+            return '0'.$matches[1];
+        }
+
+        return $value;
+    }
+
+    /**
      * Every email address in a block of text (a CSV of any shape, a pasted
      * list), lowercased and de-duplicated.
      *
