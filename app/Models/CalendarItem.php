@@ -88,6 +88,20 @@ class CalendarItem extends Model
     }
 
     /**
+     * Query equivalent of isEmptyAvailability(): open, unbooked availability
+     * slots (shown as "Available" in the diary). Keep the two in sync.
+     *
+     * @param  Builder<CalendarItem>  $query
+     */
+    public function scopeEmptyAvailability(Builder $query): void
+    {
+        $query->where('item_type', CalendarItemType::Slot)
+            ->where('is_available', true)
+            ->whereNull('status')
+            ->whereDoesntHave('lessons');
+    }
+
+    /**
      * Check if a rescheduled booking may take over (consume) this item when
      * moved on top of it: an empty availability slot, or the travel block
      * belonging to one. Consumed items are deleted by the move.

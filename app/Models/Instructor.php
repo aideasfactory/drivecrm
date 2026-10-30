@@ -228,6 +228,17 @@ class Instructor extends Model
     }
 
     /**
+     * Check if the instructor's Stripe account is fully connected — the same
+     * rule the instructor page header uses for its "Stripe Connected" badge.
+     */
+    public function isStripeConnected(): bool
+    {
+        return $this->stripe_account_id !== null
+            && (bool) $this->onboarding_complete
+            && (bool) $this->charges_enabled;
+    }
+
+    /**
      * Check if instructor has completed the mobile app onboarding slider.
      */
     public function hasCompletedAppOnboarding(): bool

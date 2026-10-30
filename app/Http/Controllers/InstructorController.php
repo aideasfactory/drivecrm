@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Actions\Calendar\MoveLessonAndFutureSiblingsAction;
+use App\Actions\Instructor\GetInstructorListAction;
 use App\Actions\Shared\AdminResetPasswordAction;
 use App\Actions\Shared\Contact\CreateContactAction;
 use App\Actions\Shared\Contact\DeleteContactAction;
@@ -25,6 +26,7 @@ use App\Http\Controllers\Hmrc\Vat\VatController;
 use App\Http\Controllers\Hmrc\Vehicles\VehicleController;
 use App\Http\Requests\AdminResetPasswordRequest;
 use App\Http\Requests\BankLessonsRequest;
+use App\Http\Requests\ExportInstructorsRequest;
 use App\Http\Requests\FillAvailableSlotsRequest;
 use App\Http\Requests\ImportInstructorsCsvRequest;
 use App\Http\Requests\ImportLocationsCsvRequest;
@@ -76,6 +78,7 @@ class InstructorController extends Controller
         protected MoveLessonAndFutureSiblingsAction $moveLessonAndFutureSiblings,
         protected PriceUpliftService $priceUpliftService,
         protected SlotOfferService $slotOfferService,
+        protected GetInstructorListAction $getInstructorList,
     ) {}
 
     /**
@@ -83,30 +86,38 @@ class InstructorController extends Controller
      */
     public function index(): Response
     {
-        $instructors = Instructor::with('user')
-            ->get()
-            ->map(function (Instructor $instructor) {
-                // Count students assigned to this instructor
-                $pupilsCount = Student::where('instructor_id', $instructor->id)->count();
-
-                // Determine connection status based on Stripe integration
-                $connectionStatus = $instructor->stripe_account_id && $instructor->charges_enabled
-                    ? 'connected'
-                    : 'not_connected';
-
-                return [
-                    'id' => $instructor->id,
-                    'name' => $instructor->user->name,
-                    'email' => $instructor->user->email,
-                    'connection_status' => $connectionStatus,
-                    'pupils_count' => $pupilsCount,
-                    'last_sync' => $instructor->updated_at->diffForHumans(),
-                ];
-            });
-
         return Inertia::render('Instructors/Index', [
-            'instructors' => $instructors,
+            'instructors' => ($this->getInstructorList)(),
             'formOptions' => $this->instructorFormOptions(),
+        ]);
+    }
+
+    /**
+     * Download the instructors list as CSV, applying the same search and
+     * setup filters as the list page (owners/admins only).
+     */
+    public function exportCsv(ExportInstructorsRequest $request): StreamedResponse
+    {
+        $instructors = ($this->getInstructorList)($request->validated());
+
+        return response()->streamDownload(function () use ($instructors): void {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Name', 'Email', 'Mobile', 'Onboarding email sent', 'Stripe connected', 'Availability added']);
+
+            foreach ($instructors as $instructor) {
+                fputcsv($handle, [
+                    $instructor['name'],
+                    $instructor['email'],
+                    $instructor['phone'] ?? '',
+                    $instructor['onboarding_email_sent'] ? 'Y' : 'N',
+                    $instructor['stripe_connected'] ? 'Y' : 'N',
+                    $instructor['availability_added'] ? 'Y' : 'N',
+                ]);
+            }
+
+            fclose($handle);
+        }, 'instructors-'.Carbon::now()->format('Y-m-d').'.csv', [
+            'Content-Type' => 'text/csv',
         ]);
     }
 

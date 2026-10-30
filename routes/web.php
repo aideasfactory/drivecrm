@@ -104,6 +104,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('instructors.csv-template');
     Route::post('/instructors/import-csv', [InstructorController::class, 'importCsv'])
         ->name('instructors.import-csv');
+    Route::get('/instructors/export', [InstructorController::class, 'exportCsv'])
+        ->middleware(EnsureOwner::class)
+        ->name('instructors.export');
     Route::get('/instructors/{instructor}', [InstructorController::class, 'show'])
         ->name('instructors.show');
     Route::put('/instructors/{instructor}', [InstructorController::class, 'update'])
