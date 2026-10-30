@@ -444,11 +444,12 @@ class ImportService extends BaseService
     /**
      * One-off clean-up of imported pupils and instructors (see FixImportedPupilsAction).
      *
+     * @param  int|null  $limit  Stop after this many records needing a change
      * @return array{pupils: int, alternative_payments_turned_on: int, pupil_phones_fixed: int, instructors: int, instructor_phones_fixed: int, examples: array<int, array{0: string, 1: string, 2: string, 3: string}>}
      */
-    public function fixImportedPupils(bool $dryRun = false, ?User $changedBy = null): array
+    public function fixImportedPupils(bool $dryRun = false, ?User $changedBy = null, ?int $limit = null): array
     {
-        return ($this->fixImportedPupils)($dryRun, $changedBy);
+        return ($this->fixImportedPupils)($dryRun, $changedBy, $limit);
     }
 
     /**

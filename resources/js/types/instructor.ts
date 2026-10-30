@@ -2,7 +2,12 @@ export interface Instructor {
   id: number
   name: string
   email: string
+  phone: string | null
   connection_status: 'connected' | 'not_connected'
+  onboarding_email_sent: boolean
+  stripe_connected: boolean
+  availability_added: boolean
+  setup_complete: boolean
   pupils_count: number
   last_sync: string
 }

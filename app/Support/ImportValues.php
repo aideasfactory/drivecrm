@@ -17,9 +17,10 @@ use Illuminate\Support\Str;
 final class ImportValues
 {
     /**
-     * Restore a UK phone number whose leading 0 was lost (a spreadsheet saved
-     * it as a number): "7818945470" → "07818945470", "447963180831" →
-     * "07963180831". Anything else is returned unchanged.
+     * Normalise a UK phone number to 11 digits with a leading 0 and no spaces:
+     * "7818945470" → "07818945470" (a spreadsheet dropped the 0),
+     * "447963180831" / "+447963180831" → "07963180831",
+     * "07856 714859" → "07856714859". Anything else is returned unchanged.
      */
     public static function ukPhone(?string $value): ?string
     {
@@ -29,11 +30,15 @@ final class ImportValues
 
         $digits = str_replace(' ', '', trim($value));
 
+        if (preg_match('/^0[1-9]\d{9}$/', $digits)) {
+            return $digits;
+        }
+
         if (preg_match('/^[1-9]\d{9}$/', $digits)) {
             return '0'.$digits;
         }
 
-        if (preg_match('/^44([1-9]\d{9})$/', $digits, $matches)) {
+        if (preg_match('/^\+?44([1-9]\d{9})$/', $digits, $matches)) {
             return '0'.$matches[1];
         }
 
