@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label'
 import { Loader2, UserPlus, UserPen, Save, Trash2, AlertTriangle, Camera, X } from 'lucide-vue-next'
 import { toast } from '@/components/ui/toast'
 import PasswordResetSection from '@/components/Shared/PasswordResetSection.vue'
+import { destroy as destroyInstructor } from '@/actions/App/Http/Controllers/InstructorController'
 import type {
     CreateInstructorData,
     InstructorDetail,
@@ -49,7 +50,7 @@ const emit = defineEmits<Emits>()
 const isEditMode = computed(() => props.instructor !== null)
 
 const isSubmitting = ref(false)
-const isRequestingDeletion = ref(false)
+const isDeletingInstructor = ref(false)
 const showDeleteDialog = ref(false)
 
 const defaultStatus = () =>
@@ -258,21 +259,23 @@ const handleOpenChange = (value: boolean) => {
     }
 }
 
-const handleRequestDeletion = () => {
+const handleDeleteInstructor = () => {
     if (!props.instructor) return
 
-    isRequestingDeletion.value = true
+    isDeletingInstructor.value = true
 
-    router.post(`/instructors/${props.instructor.id}/request-deletion`, {}, {
-        preserveScroll: true,
-        onSuccess: () => {
+    router.delete(destroyInstructor.url(props.instructor.id), {
+        onSuccess: (page) => {
+            const flash = page.props.flash as { success?: string | null } | undefined
             showDeleteDialog.value = false
+            emit('update:open', false)
+            toast({ title: flash?.success ?? 'Instructor deleted.' })
         },
         onError: () => {
-            // Error handling - the error will be displayed via toast/notification
+            toast({ title: 'Failed to delete instructor. Please try again.', variant: 'destructive' })
         },
         onFinish: () => {
-            isRequestingDeletion.value = false
+            isDeletingInstructor.value = false
         },
     })
 }
@@ -544,7 +547,8 @@ const handleRequestDeletion = () => {
                         <h3 class="font-semibold text-destructive">Danger Zone</h3>
                     </div>
                     <p class="mt-2 text-sm text-destructive/80">
-                        Once you request account deletion, an administrator will review your request.
+                        Deleting this instructor removes their personal details, signs them out of the app
+                        and unassigns their pupils. Lesson and payment history is kept.
                         This action cannot be undone.
                     </p>
                     <Button
@@ -555,7 +559,7 @@ const handleRequestDeletion = () => {
                         @click="showDeleteDialog = true"
                     >
                         <Trash2 class="mr-2 h-4 w-4" />
-                        Request Account Deletion
+                        Delete Instructor
                     </Button>
                 </div>
             </div>
@@ -568,11 +572,11 @@ const handleRequestDeletion = () => {
             <DialogHeader>
                 <DialogTitle class="flex items-center gap-2 text-destructive">
                     <AlertTriangle class="h-5 w-5" />
-                    Request Account Deletion
+                    Delete Instructor
                 </DialogTitle>
                 <DialogDescription>
-                    Are you sure you want to request deletion of your account?
-                    An administrator will review this request and contact you if needed.
+                    Are you sure you want to delete {{ instructor?.name ?? 'this instructor' }}?
+                    Their pupils will be unassigned and they will no longer be able to sign in.
                 </DialogDescription>
             </DialogHeader>
             <DialogFooter class="mt-4">
@@ -580,19 +584,19 @@ const handleRequestDeletion = () => {
                     type="button"
                     variant="outline"
                     @click="showDeleteDialog = false"
-                    :disabled="isRequestingDeletion"
+                    :disabled="isDeletingInstructor"
                 >
                     Cancel
                 </Button>
                 <Button
                     type="button"
                     variant="destructive"
-                    @click="handleRequestDeletion"
-                    :disabled="isRequestingDeletion"
+                    @click="handleDeleteInstructor"
+                    :disabled="isDeletingInstructor"
                 >
-                    <Loader2 v-if="isRequestingDeletion" class="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 v-if="isDeletingInstructor" class="mr-2 h-4 w-4 animate-spin" />
                     <Trash2 v-else class="mr-2 h-4 w-4" />
-                    Request Deletion
+                    Delete Instructor
                 </Button>
             </DialogFooter>
         </DialogContent>
