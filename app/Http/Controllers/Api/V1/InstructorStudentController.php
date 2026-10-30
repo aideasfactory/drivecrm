@@ -6,11 +6,11 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\V1\StudentResource;
-use App\Models\Student;
 use App\Services\InstructorService;
 use App\Services\StudentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class InstructorStudentController extends Controller
 {
@@ -40,16 +40,21 @@ class InstructorStudentController extends Controller
 
     /**
      * Remove one of the authenticated instructor's pupils from their list
-     * (DELETE /api/v1/instructor/pupils/{student}). Unassigns only; the pupil,
-     * orders, payments and lessons are kept.
+     * (DELETE /api/v1/instructor/pupils/{student}). Same lookup, policy and
+     * soft remove as DELETE /api/v1/students/{student}, restricted to
+     * instructors and blocked while upcoming lessons remain.
      */
-    public function destroy(Request $request, Student $student): JsonResponse
+    public function destroy(Request $request, int $student): JsonResponse
     {
         $instructor = $request->user()->instructor;
 
-        if ($instructor === null || $student->instructor_id !== $instructor->id) {
+        if ($instructor === null) {
             abort(403, 'You do not teach this pupil.');
         }
+
+        $student = $this->studentService->getById($student);
+
+        Gate::authorize('delete', $student);
 
         if ($this->studentService->hasUpcomingLessonsWith($student, $instructor)) {
             return response()->json([
