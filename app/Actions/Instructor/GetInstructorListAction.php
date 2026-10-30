@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Instructor;
 
+use App\Enums\InstructorStatus;
 use App\Models\Instructor;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -33,6 +34,7 @@ class GetInstructorListAction
      * Build the instructors list rows with their setup status, optionally
      * narrowed by search and setup filters. Every filter must match. The
      * `setup` filter is the overall one: `incomplete` = missing any step.
+     * Archived (deleted) instructors are never listed.
      *
      * Setup status mirrors the instructor page:
      * - Onboarding email sent: the user's `welcome_email_pending` flag is off.
@@ -62,6 +64,7 @@ class GetInstructorListAction
         $currentTime = $now->format('H:i:s');
 
         $rows = Instructor::query()
+            ->where('status', '!=', InstructorStatus::Archived->value)
             ->with('user')
             ->withCount('students')
             ->withExists(['calendars as has_future_availability' => fn (Builder $calendars) => $calendars

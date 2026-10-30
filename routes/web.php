@@ -176,8 +176,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('instructors.stripe.onboarding.return');
     Route::get('/instructors/{instructor}/stripe/status', [InstructorController::class, 'stripeStatus'])
         ->name('instructors.stripe.status');
-    Route::post('/instructors/{instructor}/request-deletion', [InstructorController::class, 'requestDeletion'])
-        ->name('instructors.request-deletion');
+    Route::delete('/instructors/{instructor}', [InstructorController::class, 'destroy'])
+        ->middleware(EnsureOwner::class)
+        ->name('instructors.destroy');
     Route::get('/instructors/{instructor}/activity-logs', [InstructorController::class, 'activityLogs'])
         ->name('instructors.activity-logs');
     Route::get('/instructors/{instructor}/payouts', [InstructorController::class, 'payouts'])
