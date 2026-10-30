@@ -23,9 +23,16 @@ class GetInstructorListAction
 
     public const AVAILABILITY_NOT_ADDED = 'not_added';
 
+    /** All three setup steps done. */
+    public const SETUP_COMPLETE = 'complete';
+
+    /** At least one setup step missing — the instructors to chase. */
+    public const SETUP_INCOMPLETE = 'incomplete';
+
     /**
      * Build the instructors list rows with their setup status, optionally
-     * narrowed by search and setup filters. Every filter must match.
+     * narrowed by search and setup filters. Every filter must match. The
+     * `setup` filter is the overall one: `incomplete` = missing any step.
      *
      * Setup status mirrors the instructor page:
      * - Onboarding email sent: the user's `welcome_email_pending` flag is off.
@@ -33,7 +40,7 @@ class GetInstructorListAction
      * - Availability added: at least one open "Available" diary slot
      *   (CalendarItem::emptyAvailability) that starts in the future.
      *
-     * @param  array{search?: ?string, onboarding_email?: ?string, stripe?: ?string, availability?: ?string}  $filters
+     * @param  array{search?: ?string, setup?: ?string, onboarding_email?: ?string, stripe?: ?string, availability?: ?string}  $filters
      * @return Collection<int, array{
      *     id: int,
      *     name: string,
@@ -43,6 +50,7 @@ class GetInstructorListAction
      *     onboarding_email_sent: bool,
      *     stripe_connected: bool,
      *     availability_added: bool,
+     *     setup_complete: bool,
      *     pupils_count: int,
      *     last_sync: string
      * }>
@@ -67,6 +75,8 @@ class GetInstructorListAction
             ->get()
             ->map(function (Instructor $instructor): array {
                 $stripeConnected = $instructor->isStripeConnected();
+                $onboardingEmailSent = ! $instructor->user->welcome_email_pending;
+                $availabilityAdded = (bool) $instructor->has_future_availability;
 
                 return [
                     'id' => $instructor->id,
@@ -74,9 +84,10 @@ class GetInstructorListAction
                     'email' => $instructor->user->email,
                     'phone' => $instructor->phone,
                     'connection_status' => $stripeConnected ? 'connected' : 'not_connected',
-                    'onboarding_email_sent' => ! $instructor->user->welcome_email_pending,
+                    'onboarding_email_sent' => $onboardingEmailSent,
                     'stripe_connected' => $stripeConnected,
-                    'availability_added' => (bool) $instructor->has_future_availability,
+                    'availability_added' => $availabilityAdded,
+                    'setup_complete' => $onboardingEmailSent && $stripeConnected && $availabilityAdded,
                     'pupils_count' => (int) $instructor->students_count,
                     'last_sync' => $instructor->updated_at->diffForHumans(),
                 ];
@@ -87,7 +98,7 @@ class GetInstructorListAction
 
     /**
      * @param  Collection<int, array<string, mixed>>  $rows
-     * @param  array{search?: ?string, onboarding_email?: ?string, stripe?: ?string, availability?: ?string}  $filters
+     * @param  array{search?: ?string, setup?: ?string, onboarding_email?: ?string, stripe?: ?string, availability?: ?string}  $filters
      * @return Collection<int, array<string, mixed>>
      */
     private function applyFilters(Collection $rows, array $filters): Collection
@@ -100,6 +111,7 @@ class GetInstructorListAction
         }
 
         $statusFilters = [
+            'setup_complete' => $this->expectedFlag($filters['setup'] ?? null, self::SETUP_COMPLETE, self::SETUP_INCOMPLETE),
             'onboarding_email_sent' => $this->expectedFlag($filters['onboarding_email'] ?? null, self::ONBOARDING_EMAIL_SENT, self::ONBOARDING_EMAIL_NOT_SENT),
             'stripe_connected' => $this->expectedFlag($filters['stripe'] ?? null, self::STRIPE_CONNECTED, self::STRIPE_NOT_CONNECTED),
             'availability_added' => $this->expectedFlag($filters['availability'] ?? null, self::AVAILABILITY_ADDED, self::AVAILABILITY_NOT_ADDED),

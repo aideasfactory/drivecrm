@@ -28,6 +28,10 @@ class ExportInstructorsRequest extends FormRequest
     {
         return [
             'search' => ['nullable', 'string', 'max:255'],
+            'setup' => ['nullable', Rule::in([
+                GetInstructorListAction::SETUP_COMPLETE,
+                GetInstructorListAction::SETUP_INCOMPLETE,
+            ])],
             'onboarding_email' => ['nullable', Rule::in([
                 GetInstructorListAction::ONBOARDING_EMAIL_SENT,
                 GetInstructorListAction::ONBOARDING_EMAIL_NOT_SENT,
@@ -51,6 +55,7 @@ class ExportInstructorsRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'setup.in' => 'The setup filter must be complete or incomplete.',
             'onboarding_email.in' => 'The onboarding email filter must be sent or not_sent.',
             'stripe.in' => 'The Stripe filter must be connected or not_connected.',
             'availability.in' => 'The availability filter must be added or not_added.',

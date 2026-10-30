@@ -7,6 +7,7 @@ export interface Instructor {
   onboarding_email_sent: boolean
   stripe_connected: boolean
   availability_added: boolean
+  setup_complete: boolean
   pupils_count: number
   last_sync: string
 }
