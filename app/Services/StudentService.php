@@ -19,6 +19,7 @@ use App\Actions\Student\PickupPoint\SetDefaultPickupPointAction;
 use App\Actions\Student\PickupPoint\UpdatePickupPointAction;
 use App\Actions\Student\ResendStudentInviteAction;
 use App\Actions\Student\SetStudentCashPaymentsAction;
+use App\Actions\Student\Status\HasUpcomingLessonsWithInstructorAction;
 use App\Actions\Student\Status\RemoveStudentFromInstructorAction;
 use App\Actions\Student\UpdateStudentAction;
 use App\Actions\Student\UploadStudentProfilePictureAction;
@@ -49,7 +50,8 @@ class StudentService extends BaseService
         protected DeleteStudentProfilePictureAction $deleteProfilePictureAction,
         protected GetStudentInstructorProfileAction $getInstructorProfile,
         protected GetStudentPracticeHoursAction $getPracticeHours,
-        protected SetStudentCashPaymentsAction $setStudentCashPayments
+        protected SetStudentCashPaymentsAction $setStudentCashPayments,
+        protected HasUpcomingLessonsWithInstructorAction $hasUpcomingLessonsWithInstructor
     ) {}
 
     /**
@@ -128,7 +130,17 @@ class StudentService extends BaseService
             $this->invalidateInstructorStudentCache($instructor);
         }
 
+        $this->invalidateStudentDashboardCache($student);
+
         return $result;
+    }
+
+    /**
+     * Whether the student still has upcoming booked or paid lessons with the instructor.
+     */
+    public function hasUpcomingLessonsWith(Student $student, Instructor $instructor): bool
+    {
+        return ($this->hasUpcomingLessonsWithInstructor)($student, $instructor);
     }
 
     /**
