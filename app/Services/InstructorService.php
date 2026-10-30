@@ -16,6 +16,7 @@ use App\Actions\Instructor\CreatePupilAction;
 use App\Actions\Instructor\CreateRecurringCalendarItemsAction;
 use App\Actions\Instructor\DeleteCalendarItemAction;
 use App\Actions\Instructor\DeleteFinanceReceiptAction;
+use App\Actions\Instructor\DeleteInstructorAction;
 use App\Actions\Instructor\DeleteInstructorFinanceAction;
 use App\Actions\Instructor\DeleteInstructorLocationAction;
 use App\Actions\Instructor\DeleteInstructorProfilePictureAction;
@@ -125,6 +126,7 @@ class InstructorService extends BaseService
         protected SendStripeSetupLinkAction $sendStripeSetupLink,
         protected UploadInstructorProfilePictureAction $uploadProfilePicture,
         protected DeleteInstructorProfilePictureAction $deleteProfilePicture,
+        protected DeleteInstructorAction $deleteInstructor,
         protected DetectCalendarClashesAction $detectCalendarClashes,
         protected UpdateLessonMileageAction $updateLessonMileage,
         protected GetInstructorFinancesAction $getInstructorFinances,
@@ -1041,6 +1043,16 @@ class InstructorService extends BaseService
     public function deleteProfilePicture(Instructor $instructor): Instructor
     {
         return ($this->deleteProfilePicture)($instructor);
+    }
+
+    /**
+     * Delete (anonymise and archive) an instructor on staff request.
+     */
+    public function deleteInstructor(Instructor $instructor, ?User $deletedBy = null): void
+    {
+        ($this->deleteInstructor)($instructor, $deletedBy);
+
+        $this->invalidateStudentCache($instructor);
     }
 
     /**

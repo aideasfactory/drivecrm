@@ -62,7 +62,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -1110,29 +1109,20 @@ class InstructorController extends Controller
     }
 
     /**
-     * Handle instructor account deletion request.
+     * Delete an instructor from the CRM.
+     *
+     * Anonymises and archives rather than hard-deleting, so lesson, order
+     * and payout history is kept. Their pupils are unassigned.
      */
-    public function requestDeletion(Instructor $instructor): JsonResponse
+    public function destroy(Request $request, Instructor $instructor): RedirectResponse
     {
-        $adminEmail = config('mail.admin_address', config('mail.from.address'));
         $instructorName = $instructor->user->name;
-        $instructorEmail = $instructor->user->email;
 
-        Mail::raw(
-            "Instructor Account Deletion Request\n\n".
-            "Name: {$instructorName}\n".
-            "Email: {$instructorEmail}\n".
-            "Instructor ID: {$instructor->id}\n\n".
-            'This instructor has requested their account be deleted. Please review and process this request.',
-            function ($message) use ($adminEmail, $instructorName) {
-                $message->to($adminEmail)
-                    ->subject("Account Deletion Request: {$instructorName}");
-            }
-        );
+        $this->instructorService->deleteInstructor($instructor, $request->user());
 
-        return response()->json([
-            'message' => 'Account deletion request has been submitted. An administrator will review your request.',
-        ]);
+        return redirect()
+            ->route('instructors.index')
+            ->with('success', "{$instructorName} has been deleted.");
     }
 
     /**
