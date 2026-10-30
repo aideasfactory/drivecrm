@@ -18,6 +18,8 @@ import { Search, Plus, Download, FileUp } from 'lucide-vue-next'
 import type { Instructor, InstructorFormOptions } from '@/types/instructor'
 import AddInstructorSheet from '@/components/Instructors/AddInstructorSheet.vue'
 import CsvImportSheet from '@/components/CsvImportSheet.vue'
+import { useRole } from '@/composables/useRole'
+import { exportCsv } from '@/actions/App/Http/Controllers/InstructorController'
 
 interface Props {
     instructors: Instructor[]
@@ -26,7 +28,16 @@ interface Props {
 
 const props = defineProps<Props>()
 
+const { isOwner } = useRole()
+
 const searchQuery = ref('')
+const onboardingEmailFilter = ref<'' | 'sent' | 'not_sent'>('')
+const stripeFilter = ref<'' | 'connected' | 'not_connected'>('')
+const availabilityFilter = ref<'' | 'added' | 'not_added'>('')
+
+const filterSelectClass =
+    'h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+
 const isAddSheetOpen = ref(false)
 const isCsvImportOpen = ref(false)
 
@@ -39,17 +50,34 @@ const handleCsvImported = () => {
     router.reload()
 }
 
-const filteredInstructors = computed(() => {
-    if (!searchQuery.value) {
-        return props.instructors
-    }
+const matchesFilter = (value: boolean, filter: string, yes: string) =>
+    filter === '' || value === (filter === yes)
 
-    const query = searchQuery.value.toLowerCase()
+// Mirrors GetInstructorListAction::applyFilters so the CSV export matches the list on screen.
+const filteredInstructors = computed(() => {
+    const query = searchQuery.value.trim().toLowerCase()
+
     return props.instructors.filter(
         (instructor) =>
-            instructor.name.toLowerCase().includes(query) ||
-            instructor.email.toLowerCase().includes(query)
+            (query === '' ||
+                instructor.name.toLowerCase().includes(query) ||
+                instructor.email.toLowerCase().includes(query)) &&
+            matchesFilter(instructor.onboarding_email_sent, onboardingEmailFilter.value, 'sent') &&
+            matchesFilter(instructor.stripe_connected, stripeFilter.value, 'connected') &&
+            matchesFilter(instructor.availability_added, availabilityFilter.value, 'added')
     )
+})
+
+const exportUrl = computed(() => {
+    const query: Record<string, string> = {}
+    const search = searchQuery.value.trim()
+
+    if (search !== '') query.search = search
+    if (onboardingEmailFilter.value) query.onboarding_email = onboardingEmailFilter.value
+    if (stripeFilter.value) query.stripe = stripeFilter.value
+    if (availabilityFilter.value) query.availability = availabilityFilter.value
+
+    return exportCsv.url({ query })
 })
 
 const getInitials = (name: string) => {
@@ -81,20 +109,53 @@ const breadcrumbs = [{ title: 'Instructors' }]
                 </p>
             </div>
 
-            <!-- Search and Add Button -->
-            <div class="flex items-center justify-between gap-4">
-                <div class="relative max-w-md flex-1">
-                    <Search
-                        class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                    />
-                    <Input
-                        v-model="searchQuery"
-                        type="text"
-                        placeholder="Search instructors..."
-                        class="pl-9"
-                    />
+            <!-- Search, Filters and Actions -->
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="flex flex-1 flex-wrap items-center gap-2">
+                    <div class="relative w-full max-w-md flex-1 basis-64">
+                        <Search
+                            class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                        />
+                        <Input
+                            v-model="searchQuery"
+                            type="text"
+                            placeholder="Search instructors..."
+                            class="pl-9"
+                        />
+                    </div>
+                    <select
+                        v-model="onboardingEmailFilter"
+                        aria-label="Filter by onboarding email"
+                        :class="filterSelectClass"
+                    >
+                        <option value="">Onboarding email: All</option>
+                        <option value="sent">Onboarding email: Sent</option>
+                        <option value="not_sent">Onboarding email: Not sent</option>
+                    </select>
+                    <select
+                        v-model="stripeFilter"
+                        aria-label="Filter by Stripe connection"
+                        :class="filterSelectClass"
+                    >
+                        <option value="">Stripe: All</option>
+                        <option value="connected">Stripe: Connected</option>
+                        <option value="not_connected">Stripe: Not connected</option>
+                    </select>
+                    <select
+                        v-model="availabilityFilter"
+                        aria-label="Filter by availability"
+                        :class="filterSelectClass"
+                    >
+                        <option value="">Availability: All</option>
+                        <option value="added">Availability: Added</option>
+                        <option value="not_added">Availability: Not added</option>
+                    </select>
                 </div>
                 <div class="flex items-center gap-2">
+                    <Button v-if="isOwner" variant="outline" as="a" :href="exportUrl">
+                        <Download class="mr-2 h-4 w-4" />
+                        Export CSV
+                    </Button>
                     <Button v-if="SHOW_INSTRUCTOR_CSV_IMPORT" variant="outline" as="a" href="/instructors/csv-template">
                         <Download class="mr-2 h-4 w-4" />
                         CSV Template
