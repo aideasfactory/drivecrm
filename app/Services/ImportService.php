@@ -11,6 +11,7 @@ use App\Actions\Import\ImportCoverageAction;
 use App\Actions\Import\ImportDiaryItemAction;
 use App\Actions\Import\ImportFinanceAction;
 use App\Actions\Import\ImportInstructorAction;
+use App\Actions\Import\CompleteImportedLessonAction;
 use App\Actions\Import\FillImportedLessonSummaryAction;
 use App\Actions\Import\ImportStudentAction;
 use App\Actions\Import\ReadImportBundleAction;
@@ -61,6 +62,7 @@ class ImportService extends BaseService
         'lessons_skipped',
         'lesson_summaries_filled',
         'lessons_already_in_diary',
+        'lessons_marked_completed',
         'diary_blocks',
         'finances',
         'receipts',
@@ -75,6 +77,7 @@ class ImportService extends BaseService
         protected ResolveImportedOrderAction $resolveImportedOrder,
         protected ImportDiaryItemAction $importDiaryItem,
         protected FillImportedLessonSummaryAction $fillImportedLessonSummary,
+        protected CompleteImportedLessonAction $completeImportedLesson,
         protected SyncImportedOrderAction $syncImportedOrder,
         protected ImportFinanceAction $importFinance,
         protected RecalculateStudentLessonNumbersAction $recalculateStudentLessonNumbers,
@@ -102,9 +105,11 @@ class ImportService extends BaseService
      * reference a receipt file. `report` lists every instructor and student
      * row with what the import will do with it (new / skipped and why).
      * `lesson_summaries_to_fill` counts lessons imported on an earlier run
-     * whose empty summary this bundle's diary rows will fill.
+     * whose empty summary this bundle's diary rows will fill;
+     * `lessons_to_complete` those still pending that the bundle now marks
+     * completed (see CompleteImportedLessonAction).
      *
-     * @return array{bundle: array<string, array<int|string, mixed>>, row_counts: array<string, int>, errors: array<int, array{file: string, line: int, message: string}>, skipped: array<int, array{file: string, line: int, message: string}>, report: array<int, array{type: string, file: string, line: int, ref: string, name: string, email: string, instructor_ref: string, outcome: string}>, lesson_summaries_to_fill: int}
+     * @return array{bundle: array<string, array<int|string, mixed>>, row_counts: array<string, int>, errors: array<int, array{file: string, line: int, message: string}>, skipped: array<int, array{file: string, line: int, message: string}>, report: array<int, array{type: string, file: string, line: int, ref: string, name: string, email: string, instructor_ref: string, outcome: string}>, lesson_summaries_to_fill: int, lessons_to_complete: int}
      */
     public function checkBundle(string $zipPath): array
     {
@@ -126,6 +131,7 @@ class ImportService extends BaseService
             'skipped' => $this->validateImportBundle->skipped(),
             'report' => $this->validateImportBundle->report(),
             'lesson_summaries_to_fill' => $this->fillImportedLessonSummary->countFillable($bundle['diary']),
+            'lessons_to_complete' => $this->completeImportedLesson->countCompletable($bundle['diary'], $this->existingInstructorIds($bundle['diary'])),
         ];
     }
 
@@ -471,6 +477,28 @@ class ImportService extends BaseService
     }
 
     /**
+     * Instructor ids for the diary's instructor refs that already exist
+     * (imported or linked earlier, or DRIVE-<id>), keyed by ref.
+     *
+     * @param  array<int, array<string, string|int>>  $rows
+     * @return array<string, int>
+     */
+    protected function existingInstructorIds(array $rows): array
+    {
+        $ids = [];
+
+        foreach (array_unique(array_map(fn (array $row) => trim((string) ($row['instructor_ref'] ?? '')), $rows)) as $ref) {
+            $id = $ref !== '' ? $this->resolveInstructorId($ref) : null;
+
+            if ($id !== null) {
+                $ids[$ref] = $id;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
      * Resolve an instructor from a CRM instructor ID, a DRIVE-<id> ref or an import instructor_ref.
      */
     public function resolveInstructorId(string $idOrRef): ?int
@@ -528,10 +556,11 @@ class ImportService extends BaseService
         );
         $counts['lessons_skipped'] = count($sections['diary']) - count($diaryRows);
 
-        [$lessons, $blocks, $dates, $summariesFilled, $duplicates] = $this->importDiary($instructor, $diaryRows, $run);
+        [$lessons, $blocks, $dates, $summariesFilled, $duplicates, $lessonsCompleted] = $this->importDiary($instructor, $diaryRows, $run);
         $counts['lessons'] = $lessons;
         $counts['lesson_summaries_filled'] = $summariesFilled;
         $counts['lessons_already_in_diary'] = $duplicates;
+        $counts['lessons_marked_completed'] = $lessonsCompleted;
         $counts['diary_blocks'] = $blocks;
 
         foreach ($sections['finances'] as $row) {
@@ -561,10 +590,11 @@ class ImportService extends BaseService
      * A new lesson row is skipped when the student already has a lesson at
      * that date + start time (e.g. a linked Drive+ pupil, or a lesson the old
      * system re-created under a new ref). The imported order is only created
-     * once a lesson is actually added.
+     * once a lesson is actually added. A still-pending imported lesson the
+     * row now marks completed is completed quietly (CompleteImportedLessonAction).
      *
      * @param  array<int, array<string, string|int>>  $rows
-     * @return array{0: int, 1: int, 2: array<string, true>, 3: int, 4: int} lessons, blocks, touched dates, summaries filled, duplicates skipped
+     * @return array{0: int, 1: int, 2: array<string, true>, 3: int, 4: int, 5: int} lessons, blocks, touched dates, summaries filled, duplicates skipped, lessons completed
      */
     protected function importDiary(Instructor $instructor, array $rows, ImportRun $run): array
     {
@@ -581,6 +611,10 @@ class ImportService extends BaseService
         $dates = [];
         $summariesFilled = 0;
         $duplicates = 0;
+        $lessonsCompleted = 0;
+        /** @var array<int, true> $completedOrderIds */
+        $completedOrderIds = [];
+        $completionCandidates = $this->completeImportedLesson->candidatesFor($instructor);
 
         /** @var array<int, Order> $orders */
         $orders = [];
@@ -593,6 +627,14 @@ class ImportService extends BaseService
             $lessonNumber = 0;
 
             $summariesFilled += (int) ($this->fillImportedLessonSummary)($row);
+
+            $completedLesson = ($this->completeImportedLesson)($row, $completionCandidates);
+
+            if ($completedLesson) {
+                $lessonsCompleted++;
+                $completedOrderIds[$completedLesson->order_id] = true;
+                $dates[$completedLesson->date->toDateString()] = true;
+            }
 
             if ($studentRef !== '') {
                 $student = Student::query()->findOrFail(
@@ -642,7 +684,13 @@ class ImportService extends BaseService
             ($this->recalculateStudentLessonNumbers)($order->student_id);
         }
 
-        return [$lessons, $blocks, $dates, $summariesFilled, $duplicates];
+        $syncedOrderIds = array_map(fn (Order $order) => $order->id, $orders);
+
+        foreach (array_diff(array_keys($completedOrderIds), $syncedOrderIds) as $orderId) {
+            ($this->syncImportedOrder)(Order::query()->findOrFail($orderId));
+        }
+
+        return [$lessons, $blocks, $dates, $summariesFilled, $duplicates, $lessonsCompleted];
     }
 
     /**
