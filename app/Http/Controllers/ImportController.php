@@ -74,6 +74,8 @@ class ImportController extends Controller
             'row_counts' => $result['row_counts'],
             'errors' => $result['errors'],
             'skipped' => $result['skipped'],
+            'report' => $result['report'],
+            'lesson_summaries_to_fill' => $result['lesson_summaries_to_fill'],
         ]);
     }
 

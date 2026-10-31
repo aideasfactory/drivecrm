@@ -17,8 +17,9 @@ class SetStudentCashPaymentsAction
     ) {}
 
     /**
-     * Turn cash (alternative) payments on or off for a pupil. Off by default
-     * (the importer never turns it on). Existing orders are left untouched.
+     * Turn cash (alternative) payments on or off for a pupil. Off by default;
+     * the importer turns it on for every student it creates. Existing orders
+     * are left untouched.
      *
      * Turning it off puts unpaid lessons back in the normal card flow: any
      * still-due payment an instructor had confirmed as paid by an alternative
