@@ -85,6 +85,7 @@ interface CheckResult {
     skipped: BundleError[]
     report: ReportRow[]
     lesson_summaries_to_fill: number
+    lessons_to_complete: number
 }
 
 const OUTCOMES: ReportOutcome[] = ['new', 'already_imported', 'existing_account', 'other_account', 'invalid_email']
@@ -125,7 +126,7 @@ const FILE_LABELS: Record<string, string> = {
 
 const TOTAL_LABELS: Record<string, string> = {
     instructors_created: 'Instructors created',
-    instructors_linked: 'Existing instructors linked',
+    instructors_linked: 'Existing instructors (already imported or on Drive+, not changed)',
     locations: 'Coverage sectors added',
     students: 'Students created',
     students_linked: 'Existing Drive+ pupils linked (new lessons added)',
@@ -134,6 +135,7 @@ const TOTAL_LABELS: Record<string, string> = {
     lessons_skipped: 'Diary lessons skipped (student skipped)',
     lesson_summaries_filled: 'Summaries added to lessons imported earlier',
     lessons_already_in_diary: 'Lessons skipped (pupil already has a lesson at that time)',
+    lessons_marked_completed: 'Lessons imported earlier now marked completed',
     diary_blocks: 'Unavailable diary blocks',
     finances: 'Finance entries',
     receipts: 'Receipts attached',
@@ -267,6 +269,7 @@ const asCheckResult = (data: unknown): CheckResult | null => {
         skipped?: unknown
         report?: unknown
         lesson_summaries_to_fill?: unknown
+        lessons_to_complete?: unknown
     }
 
     if (typeof body.valid !== 'boolean') {
@@ -284,6 +287,7 @@ const asCheckResult = (data: unknown): CheckResult | null => {
         report: Array.isArray(body.report) ? (body.report as ReportRow[]) : [],
         lesson_summaries_to_fill:
             typeof body.lesson_summaries_to_fill === 'number' ? body.lesson_summaries_to_fill : 0,
+        lessons_to_complete: typeof body.lessons_to_complete === 'number' ? body.lessons_to_complete : 0,
     }
 }
 
@@ -633,6 +637,19 @@ const breadcrumbs = [{ title: 'Data Import' }]
                         </AlertDescription>
                     </Alert>
 
+                    <Alert v-if="checkResult && checkResult.lessons_to_complete > 0">
+                        <CheckCircle2 class="h-4 w-4" />
+                        <AlertTitle>
+                            {{ checkResult.lessons_to_complete }} lesson(s) will be marked completed
+                        </AlertTitle>
+                        <AlertDescription>
+                            Lessons imported on an earlier upload that are still waiting for sign-off,
+                            but which this file now marks completed (same date, same instructor, before
+                            today). They're completed quietly — no emails, no payouts. Lessons booked
+                            through Drive+ are never included.
+                        </AlertDescription>
+                    </Alert>
+
                     <!-- Skipped: students already on Drive+ -->
                     <div v-if="checkResult && checkResult.skipped.length > 0" class="flex flex-col gap-2">
                         <Alert>
@@ -787,7 +804,8 @@ const breadcrumbs = [{ title: 'Data Import' }]
                         This creates real instructor and student accounts, diary
                         entries and finance records. It can't be undone from here.
                         New students have alternative payments (e.g. cash) turned on.
-                        Records already imported or already on Drive+ are not changed.
+                        Records already imported or already on Drive+ are not changed, except
+                        empty lesson summaries and imported lessons the file now marks completed.
                         No emails will be sent.
                     </DialogDescription>
                 </DialogHeader>
