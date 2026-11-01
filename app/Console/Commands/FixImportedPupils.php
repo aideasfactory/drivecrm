@@ -18,14 +18,14 @@ class FixImportedPupils extends Command
     protected $signature = 'import:fix-pupils
         {--dry-run : Count what would change without changing anything}
         {--by= : Email of the owner to record as turning alternative payments on (default: head office)}
-        {--limit= : Only change this many records (the next batch needing a change) and list every change made}';
+        {--limit= : Only change this many pupils (the next batch needing a change) and list every change made}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'One-off clean-up of imported rows: turn alternative payments on for every imported pupil and normalise UK phone numbers to 07… with no spaces — restores a lost leading 0, converts +44/44, strips spaces (pupils and instructors). Pupils already on Drive+ are not touched. Safe to re-run.';
+    protected $description = 'One-off clean-up of imported pupils: turn alternative payments on for every imported pupil. Nothing else is changed (phone numbers are left alone). Pupils already on Drive+ are not touched. Safe to re-run.';
 
     public function handle(ImportService $importService): int
     {
@@ -59,9 +59,6 @@ class FixImportedPupils extends Command
         $this->table(['', 'Count'], [
             ['Imported pupils', $counts['pupils']],
             ['Alternative payments turned on', $counts['alternative_payments_turned_on']],
-            ['Pupil phone numbers fixed', $counts['pupil_phones_fixed']],
-            ['Imported instructors', $counts['instructors']],
-            ['Instructor phone numbers fixed', $counts['instructor_phones_fixed']],
         ]);
 
         if (($dryRun || $limit !== null) && $counts['examples'] !== []) {

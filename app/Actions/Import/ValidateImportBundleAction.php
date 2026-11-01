@@ -9,6 +9,7 @@ use App\Enums\PdiStatus;
 use App\Enums\TransmissionType;
 use App\Models\ImportMapping;
 use App\Models\Instructor;
+use App\Models\Student;
 use App\Models\User;
 use App\Support\ImportValues;
 
@@ -24,6 +25,20 @@ class ValidateImportBundleAction
     /** @var array<int, array{file: string, line: int, message: string}> */
     protected array $skipped = [];
 
+    /** Report outcomes: what the import will do with an instructor / student row. */
+    public const OUTCOME_NEW = 'new';
+
+    public const OUTCOME_ALREADY_IMPORTED = 'already_imported';
+
+    public const OUTCOME_EXISTING_ACCOUNT = 'existing_account';
+
+    public const OUTCOME_INVALID_EMAIL = 'invalid_email';
+
+    public const OUTCOME_OTHER_ACCOUNT = 'other_account';
+
+    /** @var array<int, array{type: string, file: string, line: int, ref: string, name: string, email: string, instructor_ref: string, outcome: string}> */
+    protected array $report = [];
+
     /**
      * Check every row of a bundle before anything is written.
      *
@@ -31,7 +46,8 @@ class ValidateImportBundleAction
      * (import_mappings). Rows whose ref was already imported are not
      * re-checked against the database — the importer skips them. Some rows
      * are not errors but are left out of the import and listed in skipped():
-     * students with an invalid email or one already on Drive+ (plus their
+     * students with an invalid email or one on a Drive+ account that isn't a
+     * pupil, e.g. an instructor (plus their
      * diary rows), and coverage rows with an invalid postcode sector.
      *
      * @param  array<string, array<int|string, mixed>>  $bundle  From ReadImportBundleAction
@@ -41,6 +57,7 @@ class ValidateImportBundleAction
     {
         $this->errors = [];
         $this->skipped = [];
+        $this->report = [];
 
         $instructorRefs = $this->validateInstructors($bundle['instructors']) + $this->driveInstructorRefs($bundle);
         $this->validateCoverage($bundle['coverage'], $instructorRefs);
@@ -82,6 +99,18 @@ class ValidateImportBundleAction
                 continue;
             }
             $refs[$ref] = true;
+
+            // An email on an account without an instructor profile is an error, not a report row.
+            $outcome = match (true) {
+                isset($mappedRefs[$ref]) => self::OUTCOME_ALREADY_IMPORTED,
+                ($existingUsers[$email] ?? null) === true => self::OUTCOME_EXISTING_ACCOUNT,
+                isset($existingUsers[$email]) => null,
+                default => self::OUTCOME_NEW,
+            };
+
+            if ($outcome !== null) {
+                $this->addToReport('instructor', 'instructors.csv', $row, $ref, $this->value($row, 'name'), $email, $ref, $outcome);
+            }
 
             if (isset($emails[$email])) {
                 $this->fail('instructors.csv', $row, "Email '{$email}' appears more than once.");
@@ -155,6 +184,7 @@ class ValidateImportBundleAction
         $emails = [];
         $mappedRefs = $this->mappedRefs(ImportMapping::ENTITY_STUDENT);
         $existingUsers = $this->existingUsersByEmail($rows);
+        $existingStudents = $this->existingStudentEmails($rows);
 
         foreach ($rows as $row) {
             if (! $this->requireFields('students.csv', $row, ['student_ref', 'instructor_ref', 'first_name', 'surname', 'email'])) {
@@ -178,6 +208,24 @@ class ValidateImportBundleAction
             }
             $emails[$email] = true;
 
+            // Same order as ImportStudentAction: a mapped ref wins over everything else.
+            $this->addToReport(
+                'student',
+                'students.csv',
+                $row,
+                $ref,
+                trim("{$this->value($row, 'first_name')} {$this->value($row, 'surname')}"),
+                $email,
+                $this->value($row, 'instructor_ref'),
+                match (true) {
+                    isset($mappedRefs[$ref]) => self::OUTCOME_ALREADY_IMPORTED,
+                    ! filter_var($email, FILTER_VALIDATE_EMAIL) => self::OUTCOME_INVALID_EMAIL,
+                    isset($existingStudents[$email]) => self::OUTCOME_EXISTING_ACCOUNT,
+                    isset($existingUsers[$email]) => self::OUTCOME_OTHER_ACCOUNT,
+                    default => self::OUTCOME_NEW,
+                },
+            );
+
             if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 $this->skip('students.csv', $row, "Invalid email '{$email}'. Student and their diary lessons will be skipped.");
 
@@ -191,8 +239,9 @@ class ValidateImportBundleAction
 
             $this->checkEnum('students.csv', $row, 'status', self::STUDENT_STATUSES);
 
-            if (! isset($mappedRefs[$ref]) && isset($existingUsers[$email])) {
-                $this->skip('students.csv', $row, "Email '{$email}' is already on Drive+. Student and their diary lessons will be skipped.");
+            // An existing pupil is linked (their new diary lessons are added); any other account is skipped.
+            if (! isset($mappedRefs[$ref]) && isset($existingUsers[$email]) && ! isset($existingStudents[$email])) {
+                $this->skip('students.csv', $row, "Email '{$email}' belongs to a Drive+ account that isn't a pupil (e.g. an instructor). Student and their diary lessons will be skipped.");
             }
         }
 
@@ -436,6 +485,22 @@ class ValidateImportBundleAction
     }
 
     /**
+     * Every instructor and student row from the last check with what the
+     * import will do with it: create it (`new`), skip it because its ref was
+     * imported on an earlier run (`already_imported`), link it because the
+     * email is already on Drive+ (`existing_account`: the account is not
+     * changed; a pupil's new diary lessons are added), skip a student whose
+     * email is on a non-pupil account (`other_account`), or skip it for an
+     * invalid email (`invalid_email`, students only).
+     *
+     * @return array<int, array{type: string, file: string, line: int, ref: string, name: string, email: string, instructor_ref: string, outcome: string}>
+     */
+    public function report(): array
+    {
+        return $this->report;
+    }
+
+    /**
      * Existing accounts for the rows' emails, loaded in chunks so a large
      * bundle is checked in a handful of queries rather than one per row.
      *
@@ -459,6 +524,36 @@ class ValidateImportBundleAction
                 ->get(['id', 'email'])
                 ->each(function (User $user) use (&$existing): void {
                     $existing[strtolower($user->email)] = (bool) $user->instructor_exists;
+                });
+        }
+
+        return $existing;
+    }
+
+    /**
+     * Emails (lowercased) of the rows that belong to an existing pupil
+     * (soft-deleted pupils excluded), loaded in chunks like existingUsersByEmail().
+     *
+     * @param  array<int, array<string, string|int>>  $rows
+     * @return array<string, true>
+     */
+    protected function existingStudentEmails(array $rows): array
+    {
+        $emails = collect($rows)
+            ->map(fn (array $row) => strtolower($this->value($row, 'email')))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $existing = [];
+
+        foreach ($emails->chunk(1000) as $chunk) {
+            Student::query()
+                ->join('users', 'users.id', '=', 'students.user_id')
+                ->whereIn('users.email', $chunk->all())
+                ->pluck('users.email')
+                ->each(function (string $email) use (&$existing): void {
+                    $existing[strtolower($email)] = true;
                 });
         }
 
@@ -494,6 +589,31 @@ class ValidateImportBundleAction
             'file' => $file,
             'line' => (int) ($row['_line'] ?? 0),
             'message' => $message,
+        ];
+    }
+
+    /**
+     * @param  array<string, string|int>  $row
+     */
+    protected function addToReport(
+        string $type,
+        string $file,
+        array $row,
+        string $ref,
+        string $name,
+        string $email,
+        string $instructorRef,
+        string $outcome,
+    ): void {
+        $this->report[] = [
+            'type' => $type,
+            'file' => $file,
+            'line' => (int) ($row['_line'] ?? 0),
+            'ref' => $ref,
+            'name' => $name,
+            'email' => $email,
+            'instructor_ref' => $instructorRef,
+            'outcome' => $outcome,
         ];
     }
 

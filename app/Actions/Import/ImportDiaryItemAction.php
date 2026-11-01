@@ -24,7 +24,9 @@ class ImportDiaryItemAction
      * - With a student + imported order: calendar item + lesson on that order.
      *   Past rows (or status `completed`) go straight in as completed — no
      *   sign-off pipeline, no payout, no emails. Future rows are booked and
-     *   pending, ready to sign off like any other lesson.
+     *   pending, ready to sign off like any other lesson. The lesson summary
+     *   is `summary`, or `notes` when summary is blank; notes also stay on
+     *   the calendar item.
      * - Without a student: an unavailable block carrying the row's notes.
      * - `cancelled` rows and rows already imported are skipped (returns null).
      *
@@ -94,7 +96,7 @@ class ImportDiaryItemAction
             'calendar_item_id' => $item->id,
             'status' => $isCompleted ? LessonStatus::COMPLETED : LessonStatus::PENDING,
             'completed_at' => $isCompleted ? $date->setTimeFromTimeString($endTime) : null,
-            'summary' => $this->nullable($row, 'summary'),
+            'summary' => FillImportedLessonSummaryAction::summaryText($row),
             'mileage' => $mileage !== null ? (int) $mileage : null,
             'student_lesson_number' => $lessonNumber,
         ]);
@@ -103,6 +105,22 @@ class ImportDiaryItemAction
         ImportMapping::record($run, ImportMapping::ENTITY_LESSON, $ref, $lesson->id);
 
         return $item;
+    }
+
+    /**
+     * Whether the student already has a (non-cancelled) lesson at the row's
+     * date and start time, on any order.
+     *
+     * @param  array<string, string|int>  $row
+     */
+    public function studentHasLessonAt(int $studentId, array $row): bool
+    {
+        return Lesson::query()
+            ->whereHas('order', fn ($query) => $query->where('student_id', $studentId))
+            ->where('date', ImportValues::date((string) $row['date'])->toDateString())
+            ->where('start_time', ImportValues::time((string) $row['start_time']))
+            ->where('status', '!=', LessonStatus::CANCELLED)
+            ->exists();
     }
 
     /**

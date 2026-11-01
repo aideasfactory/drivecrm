@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Import;
 
+use App\Actions\Student\SetStudentCashPaymentsAction;
 use App\Enums\UserRole;
 use App\Models\ImportMapping;
 use App\Models\ImportRun;
@@ -14,18 +15,27 @@ use App\Support\ImportValues;
 
 class ImportStudentAction
 {
+    public function __construct(
+        protected SetStudentCashPaymentsAction $setStudentCashPayments,
+    ) {}
+
     /**
      * Create the student for a students.csv row, assigned to the instructor.
+     * Phone numbers are normalised (ImportValues::ukPhone) and alternative
+     * payments are turned on, logged as changed by whoever started the run.
      *
      * No email is sent: `imported_at` is set and `welcome_email_pending = true`.
      * `import:send-welcome-emails` later issues a temporary password and sends
      * the usual student welcome email.
      *
-     * A student with an invalid email, or one that already has a Drive+
-     * account, is skipped (student null) — the existing account is left alone.
+     * A student already imported (ref mapped) is returned untouched. An email
+     * that already belongs to a Drive+ pupil is linked to that pupil (mapping
+     * `linked`) so their new diary lessons can be added — the account itself
+     * is not changed. An invalid email, or one on an account that isn't a
+     * pupil (e.g. an instructor), is skipped (student null).
      *
      * @param  array<string, string|int>  $row
-     * @return array{student: Student|null, created: bool}
+     * @return array{student: Student|null, created: bool, linked: bool}
      */
     public function __invoke(Instructor $instructor, array $row, ImportRun $run): array
     {
@@ -33,13 +43,27 @@ class ImportStudentAction
 
         $mappedId = ImportMapping::modelIdFor(ImportMapping::ENTITY_STUDENT, $ref);
         if ($mappedId !== null) {
-            return ['student' => Student::query()->findOrFail($mappedId), 'created' => false];
+            return ['student' => Student::query()->findOrFail($mappedId), 'created' => false, 'linked' => false];
         }
 
         $email = strtolower((string) $row['email']);
 
-        if (! filter_var($email, FILTER_VALIDATE_EMAIL) || User::query()->where('email', $email)->exists()) {
-            return ['student' => null, 'created' => false];
+        if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return ['student' => null, 'created' => false, 'linked' => false];
+        }
+
+        $existingUser = User::query()->where('email', $email)->first();
+
+        if ($existingUser) {
+            $existingStudent = Student::query()->where('user_id', $existingUser->id)->first();
+
+            if (! $existingStudent) {
+                return ['student' => null, 'created' => false, 'linked' => false];
+            }
+
+            ImportMapping::record($run, ImportMapping::ENTITY_STUDENT, $ref, $existingStudent->id, ImportMapping::ACTION_LINKED);
+
+            return ['student' => $existingStudent, 'created' => false, 'linked' => true];
         }
 
         $firstName = (string) $row['first_name'];
@@ -72,9 +96,11 @@ class ImportStudentAction
             'inactive_reason' => $status === 'active' ? null : $this->nullable($row, 'inactive_reason'),
         ]);
 
+        ($this->setStudentCashPayments)($student, true, $run->user);
+
         ImportMapping::record($run, ImportMapping::ENTITY_STUDENT, $ref, $student->id);
 
-        return ['student' => $student, 'created' => true];
+        return ['student' => $student, 'created' => true, 'linked' => false];
     }
 
     /**

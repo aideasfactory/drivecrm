@@ -62,7 +62,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -257,6 +256,8 @@ class InstructorController extends Controller
         $displayOnboardingComplete = $instructor->onboarding_complete
             || in_array((int) $instructor->id, $bookingInstructorIds, true);
 
+        $pendingDeletion = $this->instructorService->getPendingInstructorDeletion($instructor);
+
         return Inertia::render('Instructors/Show', [
             'instructor' => [
                 'id' => $instructor->id,
@@ -282,6 +283,12 @@ class InstructorController extends Controller
                 'welcome_email_pending' => (bool) $instructor->user->welcome_email_pending,
                 'app_onboarding_step' => $instructor->app_onboarding_step,
                 'app_onboarding_complete' => $instructor->hasCompletedAppOnboarding(),
+                'pending_deletion' => $pendingDeletion ? [
+                    'scheduled_for' => $pendingDeletion->scheduled_for->toIso8601String(),
+                    'requested_at' => $pendingDeletion->requested_at->toIso8601String(),
+                    'staff_requested' => $pendingDeletion->isStaffRequested(),
+                ] : null,
+                'upcoming_lessons_count' => $this->instructorService->countUpcomingLessons($instructor),
             ],
             'tab' => $tab,
             'subtab' => request()->query('subtab', 'summary'),
@@ -1110,29 +1117,31 @@ class InstructorController extends Controller
     }
 
     /**
-     * Handle instructor account deletion request.
+     * Schedule an instructor for deletion from the CRM.
+     *
+     * They are suspended and signed out now; the nightly deletion job
+     * anonymises and archives them after the 30-day grace period, keeping
+     * lesson, order and payout history. The owner can cancel until then.
      */
-    public function requestDeletion(Instructor $instructor): JsonResponse
+    public function destroy(Request $request, Instructor $instructor): RedirectResponse
     {
-        $adminEmail = config('mail.admin_address', config('mail.from.address'));
-        $instructorName = $instructor->user->name;
-        $instructorEmail = $instructor->user->email;
+        $deletionRequest = $this->instructorService->scheduleInstructorDeletion($instructor, $request->user());
 
-        Mail::raw(
-            "Instructor Account Deletion Request\n\n".
-            "Name: {$instructorName}\n".
-            "Email: {$instructorEmail}\n".
-            "Instructor ID: {$instructor->id}\n\n".
-            'This instructor has requested their account be deleted. Please review and process this request.',
-            function ($message) use ($adminEmail, $instructorName) {
-                $message->to($adminEmail)
-                    ->subject("Account Deletion Request: {$instructorName}");
-            }
-        );
+        return redirect()
+            ->route('instructors.show', $instructor)
+            ->with('success', "{$instructor->user->name} will be deleted on {$deletionRequest->scheduled_for->format('j M Y')}.");
+    }
 
-        return response()->json([
-            'message' => 'Account deletion request has been submitted. An administrator will review your request.',
-        ]);
+    /**
+     * Cancel a staff-scheduled instructor deletion during the grace period.
+     */
+    public function cancelDeletion(Request $request, Instructor $instructor): RedirectResponse
+    {
+        if (! $this->instructorService->cancelInstructorDeletion($instructor, $request->user())) {
+            return back()->with('error', 'There is no scheduled deletion to cancel.');
+        }
+
+        return back()->with('success', "Deletion cancelled. {$instructor->user->name} has been restored.");
     }
 
     /**

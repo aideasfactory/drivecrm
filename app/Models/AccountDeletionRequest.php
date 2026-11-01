@@ -18,8 +18,10 @@ class AccountDeletionRequest extends Model
      */
     protected $fillable = [
         'user_id',
+        'requested_by_user_id',
         'status',
         'reason',
+        'previous_instructor_status',
         'requested_at',
         'scheduled_for',
         'cancelled_at',
@@ -51,6 +53,22 @@ class AccountDeletionRequest extends Model
     }
 
     /**
+     * Get the staff member who scheduled this deletion from the CRM (null when the user asked themselves).
+     */
+    public function requestedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'requested_by_user_id');
+    }
+
+    /**
+     * Whether staff scheduled this deletion from the CRM.
+     */
+    public function isStaffRequested(): bool
+    {
+        return $this->requested_by_user_id !== null;
+    }
+
+    /**
      * Scope to pending requests only.
      *
      * @param  Builder<AccountDeletionRequest>  $query
@@ -70,5 +88,16 @@ class AccountDeletionRequest extends Model
     public function scopeDue(Builder $query): Builder
     {
         return $query->pending()->where('scheduled_for', '<=', now());
+    }
+
+    /**
+     * Scope to requests scheduled by staff from the CRM.
+     *
+     * @param  Builder<AccountDeletionRequest>  $query
+     * @return Builder<AccountDeletionRequest>
+     */
+    public function scopeStaffRequested(Builder $query): Builder
+    {
+        return $query->whereNotNull('requested_by_user_id');
     }
 }

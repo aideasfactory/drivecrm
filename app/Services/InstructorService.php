@@ -2,12 +2,15 @@
 
 namespace App\Services;
 
+use App\Actions\Account\GetPendingAccountDeletionRequestAction;
 use App\Actions\Calendar\CancelBookingAction;
 use App\Actions\Calendar\DetectCalendarClashesAction;
 use App\Actions\FetchPostcodeCoordinatesAction;
 use App\Actions\FindInstructorsByPostcodeSectorAction;
 use App\Actions\Instructor\BulkImportInstructorsAction;
+use App\Actions\Instructor\CancelInstructorDeletionAction;
 use App\Actions\Instructor\CompleteAppOnboardingStepAction;
+use App\Actions\Instructor\CountInstructorUpcomingLessonsAction;
 use App\Actions\Instructor\CreateCalendarItemAction;
 use App\Actions\Instructor\CreateInstructorFinanceAction;
 use App\Actions\Instructor\CreateInstructorLocationAction;
@@ -40,6 +43,7 @@ use App\Actions\Instructor\Mileage\GetMileageLogsAction;
 use App\Actions\Instructor\Mileage\UpdateMileageLogAction;
 use App\Actions\Instructor\ReplaceInstructorLocationsAction;
 use App\Actions\Instructor\ResetInstructorStripeConnectionAction;
+use App\Actions\Instructor\ScheduleInstructorDeletionAction;
 use App\Actions\Instructor\SendInstructorWelcomeEmailAction;
 use App\Actions\Instructor\SendStripeSetupLinkAction;
 use App\Actions\Instructor\SetInstructorPackageActiveAction;
@@ -62,6 +66,7 @@ use App\Enums\LessonCancellationReason;
 use App\Enums\MessageType;
 use App\Enums\RecurrencePattern;
 use App\Enums\UserRole;
+use App\Models\AccountDeletionRequest;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
 use App\Models\InstructorFinance;
@@ -125,6 +130,10 @@ class InstructorService extends BaseService
         protected SendStripeSetupLinkAction $sendStripeSetupLink,
         protected UploadInstructorProfilePictureAction $uploadProfilePicture,
         protected DeleteInstructorProfilePictureAction $deleteProfilePicture,
+        protected ScheduleInstructorDeletionAction $scheduleInstructorDeletion,
+        protected CancelInstructorDeletionAction $cancelInstructorDeletion,
+        protected CountInstructorUpcomingLessonsAction $countUpcomingLessons,
+        protected GetPendingAccountDeletionRequestAction $getPendingDeletionRequest,
         protected DetectCalendarClashesAction $detectCalendarClashes,
         protected UpdateLessonMileageAction $updateLessonMileage,
         protected GetInstructorFinancesAction $getInstructorFinances,
@@ -1041,6 +1050,54 @@ class InstructorService extends BaseService
     public function deleteProfilePicture(Instructor $instructor): Instructor
     {
         return ($this->deleteProfilePicture)($instructor);
+    }
+
+    /**
+     * Schedule an instructor for deletion (30-day grace period) on staff request.
+     */
+    public function scheduleInstructorDeletion(Instructor $instructor, User $requestedBy): AccountDeletionRequest
+    {
+        $deletionRequest = ($this->scheduleInstructorDeletion)($instructor, $requestedBy);
+
+        $this->invalidateStudentCache($instructor);
+
+        return $deletionRequest;
+    }
+
+    /**
+     * Cancel a staff-scheduled instructor deletion. Returns false when there is none pending.
+     */
+    public function cancelInstructorDeletion(Instructor $instructor, User $cancelledBy): bool
+    {
+        $deletionRequest = $this->getPendingInstructorDeletion($instructor);
+
+        if (! $deletionRequest || ! $deletionRequest->isStaffRequested()) {
+            return false;
+        }
+
+        ($this->cancelInstructorDeletion)($instructor, $deletionRequest, $cancelledBy);
+
+        $this->invalidateStudentCache($instructor);
+
+        return true;
+    }
+
+    /**
+     * The instructor's pending deletion request (staff or self-service), if any.
+     */
+    public function getPendingInstructorDeletion(Instructor $instructor): ?AccountDeletionRequest
+    {
+        $instructor->loadMissing('user');
+
+        return ($this->getPendingDeletionRequest)($instructor->user);
+    }
+
+    /**
+     * Count the instructor's booked lessons from today onwards.
+     */
+    public function countUpcomingLessons(Instructor $instructor): int
+    {
+        return ($this->countUpcomingLessons)($instructor);
     }
 
     /**

@@ -280,6 +280,8 @@ class BuildImportTemplateAction
                 'status' => $list(ValidateImportBundleAction::DIARY_STATUSES).' Default: completed for past dates, booked otherwise. Future entries cannot be completed. Cancelled entries are skipped.',
                 'price' => 'Pounds, e.g. 35.00.',
                 'mileage' => 'Whole miles.',
+                'summary' => 'What was covered — the lesson summary. If blank, notes is used.',
+                'notes' => 'Kept on the diary entry; also the lesson summary when summary is blank. For a blocked-out slot, the reason shown.',
             ],
             'finances' => [
                 'finance_ref' => 'Your unique ID for the finance entry.',
