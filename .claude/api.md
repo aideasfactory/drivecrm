@@ -1231,6 +1231,45 @@ Returns the authenticated instructor's students grouped by status, plus a recent
 
 ---
 
+#### `DELETE /api/v1/instructor/pupils/{student}`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Removes one of the authenticated instructor's own pupils from their list. This **only unassigns** the pupil (`students.instructor_id` → `null`). The pupil record, user account, orders, payments, lessons (past or future) and pickup points are **not** deleted or changed. The removal is written to the pupil's activity log (`Student removed from instructor {name}`, category `student`).
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `student` | integer | The pupil's student record ID (`id` from `GET /instructor/students`) |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "message": "Pupil removed"
+}
+```
+
+**Error Responses:**
+
+| Status | When | Body |
+|--------|------|------|
+| `401` | Missing / invalid token | `{"message": "Unauthenticated."}` |
+| `403` | Caller is not an instructor | `{"message": "You do not teach this pupil."}` |
+| `403` | The pupil is not assigned to the caller (another instructor's pupil, or already unassigned) | `{"message": "This action is unauthorized."}` |
+| `404` | No student with that ID (or the profile has been deleted) | `{"message": "..."}` |
+| `422` | The pupil still has open lessons with this instructor | `{"message": "This pupil still has lessons with you that are not signed off or cancelled. Sign off or cancel them before removing the pupil."}` |
+
+> **Open lessons block removal.** "Open" = a lesson with this instructor in status `draft` or `pending`, on a `pending` or `active` order for this pupil, **whatever its date**: future, banked (no date), or past but not yet signed off. Past lessons count because sign-off needs the pupil to still be assigned to the instructor; removing first would leave them unsignable and their payout stuck. Completed and cancelled lessons never block, nor do lessons on completed, cancelled or expired orders. Nothing is cancelled, signed off or refunded automatically — the instructor must sign off or cancel those lessons first, then retry.
+
+> **App behaviour:** after `200`, drop the pupil from the local list / refetch `GET /instructor/students`. Show the `message` from a `422` as-is.
+
+> **Relationship to `DELETE /api/v1/students/{student}`:** both use the same student lookup, `StudentPolicy@delete` ownership check and soft remove (`StudentService::remove()` → `RemoveStudentFromInstructorAction`, same activity log entry). This endpoint differs only in that it is instructor-only, returns `422` while open lessons remain, and returns `{"message": "Pupil removed"}` instead of the student resource. **The instructor app should use this endpoint** to remove pupils.
+
+---
+
 #### `GET /api/v1/instructor/lessons`
 
 **Auth required:** Yes (Bearer token — instructor only)
@@ -4259,6 +4298,8 @@ When the student has a linked user account, `first_name`/`surname` and `email` c
 **Auth required:** Yes (Bearer token — student or instructor)
 
 Removes a student from their assigned instructor. This is a **soft remove** — the student record and user account are preserved, but the `instructor_id` is set to `null`. Access is controlled by the same policy.
+
+> **Instructors:** use `DELETE /api/v1/instructor/pupils/{student}` instead. It runs the same remove logic but also blocks (`422`) while the pupil has open lessons (not signed off or cancelled). This endpoint has no such check and is kept unchanged for existing callers (including a student detaching themselves).
 
 **URL Parameters:**
 
@@ -8078,6 +8119,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-10-27 | **Banked lessons ("Rebook later (keep in package)").** New `POST /instructor/calendar/items/{calendarItem}/bank` takes a booked lesson (or it + later ones, `scope=future`) out of the diary without cancelling it: the pupil keeps it in their booking at the price paid; no refund, charge or payout; open weekly invoice voided; the slot reopens. New `GET /instructor/banked-lessons`, `POST /instructor/lessons/{lesson}/rebook`, `POST /instructor/lessons/{lesson}/cancel-banked`. **New additive fields:** `can_bank` + `package_name` on every calendar item; `is_banked` + `banked_at` on `GET /students/{student}/lessons` and `/lessons/{lesson}`. `banked_expires_at` on student lessons and `expires_at` on banked lessons: banked lessons not rebooked within 12 months are cancelled automatically (daily `lessons:expire-banked`, reason `banked_expired` — system only, not in the reasons list) and paid ones go to Head Office to refund. **New `card_status` value `banked`** (no `date` / `start_time` / `end_time`) — treat unknown card statuses safely. Signing off a banked lesson returns 422 `This lesson is waiting to be rebooked, so it can't be signed off yet.` **App action:** see `.claude/tasks/app-developer-banked-lessons.md`. | Calendar Items (bank — NEW, `can_bank`, `package_name`), Instructor Banked Lessons (NEW), Lessons (rebook, cancel-banked — NEW), Student Lessons (`is_banked`, `banked_at`, `card_status`), Sign-off |
 | 2026-10-28 | **Instructor-booked clashes.** New additive field `provisional_handled_by` (`instructor` \| `drive_team` \| `null`) next to every `is_provisional`: `GET /instructor/calendar/items` (and every calendar item response), `GET /instructor/lessons/{date}`, `GET /instructor/lessons?from=&to=`, `GET /students/{student}/lessons`, `GET /students/{student}/lessons/{lesson}` and the sign-off response. `instructor` when the instructor booked the clash themselves (order `source` = instructor app, or CRM booked by an instructor user); they rearrange it with the pupil. Booking, payment and the provisional rules are unchanged. **App action:** see `.claude/tasks/app-developer-provisional-lessons.md` ("Instructor-booked clashes"). | Calendar Items, Instructor Day/Range Lessons, Student Lessons (index, show, sign-off) |
 | 2026-10-28 | **Lesson income in app Finances.** `GET /instructor/finances/summary` now returns a read-only `lesson_income` list (paid Stripe payouts + cash/alternative-payment sign-offs in the date range, by lesson date) and `stats.total_lesson_income_pence` / `_formatted`. `stats.total_payments_*` and `stats.net_balance_*` now **include** lesson income, matching the CRM Finances tab. Manual finance CRUD is unchanged. **App action:** show `lesson_income` rows (amount, pupil, date) on the Finances screen, read-only; see `.claude/tasks/finances-lesson-income.md` in the app repo. | Instructor Finances (summary) |
+| 2026-10-30 | **Remove a pupil from the app.** New `DELETE /instructor/pupils/{student}` — instructor only, own assigned pupil only (`403` otherwise, `404` unknown ID). Unassigns the pupil (`instructor_id` → `null`) and logs it in the pupil's activity log; the pupil, orders, payments and lessons are kept. Returns `422` while the pupil has open lessons with this instructor (draft/pending on a pending or active order, any date — including past lessons not yet signed off). Success: `200 {"message": "Pupil removed"}`. Shares lookup, `StudentPolicy@delete` and `StudentService::remove()` with `DELETE /students/{student}` (unchanged). | Instructor Pupils (remove — NEW), Students (delete — note) |
 | 2026-11-01 | **CRM instructor delete — 30-day grace period.** Removed the web `POST /instructors/{instructor}/request-deletion` (it returned plain JSON to an Inertia request and only emailed admins). Web `DELETE /instructors/{instructor}` (`instructors.destroy`, owner only) now **schedules** deletion 30 days ahead (an `account_deletion_requests` row with `requested_by_user_id`), suspends the instructor, revokes Sanctum tokens and web sessions, sends no email, and redirects to the instructor page. New web `POST /instructors/{instructor}/cancel-deletion` (`instructors.cancel-deletion`, owner only) cancels it and restores the previous status. The nightly `account:process-deletion-requests` anonymises + archives when due. **API change:** `POST /api/v1/auth/login` returns 422 `This account is scheduled for deletion. Please contact Drive support.` (`errors.email`) while a staff-scheduled deletion is pending; existing tokens are already revoked, so the app sees 401 on its next call. **App action:** none required — the message shows like any login error. | Auth (login) |
 | 2026-10-31 | **Only active pupils in the add-booking picker.** `GET /instructor/students` takes an optional `active_only` boolean. With `active_only=1` every group holds only `status = "active"` students (`passed` / `inactive` empty, `recent_activity` filtered). Without it the response is unchanged. `POST /students/{student}/orders` is unchanged and does not check pupil status. **App action:** the instructor add-booking pupil picker (including Add Booking from a diary slot) must call `?active_only=1` and list `data.active` only; leave the general pupils screen as it is. | Instructor Students (index), Orders (store — docs note) |
 ---
