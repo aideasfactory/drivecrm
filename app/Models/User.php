@@ -133,6 +133,15 @@ class User extends Authenticatable
     }
 
     /**
+     * Whether staff have scheduled this account for deletion and it is still pending.
+     * Such accounts cannot sign in (API or web) during the grace period.
+     */
+    public function hasStaffScheduledDeletion(): bool
+    {
+        return $this->accountDeletionRequests()->pending()->staffRequested()->exists();
+    }
+
+    /**
      * Get the user's HMRC OAuth token (one per user).
      */
     public function hmrcToken(): HasOne

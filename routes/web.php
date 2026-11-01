@@ -179,6 +179,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
     Route::delete('/instructors/{instructor}', [InstructorController::class, 'destroy'])
         ->middleware(EnsureOwner::class)
         ->name('instructors.destroy');
+    Route::post('/instructors/{instructor}/cancel-deletion', [InstructorController::class, 'cancelDeletion'])
+        ->middleware(EnsureOwner::class)
+        ->name('instructors.cancel-deletion');
     Route::get('/instructors/{instructor}/activity-logs', [InstructorController::class, 'activityLogs'])
         ->name('instructors.activity-logs');
     Route::get('/instructors/{instructor}/payouts', [InstructorController::class, 'payouts'])

@@ -10,6 +10,7 @@ export interface Instructor {
   setup_complete: boolean
   pupils_count: number
   last_sync: string
+  pending_deletion_on: string | null
 }
 
 export interface InstructorDetail {
@@ -33,6 +34,14 @@ export interface InstructorDetail {
   welcome_email_pending?: boolean
   app_onboarding_step?: number
   app_onboarding_complete?: boolean
+  pending_deletion?: InstructorPendingDeletion | null
+  upcoming_lessons_count?: number
+}
+
+export interface InstructorPendingDeletion {
+  scheduled_for: string
+  requested_at: string
+  staff_requested: boolean
 }
 
 export interface InstructorStats {

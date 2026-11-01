@@ -4,7 +4,8 @@ import axios from 'axios'
 import { Head, router } from '@inertiajs/vue3'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
-import { Loader2, MailWarning, SkipForward } from 'lucide-vue-next'
+import { Loader2, MailWarning, SkipForward, Trash2, Undo2 } from 'lucide-vue-next'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { useRole } from '@/composables/useRole'
 import AppLayout from '@/layouts/AppLayout.vue'
 import InstructorHeader from '@/components/Instructors/InstructorHeader.vue'
@@ -19,7 +20,7 @@ import HmrcTab from '@/components/Instructors/Tabs/HmrcTab.vue'
 import AddInstructorSheet from '@/components/Instructors/AddInstructorSheet.vue'
 import StripeOnboardingWelcome from '@/components/Instructors/StripeOnboardingWelcome.vue'
 import type { InstructorDetail, InstructorFormOptions } from '@/types/instructor'
-import { forceCompleteAppOnboarding } from '@/actions/App/Http/Controllers/InstructorController'
+import { cancelDeletion, forceCompleteAppOnboarding } from '@/actions/App/Http/Controllers/InstructorController'
 
 interface ConnectionStatus {
     connected: boolean
@@ -113,6 +114,45 @@ const resendInvite = async () => {
     }
 }
 
+const pendingDeletion = computed(() => props.instructor.pending_deletion ?? null)
+const upcomingLessonsCount = computed(() => props.instructor.upcoming_lessons_count ?? 0)
+const pendingDeletionDate = computed(() =>
+    pendingDeletion.value
+        ? new Date(pendingDeletion.value.scheduled_for).toLocaleDateString('en-GB', {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+          })
+        : '',
+)
+const isCancellingDeletion = ref(false)
+
+const cancelScheduledDeletion = () => {
+    if (isCancellingDeletion.value) {
+        return
+    }
+
+    isCancellingDeletion.value = true
+
+    router.post(cancelDeletion.url(props.instructor.id), {}, {
+        preserveScroll: true,
+        onSuccess: (page) => {
+            const flash = page.props.flash as { success?: string | null; error?: string | null } | undefined
+            if (flash?.error) {
+                toast({ title: flash.error, variant: 'destructive' })
+                return
+            }
+            toast({ title: flash?.success ?? 'Deletion cancelled.' })
+        },
+        onError: () => {
+            toast({ title: 'Failed to cancel the deletion. Please try again.', variant: 'destructive' })
+        },
+        onFinish: () => {
+            isCancellingDeletion.value = false
+        },
+    })
+}
+
 const APP_ONBOARDING_TOTAL_STEPS = 5
 const isCompletingAppOnboarding = ref(false)
 const appOnboardingComplete = ref(Boolean(props.instructor.app_onboarding_complete))
@@ -179,6 +219,38 @@ const breadcrumbs = [
                 :instructor="instructor"
                 @edit="isEditSheetOpen = true"
             />
+
+            <!-- Scheduled deletion banner -->
+            <Alert v-if="pendingDeletion" variant="destructive">
+                <Trash2 class="h-4 w-4" />
+                <AlertTitle>Scheduled for deletion on {{ pendingDeletionDate }}</AlertTitle>
+                <AlertDescription>
+                    <p v-if="pendingDeletion.staff_requested">
+                        This instructor is suspended and can't sign in. On {{ pendingDeletionDate }} their personal
+                        details are removed and their pupils unassigned.
+                    </p>
+                    <p v-else>
+                        The instructor asked to delete their account in the app. They can still sign in and
+                        cancel it there until {{ pendingDeletionDate }}.
+                    </p>
+                    <p v-if="upcomingLessonsCount > 0" class="font-medium">
+                        {{ upcomingLessonsCount }} upcoming {{ upcomingLessonsCount === 1 ? 'lesson is' : 'lessons are' }}
+                        still booked. Move or cancel them before then.
+                    </p>
+                    <Button
+                        v-if="isOwner && pendingDeletion.staff_requested"
+                        variant="outline"
+                        size="sm"
+                        class="mt-3 min-w-[160px]"
+                        :disabled="isCancellingDeletion"
+                        @click="cancelScheduledDeletion"
+                    >
+                        <Loader2 v-if="isCancellingDeletion" class="mr-2 h-4 w-4 animate-spin" />
+                        <Undo2 v-else class="mr-2 h-4 w-4" />
+                        Cancel deletion
+                    </Button>
+                </AlertDescription>
+            </Alert>
 
             <!-- Welcome email pending banner — owners only -->
             <div
