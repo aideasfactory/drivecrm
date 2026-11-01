@@ -65,11 +65,54 @@ const props = defineProps<{
     latestRun: ImportRunState | null
 }>()
 
+type ReportOutcome = 'new' | 'already_imported' | 'existing_account' | 'other_account' | 'invalid_email'
+
+interface ReportRow {
+    type: 'instructor' | 'student'
+    file: string
+    line: number
+    ref: string
+    name: string
+    email: string
+    instructor_ref: string
+    outcome: ReportOutcome
+}
+
 interface CheckResult {
     valid: boolean
     row_counts: Record<string, number>
     errors: BundleError[]
     skipped: BundleError[]
+    report: ReportRow[]
+    lesson_summaries_to_fill: number
+    lessons_to_complete: number
+}
+
+const OUTCOMES: ReportOutcome[] = ['new', 'already_imported', 'existing_account', 'other_account', 'invalid_email']
+
+const OUTCOME_HEADINGS: Record<ReportOutcome, string> = {
+    new: 'New',
+    already_imported: 'Already imported',
+    existing_account: 'Already on Drive+',
+    other_account: 'Not a pupil account',
+    invalid_email: 'Invalid email',
+}
+
+const outcomeLabel = (row: ReportRow): string => {
+    switch (row.outcome) {
+        case 'new':
+            return 'New — will be created'
+        case 'already_imported':
+            return 'Skipped — already imported on an earlier upload (not changed)'
+        case 'existing_account':
+            return row.type === 'instructor'
+                ? 'Existing Drive+ instructor — linked, not changed'
+                : 'Already on Drive+ — linked, new diary lessons added (account not changed)'
+        case 'other_account':
+            return "Skipped — email belongs to a Drive+ account that isn't a pupil (e.g. an instructor)"
+        case 'invalid_email':
+            return 'Skipped — invalid email'
+    }
 }
 
 const FILE_LABELS: Record<string, string> = {
@@ -83,12 +126,16 @@ const FILE_LABELS: Record<string, string> = {
 
 const TOTAL_LABELS: Record<string, string> = {
     instructors_created: 'Instructors created',
-    instructors_linked: 'Existing instructors linked',
+    instructors_linked: 'Existing instructors (already imported or on Drive+, not changed)',
     locations: 'Coverage sectors added',
     students: 'Students created',
-    students_skipped: 'Students skipped (invalid email or already on Drive+)',
+    students_linked: 'Existing Drive+ pupils linked (new lessons added)',
+    students_skipped: "Students skipped (invalid email or not a pupil account)",
     lessons: 'Diary lessons',
     lessons_skipped: 'Diary lessons skipped (student skipped)',
+    lesson_summaries_filled: 'Summaries added to lessons imported earlier',
+    lessons_already_in_diary: 'Lessons skipped (pupil already has a lesson at that time)',
+    lessons_marked_completed: 'Lessons imported earlier now marked completed',
     diary_blocks: 'Unavailable diary blocks',
     finances: 'Finance entries',
     receipts: 'Receipts attached',
@@ -215,7 +262,15 @@ const asCheckResult = (data: unknown): CheckResult | null => {
         return null
     }
 
-    const body = data as { valid?: unknown; row_counts?: unknown; errors?: unknown; skipped?: unknown }
+    const body = data as {
+        valid?: unknown
+        row_counts?: unknown
+        errors?: unknown
+        skipped?: unknown
+        report?: unknown
+        lesson_summaries_to_fill?: unknown
+        lessons_to_complete?: unknown
+    }
 
     if (typeof body.valid !== 'boolean') {
         return null
@@ -229,7 +284,64 @@ const asCheckResult = (data: unknown): CheckResult | null => {
                 : {},
         errors: Array.isArray(body.errors) ? (body.errors as BundleError[]) : [],
         skipped: Array.isArray(body.skipped) ? (body.skipped as BundleError[]) : [],
+        report: Array.isArray(body.report) ? (body.report as ReportRow[]) : [],
+        lesson_summaries_to_fill:
+            typeof body.lesson_summaries_to_fill === 'number' ? body.lesson_summaries_to_fill : 0,
+        lessons_to_complete: typeof body.lessons_to_complete === 'number' ? body.lessons_to_complete : 0,
     }
+}
+
+/** Per type (instructors, students), how many rows have each outcome. */
+const reportSummary = computed(() => {
+    const report = checkResult.value?.report ?? []
+
+    return (['instructor', 'student'] as const).map((type) => {
+        const rows = report.filter((row) => row.type === type)
+
+        return {
+            label: type === 'instructor' ? 'Instructors' : 'Students',
+            counts: Object.fromEntries(
+                OUTCOMES.map((outcome) => [outcome, rows.filter((row) => row.outcome === outcome).length]),
+            ) as Record<ReportOutcome, number>,
+        }
+    })
+})
+
+// Built client-side from the check response; nothing is stored on the server.
+const downloadReport = (): void => {
+    const report = [...(checkResult.value?.report ?? [])].sort(
+        (a, b) =>
+            (a.type === b.type ? 0 : a.type === 'instructor' ? -1 : 1) ||
+            OUTCOMES.indexOf(a.outcome) - OUTCOMES.indexOf(b.outcome) ||
+            a.line - b.line,
+    )
+
+    const rows = [
+        ['Type', 'Outcome', 'Ref', 'Name', 'Email', 'Instructor ref', 'File', 'Line'],
+        ...report.map((row) => [
+            row.type === 'instructor' ? 'Instructor' : 'Student',
+            outcomeLabel(row),
+            row.ref,
+            row.name,
+            row.email,
+            row.instructor_ref,
+            row.file,
+            String(row.line || ''),
+        ]),
+    ]
+
+    const escapeCell = (value: string): string => `"${(value ?? '').replace(/"/g, '""')}"`
+    const csv = rows.map((row) => row.map(escapeCell).join(',')).join('\r\n')
+
+    // BOM so Excel opens it as UTF-8
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const baseName = (selectedFile.value?.name ?? 'import').replace(/\.zip$/i, '')
+    link.href = url
+    link.download = `${baseName}-report-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
 }
 
 const handleCheck = async () => {
@@ -475,6 +587,69 @@ const breadcrumbs = [{ title: 'Data Import' }]
                         </AlertDescription>
                     </Alert>
 
+                    <!-- Report: who is new, who is skipped -->
+                    <div v-if="checkResult && checkResult.report.length > 0" class="flex flex-col gap-2">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <p class="text-sm font-medium">New and skipped records</p>
+                                <p class="text-xs text-muted-foreground">
+                                    Only new records are added. Anyone already imported or already
+                                    on Drive+ is left as they are; their new diary lessons are added,
+                                    except where they already have a lesson at that date and time.
+                                </p>
+                            </div>
+                            <Button type="button" variant="outline" size="sm" @click="downloadReport">
+                                <Download class="mr-2 h-4 w-4" />
+                                Download report (CSV)
+                            </Button>
+                        </div>
+                        <div class="rounded-lg border">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead />
+                                        <TableHead v-for="outcome in OUTCOMES" :key="outcome" class="text-right">
+                                            {{ OUTCOME_HEADINGS[outcome] }}
+                                        </TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    <TableRow v-for="summary in reportSummary" :key="summary.label">
+                                        <TableCell class="font-medium">{{ summary.label }}</TableCell>
+                                        <TableCell v-for="outcome in OUTCOMES" :key="outcome" class="text-right">
+                                            {{ summary.counts[outcome] }}
+                                        </TableCell>
+                                    </TableRow>
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </div>
+
+                    <Alert v-if="checkResult && checkResult.lesson_summaries_to_fill > 0">
+                        <CheckCircle2 class="h-4 w-4" />
+                        <AlertTitle>
+                            {{ checkResult.lesson_summaries_to_fill }} lesson summary(ies) will be added
+                        </AlertTitle>
+                        <AlertDescription>
+                            These lessons were imported on an earlier upload but have no summary yet.
+                            Their summary is filled from the diary notes. Nothing else on them changes,
+                            and any summary already written is kept.
+                        </AlertDescription>
+                    </Alert>
+
+                    <Alert v-if="checkResult && checkResult.lessons_to_complete > 0">
+                        <CheckCircle2 class="h-4 w-4" />
+                        <AlertTitle>
+                            {{ checkResult.lessons_to_complete }} lesson(s) will be marked completed
+                        </AlertTitle>
+                        <AlertDescription>
+                            Lessons imported on an earlier upload that are still waiting for sign-off,
+                            but which this file now marks completed (same date, same instructor, before
+                            today). They're completed quietly — no emails, no payouts. Lessons booked
+                            through Drive+ are never included.
+                        </AlertDescription>
+                    </Alert>
+
                     <!-- Skipped: students already on Drive+ -->
                     <div v-if="checkResult && checkResult.skipped.length > 0" class="flex flex-col gap-2">
                         <Alert>
@@ -482,8 +657,7 @@ const breadcrumbs = [{ title: 'Data Import' }]
                             <AlertTitle>{{ checkResult.skipped.length }} row(s) will be skipped</AlertTitle>
                             <AlertDescription>
                                 These rows won't be imported, but they don't stop the rest of the file.
-                                A skipped student's diary lessons are skipped too; a student already on
-                                Drive+ keeps their existing account.
+                                A skipped student's diary lessons are skipped too.
                             </AlertDescription>
                         </Alert>
                         <div class="max-h-64 overflow-y-auto rounded-lg border">
@@ -629,6 +803,9 @@ const breadcrumbs = [{ title: 'Data Import' }]
                     <DialogDescription>
                         This creates real instructor and student accounts, diary
                         entries and finance records. It can't be undone from here.
+                        New students have alternative payments (e.g. cash) turned on.
+                        Records already imported or already on Drive+ are not changed, except
+                        empty lesson summaries and imported lessons the file now marks completed.
                         No emails will be sent.
                     </DialogDescription>
                 </DialogHeader>

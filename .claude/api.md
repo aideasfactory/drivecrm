@@ -1145,6 +1145,14 @@ Returns the authenticated instructor's students grouped by status, plus a recent
 
 **Request Body:** None
 
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `active_only` | boolean | No | Default `false` (unchanged grouped list for the pupils screen). When `1`/`true`, every group holds only `status = "active"` students: `passed` and `inactive` are `[]`, and `recent_activity` is the 5 most recently updated students with non-active ones removed (so it can hold fewer than 5). Not a boolean → `422`. |
+
+> **Add-booking pupil picker:** when an instructor picks a pupil to book (`POST /students/{student}/orders`, including Add Booking from a diary slot), call `GET /instructor/students?active_only=1` and list `data.active` only. Pupils who are `inactive`, `on_hold`, `passed`, `failed` or `completed` must not be offered. Keep the general pupils screen on the default call.
+
 **Success Response:** `200 OK`
 ```json
 {
@@ -5493,6 +5501,8 @@ For `weekly` orders, each later week is invoiced by email and due **48 hours bef
 
 **Booking against a specific open diary slot:** send `calendar_item_id` instead of `first_lesson_date` / `start_time` / `end_time`. Date and time are taken from that slot. The slot must belong to the student's instructor and still be empty availability. The first lesson claims that slot (under a row lock); remaining lessons in a multi-lesson package are placed weekly at the same time, reusing matching empty slots where they exist. Any open short-notice offer on a claimed slot is closed.
 
+**Choosing the pupil (instructor):** the pupil picker for this booking must list only active pupils — use `GET /instructor/students?active_only=1` (`data.active`). This endpoint itself does not check `students.status`.
+
 **Private packages:** a student token that sends a `package_id` with `visible_to_pupils: false` receives **404** (same as an unknown or inactive package). An instructor token can still book that package for the pupil. Short-notice offers are unchanged: if an instructor offers a private package, the pupil still sees that offer.
 
 **URL Parameters:**
@@ -8069,6 +8079,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-10-28 | **Instructor-booked clashes.** New additive field `provisional_handled_by` (`instructor` \| `drive_team` \| `null`) next to every `is_provisional`: `GET /instructor/calendar/items` (and every calendar item response), `GET /instructor/lessons/{date}`, `GET /instructor/lessons?from=&to=`, `GET /students/{student}/lessons`, `GET /students/{student}/lessons/{lesson}` and the sign-off response. `instructor` when the instructor booked the clash themselves (order `source` = instructor app, or CRM booked by an instructor user); they rearrange it with the pupil. Booking, payment and the provisional rules are unchanged. **App action:** see `.claude/tasks/app-developer-provisional-lessons.md` ("Instructor-booked clashes"). | Calendar Items, Instructor Day/Range Lessons, Student Lessons (index, show, sign-off) |
 | 2026-10-28 | **Lesson income in app Finances.** `GET /instructor/finances/summary` now returns a read-only `lesson_income` list (paid Stripe payouts + cash/alternative-payment sign-offs in the date range, by lesson date) and `stats.total_lesson_income_pence` / `_formatted`. `stats.total_payments_*` and `stats.net_balance_*` now **include** lesson income, matching the CRM Finances tab. Manual finance CRUD is unchanged. **App action:** show `lesson_income` rows (amount, pupil, date) on the Finances screen, read-only; see `.claude/tasks/finances-lesson-income.md` in the app repo. | Instructor Finances (summary) |
 | 2026-11-01 | **CRM instructor delete — 30-day grace period.** Removed the web `POST /instructors/{instructor}/request-deletion` (it returned plain JSON to an Inertia request and only emailed admins). Web `DELETE /instructors/{instructor}` (`instructors.destroy`, owner only) now **schedules** deletion 30 days ahead (an `account_deletion_requests` row with `requested_by_user_id`), suspends the instructor, revokes Sanctum tokens and web sessions, sends no email, and redirects to the instructor page. New web `POST /instructors/{instructor}/cancel-deletion` (`instructors.cancel-deletion`, owner only) cancels it and restores the previous status. The nightly `account:process-deletion-requests` anonymises + archives when due. **API change:** `POST /api/v1/auth/login` returns 422 `This account is scheduled for deletion. Please contact Drive support.` (`errors.email`) while a staff-scheduled deletion is pending; existing tokens are already revoked, so the app sees 401 on its next call. **App action:** none required — the message shows like any login error. | Auth (login) |
+| 2026-10-31 | **Only active pupils in the add-booking picker.** `GET /instructor/students` takes an optional `active_only` boolean. With `active_only=1` every group holds only `status = "active"` students (`passed` / `inactive` empty, `recent_activity` filtered). Without it the response is unchanged. `POST /students/{student}/orders` is unchanged and does not check pupil status. **App action:** the instructor add-booking pupil picker (including Add Booking from a diary slot) must call `?active_only=1` and list `data.active` only; leave the general pupils screen as it is. | Instructor Students (index), Orders (store — docs note) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

@@ -151,7 +151,9 @@ const selectedStudentId = ref<number | null>(null)
 async function loadStudents() {
     studentsLoading.value = true
     try {
-        const response = await axios.get(`/instructors/${props.instructorId}/pupils`)
+        const response = await axios.get(`/instructors/${props.instructorId}/pupils`, {
+            params: { status: 'active' },
+        })
         students.value = (response.data.pupils || []).map((p: any) => ({
             id: p.id,
             name: p.name ?? `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim(),
