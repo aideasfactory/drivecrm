@@ -14,8 +14,9 @@ class HasUpcomingLessonsWithInstructorAction
 {
     /**
      * Whether the student still has open lessons with this instructor: draft or
-     * pending lessons on a pending or active order, dated today or later, or
-     * banked (no date) waiting to be rebooked.
+     * pending lessons on a pending or active order, whatever their date. Past
+     * lessons not yet signed off count too, because sign-off needs the pupil to
+     * still be assigned to the instructor.
      */
     public function __invoke(Student $student, Instructor $instructor): bool
     {
@@ -25,9 +26,6 @@ class HasUpcomingLessonsWithInstructorAction
             ->whereHas('order', fn ($query) => $query
                 ->where('student_id', $student->id)
                 ->whereIn('status', [OrderStatus::PENDING, OrderStatus::ACTIVE]))
-            ->where(fn ($query) => $query
-                ->whereNull('date')
-                ->orWhere('date', '>=', today()))
             ->exists();
     }
 }

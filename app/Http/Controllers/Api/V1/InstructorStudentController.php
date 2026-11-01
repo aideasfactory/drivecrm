@@ -58,7 +58,7 @@ class InstructorStudentController extends Controller
 
         if ($this->studentService->hasUpcomingLessonsWith($student, $instructor)) {
             return response()->json([
-                'message' => 'This pupil still has upcoming booked or paid lessons with you. Cancel or complete them before removing the pupil.',
+                'message' => 'This pupil still has lessons with you that are not signed off or cancelled. Sign off or cancel them before removing the pupil.',
             ], 422);
         }
 
