@@ -28,6 +28,12 @@ class LoginAction
             ]);
         }
 
+        if ($user->hasStaffScheduledDeletion()) {
+            throw ValidationException::withMessages([
+                'email' => [__('This account is scheduled for deletion. Please contact Drive support.')],
+            ]);
+        }
+
         if ($user->role->value !== $role) {
             throw ValidationException::withMessages([
                 'role' => [__('Your account is not registered as a :role.', ['role' => $role])],

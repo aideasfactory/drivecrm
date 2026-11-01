@@ -1524,8 +1524,10 @@ In-app account deletion with a 30-day grace period (App Store Guideline 5.1.1(v)
 |--------|------|-------------|-------------|
 | `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique deletion request identifier |
 | `user_id` | bigint unsigned | FOREIGN KEY (users.id), ON DELETE CASCADE | User requesting deletion |
+| `requested_by_user_id` | bigint unsigned | NULLABLE, FK → users.id (NULL ON DELETE) | Staff member who scheduled it from the CRM. NULL = the user asked themselves (app) |
 | `status` | varchar(20) | DEFAULT 'pending' | `AccountDeletionRequestStatus`: `pending`, `cancelled`, `completed` |
-| `reason` | text | NULLABLE | Optional free-text reason supplied by the user |
+| `reason` | text | NULLABLE | Optional free-text reason supplied by the user ("Deleted by staff" for CRM deletes) |
+| `previous_instructor_status` | varchar(20) | NULLABLE | Staff delete only: the instructor's status before it was set to `suspended`, restored on cancel |
 | `requested_at` | timestamp | NOT NULL | When the request was made |
 | `scheduled_for` | timestamp | NOT NULL | `requested_at` + 30 days — when the hard delete becomes due |
 | `cancelled_at` | timestamp | NULLABLE | When the request was cancelled (if it was) |
@@ -1539,6 +1541,7 @@ In-app account deletion with a 30-day grace period (App Store Guideline 5.1.1(v)
 
 **Relationships:**
 - Belongs to one `User`
+- Belongs to one `User` as `requestedBy` (`requested_by_user_id`, staff deletes only)
 - `User` has many `AccountDeletionRequest` (via `users.accountDeletionRequests()`)
 
 **Enums:**
@@ -1548,6 +1551,7 @@ In-app account deletion with a 30-day grace period (App Store Guideline 5.1.1(v)
 - Created by `POST /api/v1/account/deletion-request` (both roles); tokens are NOT revoked during the grace period so the user can log in and cancel.
 - Daily scheduled command `account:process-deletion-requests` (01:00) processes rows where `status = pending` and `scheduled_for <= now`.
 - Processing **anonymises** rather than deletes (users.id cascades would destroy lesson/payment history other parties need): scrubs user name/email/password/push token, revokes all Sanctum tokens, scrubs profile PII (student contact fields; instructor bio/phone/address/pin/nino/utr/vrn etc.), detaches an instructor's students (`students.instructor_id = null`), then sets `status = completed`.
+- **Staff instructor delete** (CRM Delete Instructor, owner only, `ScheduleInstructorDeletionAction`): creates a request due in 30 days with `requested_by_user_id` set (or takes over the user's own pending request, keeping its date), stores `previous_instructor_status`, sets the instructor `suspended` (out of public booking search), revokes Sanctum tokens and web sessions, sends no email. While such a request is pending the user cannot log in (API `LoginAction` + web Fortify). The owner can cancel from the instructor page (`CancelInstructorDeletionAction`): request `cancelled`, status restored if still `suspended`, no email. Upcoming lessons are left as they are (the CRM only warns with a count). The nightly command processes it like any other request (status → `archived`, pupils unassigned).
 - Distinct from **staff learner-profile delete** (`DeleteStudentAction`): that soft-deletes the `students` row and locks the login so duplicates disappear from CRM lists, but it does not scrub historical student names on invoices.
 
 ---

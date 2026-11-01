@@ -149,6 +149,9 @@ watch(filterQuery, (query) => {
 
 const exportUrl = computed(() => exportCsv.url({ query: filterQuery.value }))
 
+const formatShortDate = (date: string) =>
+    new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+
 const getInitials = (name: string) => {
     return name
         .split(' ')
@@ -296,8 +299,11 @@ const breadcrumbs = [{ title: 'Instructors' }]
                                             </AvatarFallback>
                                         </Avatar>
                                         <div>
-                                            <div class="font-semibold">
+                                            <div class="flex items-center gap-2 font-semibold">
                                                 {{ instructor.name }}
+                                                <Badge v-if="instructor.pending_deletion_on" variant="destructive">
+                                                    Deleting {{ formatShortDate(instructor.pending_deletion_on) }}
+                                                </Badge>
                                             </div>
                                             <div
                                                 class="text-sm text-muted-foreground"

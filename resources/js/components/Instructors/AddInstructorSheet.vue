@@ -20,9 +20,12 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, UserPlus, UserPen, Save, Trash2, AlertTriangle, Camera, X } from 'lucide-vue-next'
+import { Loader2, UserPlus, UserPen, Save, Trash2, AlertTriangle, Camera, X, CalendarX } from 'lucide-vue-next'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { toast } from '@/components/ui/toast'
 import PasswordResetSection from '@/components/Shared/PasswordResetSection.vue'
+import { useRole } from '@/composables/useRole'
+import { destroy as destroyInstructor } from '@/actions/App/Http/Controllers/InstructorController'
 import type {
     CreateInstructorData,
     InstructorDetail,
@@ -49,8 +52,20 @@ const emit = defineEmits<Emits>()
 const isEditMode = computed(() => props.instructor !== null)
 
 const isSubmitting = ref(false)
-const isRequestingDeletion = ref(false)
+const isDeletingInstructor = ref(false)
 const showDeleteDialog = ref(false)
+const { isOwner } = useRole()
+
+const DELETION_GRACE_PERIOD_DAYS = 30
+
+const deletionDate = computed(() => {
+    const date = new Date()
+    date.setDate(date.getDate() + DELETION_GRACE_PERIOD_DAYS)
+    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+})
+
+const upcomingLessonsCount = computed(() => props.instructor?.upcoming_lessons_count ?? 0)
+const canScheduleDeletion = computed(() => isOwner.value && !props.instructor?.pending_deletion)
 
 const defaultStatus = () =>
     props.formOptions.status[0]?.value ?? 'active'
@@ -258,21 +273,23 @@ const handleOpenChange = (value: boolean) => {
     }
 }
 
-const handleRequestDeletion = () => {
+const handleDeleteInstructor = () => {
     if (!props.instructor) return
 
-    isRequestingDeletion.value = true
+    isDeletingInstructor.value = true
 
-    router.post(`/instructors/${props.instructor.id}/request-deletion`, {}, {
-        preserveScroll: true,
-        onSuccess: () => {
+    router.delete(destroyInstructor.url(props.instructor.id), {
+        onSuccess: (page) => {
+            const flash = page.props.flash as { success?: string | null } | undefined
             showDeleteDialog.value = false
+            emit('update:open', false)
+            toast({ title: flash?.success ?? 'Instructor scheduled for deletion.' })
         },
         onError: () => {
-            // Error handling - the error will be displayed via toast/notification
+            toast({ title: 'Failed to schedule the deletion. Please try again.', variant: 'destructive' })
         },
         onFinish: () => {
-            isRequestingDeletion.value = false
+            isDeletingInstructor.value = false
         },
     })
 }
@@ -537,15 +554,16 @@ const handleRequestDeletion = () => {
             </div>
 
             <!-- Danger Zone -->
-            <div v-if="isEditMode && instructor" class="mt-8 border-t border-destructive/20 px-6 py-6">
+            <div v-if="isEditMode && instructor && canScheduleDeletion" class="mt-8 border-t border-destructive/20 px-6 py-6">
                 <div class="rounded-lg border border-destructive/50 bg-destructive/5 p-4">
                     <div class="flex items-center gap-2">
                         <AlertTriangle class="h-5 w-5 text-destructive" />
                         <h3 class="font-semibold text-destructive">Danger Zone</h3>
                     </div>
                     <p class="mt-2 text-sm text-destructive/80">
-                        Once you request account deletion, an administrator will review your request.
-                        This action cannot be undone.
+                        The instructor is suspended and signed out straight away, then deleted after
+                        {{ DELETION_GRACE_PERIOD_DAYS }} days. You can cancel the deletion until then.
+                        Lesson and payment history is kept.
                     </p>
                     <Button
                         type="button"
@@ -555,7 +573,7 @@ const handleRequestDeletion = () => {
                         @click="showDeleteDialog = true"
                     >
                         <Trash2 class="mr-2 h-4 w-4" />
-                        Request Account Deletion
+                        Delete Instructor
                     </Button>
                 </div>
             </div>
@@ -568,31 +586,42 @@ const handleRequestDeletion = () => {
             <DialogHeader>
                 <DialogTitle class="flex items-center gap-2 text-destructive">
                     <AlertTriangle class="h-5 w-5" />
-                    Request Account Deletion
+                    Delete Instructor
                 </DialogTitle>
                 <DialogDescription>
-                    Are you sure you want to request deletion of your account?
-                    An administrator will review this request and contact you if needed.
+                    {{ instructor?.name ?? 'This instructor' }} will be suspended and signed out now, and
+                    won't be able to sign in. On {{ deletionDate }} their personal details are removed and
+                    their pupils unassigned. You can cancel from their page before then.
                 </DialogDescription>
             </DialogHeader>
+            <Alert v-if="upcomingLessonsCount > 0" variant="destructive">
+                <CalendarX class="h-4 w-4" />
+                <AlertTitle>
+                    {{ upcomingLessonsCount }} upcoming {{ upcomingLessonsCount === 1 ? 'lesson' : 'lessons' }} still booked
+                </AlertTitle>
+                <AlertDescription>
+                    These lessons are not cancelled or refunded automatically. Move or cancel them
+                    before the deletion date.
+                </AlertDescription>
+            </Alert>
             <DialogFooter class="mt-4">
                 <Button
                     type="button"
                     variant="outline"
                     @click="showDeleteDialog = false"
-                    :disabled="isRequestingDeletion"
+                    :disabled="isDeletingInstructor"
                 >
                     Cancel
                 </Button>
                 <Button
                     type="button"
                     variant="destructive"
-                    @click="handleRequestDeletion"
-                    :disabled="isRequestingDeletion"
+                    @click="handleDeleteInstructor"
+                    :disabled="isDeletingInstructor"
                 >
-                    <Loader2 v-if="isRequestingDeletion" class="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 v-if="isDeletingInstructor" class="mr-2 h-4 w-4 animate-spin" />
                     <Trash2 v-else class="mr-2 h-4 w-4" />
-                    Request Deletion
+                    Schedule Deletion
                 </Button>
             </DialogFooter>
         </DialogContent>
