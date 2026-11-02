@@ -14,7 +14,9 @@ class GetConversationAction
      * Get paginated conversation messages between two users.
      *
      * Returns messages ordered by newest first (for pagination).
-     * Frontend should reverse for chronological display.
+     * Frontend should reverse for chronological display. A conversation
+     * with an owner (admin) includes messages with every owner — see
+     * Message::scopeSentBetween().
      *
      * @param  User  $userA  First participant
      * @param  User  $userB  Second participant
@@ -22,11 +24,8 @@ class GetConversationAction
      */
     public function __invoke(User $userA, User $userB, int $perPage = 30): LengthAwarePaginator
     {
-        return Message::where(function ($query) use ($userA, $userB) {
-            $query->where('from', $userA->id)->where('to', $userB->id);
-        })->orWhere(function ($query) use ($userA, $userB) {
-            $query->where('from', $userB->id)->where('to', $userA->id);
-        })
+        return Message::where(fn ($query) => $query->sentBetween($userA, $userB))
+            ->orWhere(fn ($query) => $query->sentBetween($userB, $userA))
             ->with('sender:id,name')
             ->orderByDesc('created_at')
             ->paginate($perPage);
