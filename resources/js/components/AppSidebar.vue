@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
 import {
     ArrowRightLeft,
     Bell,
@@ -189,8 +189,18 @@ const allNavItems: NavItem[] = [
 ];
 
 // Filter nav items based on user role
+const page = usePage();
+
+const supportUnreadCount = computed(() => page.props.supportInbox?.unread_count ?? 0);
+
 const mainNavItems = computed(() =>
-    allNavItems.filter((item) => canSeeNavItem(item.roles, item.restrictedOwnerVisible)),
+    allNavItems
+        .filter((item) => canSeeNavItem(item.roles, item.restrictedOwnerVisible))
+        .map((item) =>
+            item.title === 'Support Messages'
+                ? { ...item, badge: supportUnreadCount.value }
+                : item,
+        ),
 );
 
 const footerNavItems: NavItem[] = [];
