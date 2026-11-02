@@ -1002,14 +1002,15 @@ Stores broadcast and direct messages between users. Supports soft deletes for au
 - One record created per recipient in a broadcast
 - **Notification pipeline (`MessageObserver`):** every created row fires the appropriate email + push notification + activity log from a single observer on `Message::created` — call sites only create the row and must NOT dispatch their own comms (they would duplicate). `direct`/`broadcast` send the generic new-message email/push (broadcast skips per-row activity logs in favour of the caller's summary entry); `lesson_on_way`/`lesson_arrived` send the lesson-specific email (routed to learner email ?: contact email) + push + instructor activity log, using `meta.lesson_id`. Students **without** a user account can't have a message row (`to` is a users FK) — the on-way/arrived flow falls back to a direct email + inline activity log for them.
 - **Read receipts:** each row is one sender → one recipient, so `read_at` is exact per-message/per-recipient read tracking (broadcasts included — one row each). `NULL` = unread; marking read is an idempotent bulk `UPDATE` that never overwrites an existing `read_at`. Viewing a conversation does NOT auto-mark it read — the mobile app calls the explicit mark-read endpoints.
-- **Support inbox:** the admin's "Support Messages" page is simply the logged-in admin's messages inbox — the same `MessageService::getConversations()` path used by every other user. From the mobile app, students/instructors send to the admin's user id (1 in the default seeded data) via the existing `POST /api/v1/messages` endpoint. No sentinel id, no virtual participant, no schema change.
+- **Support inbox (shared):** the admin "Support Messages" page is a team inbox shared by every owner (admin). From the mobile app, students/instructors send to a single admin user id (1 in the default seeded data) via `POST /api/v1/messages`, so the inbox (`GetSupportConversationsAction`) loads every conversation between **any** owner and a non-owner participant, grouped by participant. The thread (`GetSupportThreadAction`) shows all messages between the participant and any owner; admin replies are sent from the replying admin's own user id. No schema change.
+- **Support read state + sidebar badge:** opening a thread on the Support Messages page (or closing the ticket) marks the participant's unread messages to any owner as read (`MarkSupportConversationReadAction`). The admin sidebar badge is the shared Inertia prop `supportInbox.unread_count` = number of distinct participants with unread messages to any owner (`CountUnreadSupportConversationsAction`, one `COUNT(DISTINCT from)` query using the `(to, read_at)` index, owners only, not cached).
 - **Closing tickets:** an owner can "close" (archive) a support conversation. Archive state lives in `support_ticket_archives` (see below) — a conversation is treated as archived only while `archived_at >= latest message`, so a newer message from the participant auto-reopens the ticket to the Inbox.
 
 ---
 
 ### 16a. **support_ticket_archives**
 
-Per-owner archive (closed) state for support conversations. A "ticket" is a conversation between an owner and one other user; this table records when that ticket was closed. There is no per-message state — archiving is evaluated against the conversation's latest message so a new reply automatically reopens it.
+Archive (closed) state for support conversations, evaluated team-wide. A "ticket" is a conversation between an owner and one other user; this table records when that ticket was closed. There is no per-message state — archiving is evaluated against the conversation's latest message so a new reply automatically reopens it.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -1028,10 +1029,10 @@ Per-owner archive (closed) state for support conversations. A "ticket" is a conv
 - Belongs to one `User` as `participant` (via `participant_id`)
 
 **Business Logic:**
-- Keyed per-owner so multi-owner inboxes archive independently (matches the per-`$request->user()` inbox model)
+- `owner_id` records which admin closed the ticket; archive state is **shared** — a conversation is archived when the latest `archived_at` for that participant (from any owner) is at or after the latest message
 - A conversation is **archived** (shown in the "Archived" folder, hidden from Inbox) only while `archived_at >= latest message.created_at`
 - Closing a ticket: `updateOrCreate` with `archived_at = now()` (`ArchiveConversationAction`)
-- Reopening a ticket: delete the archive row (`ReopenConversationAction`)
+- Reopening a ticket: delete every archive row for the participant (`ReopenConversationAction`)
 - A later message from the participant pushes `latest message.created_at` past `archived_at`, so the ticket auto-reopens with no extra write
 
 ---
