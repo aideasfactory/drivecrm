@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\SupportTicketService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -44,6 +45,9 @@ class HandleInertiaRequests extends Middleware
                 'user' => $user,
                 'instructor_id' => $user?->isInstructor() ? $user->instructor?->id : null,
             ],
+            'supportInbox' => fn (): ?array => $user?->isOwner()
+                ? ['unread_count' => app(SupportTicketService::class)->unreadConversationCount()]
+                : null,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             // Named hmrcFlags (not hmrc) so page props like the Instructor
             // Show page's 'hmrc' payload can't clobber it.

@@ -25,7 +25,7 @@ class SupportMessagesController extends Controller
     {
         $admin = $request->user();
 
-        $annotated = $this->supportTicketService->getAnnotatedConversations($admin);
+        $annotated = $this->supportTicketService->getAnnotatedConversations();
 
         $folder = $request->string('folder')->toString() === 'archived' ? 'archived' : 'inbox';
 
@@ -42,6 +42,8 @@ class SupportMessagesController extends Controller
                 'latest_message' => [
                     'message' => $c['latest_message']->message,
                     'is_own' => $c['latest_message']->from === $admin->id,
+                    'is_support' => $c['latest_message']->from !== $c['user']->id,
+                    'sender_name' => $c['latest_message']->sender?->name,
                     'created_at' => $c['latest_message']->created_at?->toIso8601String(),
                 ],
             ])
@@ -58,14 +60,14 @@ class SupportMessagesController extends Controller
             $selectedIsArchived = $annotated
                 ->firstWhere(fn (array $c): bool => $c['user']->id === $selectedUser->id)['is_archived'] ?? false;
 
-            $thread = $this->messageService
-                ->getConversationMessages($admin, $selectedUser, 100)
-                ->getCollection()
-                ->sortBy('created_at')
+            $this->supportTicketService->markAsRead($selectedUser);
+
+            $thread = $this->supportTicketService
+                ->getThread($selectedUser, 100)
                 ->map(fn (Message $m) => [
                     'id' => $m->id,
                     'message' => $m->message,
-                    'is_own' => $m->from === $admin->id,
+                    'is_own' => $m->from !== $selectedUser->id,
                     'sender_name' => $m->sender?->name,
                     'created_at' => $m->created_at?->toIso8601String(),
                 ])
@@ -105,7 +107,7 @@ class SupportMessagesController extends Controller
 
     public function reopen(Request $request, User $user): RedirectResponse
     {
-        $this->supportTicketService->reopen($request->user(), $user);
+        $this->supportTicketService->reopen($user);
 
         return redirect()
             ->route('support-messages.index')
