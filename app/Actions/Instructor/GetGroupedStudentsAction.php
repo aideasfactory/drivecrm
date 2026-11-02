@@ -13,6 +13,10 @@ class GetGroupedStudentsAction
     /**
      * Get instructor's students grouped by status with recent activity.
      *
+     * `inactive` holds every student who is neither active nor passed
+     * (`inactive`, `on_hold`, `failed`, `completed`), so no pupil is missing
+     * from the instructor app; each keeps their own `status` value.
+     *
      * @return array{active: Collection, passed: Collection, inactive: Collection, recent_activity: Collection}
      */
     public function __invoke(Instructor $instructor): array
@@ -24,7 +28,7 @@ class GetGroupedStudentsAction
         return [
             'active' => $students->where('status', 'active')->values(),
             'passed' => $students->where('status', 'passed')->values(),
-            'inactive' => $students->where('status', 'inactive')->values(),
+            'inactive' => $students->whereNotIn('status', ['active', 'passed'])->values(),
             'recent_activity' => $students->sortByDesc('updated_at')->take(5)->values(),
         ];
     }
