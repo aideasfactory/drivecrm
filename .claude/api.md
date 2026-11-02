@@ -30,6 +30,7 @@
     - [Packages (List)](#get-apiv1instructorpackages)
     - [Packages (Create)](#post-apiv1instructorpackages)
     - [Packages (Update)](#put-apiv1instructorpackagespackage)
+    - [Packages (Remove)](#delete-apiv1instructorpackagespackage)
     - [Calendar Items](#get-apiv1instructorcalendaritems)
     - [Rebook Later / Bank Lesson](#post-apiv1instructorcalendaritemscalendaritembank)
     - [Banked Lessons (List)](#get-apiv1instructorbanked-lessons)
@@ -1767,6 +1768,65 @@ Updates an existing package owned by the authenticated instructor. Returns `403`
   }
 }
 ```
+
+---
+
+#### `DELETE /api/v1/instructor/packages/{package}`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Removes one of the authenticated instructor's own packages. This is the same action as **Remove Package** in the CRM (`DELETE /instructors/{instructor}/packages/{package}` on the web, `InstructorService::deactivatePackage()`): the package is set to `active: false`, so it drops out of `GET /instructor/packages`, `GET /student/packages` and booking. It is **not** deleted. Existing orders, lessons and payments keep their history and are not changed. The change is logged in the instructor's activity log. Restoring is **web only** (CRM package list → Restore). Removing an already-removed package returns `200` with no change.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `package` | integer | Package ID |
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "id": 12,
+    "name": "5 Hour Starter Package",
+    "description": "Five one-hour driving lessons",
+    "total_price_pence": 16000,
+    "lessons_count": 5,
+    "lesson_price_pence": 3200,
+    "formatted_total_price": "£160.00",
+    "formatted_lesson_price": "£32.00",
+    "booking_fee": "£19.99",
+    "digital_fee": "£19.95",
+    "total_price": "£199.94",
+    "weekly_payment": "£39.99",
+    "active": false,
+    "is_one_off": false,
+    "visible_to_pupils": true,
+    "has_stripe_price": true
+  },
+  "message": "Package removed."
+}
+```
+
+**Error Responses:**
+
+`403 Forbidden` — Package not owned by this instructor (includes platform packages), or the token is not an instructor:
+```json
+{
+  "message": "You do not own this package."
+}
+```
+
+`404 Not Found` — Unknown package ID (Laravel default body; key off the status code, not the text):
+```json
+{
+  "message": "No query results for model [App\\Models\\Package] 99999"
+}
+```
+
+> **App action:** confirm before calling (mirror the CRM dialog: "This hides {name} from booking and the mobile app. Existing orders, lessons, and payments keep their history and are not changed."). On `200`, drop the package from the list (or re-fetch `GET /instructor/packages`). Do not offer Restore in the app; tell the instructor it can be restored from the web portal.
 
 ---
 
@@ -6837,6 +6897,7 @@ The `role` field is always returned in user responses. Use it to determine which
 | GET | `/api/v1/instructor/packages` | Yes | Instructor | List packages |
 | POST | `/api/v1/instructor/packages` | Yes | Instructor | Create package |
 | PUT | `/api/v1/instructor/packages/{package}` | Yes | Instructor | Update package |
+| DELETE | `/api/v1/instructor/packages/{package}` | Yes | Instructor | Remove (hide) package — restore is web only |
 | GET | `/api/v1/instructor/calendar/items` | Yes | Instructor | List calendar items for a date, or a `from`/`to` range (max 31 days) |
 | POST | `/api/v1/instructor/calendar/items` | Yes | Instructor | Create calendar item |
 | POST | `/api/v1/instructor/calendar/fill-slots` | Yes | Instructor | Bulk-fill diary with available slots (skips clashes) |
@@ -8121,6 +8182,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-10-28 | **Lesson income in app Finances.** `GET /instructor/finances/summary` now returns a read-only `lesson_income` list (paid Stripe payouts + cash/alternative-payment sign-offs in the date range, by lesson date) and `stats.total_lesson_income_pence` / `_formatted`. `stats.total_payments_*` and `stats.net_balance_*` now **include** lesson income, matching the CRM Finances tab. Manual finance CRUD is unchanged. **App action:** show `lesson_income` rows (amount, pupil, date) on the Finances screen, read-only; see `.claude/tasks/finances-lesson-income.md` in the app repo. | Instructor Finances (summary) |
 | 2026-10-30 | **Remove a pupil from the app.** New `DELETE /instructor/pupils/{student}` — instructor only, own assigned pupil only (`403` otherwise, `404` unknown ID). Unassigns the pupil (`instructor_id` → `null`) and logs it in the pupil's activity log; the pupil, orders, payments and lessons are kept. Returns `422` while the pupil has open lessons with this instructor (draft/pending on a pending or active order, any date — including past lessons not yet signed off). Success: `200 {"message": "Pupil removed"}`. Shares lookup, `StudentPolicy@delete` and `StudentService::remove()` with `DELETE /students/{student}` (unchanged). | Instructor Pupils (remove — NEW), Students (delete — note) |
 | 2026-11-01 | **CRM instructor delete — 30-day grace period.** Removed the web `POST /instructors/{instructor}/request-deletion` (it returned plain JSON to an Inertia request and only emailed admins). Web `DELETE /instructors/{instructor}` (`instructors.destroy`, owner only) now **schedules** deletion 30 days ahead (an `account_deletion_requests` row with `requested_by_user_id`), suspends the instructor, revokes Sanctum tokens and web sessions, sends no email, and redirects to the instructor page. New web `POST /instructors/{instructor}/cancel-deletion` (`instructors.cancel-deletion`, owner only) cancels it and restores the previous status. The nightly `account:process-deletion-requests` anonymises + archives when due. **API change:** `POST /api/v1/auth/login` returns 422 `This account is scheduled for deletion. Please contact Drive support.` (`errors.email`) while a staff-scheduled deletion is pending; existing tokens are already revoked, so the app sees 401 on its next call. **App action:** none required — the message shows like any login error. | Auth (login) |
+| 2026-11-02 | **Remove a package from the app.** New `DELETE /instructor/packages/{package}` — instructor only, own package only (`403` otherwise, `404` unknown ID). Same soft remove as the CRM Remove Package action (`InstructorService::deactivatePackage()`): sets `active: false`, keeps orders, lessons and payments, logs the change, clears the package cache. Success: `200 {"data": <package object, active: false>, "message": "Package removed."}`. Removed packages no longer appear in `GET /instructor/packages` or `GET /student/packages` (unchanged active filter). Restore stays web only. | Instructor Packages (remove — NEW) |
 | 2026-10-31 | **Only active pupils in the add-booking picker.** `GET /instructor/students` takes an optional `active_only` boolean. With `active_only=1` every group holds only `status = "active"` students (`passed` / `inactive` empty, `recent_activity` filtered). Without it the response is unchanged. `POST /students/{student}/orders` is unchanged and does not check pupil status. **App action:** the instructor add-booking pupil picker (including Add Booking from a diary slot) must call `?active_only=1` and list `data.active` only; leave the general pupils screen as it is. | Instructor Students (index), Orders (store — docs note) |
 ---
 
