@@ -69,7 +69,7 @@ class ExecuteStudentTransferAction
 
         $clashingLessons = ($this->detectClashes)($destination, $futureLessons);
 
-        DB::transaction(function () use ($student, $destination, $futureLessons): void {
+        DB::transaction(function () use ($student, $sourceInstructor, $destination, $futureLessons): void {
             foreach ($futureLessons as $lesson) {
                 if (! $lesson->calendar_item_id) {
                     continue;
