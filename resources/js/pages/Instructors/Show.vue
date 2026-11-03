@@ -99,8 +99,8 @@ const { isOwner } = useRole()
 const isResendingInvite = ref(false)
 const welcomeEmailPending = ref(Boolean(props.instructor.welcome_email_pending))
 const welcomeEmailLastSentAt = ref(props.instructor.welcome_email_last_sent_at ?? null)
-const hasSignedUp = Boolean(props.instructor.signed_up)
-const showOnboardingEmailBanner = computed(() => welcomeEmailPending.value || !hasSignedUp)
+const hasSignedUp = computed(() => Boolean(props.instructor.signed_up))
+const showOnboardingEmailBanner = computed(() => welcomeEmailPending.value || !hasSignedUp.value)
 const welcomeEmailLastSentLabel = computed(() =>
     welcomeEmailLastSentAt.value
         ? new Date(welcomeEmailLastSentAt.value).toLocaleString('en-GB', {
