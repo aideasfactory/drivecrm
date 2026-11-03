@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Support\FinanceReceiptUploads;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Exists;
@@ -32,7 +33,35 @@ class StoreInstructorFinanceRequest extends FormRequest
             'recurrence_iterations' => ['nullable', 'integer', 'min:1', 'max:'.(int) config('finances.recurrence.max_iterations', 60), 'required_if:is_recurring,true'],
             'date' => ['required', 'date', 'date_format:Y-m-d'],
             'notes' => ['nullable', 'string', 'max:1000'],
+            'receipt' => FinanceReceiptUploads::rules(required: false),
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return FinanceReceiptUploads::messages();
+    }
+
+    /**
+     * Multipart bodies send booleans as strings ("true"/"false"), which the
+     * `boolean` rule rejects, so normalise them before validation.
+     */
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('is_recurring'))) {
+            $this->merge([
+                'is_recurring' => filter_var($this->input('is_recurring'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? $this->input('is_recurring'),
+            ]);
+        }
+
+        foreach (['vehicle_id', 'payment_method', 'recurrence_frequency', 'recurrence_iterations', 'notes'] as $field) {
+            if ($this->input($field) === '' || $this->input($field) === 'null') {
+                $this->merge([$field => null]);
+            }
+        }
     }
 
     /**

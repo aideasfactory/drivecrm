@@ -12,16 +12,23 @@ class UploadFinanceReceiptAction
 {
     /**
      * Upload a receipt to the private S3 disk and attach it to a finance record.
-     * Replaces any existing receipt on the same record.
+     * Replaces any existing receipt on the same record. The old file is only
+     * deleted once the new one is stored, so a failed upload keeps the old receipt.
      */
     public function __invoke(InstructorFinance $finance, UploadedFile $file): InstructorFinance
     {
-        if ($finance->receipt_path) {
-            Storage::disk('s3')->delete($finance->receipt_path);
-        }
+        $previousPath = $finance->receipt_path;
 
         $directory = "instructors/{$finance->instructor_id}/finance-receipts/{$finance->id}";
         $path = $file->store($directory, 's3');
+
+        if ($path === false) {
+            throw new \RuntimeException("Failed to store receipt for finance record {$finance->id}.");
+        }
+
+        if ($previousPath && $previousPath !== $path) {
+            Storage::disk('s3')->delete($previousPath);
+        }
 
         $finance->update([
             'receipt_path' => $path,

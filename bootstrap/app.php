@@ -3,11 +3,14 @@
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\RedirectCanonicalAuthHost;
+use App\Support\FinanceReceiptUploads;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\PostTooLargeException;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
+use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -52,5 +55,23 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Mobile clients uploading receipts as multipart don't always send
+        // `Accept: application/json`; without this they'd get a redirect/HTML.
+        $exceptions->shouldRenderJsonWhen(
+            fn (Request $request, Throwable $e): bool => $request->expectsJson()
+                || $request->is('api/v1/instructor/finances', 'api/v1/instructor/finances/*')
+        );
+
+        $exceptions->render(function (PostTooLargeException $e, Request $request) {
+            if (! $request->is('api/v1/instructor/finances', 'api/v1/instructor/finances/*')) {
+                return null;
+            }
+
+            $maxMb = intdiv(FinanceReceiptUploads::maxSizeKb(), 1024);
+
+            return response()->json([
+                'message' => "The upload is too large. Receipts must be under {$maxMb} MB.",
+                'errors' => ['receipt' => ["The receipt is too large. The maximum size is {$maxMb} MB."]],
+            ], 413);
+        });
     })->create();

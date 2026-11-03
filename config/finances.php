@@ -29,6 +29,16 @@ return [
         'insurance' => 'Insurance',
         'internet' => 'Internet',
         'mot' => 'MOT',
+        // Must match the rows in `category_tax_mapping`; the picker reads
+        // `category_meta` from that table, so a slug missing here fails validation.
+        'servicing' => 'Servicing',
+        'repairs' => 'Repairs',
+        'road_tax' => 'Road Tax',
+        'breakdown_cover' => 'Breakdown Cover',
+        'vehicle_insurance' => 'Vehicle Insurance',
+        'business_insurance' => 'Business Insurance',
+        'phone' => 'Phone',
+        'accountant_fees' => 'Accountant Fees',
     ],
 
     'payment_categories' => [

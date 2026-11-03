@@ -14,10 +14,12 @@ use App\Http\Resources\V1\VehicleResource;
 use App\Models\InstructorFinance;
 use App\Services\InstructorService;
 use App\Services\VehicleService;
+use App\Support\FinanceReceiptUploads;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class InstructorFinanceController extends Controller
 {
@@ -112,8 +114,8 @@ class InstructorFinanceController extends Controller
                 'max_iterations' => (int) config('finances.recurrence.max_iterations', 60),
             ],
             'receipt' => [
-                'max_size_kb' => (int) config('finances.receipt.max_size_kb', 10240),
-                'allowed_mimes' => config('finances.receipt.allowed_mimes', []),
+                'max_size_kb' => FinanceReceiptUploads::maxSizeKb(),
+                'allowed_mimes' => FinanceReceiptUploads::allowedMimes(),
             ],
             'category_meta' => $categoryMeta,
             'vehicles' => VehicleResource::collection($this->vehicleService->activeVehiclesFor($instructor))->resolve(),
@@ -132,14 +134,31 @@ class InstructorFinanceController extends Controller
 
     /**
      * Create a new finance record for the authenticated instructor.
+     *
+     * Accepts JSON, or multipart with an optional `receipt` file. The record is
+     * saved before the receipt is stored, so a failed S3 upload never loses the
+     * expense: it returns 201 with `meta.receipt_upload_failed = true` and the
+     * app retries via `POST /finances/{finance}/receipt`.
      */
     public function store(StoreInstructorFinanceRequest $request): JsonResponse
     {
         $instructor = $request->user()->instructor;
 
-        $finance = $this->instructorService->createFinance($instructor, $request->validated());
+        $finance = $this->instructorService->createFinance($instructor, $request->safe()->except('receipt'));
+
+        $receiptUploadFailed = false;
+
+        if ($request->hasFile('receipt')) {
+            try {
+                $finance = $this->instructorService->uploadFinanceReceipt($finance, $request->file('receipt'));
+            } catch (Throwable $exception) {
+                report($exception);
+                $receiptUploadFailed = true;
+            }
+        }
 
         return (new InstructorFinanceResource($finance))
+            ->additional(['meta' => ['receipt_upload_failed' => $receiptUploadFailed]])
             ->response()
             ->setStatusCode(201);
     }
