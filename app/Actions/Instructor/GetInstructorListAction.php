@@ -16,6 +16,10 @@ class GetInstructorListAction
 
     public const ONBOARDING_EMAIL_NOT_SENT = 'not_sent';
 
+    public const SIGNED_UP = 'signed_up';
+
+    public const NOT_SIGNED_UP = 'not_signed_up';
+
     public const STRIPE_CONNECTED = 'connected';
 
     public const STRIPE_NOT_CONNECTED = 'not_connected';
@@ -39,11 +43,13 @@ class GetInstructorListAction
      *
      * Setup status mirrors the instructor page:
      * - Onboarding email sent: the user's `welcome_email_pending` flag is off.
+     * - Signed up: User::hasCompletedSignUp() (set their own password). Shown
+     *   alongside the steps but not part of `setup_complete`.
      * - Stripe connected: Instructor::isStripeConnected().
      * - Availability added: at least one open "Available" diary slot
      *   (CalendarItem::emptyAvailability) that starts in the future.
      *
-     * @param  array{search?: ?string, setup?: ?string, onboarding_email?: ?string, stripe?: ?string, availability?: ?string}  $filters
+     * @param  array{search?: ?string, setup?: ?string, onboarding_email?: ?string, signed_up?: ?string, stripe?: ?string, availability?: ?string}  $filters
      * @return Collection<int, array{
      *     id: int,
      *     name: string,
@@ -107,7 +113,7 @@ class GetInstructorListAction
 
     /**
      * @param  Collection<int, array<string, mixed>>  $rows
-     * @param  array{search?: ?string, setup?: ?string, onboarding_email?: ?string, stripe?: ?string, availability?: ?string}  $filters
+     * @param  array{search?: ?string, setup?: ?string, onboarding_email?: ?string, signed_up?: ?string, stripe?: ?string, availability?: ?string}  $filters
      * @return Collection<int, array<string, mixed>>
      */
     private function applyFilters(Collection $rows, array $filters): Collection
@@ -122,6 +128,7 @@ class GetInstructorListAction
         $statusFilters = [
             'setup_complete' => $this->expectedFlag($filters['setup'] ?? null, self::SETUP_COMPLETE, self::SETUP_INCOMPLETE),
             'onboarding_email_sent' => $this->expectedFlag($filters['onboarding_email'] ?? null, self::ONBOARDING_EMAIL_SENT, self::ONBOARDING_EMAIL_NOT_SENT),
+            'signed_up' => $this->expectedFlag($filters['signed_up'] ?? null, self::SIGNED_UP, self::NOT_SIGNED_UP),
             'stripe_connected' => $this->expectedFlag($filters['stripe'] ?? null, self::STRIPE_CONNECTED, self::STRIPE_NOT_CONNECTED),
             'availability_added' => $this->expectedFlag($filters['availability'] ?? null, self::AVAILABILITY_ADDED, self::AVAILABILITY_NOT_ADDED),
         ];
