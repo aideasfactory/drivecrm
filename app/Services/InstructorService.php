@@ -42,6 +42,7 @@ use App\Actions\Instructor\Mileage\DeleteMileageLogAction;
 use App\Actions\Instructor\Mileage\GetMileageLogsAction;
 use App\Actions\Instructor\Mileage\UpdateMileageLogAction;
 use App\Actions\Instructor\ReplaceInstructorLocationsAction;
+use App\Actions\Instructor\ResendInstructorWelcomeEmailAction;
 use App\Actions\Instructor\ResetInstructorStripeConnectionAction;
 use App\Actions\Instructor\ScheduleInstructorDeletionAction;
 use App\Actions\Instructor\SendInstructorWelcomeEmailAction;
@@ -148,6 +149,7 @@ class InstructorService extends BaseService
         protected DeleteMileageLogAction $deleteMileageLog,
         protected SeedInstructorProgressTrackerAction $seedInstructorProgressTracker,
         protected SendInstructorWelcomeEmailAction $sendInstructorWelcomeEmail,
+        protected ResendInstructorWelcomeEmailAction $resendInstructorWelcomeEmail,
         protected CancelBookingAction $cancelBooking,
         protected BankLessonsAction $bankLessons,
         protected RebookBankedLessonAction $rebookBankedLesson,
@@ -248,11 +250,12 @@ class InstructorService extends BaseService
     /**
      * Resend the welcome / password-setup email to an existing instructor.
      * Mirrors the action triggered on initial creation — useful when the original
-     * email failed to send or the link expired before the instructor used it.
+     * email failed to send, the link expired, or the instructor never signed up.
+     * Refused once they've signed up, and throttled per instructor.
      */
     public function resendWelcomeEmail(Instructor $instructor): bool
     {
-        return ($this->sendInstructorWelcomeEmail)($instructor);
+        return ($this->resendInstructorWelcomeEmail)($instructor);
     }
 
     /**

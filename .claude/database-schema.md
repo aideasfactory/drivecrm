@@ -91,6 +91,7 @@ Students (Many) ──── (0..1) Orders   [students.test_pass_guarantee_order
    - Belongs to a `team` via `current_team_id` (nullable foreign key)
    - `password_change_required` (boolean, default false) — set to true when a temporary password is issued (instructor-created pupils, onboarding, admin reset); cleared when user changes password via API
    - `welcome_email_pending` (boolean, default false) — set to true when a brand-new user is created and a welcome email is pending dispatch. Two writers today: (a) web onboarding (`CreateUserAndStudentFromEnquiryAction`) — cleared atomically by `SendOrderConfirmationEmailAction`; (b) instructor creation (`InstructorService::createInstructor`, `BulkImportInstructorsAction`) — cleared by `SendInstructorWelcomeEmailAction` after the password-setup email queues successfully. Left at `true` when sending fails so admins can resend from the Instructor Show page.
+   - `welcome_email_last_sent_at` (timestamp, nullable) — stamped by `SendInstructorWelcomeEmailAction` each time the instructor onboarding email queues successfully (first send and admin resends). Shown as "Last sent" next to the Resend onboarding email button. Admins can resend while the instructor hasn't signed up (`password_change_required = true`) or the send failed (`welcome_email_pending = true`); throttled to one send per instructor per 2 minutes.
 
 2. **instructors** - Instructor profiles
    - One-to-one with `users` (via `user_id`)
@@ -260,6 +261,7 @@ Core user table storing all users in the system (owners, instructors, and studen
 | `password` | varchar(255) | NOT NULL | Hashed password |
 | `password_change_required` | boolean | DEFAULT false | Forces password reset on next login (set when a temp password is issued) |
 | `welcome_email_pending` | boolean | DEFAULT false | True between new-user creation and the welcome email being dispatched. Cleared by `SendOrderConfirmationEmailAction` (web onboarding) or `SendInstructorWelcomeEmailAction` (instructor invite). Stays `true` if sending fails so admins can resend. |
+| `welcome_email_last_sent_at` | timestamp | NULLABLE | When the instructor onboarding (password-setup) email was last queued — first send or admin resend. Set by `SendInstructorWelcomeEmailAction`. Null for users never sent one (and for sends before 2026-11-03). Added 2026-11-03. |
 | `imported_at` | timestamp | NULLABLE, INDEXED | Set when the account was created by the legacy importer (Data Import page). No emails go out at import; `import:send-welcome-emails` sends the welcome email to every imported user still `welcome_email_pending = true`. |
 | `role` | enum('owner', 'instructor', 'student') | DEFAULT 'student' | User role in the system |
 | `owner_access` | varchar(20) | DEFAULT 'all' | Admin-area access level (`OwnerAccess` enum), only meaningful when `role = owner`. `all` = entire admin area; `restricted` = Instructors, Students, Transfer Student, Support Messages, Enquiries and own Settings only (enforced by `RestrictOwnerAccess` middleware). Managed by full-access owners on the Owner Access page (`/owners`); owners cannot change their own value. Added 2026-10-01. |

@@ -281,6 +281,8 @@ class InstructorController extends Controller
                 'locations' => $locations,
                 'hmrc_connected' => $instructor->user->hmrcToken()->exists(),
                 'welcome_email_pending' => (bool) $instructor->user->welcome_email_pending,
+                'welcome_email_last_sent_at' => $instructor->user->welcome_email_last_sent_at?->toIso8601String(),
+                'signed_up' => $instructor->user->hasCompletedSignUp(),
                 'app_onboarding_step' => $instructor->app_onboarding_step,
                 'app_onboarding_complete' => $instructor->hasCompletedAppOnboarding(),
                 'pending_deletion' => $pendingDeletion ? [
@@ -391,7 +393,8 @@ class InstructorController extends Controller
 
     /**
      * Resend the welcome / password-setup email to an instructor.
-     * Used when the original email failed or the setup link expired.
+     * Used when the original email failed, the setup link expired, or the
+     * instructor hasn't signed up yet. 422 once signed up; 429 within the cooldown.
      */
     public function resendWelcomeEmail(Instructor $instructor): JsonResponse
     {
@@ -405,8 +408,9 @@ class InstructorController extends Controller
         }
 
         return response()->json([
-            'message' => 'Welcome email has been resent.',
+            'message' => "Onboarding email resent to {$instructor->user->email}.",
             'welcome_email_pending' => false,
+            'welcome_email_last_sent_at' => $instructor->user->fresh()?->welcome_email_last_sent_at?->toIso8601String(),
         ]);
     }
 

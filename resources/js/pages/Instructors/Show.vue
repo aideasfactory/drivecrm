@@ -20,7 +20,11 @@ import HmrcTab from '@/components/Instructors/Tabs/HmrcTab.vue'
 import AddInstructorSheet from '@/components/Instructors/AddInstructorSheet.vue'
 import StripeOnboardingWelcome from '@/components/Instructors/StripeOnboardingWelcome.vue'
 import type { InstructorDetail, InstructorFormOptions } from '@/types/instructor'
-import { cancelDeletion, forceCompleteAppOnboarding } from '@/actions/App/Http/Controllers/InstructorController'
+import {
+    cancelDeletion,
+    forceCompleteAppOnboarding,
+    resendWelcomeEmail,
+} from '@/actions/App/Http/Controllers/InstructorController'
 
 interface ConnectionStatus {
     connected: boolean
@@ -94,6 +98,20 @@ const isEditSheetOpen = ref(false)
 const { isOwner } = useRole()
 const isResendingInvite = ref(false)
 const welcomeEmailPending = ref(Boolean(props.instructor.welcome_email_pending))
+const welcomeEmailLastSentAt = ref(props.instructor.welcome_email_last_sent_at ?? null)
+const hasSignedUp = computed(() => Boolean(props.instructor.signed_up))
+const showOnboardingEmailBanner = computed(() => welcomeEmailPending.value || !hasSignedUp.value)
+const welcomeEmailLastSentLabel = computed(() =>
+    welcomeEmailLastSentAt.value
+        ? new Date(welcomeEmailLastSentAt.value).toLocaleString('en-GB', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+          })
+        : null,
+)
 
 const resendInvite = async () => {
     if (isResendingInvite.value) {
@@ -103,9 +121,10 @@ const resendInvite = async () => {
     isResendingInvite.value = true
 
     try {
-        const { data } = await axios.post(`/instructors/${props.instructor.id}/resend-invite`)
+        const { data } = await axios.post(resendWelcomeEmail.url(props.instructor.id))
         welcomeEmailPending.value = Boolean(data?.welcome_email_pending)
-        toast({ title: data?.message ?? 'Welcome email resent.' })
+        welcomeEmailLastSentAt.value = data?.welcome_email_last_sent_at ?? welcomeEmailLastSentAt.value
+        toast({ title: data?.message ?? 'Onboarding email resent.' })
     } catch (error: any) {
         const message = error?.response?.data?.message ?? 'Failed to resend the welcome email.'
         toast({ title: message, variant: 'destructive' })
@@ -252,19 +271,31 @@ const breadcrumbs = [
                 </AlertDescription>
             </Alert>
 
-            <!-- Welcome email pending banner — owners only -->
+            <!-- Onboarding email banner (failed send or not signed up yet) — owners only -->
             <div
-                v-if="isOwner && welcomeEmailPending"
+                v-if="isOwner && showOnboardingEmailBanner"
                 class="flex flex-col gap-3 rounded-md border border-amber-200 bg-amber-50 p-4 text-amber-900 sm:flex-row sm:items-center sm:justify-between"
             >
                 <div class="flex items-start gap-3">
                     <MailWarning class="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
                     <div class="text-sm">
-                        <p class="font-medium">Welcome email hasn't been delivered yet</p>
-                        <p class="text-amber-800">
-                            We couldn't confirm the password-setup email was sent to
-                            <strong>{{ instructor.email }}</strong>. Resend it so they can
-                            access their account.
+                        <template v-if="welcomeEmailPending">
+                            <p class="font-medium">Welcome email hasn't been delivered yet</p>
+                            <p class="text-amber-800">
+                                We couldn't confirm the password-setup email was sent to
+                                <strong>{{ instructor.email }}</strong>. Resend it so they can
+                                access their account.
+                            </p>
+                        </template>
+                        <template v-else>
+                            <p class="font-medium">Instructor hasn't signed up yet</p>
+                            <p class="text-amber-800">
+                                {{ instructor.name }} hasn't set their password from the onboarding email sent to
+                                <strong>{{ instructor.email }}</strong>. Resend it with a fresh setup link.
+                            </p>
+                        </template>
+                        <p v-if="welcomeEmailLastSentLabel" class="mt-1 text-xs text-amber-700">
+                            Last sent {{ welcomeEmailLastSentLabel }}
                         </p>
                     </div>
                 </div>
@@ -275,7 +306,7 @@ const breadcrumbs = [
                     @click="resendInvite"
                 >
                     <Loader2 v-if="isResendingInvite" class="mr-2 h-4 w-4 animate-spin" />
-                    {{ isResendingInvite ? 'Resending…' : 'Resend welcome email' }}
+                    {{ isResendingInvite ? 'Resending…' : 'Resend onboarding email' }}
                 </Button>
             </div>
 
