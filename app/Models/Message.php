@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\MessageType;
+use App\Enums\UserRole;
 use App\Observers\MessageObserver;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Builder;
@@ -78,5 +79,33 @@ class Message extends Model
     public function scopeUnread(Builder $query): Builder
     {
         return $query->whereNull('read_at');
+    }
+
+    /**
+     * Scope the query to messages sent from $sender to $recipient.
+     *
+     * Support is one shared team inbox: when exactly one side is an owner
+     * (admin), that side matches any owner, so replies from every admin
+     * land in the same thread the mobile app opens with the support user.
+     */
+    public function scopeSentBetween(Builder $query, User $sender, User $recipient): Builder
+    {
+        return $query
+            ->whereIn('from', self::participantIds($sender, $recipient))
+            ->whereIn('to', self::participantIds($recipient, $sender));
+    }
+
+    /**
+     * The user ids that stand for $participant in a conversation with $otherParticipant.
+     *
+     * @return Builder<User>|array<int, int>
+     */
+    private static function participantIds(User $participant, User $otherParticipant): Builder|array
+    {
+        if ($participant->isOwner() && ! $otherParticipant->isOwner()) {
+            return User::query()->select('id')->where('role', UserRole::OWNER);
+        }
+
+        return [$participant->id];
     }
 }

@@ -15,4 +15,6 @@ export type NavItem = {
     roles?: UserRoleType[];
     /** Visible to owners with restricted access (hidden from them otherwise). */
     restrictedOwnerVisible?: boolean;
+    /** Count shown as a badge beside the item; hidden when 0 or unset. */
+    badge?: number;
 };

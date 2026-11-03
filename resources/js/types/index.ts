@@ -26,5 +26,6 @@ export type AppPageProps<
         android: string | null;
     };
     schoolContact: SchoolContact;
+    supportInbox: { unread_count: number } | null;
     [key: string]: unknown;
 };

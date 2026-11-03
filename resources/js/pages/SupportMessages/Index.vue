@@ -24,6 +24,8 @@ interface ConversationEntry {
     latest_message: {
         message: string
         is_own: boolean
+        is_support: boolean
+        sender_name: string | null
         created_at: string | null
     }
 }
@@ -310,6 +312,12 @@ const breadcrumbs = [{ title: 'Support Messages' }]
                                             >
                                                 You:
                                             </span>
+                                            <span
+                                                v-else-if="c.latest_message.is_support"
+                                                class="text-muted-foreground"
+                                            >
+                                                {{ c.latest_message.sender_name ?? 'Support' }}:
+                                            </span>
                                             {{
                                                 truncate(
                                                     c.latest_message.message,
@@ -414,6 +422,9 @@ const breadcrumbs = [{ title: 'Support Messages' }]
                                             class="mt-1 text-[10px] opacity-70"
                                             :title="formatFull(msg.created_at)"
                                         >
+                                            <template v-if="msg.is_own && msg.sender_name">
+                                                {{ msg.sender_name }} ·
+                                            </template>
                                             {{ formatTime(msg.created_at) }}
                                         </p>
                                     </div>

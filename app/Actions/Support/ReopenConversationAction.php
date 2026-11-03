@@ -10,13 +10,12 @@ use App\Models\User;
 class ReopenConversationAction
 {
     /**
-     * Reopen (un-archive) the conversation between an owner and a participant
-     * by removing its archive record.
+     * Reopen (un-archive) a participant's support conversation for the whole
+     * admin team by removing every archive record for that participant.
      */
-    public function __invoke(User $owner, User $participant): void
+    public function __invoke(User $participant): void
     {
         SupportTicketArchive::query()
-            ->where('owner_id', $owner->id)
             ->where('participant_id', $participant->id)
             ->delete();
     }

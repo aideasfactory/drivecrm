@@ -5,73 +5,84 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Actions\Support\ArchiveConversationAction;
+use App\Actions\Support\CountUnreadSupportConversationsAction;
+use App\Actions\Support\GetSupportConversationsAction;
+use App\Actions\Support\GetSupportThreadAction;
+use App\Actions\Support\MarkSupportConversationReadAction;
 use App\Actions\Support\ReopenConversationAction;
 use App\Models\Message;
-use App\Models\SupportTicketArchive;
 use App\Models\User;
 use Illuminate\Support\Collection;
 
+/**
+ * The support inbox is shared by every owner (admin): conversations between
+ * any admin and an instructor/pupil appear for all admins, and closing,
+ * reopening and reading a ticket applies team-wide.
+ */
 class SupportTicketService extends BaseService
 {
     public function __construct(
-        protected MessageService $messageService,
+        protected GetSupportConversationsAction $getSupportConversations,
+        protected GetSupportThreadAction $getSupportThread,
+        protected MarkSupportConversationReadAction $markSupportConversationRead,
+        protected CountUnreadSupportConversationsAction $countUnreadSupportConversations,
         protected ArchiveConversationAction $archiveConversation,
         protected ReopenConversationAction $reopenConversation
     ) {}
 
     /**
-     * Get the owner's conversations annotated with an `is_archived` flag.
-     *
-     * A conversation counts as archived only while its archive record's
-     * `archived_at` is at or after the latest message — so a newer message
-     * from the participant automatically reopens the ticket.
+     * Get the shared support conversations annotated with an `is_archived` flag.
      *
      * @return Collection<int, array{user: User, latest_message: Message, is_archived: bool}>
      */
-    public function getAnnotatedConversations(User $owner): Collection
+    public function getAnnotatedConversations(): Collection
     {
-        $conversations = $this->messageService->getConversations($owner);
-
-        $archives = SupportTicketArchive::query()
-            ->where('owner_id', $owner->id)
-            ->get()
-            ->keyBy('participant_id');
-
-        return $conversations->map(function (array $conversation) use ($archives): array {
-            $participantId = $conversation['user']->id;
-            $archive = $archives->get($participantId);
-            $latestAt = $conversation['latest_message']->created_at;
-
-            $conversation['is_archived'] = $archive !== null
-                && $latestAt !== null
-                && $archive->archived_at->greaterThanOrEqualTo($latestAt);
-
-            return $conversation;
-        })->values();
+        return ($this->getSupportConversations)();
     }
 
     /**
-     * Whether the conversation with the given participant is currently archived.
+     * Get the latest messages between a participant and any admin, oldest first.
+     *
+     * @return Collection<int, Message>
      */
-    public function isArchived(User $owner, User $participant): bool
+    public function getThread(User $participant, int $limit = 100): Collection
     {
-        return $this->getAnnotatedConversations($owner)
-            ->firstWhere(fn (array $c): bool => $c['user']->id === $participant->id)['is_archived'] ?? false;
+        return ($this->getSupportThread)($participant, $limit);
     }
 
     /**
-     * Archive (close) the conversation with a participant.
+     * Mark the participant's unread messages to any admin as read.
+     */
+    public function markAsRead(User $participant): int
+    {
+        return ($this->markSupportConversationRead)($participant);
+    }
+
+    /**
+     * Number of conversations with unread messages, for the sidebar badge.
+     *
+     * Not cached — the count must drop as soon as an admin opens a thread.
+     */
+    public function unreadConversationCount(): int
+    {
+        return ($this->countUnreadSupportConversations)();
+    }
+
+    /**
+     * Archive (close) the conversation with a participant. Closing also marks
+     * it read so closed tickets don't keep the sidebar badge lit.
      */
     public function archive(User $owner, User $participant): void
     {
         ($this->archiveConversation)($owner, $participant);
+        $this->markAsRead($participant);
     }
 
     /**
      * Reopen (un-archive) the conversation with a participant.
      */
-    public function reopen(User $owner, User $participant): void
+    public function reopen(User $participant): void
     {
-        ($this->reopenConversation)($owner, $participant);
+        ($this->reopenConversation)($participant);
     }
 }
