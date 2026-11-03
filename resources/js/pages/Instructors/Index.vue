@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
+import axios from 'axios'
 import { Head, router } from '@inertiajs/vue3'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -15,12 +16,13 @@ import {
 } from '@/components/ui/table'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { Search, Plus, Download, FileUp, Check, X } from 'lucide-vue-next'
+import { toast } from '@/components/ui/toast'
+import { Search, Plus, Download, FileUp, Check, X, Loader2, Send } from 'lucide-vue-next'
 import type { Instructor, InstructorFormOptions } from '@/types/instructor'
 import AddInstructorSheet from '@/components/Instructors/AddInstructorSheet.vue'
 import CsvImportSheet from '@/components/CsvImportSheet.vue'
 import { useRole } from '@/composables/useRole'
-import { exportCsv } from '@/actions/App/Http/Controllers/InstructorController'
+import { exportCsv, resendWelcomeEmail } from '@/actions/App/Http/Controllers/InstructorController'
 
 interface Props {
     instructors: Instructor[]
@@ -162,10 +164,40 @@ const getInitials = (name: string) => {
 }
 
 const setupSteps = (instructor: Instructor) => [
-    { label: instructor.onboarding_email_sent ? 'Sent' : 'Not sent', done: instructor.onboarding_email_sent },
-    { label: instructor.stripe_connected ? 'Connected' : 'Not connected', done: instructor.stripe_connected },
-    { label: instructor.availability_added ? 'Added' : 'Not added', done: instructor.availability_added },
+    { key: 'onboarding_email', label: instructor.onboarding_email_sent ? 'Sent' : 'Not sent', done: instructor.onboarding_email_sent },
+    { key: 'stripe', label: instructor.stripe_connected ? 'Connected' : 'Not connected', done: instructor.stripe_connected },
+    { key: 'availability', label: instructor.availability_added ? 'Added' : 'Not added', done: instructor.availability_added },
 ]
+
+const resendingOnboardingEmailId = ref<number | null>(null)
+const onboardingEmailLastSentOverrides = reactive<Record<number, string>>({})
+
+const onboardingEmailLastSentAt = (instructor: Instructor) =>
+    onboardingEmailLastSentOverrides[instructor.id] ?? instructor.onboarding_email_last_sent_at
+
+const canResendOnboardingEmail = (instructor: Instructor) =>
+    isOwner.value && (!instructor.signed_up || !instructor.onboarding_email_sent)
+
+const resendOnboardingEmail = async (instructor: Instructor) => {
+    if (resendingOnboardingEmailId.value !== null) {
+        return
+    }
+
+    resendingOnboardingEmailId.value = instructor.id
+
+    try {
+        const { data } = await axios.post(resendWelcomeEmail.url(instructor.id))
+        if (data?.welcome_email_last_sent_at) {
+            onboardingEmailLastSentOverrides[instructor.id] = data.welcome_email_last_sent_at
+        }
+        toast({ title: data?.message ?? 'Onboarding email resent.' })
+    } catch (error: any) {
+        const message = error?.response?.data?.message ?? 'Failed to resend the onboarding email.'
+        toast({ title: message, variant: 'destructive' })
+    } finally {
+        resendingOnboardingEmailId.value = null
+    }
+}
 
 const navigateToInstructor = (instructorId: number) => {
     router.visit(`/instructors/${instructorId}`)
@@ -313,12 +345,37 @@ const breadcrumbs = [{ title: 'Instructors' }]
                                         </div>
                                     </div>
                                 </TableCell>
-                                <TableCell v-for="step in setupSteps(instructor)" :key="step.label">
+                                <TableCell v-for="step in setupSteps(instructor)" :key="step.key">
                                     <Badge :variant="step.done ? 'secondary' : 'destructive'">
                                         <Check v-if="step.done" class="mr-1 h-3 w-3" />
                                         <X v-else class="mr-1 h-3 w-3" />
                                         {{ step.label }}
                                     </Badge>
+                                    <div
+                                        v-if="step.key === 'onboarding_email' && canResendOnboardingEmail(instructor)"
+                                        class="mt-1 flex flex-col items-start gap-0.5"
+                                    >
+                                        <Button
+                                            variant="link"
+                                            size="sm"
+                                            class="h-auto p-0 text-xs"
+                                            :disabled="resendingOnboardingEmailId === instructor.id"
+                                            @click.stop="resendOnboardingEmail(instructor)"
+                                        >
+                                            <Loader2
+                                                v-if="resendingOnboardingEmailId === instructor.id"
+                                                class="mr-1 h-3 w-3 animate-spin"
+                                            />
+                                            <Send v-else class="mr-1 h-3 w-3" />
+                                            Resend
+                                        </Button>
+                                        <span
+                                            v-if="onboardingEmailLastSentAt(instructor)"
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            Last sent {{ formatShortDate(onboardingEmailLastSentAt(instructor)!) }}
+                                        </span>
+                                    </div>
                                 </TableCell>
                                 <TableCell>
                                     <span class="font-medium">
