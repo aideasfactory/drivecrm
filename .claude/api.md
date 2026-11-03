@@ -2662,7 +2662,7 @@ Creates a new calendar item (time slot) for the authenticated instructor. Suppor
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `date` | string | **Yes** | Date in `Y-m-d` format. Cannot be in the past. |
-| `start_time` | string | **Yes** | Start time in `H:i` format (e.g., `09:00`). Must be at or after `00:00`. |
+| `start_time` | string | **Yes** | Start time in `H:i` format (e.g., `09:00`). Must be at or after `00:00`. Any minute is accepted; the app should offer starts in 15-minute steps (`:00`, `:15`, `:30`, `:45`) to match the admin diary. |
 | `end_time` | string | **Yes** | End time in `H:i` format. Must be after `start_time` and at or before `23:59`. |
 | `is_available` | boolean | No | Whether the slot is available for booking. Default: `true`. |
 | `notes` | string\|null | No | Optional notes (max 1000 characters) |
@@ -2787,7 +2787,7 @@ Created slots are plain independent items (`recurrence_pattern: none`, no `recur
 | `start_date` | string | **Yes** | First date of the range in `Y-m-d` format. Cannot be in the past. |
 | `weeks` | integer | **Yes** | Number of weeks to fill from `start_date` (1–12). |
 | `days` | integer[] | **Yes** | ISO weekdays to fill: `1` = Monday … `7` = Sunday. At least one required. |
-| `day_start_time` | string | **Yes** | Earliest slot start each day, `H:i` format. Must be at or after `00:00`. |
+| `day_start_time` | string | **Yes** | Earliest slot start each day, `H:i` format. Must be at or after `00:00`. Any minute is accepted; the app should offer starts in 15-minute steps (`:00`, `:15`, `:30`, `:45`) to match the admin diary. |
 | `day_end_time` | string | **Yes** | Latest slot **end** each day, `H:i` format. Must be after `day_start_time`, at or before `23:59`, and at least 2 hours after `day_start_time` (must fit one slot). |
 | `travel_time_minutes` | integer\|null | No | Travel block after **each** created slot: `15`, `30`, `45`, or `60` minutes. Omit or `null` for none. |
 
@@ -2843,7 +2843,7 @@ Updates a calendar item belonging to the authenticated instructor — used to **
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `date` | string | **Yes** | New date in `Y-m-d` format. Cannot be in the past. |
-| `start_time` | string | **Yes** | New start time in `H:i` format. Must be at or after `00:00`. |
+| `start_time` | string | **Yes** | New start time in `H:i` format. Must be at or after `00:00`. Any minute is accepted; the app should offer starts in 15-minute steps (`:00`, `:15`, `:30`, `:45`) to match the admin diary. |
 | `end_time` | string | **Yes** | New end time in `H:i` format. Must be after `start_time` and at or before `23:59`. |
 | `is_available` | boolean | No | New availability. Omit to leave unchanged. |
 | `notes` | string\|null | No | Notes (max 1000 chars). Omit to leave unchanged. |
@@ -8232,6 +8232,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-03 | **Expense create + receipt upload fixes.** `/finances/config.expense_categories` gains `servicing`, `repairs`, `road_tax`, `breakdown_cover`, `vehicle_insurance`, `business_insurance`, `phone`, `accountant_fees` (they were already in `category_meta`, but create/update rejected them with 422 "The selected category is invalid."). `POST /instructor/finances` also accepts `multipart/form-data` with an optional `receipt` file. The record is saved first, and a failed receipt store returns `201` with `meta.receipt_upload_failed: true` (new additive `meta` on the create response). String booleans (`"true"`/`"false"`) are accepted on create. `/finances/config.receipt.max_size_kb` is now the effective limit (config 10 MB, lowered if PHP limits are lower). All `/instructor/finances*` errors are JSON (422 with plain-English `errors.receipt` messages, 413 when the body is over PHP `post_max_size`). Replacing a receipt keeps the old one if the new upload fails. **App action:** read `max_size_kb`/`allowed_mimes` from config and check the file before sending; send `Accept: application/json`; if using the single multipart create, never re-create on retry; handle `meta.receipt_upload_failed`, 422 and 413 with the server message. | Instructor Finances (config, store, receipt upload) |
 | 2026-11-03 | **Receipt photos processed on the server.** `/finances/config.receipt.max_size_kb` raised from 10 MB to 20 MB so the app can send untouched camera photos. JPEG/PNG receipts are stored as uploaded and returned with new additive fields `receipt.status: "processing"` and `receipt.thumbnail_url: null`; a background job rotates (EXIF), shrinks to 1600px JPEG, creates a 320px thumbnail and sets `status: "ready"` + `thumbnail_url`. After processing, `mime_type`/`size_bytes`/`original_name` describe the shrunk JPEG. PDFs, older and imported receipts are `ready` with `thumbnail_url: null`; a failed shrink keeps the original as `ready`. No status endpoint — re-fetch the record. **App action:** send photos untouched (Android `quality: 1`, iOS `0.7`); show "Processing…" while `status` is `processing`, the thumbnail when `thumbnail_url` is set, a file icon otherwise. | Instructor Finances (record object, config, store, receipt upload) |
 | 2026-11-03 | **60-minute travel time.** `travel_time_minutes` now also accepts `60` (1 hour) on `POST /instructor/calendar/items`, `POST /instructor/calendar/fill-slots` (each created slot) and `PUT /instructor/calendar/items/{calendarItem}` (alongside `0` to remove). A 60 creates a 60-minute travel block after the slot and the overlap check reserves the full hour. Calendar item responses return `travel_time_minutes: 60` unchanged in shape. Validation message is now `Travel time must be 15, 30, 45, or 60 minutes.` (update: `0, 15, 30, 45, or 60`). **App action:** add a `60 min` option to Travel Time After on the Add/Edit Time Slot sheets and fill-slots, sending `travel_time_minutes: 60`. | Instructor Calendar (store, fill-slots, update) |
+| 2026-11-03 | **15-minute diary starts (docs only, no API change).** `start_time` on `POST`/`PUT /api/v1/instructor/calendar/items` and `day_start_time` on `POST /calendar/fill-slots` already accept any `H:i` minute; the server never rounded to 30 minutes. The admin diary now offers :00/:15/:30/:45 starts everywhere (including clicking the weekly grid), and the app should offer the same 15-minute steps. Fill-slots walks candidates in 15-minute steps. | Instructor Calendar (store, update, fill-slots) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

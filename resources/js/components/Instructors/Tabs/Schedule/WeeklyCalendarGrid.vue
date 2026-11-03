@@ -165,9 +165,11 @@ function isToday(date: Date): boolean {
 }
 
 // ── Click on empty slot (snap to nearest 15-min) ────────
-function handleSlotClick(dayDate: Date, slotIndex: number) {
+function handleSlotClick(dayDate: Date, slotIndex: number, clickEvent: MouseEvent) {
     const date = formatDate(dayDate)
-    const totalMinutes = DAY_START_HOUR * 60 + slotIndex * 30
+    // Each visual row is 30 minutes; a click in its lower half starts at :15 / :45.
+    const offsetInRow = clickEvent.offsetY >= SNAP_PX ? SNAP_MINUTES : 0
+    const totalMinutes = DAY_START_HOUR * 60 + slotIndex * 30 + offsetInRow
     // Round down to nearest 15-min increment
     const snappedMinutes = Math.floor(totalMinutes / SNAP_MINUTES) * SNAP_MINUTES
     // Clamp so the 2-hour slot fits within the bookable day
@@ -430,7 +432,7 @@ watch(() => props.weekDays, () => {
                     class="cursor-pointer border-b border-border transition-colors hover:bg-muted/50"
                     :class="(slotIdx - 1) % 2 === 0 ? 'border-dashed' : ''"
                     :style="{ height: `${ROW_HEIGHT}px` }"
-                    @click="handleSlotClick(day, slotIdx - 1)"
+                    @click="handleSlotClick(day, slotIdx - 1, $event)"
                 ></div>
 
                 <!-- Event blocks (absolutely positioned, side-by-side when overlapping) -->
