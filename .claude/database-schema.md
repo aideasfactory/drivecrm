@@ -1214,6 +1214,8 @@ Tracks payments received and expenses incurred by instructors. Supports recurrin
 | `receipt_original_name` | varchar(255) | NULLABLE | Original filename for display/download |
 | `receipt_mime_type` | varchar(64) | NULLABLE | Upload MIME (PDF/JPG/PNG) |
 | `receipt_size_bytes` | int unsigned | NULLABLE | Upload size, bytes |
+| `receipt_status` | varchar(20) | NULLABLE | `ReceiptStatus` enum: `processing` (JPEG/PNG stored as uploaded, `ProcessFinanceReceiptImageJob` queued to shrink it) or `ready`. NULL = no receipt, or a receipt from before 2026-11-03 / import — treated as `ready`. Set by `UploadFinanceReceiptAction` (PDFs go straight to `ready`); the job sets `ready` after swapping in the shrunk file, or keeps the original and sets `ready` if processing fails. Added 2026-11-03. |
+| `receipt_thumbnail_path` | varchar(255) | NULLABLE | Private S3 path of the ~320px JPEG thumbnail created by the shrink job. NULL while processing, for PDFs, imported receipts and failed shrinks. Deleted with the receipt. Added 2026-11-03. |
 | `created_at` | timestamp | NULLABLE | Created timestamp |
 | `updated_at` | timestamp | NULLABLE | Updated timestamp |
 

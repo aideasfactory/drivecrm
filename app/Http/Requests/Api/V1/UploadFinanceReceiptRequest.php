@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Support\FinanceReceiptUploads;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UploadFinanceReceiptRequest extends FormRequest
@@ -18,11 +19,16 @@ class UploadFinanceReceiptRequest extends FormRequest
      */
     public function rules(): array
     {
-        $maxKb = (int) config('finances.receipt.max_size_kb', 10240);
-        $mimes = implode(',', config('finances.receipt.allowed_mimes', ['pdf', 'jpg', 'jpeg', 'png']));
-
         return [
-            'receipt' => ['required', 'file', "mimes:{$mimes}", "max:{$maxKb}"],
+            'receipt' => FinanceReceiptUploads::rules(required: true),
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return FinanceReceiptUploads::messages();
     }
 }

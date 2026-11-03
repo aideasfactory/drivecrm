@@ -29,6 +29,16 @@ return [
         'insurance' => 'Insurance',
         'internet' => 'Internet',
         'mot' => 'MOT',
+        // Must match the rows in `category_tax_mapping`; the picker reads
+        // `category_meta` from that table, so a slug missing here fails validation.
+        'servicing' => 'Servicing',
+        'repairs' => 'Repairs',
+        'road_tax' => 'Road Tax',
+        'breakdown_cover' => 'Breakdown Cover',
+        'vehicle_insurance' => 'Vehicle Insurance',
+        'business_insurance' => 'Business Insurance',
+        'phone' => 'Phone',
+        'accountant_fees' => 'Accountant Fees',
     ],
 
     'payment_categories' => [
@@ -69,8 +79,21 @@ return [
 
     'receipt' => [
         // Kilobytes — Laravel's `max` rule on uploaded files is in KB.
-        'max_size_kb' => 10240,
+        // Android uploads untouched camera photos (3–8 MB, up to ~20 MB); they're
+        // shrunk server-side by ProcessFinanceReceiptImageJob. The advertised limit
+        // is also capped by PHP's upload_max_filesize / post_max_size.
+        'max_size_kb' => 20480,
         'allowed_mimes' => ['pdf', 'jpg', 'jpeg', 'png'],
         'signed_url_ttl_minutes' => 20,
+
+        // Background shrink of JPEG/PNG receipts (PDFs are stored as uploaded).
+        'processing' => [
+            // Long edge of the stored receipt — keeps print legible at ~200–500 KB.
+            'max_edge_px' => 1600,
+            'jpeg_quality' => 75,
+            // Long edge of the list thumbnail returned as `receipt.thumbnail_url`.
+            'thumbnail_edge_px' => 320,
+            'thumbnail_jpeg_quality' => 70,
+        ],
     ],
 ];

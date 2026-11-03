@@ -37,6 +37,8 @@ class InstructorFinanceResource extends JsonResource
                 'original_name' => $this->receipt_original_name,
                 'mime_type' => $this->receipt_mime_type,
                 'size_bytes' => $this->receipt_size_bytes,
+                'status' => $this->receiptStatus()?->value,
+                'thumbnail_url' => $this->receipt_thumbnail_url,
             ] : null,
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),

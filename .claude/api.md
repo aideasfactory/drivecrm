@@ -1855,7 +1855,7 @@ Payments and expenses tracking. Every finance record has an optional receipt (PD
 | `recurrence_group_id` | string\|null | UUID shared by every record generated as one recurring series. `null` for standalone records (including recurring records created before series generation existed, or single-iteration ones). |
 | `date` | string | YYYY-MM-DD |
 | `notes` | string\|null | Free-text notes (max 1000 chars) |
-| `receipt` | object\|null | `null` when no receipt. Object has `url` (signed S3 URL, 20-min TTL), `original_name`, `mime_type`, `size_bytes`. |
+| `receipt` | object\|null | `null` when no receipt. Object has `url` (signed S3 URL, 20-min TTL), `original_name`, `mime_type`, `size_bytes`, `status` and `thumbnail_url` — see **Receipt processing** under `POST /finances/{finance}/receipt`. |
 | `created_at` | string | ISO 8601 |
 | `updated_at` | string | ISO 8601 |
 
@@ -1877,6 +1877,7 @@ Returns the dropdown options used by the finance screens **plus** the per-catego
     "fuel": "Fuel",
     "insurance": "Insurance",
     "mot": "MOT",
+    "repairs": "Repairs",
     "advertising": "Advertising"
   },
   "payment_categories": {
@@ -1907,7 +1908,7 @@ Returns the dropdown options used by the finance screens **plus** the per-catego
     "max_iterations": 60
   },
   "receipt": {
-    "max_size_kb": 10240,
+    "max_size_kb": 20480,
     "allowed_mimes": ["pdf", "jpg", "jpeg", "png"]
   },
   "category_meta": {
@@ -1976,7 +1977,7 @@ When both `from` and `to` are omitted, the response covers **the last 30 days** 
     "default_applied": true
   },
   "finances": [
-    { "id": 12, "type": "expense", "category": "fuel", "category_label": "Fuel", "payment_method": "card", "payment_method_label": "Card", "description": "BP Fillup", "amount_pence": 7500, "formatted_amount": "£75.00", "is_recurring": false, "recurrence_frequency": null, "recurrence_frequency_label": null, "recurrence_iterations": null, "recurrence_group_id": null, "date": "2026-04-22", "notes": null, "receipt": { "url": "https://...", "original_name": "receipt.pdf", "mime_type": "application/pdf", "size_bytes": 45123 }, "created_at": "2026-04-22T08:12:00+00:00", "updated_at": "2026-04-22T08:12:00+00:00" }
+    { "id": 12, "type": "expense", "category": "fuel", "category_label": "Fuel", "payment_method": "card", "payment_method_label": "Card", "description": "BP Fillup", "amount_pence": 7500, "formatted_amount": "£75.00", "is_recurring": false, "recurrence_frequency": null, "recurrence_frequency_label": null, "recurrence_iterations": null, "recurrence_group_id": null, "date": "2026-04-22", "notes": null, "receipt": { "url": "https://...", "original_name": "receipt.pdf", "mime_type": "application/pdf", "size_bytes": 45123, "status": "ready", "thumbnail_url": null }, "created_at": "2026-04-22T08:12:00+00:00", "updated_at": "2026-04-22T08:12:00+00:00" }
   ],
   "lesson_income": [
     { "key": "payout-311", "source": "payout", "description": "Lesson – Sarah Jones", "package_name": "Test Ready", "date": "2026-04-20", "amount_pence": 3500, "formatted_amount": "£35.00" },
@@ -2086,7 +2087,9 @@ Fetch a single finance record by ID. The record must belong to the authenticated
       "url": "https://s3.../receipt.pdf?X-Amz-Signature=...",
       "original_name": "bp-fillup.pdf",
       "mime_type": "application/pdf",
-      "size_bytes": 45123
+      "size_bytes": 45123,
+      "status": "ready",
+      "thumbnail_url": null
     },
     "created_at": "2026-04-22T08:12:00+00:00",
     "updated_at": "2026-04-22T08:12:00+00:00"
@@ -2105,7 +2108,9 @@ Fetch a single finance record by ID. The record must belong to the authenticated
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Creates a finance record. Create first (JSON), then upload a receipt separately via `POST /finances/{finance}/receipt` if desired — this keeps the create call small and makes receipt upload independently retryable over flaky networks.
+Creates a finance record. Preferred flow: create first (JSON), then upload a receipt separately via `POST /finances/{finance}/receipt` — this keeps the create call small and makes receipt upload independently retryable over flaky networks.
+
+**Single-request alternative (multipart):** the same fields may be sent as `multipart/form-data` with an optional `receipt` file (same rules as the receipt endpoint: `pdf`, `jpg`, `jpeg`, `png`, max `/finances/config.receipt.max_size_kb`, 20 MB by default). Booleans may be `true`/`false`/`1`/`0` strings, and empty strings or `"null"` count as null for `vehicle_id`, `payment_method`, `recurrence_frequency`, `recurrence_iterations` and `notes`. The record is always saved **before** the receipt goes to S3. If storing the receipt fails, the response is still `201`, `receipt` is `null` and `meta.receipt_upload_failed` is `true`. Retry with `POST /finances/{finance}/receipt` and do **not** re-create the record.
 
 **Recurring series:** when `is_recurring=true`, the backend creates the **entire series upfront** — `recurrence_iterations` records in total (the first on `date`, subsequent ones stepped by `recurrence_frequency` with no-overflow month/year arithmetic, e.g. 31 Jan + 1 month = 28 Feb). All records share a `recurrence_group_id` UUID. The response returns the **first** record only — refetch `GET /finances` to display the series. Updates and deletes always target single records (no series-wide operations). A receipt uploaded afterwards attaches to the first record only.
 
@@ -2124,6 +2129,7 @@ Creates a finance record. Create first (JSON), then upload a receipt separately 
 | `recurrence_iterations` | integer | Conditional | Required when `is_recurring=true`. Total occurrences **including the first** (1 to `recurrence.max_iterations` from config, default 60). |
 | `date` | string | Yes | YYYY-MM-DD — date of the first occurrence |
 | `notes` | string | No | Max 1000 chars |
+| `receipt` | file | No | Multipart only. PDF, JPG/JPEG, or PNG, max `/finances/config.receipt.max_size_kb` (20 MB default). See "Single-request alternative" above. |
 
 **Example Request (recurring monthly payment, 12 occurrences):**
 ```json
@@ -2166,9 +2172,16 @@ Creates 12 records dated 2026-08-01 through 2027-07-01, all sharing one `recurre
 }
 ```
 
-**Success Response:** `201 Created` — returns the created record in the same shape as `GET /finances/{finance}`.
+**Success Response:** `201 Created` — returns the created record in the same shape as `GET /finances/{finance}`, plus `meta`:
+```json
+{ "data": { "id": 812, "type": "expense", "category": "repairs", "receipt": { "url": "https://...", "original_name": "photo-1793639953752.jpg", "mime_type": "image/jpeg", "size_bytes": 3145728, "status": "processing", "thumbnail_url": null }, "...": "..." }, "meta": { "receipt_upload_failed": false } }
+```
 
-**Error Response (validation):** `422 Unprocessable Entity` — `errors` object keyed by field.
+**Error Responses:**
+- `422 Unprocessable Entity` — `errors` object keyed by field (e.g. `errors.receipt: ["The receipt is too large. The maximum size is 20 MB."]`, `errors.category: ["The selected category is invalid."]`).
+- `413 Payload Too Large` — the whole request body exceeded the server's PHP `post_max_size`; JSON `{ "message": "...", "errors": { "receipt": ["..."] } }`. A body rejected by the web server (nginx `client_max_body_size`) never reaches Laravel and returns an nginx HTML 413.
+
+All `/instructor/finances*` errors are JSON, even when the request has no `Accept: application/json` header.
 
 ---
 
@@ -2210,7 +2223,7 @@ Deletes a finance record. If a receipt is attached, it is deleted from S3 automa
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Uploads (or replaces) a receipt for a finance record. Multipart request. If a receipt already exists on the record, it is deleted from S3 before the new one is stored.
+Uploads (or replaces) a receipt for a finance record. Multipart request. If a receipt already exists on the record (with its thumbnail), it is replaced; the old files are deleted only after the new one is stored.
 
 **URL Parameters:** `finance` (integer)
 
@@ -2218,13 +2231,39 @@ Uploads (or replaces) a receipt for a finance record. Multipart request. If a re
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `receipt` | file | Yes | PDF, JPG/JPEG, or PNG. Max size from `/finances/config.receipt.max_size_kb` (default 10 MB). |
+| `receipt` | file | Yes | PDF, JPG/JPEG, or PNG (checked by file content, not just the name). Max size from `/finances/config.receipt.max_size_kb` (default 20 MB; the server lowers it automatically if PHP's upload limits are lower, so always read it from config). Send photos **untouched** — the server rotates, shrinks and thumbnails them. |
+
+**Receipt processing (photos):** the file is stored on private S3 as uploaded and the response returns straight away. JPEG/PNG photos come back with `receipt.status: "processing"` and `receipt.thumbnail_url: null`; a background job then:
+1. rotates the photo upright from its EXIF orientation tag and strips metadata,
+2. shrinks it to 1600px on the long edge (JPEG), and creates a 320px JPEG thumbnail,
+3. swaps them in — `receipt.url` then serves the shrunk JPEG, `mime_type` becomes `image/jpeg`, `size_bytes` the new size, `original_name` gets a `.jpg` extension, `thumbnail_url` is set and `status` becomes `"ready"`.
+
+This normally takes a few seconds. There is no status endpoint: re-fetch the record (`GET /finances/{finance}`, the list, or the summary) when the screen is shown again. While `processing`, `receipt.url` already serves the original upload, so the receipt can be opened; show a "Processing…" placeholder rather than a thumbnail.
+
+If shrinking fails (after 3 attempts), the original is kept and `status` still becomes `"ready"`, with `thumbnail_url: null` — never an error for the user. PDFs are `"ready"` immediately with `thumbnail_url: null`. Receipts uploaded before 2026-11-03 or imported are `"ready"` with `thumbnail_url: null`.
+
+| `receipt.status` | `receipt.thumbnail_url` | App shows |
+|---|---|---|
+| `processing` | `null` | "Processing…" placeholder (receipt can still be opened via `url`) |
+| `ready` | string | Thumbnail image (signed URL, 20-min TTL — re-fetch the record rather than caching it) |
+| `ready` | `null` | File icon (PDF, older/imported receipt, or a photo that couldn't be shrunk) |
 
 **Success Response:** `200 OK` — returns the updated record with the new `receipt` object populated.
 
-**Error Responses:**
+```json
+{ "data": { "id": 812, "type": "expense", "category": "repairs", "receipt": { "url": "https://...", "original_name": "photo-1793639953752.jpg", "mime_type": "image/jpeg", "size_bytes": 6291456, "status": "processing", "thumbnail_url": null }, "...": "..." } }
+```
+
+After processing, the same record returns:
+
+```json
+{ "receipt": { "url": "https://...", "original_name": "photo-1793639953752.jpg", "mime_type": "image/jpeg", "size_bytes": 284311, "status": "ready", "thumbnail_url": "https://..." } }
+```
+
+**Error Responses (always JSON):**
 - `403 Forbidden` — record not owned.
-- `422 Unprocessable Entity` — file missing, wrong mime, or over max size.
+- `422 Unprocessable Entity` — `errors.receipt` with one of: `Please attach a receipt file.`, `The receipt must be one of: PDF, JPG, JPEG, PNG.`, `The receipt is too large. The maximum size is 20 MB.`, `The receipt could not be uploaded. Make sure it is a PDF, JPG, JPEG, PNG file under 20 MB and try again.` (the last one when PHP rejected the file, e.g. over `upload_max_filesize`).
+- `413 Payload Too Large` — body over PHP `post_max_size` (JSON), or over nginx `client_max_body_size` (nginx HTML page; nginx may also close the connection before the app has sent the whole file, which shows up on the phone as a timeout or lost connection).
 
 ---
 
@@ -8190,6 +8229,8 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-01 | **CRM instructor delete — 30-day grace period.** Removed the web `POST /instructors/{instructor}/request-deletion` (it returned plain JSON to an Inertia request and only emailed admins). Web `DELETE /instructors/{instructor}` (`instructors.destroy`, owner only) now **schedules** deletion 30 days ahead (an `account_deletion_requests` row with `requested_by_user_id`), suspends the instructor, revokes Sanctum tokens and web sessions, sends no email, and redirects to the instructor page. New web `POST /instructors/{instructor}/cancel-deletion` (`instructors.cancel-deletion`, owner only) cancels it and restores the previous status. The nightly `account:process-deletion-requests` anonymises + archives when due. **API change:** `POST /api/v1/auth/login` returns 422 `This account is scheduled for deletion. Please contact Drive support.` (`errors.email`) while a staff-scheduled deletion is pending; existing tokens are already revoked, so the app sees 401 on its next call. **App action:** none required — the message shows like any login error. | Auth (login) |
 | 2026-11-02 | **Remove a package from the app.** New `DELETE /instructor/packages/{package}` — instructor only, own package only (`403` otherwise, `404` unknown ID). Same soft remove as the CRM Remove Package action (`InstructorService::deactivatePackage()`): sets `active: false`, keeps orders, lessons and payments, logs the change, clears the package cache. Success: `200 {"data": <package object, active: false>, "message": "Package removed."}`. Removed packages no longer appear in `GET /instructor/packages` or `GET /student/packages` (unchanged active filter). Restore stays web only. | Instructor Packages (remove — NEW) |
 | 2026-10-31 | **Only active pupils in the add-booking picker.** `GET /instructor/students` takes an optional `active_only` boolean. With `active_only=1` every group holds only `status = "active"` students (`passed` / `inactive` empty, `recent_activity` filtered). Without it the response is unchanged. `POST /students/{student}/orders` is unchanged and does not check pupil status. **App action:** the instructor add-booking pupil picker (including Add Booking from a diary slot) must call `?active_only=1` and list `data.active` only; leave the general pupils screen as it is. | Instructor Students (index), Orders (store — docs note) |
+| 2026-11-03 | **Expense create + receipt upload fixes.** `/finances/config.expense_categories` gains `servicing`, `repairs`, `road_tax`, `breakdown_cover`, `vehicle_insurance`, `business_insurance`, `phone`, `accountant_fees` (they were already in `category_meta`, but create/update rejected them with 422 "The selected category is invalid."). `POST /instructor/finances` also accepts `multipart/form-data` with an optional `receipt` file. The record is saved first, and a failed receipt store returns `201` with `meta.receipt_upload_failed: true` (new additive `meta` on the create response). String booleans (`"true"`/`"false"`) are accepted on create. `/finances/config.receipt.max_size_kb` is now the effective limit (config 10 MB, lowered if PHP limits are lower). All `/instructor/finances*` errors are JSON (422 with plain-English `errors.receipt` messages, 413 when the body is over PHP `post_max_size`). Replacing a receipt keeps the old one if the new upload fails. **App action:** read `max_size_kb`/`allowed_mimes` from config and check the file before sending; send `Accept: application/json`; if using the single multipart create, never re-create on retry; handle `meta.receipt_upload_failed`, 422 and 413 with the server message. | Instructor Finances (config, store, receipt upload) |
+| 2026-11-03 | **Receipt photos processed on the server.** `/finances/config.receipt.max_size_kb` raised from 10 MB to 20 MB so the app can send untouched camera photos. JPEG/PNG receipts are stored as uploaded and returned with new additive fields `receipt.status: "processing"` and `receipt.thumbnail_url: null`; a background job rotates (EXIF), shrinks to 1600px JPEG, creates a 320px thumbnail and sets `status: "ready"` + `thumbnail_url`. After processing, `mime_type`/`size_bytes`/`original_name` describe the shrunk JPEG. PDFs, older and imported receipts are `ready` with `thumbnail_url: null`; a failed shrink keeps the original as `ready`. No status endpoint — re-fetch the record. **App action:** send photos untouched (Android `quality: 1`, iOS `0.7`); show "Processing…" while `status` is `processing`, the thumbnail when `thumbnail_url` is set, a file icon otherwise. | Instructor Finances (record object, config, store, receipt upload) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.
