@@ -1817,6 +1817,7 @@ Returns the dropdown options used by the finance screens **plus** the per-catego
     "fuel": "Fuel",
     "insurance": "Insurance",
     "mot": "MOT",
+    "repairs": "Repairs",
     "advertising": "Advertising"
   },
   "payment_categories": {
@@ -2045,7 +2046,9 @@ Fetch a single finance record by ID. The record must belong to the authenticated
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Creates a finance record. Create first (JSON), then upload a receipt separately via `POST /finances/{finance}/receipt` if desired — this keeps the create call small and makes receipt upload independently retryable over flaky networks.
+Creates a finance record. Preferred flow: create first (JSON), then upload a receipt separately via `POST /finances/{finance}/receipt` — this keeps the create call small and makes receipt upload independently retryable over flaky networks.
+
+**Single-request alternative (multipart):** the same fields may be sent as `multipart/form-data` with an optional `receipt` file (same rules as the receipt endpoint: `pdf`, `jpg`, `jpeg`, `png`, max `/finances/config.receipt.max_size_kb`, 10 MB by default). Booleans may be `true`/`false`/`1`/`0` strings, and empty strings or `"null"` count as null for `vehicle_id`, `payment_method`, `recurrence_frequency`, `recurrence_iterations` and `notes`. The record is always saved **before** the receipt goes to S3. If storing the receipt fails, the response is still `201`, `receipt` is `null` and `meta.receipt_upload_failed` is `true`. Retry with `POST /finances/{finance}/receipt` and do **not** re-create the record.
 
 **Recurring series:** when `is_recurring=true`, the backend creates the **entire series upfront** — `recurrence_iterations` records in total (the first on `date`, subsequent ones stepped by `recurrence_frequency` with no-overflow month/year arithmetic, e.g. 31 Jan + 1 month = 28 Feb). All records share a `recurrence_group_id` UUID. The response returns the **first** record only — refetch `GET /finances` to display the series. Updates and deletes always target single records (no series-wide operations). A receipt uploaded afterwards attaches to the first record only.
 
@@ -2064,6 +2067,7 @@ Creates a finance record. Create first (JSON), then upload a receipt separately 
 | `recurrence_iterations` | integer | Conditional | Required when `is_recurring=true`. Total occurrences **including the first** (1 to `recurrence.max_iterations` from config, default 60). |
 | `date` | string | Yes | YYYY-MM-DD — date of the first occurrence |
 | `notes` | string | No | Max 1000 chars |
+| `receipt` | file | No | Multipart only. PDF, JPG/JPEG, or PNG, max `/finances/config.receipt.max_size_kb` (10 MB default). See "Single-request alternative" above. |
 
 **Example Request (recurring monthly payment, 12 occurrences):**
 ```json
@@ -2106,9 +2110,16 @@ Creates 12 records dated 2026-08-01 through 2027-07-01, all sharing one `recurre
 }
 ```
 
-**Success Response:** `201 Created` — returns the created record in the same shape as `GET /finances/{finance}`.
+**Success Response:** `201 Created` — returns the created record in the same shape as `GET /finances/{finance}`, plus `meta`:
+```json
+{ "data": { "id": 812, "type": "expense", "category": "repairs", "receipt": { "url": "https://...", "original_name": "photo-1793639953752.jpg", "mime_type": "image/jpeg", "size_bytes": 3145728 }, "...": "..." }, "meta": { "receipt_upload_failed": false } }
+```
 
-**Error Response (validation):** `422 Unprocessable Entity` — `errors` object keyed by field.
+**Error Responses:**
+- `422 Unprocessable Entity` — `errors` object keyed by field (e.g. `errors.receipt: ["The receipt is too large. The maximum size is 10 MB."]`, `errors.category: ["The selected category is invalid."]`).
+- `413 Payload Too Large` — the whole request body exceeded the server's PHP `post_max_size`; JSON `{ "message": "...", "errors": { "receipt": ["..."] } }`. A body rejected by the web server (nginx `client_max_body_size`) never reaches Laravel and returns an nginx HTML 413.
+
+All `/instructor/finances*` errors are JSON, even when the request has no `Accept: application/json` header.
 
 ---
 
@@ -2158,13 +2169,16 @@ Uploads (or replaces) a receipt for a finance record. Multipart request. If a re
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `receipt` | file | Yes | PDF, JPG/JPEG, or PNG. Max size from `/finances/config.receipt.max_size_kb` (default 10 MB). |
+| `receipt` | file | Yes | PDF, JPG/JPEG, or PNG (checked by file content, not just the name). Max size from `/finances/config.receipt.max_size_kb` (default 10 MB; the server lowers it automatically if PHP's upload limits are lower, so always read it from config). |
+
+The file goes straight to private S3 in the request; there is no image processing. If an existing receipt is replaced, the old file is deleted only after the new one is stored.
 
 **Success Response:** `200 OK` — returns the updated record with the new `receipt` object populated.
 
-**Error Responses:**
+**Error Responses (always JSON):**
 - `403 Forbidden` — record not owned.
-- `422 Unprocessable Entity` — file missing, wrong mime, or over max size.
+- `422 Unprocessable Entity` — `errors.receipt` with one of: `Please attach a receipt file.`, `The receipt must be one of: PDF, JPG, JPEG, PNG.`, `The receipt is too large. The maximum size is 10 MB.`, `The receipt could not be uploaded. Make sure it is a PDF, JPG, JPEG, PNG file under 10 MB and try again.` (the last one when PHP rejected the file, e.g. over `upload_max_filesize`).
+- `413 Payload Too Large` — body over PHP `post_max_size` (JSON), or over nginx `client_max_body_size` (nginx HTML page; nginx may also close the connection before the app has sent the whole file, which shows up on the phone as a timeout or lost connection).
 
 ---
 
@@ -8122,6 +8136,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-10-30 | **Remove a pupil from the app.** New `DELETE /instructor/pupils/{student}` — instructor only, own assigned pupil only (`403` otherwise, `404` unknown ID). Unassigns the pupil (`instructor_id` → `null`) and logs it in the pupil's activity log; the pupil, orders, payments and lessons are kept. Returns `422` while the pupil has open lessons with this instructor (draft/pending on a pending or active order, any date — including past lessons not yet signed off). Success: `200 {"message": "Pupil removed"}`. Shares lookup, `StudentPolicy@delete` and `StudentService::remove()` with `DELETE /students/{student}` (unchanged). | Instructor Pupils (remove — NEW), Students (delete — note) |
 | 2026-11-01 | **CRM instructor delete — 30-day grace period.** Removed the web `POST /instructors/{instructor}/request-deletion` (it returned plain JSON to an Inertia request and only emailed admins). Web `DELETE /instructors/{instructor}` (`instructors.destroy`, owner only) now **schedules** deletion 30 days ahead (an `account_deletion_requests` row with `requested_by_user_id`), suspends the instructor, revokes Sanctum tokens and web sessions, sends no email, and redirects to the instructor page. New web `POST /instructors/{instructor}/cancel-deletion` (`instructors.cancel-deletion`, owner only) cancels it and restores the previous status. The nightly `account:process-deletion-requests` anonymises + archives when due. **API change:** `POST /api/v1/auth/login` returns 422 `This account is scheduled for deletion. Please contact Drive support.` (`errors.email`) while a staff-scheduled deletion is pending; existing tokens are already revoked, so the app sees 401 on its next call. **App action:** none required — the message shows like any login error. | Auth (login) |
 | 2026-10-31 | **Only active pupils in the add-booking picker.** `GET /instructor/students` takes an optional `active_only` boolean. With `active_only=1` every group holds only `status = "active"` students (`passed` / `inactive` empty, `recent_activity` filtered). Without it the response is unchanged. `POST /students/{student}/orders` is unchanged and does not check pupil status. **App action:** the instructor add-booking pupil picker (including Add Booking from a diary slot) must call `?active_only=1` and list `data.active` only; leave the general pupils screen as it is. | Instructor Students (index), Orders (store — docs note) |
+| 2026-11-03 | **Expense create + receipt upload fixes.** `/finances/config.expense_categories` gains `servicing`, `repairs`, `road_tax`, `breakdown_cover`, `vehicle_insurance`, `business_insurance`, `phone`, `accountant_fees` (they were already in `category_meta`, but create/update rejected them with 422 "The selected category is invalid."). `POST /instructor/finances` also accepts `multipart/form-data` with an optional `receipt` file. The record is saved first, and a failed receipt store returns `201` with `meta.receipt_upload_failed: true` (new additive `meta` on the create response). String booleans (`"true"`/`"false"`) are accepted on create. `/finances/config.receipt.max_size_kb` is now the effective limit (config 10 MB, lowered if PHP limits are lower). All `/instructor/finances*` errors are JSON (422 with plain-English `errors.receipt` messages, 413 when the body is over PHP `post_max_size`). Replacing a receipt keeps the old one if the new upload fails. **App action:** read `max_size_kb`/`allowed_mimes` from config and check the file before sending; send `Accept: application/json`; if using the single multipart create, never re-create on retry; handle `meta.receipt_upload_failed`, 422 and 413 with the server message. | Instructor Finances (config, store, receipt upload) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

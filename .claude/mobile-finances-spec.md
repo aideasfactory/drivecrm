@@ -281,7 +281,7 @@ onSubmit:
          - Store the file in memory so the retry works without re-picking
 ```
 
-**Don't** combine both into a single multipart request — we chose separate endpoints specifically so receipt upload is retryable independently of the record create.
+Prefer this two-step flow. `POST /instructor/finances` also accepts a single multipart request with an optional `receipt` file: the record is saved first, and if storing the receipt fails the response is still `201` with `meta.receipt_upload_failed: true`. In that case retry with `POST /finances/{id}/receipt` and never re-create the record. Always send `Accept: application/json`, and check the file against `config.receipt.max_size_kb` / `allowed_mimes` before uploading.
 
 ### 5.2 Edit finance (with receipt changes)
 
