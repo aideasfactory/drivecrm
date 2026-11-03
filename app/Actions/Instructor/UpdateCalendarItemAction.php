@@ -27,7 +27,7 @@ class UpdateCalendarItemAction
      * @param  bool|null  $isAvailable  New availability status (null to keep unchanged)
      * @param  string|null  $notes  Notes about the slot (null to keep unchanged)
      * @param  string|null  $unavailabilityReason  Reason for unavailability (null to keep unchanged)
-     * @param  int|null  $travelTimeMinutes  Travel time in minutes (0, 15, 30, or 45). Pass 0 to remove travel block.
+     * @param  int|null  $travelTimeMinutes  Travel time in minutes (0, 15, 30, 45, or 60). Pass 0 to remove travel block.
      * @return CalendarItem The updated calendar item
      */
     public function __invoke(

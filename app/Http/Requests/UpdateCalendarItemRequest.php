@@ -60,7 +60,7 @@ class UpdateCalendarItemRequest extends FormRequest
             'travel_time_minutes' => [
                 'nullable',
                 'integer',
-                'in:0,15,30,45',
+                'in:0,15,30,45,60',
             ],
             'is_practical_test' => [
                 'sometimes',

@@ -66,7 +66,7 @@ class FillAvailableSlotsRequest extends FormRequest
             'travel_time_minutes' => [
                 'nullable',
                 'integer',
-                'in:15,30,45',
+                'in:15,30,45,60',
             ],
         ];
     }
@@ -116,7 +116,7 @@ class FillAvailableSlotsRequest extends FormRequest
             'day_end_time.required' => 'Please provide a daily end time.',
             'day_end_time.date_format' => 'End time must be in HH:MM format.',
             'day_end_time.after' => 'The daily end time must be after the start time.',
-            'travel_time_minutes.in' => 'Travel time must be 15, 30, or 45 minutes.',
+            'travel_time_minutes.in' => 'Travel time must be 15, 30, 45, or 60 minutes.',
         ];
     }
 }

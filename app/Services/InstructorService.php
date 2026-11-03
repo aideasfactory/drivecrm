@@ -457,7 +457,7 @@ class InstructorService extends BaseService
      * @param  bool|null  $isAvailable  New availability status (null to keep unchanged)
      * @param  string|null  $notes  Notes about the slot (null to keep unchanged)
      * @param  string|null  $unavailabilityReason  Reason for unavailability (null to keep unchanged)
-     * @param  int|null  $travelTimeMinutes  Travel time in minutes (0 to remove, 15/30/45 to set)
+     * @param  int|null  $travelTimeMinutes  Travel time in minutes (0 to remove, 15/30/45/60 to set)
      * @return CalendarItem The updated calendar item
      */
     public function updateCalendarItem(

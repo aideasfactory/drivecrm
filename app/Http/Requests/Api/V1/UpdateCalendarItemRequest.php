@@ -55,7 +55,7 @@ class UpdateCalendarItemRequest extends FormRequest
             'travel_time_minutes' => [
                 'nullable',
                 'integer',
-                'in:0,15,30,45',
+                'in:0,15,30,45,60',
             ],
             'apply_to_future_in_order' => [
                 'sometimes',
@@ -154,7 +154,7 @@ class UpdateCalendarItemRequest extends FormRequest
             'end_time.before_or_equal' => 'End time must be at or before '.config('diary.end_time').'.',
             'notes.max' => 'Notes cannot exceed 1000 characters.',
             'unavailability_reason.max' => 'Unavailability reason cannot exceed 500 characters.',
-            'travel_time_minutes.in' => 'Travel time must be 0, 15, 30, or 45 minutes.',
+            'travel_time_minutes.in' => 'Travel time must be 0, 15, 30, 45, or 60 minutes.',
         ];
     }
 }

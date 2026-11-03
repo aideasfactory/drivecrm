@@ -32,7 +32,7 @@ class CreateRecurringCalendarItemsAction
      * @param  bool  $isAvailable  Whether the slots are available
      * @param  string|null  $notes  Optional notes
      * @param  string|null  $unavailabilityReason  Reason for unavailability
-     * @param  int|null  $travelTimeMinutes  Travel time in minutes (15, 30, or 45) to create after each slot
+     * @param  int|null  $travelTimeMinutes  Travel time in minutes (15, 30, 45, or 60) to create after each slot
      * @return Collection<int, CalendarItem> The created calendar items
      */
     public function __invoke(
