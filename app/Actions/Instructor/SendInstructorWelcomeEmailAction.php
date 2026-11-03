@@ -25,7 +25,8 @@ class SendInstructorWelcomeEmailAction
      * 1. Mark the user's `welcome_email_pending` flag so admins can see if it never sends.
      * 2. Mint a password-broker reset token (Laravel's standard, time-limited token).
      * 3. Queue the welcome email with a link to the standard password.reset page.
-     * 4. On success, clear the pending flag and log activity on the instructor.
+     * 4. On success, clear the pending flag, stamp `welcome_email_last_sent_at`
+     *    and log activity on the instructor.
      * 5. On failure, leave the pending flag set, log the error, and return false —
      *    callers (controllers / bulk-import) can surface the failure to the admin.
      *
@@ -61,7 +62,10 @@ class SendInstructorWelcomeEmailAction
                 expiresInMinutes: $expiresInMinutes,
             ));
 
-            $user->forceFill(['welcome_email_pending' => false])->save();
+            $user->forceFill([
+                'welcome_email_pending' => false,
+                'welcome_email_last_sent_at' => now(),
+            ])->save();
 
             ($this->logActivity)(
                 $instructor,

@@ -32,6 +32,7 @@ class User extends Authenticatable
         'password',
         'password_change_required',
         'welcome_email_pending',
+        'welcome_email_last_sent_at',
         'imported_at',
         'role',
         'owner_access',
@@ -62,6 +63,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'password_change_required' => 'boolean',
             'welcome_email_pending' => 'boolean',
+            'welcome_email_last_sent_at' => 'datetime',
             'imported_at' => 'datetime',
             'role' => UserRole::class,
             'owner_access' => OwnerAccess::class,
@@ -167,6 +169,18 @@ class User extends Authenticatable
         return Attribute::make(
             get: fn () => $this->instructor ?? $this->student,
         );
+    }
+
+    /**
+     * Whether the user has finished sign-up by choosing their own password.
+     *
+     * New and imported accounts start with `password_change_required` set;
+     * it is cleared when the user sets a password via the welcome / reset link
+     * or changes it in the app.
+     */
+    public function hasCompletedSignUp(): bool
+    {
+        return ! $this->password_change_required;
     }
 
     /**
