@@ -53,6 +53,8 @@ use App\Actions\Instructor\UpdateCalendarItemAction;
 use App\Actions\Instructor\UpdateInstructorFinanceAction;
 use App\Actions\Instructor\UpdateInstructorProfileAction;
 use App\Actions\Instructor\UploadFinanceReceiptAction;
+use App\Actions\Instructor\ProcessFinanceReceiptImageAction;
+use App\Actions\Instructor\MarkFinanceReceiptReadyAction;
 use App\Actions\Instructor\UploadInstructorProfilePictureAction;
 use App\Actions\Lesson\BankLessonsAction;
 use App\Actions\Lesson\GetBankedLessonsAction;
@@ -142,6 +144,8 @@ class InstructorService extends BaseService
         protected DeleteInstructorFinanceAction $deleteInstructorFinance,
         protected UploadFinanceReceiptAction $uploadFinanceReceipt,
         protected DeleteFinanceReceiptAction $deleteFinanceReceipt,
+        protected ProcessFinanceReceiptImageAction $processFinanceReceiptImage,
+        protected MarkFinanceReceiptReadyAction $markFinanceReceiptReady,
         protected GetMileageLogsAction $getMileageLogs,
         protected CreateMileageLogAction $createMileageLog,
         protected UpdateMileageLogAction $updateMileageLog,
@@ -1302,6 +1306,23 @@ class InstructorService extends BaseService
     public function deleteFinanceReceipt(InstructorFinance $finance): InstructorFinance
     {
         return ($this->deleteFinanceReceipt)($finance);
+    }
+
+    /**
+     * Shrink a queued receipt photo and create its thumbnail (ProcessFinanceReceiptImageJob).
+     * Returns false when skipped because the receipt was replaced or removed.
+     */
+    public function processFinanceReceiptImage(int $financeId, string $sourcePath): bool
+    {
+        return ($this->processFinanceReceiptImage)($financeId, $sourcePath);
+    }
+
+    /**
+     * Keep the original upload as the final receipt when it couldn't be shrunk.
+     */
+    public function markFinanceReceiptReady(int $financeId, string $sourcePath): void
+    {
+        ($this->markFinanceReceiptReady)($financeId, $sourcePath);
     }
 
     /**

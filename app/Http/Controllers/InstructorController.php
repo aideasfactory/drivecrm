@@ -1719,6 +1719,8 @@ class InstructorController extends Controller
                 'original_name' => $f->receipt_original_name,
                 'mime_type' => $f->receipt_mime_type,
                 'size_bytes' => $f->receipt_size_bytes,
+                'status' => $f->receiptStatus()?->value,
+                'thumbnail_url' => $f->receipt_thumbnail_url,
             ] : null,
             'created_at' => $f->created_at?->toIso8601String(),
         ];

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\ReceiptStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -31,6 +32,8 @@ class InstructorFinance extends Model
         'receipt_original_name',
         'receipt_mime_type',
         'receipt_size_bytes',
+        'receipt_status',
+        'receipt_thumbnail_path',
     ];
 
     protected function casts(): array
@@ -41,6 +44,7 @@ class InstructorFinance extends Model
             'recurrence_iterations' => 'integer',
             'date' => 'date',
             'receipt_size_bytes' => 'integer',
+            'receipt_status' => ReceiptStatus::class,
         ];
     }
 
@@ -115,6 +119,37 @@ class InstructorFinance extends Model
             $this->receipt_path,
             now()->addMinutes($ttlMinutes)
         );
+    }
+
+    /**
+     * Temporary signed S3 URL for the small receipt thumbnail. Null while the
+     * image is still processing, for PDFs, and for receipts without one.
+     */
+    public function getReceiptThumbnailUrlAttribute(): ?string
+    {
+        if (! $this->receipt_thumbnail_path) {
+            return null;
+        }
+
+        $ttlMinutes = (int) config('finances.receipt.signed_url_ttl_minutes', 20);
+
+        return Storage::disk('s3')->temporaryUrl(
+            $this->receipt_thumbnail_path,
+            now()->addMinutes($ttlMinutes)
+        );
+    }
+
+    /**
+     * Effective receipt status: null when there is no receipt; a receipt with no
+     * stored status (PDF, imported, or uploaded before processing existed) is ready.
+     */
+    public function receiptStatus(): ?ReceiptStatus
+    {
+        if (! $this->receipt_path) {
+            return null;
+        }
+
+        return $this->receipt_status ?? ReceiptStatus::Ready;
     }
 
     public function scopePayments($query)
