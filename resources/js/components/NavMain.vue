@@ -4,6 +4,7 @@ import {
     SidebarGroup,
     SidebarGroupLabel,
     SidebarMenu,
+    SidebarMenuBadge,
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
@@ -27,11 +28,23 @@ const { isCurrentUrl } = useCurrentUrl();
                     :is-active="isCurrentUrl(item.href)"
                     :tooltip="item.title"
                 >
-                    <Link :href="item.href">
+                    <Link :href="item.href" class="relative">
                         <component :is="item.icon" />
                         <span>{{ item.title }}</span>
+                        <span
+                            v-if="item.badge"
+                            class="absolute top-1 left-5 hidden size-2 rounded-full bg-destructive group-data-[collapsible=icon]:block"
+                            aria-hidden="true"
+                        />
                     </Link>
                 </SidebarMenuButton>
+                <SidebarMenuBadge
+                    v-if="item.badge"
+                    class="bg-destructive text-white peer-hover/menu-button:text-white peer-data-[active=true]/menu-button:text-white"
+                    :aria-label="`${item.badge} unread`"
+                >
+                    {{ item.badge > 99 ? '99+' : item.badge }}
+                </SidebarMenuBadge>
             </SidebarMenuItem>
         </SidebarMenu>
     </SidebarGroup>

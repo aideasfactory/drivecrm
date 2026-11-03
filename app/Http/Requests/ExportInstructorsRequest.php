@@ -36,6 +36,10 @@ class ExportInstructorsRequest extends FormRequest
                 GetInstructorListAction::ONBOARDING_EMAIL_SENT,
                 GetInstructorListAction::ONBOARDING_EMAIL_NOT_SENT,
             ])],
+            'signed_up' => ['nullable', Rule::in([
+                GetInstructorListAction::SIGNED_UP,
+                GetInstructorListAction::NOT_SIGNED_UP,
+            ])],
             'stripe' => ['nullable', Rule::in([
                 GetInstructorListAction::STRIPE_CONNECTED,
                 GetInstructorListAction::STRIPE_NOT_CONNECTED,
@@ -57,6 +61,7 @@ class ExportInstructorsRequest extends FormRequest
         return [
             'setup.in' => 'The setup filter must be complete or incomplete.',
             'onboarding_email.in' => 'The onboarding email filter must be sent or not_sent.',
+            'signed_up.in' => 'The signed up filter must be signed_up or not_signed_up.',
             'stripe.in' => 'The Stripe filter must be connected or not_connected.',
             'availability.in' => 'The availability filter must be added or not_added.',
         ];

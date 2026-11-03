@@ -5,6 +5,8 @@ export interface Instructor {
   phone: string | null
   connection_status: 'connected' | 'not_connected'
   onboarding_email_sent: boolean
+  onboarding_email_last_sent_at: string | null
+  signed_up: boolean
   stripe_connected: boolean
   availability_added: boolean
   setup_complete: boolean
@@ -32,6 +34,8 @@ export interface InstructorDetail {
   locations: Location[]
   hmrc_connected?: boolean
   welcome_email_pending?: boolean
+  welcome_email_last_sent_at?: string | null
+  signed_up?: boolean
   app_onboarding_step?: number
   app_onboarding_complete?: boolean
   pending_deletion?: InstructorPendingDeletion | null

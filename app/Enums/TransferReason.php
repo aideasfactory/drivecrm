@@ -11,6 +11,7 @@ enum TransferReason: string
     case NoAvailability = 'no_availability';
     case WrongTransmission = 'wrong_transmission';
     case Complaint = 'complaint';
+    case Other = 'other';
 
     public function label(): string
     {
@@ -20,6 +21,7 @@ enum TransferReason: string
             self::NoAvailability => 'No availability',
             self::WrongTransmission => 'Wrong transmission',
             self::Complaint => 'Complaint',
+            self::Other => 'Other',
         };
     }
 

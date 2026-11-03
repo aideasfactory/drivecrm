@@ -88,6 +88,7 @@ Route::prefix('v1')->group(function (): void {
             Route::get('packages', [InstructorPackageController::class, 'index']);
             Route::post('packages', [InstructorPackageController::class, 'store']);
             Route::put('packages/{package}', [InstructorPackageController::class, 'update']);
+            Route::delete('packages/{package}', [InstructorPackageController::class, 'destroy']);
             Route::get('calendar/items', [InstructorCalendarController::class, 'index']);
             Route::post('calendar/items', [InstructorCalendarController::class, 'store']);
             Route::post('calendar/fill-slots', [InstructorCalendarController::class, 'fillSlots']);

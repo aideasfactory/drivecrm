@@ -33,12 +33,14 @@ const { isOwner } = useRole()
 
 type SetupFilter = '' | 'complete' | 'incomplete'
 type OnboardingEmailFilter = '' | 'sent' | 'not_sent'
+type SignedUpFilter = '' | 'signed_up' | 'not_signed_up'
 type StripeFilter = '' | 'connected' | 'not_connected'
 type AvailabilityFilter = '' | 'added' | 'not_added'
 
 interface Filters {
     setup: SetupFilter
     onboarding_email: OnboardingEmailFilter
+    signed_up: SignedUpFilter
     stripe: StripeFilter
     availability: AvailabilityFilter
 }
@@ -53,6 +55,7 @@ const fromQuery = <T extends string>(key: string, allowed: T[]): T | '' => {
 const searchQuery = ref(initialQuery.get('search') ?? '')
 const setupFilter = ref<SetupFilter>(fromQuery('setup', ['complete', 'incomplete']))
 const onboardingEmailFilter = ref<OnboardingEmailFilter>(fromQuery('onboarding_email', ['sent', 'not_sent']))
+const signedUpFilter = ref<SignedUpFilter>(fromQuery('signed_up', ['signed_up', 'not_signed_up']))
 const stripeFilter = ref<StripeFilter>(fromQuery('stripe', ['connected', 'not_connected']))
 const availabilityFilter = ref<AvailabilityFilter>(fromQuery('availability', ['added', 'not_added']))
 
@@ -81,6 +84,7 @@ const isSetupComplete = (instructor: Instructor) =>
 const currentFilters = computed<Filters>(() => ({
     setup: setupFilter.value,
     onboarding_email: onboardingEmailFilter.value,
+    signed_up: signedUpFilter.value,
     stripe: stripeFilter.value,
     availability: availabilityFilter.value,
 }))
@@ -96,6 +100,7 @@ const matches = (instructor: Instructor, filters: Filters) => {
             instructor.email.toLowerCase().includes(query)) &&
         matchesFilter(isSetupComplete(instructor), filters.setup, 'complete') &&
         matchesFilter(instructor.onboarding_email_sent, filters.onboarding_email, 'sent') &&
+        matchesFilter(instructor.signed_up, filters.signed_up, 'signed_up') &&
         matchesFilter(instructor.stripe_connected, filters.stripe, 'connected') &&
         matchesFilter(instructor.availability_added, filters.availability, 'added')
     )
@@ -121,6 +126,7 @@ const clearFilters = () => {
     searchQuery.value = ''
     setupFilter.value = ''
     onboardingEmailFilter.value = ''
+    signedUpFilter.value = ''
     stripeFilter.value = ''
     availabilityFilter.value = ''
 }
@@ -162,10 +168,17 @@ const getInitials = (name: string) => {
 }
 
 const setupSteps = (instructor: Instructor) => [
-    { label: instructor.onboarding_email_sent ? 'Sent' : 'Not sent', done: instructor.onboarding_email_sent },
-    { label: instructor.stripe_connected ? 'Connected' : 'Not connected', done: instructor.stripe_connected },
-    { label: instructor.availability_added ? 'Added' : 'Not added', done: instructor.availability_added },
+    { key: 'onboarding_email', label: instructor.onboarding_email_sent ? 'Sent' : 'Not sent', done: instructor.onboarding_email_sent },
+    { key: 'signed_up', label: instructor.signed_up ? 'Signed up' : 'Not signed up', done: instructor.signed_up },
+    { key: 'stripe', label: instructor.stripe_connected ? 'Connected' : 'Not connected', done: instructor.stripe_connected },
+    { key: 'availability', label: instructor.availability_added ? 'Added' : 'Not added', done: instructor.availability_added },
 ]
+
+/** Hover text on the "Not signed up" badge: when the onboarding email last went out. */
+const notSignedUpTitle = (instructor: Instructor) =>
+    instructor.onboarding_email_last_sent_at
+        ? `Onboarding email last sent ${formatShortDate(instructor.onboarding_email_last_sent_at)}`
+        : undefined
 
 const navigateToInstructor = (instructorId: number) => {
     router.visit(`/instructors/${instructorId}`)
@@ -240,6 +253,15 @@ const breadcrumbs = [{ title: 'Instructors' }]
                         <option value="not_sent">Onboarding email: Not sent ({{ optionCount('onboarding_email', 'not_sent') }})</option>
                     </select>
                     <select
+                        v-model="signedUpFilter"
+                        aria-label="Filter by sign-up"
+                        :class="filterSelectClass"
+                    >
+                        <option value="">Signed up: All ({{ optionCount('signed_up', '') }})</option>
+                        <option value="signed_up">Signed up: Yes ({{ optionCount('signed_up', 'signed_up') }})</option>
+                        <option value="not_signed_up">Signed up: No ({{ optionCount('signed_up', 'not_signed_up') }})</option>
+                    </select>
+                    <select
                         v-model="stripeFilter"
                         aria-label="Filter by Stripe connection"
                         :class="filterSelectClass"
@@ -276,6 +298,7 @@ const breadcrumbs = [{ title: 'Instructors' }]
                             <TableRow>
                                 <TableHead>Name</TableHead>
                                 <TableHead>Onboarding email</TableHead>
+                                <TableHead>Signed up</TableHead>
                                 <TableHead>Stripe</TableHead>
                                 <TableHead>Availability</TableHead>
                                 <TableHead>Pupils</TableHead>
@@ -313,8 +336,11 @@ const breadcrumbs = [{ title: 'Instructors' }]
                                         </div>
                                     </div>
                                 </TableCell>
-                                <TableCell v-for="step in setupSteps(instructor)" :key="step.label">
-                                    <Badge :variant="step.done ? 'secondary' : 'destructive'">
+                                <TableCell v-for="step in setupSteps(instructor)" :key="step.key">
+                                    <Badge
+                                        :variant="step.done ? 'secondary' : 'destructive'"
+                                        :title="step.key === 'signed_up' && !step.done ? notSignedUpTitle(instructor) : undefined"
+                                    >
                                         <Check v-if="step.done" class="mr-1 h-3 w-3" />
                                         <X v-else class="mr-1 h-3 w-3" />
                                         {{ step.label }}
@@ -332,7 +358,7 @@ const breadcrumbs = [{ title: 'Instructors' }]
                                 </TableCell>
                             </TableRow>
                             <TableRow v-if="filteredInstructors.length === 0">
-                                <TableCell colspan="6" class="text-center">
+                                <TableCell colspan="7" class="text-center">
                                     <div class="py-8 text-muted-foreground">
                                         No instructors found
                                     </div>
