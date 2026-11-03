@@ -73,7 +73,7 @@ class StoreCalendarItemRequest extends FormRequest
             'travel_time_minutes' => [
                 'nullable',
                 'integer',
-                'in:15,30,45',
+                'in:15,30,45,60',
             ],
             'is_practical_test' => [
                 'sometimes',
@@ -184,7 +184,7 @@ class StoreCalendarItemRequest extends FormRequest
             'recurrence_end_date.date' => 'Please provide a valid end date for the recurrence.',
             'recurrence_end_date.after' => 'Recurrence end date must be after the start date.',
             'travel_time_minutes.integer' => 'Travel time must be a number.',
-            'travel_time_minutes.in' => 'Travel time must be 15, 30, or 45 minutes.',
+            'travel_time_minutes.in' => 'Travel time must be 15, 30, 45, or 60 minutes.',
         ];
     }
 }

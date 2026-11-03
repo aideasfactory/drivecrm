@@ -2669,7 +2669,7 @@ Creates a new calendar item (time slot) for the authenticated instructor. Suppor
 | `unavailability_reason` | string\|null | No | Optional reason for unavailability (max 500 chars). May be supplied when `is_available=false`; not required. |
 | `recurrence_pattern` | string | No | One of: `none` (default), `weekly`, `biweekly`, `monthly` |
 | `recurrence_end_date` | string\|null | No | End date for recurring series in `Y-m-d` format. Must be after `date`. If omitted, defaults to 6 months from `date`. |
-| `travel_time_minutes` | integer\|null | No | Travel time block after the slot: `15`, `30`, or `45` minutes. Creates a separate travel item. |
+| `travel_time_minutes` | integer\|null | No | Travel time block after the slot: `15`, `30`, `45`, or `60` minutes. Creates a separate travel item. |
 | `is_practical_test` | boolean | No | If `true`, creates a practical test slot. Blocks 1 hour before `start_time` and 30 minutes after `end_time`. Automatically marked unavailable. |
 | `student_id` | integer\|null | No | Student assigned to a practical test. Must exist in `students`. When supplied with `is_practical_test=true`, the test `date` is carried over to that student's `book_practical_test` checklist item (its `date` is set and the item is marked checked). Ignored for non-practical slots. |
 
@@ -2789,7 +2789,7 @@ Created slots are plain independent items (`recurrence_pattern: none`, no `recur
 | `days` | integer[] | **Yes** | ISO weekdays to fill: `1` = Monday … `7` = Sunday. At least one required. |
 | `day_start_time` | string | **Yes** | Earliest slot start each day, `H:i` format. Must be at or after `00:00`. |
 | `day_end_time` | string | **Yes** | Latest slot **end** each day, `H:i` format. Must be after `day_start_time`, at or before `23:59`, and at least 2 hours after `day_start_time` (must fit one slot). |
-| `travel_time_minutes` | integer\|null | No | Travel block after **each** created slot: `15`, `30`, or `45` minutes. Omit or `null` for none. |
+| `travel_time_minutes` | integer\|null | No | Travel block after **each** created slot: `15`, `30`, `45`, or `60` minutes. Omit or `null` for none. |
 
 **Example — fill Mon–Fri, 08:00–18:00, for 4 weeks with 30-min travel:**
 ```json
@@ -2818,7 +2818,7 @@ Created slots are plain independent items (`recurrence_pattern: none`, no `recur
 **Validation errors (422):**
 - `start_date` in the past, `weeks` outside 1–12, empty `days`, or a day value outside 1–7.
 - `day_end_time` not after `day_start_time`, or a daily window shorter than 2 hours ("The daily window must be at least 2 hours to fit a lesson slot.").
-- `travel_time_minutes` not one of `15`, `30`, `45`.
+- `travel_time_minutes` not one of `15`, `30`, `45`, `60`.
 
 ---
 
@@ -2848,7 +2848,7 @@ Updates a calendar item belonging to the authenticated instructor — used to **
 | `is_available` | boolean | No | New availability. Omit to leave unchanged. |
 | `notes` | string\|null | No | Notes (max 1000 chars). Omit to leave unchanged. |
 | `unavailability_reason` | string\|null | No | Reason (max 500 chars). Omit to leave unchanged. |
-| `travel_time_minutes` | integer\|null | No | Travel block: `0` (remove), `15`, `30`, or `45`. Omit to leave unchanged. |
+| `travel_time_minutes` | integer\|null | No | Travel block: `0` (remove), `15`, `30`, `45`, or `60`. Omit to leave unchanged. |
 | `apply_to_future_in_order` | boolean | No | `true` = bulk-reschedule the whole booking (see Bulk mode). Default `false`. |
 
 > **Reschedule-only items:** booked **and paid** lessons should only send `date`/`start_time`/`end_time` (the app hides the rest). Completed lessons cannot be moved. A slot with booked lessons cannot be deleted — only moved.
@@ -8231,6 +8231,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-10-31 | **Only active pupils in the add-booking picker.** `GET /instructor/students` takes an optional `active_only` boolean. With `active_only=1` every group holds only `status = "active"` students (`passed` / `inactive` empty, `recent_activity` filtered). Without it the response is unchanged. `POST /students/{student}/orders` is unchanged and does not check pupil status. **App action:** the instructor add-booking pupil picker (including Add Booking from a diary slot) must call `?active_only=1` and list `data.active` only; leave the general pupils screen as it is. | Instructor Students (index), Orders (store — docs note) |
 | 2026-11-03 | **Expense create + receipt upload fixes.** `/finances/config.expense_categories` gains `servicing`, `repairs`, `road_tax`, `breakdown_cover`, `vehicle_insurance`, `business_insurance`, `phone`, `accountant_fees` (they were already in `category_meta`, but create/update rejected them with 422 "The selected category is invalid."). `POST /instructor/finances` also accepts `multipart/form-data` with an optional `receipt` file. The record is saved first, and a failed receipt store returns `201` with `meta.receipt_upload_failed: true` (new additive `meta` on the create response). String booleans (`"true"`/`"false"`) are accepted on create. `/finances/config.receipt.max_size_kb` is now the effective limit (config 10 MB, lowered if PHP limits are lower). All `/instructor/finances*` errors are JSON (422 with plain-English `errors.receipt` messages, 413 when the body is over PHP `post_max_size`). Replacing a receipt keeps the old one if the new upload fails. **App action:** read `max_size_kb`/`allowed_mimes` from config and check the file before sending; send `Accept: application/json`; if using the single multipart create, never re-create on retry; handle `meta.receipt_upload_failed`, 422 and 413 with the server message. | Instructor Finances (config, store, receipt upload) |
 | 2026-11-03 | **Receipt photos processed on the server.** `/finances/config.receipt.max_size_kb` raised from 10 MB to 20 MB so the app can send untouched camera photos. JPEG/PNG receipts are stored as uploaded and returned with new additive fields `receipt.status: "processing"` and `receipt.thumbnail_url: null`; a background job rotates (EXIF), shrinks to 1600px JPEG, creates a 320px thumbnail and sets `status: "ready"` + `thumbnail_url`. After processing, `mime_type`/`size_bytes`/`original_name` describe the shrunk JPEG. PDFs, older and imported receipts are `ready` with `thumbnail_url: null`; a failed shrink keeps the original as `ready`. No status endpoint — re-fetch the record. **App action:** send photos untouched (Android `quality: 1`, iOS `0.7`); show "Processing…" while `status` is `processing`, the thumbnail when `thumbnail_url` is set, a file icon otherwise. | Instructor Finances (record object, config, store, receipt upload) |
+| 2026-11-03 | **60-minute travel time.** `travel_time_minutes` now also accepts `60` (1 hour) on `POST /instructor/calendar/items`, `POST /instructor/calendar/fill-slots` (each created slot) and `PUT /instructor/calendar/items/{calendarItem}` (alongside `0` to remove). A 60 creates a 60-minute travel block after the slot and the overlap check reserves the full hour. Calendar item responses return `travel_time_minutes: 60` unchanged in shape. Validation message is now `Travel time must be 15, 30, 45, or 60 minutes.` (update: `0, 15, 30, 45, or 60`). **App action:** add a `60 min` option to Travel Time After on the Add/Edit Time Slot sheets and fill-slots, sending `travel_time_minutes: 60`. | Instructor Calendar (store, fill-slots, update) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

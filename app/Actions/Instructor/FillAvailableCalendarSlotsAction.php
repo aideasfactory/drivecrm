@@ -34,7 +34,7 @@ class FillAvailableCalendarSlotsAction
      * @param  array<int>  $days  ISO weekdays to fill (1 = Monday … 7 = Sunday)
      * @param  string  $dayStartTime  Earliest slot start each day in H:i format
      * @param  string  $dayEndTime  Latest slot end each day in H:i format
-     * @param  int|null  $travelTimeMinutes  Travel time in minutes (15, 30, or 45) after each slot
+     * @param  int|null  $travelTimeMinutes  Travel time in minutes (15, 30, 45, or 60) after each slot
      * @return Collection<int, CalendarItem> The created lesson slots (excluding travel blocks)
      */
     public function __invoke(

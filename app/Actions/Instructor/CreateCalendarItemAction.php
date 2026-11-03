@@ -29,7 +29,7 @@ class CreateCalendarItemAction
      * @param  bool  $isAvailable  Whether the slot is available
      * @param  string|null  $notes  Optional notes about the slot
      * @param  string|null  $unavailabilityReason  Reason for unavailability (when is_available = false)
-     * @param  int|null  $travelTimeMinutes  Travel time in minutes (15, 30, or 45) to create after the slot
+     * @param  int|null  $travelTimeMinutes  Travel time in minutes (15, 30, 45, or 60) to create after the slot
      * @param  bool  $isPracticalTest  Whether this is a practical test slot
      * @param  int|null  $studentId  Student assigned to a practical test (carries the date to their checklist)
      * @return CalendarItem The created calendar item
