@@ -10,6 +10,7 @@ use App\Http\Requests\Api\V1\UpdateInstructorPackageRequest;
 use App\Http\Resources\V1\PackageResource;
 use App\Models\Package;
 use App\Services\InstructorPackageService;
+use App\Services\InstructorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -17,7 +18,8 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 class InstructorPackageController extends Controller
 {
     public function __construct(
-        protected InstructorPackageService $packageService
+        protected InstructorPackageService $packageService,
+        protected InstructorService $instructorService
     ) {}
 
     /**
@@ -60,5 +62,23 @@ class InstructorPackageController extends Controller
         $updated = $this->packageService->updatePackage($package, $request->validated());
 
         return new PackageResource($updated);
+    }
+
+    /**
+     * Remove (hide) a package owned by the authenticated instructor. Same
+     * soft deactivation as the web "Remove Package" action: the row and its
+     * orders, lessons and payments are kept, and it can be restored on the web.
+     */
+    public function destroy(Request $request, Package $package): PackageResource
+    {
+        $instructor = $request->user()->instructor;
+
+        if ($instructor === null || $package->instructor_id !== $instructor->id) {
+            abort(403, 'You do not own this package.');
+        }
+
+        $updated = $this->instructorService->deactivatePackage($package);
+
+        return (new PackageResource($updated))->additional(['message' => 'Package removed.']);
     }
 }
