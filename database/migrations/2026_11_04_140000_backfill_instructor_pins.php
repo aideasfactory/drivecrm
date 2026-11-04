@@ -7,7 +7,8 @@ return new class extends Migration
 {
     /**
      * Give every instructor without a PIN a unique 6-digit numeric PIN.
-     * Existing PINs (numeric or not) are left unchanged.
+     * Existing PINs (numeric or not) are left unchanged. Archived instructors are
+     * skipped: account deletion nulls their PIN so pupils can no longer attach.
      */
     public function up(): void
     {
@@ -20,6 +21,7 @@ return new class extends Migration
 
         DB::table('instructors')
             ->where(fn ($query) => $query->whereNull('pin')->orWhere('pin', ''))
+            ->where('status', '!=', 'archived')
             ->orderBy('id')
             ->chunkById(200, function ($instructors) use (&$usedPins): void {
                 foreach ($instructors as $instructor) {

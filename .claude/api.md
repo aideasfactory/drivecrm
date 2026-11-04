@@ -359,7 +359,7 @@ Login and receive a Bearer token for subsequent API calls.
       "phone": "07700900001",
       "address": "1 High Street",
       "postcode": "TS7 0AB",
-      "pin": "4827",
+      "pin": "482731",
       "onboarding_complete": false,
       "charges_enabled": false,
       "payouts_enabled": false,
@@ -517,7 +517,7 @@ Returns the authenticated user's profile with role-specific data.
       "phone": "07700900001",
       "address": "1 High Street",
       "postcode": "TS7 0AB",
-      "pin": "4827",
+      "pin": "482731",
       "onboarding_complete": false,
       "charges_enabled": false,
       "payouts_enabled": false,
@@ -649,7 +649,7 @@ Register a new instructor account. Creates a base user record with the `instruct
       "phone": "07700900001",
       "address": "1 High Street",
       "postcode": "TS7 0AB",
-      "pin": "4827",
+      "pin": "482731",
       "onboarding_complete": false,
       "charges_enabled": false,
       "payouts_enabled": false,
@@ -1007,7 +1007,7 @@ Update the authenticated instructor's own profile. The instructor is derived fro
     "phone": "07700900001",
     "address": "10 High Street",
     "postcode": "TS7 0AB",
-    "pin": "4827",
+    "pin": "482731",
     "onboarding_complete": false,
     "charges_enabled": false,
     "payouts_enabled": false,
@@ -1072,7 +1072,7 @@ curl -X POST https://drivecrm.test/api/v1/instructor/profile/picture \
     "phone": "07700900001",
     "address": "10 High Street",
     "postcode": "TS7 0AB",
-    "pin": "4827",
+    "pin": "482731",
     "onboarding_complete": false,
     "charges_enabled": false,
     "payouts_enabled": false,
@@ -1118,7 +1118,7 @@ Delete the instructor's profile picture.
     "phone": "07700900001",
     "address": "10 High Street",
     "postcode": "TS7 0AB",
-    "pin": "4827",
+    "pin": "482731",
     "onboarding_complete": false,
     "charges_enabled": false,
     "payouts_enabled": false,
@@ -4138,13 +4138,13 @@ Attaches the authenticated student to an instructor using the instructor's PIN c
 **Request Body:**
 ```json
 {
-  "pin": "ABC123"
+  "pin": "482731"
 }
 ```
 
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
-| `pin` | string | Yes | Instructor's unique PIN code (max 10 characters) |
+| `pin` | string | Yes | Instructor's unique PIN code — 6 digits for every instructor (validation still accepts up to 10 characters) |
 
 **Success Response (200):**
 ```json
@@ -6883,7 +6883,7 @@ The `profile` key in user responses contains role-specific data. The shape depen
 | `phone` | string\|null | Instructor's contact / mobile phone number |
 | `address` | string\|null | Business address |
 | `postcode` | string\|null | Business postcode |
-| `pin` | string\|null | Instructor's attach PIN — students enter this on the mobile app to link themselves to the instructor (`POST /api/v1/students/attach`) |
+| `pin` | string\|null | Instructor's attach PIN — a unique 6-digit numeric string, generated automatically when the instructor is created. Students enter this on the mobile app to link themselves to the instructor (`POST /api/v1/students/attach`). `null` only for deleted (archived) accounts |
 | `onboarding_complete` | boolean | Whether Stripe onboarding is done |
 | `charges_enabled` | boolean | Whether Stripe charges are enabled |
 | `payouts_enabled` | boolean | Whether Stripe payouts are enabled |
@@ -8233,6 +8233,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-03 | **Receipt photos processed on the server.** `/finances/config.receipt.max_size_kb` raised from 10 MB to 20 MB so the app can send untouched camera photos. JPEG/PNG receipts are stored as uploaded and returned with new additive fields `receipt.status: "processing"` and `receipt.thumbnail_url: null`; a background job rotates (EXIF), shrinks to 1600px JPEG, creates a 320px thumbnail and sets `status: "ready"` + `thumbnail_url`. After processing, `mime_type`/`size_bytes`/`original_name` describe the shrunk JPEG. PDFs, older and imported receipts are `ready` with `thumbnail_url: null`; a failed shrink keeps the original as `ready`. No status endpoint — re-fetch the record. **App action:** send photos untouched (Android `quality: 1`, iOS `0.7`); show "Processing…" while `status` is `processing`, the thumbnail when `thumbnail_url` is set, a file icon otherwise. | Instructor Finances (record object, config, store, receipt upload) |
 | 2026-11-03 | **60-minute travel time.** `travel_time_minutes` now also accepts `60` (1 hour) on `POST /instructor/calendar/items`, `POST /instructor/calendar/fill-slots` (each created slot) and `PUT /instructor/calendar/items/{calendarItem}` (alongside `0` to remove). A 60 creates a 60-minute travel block after the slot and the overlap check reserves the full hour. Calendar item responses return `travel_time_minutes: 60` unchanged in shape. Validation message is now `Travel time must be 15, 30, 45, or 60 minutes.` (update: `0, 15, 30, 45, or 60`). **App action:** add a `60 min` option to Travel Time After on the Add/Edit Time Slot sheets and fill-slots, sending `travel_time_minutes: 60`. | Instructor Calendar (store, fill-slots, update) |
 | 2026-11-03 | **15-minute diary starts (docs only, no API change).** `start_time` on `POST`/`PUT /api/v1/instructor/calendar/items` and `day_start_time` on `POST /calendar/fill-slots` already accept any `H:i` minute; the server never rounded to 30 minutes. The admin diary now offers :00/:15/:30/:45 starts everywhere (including clicking the weekly grid), and the app should offer the same 15-minute steps. Fill-slots walks candidates in 15-minute steps. | Instructor Calendar (store, update, fill-slots) |
+| 2026-11-04 | **Instructor PINs are always 6 digits.** Every instructor now gets a unique 6-digit numeric `pin` on creation (all paths: registration, admin create, imports), and existing instructors without one were backfilled (deleted/archived accounts excluded; existing PINs unchanged). No shape change — `pin` in the instructor profile object is now non-null for live instructors. `POST /students/attach` unchanged. | Instructor profile object, Students (attach) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.
