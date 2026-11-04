@@ -21,6 +21,7 @@ class ConfirmAlternativePaymentBookingAction
     public function __construct(
         protected ConfirmCalendarItemsAction $confirmCalendarItems,
         protected AssignStudentOnPaidBookingAction $assignStudentOnPaidBooking,
+        protected WaiveAlternativePaymentOrderFeesAction $waiveOrderFees,
     ) {}
 
     /**
@@ -37,6 +38,8 @@ class ConfirmAlternativePaymentBookingAction
      * every lesson is recorded as paid by the alternative method now. As at
      * an alternative sign-off, fees are waived (amount = the lesson price), no
      * guarantee is carried and no payout is made when the lesson is signed off.
+     * The order's booking and digital fees are removed too, so every view
+     * shows the lesson price with no fee split.
      *
      * The caller must close the order's Stripe Checkout session first.
      * Returns true only for the call that confirmed the order.
@@ -52,6 +55,7 @@ class ConfirmAlternativePaymentBookingAction
 
             if ($lockedOrder->isUpfront()) {
                 $this->recordLessonsPaid($lockedOrder, $confirmedBy);
+                ($this->waiveOrderFees)($lockedOrder);
             } else {
                 $this->flagFirstPaymentConfirmed($lockedOrder, $confirmedBy);
             }
