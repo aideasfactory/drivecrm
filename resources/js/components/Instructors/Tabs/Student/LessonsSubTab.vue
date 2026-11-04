@@ -265,6 +265,13 @@ const paymentBadgeVariant = (status: string | null): 'default' | 'secondary' | '
     }
 }
 
+// A cancelled lesson's invoice is voided, so 'due' means it was never paid, not that anything is owed.
+const paymentLabel = (lesson: Lesson): string => {
+    if (!lesson.payment_status) return '—'
+    if (lesson.status === 'cancelled' && lesson.payment_status === 'due') return 'Unpaid'
+    return lesson.payment_status.charAt(0).toUpperCase() + lesson.payment_status.slice(1)
+}
+
 // API calls
 const loadLessons = async () => {
     loading.value = true
@@ -667,7 +674,7 @@ onMounted(() => {
                     <TableBody>
                         <TableRow v-for="lesson in lessons" :key="lesson.id">
                             <TableCell class="font-medium tabular-nums">
-                                #{{ lesson.student_lesson_number }}
+                                {{ lesson.status === 'cancelled' ? '—' : `#${lesson.student_lesson_number}` }}
                             </TableCell>
                             <TableCell class="font-medium">
                                 <template v-if="lesson.is_banked">
@@ -727,9 +734,7 @@ onMounted(() => {
                                 <div class="flex items-center gap-2">
                                     <Badge :variant="paymentBadgeVariant(lesson.payment_status)" class="gap-1">
                                         <PoundSterling class="h-3 w-3" />
-                                        {{ lesson.payment_status
-                                            ? lesson.payment_status.charAt(0).toUpperCase() + lesson.payment_status.slice(1)
-                                            : '—' }}
+                                        {{ paymentLabel(lesson) }}
                                     </Badge>
                                     <Badge v-if="lesson.payment_mode === 'cash'" variant="outline" class="gap-1">
                                         <Banknote class="h-3 w-3" />
@@ -748,7 +753,7 @@ onMounted(() => {
                                         Alt. payment allowed
                                     </Badge>
                                     <Badge
-                                        v-if="lesson.payment_status === 'due' && lesson.invoice_cancelled"
+                                        v-if="lesson.status !== 'cancelled' && lesson.payment_status === 'due' && lesson.invoice_cancelled"
                                         variant="outline"
                                         title="Still unpaid a week after the lesson, so the invoice was cancelled and the pupil can no longer pay it."
                                     >
