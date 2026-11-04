@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Actions\Calendar\MoveLessonAndFutureSiblingsAction;
+use App\Actions\Instructor\CountInstructorPupilsByStatusAction;
 use App\Actions\Instructor\GetInstructorListAction;
 use App\Actions\Shared\AdminResetPasswordAction;
 use App\Actions\Shared\Contact\CreateContactAction;
@@ -48,7 +49,6 @@ use App\Models\Location;
 use App\Models\MileageLog;
 use App\Models\Package;
 use App\Models\Payout;
-use App\Models\Student;
 use App\Models\User;
 use App\Services\HmrcService;
 use App\Services\InstructorService;
@@ -145,10 +145,7 @@ class InstructorController extends Controller
 
         // Calculate statistics
         $stats = [
-            'current_pupils' => Student::where('instructor_id', $instructor->id)->count(),
-            'passed_pupils' => 0, // TODO: Implement when we track passed students
-            'archived_pupils' => 0, // TODO: Implement when we add archiving
-            'waiting_list' => 0, // TODO: Implement waiting list
+            ...(new CountInstructorPupilsByStatusAction)($instructor),
             'open_enquiries' => 0, // TODO: Implement enquiries tracking
         ];
 
