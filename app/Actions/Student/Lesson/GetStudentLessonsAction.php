@@ -22,17 +22,22 @@ class GetStudentLessonsAction
      *
      * Draft (awaiting-payment) lessons are excluded by default and only
      * included when the `include_drafts` flag is set (instructor pupil view).
+     * Cancelled lessons are likewise excluded unless `include_cancelled` is set.
      *
-     * @param  array{status?: string, from_date?: string, sort?: string, limit?: int, include_drafts?: bool}  $filters
+     * @param  array{status?: string, from_date?: string, sort?: string, limit?: int, include_drafts?: bool, include_cancelled?: bool}  $filters
      */
     public function __invoke(Student $student, array $filters = []): Collection
     {
         $includeDrafts = $filters['include_drafts'] ?? false;
+        $includeCancelled = $filters['include_cancelled'] ?? false;
 
         $lessons = $student->orders()
             ->with([
                 'lessons' => fn ($query) => $query
-                    ->where('status', '!=', LessonStatus::CANCELLED)
+                    ->when(
+                        ! $includeCancelled,
+                        fn ($q) => $q->where('status', '!=', LessonStatus::CANCELLED)
+                    )
                     ->when(
                         ! $includeDrafts,
                         fn ($q) => $q->where('status', '!=', LessonStatus::DRAFT)
@@ -85,6 +90,9 @@ class GetStudentLessonsAction
                     'provisional_handled_by' => $lesson->provisionalHandledBy()?->value,
                     'has_started' => $lesson->hasStarted(),
                     'completed_at' => $lesson->completed_at?->toISOString(),
+                    'cancelled_at' => $lesson->cancelled_at?->toISOString(),
+                    'cancellation_reason_label' => $lesson->cancellation_reason_code?->label(),
+                    'cancellation_reason' => $lesson->cancellation_reason,
                     'summary' => $lesson->summary,
                     'lesson_payment_id' => $lesson->lessonPayment?->id,
                     'payment_status' => $lesson->lessonPayment?->status?->value ?? ($order->isPrepaid() ? 'paid' : null),
@@ -118,7 +126,9 @@ class GetStudentLessonsAction
             $isPast = $lessonDate && $lessonDate->lt($today);
             $isToday = $lessonDate && $lessonDate->isToday();
 
-            if ($lesson['status'] === LessonStatus::DRAFT->value) {
+            if ($lesson['status'] === LessonStatus::CANCELLED->value) {
+                $cardStatus = LessonCardStatus::Cancelled->value;
+            } elseif ($lesson['status'] === LessonStatus::DRAFT->value) {
                 $cardStatus = LessonCardStatus::Draft->value;
             } elseif ($isCompleted) {
                 $cardStatus = LessonCardStatus::SignedOff->value;

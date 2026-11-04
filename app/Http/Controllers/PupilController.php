@@ -414,7 +414,7 @@ class PupilController extends Controller
      */
     public function lessons(Student $student, LessonSignOffService $service): JsonResponse
     {
-        $lessons = $service->getStudentLessons($student, ['sort' => 'asc']);
+        $lessons = $service->getStudentLessons($student, ['sort' => 'asc', 'include_cancelled' => true]);
 
         return response()->json([
             'lessons' => $lessons,
