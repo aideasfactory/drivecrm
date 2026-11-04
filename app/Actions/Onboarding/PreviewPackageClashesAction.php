@@ -23,7 +23,11 @@ class PreviewPackageClashesAction
      * held. Uses the same clash rules as the booking itself, so a week flagged
      * here is booked as provisional.
      *
-     * @return list<array{lesson_number: int, date: string, start_time: string, end_time: string, clashes: list<string>}>
+     * `in_slot` is false when the week has no pre-made available slot at that
+     * exact time, matched the same way CreateDraftCalendarItemsAction picks a
+     * slot to take over; the booking then creates a new diary item instead.
+     *
+     * @return list<array{lesson_number: int, date: string, start_time: string, end_time: string, clashes: list<string>, in_slot: bool}>
      */
     public function __invoke(CalendarItem $firstSlot, int $lessonsCount): array
     {
@@ -61,9 +65,24 @@ class PreviewPackageClashesAction
                 'start_time' => $startTime,
                 'end_time' => $endTime,
                 'clashes' => $clashes,
+                'in_slot' => $week === 0 || ($calendar !== null && $this->hasPreMadeSlot($calendar, $startTime, $endTime)),
             ];
         }
 
         return $weeks;
+    }
+
+    /**
+     * Keep in sync with the slot lookup in CreateDraftCalendarItemsAction.
+     */
+    protected function hasPreMadeSlot(Calendar $calendar, string $startTime, string $endTime): bool
+    {
+        return CalendarItem::query()
+            ->where('calendar_id', $calendar->id)
+            ->where('start_time', $startTime)
+            ->where('end_time', $endTime)
+            ->where('is_available', true)
+            ->whereDoesntHave('lessons')
+            ->exists();
     }
 }
