@@ -19,7 +19,7 @@ class GetCancelledLessonsAction
      * @param  ?string  $cancelledFrom  Y-m-d — only lessons cancelled on/after this date
      * @param  ?string  $cancelledTo  Y-m-d — only lessons cancelled on/before this date
      * @param  ?string  $paymentStatus  'paid', 'due', or 'refunded'
-     * @return array{rows: Collection<int, array{lesson_id: int, student_id: ?int, instructor_id: ?int, learner_name: string, learner_phone: ?string, learner_email: ?string, instructor_name: ?string, lesson_date: string, lesson_time: string, amount: string, amount_pence: int, payment_status: ?string, cancellation_reason_label: ?string, cancelled_by: ?string, cancellation_reason: ?string, cancelled_at: ?string}>, generated_at: string}
+     * @return array{rows: Collection<int, array{lesson_id: int, student_id: ?int, instructor_id: ?int, learner_name: string, learner_phone: ?string, learner_email: ?string, instructor_name: ?string, lesson_date: ?string, lesson_time: ?string, amount: string, amount_pence: int, payment_status: ?string, cancellation_reason_label: ?string, cancelled_by: ?string, cancellation_reason: ?string, cancelled_at: ?string}>, generated_at: string}
      */
     public function __invoke(?string $cancelledFrom = null, ?string $cancelledTo = null, ?string $paymentStatus = null): array
     {
@@ -66,9 +66,12 @@ class GetCancelledLessonsAction
                         : 'Unknown learner',
                     'learner_phone' => $student?->phone,
                     'learner_email' => $student?->email,
-                    'instructor_name' => $lesson->instructor?->name,
-                    'lesson_date' => $lesson->date->toDateString(),
-                    'lesson_time' => $lesson->start_time->format('H:i').' – '.$lesson->end_time->format('H:i'),
+                    'instructor_name' => $lesson->instructor?->user ? $lesson->instructor->name : null,
+                    // Banked lessons have no date or times, and keep none if cancelled while banked
+                    'lesson_date' => $lesson->date?->toDateString(),
+                    'lesson_time' => $lesson->start_time && $lesson->end_time
+                        ? $lesson->start_time->format('H:i').' – '.$lesson->end_time->format('H:i')
+                        : null,
                     'amount' => '£'.number_format($lesson->amount_pence / 100, 2),
                     'amount_pence' => $lesson->amount_pence,
                     'payment_status' => $payment?->status->value,
