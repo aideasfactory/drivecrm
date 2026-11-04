@@ -301,7 +301,7 @@ Extended profile for users with instructor role.
 | `app_onboarding_completed_at` | timestamp | NULLABLE | When the mobile app onboarding slider was finished (step 5 completed). Null = not complete. Set server-side by `CompleteAppOnboardingStepAction`. |
 | `bio` | text | NULLABLE | Instructor biography for display |
 | `phone` | varchar(20) | NULLABLE | Instructor phone number |
-| `pin` | varchar(10) | NULLABLE, UNIQUE | Instructor PIN code for student attachment |
+| `pin` | varchar(10) | NULLABLE, UNIQUE | Instructor PIN code for student attachment. Auto-generated as a unique 6-digit numeric string on create (`Instructor::booted` creating hook) unless already set; existing instructors backfilled by `2026_11_04_140000_backfill_instructor_pins`. Cleared to NULL on account deletion. |
 | `rating` | float(3,2) | NULLABLE | Instructor rating (0.00-5.00) |
 | `transmission_type` | enum('manual', 'automatic') | NOT NULL | Vehicle transmission type |
 | `status` | varchar(50) | DEFAULT 'active' | Instructor status |

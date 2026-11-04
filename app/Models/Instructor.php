@@ -83,6 +83,28 @@ class Instructor extends Model
         'avatar',
     ];
 
+    protected static function booted(): void
+    {
+        static::creating(function (Instructor $instructor) {
+            if (blank($instructor->pin)) {
+                $instructor->pin = static::generateUniquePin();
+            }
+        });
+    }
+
+    /**
+     * Generate a 6-digit numeric PIN not used by any instructor.
+     * The unique index on instructors.pin is the backstop for concurrent creates.
+     */
+    public static function generateUniquePin(): string
+    {
+        do {
+            $pin = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        } while (static::query()->where('pin', $pin)->exists());
+
+        return $pin;
+    }
+
     /**
      * Get the user that owns this instructor profile.
      */
