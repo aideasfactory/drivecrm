@@ -19,8 +19,8 @@ interface CancelledLessonRow {
     learner_phone: string | null;
     learner_email: string | null;
     instructor_name: string | null;
-    lesson_date: string;
-    lesson_time: string;
+    lesson_date: string | null;
+    lesson_time: string | null;
     amount: string;
     amount_pence: number;
     payment_status: string | null;
