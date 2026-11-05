@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\MarketingParams;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -23,6 +24,7 @@ class ValidateBookingStepAccess
         if ($requestedStep > $maxAllowedStep) {
             return redirect()->route('booking.step'.$currentStep, [
                 'uuid' => $enquiry->id,
+                ...MarketingParams::fromRequest($request),
             ])->with('error', 'Please complete the current step first.');
         }
 
