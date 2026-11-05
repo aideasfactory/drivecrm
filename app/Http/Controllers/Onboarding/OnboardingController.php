@@ -108,11 +108,13 @@ class OnboardingController extends Controller
             $maxStep = 3;
         }
 
-        $enquiry = Enquiry::create([
+        $enquiry = new Enquiry([
             'data' => $data,
             'current_step' => 1,
             'max_step_reached' => $maxStep,
         ]);
+        $enquiry->fillAdClickIds($request->query());
+        $enquiry->save();
 
         // Pass ad-click/UTM params through so GTM sees them on the landing page
         return redirect()->route('onboarding.step1', ['uuid' => $enquiry->id, ...MarketingParams::fromRequest($request)]);
