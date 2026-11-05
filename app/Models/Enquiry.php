@@ -83,17 +83,18 @@ class Enquiry extends Model
     /**
      * Store the non-empty Google Ads click IDs from the given values. Empty
      * values never clear a stored ID, so a step reached without the query
-     * string keeps the IDs captured on landing.
+     * string keeps the IDs captured on landing. Values longer than the
+     * column are ignored rather than truncated into an invalid ID.
      *
      * @param  array<string, mixed>  $values
      */
     public function fillAdClickIds(array $values): void
     {
         foreach (self::AD_CLICK_ID_FIELDS as $field) {
-            $value = $values[$field] ?? null;
+            $value = is_string($values[$field] ?? null) ? trim($values[$field]) : '';
 
-            if (is_string($value) && trim($value) !== '') {
-                $this->{$field} = trim($value);
+            if ($value !== '' && strlen($value) <= 255) {
+                $this->{$field} = $value;
             }
         }
     }
