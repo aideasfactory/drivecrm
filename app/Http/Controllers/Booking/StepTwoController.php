@@ -48,6 +48,7 @@ class StepTwoController extends Controller
         }
 
         $tracking = $enquiry->getTracking() ?? [];
+        $adClickIds = $enquiry->adClickIds();
 
         return Inertia::render('Booking/Step2', [
             'uuid' => $enquiry->id,
@@ -57,7 +58,9 @@ class StepTwoController extends Controller
             'inArea' => $inArea,
             'maxStepReached' => $enquiry->max_step_reached,
             'source' => $tracking['source'] ?? null,
-            'gclid' => $tracking['gclid'] ?? null,
+            'gclid' => $adClickIds['gclid'] ?? null,
+            'gbraid' => $adClickIds['gbraid'] ?? null,
+            'wbraid' => $adClickIds['wbraid'] ?? null,
         ]);
     }
 

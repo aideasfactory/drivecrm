@@ -10,6 +10,7 @@ use App\Models\Enquiry;
 use App\Models\Instructor;
 use App\Models\Order;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -62,7 +63,10 @@ class BirdContactService extends BaseService
             ));
         }
 
-        $payload = $this->buildPayload($step1, $step2, $enquiry->getTracking() ?? []);
+        $tracking = $enquiry->getTracking() ?? [];
+        $tracking['gclid'] = $enquiry->adClickIds()['gclid'] ?? null;
+
+        $payload = $this->buildPayload($step1, $step2, $tracking);
 
         $url = sprintf(
             '%s/workspaces/%s/contacts/identifiers/emailaddress/%s',
@@ -136,16 +140,20 @@ class BirdContactService extends BaseService
     }
 
     /**
-     * Booking details from the /onboarding flow. Each value is only sent once
-     * the learner has reached the step that captures it. The /booking short
-     * form captures none of them, so it sends nothing here.
+     * Google Ads iOS click IDs (gbraid/wbraid), plus booking details from the
+     * /onboarding flow. Each booking value is only sent once the learner has
+     * reached the step that captures it; the /booking short form captures
+     * none of them, so it only sends the click IDs. The click IDs ride on this
+     * non-fatal request so a Bird attribute problem can't block the contact.
      *
      * @return array<string, mixed>
      */
     private function buildBookingAttributes(Enquiry $enquiry): array
     {
+        $adClickIds = Arr::only($enquiry->adClickIds(), ['gbraid', 'wbraid']);
+
         if ($enquiry->isShortBookingForm()) {
-            return [];
+            return $adClickIds;
         }
 
         $step2 = $enquiry->getStepData(2) ?? [];
@@ -172,6 +180,7 @@ class BirdContactService extends BaseService
             'instructor' => $this->stringOrNull($instructor?->user?->name),
             'dateOfFirstLesson' => $this->stringOrNull($step4['date'] ?? null),
             'bookingUrl' => $isPaid ? null : $this->bookingUrl($enquiry),
+            ...$adClickIds,
         ], fn ($value) => $value !== null);
     }
 
