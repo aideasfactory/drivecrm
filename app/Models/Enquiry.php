@@ -9,6 +9,13 @@ class Enquiry extends Model
 {
     use HasUuids;
 
+    /**
+     * Google Ads click identifiers captured from the landing URL.
+     *
+     * @var list<string>
+     */
+    public const AD_CLICK_ID_FIELDS = ['gclid', 'gbraid', 'wbraid'];
+
     protected $fillable = [
         'data',
         'current_step',
@@ -16,6 +23,9 @@ class Enquiry extends Model
         'privacy_consent',
         'marketing_consent',
         'consented_at',
+        'gclid',
+        'gbraid',
+        'wbraid',
     ];
 
     protected function casts(): array
@@ -68,6 +78,41 @@ class Enquiry extends Model
     public function getTracking(): ?array
     {
         return $this->data['tracking'] ?? null;
+    }
+
+    /**
+     * Store the non-empty Google Ads click IDs from the given values. Empty
+     * values never clear a stored ID, so a step reached without the query
+     * string keeps the IDs captured on landing.
+     *
+     * @param  array<string, mixed>  $values
+     */
+    public function fillAdClickIds(array $values): void
+    {
+        foreach (self::AD_CLICK_ID_FIELDS as $field) {
+            $value = $values[$field] ?? null;
+
+            if (is_string($value) && trim($value) !== '') {
+                $this->{$field} = trim($value);
+            }
+        }
+    }
+
+    /**
+     * The stored Google Ads click IDs, non-empty values only. Enquiries saved
+     * before the columns existed fall back to the gclid in data.tracking.
+     *
+     * @return array{gclid?: string, gbraid?: string, wbraid?: string}
+     */
+    public function adClickIds(): array
+    {
+        $ids = [
+            'gclid' => $this->gclid ?? ($this->getTracking()['gclid'] ?? null),
+            'gbraid' => $this->gbraid,
+            'wbraid' => $this->wbraid,
+        ];
+
+        return array_filter($ids, fn ($value) => is_string($value) && $value !== '');
     }
 
     /**
