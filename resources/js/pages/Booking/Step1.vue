@@ -409,6 +409,15 @@ const storedAdClickIds = (page.props.adClickIds ?? {}) as Record<string, string 
 const adClickId = (key: 'gclid' | 'gbraid' | 'wbraid'): string =>
   urlParams.get(key)?.trim() || storedAdClickIds[key] || ''
 
+// Last resort when the ad landed elsewhere (another page, or just-drive.co.uk via
+// the GTM cross-domain linker): Google's Conversion Linker cookies, written only
+// once ad consent is given, hold "GCL.<timestamp>.<click id>". Read at submit
+// time because GTM loads after this page mounts.
+function conversionLinkerCookie(name: string): string {
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))
+  return match ? decodeURIComponent(match[1]).split('.').slice(2).join('.') : ''
+}
+
 const existingPhone = splitPhone(existingData.phone || '')
 
 const countryCode = ref(existingPhone.code)
@@ -531,6 +540,8 @@ function submit() {
     .transform((data) => ({
       ...data,
       phone: toE164Phone(data.phone, countryCode.value),
+      gclid: data.gclid || conversionLinkerCookie('_gcl_aw'),
+      gbraid: data.gbraid || conversionLinkerCookie('_gcl_gb'),
     }))
     .post(`/booking/${enquiry.id}/step/1`, {
       preserveScroll: 'errors',
