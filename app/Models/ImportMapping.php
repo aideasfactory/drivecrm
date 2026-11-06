@@ -28,6 +28,8 @@ class ImportMapping extends Model
 
     public const ENTITY_FINANCE = 'finance'; // → instructor_finances.id
 
+    public const ENTITY_MILEAGE = 'mileage'; // → mileage_logs.id (ref: the mileage_ref; import:mileage)
+
     /** Row was created by the import. */
     public const ACTION_CREATED = 'created';
 

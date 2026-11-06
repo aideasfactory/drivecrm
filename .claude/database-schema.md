@@ -1148,6 +1148,7 @@ Stores pickup/drop-off locations for students. Each student can have multiple pi
 - Only one pickup point per student can be `is_default = true`
 - When setting a new default, all others for that student are unset
 - Postcode is geocoded on create/update via postcodes.io API (free, no API key)
+- Points added by `import:pickup-points` (legacy `student_locations.csv`) are **not geocoded**: `latitude`/`longitude` stay NULL until a separate geocoding run
 - Used for lesson scheduling and instructor route planning
 
 ---
@@ -1254,6 +1255,8 @@ Separate ledger for instructor mileage — not a sub-type of `instructor_finance
 | `updated_at` | timestamp | NULLABLE | Updated timestamp |
 
 **Indexes:** `(instructor_id, date)`, `(instructor_id, type)`, `(vehicle_id, date)`
+
+**Imported trips:** `import:mileage` (legacy `mileage.csv`) creates trips with `vehicle_id` NULL and the legacy registration in `notes` (`Vehicle: <reg>`, plus `End date: dd/mm/yyyy` for multi-day trips). No vehicles are created; the instructor's primary-vehicle setup (`BackfillPrimaryVehicleAction`) tags them later.
 
 **Relationships:**
 - `mileage_logs.instructor_id` → `instructors.id` (CASCADE DELETE)
@@ -1563,16 +1566,16 @@ In-app account deletion with a 30-day grace period (App Store Guideline 5.1.1(v)
 
 ### 32. **import_runs**
 
-One execution of the legacy importer (a Data Import page upload).
+One execution of the legacy importer: a Data Import page upload, or an `import:*` command run against a single CSV (e.g. `import:lessons`).
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Run ID |
 | `user_id` | bigint unsigned | NULLABLE, FK → users.id (NULL ON DELETE) | Owner who uploaded it |
-| `source` | varchar(16) | NOT NULL | `upload` (Data Import page — currently the only source) |
-| `file_name` | varchar(255) | NULLABLE | Original zip file name |
+| `source` | varchar(16) | NOT NULL | `upload` (Data Import page) or `command` (`import:lessons` and other single-file import commands) |
+| `file_name` | varchar(255) | NULLABLE | Original zip file name (CSV basename for `command` runs) |
 | `status` | varchar(16) | DEFAULT 'running' | `queued` (waiting for `ImportBundleJob`; imports run one at a time), `running`, `completed`, `failed` |
-| `totals` | json | NULLABLE | Counts created: instructors_created, instructors_linked, locations, students, students_skipped, lessons, lessons_skipped, diary_blocks, finances, receipts. While `running` also `instructors_done` / `instructors_to_import` (progress) |
+| `totals` | json | NULLABLE | Counts created: instructors_created, instructors_linked, locations, students, students_skipped, lessons, lessons_skipped, diary_blocks, finances, receipts. While `running` also `instructors_done` / `instructors_to_import` (progress). `import:lessons` runs: rows, already_imported, lessons, lessons_already_in_diary, lessons_marked_completed, skipped_* |
 | `error` | text | NULLABLE | Exception message when `failed` (instructors before the failure stay imported) |
 | `completed_at` | timestamp | NULLABLE | When the run finished (either outcome) |
 | `created_at` / `updated_at` | timestamp | - | Timestamps |
@@ -1589,13 +1592,15 @@ The permanent record of everything the importer brought in. Links a legacy syste
 |--------|------|-------------|-------------|
 | `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Mapping ID |
 | `import_run_id` | bigint unsigned | NULLABLE, FK → import_runs.id (NULL ON DELETE) | Run that created/linked the row |
-| `entity` | varchar(32) | NOT NULL | `instructor` (→ instructors.id), `location` (→ locations.id, ref `{instructor_ref}:{sector}`), `student` (→ students.id), `diary` (→ calendar_items.id), `lesson` (→ lessons.id, ref = diary_ref), `finance` (→ instructor_finances.id) |
+| `entity` | varchar(32) | NOT NULL | `instructor` (→ instructors.id), `location` (→ locations.id, ref `{instructor_ref}:{sector}`), `student` (→ students.id), `diary` (→ calendar_items.id), `lesson` (→ lessons.id, ref = diary_ref), `finance` (→ instructor_finances.id), `mileage` (→ mileage_logs.id, ref = mileage_ref; `import:mileage`) |
 | `source_ref` | varchar(191) | NOT NULL | The legacy system's own ID for the row |
 | `model_id` | bigint unsigned | NOT NULL | ID of the row (no FK — polymorphic by `entity`) |
 | `action` | varchar(16) | DEFAULT 'created' | `created` by the import, or `linked` (an existing instructor matched by email — not created, not changed) |
 | `created_at` / `updated_at` | timestamp | - | Timestamps |
 
 **Indexes:** unique `(entity, source_ref)`, index `(entity, model_id)`
+
+**Converted practical tests:** `import:practical-tests` deletes an imported lesson that was really a driving test and its `lesson` mapping; the `diary` mapping stays, pointing at the calendar item (now `item_type = practical_test`, `student_id` set).
 
 **Other imported markers:** `users.imported_at` (accounts — set only by the importer; shown as an "Imported" badge on the pupil's Actions tab; has no effect on cash payments), `orders.payment_mode = imported` (imported lessons' orders), `instructor_finances.category = imported` (finance rows with no category given). Imported receipts are stored exactly like manual uploads (`instructors/{id}/finance-receipts/{financeId}/…` on s3).
 
