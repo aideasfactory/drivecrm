@@ -8,6 +8,7 @@ use App\Actions\Import\BuildImportTemplateAction;
 use App\Actions\Import\CompleteImportedLessonAction;
 use App\Actions\Import\CreateImportedPickupPointsAction;
 use App\Actions\Import\ConvertImportedLessonToPracticalTestAction;
+use App\Actions\Import\FetchRemoteImportFileAction;
 use App\Actions\Import\FillImportedLessonSummaryAction;
 use App\Actions\Import\FixImportedPupilsAction;
 use App\Actions\Import\GetPendingImportedUsersAction;
@@ -109,6 +110,7 @@ class ImportService extends BaseService
         protected CreateImportedPickupPointsAction $createImportedPickupPoints,
         protected TickImportedChecklistItemAction $tickImportedChecklistItem,
         protected ImportMileageLogAction $importMileageLog,
+        protected FetchRemoteImportFileAction $fetchRemoteImportFile,
     ) {}
 
     /**
@@ -752,8 +754,13 @@ class ImportService extends BaseService
     }
 
     /**
-     * Attach receipt files from a folder to finance rows already imported
-     * (import:receipts). Each file is named after its finance ref
+     * Attach receipt files to finance rows already imported (import:receipts).
+     * The files come from a local folder, or — for a bucket that can't be
+     * listed — a folder URL plus a manifest (a local file or URL listing the
+     * file names, one per line). A manifest URL on its own also works: its
+     * files are the ones next to it. Remote files are fetched one at a time
+     * to a temp file and deleted after.
+     * Each file is named after its finance ref
      * (`F-169242.png`) and matched through its `finance` import mapping only.
      *
      * A file is attached only when its finance row has no receipt yet — an
@@ -761,23 +768,40 @@ class ImportService extends BaseService
      * an instructor's own upload (UploadFinanceReceiptAction): same S3 path,
      * photos shrunk and thumbnailed by the queued job, PDFs ready at once.
      * Skipped: types other than pdf/jpg/jpeg/png, refs never imported, and a
-     * ref with more than one file. A failed upload is reported and the rest
-     * carry on. Safe to re-run.
+     * ref with more than one file. With a manifest, the dry run checks every
+     * file is reachable. A failed upload is reported and the rest carry on.
+     * Safe to re-run.
      *
      * @return array{counts: array<string, int>, rows: array<int, array{file: string, ref: string, finance_id: int|null, instructor: string, date: string, type: string, category: string, amount: string, description: string, outcome: string}>}
      */
-    public function importReceipts(string $folder, bool $dryRun = false): array
+    public function importReceipts(string $source, bool $dryRun = false, ?string $manifest = null): array
     {
-        if (! is_dir($folder)) {
-            throw new RuntimeException("{$folder} is not a folder.");
+        $isRemote = (bool) preg_match('#^https?://#i', $source);
+
+        if ($isRemote) {
+            if ($manifest === null) {
+                $manifest = $source;
+                $baseUrl = substr($source, 0, strrpos($source, '/') + 1);
+            } else {
+                $baseUrl = rtrim($source, '/').'/';
+            }
+
+            $names = preg_match('#^https?://#i', $manifest)
+                ? $this->fetchRemoteImportFile->manifest($manifest)
+                : $this->readLocalManifest($manifest);
+
+            $files = collect($names)
+                ->map(fn (string $name) => ['name' => basename($name), 'location' => $baseUrl.rawurlencode(basename($name))]);
+        } elseif (is_dir($source)) {
+            $files = collect(File::files($source))
+                ->reject(fn ($file) => str_starts_with($file->getFilename(), '.'))
+                ->map(fn ($file) => ['name' => $file->getFilename(), 'location' => $file->getPathname()]);
+        } else {
+            throw new RuntimeException("{$source} is not a folder or a manifest URL.");
         }
 
-        $files = collect(File::files($folder))
-            ->reject(fn ($file) => str_starts_with($file->getFilename(), '.'))
-            ->sortBy(fn ($file) => $file->getFilename(), SORT_NATURAL)
-            ->values();
-
-        $filesPerRef = $files->countBy(fn ($file) => strtoupper($file->getFilenameWithoutExtension()));
+        $files = $files->sortBy('name', SORT_NATURAL)->values();
+        $filesPerRef = $files->countBy(fn (array $file) => strtoupper(pathinfo($file['name'], PATHINFO_FILENAME)));
 
         $financeIds = ImportMapping::query()
             ->where('entity', ImportMapping::ENTITY_FINANCE)
@@ -798,18 +822,19 @@ class ImportService extends BaseService
             'finance_row_missing' => 'Skipped: finance row deleted',
             'duplicate_file' => 'Skipped: more than one file for this ref',
             'unsupported_type' => 'Skipped: not a pdf, jpg or png',
+            'file_missing' => 'Skipped: file not found at its URL',
             'failed' => 'Failed',
         ];
         $counts = array_fill_keys(array_keys($outcomes), 0);
         $rows = [];
 
         foreach ($files as $file) {
-            $ref = strtoupper($file->getFilenameWithoutExtension());
+            $ref = strtoupper(pathinfo($file['name'], PATHINFO_FILENAME));
             $financeId = $financeIds->get($ref);
             $finance = $financeId !== null ? $finances->get($financeId) : null;
 
             $key = match (true) {
-                ! in_array(strtolower($file->getExtension()), ['pdf', 'jpg', 'jpeg', 'png'], true) => 'unsupported_type',
+                ! in_array(strtolower(pathinfo($file['name'], PATHINFO_EXTENSION)), ['pdf', 'jpg', 'jpeg', 'png'], true) => 'unsupported_type',
                 $filesPerRef->get($ref) > 1 => 'duplicate_file',
                 $financeId === null => 'ref_not_imported',
                 $finance === null => 'finance_row_missing',
@@ -817,20 +842,31 @@ class ImportService extends BaseService
                 default => 'attach',
             };
 
+            if ($key === 'attach' && $dryRun && $isRemote && ! $this->fetchRemoteImportFile->exists($file['location'])) {
+                $key = 'file_missing';
+            }
+
             $outcome = $outcomes[$key];
 
             if ($key === 'attach' && ! $dryRun) {
+                $localPath = null;
+
                 try {
-                    ($this->uploadFinanceReceipt)($finance, new UploadedFile($file->getPathname(), $file->getFilename(), null, null, true));
+                    $localPath = $isRemote ? $this->fetchRemoteImportFile->download($file['location'], $file['name']) : $file['location'];
+                    ($this->uploadFinanceReceipt)($finance, new UploadedFile($localPath, $file['name'], null, null, true));
                 } catch (Throwable $exception) {
                     $key = 'failed';
                     $outcome = 'Failed: '.$exception->getMessage();
+                } finally {
+                    if ($isRemote && $localPath !== null) {
+                        $this->fetchRemoteImportFile->cleanUp($localPath);
+                    }
                 }
             }
 
             $counts[$key]++;
             $rows[] = [
-                'file' => $file->getFilename(),
+                'file' => $file['name'],
                 'ref' => $ref,
                 'finance_id' => $finance?->id,
                 'instructor' => $finance ? "#{$finance->instructor_id} ".($finance->instructor?->name ?? '') : '',
@@ -844,6 +880,23 @@ class ImportService extends BaseService
         }
 
         return ['counts' => $counts, 'rows' => $rows];
+    }
+
+    /**
+     * File names from a local manifest (one per line; blanks and # lines ignored).
+     *
+     * @return array<int, string>
+     */
+    protected function readLocalManifest(string $path): array
+    {
+        if (! is_file($path)) {
+            throw new RuntimeException("Manifest {$path} not found.");
+        }
+
+        return array_values(array_filter(
+            array_map('trim', file($path, FILE_IGNORE_NEW_LINES)),
+            fn (string $line) => $line !== '' && ! str_starts_with($line, '#'),
+        ));
     }
 
     /**

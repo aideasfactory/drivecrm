@@ -1148,7 +1148,7 @@ Stores pickup/drop-off locations for students. Each student can have multiple pi
 - Only one pickup point per student can be `is_default = true`
 - When setting a new default, all others for that student are unset
 - Postcode is geocoded on create/update via postcodes.io API (free, no API key)
-- Points added by `import:pickup-points` (legacy `student_locations.csv`) are **not geocoded**: `latitude`/`longitude` stay NULL until a separate geocoding run
+- Points added by `import:pickup-points` (legacy `student_locations.csv`) are **not geocoded**: `latitude`/`longitude` stay NULL until `php artisan pickup-points:geocode` fills them (postcodes.io bulk, batches of ≤100 with a pause; only rows missing coordinates)
 - Used for lesson scheduling and instructor route planning
 
 ---

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Actions\Instructor\CreatePupilAction;
+use App\Actions\Shared\LookupPostcodesInBulkAction;
 use App\Actions\Student\AttachStudentToInstructorAction;
 use App\Actions\Student\DeleteStudentAction;
 use App\Actions\Student\DeleteStudentProfilePictureAction;
@@ -14,6 +15,7 @@ use App\Actions\Student\GetStudentInstructorProfileAction;
 use App\Actions\Student\GetStudentPracticeHoursAction;
 use App\Actions\Student\PickupPoint\CreatePickupPointAction;
 use App\Actions\Student\PickupPoint\DeletePickupPointAction;
+use App\Actions\Student\PickupPoint\GeocodePickupPointsAction;
 use App\Actions\Student\PickupPoint\GetStudentPickupPointsAction;
 use App\Actions\Student\PickupPoint\SetDefaultPickupPointAction;
 use App\Actions\Student\PickupPoint\UpdatePickupPointAction;
@@ -51,7 +53,8 @@ class StudentService extends BaseService
         protected GetStudentInstructorProfileAction $getInstructorProfile,
         protected GetStudentPracticeHoursAction $getPracticeHours,
         protected SetStudentCashPaymentsAction $setStudentCashPayments,
-        protected HasUpcomingLessonsWithInstructorAction $hasUpcomingLessonsWithInstructor
+        protected HasUpcomingLessonsWithInstructorAction $hasUpcomingLessonsWithInstructor,
+        protected GeocodePickupPointsAction $geocodePickupPoints,
     ) {}
 
     /**
@@ -280,5 +283,68 @@ class StudentService extends BaseService
             $this->cacheKey('student', $student->id, 'instructor_profile'),
             $this->cacheKey('student', $student->id, 'dashboard'),
         ]);
+    }
+
+    /**
+     * Geocode pickup points that have no coordinates yet (e.g. imported ones),
+     * from their postcode, in batches of up to 100 points (one postcodes.io
+     * bulk request each), pausing between batches to stay under rate limits.
+     * Points with coordinates are never touched; unknown postcodes stay
+     * empty (and are tried again on a re-run). A dry run only counts.
+     *
+     * @param  (callable(string): void)|null  $progress  Receives a line per batch
+     * @return array{points_missing: int, postcodes_missing: int, geocoded: int, not_found: int, batches: int}
+     */
+    public function geocodePickupPoints(int $batchSize = 100, int $pauseSeconds = 2, ?int $limit = null, bool $dryRun = false, ?callable $progress = null): array
+    {
+        $batchSize = max(1, min($batchSize, LookupPostcodesInBulkAction::MAX_PER_REQUEST));
+
+        $missing = StudentPickupPoint::query()
+            ->where(fn ($query) => $query->whereNull('latitude')->orWhereNull('longitude'))
+            ->where('postcode', '!=', '');
+
+        $counts = [
+            'points_missing' => (clone $missing)->count(),
+            'postcodes_missing' => (clone $missing)->distinct()->count('postcode'),
+            'geocoded' => 0,
+            'not_found' => 0,
+            'batches' => 0,
+        ];
+
+        if ($dryRun) {
+            $counts['batches'] = (int) ceil(min($counts['points_missing'], $limit ?? PHP_INT_MAX) / $batchSize);
+
+            return $counts;
+        }
+
+        $done = 0;
+
+        (clone $missing)->orderBy('id')->chunkById($batchSize, function ($points) use (&$counts, &$done, $limit, $pauseSeconds, $progress): bool {
+            if ($limit !== null && $done >= $limit) {
+                return false;
+            }
+
+            if ($limit !== null) {
+                $points = $points->take($limit - $done);
+            }
+
+            if ($counts['batches'] > 0 && $pauseSeconds > 0) {
+                sleep($pauseSeconds);
+            }
+
+            $result = ($this->geocodePickupPoints)($points);
+            $counts['geocoded'] += $result['geocoded'];
+            $counts['not_found'] += $result['not_found'];
+            $counts['batches']++;
+            $done += $points->count();
+
+            if ($progress) {
+                $progress(sprintf('Batch %d: %d geocoded, %d not found (%d of %d done).', $counts['batches'], $result['geocoded'], $result['not_found'], $done, $counts['points_missing']));
+            }
+
+            return true;
+        });
+
+        return $counts;
     }
 }

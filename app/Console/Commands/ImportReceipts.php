@@ -16,7 +16,8 @@ class ImportReceipts extends Command
      * @var string
      */
     protected $signature = 'import:receipts
-        {folder=imports/receipts : Folder of receipt files named after their finance ref (e.g. F-169242.png)}
+        {source=imports/receipts : Folder of receipt files named after their finance ref (e.g. F-169242.png); or a bucket folder URL (with --manifest); or the URL of a manifest.txt with the files next to it}
+        {--manifest= : For a bucket folder URL: local file (or URL) listing the file names, one per line}
         {--dry-run : List which finance record each file would attach to, without uploading anything}
         {--csv= : Also write the list to this CSV file}';
 
@@ -29,16 +30,16 @@ class ImportReceipts extends Command
 
     public function handle(ImportService $importService): int
     {
-        $folder = (string) $this->argument('folder');
+        $source = (string) $this->argument('source');
 
-        if (! is_dir($folder) && is_dir(base_path($folder))) {
-            $folder = base_path($folder);
+        if (! preg_match('#^https?://#i', $source) && ! is_dir($source) && is_dir(base_path($source))) {
+            $source = base_path($source);
         }
 
         $dryRun = (bool) $this->option('dry-run');
 
         try {
-            $result = $importService->importReceipts($folder, $dryRun);
+            $result = $importService->importReceipts($source, $dryRun, $this->option('manifest') !== null ? (string) $this->option('manifest') : null);
         } catch (RuntimeException $exception) {
             $this->error($exception->getMessage());
 
@@ -56,6 +57,7 @@ class ImportReceipts extends Command
             ['Skipped: finance row deleted', $result['counts']['finance_row_missing']],
             ['Skipped: more than one file for this ref', $result['counts']['duplicate_file']],
             ['Skipped: not a pdf, jpg or png', $result['counts']['unsupported_type']],
+            ['Skipped: file not found at its URL', $result['counts']['file_missing']],
             ['Failed', $result['counts']['failed']],
         ]);
 
