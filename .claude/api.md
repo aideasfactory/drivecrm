@@ -4594,17 +4594,20 @@ Returns lessons for a given student across all their orders. Supports optional f
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `status` | string | — | Filter by lesson status: `pending` or `completed` (also `draft` when `include_drafts=true`). Cancelled lessons are never returned, so `cancelled` yields an empty list. |
+| `status` | string | — | Filter by lesson status: `pending` or `completed` (also `draft` when `include_drafts=true`, `cancelled` when `include_cancelled=true`). Without `include_cancelled`, `cancelled` yields an empty list. |
 | `from_date` | string | — | Only return lessons on or after this date (YYYY-MM-DD) |
 | `sort` | string | `desc` | Sort direction by date/time: `asc` or `desc` |
 | `limit` | integer | — | Maximum number of results to return |
 | `include_drafts` | boolean | `false` | When `true`, include **draft** (upfront or weekly booking awaiting its first payment) lessons in the response. Off by default so student-facing views are unaffected — the instructor's pupil view passes this. Draft lessons are returned with `card_status: "draft"` and `status: "draft"`. |
+| `include_cancelled` | boolean | `false` | When `true`, include **cancelled** lessons, returned with `status: "cancelled"`, `card_status: "cancelled"` and the `cancelled_at` / `cancellation_reason_label` / `cancellation_reason` fields. Off by default so older app builds and student-facing views are unaffected — the instructor's pupil lessons list passes this. A cancelled lesson that was banked first has `date`, `start_time` and `end_time` all `null`: show a dash. A cancelled lesson keeps its old `student_lesson_number` while open lessons are renumbered, so it can repeat an open lesson's number: don't show it. `payment_status: "due"` on a cancelled lesson means it was never paid (its invoice was voided), not that anything is owed: show "Unpaid" and no resend action. `"paid"` means Head Office reviews a refund by hand, so it stays `"paid"` after any refund. Cancelled lessons count towards `limit`. Cancelled lessons are not tappable (the detail endpoint still returns 404 for them) and must not be counted as upcoming or completed. |
 
 **Request Body:** None
 
 **Example:** `GET /api/v1/students/5/lessons?status=pending&from_date=2026-04-10&sort=asc&limit=3`
 
 **Example (instructor pupil view, includes drafts):** `GET /api/v1/students/5/lessons?include_drafts=true&sort=asc`
+
+**Example (instructor pupil view, includes drafts and cancelled):** `GET /api/v1/students/5/lessons?include_drafts=true&include_cancelled=true&sort=asc`
 
 **Success Response:** `200 OK`
 ```json
@@ -4677,8 +4680,11 @@ Returns lessons for a given student across all their orders. Supports optional f
 | `date` | string\|null | Lesson date (YYYY-MM-DD) |
 | `start_time` | string\|null | Start time (HH:MM) |
 | `end_time` | string\|null | End time (HH:MM) |
-| `status` | string | Lesson status: `pending`, `completed`, or `draft` (drafts only returned when `include_drafts=true`). **Cancelled lessons are never returned by this endpoint.** |
+| `status` | string | Lesson status: `pending`, `completed`, `draft` (only when `include_drafts=true`) or `cancelled` (only when `include_cancelled=true`) |
 | `completed_at` | string\|null | ISO 8601 timestamp when lesson was completed |
+| `cancelled_at` | string\|null | ISO 8601 timestamp when the lesson was cancelled. `null` for lessons that aren't cancelled, and for older cancellations recorded before this was stored |
+| `cancellation_reason_label` | string\|null | Human label of the cancellation reason, e.g. `"Pupil unwell"`. `null` when not cancelled or no reason code was recorded |
+| `cancellation_reason` | string\|null | Free-text cancellation details entered by whoever cancelled it. `null` when none |
 | `card_status` | string | Computed UI card status (see Card Status Logic below) |
 | `has_reflective_log` | boolean | Leftover four-prompt log present and complete. **Do not** gate sign-off on this — use `status` / `card_status` / `summary` |
 | `resources_count` | integer | Number of resources attached to this lesson |
@@ -4719,6 +4725,7 @@ The parts always add up to `total_pence`. They are pro-rated from the order's st
 | `upcoming` | Blue | Future lessons beyond the next one |
 | `draft` | Grey | Booking (upfront or weekly) awaiting its first payment. Only returned when `include_drafts=true`. Draft lessons never consume the `current` slot — the "next lesson to sign off" is still the next non-draft lesson. |
 | `banked` | Grey | Kept in the booking to rebook later (`is_banked: true`, no date). Pupil: *"Your instructor will rebook this lesson. It stays in your booking at the price you paid."* Instructor: show a **Rebook** action. Never offer sign-off. |
+| `cancelled` | Grey/Red | Lesson was cancelled (`status: "cancelled"`). Only returned when `include_cancelled=true`. Show a **Cancelled** badge with `cancelled_at` / reason. Never offer sign-off or rebook, and never consumes the `current` slot. |
 
 ---
 
@@ -8234,6 +8241,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-03 | **60-minute travel time.** `travel_time_minutes` now also accepts `60` (1 hour) on `POST /instructor/calendar/items`, `POST /instructor/calendar/fill-slots` (each created slot) and `PUT /instructor/calendar/items/{calendarItem}` (alongside `0` to remove). A 60 creates a 60-minute travel block after the slot and the overlap check reserves the full hour. Calendar item responses return `travel_time_minutes: 60` unchanged in shape. Validation message is now `Travel time must be 15, 30, 45, or 60 minutes.` (update: `0, 15, 30, 45, or 60`). **App action:** add a `60 min` option to Travel Time After on the Add/Edit Time Slot sheets and fill-slots, sending `travel_time_minutes: 60`. | Instructor Calendar (store, fill-slots, update) |
 | 2026-11-03 | **15-minute diary starts (docs only, no API change).** `start_time` on `POST`/`PUT /api/v1/instructor/calendar/items` and `day_start_time` on `POST /calendar/fill-slots` already accept any `H:i` minute; the server never rounded to 30 minutes. The admin diary now offers :00/:15/:30/:45 starts everywhere (including clicking the weekly grid), and the app should offer the same 15-minute steps. Fill-slots walks candidates in 15-minute steps. | Instructor Calendar (store, update, fill-slots) |
 | 2026-11-04 | **Instructor PINs are always 6 digits.** Every instructor now gets a unique 6-digit numeric `pin` on creation (all paths: registration, admin create, imports), and existing instructors without one were backfilled (deleted/archived accounts excluded; existing PINs unchanged). No shape change — `pin` in the instructor profile object is now non-null for live instructors. `POST /students/attach` unchanged. | Instructor profile object, Students (attach) |
+| 2026-11-04 | **Cancelled lessons on the pupil lessons list (opt-in).** New `include_cancelled` query param (default `false`): when `true`, cancelled lessons are returned with `status: "cancelled"` and new `card_status: "cancelled"`. Three new nullable fields on every lesson list item: `cancelled_at`, `cancellation_reason_label`, `cancellation_reason`. Additive only — no fields removed, default response unchanged. Lesson detail still 404s for cancelled lessons. **App action:** on cancelled rows hide `student_lesson_number` (can repeat an open lesson's number) and show `payment_status: "due"` as "Unpaid" (invoice voided, nothing owed). | Student (lessons index) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

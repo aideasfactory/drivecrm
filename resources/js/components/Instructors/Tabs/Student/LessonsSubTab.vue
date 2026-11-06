@@ -88,6 +88,9 @@ interface Lesson {
     /** Start time (UK) reached; a lesson can't be signed off before it. */
     has_started: boolean
     completed_at: string | null
+    cancelled_at: string | null
+    cancellation_reason_label: string | null
+    cancellation_reason: string | null
     summary: string | null
     lesson_payment_id: number | null
     payment_status: 'due' | 'paid' | 'refunded' | null
@@ -170,6 +173,7 @@ const cancellationReasons = ref<CancellationReasonOption[]>([])
 const cancellationReasonsLoading = ref(false)
 
 // Computed
+const activeLessons = computed(() => lessons.value.filter((l) => l.status !== 'cancelled'))
 const pendingLessons = computed(() => lessons.value.filter((l) => l.status === 'pending'))
 const completedLessons = computed(() => lessons.value.filter((l) => l.status === 'completed'))
 const todayIso = new Date().toISOString().slice(0, 10)
@@ -259,6 +263,13 @@ const paymentBadgeVariant = (status: string | null): 'default' | 'secondary' | '
         default:
             return 'secondary'
     }
+}
+
+// A cancelled lesson's invoice is voided, so 'due' means it was never paid, not that anything is owed.
+const paymentLabel = (lesson: Lesson): string => {
+    if (!lesson.payment_status) return '—'
+    if (lesson.status === 'cancelled' && lesson.payment_status === 'due') return 'Unpaid'
+    return lesson.payment_status.charAt(0).toUpperCase() + lesson.payment_status.slice(1)
 }
 
 // API calls
@@ -538,7 +549,7 @@ onMounted(() => {
                 <CardContent class="p-6">
                     <div class="flex flex-col gap-2">
                         <BookOpen class="h-4 w-4 text-muted-foreground" />
-                        <p class="text-2xl font-bold">{{ lessons.length }}</p>
+                        <p class="text-2xl font-bold">{{ activeLessons.length }}</p>
                         <p class="text-sm text-muted-foreground">Total Lessons</p>
                     </div>
                 </CardContent>
@@ -663,7 +674,7 @@ onMounted(() => {
                     <TableBody>
                         <TableRow v-for="lesson in lessons" :key="lesson.id">
                             <TableCell class="font-medium tabular-nums">
-                                #{{ lesson.student_lesson_number }}
+                                {{ lesson.status === 'cancelled' ? '—' : `#${lesson.student_lesson_number}` }}
                             </TableCell>
                             <TableCell class="font-medium">
                                 <template v-if="lesson.is_banked">
@@ -694,6 +705,17 @@ onMounted(() => {
                                     />
                                     {{ lesson.status.charAt(0).toUpperCase() + lesson.status.slice(1) }}
                                 </Badge>
+                                <div
+                                    v-if="lesson.status === 'cancelled' && (lesson.cancelled_at || lesson.cancellation_reason_label || lesson.cancellation_reason)"
+                                    class="mt-1 max-w-[220px] text-xs text-muted-foreground"
+                                >
+                                    <div v-if="lesson.cancelled_at" class="whitespace-nowrap">
+                                        on {{ formatDate(lesson.cancelled_at.slice(0, 10)) }}
+                                    </div>
+                                    <div v-if="lesson.cancellation_reason_label || lesson.cancellation_reason">
+                                        {{ [lesson.cancellation_reason_label, lesson.cancellation_reason].filter(Boolean).join(': ') }}
+                                    </div>
+                                </div>
                                 <Badge
                                     v-if="lesson.is_provisional"
                                     variant="destructive"
@@ -712,9 +734,7 @@ onMounted(() => {
                                 <div class="flex items-center gap-2">
                                     <Badge :variant="paymentBadgeVariant(lesson.payment_status)" class="gap-1">
                                         <PoundSterling class="h-3 w-3" />
-                                        {{ lesson.payment_status
-                                            ? lesson.payment_status.charAt(0).toUpperCase() + lesson.payment_status.slice(1)
-                                            : '—' }}
+                                        {{ paymentLabel(lesson) }}
                                     </Badge>
                                     <Badge v-if="lesson.payment_mode === 'cash'" variant="outline" class="gap-1">
                                         <Banknote class="h-3 w-3" />
@@ -733,14 +753,14 @@ onMounted(() => {
                                         Alt. payment allowed
                                     </Badge>
                                     <Badge
-                                        v-if="lesson.payment_status === 'due' && lesson.invoice_cancelled"
+                                        v-if="lesson.status !== 'cancelled' && lesson.payment_status === 'due' && lesson.invoice_cancelled"
                                         variant="outline"
                                         title="Still unpaid a week after the lesson, so the invoice was cancelled and the pupil can no longer pay it."
                                     >
                                         Invoice cancelled
                                     </Badge>
                                     <Button
-                                        v-else-if="lesson.payment_status === 'due' && lesson.has_stripe_invoice"
+                                        v-else-if="lesson.status !== 'cancelled' && lesson.payment_status === 'due' && lesson.has_stripe_invoice"
                                         variant="ghost"
                                         size="sm"
                                         class="h-7 gap-1 px-2 text-xs"
@@ -802,6 +822,7 @@ onMounted(() => {
                                 >
                                     Signed off
                                 </span>
+                                <span v-else class="text-sm text-muted-foreground">—</span>
                             </TableCell>
                         </TableRow>
                     </TableBody>

@@ -13,4 +13,6 @@ enum LessonCardStatus: string
     case Draft = 'draft';
     /** Kept in the booking to rebook later: no date until the instructor rebooks it. */
     case Banked = 'banked';
+    /** Only returned when cancelled lessons are explicitly requested (`include_cancelled`). */
+    case Cancelled = 'cancelled';
 }
