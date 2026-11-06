@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Enquiry;
 use App\Support\MarketingParams;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 
 class BookingController extends Controller
 {
@@ -20,24 +21,28 @@ class BookingController extends Controller
             'source' => 'booking',
         ];
 
-        // Google Ads landing URLs carry ?gclid=…; capture it here so it
-        // survives the redirect into the step flow and can be forwarded to
-        // downstream tools (Bird CRM, admin email, GTM) as source "Google ads".
-        $gclid = trim((string) $request->query('gclid', ''));
-        if ($gclid !== '') {
-            $data['tracking'] = [
-                'gclid' => $gclid,
+        // Google Ads landing URLs carry ?gclid=… (or gbraid/wbraid for iOS);
+        // capture them here so they survive the redirect into the step flow and
+        // can be forwarded to downstream tools (Bird CRM, admin email, GTM) as
+        // source "Google ads".
+        $marketingParams = MarketingParams::fromRequest($request);
+        $adClickIds = Arr::only($marketingParams, Enquiry::AD_CLICK_ID_FIELDS);
+        if ($adClickIds !== []) {
+            $data['tracking'] = array_filter([
+                'gclid' => $adClickIds['gclid'] ?? null,
                 'source' => 'Google ads',
-            ];
+            ]);
         }
 
-        $enquiry = Enquiry::create([
+        $enquiry = new Enquiry([
             'data' => $data,
             'current_step' => 1,
             'max_step_reached' => 1,
         ]);
+        $enquiry->fillAdClickIds($adClickIds);
+        $enquiry->save();
 
         // Pass ad-click/UTM params through so GTM sees them on the landing page
-        return redirect()->route('booking.step1', ['uuid' => $enquiry->id, ...MarketingParams::fromRequest($request)]);
+        return redirect()->route('booking.step1', ['uuid' => $enquiry->id, ...$marketingParams]);
     }
 }

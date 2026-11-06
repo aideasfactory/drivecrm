@@ -260,6 +260,8 @@ const props = defineProps<{
   maxStepReached: number
   source: string | null
   gclid: string | null
+  gbraid: string | null
+  wbraid: string | null
 }>()
 
 const journeySteps = [
@@ -326,6 +328,8 @@ onMounted(() => {
     in_area: props.inArea,
     source: props.source,
     gclid: props.gclid,
+    gbraid: props.gbraid,
+    wbraid: props.wbraid,
   })
 })
 </script>

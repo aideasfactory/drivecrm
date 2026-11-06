@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Booking;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Booking\StepOneRequest;
+use App\Models\Enquiry;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Inertia\Inertia;
 
 class StepOneController extends Controller
@@ -12,6 +14,13 @@ class StepOneController extends Controller
     public function show(Request $request)
     {
         $enquiry = $request->get('enquiry');
+
+        // Catch click IDs on a step 1 URL that bypassed /booking (e.g. a reload
+        // or shared link carrying ?gclid=…). Existing IDs are never cleared.
+        $enquiry->fillAdClickIds($request->query());
+        if ($enquiry->isDirty(Enquiry::AD_CLICK_ID_FIELDS)) {
+            $enquiry->save();
+        }
 
         return Inertia::render('Booking/Step1', [
             'enquiry' => [
@@ -24,13 +33,14 @@ class StepOneController extends Controller
             'totalSteps' => 2,
             'stepData' => $enquiry->getStepData(1),
             'maxStepReached' => $enquiry->max_step_reached,
+            'adClickIds' => $enquiry->only(Enquiry::AD_CLICK_ID_FIELDS),
         ]);
     }
 
     public function store(StepOneRequest $request)
     {
         $enquiry = $request->get('enquiry');
-        $validated = $request->validated();
+        $validated = Arr::except($request->validated(), Enquiry::AD_CLICK_ID_FIELDS);
 
         // Normalize postcode: strip spaces and re-insert before the 3-char inward code
         $stripped = strtoupper(preg_replace('/\s+/', '', $validated['postcode']));
@@ -41,6 +51,7 @@ class StepOneController extends Controller
         $validated['marketing_consent'] = true;
 
         $enquiry->setStepData(1, $validated);
+        $enquiry->fillAdClickIds($request->validated());
         $enquiry->current_step = max($enquiry->current_step, 1);
         $enquiry->max_step_reached = max($enquiry->max_step_reached, 2);
         $enquiry->privacy_consent = (bool) ($validated['privacy_consent'] ?? false);

@@ -41,6 +41,9 @@ interface Enquiry {
     phone: string | null
     postcode: string | null
     transmission: 'manual' | 'automatic' | 'both' | null
+    gclid: string | null
+    gbraid: string | null
+    wbraid: string | null
     created_at: string | null
     updated_at: string | null
     data: Record<string, unknown>
@@ -426,6 +429,16 @@ const breadcrumbs = [{ title: 'Enquiries' }]
                         <p class="text-xs text-muted-foreground font-mono break-all">
                             {{ selectedEnquiry.id }}
                         </p>
+                    </div>
+
+                    <div class="space-y-2">
+                        <h4 class="font-semibold text-sm">Google Ads</h4>
+                        <div class="rounded-md border divide-y">
+                            <div class="flex justify-between gap-4 px-3 py-2 text-sm">
+                                <span class="text-muted-foreground">GCLID</span>
+                                <span class="text-right font-mono text-xs break-all">{{ selectedEnquiry.gclid ?? '—' }}</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div v-for="section in selectedSteps" :key="section.key" class="space-y-2">

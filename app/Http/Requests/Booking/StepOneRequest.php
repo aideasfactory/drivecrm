@@ -38,6 +38,9 @@ class StepOneRequest extends FormRequest
             'transmission' => ['required', 'in:manual,automatic'],
             'privacy_consent' => ['required', 'accepted'],
             'marketing_consent' => ['nullable', 'boolean'],
+            'gclid' => ['nullable', 'string'],
+            'gbraid' => ['nullable', 'string'],
+            'wbraid' => ['nullable', 'string'],
         ];
     }
 

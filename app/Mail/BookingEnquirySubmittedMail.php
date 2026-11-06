@@ -47,7 +47,7 @@ class BookingEnquirySubmittedMail extends Mailable
                 'inArea' => (bool) ($step2['in_area'] ?? false),
                 'instructorId' => $step2['instructor_id'] ?? null,
                 'source' => $tracking['source'] ?? null,
-                'gclid' => $tracking['gclid'] ?? null,
+                'gclid' => $this->enquiry->adClickIds()['gclid'] ?? null,
                 'enquiryId' => $this->enquiry->id,
                 'submittedAt' => $this->enquiry->updated_at?->format('j M Y, H:i'),
                 'enquiriesUrl' => url('/enquiries'),

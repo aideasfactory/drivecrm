@@ -102,7 +102,10 @@ class CreateUserAndStudentFromEnquiryAction
 
             // Get or update student record — updateOrCreate ensures returning
             // users get their details refreshed with the latest onboarding data
-            $studentData = $this->getStudentData($step1, $step5, $bookingForSomeoneElse);
+            $studentData = [
+                ...$this->getStudentData($step1, $step5, $bookingForSomeoneElse),
+                ...$enquiry->adClickIds(),
+            ];
             $student = Student::updateOrCreate(
                 ['user_id' => $user->id],
                 $studentData

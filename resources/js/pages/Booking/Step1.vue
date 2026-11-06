@@ -93,6 +93,9 @@
 
             <CardContent>
               <form novalidate @submit.prevent="submit" class="space-y-6">
+                <input type="hidden" name="gclid" :value="form.gclid" />
+                <input type="hidden" name="gbraid" :value="form.gbraid" />
+                <input type="hidden" name="wbraid" :value="form.wbraid" />
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div class="space-y-2">
                     <Label for="first_name">
@@ -399,6 +402,22 @@ function splitPhone(phone: string): { code: string; national: string } {
     : { code: '+44', national: phone.slice(1) }
 }
 
+// Google Ads click IDs: the current URL wins, otherwise fall back to the values
+// stored on the enquiry when the visitor first landed with them.
+const urlParams = new URLSearchParams(page.url.split('?')[1] ?? '')
+const storedAdClickIds = (page.props.adClickIds ?? {}) as Record<string, string | null>
+const adClickId = (key: 'gclid' | 'gbraid' | 'wbraid'): string =>
+  urlParams.get(key)?.trim() || storedAdClickIds[key] || ''
+
+// Last resort when the ad landed elsewhere (another page, or just-drive.co.uk via
+// the GTM cross-domain linker): Google's Conversion Linker cookies, written only
+// once ad consent is given, hold "GCL.<timestamp>.<click id>". Read at submit
+// time because GTM loads after this page mounts.
+function conversionLinkerCookie(name: string): string {
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))
+  return match ? decodeURIComponent(match[1]).split('.').slice(2).join('.') : ''
+}
+
 const existingPhone = splitPhone(existingData.phone || '')
 
 const countryCode = ref(existingPhone.code)
@@ -411,6 +430,9 @@ const form = useForm({
   postcode: existingData.postcode || '',
   transmission: existingData.transmission || 'manual',
   privacy_consent: existingData.privacy_consent || false,
+  gclid: adClickId('gclid'),
+  gbraid: adClickId('gbraid'),
+  wbraid: adClickId('wbraid'),
 })
 
 const privacyConsent = ref(form.privacy_consent)
@@ -518,6 +540,8 @@ function submit() {
     .transform((data) => ({
       ...data,
       phone: toE164Phone(data.phone, countryCode.value),
+      gclid: data.gclid || conversionLinkerCookie('_gcl_aw'),
+      gbraid: data.gbraid || conversionLinkerCookie('_gcl_gb'),
     }))
     .post(`/booking/${enquiry.id}/step/1`, {
       preserveScroll: 'errors',
