@@ -7,6 +7,7 @@ namespace App\Actions\Instructor;
 use App\Enums\CalendarItemStatus;
 use App\Enums\LessonStatus;
 use App\Models\Instructor;
+use App\Support\AlternativePayments;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -52,8 +53,9 @@ class GetInstructorCalendarAction
                     // carry a linked lesson/order from creation. They form one "active booking" family:
                     // each surfaces the booking-context fields (lesson id, order id, future-sibling count,
                     // payment) so the schedule's move / cancel "this one or all forward?" prompt behaves
-                    // identically across every booking status. The pupil name is withheld on a draft hold
-                    // until the first payment confirms the booking.
+                    // identically across every booking status. As in the API's CalendarItemResource, a draft
+                    // hold is only named when staff or the instructor made the booking: a learner's own
+                    // unpaid checkout stays unnamed until the first payment confirms it.
                     $bookingStatuses = [
                         CalendarItemStatus::BOOKED,
                         CalendarItemStatus::COMPLETED,
@@ -63,7 +65,8 @@ class GetInstructorCalendarAction
 
                     if (in_array($item->status, $bookingStatuses, true)) {
                         $lesson = $item->lessons->first();
-                        if ($item->status !== CalendarItemStatus::DRAFT && $lesson && $lesson->order && $lesson->order->student) {
+                        if ($lesson && $lesson->order && $lesson->order->student
+                            && ($item->status !== CalendarItemStatus::DRAFT || AlternativePayments::isStaffOrInstructorBooking($lesson->order))) {
                             $student = $lesson->order->student;
                             $studentName = trim($student->first_name.' '.$student->surname);
                         }
