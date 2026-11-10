@@ -29,6 +29,7 @@ interface ConversationContext {
     instructor_name: string
     student_user_id: number
     student_name: string
+    can_send: boolean
 }
 
 interface PaginationMeta {
@@ -269,7 +270,7 @@ onMounted(() => {
                     <MessageSquare class="h-10 w-10" />
                     <div class="text-center">
                         <p class="font-medium">No messages yet</p>
-                        <p class="mt-1 text-sm">Send the first message to start the conversation</p>
+                        <p v-if="context.can_send" class="mt-1 text-sm">Send the first message to start the conversation</p>
                     </div>
                 </div>
 
@@ -333,8 +334,15 @@ onMounted(() => {
                 </template>
             </div>
 
+            <p
+                v-if="!context.can_send"
+                class="mt-4 border-t pt-4 text-center text-sm text-muted-foreground"
+            >
+                Read only. Only {{ context.instructor_name }} can message this pupil.
+            </p>
+
             <!-- Message Input -->
-            <div class="mt-4 flex items-center gap-3 border-t pt-4">
+            <div v-else class="mt-4 flex items-center gap-3 border-t pt-4">
                 <Input
                     v-model="newMessage"
                     placeholder="Type your message..."
