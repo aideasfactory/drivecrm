@@ -1255,6 +1255,10 @@ class InstructorController extends Controller
      */
     public function broadcastMessage(Instructor $instructor): JsonResponse
     {
+        if ($instructor->user_id === null || $instructor->user_id !== request()->user()?->id) {
+            abort(403, 'Only the instructor can broadcast to their pupils.');
+        }
+
         $data = request()->validate([
             'message' => 'required|string|max:5000',
         ]);
