@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { router } from '@inertiajs/vue3'
+import { router, usePage } from '@inertiajs/vue3'
 import axios from 'axios'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -48,6 +48,11 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+const page = usePage()
+const canBroadcast = computed(
+    () => page.props.auth?.instructor_id === props.instructor.id,
+)
 
 const pupils = ref<Pupil[]>([])
 const loading = ref(true)
@@ -339,6 +344,7 @@ const handleCreatePupil = async () => {
                     Add Pupil
                 </Button>
                 <Button
+                    v-if="canBroadcast"
                     variant="secondary"
                     @click="isBroadcastSheetOpen = true"
                     class="cursor-pointer"

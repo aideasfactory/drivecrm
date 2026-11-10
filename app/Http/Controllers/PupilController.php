@@ -373,8 +373,19 @@ class PupilController extends Controller
                 'instructor_name' => $instructorUser->name,
                 'student_user_id' => $studentUser->id,
                 'student_name' => $student->first_name.' '.$student->surname,
+                'can_send' => $this->isPupilsInstructor($student),
             ],
         ]);
+    }
+
+    /**
+     * Messages are sent as the pupil's instructor, so only that instructor may
+     * send them. Admins viewing the pupil get read-only access to the history.
+     */
+    private function isPupilsInstructor(Student $student): bool
+    {
+        return $student->instructor?->user_id !== null
+            && $student->instructor->user_id === request()->user()?->id;
     }
 
     /**
@@ -388,6 +399,10 @@ class PupilController extends Controller
 
         if (! $student->instructor_id) {
             return response()->json(['message' => 'Student does not have an assigned instructor.'], 422);
+        }
+
+        if (! $this->isPupilsInstructor($student)) {
+            abort(403, 'Only the pupil\'s instructor can send messages.');
         }
 
         $data = request()->validate([
