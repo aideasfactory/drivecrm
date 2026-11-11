@@ -21,6 +21,8 @@ class MileageLogResource extends JsonResource
             'start_mileage' => $this->start_mileage,
             'end_mileage' => $this->end_mileage,
             'miles' => $this->miles,
+            'is_complete' => $this->isComplete(),
+            'finish_mileage_needed' => ! $this->isComplete(),
             'type' => $this->type,
             'type_label' => config("finances.mileage_types.{$this->type}"),
             'notes' => $this->notes,

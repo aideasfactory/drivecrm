@@ -33,6 +33,21 @@ class MileageLog extends Model
         ];
     }
 
+    public const FINISH_MILEAGE_MESSAGE = 'Finishing mileage must be the same as or higher than starting mileage.';
+
+    /**
+     * Miles driven, or 0 while the finish reading hasn't been logged yet.
+     */
+    public static function calculateMiles(int $startMileage, ?int $endMileage): int
+    {
+        return $endMileage === null ? 0 : max($endMileage - $startMileage, 0);
+    }
+
+    public function isComplete(): bool
+    {
+        return $this->end_mileage !== null;
+    }
+
     public function instructor(): BelongsTo
     {
         return $this->belongsTo(Instructor::class);
