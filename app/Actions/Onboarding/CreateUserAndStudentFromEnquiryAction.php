@@ -156,6 +156,9 @@ class CreateUserAndStudentFromEnquiryAction
      * "Home" point; otherwise it is added as an extra, non-default point so
      * existing pickup points are never overwritten. A postcode the pupil
      * already has (ignoring spaces and case) is not added again.
+     *
+     * Runs in its own savepoint and never throws, so a failure here can
+     * never roll back or block the checkout it is part of.
      */
     protected function addBookingPostcodeAsPickupPoint(Student $student, ?string $postcode): void
     {
@@ -165,22 +168,32 @@ class CreateUserAndStudentFromEnquiryAction
             return;
         }
 
-        $existingPostcodes = $student->pickupPoints()
-            ->pluck('postcode')
-            ->map(fn (string $existing): string => strtoupper((string) preg_replace('/\s+/', '', $existing)));
+        try {
+            DB::transaction(function () use ($student, $postcode): void {
+                $existingPostcodes = $student->pickupPoints()
+                    ->pluck('postcode')
+                    ->map(fn (string $existing): string => strtoupper((string) preg_replace('/\s+/', '', $existing)));
 
-        if ($existingPostcodes->contains((string) preg_replace('/\s+/', '', $postcode))) {
-            return;
+                if ($existingPostcodes->contains((string) preg_replace('/\s+/', '', $postcode))) {
+                    return;
+                }
+
+                $isFirstPickupPoint = $existingPostcodes->isEmpty();
+
+                ($this->createPickupPoint)($student, [
+                    'label' => $isFirstPickupPoint ? CreateImportedPickupPointsAction::FIRST_LABEL : CreateImportedPickupPointsAction::OTHER_LABEL,
+                    'address' => $postcode,
+                    'postcode' => $postcode,
+                    'is_default' => $isFirstPickupPoint,
+                ]);
+            });
+        } catch (\Throwable $e) {
+            Log::warning('Failed to save booking postcode as pickup point', [
+                'student_id' => $student->id,
+                'postcode' => $postcode,
+                'error' => $e->getMessage(),
+            ]);
         }
-
-        $isFirstPickupPoint = $existingPostcodes->isEmpty();
-
-        ($this->createPickupPoint)($student, [
-            'label' => $isFirstPickupPoint ? CreateImportedPickupPointsAction::FIRST_LABEL : CreateImportedPickupPointsAction::OTHER_LABEL,
-            'address' => $postcode,
-            'postcode' => $postcode,
-            'is_default' => $isFirstPickupPoint,
-        ]);
     }
 
     /**
