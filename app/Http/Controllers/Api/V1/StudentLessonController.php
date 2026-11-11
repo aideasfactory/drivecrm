@@ -22,7 +22,7 @@ class StudentLessonController extends Controller
     /**
      * Return lessons for a student, with optional filtering.
      *
-     * Query params: status, from_date, sort (asc|desc), limit.
+     * Query params: status, from_date, sort (asc|desc), limit, include_drafts, include_cancelled.
      * Authorised for the student themselves or their assigned instructor.
      */
     public function index(Request $request, Student $student): LessonCollection
@@ -35,6 +35,7 @@ class StudentLessonController extends Controller
             'sort' => $request->query('sort'),
             'limit' => $request->query('limit') ? (int) $request->query('limit') : null,
             'include_drafts' => $request->boolean('include_drafts') ?: null,
+            'include_cancelled' => $request->boolean('include_cancelled') ?: null,
         ], fn ($value) => $value !== null);
 
         $lessons = $this->lessonSignOffService->getStudentLessons($student, $filters);

@@ -18,8 +18,8 @@ class RecalculateStudentLessonNumbersAction
      *
      * Completed lessons are locked — their numbers never change. The sequence
      * for open lessons continues after the student's highest completed lesson
-     * number. Cancelled lessons keep their historical number; they are excluded
-     * from every lesson list so they never hold a slot in the sequence.
+     * number. Cancelled lessons keep their historical number and never hold a
+     * slot in the sequence, so lists that show them must not show that number.
      * Banked lessons (kept to rebook later, no date) are numbered last.
      *
      * @return int The number of lessons whose number changed
