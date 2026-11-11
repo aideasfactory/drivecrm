@@ -248,24 +248,46 @@
                       <Spinner class="h-4 w-4 animate-spin" />
                       Checking the diary…
                     </div>
-                    <ul v-else class="divide-y">
+                    <template v-else>
+                    <Alert v-if="offSlotWeeks.length > 0" class="mb-3">
+                      <TriangleAlert class="h-4 w-4" />
+                      <AlertTitle>
+                        {{ offSlotWeeks.length }} {{ offSlotWeeks.length === 1 ? 'lesson is' : 'lessons are' }} not in a pre-made slot
+                      </AlertTitle>
+                      <AlertDescription>
+                        <p>These are still booked, as new diary items. Check the instructor is happy to teach at these times.</p>
+                        <ul class="mt-1 list-disc pl-4">
+                          <li v-for="week in offSlotWeeks" :key="week.lesson_number">
+                            Lesson {{ week.lesson_number }} · {{ formatPreviewDate(week.date) }} · {{ week.start_time }}–{{ week.end_time }}
+                          </li>
+                        </ul>
+                      </AlertDescription>
+                    </Alert>
+                    <ul class="divide-y">
                       <li v-for="week in clashPreview" :key="week.lesson_number" class="flex items-start justify-between gap-4 py-2 text-sm">
                         <span class="font-medium">
                           Lesson {{ week.lesson_number }} · {{ formatPreviewDate(week.date) }} · {{ week.start_time }}–{{ week.end_time }}
                         </span>
-                        <span v-if="week.clashes.length === 0" class="flex items-center gap-1 text-muted-foreground">
-                          <CheckCircle2 class="h-4 w-4" />
-                          Free
-                        </span>
-                        <span v-else class="flex flex-col items-end gap-1 text-right">
-                          <Badge variant="destructive" class="gap-1">
-                            <TriangleAlert class="h-3 w-3" />
-                            Clash
+                        <span class="flex flex-col items-end gap-1 text-right">
+                          <span v-if="week.clashes.length === 0" class="flex items-center gap-1 text-muted-foreground">
+                            <CheckCircle2 class="h-4 w-4" />
+                            Free
+                          </span>
+                          <template v-else>
+                            <Badge variant="destructive" class="gap-1">
+                              <TriangleAlert class="h-3 w-3" />
+                              Clash
+                            </Badge>
+                            <span v-for="clash in week.clashes" :key="clash" class="text-xs text-muted-foreground">{{ clash }}</span>
+                          </template>
+                          <Badge v-if="week.in_slot === false" variant="outline" class="gap-1">
+                            <CalendarX class="h-3 w-3" />
+                            Not in a slot
                           </Badge>
-                          <span v-for="clash in week.clashes" :key="clash" class="text-xs text-muted-foreground">{{ clash }}</span>
                         </span>
                       </li>
                     </ul>
+                    </template>
                   </CardContent>
                 </Card>
 
@@ -392,7 +414,7 @@ import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 import { clashPreview as clashPreviewRoute, step3 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step4'
-import { ArrowLeft, ArrowRight, RefreshCw, Star, GraduationCap, Calendar, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Info, TriangleAlert, XCircle } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, RefreshCw, Star, GraduationCap, Calendar, CalendarCheck, CalendarX, CheckCircle2, ChevronLeft, ChevronRight, Info, TriangleAlert, XCircle } from 'lucide-vue-next'
 
 const props = defineProps({
   uuid: String,
@@ -430,6 +452,8 @@ async function loadClashPreview() {
     loadingClashPreview.value = false
   }
 }
+
+const offSlotWeeks = computed(() => clashPreview.value.filter((week) => week.in_slot === false))
 
 function formatPreviewDate(date) {
   return new Date(date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
