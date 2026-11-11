@@ -1984,7 +1984,7 @@ When both `from` and `to` are omitted, the response covers **the last 30 days** 
     { "key": "lesson-982", "source": "cash", "description": "Lesson – Tom Reid", "package_name": null, "date": "2026-04-18", "amount_pence": 4000, "formatted_amount": "£40.00" }
   ],
   "mileage": [
-    { "id": 5, "date": "2026-04-22", "start_mileage": 45210, "end_mileage": 45250, "miles": 40, "type": "business", "type_label": "Business", "notes": null, "created_at": "2026-04-22T16:00:00+00:00", "updated_at": "2026-04-22T16:00:00+00:00" }
+    { "id": 5, "date": "2026-04-22", "start_mileage": 45210, "end_mileage": 45250, "miles": 40, "is_complete": true, "finish_mileage_needed": false, "type": "business", "type_label": "Business", "notes": null, "created_at": "2026-04-22T16:00:00+00:00", "updated_at": "2026-04-22T16:00:00+00:00" }
   ],
   "stats": {
     "total_records": 42,
@@ -2291,8 +2291,10 @@ Mileage logs are a separate ledger from finances. Fuel expenses are **not** link
 | `date` | string | YYYY-MM-DD |
 | `vehicle_id` | integer\|null | The vehicle the trip was driven in. Nullable on historical rows from before vehicles existed; required on new business trips for HMRC mileage allowance calculations. |
 | `start_mileage` | integer | Starting odometer reading |
-| `end_mileage` | integer | Ending odometer reading (≥ start) |
-| `miles` | integer | Server-calculated `end - start` |
+| `end_mileage` | integer\|null | Ending odometer reading (≥ start). `null` while the trip is incomplete (finish not logged yet). |
+| `miles` | integer | Server-calculated `end - start`. Always `0` while `end_mileage` is `null`, so incomplete trips add nothing to totals. |
+| `is_complete` | boolean | `true` when `end_mileage` is set. |
+| `finish_mileage_needed` | boolean | Inverse of `is_complete`. Use it to label the trip "Finish mileage needed". |
 | `type` | string | `business` or `personal` |
 | `type_label` | string | `"Business"` or `"Personal"` |
 | `notes` | string\|null | Free-text notes (max 1000 chars) |
@@ -2335,6 +2337,8 @@ Fetch a single mileage log by ID. 403 if not owned.
     "start_mileage": 45210,
     "end_mileage": 45250,
     "miles": 40,
+    "is_complete": true,
+    "finish_mileage_needed": false,
     "type": "business",
     "type_label": "Business",
     "notes": "Lesson with Jane",
@@ -2350,7 +2354,7 @@ Fetch a single mileage log by ID. 403 if not owned.
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Creates a mileage log. `miles` is calculated server-side from `end_mileage - start_mileage`.
+Creates a mileage log. `miles` is calculated server-side from `end_mileage - start_mileage`. `end_mileage` can be omitted or `null` to log the start reading before work and add the finish later with `PUT` (the trip is saved with `miles: 0`, `is_complete: false`).
 
 **Request Body:**
 
@@ -2359,7 +2363,7 @@ Creates a mileage log. `miles` is calculated server-side from `end_mileage - sta
 | `date` | string | Yes | YYYY-MM-DD |
 | `vehicle_id` | integer | Recommended | The vehicle this trip was driven in. Must be one of the vehicles in `/finances/config.vehicles`. Nullable for backward compatibility, but business trips with `vehicle_id = null` are excluded from HMRC mileage-allowance calculations. |
 | `start_mileage` | integer | Yes | Starting odometer reading (min 0) |
-| `end_mileage` | integer | Yes | Ending odometer reading. Must be ≥ `start_mileage`. |
+| `end_mileage` | integer\|null | No | Ending odometer reading (min 0). When sent, must be ≥ `start_mileage`. |
 | `type` | string | Yes | `business` or `personal` |
 | `notes` | string | No | Max 1000 chars |
 
@@ -2377,7 +2381,7 @@ Creates a mileage log. `miles` is calculated server-side from `end_mileage - sta
 
 **Success Response:** `201 Created` — returns the created mileage log.
 
-**Error Response (validation):** `422 Unprocessable Entity` — includes `end_mileage` error when end < start.
+**Error Response (validation):** `422 Unprocessable Entity` — `errors.end_mileage`: `"Finishing mileage must be the same as or higher than starting mileage."` when end < start.
 
 ---
 
@@ -2385,7 +2389,7 @@ Creates a mileage log. `miles` is calculated server-side from `end_mileage - sta
 
 **Auth required:** Yes (Bearer token — instructor only)
 
-Updates a mileage log. All fields optional. `miles` is recomputed whenever either `start_mileage` or `end_mileage` changes. The **effective** end must still be ≥ the effective start, so you can send only `end_mileage` and the server validates against the stored `start_mileage`.
+Updates a mileage log. All fields optional. `miles` is recomputed whenever either `start_mileage` or `end_mileage` changes. When the **effective** end is set it must be ≥ the effective start, so you can send only `end_mileage` (e.g. to complete a trip logged with just a start reading) and the server validates against the stored `start_mileage`. `end_mileage: null` makes the trip incomplete again (`miles: 0`).
 
 `vehicle_id` can be set (integer), cleared (`null`), or left alone (omit the key).
 
@@ -2393,7 +2397,7 @@ Updates a mileage log. All fields optional. `miles` is recomputed whenever eithe
 
 **Error Responses:**
 - `403 Forbidden` — not owned.
-- `422 Unprocessable Entity` — includes `end_mileage` error if effective end < effective start.
+- `422 Unprocessable Entity` — `errors.end_mileage`: `"Finishing mileage must be the same as or higher than starting mileage."` if effective end < effective start.
 
 ---
 
@@ -8244,6 +8248,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-04 | **Cancelled lessons on the pupil lessons list (opt-in).** New `include_cancelled` query param (default `false`): when `true`, cancelled lessons are returned with `status: "cancelled"` and new `card_status: "cancelled"`. Three new nullable fields on every lesson list item: `cancelled_at`, `cancellation_reason_label`, `cancellation_reason`. Additive only — no fields removed, default response unchanged. Lesson detail still 404s for cancelled lessons. **App action:** on cancelled rows hide `student_lesson_number` (can repeat an open lesson's number) and show `payment_status: "due"` as "Unpaid" (invoice voided, nothing owed). | Student (lessons index) |
 | 2026-11-04 | **Admin diary names instructor-made holds (web only, no mobile API change).** The web `GET /instructors/{instructor}/calendar` now sets `student_name` on `draft` items using the same rule as `GET /api/v1/instructor/calendar/items` (named when the instructor or Head Office booked; `null` for the pupil's own website/app checkout), and the diary labels them "Held - <name>" like the app. This supersedes the "labels the block Held" note in the 2026-10-01 entry. | Admin diary (web) |
 | 2026-11-11 | **Practical tests can no longer repeat.** `POST /api/v1/instructor/calendar/items` (and the web `POST /instructors/{instructor}/calendar/items`) now returns 422 on `recurrence_pattern` ("Practical tests cannot repeat. Please add each test on its own.") when `is_practical_test=true` and `recurrence_pattern` is not `none`. Previously the recurring path ignored `is_practical_test` and saved a weekly series of bookable 1-hour *available* slots (found on Malik Arshad's diary). **App action:** hide the Repeat options when Practical test is ticked. | Instructor Calendar (store) |
+| 2026-11-11 | **Mileage: finish reading optional.** `POST /instructor/mileage` no longer requires `end_mileage` (omit or `null`), so instructors can log the start reading before work and add the finish later with `PUT /instructor/mileage/{mileageLog}`. When sent, `end_mileage` must be ≥ `start_mileage`; the 422 message on `errors.end_mileage` is now `Finishing mileage must be the same as or higher than starting mileage.` (create and update). Mileage log responses: `end_mileage` is now `integer\|null`; `miles` is `0` while incomplete, so totals (`/finances/summary` stats, HMRC mileage allowance, year-end archive) count incomplete trips as 0. **New additive fields** `is_complete` and `finish_mileage_needed` (booleans) on every mileage log. **App action:** make finish mileage optional on the mileage form, label trips with `finish_mileage_needed: true` as "Finish mileage needed", and let the instructor edit them to add the finish reading. | Instructor Mileage (store, update, object), Instructor Finances (summary `mileage`) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.
