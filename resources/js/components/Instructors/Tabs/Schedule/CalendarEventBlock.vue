@@ -187,7 +187,7 @@ const statusLabel = computed(() => {
     if (status === 'booked' && isCash.value) return cashLabel.value
     if (status === 'booked' && isPaid.value) return 'Booked & Paid'
     if (status === 'booked') return 'Booked (Unpaid)'
-    if (status === 'draft') return 'Held'
+    if (status === 'draft') return props.event.studentName ? `Held - ${props.event.studentName}` : 'Held'
     if (status === 'reserved') return 'Booked — Paying Weekly'
 
     return props.event.isAvailable ? 'Available' : 'Unavailable'

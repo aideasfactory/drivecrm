@@ -10,6 +10,7 @@ use App\Actions\Report\GetCancelledLessonsAction;
 use App\Actions\Report\GetClashingLessonsAction;
 use App\Actions\Report\GetInstructorAvailabilityAnalyticsAction;
 use App\Actions\Report\GetInvoiceDueWithin48HoursAction;
+use App\Actions\Report\GetOffSlotLessonsAction;
 use App\Models\Lesson;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -23,7 +24,18 @@ class ReportService extends BaseService
         protected GetClashingLessonsAction $getClashingLessons,
         protected ConfirmProvisionalLessonAction $confirmProvisionalLesson,
         protected GetBankedLessonsReportAction $getBankedLessonsReport,
+        protected GetOffSlotLessonsAction $getOffSlotLessons,
     ) {}
+
+    /**
+     * Get upcoming lessons booked outside a pre-made slot.
+     *
+     * @return array{rows: Collection, generated_at: string}
+     */
+    public function getOffSlotLessons(): array
+    {
+        return ($this->getOffSlotLessons)();
+    }
 
     /**
      * Get every lesson kept in its booking to rebook later.

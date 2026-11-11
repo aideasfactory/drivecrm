@@ -75,6 +75,16 @@ class ReportController extends Controller
     }
 
     /**
+     * Display upcoming lessons booked outside a pre-made slot.
+     */
+    public function offSlotLessons(): Response
+    {
+        return Inertia::render('Reports/OffSlotLessons', [
+            'report' => $this->reportService->getOffSlotLessons(),
+        ]);
+    }
+
+    /**
      * Display lessons kept in their booking to rebook later.
      */
     public function bankedLessons(): Response
@@ -315,6 +325,13 @@ class ReportController extends Controller
                 'description' => 'Provisional lessons booked onto a time that was already taken — contact the learner to rearrange.',
                 'icon' => 'CalendarClock',
                 'route' => route('reports.clashes'),
+            ],
+            [
+                'key' => 'off-slot-lessons',
+                'title' => 'Lessons Not In A Slot',
+                'description' => 'Upcoming lessons booked at a time with no pre-made available slot — check the instructor is happy.',
+                'icon' => 'CalendarX',
+                'route' => route('reports.off-slot-lessons'),
             ],
             [
                 'key' => 'banked-lessons',

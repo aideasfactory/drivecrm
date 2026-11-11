@@ -16,6 +16,9 @@ class ImportRun extends Model
 {
     public const SOURCE_UPLOAD = 'upload';
 
+    /** An import:* console command run against a single CSV (e.g. import:lessons). */
+    public const SOURCE_COMMAND = 'command';
+
     public const STATUS_QUEUED = 'queued';
 
     public const STATUS_RUNNING = 'running';

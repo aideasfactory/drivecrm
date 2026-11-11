@@ -21,9 +21,9 @@ class InstructorCalendarService extends BaseService
 
     /**
      * Every weekly lesson date a package starting in this slot would get, and
-     * what each one clashes with. Read-only.
+     * what each one clashes with, and whether it sits in a pre-made slot. Read-only.
      *
-     * @return list<array{lesson_number: int, date: string, start_time: string, end_time: string, clashes: list<string>}>
+     * @return list<array{lesson_number: int, date: string, start_time: string, end_time: string, clashes: list<string>, in_slot: bool}>
      */
     public function previewPackageClashes(CalendarItem $firstSlot, int $lessonsCount): array
     {

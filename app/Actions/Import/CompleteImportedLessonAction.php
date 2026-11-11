@@ -13,6 +13,7 @@ use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Support\ImportValues;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 
 class CompleteImportedLessonAction
@@ -47,7 +48,20 @@ class CompleteImportedLessonAction
             return null;
         }
 
-        // Re-checked in the update itself, so a lesson signed off meanwhile is left alone.
+        $candidates->forget($ref);
+
+        return $this->complete($lesson) ? $lesson : null;
+    }
+
+    /**
+     * Complete one eligible lesson: lesson completed (at its end time) and its
+     * calendar item completed. Eligibility is re-checked in the update itself,
+     * so a lesson signed off meanwhile is left alone.
+     *
+     * @return bool Whether the lesson was completed
+     */
+    public function complete(Lesson $lesson): bool
+    {
         $updated = $this->eligible()
             ->whereKey($lesson->id)
             ->update([
@@ -55,10 +69,8 @@ class CompleteImportedLessonAction
                 'completed_at' => $lesson->end_time ? $lesson->date->copy()->setTimeFrom($lesson->end_time) : $lesson->date,
             ]);
 
-        $candidates->forget($ref);
-
         if ($updated === 0) {
-            return null;
+            return false;
         }
 
         if ($lesson->calendar_item_id) {
@@ -67,7 +79,19 @@ class CompleteImportedLessonAction
                 ->update(['status' => CalendarItemStatus::COMPLETED]);
         }
 
-        return $lesson;
+        return true;
+    }
+
+    /**
+     * Every lesson the importer created that could be completed: on an
+     * imported order, pending, not banked, dated before today. Used by
+     * import:lessons to close off past imported lessons whatever the file says.
+     *
+     * @return EloquentCollection<int, Lesson>
+     */
+    public function pastPendingLessons(): EloquentCollection
+    {
+        return $this->candidates()->get();
     }
 
     /**

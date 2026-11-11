@@ -397,6 +397,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('reports.clashes.export');
     Route::post('/reports/clashes/{lesson}/confirm', [ReportController::class, 'confirmClash'])
         ->name('reports.clashes.confirm');
+    Route::get('/reports/off-slot-lessons', [ReportController::class, 'offSlotLessons'])
+        ->name('reports.off-slot-lessons');
     Route::get('/reports/banked-lessons', [ReportController::class, 'bankedLessons'])
         ->name('reports.banked-lessons');
     Route::get('/reports/banked-lessons/export', [ReportController::class, 'exportBankedLessons'])

@@ -6,6 +6,9 @@ namespace App\Services;
 
 use App\Actions\Import\BuildImportTemplateAction;
 use App\Actions\Import\CompleteImportedLessonAction;
+use App\Actions\Import\CreateImportedPickupPointsAction;
+use App\Actions\Import\ConvertImportedLessonToPracticalTestAction;
+use App\Actions\Import\FetchRemoteImportFileAction;
 use App\Actions\Import\FillImportedLessonSummaryAction;
 use App\Actions\Import\FixImportedPupilsAction;
 use App\Actions\Import\GetPendingImportedUsersAction;
@@ -13,24 +16,36 @@ use App\Actions\Import\ImportCoverageAction;
 use App\Actions\Import\ImportDiaryItemAction;
 use App\Actions\Import\ImportFinanceAction;
 use App\Actions\Import\ImportInstructorAction;
+use App\Actions\Import\ImportMileageLogAction;
 use App\Actions\Import\ImportStudentAction;
+use App\Actions\Import\ParseImportedLocationsAction;
+use App\Actions\Import\ReadCsvColumnsAction;
+use App\Actions\Import\ReadDiaryCsvRowsAction;
 use App\Actions\Import\ReadImportBundleAction;
 use App\Actions\Import\ResolveImportedOrderAction;
 use App\Actions\Import\SendImportedWelcomeEmailAction;
 use App\Actions\Import\SyncImportedOrderAction;
+use App\Actions\Import\SyncLatestPracticalTestDateAction;
+use App\Actions\Import\TickImportedChecklistItemAction;
 use App\Actions\Import\ValidateImportBundleAction;
+use App\Actions\Instructor\UploadFinanceReceiptAction;
 use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
+use App\Enums\CalendarItemType;
 use App\Jobs\ImportBundleJob;
+use App\Models\CalendarItem;
 use App\Models\ImportMapping;
 use App\Models\ImportRun;
 use App\Models\Instructor;
+use App\Models\InstructorFinance;
 use App\Models\Lesson;
 use App\Models\Order;
 use App\Models\Student;
+use App\Models\StudentPickupPoint;
 use App\Models\User;
 use App\Support\ImportValues;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -86,6 +101,16 @@ class ImportService extends BaseService
         protected GetPendingImportedUsersAction $getPendingImportedUsers,
         protected SendImportedWelcomeEmailAction $sendImportedWelcomeEmail,
         protected BuildImportTemplateAction $buildImportTemplate,
+        protected ReadDiaryCsvRowsAction $readDiaryCsvRows,
+        protected ConvertImportedLessonToPracticalTestAction $convertImportedLessonToPracticalTest,
+        protected SyncLatestPracticalTestDateAction $syncLatestPracticalTestDate,
+        protected UploadFinanceReceiptAction $uploadFinanceReceipt,
+        protected ReadCsvColumnsAction $readCsvColumns,
+        protected ParseImportedLocationsAction $parseImportedLocations,
+        protected CreateImportedPickupPointsAction $createImportedPickupPoints,
+        protected TickImportedChecklistItemAction $tickImportedChecklistItem,
+        protected ImportMileageLogAction $importMileageLog,
+        protected FetchRemoteImportFileAction $fetchRemoteImportFile,
     ) {}
 
     /**
@@ -477,6 +502,1042 @@ class ImportService extends BaseService
     }
 
     /**
+     * Dry run of importLessonFile() (import:lessons --dry-run): what it would do, writing nothing.
+     *
+     * `new_lessons_completed` / `new_lessons_booked` are the lessons it would
+     * add (dated before today / today onwards). `lessons_already_in_diary` are
+     * new refs skipped because the pupil already has a lesson at that date +
+     * start time. `lessons_to_complete` are imported lessons dated before
+     * today still pending, which it would close off.
+     *
+     * @return array{counts: array<string, int>, missing_instructor_refs: array<string, int>, missing_student_refs: array<string, int>}
+     */
+    public function checkLessonFile(string $path): array
+    {
+        $sorted = $this->sortLessonFileRows($path);
+        $counts = $sorted['counts'] + [
+            'new_lessons_completed' => 0,
+            'new_lessons_booked' => 0,
+            'lessons_already_in_diary' => 0,
+            'pupils' => 0,
+            'instructors' => 0,
+            'lessons_to_complete' => 0,
+        ];
+
+        /** @var array<string, true> $seen */
+        $seen = [];
+        /** @var array<int, true> $pupils */
+        $pupils = [];
+        /** @var array<string, true> $instructors */
+        $instructors = [];
+
+        foreach ($sorted['groups'] as $instructorRef => $rows) {
+            foreach ($rows as $row) {
+                $studentId = $sorted['student_ids'][$row['student_ref']];
+                $key = $studentId.'|'.ImportValues::date((string) $row['date'])->toDateString().'|'.ImportValues::time((string) $row['start_time']);
+
+                if (isset($seen[$key]) || $this->importDiaryItem->studentHasLessonAt($studentId, $row)) {
+                    $counts['lessons_already_in_diary']++;
+
+                    continue;
+                }
+
+                $seen[$key] = true;
+                $pupils[$studentId] = true;
+                $instructors[$instructorRef] = true;
+                $counts[$row['status'] === 'completed' ? 'new_lessons_completed' : 'new_lessons_booked']++;
+            }
+        }
+
+        $counts['pupils'] = count($pupils);
+        $counts['instructors'] = count($instructors);
+        $counts['lessons_to_complete'] = $this->completeImportedLesson->pastPendingLessons()->count();
+
+        return [
+            'counts' => $counts,
+            'missing_instructor_refs' => $sorted['missing_instructor_refs'],
+            'missing_student_refs' => $sorted['missing_student_refs'],
+        ];
+    }
+
+    /**
+     * Bring in the lessons from a diary-shaped CSV (e.g. lesson_progress.csv)
+     * that the CRM doesn't have yet, then close off past imported lessons.
+     *
+     * Rules (the master import blueprint follows the same ones):
+     * - Only new diary refs. A lesson already imported is never changed by its row.
+     * - Only rows whose instructor was imported and whose pupil was imported
+     *   and is linked to that instructor (`students.instructor_id`). Anything
+     *   else is skipped.
+     * - Rows with an unusable date or time (blank, unparseable, before 2000,
+     *   end not after start) are skipped, as is a row where the pupil already
+     *   has a lesson at that date + start time.
+     * - Dated before today → completed (whatever the row's status); today
+     *   onwards → booked.
+     * - Same path as the bundle's diary (importDiary): one transaction per
+     *   instructor, lessons on the pupil's imported order, lesson numbers
+     *   recalculated, order synced, caches cleared.
+     * - Then every imported lesson dated before today still pending is
+     *   completed quietly (closeOffPastImportedLessons).
+     *
+     * Recorded as an import run (`source = command`); every lesson it creates
+     * is mapped (`diary` + `lesson`) like the bundle's. Safe to re-run.
+     *
+     * @param  (callable(string): void)|null  $progress  Receives one line per instructor
+     * @return array{run: ImportRun, totals: array<string, int>}
+     *
+     * @throws Throwable When an instructor fails (earlier instructors stay imported; the run is marked failed)
+     */
+    public function importLessonFile(string $path, ?callable $progress = null): array
+    {
+        $sorted = $this->sortLessonFileRows($path);
+        $totals = $sorted['counts'] + ['lessons' => 0, 'lessons_already_in_diary' => 0, 'lessons_marked_completed' => 0];
+
+        $run = ImportRun::create([
+            'source' => ImportRun::SOURCE_COMMAND,
+            'file_name' => basename($path),
+            'status' => ImportRun::STATUS_RUNNING,
+            'totals' => $totals + ['instructors_done' => 0, 'instructors_to_import' => count($sorted['groups'])],
+        ]);
+
+        $instructorsDone = 0;
+
+        try {
+            foreach ($sorted['groups'] as $instructorRef => $rows) {
+                $instructor = Instructor::query()->findOrFail($sorted['instructor_ids'][$instructorRef]);
+
+                [$lessons, , , , $duplicates] = DB::transaction(function () use ($instructor, $rows, $run): array {
+                    $result = $this->importDiary($instructor, $rows, $run);
+                    $this->invalidateImportedInstructorCaches($instructor, $result[2]);
+
+                    return $result;
+                });
+
+                $totals['lessons'] += $lessons;
+                $totals['lessons_already_in_diary'] += $duplicates;
+                $instructorsDone++;
+
+                $run->update([
+                    'totals' => $totals + ['instructors_done' => $instructorsDone, 'instructors_to_import' => count($sorted['groups'])],
+                ]);
+
+                if ($progress) {
+                    $progress(sprintf(
+                        '[%s] (%d of %d) %d lesson(s) added, %d already in diary.',
+                        $instructorRef,
+                        $instructorsDone,
+                        count($sorted['groups']),
+                        $lessons,
+                        $duplicates,
+                    ));
+                }
+            }
+
+            $totals['lessons_marked_completed'] = $this->closeOffPastImportedLessons();
+
+            if ($progress) {
+                $progress("{$totals['lessons_marked_completed']} past imported lesson(s) marked completed.");
+            }
+        } catch (Throwable $exception) {
+            $run->update([
+                'status' => ImportRun::STATUS_FAILED,
+                'totals' => $totals,
+                'error' => $exception->getMessage(),
+                'completed_at' => now(),
+            ]);
+
+            throw $exception;
+        }
+
+        $run->update([
+            'status' => ImportRun::STATUS_COMPLETED,
+            'totals' => $totals,
+            'completed_at' => now(),
+        ]);
+
+        return ['run' => $run, 'totals' => $totals];
+    }
+
+    /**
+     * Turn imported lessons that were really driving tests into practical
+     * tests (import:practical-tests). A diary row is a test when its notes
+     * start "Driving test" (ConvertImportedLessonToPracticalTestAction::NOTES_PATTERN);
+     * it is matched to its imported lesson by diary_ref only.
+     *
+     * Per pupil, in one transaction: each eligible lesson's calendar item
+     * becomes a `practical_test` for the pupil (same times, notes kept and
+     * prefixed with the pupil's name) and the lesson is deleted; then lesson
+     * numbers are recalculated, the imported orders synced, and the pupil's
+     * "Book practical test" checklist item ticked and dated with their latest
+     * test date (never moved back to an earlier one). Skipped: rows whose
+     * lesson wasn't imported (or is already a test), cancelled lessons, lessons
+     * with a payment / payout / reflective log, and a test on a date the pupil
+     * already has a practical test. Safe to re-run.
+     *
+     * @param  (callable(string): void)|null  $progress  Receives a line every 250 pupils
+     * @return array<string, int>
+     */
+    public function importPracticalTests(string $path, bool $dryRun = false, ?callable $progress = null): array
+    {
+        $counts = [
+            'rows' => 0,
+            'test_rows' => 0,
+            'tests_past' => 0,
+            'tests_future' => 0,
+            'pupils' => 0,
+            'checklists_updated' => 0,
+            'already_converted' => 0,
+            'skipped_not_imported' => 0,
+            'skipped_cancelled' => 0,
+            'skipped_banked' => 0,
+            'skipped_no_calendar_item' => 0,
+            'skipped_has_payment_or_log' => 0,
+            'skipped_pupil_has_test_that_day' => 0,
+        ];
+
+        /** @var array<int, true> $lessonIds */
+        $lessonIds = [];
+
+        foreach (($this->readDiaryCsvRows)($path, ['notes']) as $row) {
+            $counts['rows']++;
+
+            if (! preg_match(ConvertImportedLessonToPracticalTestAction::NOTES_PATTERN, (string) $row['notes'])) {
+                continue;
+            }
+
+            $counts['test_rows']++;
+            $ref = (string) $row['diary_ref'];
+            $lessonId = ImportMapping::modelIdFor(ImportMapping::ENTITY_LESSON, $ref);
+
+            if ($lessonId !== null) {
+                $lessonIds[$lessonId] = true;
+
+                continue;
+            }
+
+            $calendarItemId = ImportMapping::modelIdFor(ImportMapping::ENTITY_DIARY, $ref);
+            $isConverted = $calendarItemId !== null && CalendarItem::query()
+                ->whereKey($calendarItemId)
+                ->where('item_type', CalendarItemType::PracticalTest)
+                ->exists();
+
+            $counts[$isConverted ? 'already_converted' : 'skipped_not_imported']++;
+        }
+
+        $lessonsByStudent = [];
+
+        foreach (array_chunk(array_keys($lessonIds), 1000) as $chunk) {
+            foreach (Lesson::query()->with(['order.student', 'calendarItem'])->whereKey($chunk)->get() as $lesson) {
+                $lessonsByStudent[(int) $lesson->order?->student_id][] = $lesson;
+            }
+        }
+
+        $pupilsDone = 0;
+
+        foreach ($lessonsByStudent as $studentId => $lessons) {
+            $pupilCounts = $dryRun
+                ? $this->convertPupilPracticalTests($studentId, $lessons, true)
+                : DB::transaction(fn () => $this->convertPupilPracticalTests($studentId, $lessons, false));
+
+            foreach ($pupilCounts as $key => $count) {
+                $counts[$key] += $count;
+            }
+
+            $pupilsDone++;
+
+            if ($progress && $pupilsDone % 250 === 0) {
+                $progress("{$pupilsDone} of ".count($lessonsByStudent).' pupils done.');
+            }
+        }
+
+        return $counts;
+    }
+
+    /**
+     * Attach receipt files to finance rows already imported (import:receipts).
+     * The files come from a local folder, or — for a bucket that can't be
+     * listed — a folder URL plus a manifest (a local file or URL listing the
+     * file names, one per line). A manifest URL on its own also works: its
+     * files are the ones next to it. Remote files are fetched one at a time
+     * to a temp file and deleted after.
+     * Each file is named after its finance ref
+     * (`F-169242.png`) and matched through its `finance` import mapping only.
+     *
+     * A file is attached only when its finance row has no receipt yet — an
+     * existing receipt is never replaced. It goes through the same action as
+     * an instructor's own upload (UploadFinanceReceiptAction): same S3 path,
+     * photos shrunk and thumbnailed by the queued job, PDFs ready at once.
+     * Skipped: types other than pdf/jpg/jpeg/png, refs never imported, and a
+     * ref with more than one file. With a manifest, the dry run checks every
+     * file is reachable. A failed upload is reported and the rest carry on.
+     * Safe to re-run.
+     *
+     * @return array{counts: array<string, int>, rows: array<int, array{file: string, ref: string, finance_id: int|null, instructor: string, date: string, type: string, category: string, amount: string, description: string, outcome: string}>}
+     */
+    public function importReceipts(string $source, bool $dryRun = false, ?string $manifest = null): array
+    {
+        $isRemote = (bool) preg_match('#^https?://#i', $source);
+
+        if ($isRemote) {
+            if ($manifest === null) {
+                $manifest = $source;
+                $baseUrl = substr($source, 0, strrpos($source, '/') + 1);
+            } else {
+                $baseUrl = rtrim($source, '/').'/';
+            }
+
+            $names = preg_match('#^https?://#i', $manifest)
+                ? $this->fetchRemoteImportFile->manifest($manifest)
+                : $this->readLocalManifest($manifest);
+
+            $files = collect($names)
+                ->map(fn (string $name) => ['name' => basename($name), 'location' => $baseUrl.rawurlencode(basename($name))]);
+        } elseif (is_dir($source)) {
+            $files = collect(File::files($source))
+                ->reject(fn ($file) => str_starts_with($file->getFilename(), '.'))
+                ->map(fn ($file) => ['name' => $file->getFilename(), 'location' => $file->getPathname()]);
+        } else {
+            throw new RuntimeException("{$source} is not a folder or a manifest URL.");
+        }
+
+        $files = $files->sortBy('name', SORT_NATURAL)->values();
+        $filesPerRef = $files->countBy(fn (array $file) => strtoupper(pathinfo($file['name'], PATHINFO_FILENAME)));
+
+        $financeIds = ImportMapping::query()
+            ->where('entity', ImportMapping::ENTITY_FINANCE)
+            ->whereIn('source_ref', $filesPerRef->keys()->all())
+            ->pluck('model_id', 'source_ref')
+            ->mapWithKeys(fn (int $id, string $ref) => [strtoupper($ref) => $id]);
+
+        $finances = InstructorFinance::query()
+            ->with('instructor.user')
+            ->whereKey($financeIds->values()->all())
+            ->get()
+            ->keyBy('id');
+
+        $outcomes = [
+            'attach' => $dryRun ? 'Would attach' : 'Attached',
+            'already_has_receipt' => 'Skipped: already has a receipt',
+            'ref_not_imported' => 'Skipped: ref not imported',
+            'finance_row_missing' => 'Skipped: finance row deleted',
+            'duplicate_file' => 'Skipped: more than one file for this ref',
+            'unsupported_type' => 'Skipped: not a pdf, jpg or png',
+            'file_missing' => 'Skipped: file not found at its URL',
+            'failed' => 'Failed',
+        ];
+        $counts = array_fill_keys(array_keys($outcomes), 0);
+        $rows = [];
+
+        foreach ($files as $file) {
+            $ref = strtoupper(pathinfo($file['name'], PATHINFO_FILENAME));
+            $financeId = $financeIds->get($ref);
+            $finance = $financeId !== null ? $finances->get($financeId) : null;
+
+            $key = match (true) {
+                ! in_array(strtolower(pathinfo($file['name'], PATHINFO_EXTENSION)), ['pdf', 'jpg', 'jpeg', 'png'], true) => 'unsupported_type',
+                $filesPerRef->get($ref) > 1 => 'duplicate_file',
+                $financeId === null => 'ref_not_imported',
+                $finance === null => 'finance_row_missing',
+                $finance->receipt_path !== null => 'already_has_receipt',
+                default => 'attach',
+            };
+
+            if ($key === 'attach' && $dryRun && $isRemote && ! $this->fetchRemoteImportFile->exists($file['location'])) {
+                $key = 'file_missing';
+            }
+
+            $outcome = $outcomes[$key];
+
+            if ($key === 'attach' && ! $dryRun) {
+                $localPath = null;
+
+                try {
+                    $localPath = $isRemote ? $this->fetchRemoteImportFile->download($file['location'], $file['name']) : $file['location'];
+                    ($this->uploadFinanceReceipt)($finance, new UploadedFile($localPath, $file['name'], null, null, true));
+                } catch (Throwable $exception) {
+                    $key = 'failed';
+                    $outcome = 'Failed: '.$exception->getMessage();
+                } finally {
+                    if ($isRemote && $localPath !== null) {
+                        $this->fetchRemoteImportFile->cleanUp($localPath);
+                    }
+                }
+            }
+
+            $counts[$key]++;
+            $rows[] = [
+                'file' => $file['name'],
+                'ref' => $ref,
+                'finance_id' => $finance?->id,
+                'instructor' => $finance ? "#{$finance->instructor_id} ".($finance->instructor?->name ?? '') : '',
+                'date' => $finance?->date?->toDateString() ?? '',
+                'type' => (string) ($finance?->type ?? ''),
+                'category' => (string) ($finance?->category ?? ''),
+                'amount' => $finance?->formatted_amount ?? '',
+                'description' => (string) ($finance?->description ?? ''),
+                'outcome' => $outcome,
+            ];
+        }
+
+        return ['counts' => $counts, 'rows' => $rows];
+    }
+
+    /**
+     * File names from a local manifest (one per line; blanks and # lines ignored).
+     *
+     * @return array<int, string>
+     */
+    protected function readLocalManifest(string $path): array
+    {
+        if (! is_file($path)) {
+            throw new RuntimeException("Manifest {$path} not found.");
+        }
+
+        return array_values(array_filter(
+            array_map('trim', file($path, FILE_IGNORE_NEW_LINES)),
+            fn (string $line) => $line !== '' && ! str_starts_with($line, '#'),
+        ));
+    }
+
+    /**
+     * Give imported pupils their pickup points from a locations CSV
+     * (import:pickup-points; legacy student_locations.csv: `student_ref`,
+     * `locations` joined by `|`).
+     *
+     * - Pupils are matched by student ref through their `student` mapping only;
+     *   a ref never imported is skipped.
+     * - A pupil who already has any pickup point in Drive is skipped entirely,
+     *   as is a pupil two refs in the file point to (linked by email at import).
+     * - Only locations that parse cleanly are added (ParseImportedLocationsAction:
+     *   full postcode at the end); anything else is skipped and listed, for
+     *   adding by hand.
+     * - The first clean location is the default; an unlabelled first one is
+     *   "Home", any other unlabelled one "Pick-up point".
+     * - No geocoding: latitude/longitude stay empty for a later step.
+     *
+     * Safe to re-run (a pupil with points is skipped).
+     *
+     * @return array{counts: array<string, int>, rows: array<int, array{student_ref: string, student_id: int|null, pupil: string, label: string, address: string, postcode: string, default: string, outcome: string}>}
+     */
+    public function importPickupPoints(string $path, bool $dryRun = false): array
+    {
+        $studentIds = ImportMapping::query()
+            ->where('entity', ImportMapping::ENTITY_STUDENT)
+            ->pluck('model_id', 'source_ref')
+            ->all();
+
+        $pupilsWithPoints = array_flip(StudentPickupPoint::query()->distinct()->pluck('student_id')->all());
+
+        $counts = [
+            'pupils_given_points' => 0,
+            'points_added' => 0,
+            'defaults_set' => 0,
+            'locations_skipped' => 0,
+            'locations_repeated' => 0,
+            'pupils_not_imported' => 0,
+            'pupils_already_have_points' => 0,
+            'pupils_with_two_refs' => 0,
+            'pupils_no_locations' => 0,
+            'pupils_no_clean_locations' => 0,
+        ];
+        $rows = [];
+        /** @var array<int, array{ref: string, locations: string}> $pending */
+        $pending = [];
+
+        foreach (($this->readCsvColumns)($path, ['student_ref', 'locations']) as $row) {
+            $ref = (string) $row['student_ref'];
+            $studentId = $studentIds[$ref] ?? null;
+            $locations = (string) $row['locations'];
+
+            if ($locations === '') {
+                $counts['pupils_no_locations']++;
+
+                continue;
+            }
+
+            if ($studentId === null) {
+                $counts['pupils_not_imported']++;
+                $rows[] = $this->pickupRow($ref, null, '', null, 'Skipped: pupil not imported', $locations);
+
+                continue;
+            }
+
+            if (isset($pupilsWithPoints[$studentId])) {
+                $counts['pupils_already_have_points']++;
+                $rows[] = $this->pickupRow($ref, $studentId, '', null, 'Skipped: pupil already has a pick-up point', $locations);
+
+                continue;
+            }
+
+            if (isset($pending[$studentId])) {
+                $pending[$studentId]['other_refs'][] = ['ref' => $ref, 'locations' => $locations];
+
+                continue;
+            }
+
+            $pending[$studentId] = ['ref' => $ref, 'locations' => $locations, 'other_refs' => []];
+        }
+
+        foreach ($pending as $studentId => $entry) {
+            if ($entry['other_refs'] === []) {
+                continue;
+            }
+
+            foreach ([['ref' => $entry['ref'], 'locations' => $entry['locations']], ...$entry['other_refs']] as $duplicate) {
+                $counts['pupils_with_two_refs']++;
+                $rows[] = $this->pickupRow($duplicate['ref'], $studentId, '', null, 'Skipped: another ref in the file is the same pupil', $duplicate['locations']);
+            }
+
+            unset($pending[$studentId]);
+        }
+
+        foreach (array_chunk(array_keys($pending), 1000, true) as $chunk) {
+            $names = Student::query()->whereKey($chunk)->get(['id', 'first_name', 'surname'])
+                ->mapWithKeys(fn (Student $student) => [$student->id => trim($student->first_name.' '.$student->surname)]);
+
+            foreach ($chunk as $studentId) {
+                $ref = $pending[$studentId]['ref'];
+                $pupil = (string) ($names[$studentId] ?? '');
+                $parsed = ($this->parseImportedLocations)($pending[$studentId]['locations']);
+                $clean = array_values(array_filter($parsed, fn (array $location) => $location['skip_reason'] === null));
+
+                foreach ($parsed as $location) {
+                    if ($location['skip_reason'] !== null) {
+                        $counts[$location['postcode'] === null && $location['skip_reason'] === ParseImportedLocationsAction::REPEAT_REASON ? 'locations_repeated' : 'locations_skipped']++;
+                        $rows[] = $this->pickupRow($ref, $studentId, $pupil, null, 'Skipped: '.$location['skip_reason'], $location['raw']);
+                    }
+                }
+
+                if ($clean === []) {
+                    $counts['pupils_no_clean_locations']++;
+
+                    continue;
+                }
+
+                $points = CreateImportedPickupPointsAction::plan($clean);
+                $saved = $dryRun || ($this->createImportedPickupPoints)($studentId, $points);
+
+                if (! $saved) {
+                    $counts['pupils_already_have_points']++;
+                    $rows[] = $this->pickupRow($ref, $studentId, $pupil, null, 'Skipped: pupil already has a pick-up point', $pending[$studentId]['locations']);
+
+                    continue;
+                }
+
+                $counts['pupils_given_points']++;
+                $counts['points_added'] += count($points);
+                $counts['defaults_set']++;
+
+                foreach ($points as $point) {
+                    $rows[] = $this->pickupRow($ref, $studentId, $pupil, $point, $dryRun ? 'Would add' : 'Added');
+                }
+            }
+        }
+
+        return ['counts' => $counts, 'rows' => $rows];
+    }
+
+    /**
+     * @param  array{label: string, address: string, postcode: string, is_default: bool}|null  $point
+     * @return array{student_ref: string, student_id: int|null, pupil: string, label: string, address: string, postcode: string, default: string, outcome: string}
+     */
+    protected function pickupRow(string $ref, ?int $studentId, string $pupil, ?array $point, string $outcome, string $raw = ''): array
+    {
+        return [
+            'student_ref' => $ref,
+            'student_id' => $studentId,
+            'pupil' => $pupil,
+            'label' => $point['label'] ?? '',
+            'address' => $point['address'] ?? $raw,
+            'postcode' => $point['postcode'] ?? '',
+            'default' => $point ? ($point['is_default'] ? 'Yes' : 'No') : '',
+            'outcome' => $outcome,
+        ];
+    }
+
+    /**
+     * Fill pupils' date of birth and theory / practical passes from the
+     * legacy student details export (import:student-details;
+     * Students_data.csv: `ID`, `Date of Birth`, `Theory Test Passed`,
+     * `Practical Test Passed`). Only the file's own data is used.
+     *
+     * - `ID` 119827 is the pupil imported as `STU-119827` (matched through the
+     *   `student` mapping only); IDs never imported, and deleted pupils, are skipped.
+     * - Date of birth (dd/mm/yyyy): set only when the pupil has none; a date
+     *   that doesn't parse or is not in the past is skipped.
+     * - Theory "Yes" → tick "Sit theory test"; practical "Yes" → tick "Sit
+     *   practical test". No dates, nothing unticked, "No"/blank change nothing.
+     * - Nothing else changes (no lessons, status, "Book …" items, licence, email).
+     *
+     * One transaction per pupil. Safe to re-run.
+     *
+     * @return array{counts: array<string, int>, rows: array<int, array{id: string, student_id: int|null, pupil: string, field: string, value: string, outcome: string}>}
+     */
+    public function importStudentDetails(string $path, bool $dryRun = false): array
+    {
+        $columns = ['id', 'date of birth', 'theory test passed', 'practical test passed'];
+        $checklistFields = [
+            'theory test passed' => ['key' => 'sit_theory_test', 'field' => 'Sit theory test', 'count' => 'theory'],
+            'practical test passed' => ['key' => 'sit_practical_test', 'field' => 'Sit practical test', 'count' => 'practical'],
+        ];
+
+        $studentIds = ImportMapping::query()
+            ->where('entity', ImportMapping::ENTITY_STUDENT)
+            ->pluck('model_id', 'source_ref')
+            ->all();
+
+        $counts = [
+            'rows' => 0,
+            'pupils_matched' => 0,
+            'pupils_not_imported' => 0,
+            'pupils_deleted' => 0,
+            'dob_set' => 0,
+            'dob_already_set' => 0,
+            'dob_invalid' => 0,
+            'theory_ticked' => 0,
+            'theory_already_ticked' => 0,
+            'practical_ticked' => 0,
+            'practical_already_ticked' => 0,
+        ];
+        $rows = [];
+        /** @var array<int, array<string, string|int>> $matched */
+        $matched = [];
+
+        foreach (($this->readCsvColumns)($path, $columns) as $row) {
+            $counts['rows']++;
+            $studentId = $studentIds['STU-'.$row['id']] ?? null;
+
+            if ($studentId === null) {
+                $counts['pupils_not_imported']++;
+
+                continue;
+            }
+
+            $counts['pupils_matched']++;
+            $matched[$studentId] = $row;
+        }
+
+        $today = now()->startOfDay();
+        $verb = $dryRun ? 'Would set' : 'Set';
+        $tickVerb = $dryRun ? 'Would tick' : 'Ticked';
+
+        foreach (array_chunk(array_keys($matched), 500, true) as $chunk) {
+            $students = Student::query()->whereKey($chunk)->get()->keyBy('id');
+
+            foreach ($chunk as $studentId) {
+                $student = $students->get($studentId);
+
+                if ($student === null) {
+                    $counts['pupils_deleted']++;
+
+                    continue;
+                }
+
+                $row = $matched[$studentId];
+                $pupil = trim($student->first_name.' '.$student->surname);
+                $id = (string) $row['id'];
+                $pupilRows = [];
+
+                $apply = function () use ($student, $row, $dryRun, $today, $checklistFields, $id, $studentId, $pupil, $verb, $tickVerb, &$counts, &$pupilRows): void {
+                    $dobValue = (string) $row['date of birth'];
+
+                    if ($dobValue !== '') {
+                        $dob = ImportValues::date($dobValue);
+
+                        if ($dob === null || ! $dob->lessThan($today)) {
+                            $counts['dob_invalid']++;
+                            $pupilRows[] = ['id' => $id, 'student_id' => $studentId, 'pupil' => $pupil, 'field' => 'Date of birth', 'value' => $dobValue, 'outcome' => 'Skipped: not a valid past date'];
+                        } elseif ($student->date_of_birth !== null) {
+                            $counts['dob_already_set']++;
+                        } else {
+                            if (! $dryRun) {
+                                $student->update(['date_of_birth' => $dob->toDateString()]);
+                            }
+
+                            $counts['dob_set']++;
+                            $pupilRows[] = ['id' => $id, 'student_id' => $studentId, 'pupil' => $pupil, 'field' => 'Date of birth', 'value' => $dob->toDateString(), 'outcome' => $verb];
+                        }
+                    }
+
+                    foreach ($checklistFields as $column => $target) {
+                        if (strcasecmp((string) $row[$column], 'yes') !== 0) {
+                            continue;
+                        }
+
+                        if (($this->tickImportedChecklistItem)($student, $target['key'], $dryRun)) {
+                            $counts[$target['count'].'_ticked']++;
+                            $pupilRows[] = ['id' => $id, 'student_id' => $studentId, 'pupil' => $pupil, 'field' => $target['field'], 'value' => 'Yes', 'outcome' => $tickVerb];
+                        } else {
+                            $counts[$target['count'].'_already_ticked']++;
+                        }
+                    }
+                };
+
+                $dryRun ? $apply() : DB::transaction($apply);
+
+                array_push($rows, ...$pupilRows);
+            }
+        }
+
+        return ['counts' => $counts, 'rows' => $rows];
+    }
+
+    /**
+     * Import instructors' mileage trips (import:mileage; legacy mileage.csv).
+     *
+     * - Instructors matched by ref (`instructor` mapping or DRIVE-<id>) only.
+     * - Each trip's `mileage_ref` is mapped, so a re-run skips it.
+     * - Only clean rows (ImportMileageLogAction::parse); others are skipped and listed.
+     * - A trip the instructor already has (same date + odometers) is skipped.
+     * - **No vehicles are created** and trips get no vehicle: the instructor's
+     *   primary-vehicle setup (BackfillPrimaryVehicleAction) tags every trip
+     *   with no vehicle later. The registration is kept in the trip's notes.
+     *
+     * One transaction per instructor; recorded as an import run (`source = command`).
+     *
+     * @return array{counts: array<string, int>, rows: array<int, array{mileage_ref: string, instructor_ref: string, instructor_id: int|null, date: string, start: string, end: string, miles: string, type: string, notes: string, outcome: string}>}
+     */
+    public function importMileage(string $path, bool $dryRun = false): array
+    {
+        $columns = ['mileage_ref', 'instructor_ref', 'date', 'end_date', 'start_odometer', 'end_odometer', 'type', 'vehicle_reg'];
+
+        $importedRefs = array_flip(
+            ImportMapping::query()->where('entity', ImportMapping::ENTITY_MILEAGE)->pluck('source_ref')->all()
+        );
+
+        $counts = [
+            'rows' => 0,
+            'trips_added' => 0,
+            'business' => 0,
+            'personal' => 0,
+            'with_registration_note' => 0,
+            'instructors' => 0,
+            'already_imported' => 0,
+            'skipped_not_clean' => 0,
+            'skipped_no_instructor' => 0,
+            'skipped_already_logged' => 0,
+        ];
+        $rows = [];
+        /** @var array<int, array<int, array{row: array<string, string|int>, data: array<string, mixed>}>> $byInstructor */
+        $byInstructor = [];
+        /** @var array<string, int|null> $instructorIds */
+        $instructorIds = [];
+
+        $describe = fn (array $row, ?int $instructorId, ?array $data, string $outcome): array => [
+            'mileage_ref' => (string) $row['mileage_ref'],
+            'instructor_ref' => (string) $row['instructor_ref'],
+            'instructor_id' => $instructorId,
+            'date' => (string) ($data['date'] ?? $row['date']),
+            'start' => (string) ($data['start_mileage'] ?? $row['start_odometer']),
+            'end' => (string) ($data['end_mileage'] ?? $row['end_odometer']),
+            'miles' => isset($data['miles']) ? (string) $data['miles'] : '',
+            'type' => (string) ($data['type'] ?? $row['type']),
+            'notes' => (string) ($data['notes'] ?? ''),
+            'outcome' => $outcome,
+        ];
+
+        foreach (($this->readCsvColumns)($path, $columns) as $row) {
+            $counts['rows']++;
+
+            if (isset($importedRefs[(string) $row['mileage_ref']])) {
+                $counts['already_imported']++;
+
+                continue;
+            }
+
+            $instructorRef = (string) $row['instructor_ref'];
+            $instructorIds[$instructorRef] ??= $instructorRef !== '' ? $this->resolveInstructorId($instructorRef) : null;
+            $instructorId = $instructorIds[$instructorRef];
+
+            if ($instructorId === null) {
+                $counts['skipped_no_instructor']++;
+                $rows[] = $describe($row, null, null, 'Skipped: instructor not imported');
+
+                continue;
+            }
+
+            $parsed = ImportMileageLogAction::parse($row);
+
+            if ($parsed['data'] === null) {
+                $counts['skipped_not_clean']++;
+                $rows[] = $describe($row, $instructorId, null, 'Skipped: '.$parsed['skip_reason']);
+
+                continue;
+            }
+
+            $byInstructor[$instructorId][] = ['row' => $row, 'data' => $parsed['data']];
+        }
+
+        $run = $dryRun ? null : ImportRun::create([
+            'source' => ImportRun::SOURCE_COMMAND,
+            'file_name' => basename($path),
+            'status' => ImportRun::STATUS_RUNNING,
+        ]);
+
+        try {
+            foreach ($byInstructor as $instructorId => $trips) {
+                $process = function () use ($instructorId, $trips, $run, $dryRun, $describe, &$counts, &$rows): void {
+                    /** @var array<string, true> $seen */
+                    $seen = [];
+                    $added = 0;
+
+                    foreach ($trips as ['row' => $row, 'data' => $data]) {
+                        $key = $data['date'].'|'.$data['start_mileage'].'|'.$data['end_mileage'];
+
+                        if (isset($seen[$key]) || $this->importMileageLog->instructorHasTrip($instructorId, $data)) {
+                            $counts['skipped_already_logged']++;
+                            $rows[] = $describe($row, $instructorId, $data, 'Skipped: instructor already has this trip');
+
+                            continue;
+                        }
+
+                        $seen[$key] = true;
+
+                        if (! $dryRun) {
+                            ($this->importMileageLog)($instructorId, (string) $row['mileage_ref'], $data, $run);
+                        }
+
+                        $added++;
+                        $counts['trips_added']++;
+                        $counts[$data['type']]++;
+                        $counts['with_registration_note'] += (int) str_contains((string) $data['notes'], 'Vehicle: ');
+                        $rows[] = $describe($row, $instructorId, $data, $dryRun ? 'Would add' : 'Added');
+                    }
+
+                    $counts['instructors'] += (int) ($added > 0);
+                };
+
+                $dryRun ? $process() : DB::transaction($process);
+            }
+        } catch (Throwable $exception) {
+            $run?->update(['status' => ImportRun::STATUS_FAILED, 'totals' => $counts, 'error' => $exception->getMessage(), 'completed_at' => now()]);
+
+            throw $exception;
+        }
+
+        $run?->update(['status' => ImportRun::STATUS_COMPLETED, 'totals' => $counts, 'completed_at' => now()]);
+
+        return ['counts' => $counts, 'rows' => $rows];
+    }
+
+    /**
+     * Convert one pupil's imported test lessons (see importPracticalTests).
+     *
+     * @param  array<int, Lesson>  $lessons
+     * @return array<string, int>
+     */
+    protected function convertPupilPracticalTests(int $studentId, array $lessons, bool $dryRun): array
+    {
+        $counts = ['tests_past' => 0, 'tests_future' => 0, 'pupils' => 0, 'checklists_updated' => 0];
+        $today = now()->toDateString();
+        /** @var array<string, true> $testDates */
+        $testDates = [];
+        /** @var array<int, Order> $orders */
+        $orders = [];
+        /** @var array<int, array<string, true>> $datesByInstructor */
+        $datesByInstructor = [];
+
+        usort($lessons, fn (Lesson $a, Lesson $b) => $a->date?->toDateString() <=> $b->date?->toDateString());
+
+        foreach ($lessons as $lesson) {
+            $blocker = $this->convertImportedLessonToPracticalTest->blocker($lesson);
+
+            if ($blocker !== null) {
+                $counts['skipped_'.$blocker] = ($counts['skipped_'.$blocker] ?? 0) + 1;
+
+                continue;
+            }
+
+            $date = $lesson->date->toDateString();
+
+            if (isset($testDates[$date]) || $this->convertImportedLessonToPracticalTest->pupilHasTestOn($studentId, $date, $lesson->calendar_item_id)) {
+                $counts['skipped_pupil_has_test_that_day'] = ($counts['skipped_pupil_has_test_that_day'] ?? 0) + 1;
+
+                continue;
+            }
+
+            if (! $dryRun) {
+                ($this->convertImportedLessonToPracticalTest)($lesson);
+            }
+
+            $testDates[$date] = true;
+            $orders[$lesson->order_id] = $lesson->order;
+            $datesByInstructor[$lesson->instructor_id][$date] = true;
+            $counts[$date < $today ? 'tests_past' : 'tests_future']++;
+        }
+
+        if ($testDates === []) {
+            return $counts;
+        }
+
+        $counts['pupils'] = 1;
+        $student = reset($orders)->student;
+        $counts['checklists_updated'] = (int) ($this->syncLatestPracticalTestDate)($student, max(array_keys($testDates)), $dryRun);
+
+        if ($dryRun) {
+            return $counts;
+        }
+
+        foreach ($orders as $order) {
+            ($this->syncImportedOrder)($order);
+        }
+
+        ($this->recalculateStudentLessonNumbers)($studentId);
+
+        foreach (Instructor::query()->whereKey(array_keys($datesByInstructor))->get() as $instructor) {
+            $this->invalidateImportedInstructorCaches($instructor, $datesByInstructor[$instructor->id]);
+        }
+
+        return $counts;
+    }
+
+    /**
+     * Quietly complete every lesson the importer created that is dated before
+     * today and still pending (CompleteImportedLessonAction — imported orders
+     * only, no sign-off pipeline: no emails, payouts or lesson payments), then
+     * sync the touched orders and clear the instructors' calendar caches.
+     *
+     * @return int Lessons completed
+     */
+    protected function closeOffPastImportedLessons(): int
+    {
+        return DB::transaction(function (): int {
+            $completed = 0;
+            /** @var array<int, true> $orderIds */
+            $orderIds = [];
+            /** @var array<int, array<string, true>> $datesByInstructor */
+            $datesByInstructor = [];
+
+            foreach ($this->completeImportedLesson->pastPendingLessons() as $lesson) {
+                if (! $this->completeImportedLesson->complete($lesson)) {
+                    continue;
+                }
+
+                $completed++;
+                $orderIds[$lesson->order_id] = true;
+                $datesByInstructor[$lesson->instructor_id][$lesson->date->toDateString()] = true;
+            }
+
+            foreach (Order::query()->whereKey(array_keys($orderIds))->get() as $order) {
+                ($this->syncImportedOrder)($order);
+            }
+
+            foreach (Instructor::query()->whereKey(array_keys($datesByInstructor))->get() as $instructor) {
+                $this->invalidateImportedInstructorCaches($instructor, $datesByInstructor[$instructor->id]);
+            }
+
+            return $completed;
+        });
+    }
+
+    /**
+     * Read a diary-shaped CSV and keep the rows importLessonFile() adds,
+     * grouped by instructor ref, with `status` set by date (completed before
+     * today, booked from today). Everything else is counted as skipped.
+     *
+     * @return array{groups: array<string, array<int, array<string, string|int>>>, instructor_ids: array<string, int>, student_ids: array<string, int>, counts: array<string, int>, missing_instructor_refs: array<string, int>, missing_student_refs: array<string, int>}
+     */
+    protected function sortLessonFileRows(string $path): array
+    {
+        $importedDiaryRefs = array_flip(
+            ImportMapping::query()->where('entity', ImportMapping::ENTITY_DIARY)->pluck('source_ref')->all()
+        );
+
+        $studentIds = ImportMapping::query()
+            ->where('entity', ImportMapping::ENTITY_STUDENT)
+            ->pluck('model_id', 'source_ref')
+            ->all();
+
+        $studentInstructorIds = Student::query()->pluck('instructor_id', 'id')->all();
+
+        $counts = [
+            'rows' => 0,
+            'already_imported' => 0,
+            'skipped_cancelled' => 0,
+            'skipped_bad_date' => 0,
+            'skipped_no_instructor' => 0,
+            'skipped_no_pupil' => 0,
+            'skipped_pupil_not_linked' => 0,
+        ];
+        $groups = [];
+        /** @var array<string, int|null> $instructorIds */
+        $instructorIds = [];
+        $missingInstructorRefs = [];
+        $missingStudentRefs = [];
+        $earliestDate = ImportValues::date('2000-01-01');
+        $today = now()->startOfDay();
+
+        foreach (($this->readDiaryCsvRows)($path) as $row) {
+            $counts['rows']++;
+
+            if (isset($importedDiaryRefs[(string) $row['diary_ref']])) {
+                $counts['already_imported']++;
+
+                continue;
+            }
+
+            $date = ImportValues::date((string) $row['date']);
+            $startTime = ImportValues::time((string) $row['start_time']);
+            $endTime = ImportValues::time((string) $row['end_time']);
+
+            if ($date === null || $date->lessThan($earliestDate) || $startTime === null || $endTime === null || $endTime <= $startTime) {
+                $counts['skipped_bad_date']++;
+
+                continue;
+            }
+
+            if (ImportDiaryItemAction::resolveStatus($row) === 'cancelled') {
+                $counts['skipped_cancelled']++;
+
+                continue;
+            }
+
+            $instructorRef = (string) $row['instructor_ref'];
+            $instructorIds[$instructorRef] ??= $instructorRef !== '' ? $this->resolveInstructorId($instructorRef) : null;
+
+            if ($instructorIds[$instructorRef] === null) {
+                $counts['skipped_no_instructor']++;
+                $missingInstructorRefs[$instructorRef] = ($missingInstructorRefs[$instructorRef] ?? 0) + 1;
+
+                continue;
+            }
+
+            $studentRef = (string) $row['student_ref'];
+            $studentId = $studentIds[$studentRef] ?? null;
+
+            if ($studentId === null) {
+                $counts['skipped_no_pupil']++;
+                $missingStudentRefs[$studentRef] = ($missingStudentRefs[$studentRef] ?? 0) + 1;
+
+                continue;
+            }
+
+            $linkedInstructorId = $studentInstructorIds[$studentId] ?? null;
+
+            if ($linkedInstructorId === null || (int) $linkedInstructorId !== $instructorIds[$instructorRef]) {
+                $counts['skipped_pupil_not_linked']++;
+
+                continue;
+            }
+
+            $row['status'] = $date->lessThan($today) ? 'completed' : 'booked';
+            $groups[$instructorRef][] = $row;
+        }
+
+        arsort($missingInstructorRefs);
+        arsort($missingStudentRefs);
+
+        return [
+            'groups' => $groups,
+            'instructor_ids' => array_filter($instructorIds, fn (?int $id) => $id !== null),
+            'student_ids' => $studentIds,
+            'counts' => $counts,
+            'missing_instructor_refs' => $missingInstructorRefs,
+            'missing_student_refs' => $missingStudentRefs,
+        ];
+    }
+
+    /**
      * Instructor ids for the diary's instructor refs that already exist
      * (imported or linked earlier, or DRIVE-<id>), keyed by ref.
      *
@@ -572,6 +1633,19 @@ class ImportService extends BaseService
             }
         }
 
+        $this->invalidateImportedInstructorCaches($instructor, $dates);
+
+        return $counts;
+    }
+
+    /**
+     * Once the transaction commits, clear the instructor's calendar cache for
+     * every touched date and their grouped pupils list.
+     *
+     * @param  array<string, true>  $dates
+     */
+    protected function invalidateImportedInstructorCaches(Instructor $instructor, array $dates): void
+    {
         DB::afterCommit(function () use ($instructor, $dates): void {
             foreach (array_keys($dates) as $date) {
                 $this->instructorCalendarService->invalidateCalendarCache($instructor->id, $date);
@@ -579,8 +1653,6 @@ class ImportService extends BaseService
 
             $this->invalidate($this->cacheKey('instructor', $instructor->id, 'grouped_students'));
         });
-
-        return $counts;
     }
 
     /**

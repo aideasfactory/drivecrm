@@ -415,7 +415,7 @@ Lesson packages (both platform defaults and instructor bespoke packages).
 | `lesson_price_pence` | integer | NOT NULL | Price per lesson in pence (auto-calculated) |
 | `stripe_product_id` | varchar(255) | NULLABLE | Stripe product ID |
 | `stripe_price_id` | varchar(255) | NULLABLE | Stripe price ID |
-| `active` | boolean | DEFAULT true | Whether package is available for new bookings. Instructors hide packages from the CRM admin (Details → Packages) by setting this to false. The row is kept so `orders.package_id` and `slot_offers.package_id` stay valid. Mobile and booking UIs only list `active = true`. Do not hard-delete packages: those FKs are `ON DELETE CASCADE` and would wipe orders (and therefore lessons and payments). |
+| `active` | boolean | DEFAULT true | Whether package is available for new bookings. Instructors hide packages from the CRM admin (Details → Packages) by setting this to false. The row is kept so `orders.package_id` and `slot_offers.package_id` stay valid. Mobile and booking UIs only list `active = true`. Do not hard-delete packages: `orders.package_id` is `ON DELETE RESTRICT` (since 2026-11-11) and `DeletePackageAction` refuses a package with orders; `slot_offers.package_id` still cascades. |
 | `is_one_off` | boolean | DEFAULT false | True for reusable short-notice "One-Off Package" rows created from Offer Slot |
 | `visible_to_pupils` | boolean | DEFAULT true, NOT NULL | Whether pupils can choose this package. `true` (the default, including every existing row) lists it in pupil package pickers. `false` keeps it private: hidden from website onboarding (unless staff are booking on a pupil's behalf), hidden from `GET /api/v1/student/packages`, and rejected when a pupil tries to book or price it. Instructors and admins still see it and can book it for a pupil. |
 | `created_at` | timestamp | - | Record creation timestamp |
@@ -435,6 +435,7 @@ Lesson packages (both platform defaults and instructor bespoke packages).
 - Prices are stored in pence (GBP smallest unit)
 - `is_one_off` packages are 1-lesson instructor packages created when offering a slot at a custom price. The same instructor + price combination is reused on later offers.
 - `visible_to_pupils` defaults to true so existing packages stay on pupil lists. Set it false for a private price (for example friends and family). Private packages stay on instructor and admin package screens and can still be used when staff book on a pupil's behalf. Pupils cannot select them during onboarding or checkout, and the student package API omits them.
+- Admin delete (`DELETE /packages/{package}` → `DeletePackageAction`) only works on a package with no orders; otherwise 422 "can't be deleted because it has N bookings". The DB FK `orders.package_id` RESTRICT backs this up.
 - Instructor-created packages are hidden, not deleted: `DELETE /instructors/{id}/packages/{package}` sets `active = false`. `PATCH .../restore` sets `active = true`. Lessons and `lesson_payments` have no `package_id` — they belong to orders, which snapshot package name and prices.
 
 ---
@@ -448,7 +449,7 @@ Student enrollments/purchases of lesson packages.
 | `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique order identifier |
 | `student_id` | bigint unsigned | FOREIGN KEY (students.id), ON DELETE CASCADE | Student who made the order |
 | `instructor_id` | bigint unsigned | FOREIGN KEY (instructors.id), NULLABLE, ON DELETE CASCADE | Assigned instructor |
-| `package_id` | bigint unsigned | FOREIGN KEY (packages.id), ON DELETE CASCADE | Purchased package (template reference) |
+| `package_id` | bigint unsigned | FOREIGN KEY (packages.id), ON DELETE RESTRICT | Purchased package (template reference). Was CASCADE until 2026-11-11, when deleting platform package 55 wiped 253 orders with their lessons, payments and payouts; a package with orders can no longer be deleted. |
 | `package_name` | varchar(255) | NULLABLE | Snapshot: package name at time of order |
 | `package_total_price_pence` | integer | NULLABLE | Snapshot: total price in pence at time of order |
 | `package_lesson_price_pence` | integer | NULLABLE | Snapshot: per-lesson price in pence at time of order |
@@ -1148,6 +1149,7 @@ Stores pickup/drop-off locations for students. Each student can have multiple pi
 - Only one pickup point per student can be `is_default = true`
 - When setting a new default, all others for that student are unset
 - Postcode is geocoded on create/update via postcodes.io API (free, no API key)
+- Points added by `import:pickup-points` (legacy `student_locations.csv`) are **not geocoded**: `latitude`/`longitude` stay NULL until `php artisan pickup-points:geocode` fills them (postcodes.io bulk, batches of ≤100 with a pause; only rows missing coordinates)
 - Used for lesson scheduling and instructor route planning
 
 ---
@@ -1254,6 +1256,8 @@ Separate ledger for instructor mileage — not a sub-type of `instructor_finance
 | `updated_at` | timestamp | NULLABLE | Updated timestamp |
 
 **Indexes:** `(instructor_id, date)`, `(instructor_id, type)`, `(vehicle_id, date)`
+
+**Imported trips:** `import:mileage` (legacy `mileage.csv`) creates trips with `vehicle_id` NULL and the legacy registration in `notes` (`Vehicle: <reg>`, plus `End date: dd/mm/yyyy` for multi-day trips). No vehicles are created; the instructor's primary-vehicle setup (`BackfillPrimaryVehicleAction`) tags them later.
 
 **Relationships:**
 - `mileage_logs.instructor_id` → `instructors.id` (CASCADE DELETE)
@@ -1563,16 +1567,16 @@ In-app account deletion with a 30-day grace period (App Store Guideline 5.1.1(v)
 
 ### 32. **import_runs**
 
-One execution of the legacy importer (a Data Import page upload).
+One execution of the legacy importer: a Data Import page upload, or an `import:*` command run against a single CSV (e.g. `import:lessons`).
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Run ID |
 | `user_id` | bigint unsigned | NULLABLE, FK → users.id (NULL ON DELETE) | Owner who uploaded it |
-| `source` | varchar(16) | NOT NULL | `upload` (Data Import page — currently the only source) |
-| `file_name` | varchar(255) | NULLABLE | Original zip file name |
+| `source` | varchar(16) | NOT NULL | `upload` (Data Import page) or `command` (`import:lessons` and other single-file import commands) |
+| `file_name` | varchar(255) | NULLABLE | Original zip file name (CSV basename for `command` runs) |
 | `status` | varchar(16) | DEFAULT 'running' | `queued` (waiting for `ImportBundleJob`; imports run one at a time), `running`, `completed`, `failed` |
-| `totals` | json | NULLABLE | Counts created: instructors_created, instructors_linked, locations, students, students_skipped, lessons, lessons_skipped, diary_blocks, finances, receipts. While `running` also `instructors_done` / `instructors_to_import` (progress) |
+| `totals` | json | NULLABLE | Counts created: instructors_created, instructors_linked, locations, students, students_skipped, lessons, lessons_skipped, diary_blocks, finances, receipts. While `running` also `instructors_done` / `instructors_to_import` (progress). `import:lessons` runs: rows, already_imported, lessons, lessons_already_in_diary, lessons_marked_completed, skipped_* |
 | `error` | text | NULLABLE | Exception message when `failed` (instructors before the failure stay imported) |
 | `completed_at` | timestamp | NULLABLE | When the run finished (either outcome) |
 | `created_at` / `updated_at` | timestamp | - | Timestamps |
@@ -1589,13 +1593,15 @@ The permanent record of everything the importer brought in. Links a legacy syste
 |--------|------|-------------|-------------|
 | `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Mapping ID |
 | `import_run_id` | bigint unsigned | NULLABLE, FK → import_runs.id (NULL ON DELETE) | Run that created/linked the row |
-| `entity` | varchar(32) | NOT NULL | `instructor` (→ instructors.id), `location` (→ locations.id, ref `{instructor_ref}:{sector}`), `student` (→ students.id), `diary` (→ calendar_items.id), `lesson` (→ lessons.id, ref = diary_ref), `finance` (→ instructor_finances.id) |
+| `entity` | varchar(32) | NOT NULL | `instructor` (→ instructors.id), `location` (→ locations.id, ref `{instructor_ref}:{sector}`), `student` (→ students.id), `diary` (→ calendar_items.id), `lesson` (→ lessons.id, ref = diary_ref), `finance` (→ instructor_finances.id), `mileage` (→ mileage_logs.id, ref = mileage_ref; `import:mileage`) |
 | `source_ref` | varchar(191) | NOT NULL | The legacy system's own ID for the row |
 | `model_id` | bigint unsigned | NOT NULL | ID of the row (no FK — polymorphic by `entity`) |
 | `action` | varchar(16) | DEFAULT 'created' | `created` by the import, or `linked` (an existing instructor matched by email — not created, not changed) |
 | `created_at` / `updated_at` | timestamp | - | Timestamps |
 
 **Indexes:** unique `(entity, source_ref)`, index `(entity, model_id)`
+
+**Converted practical tests:** `import:practical-tests` deletes an imported lesson that was really a driving test and its `lesson` mapping; the `diary` mapping stays, pointing at the calendar item (now `item_type = practical_test`, `student_id` set).
 
 **Other imported markers:** `users.imported_at` (accounts — set only by the importer; shown as an "Imported" badge on the pupil's Actions tab; has no effect on cash payments), `orders.payment_mode = imported` (imported lessons' orders), `instructor_finances.category = imported` (finance rows with no category given). Imported receipts are stored exactly like manual uploads (`instructors/{id}/finance-receipts/{financeId}/…` on s3).
 

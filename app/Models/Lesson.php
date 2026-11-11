@@ -320,6 +320,8 @@ class Lesson extends Model
      * booking fee share, digital fee share and any Pass Your Test Guarantee
      * charged with it (only ever on an order's first lesson). The parts always
      * sum to `total_pence`. Expects `order` and `lessonPayment` to be loaded.
+     * A lesson paid to the instructor by an alternative method carries no
+     * fees, so its whole payment is the lesson cost.
      *
      * @return array{total_pence: int, lesson_pence: int, booking_fee_pence: int, digital_fee_pence: int, test_pass_guarantee_pence: int}
      */
@@ -327,7 +329,7 @@ class Lesson extends Model
     {
         [$totalPence, $guaranteePence] = $this->studentPays();
 
-        if (! $this->order) {
+        if (! $this->order || $this->lessonPayment?->isPaidByAlternativeMethod()) {
             return [
                 'total_pence' => $totalPence,
                 'lesson_pence' => $totalPence,

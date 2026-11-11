@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Actions\Payment\ConfirmAlternativePaymentBookingAction;
 use App\Actions\Payment\GetConfirmableAlternativePaymentBookingsAction;
 use App\Actions\Payment\RecordAlternativeLessonPaymentAction;
+use App\Actions\Payment\WaiveAlternativePaymentOrderFeesAction;
 use App\Actions\Shared\LogActivityAction;
 use App\Enums\PaymentStatus;
 use App\Models\Lesson;
@@ -15,6 +16,7 @@ use App\Models\Student;
 use App\Models\User;
 use App\Support\AlternativePayments;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
@@ -35,6 +37,7 @@ class AlternativePaymentService extends BaseService
         protected RecordAlternativeLessonPaymentAction $recordLessonPayment,
         protected GetConfirmableAlternativePaymentBookingsAction $getConfirmableBookingsAction,
         protected LogActivityAction $logActivity,
+        protected WaiveAlternativePaymentOrderFeesAction $waiveOrderFees,
     ) {}
 
     /**
@@ -163,6 +166,43 @@ class AlternativePaymentService extends BaseService
     public function getConfirmableBookings(Student $student): Collection
     {
         return ($this->getConfirmableBookingsAction)($student);
+    }
+
+    /**
+     * One-off clean-up: remove the booking and digital fees from pay-in-full
+     * orders confirmed as paid by an alternative method before confirmation
+     * did this itself. Each order is re-checked under a lock. Nothing is added
+     * to pupils' activity logs (pupils can see theirs in the app); every
+     * change is written to the application log instead.
+     *
+     * @return list<array{order_id: int, booking_fee_pence: int, digital_fee_pence: int, total_before_pence: int, total_after_pence: int}>
+     */
+    public function waiveFeesOnAlternativeOrders(bool $dryRun = false): array
+    {
+        $changes = [];
+
+        foreach ($this->waiveOrderFees->qualifyingOrders()->lazyById(100) as $order) {
+            $change = DB::transaction(function () use ($order, $dryRun): ?array {
+                $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->first();
+
+                return $lockedOrder ? ($this->waiveOrderFees)($lockedOrder, $dryRun) : null;
+            });
+
+            if (! $change) {
+                continue;
+            }
+
+            $changes[] = $change;
+        }
+
+        if (! $dryRun && $changes !== []) {
+            Log::info('Booking fees removed from alternative-payment orders', [
+                'orders' => count($changes),
+                'changes' => $changes,
+            ]);
+        }
+
+        return $changes;
     }
 
     protected function bookingRefusalMessage(Order $order): string
