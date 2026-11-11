@@ -415,7 +415,7 @@ Lesson packages (both platform defaults and instructor bespoke packages).
 | `lesson_price_pence` | integer | NOT NULL | Price per lesson in pence (auto-calculated) |
 | `stripe_product_id` | varchar(255) | NULLABLE | Stripe product ID |
 | `stripe_price_id` | varchar(255) | NULLABLE | Stripe price ID |
-| `active` | boolean | DEFAULT true | Whether package is available for new bookings. Instructors hide packages from the CRM admin (Details → Packages) by setting this to false. The row is kept so `orders.package_id` and `slot_offers.package_id` stay valid. Mobile and booking UIs only list `active = true`. Do not hard-delete packages: those FKs are `ON DELETE CASCADE` and would wipe orders (and therefore lessons and payments). |
+| `active` | boolean | DEFAULT true | Whether package is available for new bookings. Instructors hide packages from the CRM admin (Details → Packages) by setting this to false. The row is kept so `orders.package_id` and `slot_offers.package_id` stay valid. Mobile and booking UIs only list `active = true`. Do not hard-delete packages: `orders.package_id` is `ON DELETE RESTRICT` (since 2026-11-11) and `DeletePackageAction` refuses a package with orders; `slot_offers.package_id` still cascades. |
 | `is_one_off` | boolean | DEFAULT false | True for reusable short-notice "One-Off Package" rows created from Offer Slot |
 | `visible_to_pupils` | boolean | DEFAULT true, NOT NULL | Whether pupils can choose this package. `true` (the default, including every existing row) lists it in pupil package pickers. `false` keeps it private: hidden from website onboarding (unless staff are booking on a pupil's behalf), hidden from `GET /api/v1/student/packages`, and rejected when a pupil tries to book or price it. Instructors and admins still see it and can book it for a pupil. |
 | `created_at` | timestamp | - | Record creation timestamp |
@@ -435,6 +435,7 @@ Lesson packages (both platform defaults and instructor bespoke packages).
 - Prices are stored in pence (GBP smallest unit)
 - `is_one_off` packages are 1-lesson instructor packages created when offering a slot at a custom price. The same instructor + price combination is reused on later offers.
 - `visible_to_pupils` defaults to true so existing packages stay on pupil lists. Set it false for a private price (for example friends and family). Private packages stay on instructor and admin package screens and can still be used when staff book on a pupil's behalf. Pupils cannot select them during onboarding or checkout, and the student package API omits them.
+- Admin delete (`DELETE /packages/{package}` → `DeletePackageAction`) only works on a package with no orders; otherwise 422 "can't be deleted because it has N bookings". The DB FK `orders.package_id` RESTRICT backs this up.
 - Instructor-created packages are hidden, not deleted: `DELETE /instructors/{id}/packages/{package}` sets `active = false`. `PATCH .../restore` sets `active = true`. Lessons and `lesson_payments` have no `package_id` — they belong to orders, which snapshot package name and prices.
 
 ---
@@ -448,7 +449,7 @@ Student enrollments/purchases of lesson packages.
 | `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique order identifier |
 | `student_id` | bigint unsigned | FOREIGN KEY (students.id), ON DELETE CASCADE | Student who made the order |
 | `instructor_id` | bigint unsigned | FOREIGN KEY (instructors.id), NULLABLE, ON DELETE CASCADE | Assigned instructor |
-| `package_id` | bigint unsigned | FOREIGN KEY (packages.id), ON DELETE CASCADE | Purchased package (template reference) |
+| `package_id` | bigint unsigned | FOREIGN KEY (packages.id), ON DELETE RESTRICT | Purchased package (template reference). Was CASCADE until 2026-11-11, when deleting platform package 55 wiped 253 orders with their lessons, payments and payouts; a package with orders can no longer be deleted. |
 | `package_name` | varchar(255) | NULLABLE | Snapshot: package name at time of order |
 | `package_total_price_pence` | integer | NULLABLE | Snapshot: total price in pence at time of order |
 | `package_lesson_price_pence` | integer | NULLABLE | Snapshot: per-lesson price in pence at time of order |
