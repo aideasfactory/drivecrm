@@ -17,14 +17,16 @@ class InstructorMergeService extends BaseService
     ) {}
 
     /**
-     * Merge the instructor account logged in with `$fromEmail` into the one logged in with `$intoEmail`.
+     * Merge the instructor account logged in with `$fromEmail` into the one logged in with `$intoEmail`,
+     * then retire the `$fromEmail` account. With `$takeEmail` the kept account takes `$fromEmail` as its login.
      *
-     * Refuses (RuntimeException) when the old account holds anything that must not be moved by a script:
-     * a Stripe Connect account, payouts, HMRC data or pupil progress on its progress tracker.
+     * Refuses (RuntimeException) when the retired account holds anything a script must not decide:
+     * a Stripe Connect account (unless `$leaveStripe`), HMRC data, year-end archives, or pupil progress
+     * on a tracker subcategory the kept account doesn't have.
      *
      * @return array{from: Instructor, into: Instructor, report: array<string, mixed>}
      */
-    public function merge(string $fromEmail, string $intoEmail, bool $dryRun): array
+    public function merge(string $fromEmail, string $intoEmail, bool $takeEmail, bool $leaveStripe, bool $dryRun): array
     {
         $from = $this->findInstructor($fromEmail);
         $into = $this->findInstructor($intoEmail);
@@ -33,9 +35,9 @@ class InstructorMergeService extends BaseService
             throw new RuntimeException('Both emails belong to the same instructor.');
         }
 
-        $this->guardNothingUnmovable($from);
+        $this->guardNothingUnmovable($from, $into, $leaveStripe);
 
-        $report = ($this->mergeInstructorAccounts)($from, $into, $dryRun);
+        $report = ($this->mergeInstructorAccounts)($from, $into, $takeEmail, $dryRun);
 
         if (! $dryRun) {
             foreach ([$from->id, $into->id] as $instructorId) {
@@ -67,30 +69,35 @@ class InstructorMergeService extends BaseService
     }
 
     /**
-     * Stop if the old account holds money or tax records — those need a person, not a script.
+     * Stop if the retired account holds tax records, an unexpected Stripe account, or progress we can't map.
      */
-    private function guardNothingUnmovable(Instructor $from): void
+    private function guardNothingUnmovable(Instructor $from, Instructor $into, bool $leaveStripe): void
     {
+        $unmappedProgress = 0;
+        $progressMap = $this->mergeInstructorAccounts->progressSubcategoryMap($from, $into);
+        $unmappedSubcategoryIds = array_keys(array_filter($progressMap, fn (?int $keptId): bool => $keptId === null));
+
+        if ($unmappedSubcategoryIds !== []) {
+            $unmappedProgress = $this->mergeInstructorAccounts->progressQuery($from)
+                ->whereIn('p.progress_subcategory_id', $unmappedSubcategoryIds)
+                ->count();
+        }
+
         $blockers = array_filter([
-            'a Stripe Connect account' => $from->stripe_account_id !== null,
-            'payouts' => DB::table('payouts')->where('instructor_id', $from->id)->exists(),
+            "a Stripe Connect account ({$from->stripe_account_id}) — pass --leave-stripe to keep it on the archived profile" => $from->stripe_account_id !== null && ! $leaveStripe,
             'year-end archives' => DB::table('year_end_archives')->where('instructor_id', $from->id)->exists(),
             'HMRC connection' => DB::table('hmrc_tokens')->where('user_id', $from->user_id)->exists(),
             'HMRC businesses' => DB::table('hmrc_itsa_businesses')->where('instructor_id', $from->id)->exists(),
             'HMRC quarterly updates' => DB::table('hmrc_itsa_quarterly_updates')->where('instructor_id', $from->id)->exists(),
             'HMRC VAT returns' => DB::table('hmrc_vat_returns')->where('instructor_id', $from->id)->exists(),
-            'pupil progress on its progress tracker' => DB::table('student_progress')
-                ->join('progress_subcategories', 'progress_subcategories.id', '=', 'student_progress.progress_subcategory_id')
-                ->join('progress_categories', 'progress_categories.id', '=', 'progress_subcategories.progress_category_id')
-                ->where('progress_categories.instructor_id', $from->id)
-                ->exists(),
+            "{$unmappedProgress} pupil progress score(s) on tracker items the kept account doesn't have" => $unmappedProgress > 0,
         ]);
 
         if ($blockers !== []) {
             throw new RuntimeException(sprintf(
                 'Refusing to merge: %s has %s.',
                 $from->user->email,
-                implode(', ', array_keys($blockers)),
+                implode('; ', array_keys($blockers)),
             ));
         }
     }
