@@ -32,6 +32,7 @@ class CreateOrderFromApiAction
      *
      * @param  array<int, int>  $calendarItemIds  Draft calendar item IDs (one per lesson)
      * @param  ?OrderSource  $source  Where the booking came from (CRM, learner app or instructor app)
+     * @param  bool  $isPracticalTest  Flag the lessons as a paid driving test (`lessons.is_practical_test`)
      */
     public function __invoke(
         Student $student,
@@ -41,9 +42,10 @@ class CreateOrderFromApiAction
         string $startTime,
         string $endTime,
         array $calendarItemIds,
-        ?OrderSource $source = null
+        ?OrderSource $source = null,
+        bool $isPracticalTest = false
     ): Order {
-        $order = DB::transaction(function () use ($student, $package, $paymentMode, $firstLessonDate, $startTime, $endTime, $calendarItemIds, $source): Order {
+        $order = DB::transaction(function () use ($student, $package, $paymentMode, $firstLessonDate, $startTime, $endTime, $calendarItemIds, $source, $isPracticalTest): Order {
             $instructorId = $student->instructor_id;
 
             $pricing = app(CalculatePackagePricingAction::class)($package);
@@ -108,6 +110,7 @@ class CreateOrderFromApiAction
                     'start_time' => $startTime,
                     'end_time' => $endTime,
                     'calendar_item_id' => $calendarItemId,
+                    'is_practical_test' => $isPracticalTest,
                     'student_lesson_number' => $nextLessonNumber++,
                 ]);
 

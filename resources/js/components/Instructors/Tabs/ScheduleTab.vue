@@ -166,6 +166,59 @@ async function loadStudents() {
     }
 }
 
+// ── Paid driving test: price from a 1-lesson package or a one-off price ──
+interface TestPackageOption {
+    id: number
+    name: string
+    total_price: string
+    lessons_count: number
+    active: boolean
+}
+const testPackages = ref<TestPackageOption[]>([])
+const testPackagesLoading = ref(false)
+const testPackageId = ref<number | null>(null)
+const testOneOffPricePounds = ref<number | null>(null)
+
+const testUsesOneOffPrice = computed(() => testOneOffPricePounds.value !== null && testOneOffPricePounds.value > 0)
+const testChargesPupil = computed(() => !!selectedStudentId.value && (!!testPackageId.value || testUsesOneOffPrice.value))
+
+async function loadTestPackages() {
+    testPackagesLoading.value = true
+    try {
+        const response = await axios.get(`/instructors/${props.instructorId}/packages`)
+        testPackages.value = (response.data.packages || []).filter(
+            (pkg: TestPackageOption) => pkg.active && pkg.lessons_count === 1,
+        )
+    } catch {
+        toast({ title: 'Failed to load packages', variant: 'destructive' })
+    } finally {
+        testPackagesLoading.value = false
+    }
+}
+
+function resetTestCharge() {
+    testPackageId.value = null
+    testOneOffPricePounds.value = null
+}
+
+watch(testOneOffPricePounds, (value) => {
+    if (value !== null && value > 0) {
+        testPackageId.value = null
+    }
+})
+
+watch(testPackageId, (value) => {
+    if (value) {
+        testOneOffPricePounds.value = null
+    }
+})
+
+watch(selectedStudentId, (studentId) => {
+    if (!studentId) {
+        resetTestCharge()
+    }
+})
+
 // ── Form state ───────────────────────────────────────────
 const createForm = ref<CalendarItemFormData>({
     date: '',
@@ -393,6 +446,10 @@ watch(() => createForm.value.is_practical_test, (isPracticalTest) => {
             // Practical test: 1hr test appointment
             createForm.value.end_time = minutesToTime(timeToMinutes(createForm.value.start_time) + 60)
             createForm.value.is_available = false
+            createForm.value.recurrence_pattern = 'none'
+            createForm.value.recurrence_end_date = ''
+            resetTestCharge()
+            loadTestPackages()
         } else {
             // Regular slot: 2hr duration
             createForm.value.end_time = calcEndTime(createForm.value.start_time)
@@ -567,6 +624,7 @@ function handleSlotClick(date: string, time: string) {
         is_practical_test: false,
     }
     selectedStudentId.value = null
+    resetTestCharge()
     isCreateSheetOpen.value = true
 }
 
@@ -583,6 +641,7 @@ function handleDayClick(date: string) {
         is_practical_test: false,
     }
     selectedStudentId.value = null
+    resetTestCharge()
     isCreateSheetOpen.value = true
 }
 
@@ -624,6 +683,11 @@ async function handleCreateSubmit() {
                 travel_time_minutes: travelMinutes > 0 ? travelMinutes : null,
                 is_practical_test: isPracticalTest,
                 student_id: isPracticalTest ? selectedStudentId.value : null,
+                ...(isPracticalTest && testChargesPupil.value
+                    ? (testUsesOneOffPrice.value
+                        ? { one_off_price_pence: Math.round((testOneOffPricePounds.value || 0) * 100) }
+                        : { package_id: testPackageId.value })
+                    : {}),
             },
         )
 
@@ -636,6 +700,9 @@ async function handleCreateSubmit() {
         } else if (hasTravelItem) {
             // Reload to pick up both the slot and travel item
             toast({ title: 'Time slot with travel time added!' })
+            await loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
+        } else if (isPracticalTest && response.data.payment_link_sent) {
+            toast({ title: 'Driving test added. Payment link sent to the pupil.' })
             await loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
         } else if (isPracticalTest) {
             toast({ title: 'Practical test slot added!' })
@@ -1409,6 +1476,50 @@ onMounted(() => {
                         </p>
                     </div>
 
+                    <!-- Charge the pupil (practical tests with a student only) -->
+                    <div v-if="createForm.is_practical_test && selectedStudentId" class="space-y-3 rounded-md border p-3">
+                        <div>
+                            <p class="flex items-center gap-1.5 text-sm font-medium">
+                                <PoundSterling class="h-4 w-4" />
+                                Charge the pupil (optional)
+                            </p>
+                            <p class="text-xs text-muted-foreground">
+                                Pick a single-lesson package or enter a one-off price. The pupil is emailed a payment link to
+                                pay in full (plus booking and digital fees). Leave both empty to add the test without a charge.
+                            </p>
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label for="create-test-package">Existing package</Label>
+                            <select
+                                id="create-test-package"
+                                v-model="testPackageId"
+                                :disabled="testPackagesLoading || testUsesOneOffPrice"
+                                class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            >
+                                <option :value="null">
+                                    {{ testPackages.length || testPackagesLoading ? 'Select a package...' : 'No single-lesson packages' }}
+                                </option>
+                                <option v-for="pkg in testPackages" :key="pkg.id" :value="pkg.id">
+                                    {{ pkg.name }} — {{ pkg.total_price }} incl. fees
+                                </option>
+                            </select>
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label for="create-test-one-off">Or one-off price (£)</Label>
+                            <Input
+                                id="create-test-one-off"
+                                v-model.number="testOneOffPricePounds"
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                placeholder="e.g. 75.00"
+                                :disabled="!!testPackageId"
+                            />
+                        </div>
+                    </div>
+
                     <!-- Travel Time (only shown when available and not practical test) -->
                     <div v-if="createForm.is_available && !createForm.is_practical_test" class="space-y-2">
                         <Label for="create-travel">
@@ -1534,7 +1645,7 @@ onMounted(() => {
                     >
                         <Loader2 v-if="formLoading" class="mr-2 h-4 w-4 animate-spin" />
                         <Plus v-else class="mr-2 h-4 w-4" />
-                        {{ createForm.is_practical_test ? 'Add Practical Test' : (createForm.recurrence_pattern && createForm.recurrence_pattern !== 'none' ? 'Add Recurring Slots' : 'Add Time Slot') }}
+                        {{ createForm.is_practical_test ? (testChargesPupil ? 'Add Test & Send Payment Link' : 'Add Practical Test') : (createForm.recurrence_pattern && createForm.recurrence_pattern !== 'none' ? 'Add Recurring Slots' : 'Add Time Slot') }}
                     </Button>
                 </form>
             </SheetContent>

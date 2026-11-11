@@ -78,6 +78,8 @@ interface Lesson {
     status: 'pending' | 'completed' | 'cancelled'
     /** Package week booked onto a time already taken; the DRIVE team is rearranging it. */
     is_provisional: boolean
+    /** Paid driving test booked from the diary (shown as "Driving test"). */
+    is_practical_test: boolean
     /** Kept in its booking to rebook later: no date until the instructor rebooks it. */
     is_banked: boolean
     banked_at: string | null
@@ -692,7 +694,10 @@ onMounted(() => {
                                 {{ formatTime(lesson.start_time, lesson.end_time) }}
                             </TableCell>
                             <TableCell>
-                                {{ lesson.package_name }}
+                                <Badge v-if="lesson.is_practical_test" variant="secondary">
+                                    Driving test
+                                </Badge>
+                                <template v-else>{{ lesson.package_name }}</template>
                             </TableCell>
                             <TableCell>
                                 {{ formatCurrency(lesson.amount_pence) }}

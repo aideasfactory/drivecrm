@@ -71,6 +71,7 @@ class GetStudentLessonsAction
                 return [
                     'id' => $lesson->id,
                     'student_lesson_number' => $lesson->student_lesson_number,
+                    'is_practical_test' => (bool) $lesson->is_practical_test,
                     'order_id' => $order->id,
                     'instructor_id' => $lesson->instructor_id,
                     'instructor_name' => $lesson->instructor?->user?->name,

@@ -39,6 +39,7 @@ class Lesson extends Model
         'banked_by_user_id',
         'mileage',
         'student_lesson_number',
+        'is_practical_test',
     ];
 
     protected function casts(): array
@@ -51,6 +52,7 @@ class Lesson extends Model
             'cancelled_at' => 'datetime',
             'provisional_at' => 'datetime',
             'banked_at' => 'datetime',
+            'is_practical_test' => 'boolean',
             'status' => LessonStatus::class,
             'cancellation_reason_code' => LessonCancellationReason::class,
         ];
@@ -218,7 +220,8 @@ class Lesson extends Model
      */
     public function canBeBanked(): bool
     {
-        return $this->status === LessonStatus::PENDING
+        return ! $this->is_practical_test
+            && $this->status === LessonStatus::PENDING
             && $this->banked_at === null
             && $this->payout === null
             && $this->order?->isActive() === true;

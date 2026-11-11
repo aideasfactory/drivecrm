@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\CalendarItem;
 
 use App\Enums\CalendarItemStatus;
+use App\Enums\CalendarItemType;
 use App\Models\CalendarItem;
 
 class ReleaseDraftCalendarItemsAction
@@ -17,6 +18,9 @@ class ReleaseDraftCalendarItemsAction
      * as availability, as before. Items that are no longer drafts are left
      * untouched. The draft lessons must already have been deleted.
      *
+     * A practical test held by an unpaid paid-test booking is never deleted or
+     * turned into availability: it goes back to a plain (unpaid) test entry.
+     *
      * @param  iterable<int, int>  $calendarItemIds
      * @return int The number of calendar items released
      */
@@ -26,6 +30,29 @@ class ReleaseDraftCalendarItemsAction
 
         if ($ids->isEmpty()) {
             return 0;
+        }
+
+        $practicalTestIds = CalendarItem::query()
+            ->whereIn('id', $ids)
+            ->where('item_type', CalendarItemType::PracticalTest)
+            ->pluck('id');
+
+        $releasedTests = 0;
+
+        if ($practicalTestIds->isNotEmpty()) {
+            $releasedTests = CalendarItem::query()
+                ->whereIn('id', $practicalTestIds)
+                ->where('status', CalendarItemStatus::DRAFT)
+                ->update([
+                    'is_available' => false,
+                    'status' => null,
+                ]);
+
+            $ids = $ids->diff($practicalTestIds)->values();
+
+            if ($ids->isEmpty()) {
+                return $releasedTests;
+            }
         }
 
         $createdByHoldIds = CalendarItem::query()
@@ -49,7 +76,7 @@ class ReleaseDraftCalendarItemsAction
         $restoreIds = $ids->diff($createdByHoldIds);
 
         if ($restoreIds->isEmpty()) {
-            return $deleted;
+            return $releasedTests + $deleted;
         }
 
         CalendarItem::query()
@@ -66,6 +93,6 @@ class ReleaseDraftCalendarItemsAction
                 'created_by_hold' => null,
             ]);
 
-        return $deleted + $restored;
+        return $releasedTests + $deleted + $restored;
     }
 }

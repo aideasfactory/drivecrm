@@ -84,6 +84,18 @@ class StoreCalendarItemRequest extends FormRequest
                 'integer',
                 'exists:students,id',
             ],
+            'package_id' => [
+                'nullable',
+                'integer',
+                'exists:packages,id',
+                'prohibits:one_off_price_pence',
+            ],
+            'one_off_price_pence' => [
+                'nullable',
+                'integer',
+                'min:1',
+                'prohibits:package_id',
+            ],
         ];
     }
 
@@ -94,6 +106,18 @@ class StoreCalendarItemRequest extends FormRequest
     {
         $validator->after(function (Validator $validator) {
             if ($validator->errors()->isNotEmpty()) {
+                return;
+            }
+
+            if ($this->chargesPupil() && ! $this->boolean('is_practical_test')) {
+                $validator->errors()->add('package_id', 'A price can only be set when adding a driving test.');
+
+                return;
+            }
+
+            if ($this->chargesPupil() && ! $this->filled('student_id')) {
+                $validator->errors()->add('student_id', 'Choose the pupil to charge for this driving test.');
+
                 return;
             }
 
@@ -116,6 +140,14 @@ class StoreCalendarItemRequest extends FormRequest
      * plain availability slots, so a repeating practical test would be saved as
      * bookable 1-hour lesson slots.
      */
+    /**
+     * Whether the instructor is charging the pupil for this driving test.
+     */
+    public function chargesPupil(): bool
+    {
+        return $this->filled('package_id') || $this->filled('one_off_price_pence');
+    }
+
     protected function isRecurringPracticalTest(): bool
     {
         $pattern = RecurrencePattern::tryFrom((string) $this->input('recurrence_pattern', 'none')) ?? RecurrencePattern::None;
@@ -206,6 +238,9 @@ class StoreCalendarItemRequest extends FormRequest
             'recurrence_end_date.after' => 'Recurrence end date must be after the start date.',
             'travel_time_minutes.integer' => 'Travel time must be a number.',
             'travel_time_minutes.in' => 'Travel time must be 15, 30, 45, or 60 minutes.',
+            'package_id.prohibits' => 'Choose a package or a one-off price, not both.',
+            'one_off_price_pence.prohibits' => 'Choose a package or a one-off price, not both.',
+            'one_off_price_pence.min' => 'The one-off price must be at least 1p.',
         ];
     }
 }
