@@ -97,9 +97,30 @@ class StoreCalendarItemRequest extends FormRequest
                 return;
             }
 
+            if ($this->isRecurringPracticalTest()) {
+                $validator->errors()->add(
+                    'recurrence_pattern',
+                    'Practical tests cannot repeat. Please add each test on its own.'
+                );
+
+                return;
+            }
+
             // Check for overlapping time slots on the same date
             $this->checkForOverlap($validator);
         });
+    }
+
+    /**
+     * A practical test is a one-off appointment. The recurring path only builds
+     * plain availability slots, so a repeating practical test would be saved as
+     * bookable 1-hour lesson slots.
+     */
+    protected function isRecurringPracticalTest(): bool
+    {
+        $pattern = RecurrencePattern::tryFrom((string) $this->input('recurrence_pattern', 'none')) ?? RecurrencePattern::None;
+
+        return $this->boolean('is_practical_test') && $pattern !== RecurrencePattern::None;
     }
 
     /**
