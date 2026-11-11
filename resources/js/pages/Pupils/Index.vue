@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, watch } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import axios from 'axios'
 import AppLayout from '@/layouts/AppLayout.vue'
@@ -27,9 +27,10 @@ import {
 } from '@/components/ui/sheet'
 import DeleteLearnerSection from '@/components/Instructors/Tabs/Student/Actions/DeleteLearnerSection.vue'
 import TestPassGuaranteeBadge from '@/components/Shared/TestPassGuaranteeBadge.vue'
-import { Search, GraduationCap, CalendarPlus } from 'lucide-vue-next'
+import { Search, GraduationCap, CalendarPlus, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { show as instructorsShow } from '@/routes/instructors'
 import { start as onboardingStart } from '@/routes/onboarding'
+import { index as pupilsIndex } from '@/routes/pupils'
 import { toast } from '@/components/ui/sonner'
 import type { PupilListing } from '@/types/pupil'
 
@@ -50,39 +51,71 @@ interface StudentSummary {
     instructor_id: number | null
 }
 
+type Assignment = 'all' | 'assigned' | 'unassigned'
+
+interface Pagination {
+    current_page: number
+    last_page: number
+    total: number
+    from: number | null
+    to: number | null
+    prev_page_url: string | null
+    next_page_url: string | null
+}
+
+interface Filters {
+    assignment: Assignment
+    q: string | null
+}
+
 interface Props {
     pupils: PupilListing[]
+    pagination: Pagination
+    counts: Record<Assignment, number>
+    filters: Filters
     onboardedInstructors: OnboardedInstructor[]
 }
 
 const props = defineProps<Props>()
 
-const searchQuery = ref('')
-const showUnassignedOnly = ref(false)
+const assignmentOptions: { value: Assignment; label: string }[] = [
+    { value: 'all', label: 'All' },
+    { value: 'assigned', label: 'Assigned' },
+    { value: 'unassigned', label: 'Unassigned' },
+]
 
-const filteredPupils = computed(() => {
-    let pupils = props.pupils
+const searchQuery = ref(props.filters.q ?? '')
+let searchDebounce: ReturnType<typeof setTimeout> | undefined
 
-    if (showUnassignedOnly.value) {
-        pupils = pupils.filter((pupil) => pupil.instructor_id === null)
+const applyFilters = (changes: Partial<Filters> = {}) => {
+    const next: Filters = {
+        assignment: props.filters.assignment,
+        q: searchQuery.value.trim() || null,
+        ...changes,
     }
+    const query: Record<string, string> = {}
 
-    if (searchQuery.value) {
-        const query = searchQuery.value.toLowerCase()
-        pupils = pupils.filter(
-            (pupil) =>
-                pupil.name.toLowerCase().includes(query) ||
-                pupil.email?.toLowerCase().includes(query) ||
-                pupil.instructor_name?.toLowerCase().includes(query),
-        )
-    }
+    if (next.assignment !== 'all') query.assignment = next.assignment
+    if (next.q) query.q = next.q
 
-    return pupils
+    router.get(pupilsIndex.url({ query }), {}, { preserveScroll: true, preserveState: true })
+}
+
+watch(searchQuery, () => {
+    clearTimeout(searchDebounce)
+    searchDebounce = setTimeout(() => {
+        if ((props.filters.q ?? '') === searchQuery.value.trim()) {
+            return
+        }
+
+        applyFilters()
+    }, 400)
 })
 
-const unassignedCount = computed(
-    () => props.pupils.filter((p) => p.instructor_id === null).length,
-)
+const goToPage = (url: string | null) => {
+    if (!url) return
+    router.visit(url, { preserveScroll: true, preserveState: true })
+}
 
 const getInitials = (name: string) => {
     return name
@@ -155,7 +188,7 @@ const submitAssignment = async () => {
         })
         toast.success('Instructor assigned. The instructor has been notified.')
         sheetOpen.value = false
-        router.reload({ only: ['pupils'] })
+        router.reload({ only: ['pupils', 'pagination', 'counts'] })
     } catch (e: unknown) {
         const message =
             (e as { response?: { data?: { message?: string } } })?.response
@@ -172,7 +205,7 @@ const staffBookingUrl = onboardingStart.url({ query: { staff_booking: 1 } })
 
 const onLearnerDeleted = () => {
     sheetOpen.value = false
-    router.reload({ only: ['pupils'] })
+    router.reload({ only: ['pupils', 'pagination', 'counts'] })
 }
 </script>
 
@@ -211,29 +244,21 @@ const onLearnerDeleted = () => {
                     <Input
                         v-model="searchQuery"
                         type="text"
-                        placeholder="Search students or instructors..."
+                        placeholder="Search name, email, phone or instructor..."
                         class="pl-9"
                     />
                 </div>
-                <div class="flex items-center gap-2 rounded-md border p-1">
+                <div class="flex items-center gap-1 rounded-md border p-1">
                     <Button
-                        :variant="!showUnassignedOnly ? 'default' : 'ghost'"
+                        v-for="option in assignmentOptions"
+                        :key="option.value"
+                        :variant="filters.assignment === option.value ? 'default' : 'ghost'"
                         size="sm"
-                        @click="showUnassignedOnly = false"
+                        @click="applyFilters({ assignment: option.value })"
                     >
-                        All
+                        {{ option.label }}
                         <Badge variant="secondary" class="ml-2">
-                            {{ props.pupils.length }}
-                        </Badge>
-                    </Button>
-                    <Button
-                        :variant="showUnassignedOnly ? 'default' : 'ghost'"
-                        size="sm"
-                        @click="showUnassignedOnly = true"
-                    >
-                        Unassigned
-                        <Badge variant="secondary" class="ml-2">
-                            {{ unassignedCount }}
+                            {{ counts[option.value] }}
                         </Badge>
                     </Button>
                 </div>
@@ -251,7 +276,7 @@ const onLearnerDeleted = () => {
                         </TableHeader>
                         <TableBody>
                             <TableRow
-                                v-for="pupil in filteredPupils"
+                                v-for="pupil in pupils"
                                 :key="pupil.id"
                                 class="cursor-pointer hover:bg-muted/50"
                                 @click="navigateToPupil(pupil)"
@@ -307,7 +332,7 @@ const onLearnerDeleted = () => {
                                     </Badge>
                                 </TableCell>
                             </TableRow>
-                            <TableRow v-if="filteredPupils.length === 0">
+                            <TableRow v-if="pupils.length === 0">
                                 <TableCell colspan="2" class="text-center">
                                     <div class="py-8 text-muted-foreground">
                                         No students found
@@ -316,6 +341,38 @@ const onLearnerDeleted = () => {
                             </TableRow>
                         </TableBody>
                     </Table>
+
+                    <div
+                        v-if="pagination.last_page > 1"
+                        class="flex flex-wrap items-center justify-between gap-2 border-t p-4"
+                    >
+                        <div class="text-sm text-muted-foreground">
+                            Showing {{ pagination.from ?? 0 }}–{{ pagination.to ?? 0 }} of {{ pagination.total }}
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                :disabled="!pagination.prev_page_url"
+                                @click="goToPage(pagination.prev_page_url)"
+                            >
+                                <ChevronLeft class="h-4 w-4" />
+                                Previous
+                            </Button>
+                            <div class="text-sm">
+                                Page {{ pagination.current_page }} of {{ pagination.last_page }}
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                :disabled="!pagination.next_page_url"
+                                @click="goToPage(pagination.next_page_url)"
+                            >
+                                Next
+                                <ChevronRight class="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </div>
                 </CardContent>
             </Card>
         </div>

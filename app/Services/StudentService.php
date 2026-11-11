@@ -9,10 +9,10 @@ use App\Actions\Shared\LookupPostcodesInBulkAction;
 use App\Actions\Student\AttachStudentToInstructorAction;
 use App\Actions\Student\DeleteStudentAction;
 use App\Actions\Student\DeleteStudentProfilePictureAction;
-use App\Actions\Student\GetAllStudentsAction;
 use App\Actions\Student\GetStudentByIdAction;
 use App\Actions\Student\GetStudentInstructorProfileAction;
 use App\Actions\Student\GetStudentPracticeHoursAction;
+use App\Actions\Student\ListStudentsAction;
 use App\Actions\Student\PickupPoint\CreatePickupPointAction;
 use App\Actions\Student\PickupPoint\DeletePickupPointAction;
 use App\Actions\Student\PickupPoint\GeocodePickupPointsAction;
@@ -29,13 +29,14 @@ use App\Models\Instructor;
 use App\Models\Student;
 use App\Models\StudentPickupPoint;
 use App\Models\User;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\UploadedFile;
 
 class StudentService extends BaseService
 {
     public function __construct(
-        protected GetAllStudentsAction $getAllStudents,
+        protected ListStudentsAction $listStudents,
         protected GetStudentByIdAction $getStudentById,
         protected CreatePupilAction $createPupil,
         protected ResendStudentInviteAction $resendStudentInvite,
@@ -66,13 +67,15 @@ class StudentService extends BaseService
     }
 
     /**
-     * Get all students with instructor relationships.
+     * Paginated students for the admin Students page. Not cached — admins
+     * assign unassigned students from this page, so it must always be current.
      *
-     * @return Collection<int, Student>
+     * @param  array{assignment: string, q: ?string}  $filters
+     * @return array{students: LengthAwarePaginator<int, Student>, counts: array{all: int, assigned: int, unassigned: int}}
      */
-    public function getAll(): Collection
+    public function list(array $filters): array
     {
-        return ($this->getAllStudents)();
+        return ($this->listStudents)($filters['assignment'], $filters['q']);
     }
 
     /**

@@ -36,6 +36,7 @@ use App\Http\Requests\AdminResetPasswordRequest;
 use App\Http\Requests\Api\V1\ConfirmAlternativePaymentRequest;
 use App\Http\Requests\CancelBankedLessonRequest;
 use App\Http\Requests\DeleteStudentProfileRequest;
+use App\Http\Requests\FilterStudentsRequest;
 use App\Http\Requests\RebookBankedLessonRequest;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\StorePickupPointRequest;
@@ -78,13 +79,15 @@ class PupilController extends Controller
     /**
      * Display the pupils index page.
      */
-    public function index(): Response
+    public function index(FilterStudentsRequest $request): Response
     {
-        $students = $this->studentService->getAll();
+        $filters = $request->filters();
+        $listing = $this->studentService->list($filters);
+        $students = $listing['students'];
         $onboardedInstructors = (new GetOnboardedInstructorsAction)();
 
         return Inertia::render('Pupils/Index', [
-            'pupils' => $students->map(fn (Student $student) => [
+            'pupils' => collect($students->items())->map(fn (Student $student) => [
                 'id' => $student->id,
                 'name' => trim($student->first_name.' '.$student->surname),
                 'email' => $student->email,
@@ -92,7 +95,18 @@ class PupilController extends Controller
                 'has_test_pass_guarantee' => $student->hasTestPassGuarantee(),
                 'instructor_id' => $student->instructor_id,
                 'instructor_name' => $student->instructor?->user?->name,
-            ]),
+            ])->values(),
+            'pagination' => [
+                'current_page' => $students->currentPage(),
+                'last_page' => $students->lastPage(),
+                'total' => $students->total(),
+                'from' => $students->firstItem(),
+                'to' => $students->lastItem(),
+                'prev_page_url' => $students->previousPageUrl(),
+                'next_page_url' => $students->nextPageUrl(),
+            ],
+            'counts' => $listing['counts'],
+            'filters' => $filters,
             'onboardedInstructors' => $onboardedInstructors->map(fn (Instructor $instructor) => [
                 'id' => $instructor->id,
                 'name' => $instructor->name ?? "Instructor #{$instructor->id}",
