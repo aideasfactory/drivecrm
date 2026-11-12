@@ -50,14 +50,32 @@ final class BookingPayments
 
     /**
      * Hold for an instructor booking: until the first payment is due, i.e. the
-     * configured number of hours before the first lesson starts.
+     * configured number of hours before the first lesson starts. A booking made
+     * inside that window is held until the first lesson starts instead.
      */
     public static function instructorHoldExpiresAt(string $firstLessonDate, ?string $firstLessonStartTime): CarbonImmutable
     {
+        if (self::isWithinCancellationPeriod($firstLessonDate, $firstLessonStartTime)) {
+            return self::atLeastMinimum(self::lessonStartsAt($firstLessonDate, $firstLessonStartTime));
+        }
+
         $deadline = self::lessonStartsAt($firstLessonDate, $firstLessonStartTime)
-            ->subHours((int) config('booking_payments.instructor_hold_hours_before_lesson', 48));
+            ->subHours(self::instructorHoldHoursBeforeLesson());
 
         return self::atLeastMinimum($deadline);
+    }
+
+    /**
+     * Whether an instructor booking for this first lesson is being made inside
+     * the cancellation period (fewer than `instructor_hold_hours_before_lesson`
+     * before it starts). Such bookings are never released automatically when unpaid.
+     */
+    public static function isWithinCancellationPeriod(string $firstLessonDate, ?string $firstLessonStartTime): bool
+    {
+        $deadline = self::lessonStartsAt($firstLessonDate, $firstLessonStartTime)
+            ->subHours(self::instructorHoldHoursBeforeLesson());
+
+        return self::now()->greaterThanOrEqualTo($deadline);
     }
 
     /**
@@ -161,6 +179,11 @@ final class BookingPayments
     public static function lateCancellationHours(): int
     {
         return (int) config('booking_payments.late_cancellation_hours', 48);
+    }
+
+    public static function instructorHoldHoursBeforeLesson(): int
+    {
+        return (int) config('booking_payments.instructor_hold_hours_before_lesson', 48);
     }
 
     public static function learnerHoldMinutes(): int

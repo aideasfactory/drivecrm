@@ -32,6 +32,15 @@
             </AlertDescription>
           </Alert>
 
+          <Alert v-else-if="reason === 'closed'">
+            <Info class="h-4 w-4" />
+            <AlertTitle>Online payment has closed</AlertTitle>
+            <AlertDescription>
+              No payment was taken. Contact your instructor<span v-if="order?.instructor"> ({{ order.instructor.name }})</span>
+              about this booking.
+            </AlertDescription>
+          </Alert>
+
           <Alert v-else>
             <Info class="h-4 w-4" />
             <AlertTitle>These lesson times have been released</AlertTitle>
@@ -64,7 +73,7 @@ interface OrderSummary {
 }
 
 const props = defineProps<{
-  reason: 'paid' | 'unavailable' | 'error'
+  reason: 'paid' | 'unavailable' | 'closed' | 'error'
   message: string
   order: OrderSummary | null
 }>()
@@ -76,6 +85,10 @@ const heading = computed((): string => {
 
   if (props.reason === 'error') {
     return 'Something Went Wrong'
+  }
+
+  if (props.reason === 'closed') {
+    return 'Payment Closed'
   }
 
   return 'Booking No Longer Available'

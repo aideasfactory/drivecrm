@@ -10,9 +10,11 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet'
-import { CalendarPlus, Clock, Loader2, Send } from 'lucide-vue-next'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { CalendarPlus, Clock, Loader2, Send, TriangleAlert } from 'lucide-vue-next'
 import { toast } from '@/components/ui/toast'
 import PackagePriceBreakdown from '@/components/Instructors/PackagePriceBreakdown.vue'
+import { CANCELLATION_PERIOD_WARNING, isWithinCancellationPeriod } from '@/lib/cancellationPeriod'
 
 interface PackageOption {
     id: number
@@ -67,6 +69,10 @@ const paymentMode = ref('upfront')
 
 const selectedPackage = computed(() =>
     packages.value.find((pkg) => pkg.id === selectedPackageId.value),
+)
+
+const isInsideCancellationPeriod = computed(() =>
+    props.slot ? isWithinCancellationPeriod(props.slot.date, props.slot.start_time) : false,
 )
 
 const weeklyAvailable = computed(() => selectedPackage.value?.allows_weekly_payment ?? true)
@@ -238,6 +244,11 @@ const handleSubmit = async () => {
                     </p>
                     <p v-if="errors.payment_mode" class="text-sm text-destructive">{{ errors.payment_mode }}</p>
                 </div>
+
+                <Alert v-if="isInsideCancellationPeriod">
+                    <TriangleAlert class="h-4 w-4" />
+                    <AlertDescription>{{ CANCELLATION_PERIOD_WARNING }}</AlertDescription>
+                </Alert>
 
                 <div class="flex justify-end gap-2 pt-4">
                     <Button type="button" variant="outline" :disabled="isSubmitting" @click="isOpen = false">

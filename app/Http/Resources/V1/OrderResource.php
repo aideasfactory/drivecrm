@@ -29,6 +29,7 @@ class OrderResource extends JsonResource
             'payment_mode' => $this->payment_mode->value,
             'status' => $this->status->value,
             'payment_hold_expires_at' => $this->payment_hold_expires_at?->toIso8601String(),
+            'booked_within_cancellation_period' => (bool) $this->booked_within_cancellation_period,
             'lessons_count' => $this->whenCounted('lessons', $this->lessons_count),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
