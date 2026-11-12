@@ -16,15 +16,17 @@ class LessonDetailResource extends JsonResource
      * Expects a Lesson model with eager-loaded relationships
      * and a computed card_status attribute.
      *
-     * For the pupil, `summary` is only shown once the lesson is signed off
-     * (imported upcoming lessons can carry the old system's diary notes), and
-     * the instructor's payout fields are blanked.
+     * For the pupil, `summary` is only shown once the lesson is signed off and
+     * never on an imported lesson (the importer fills it from the old
+     * system's private diary notes), and the instructor's payout fields are
+     * blanked.
      *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
     {
         $isPupil = $request->user()?->isStudent() === true;
+        $isImported = $this->order?->isImported() === true;
 
         return [
             'id' => $this->id,
@@ -45,7 +47,8 @@ class LessonDetailResource extends JsonResource
             'banked_expires_at' => $this->resource->bankedExpiresAt()?->toISOString(),
             'provisional_handled_by' => $this->resource->provisionalHandledBy()?->value,
             'completed_at' => $this->completed_at?->toISOString(),
-            'summary' => $isPupil && ! $this->resource->isCompleted() ? null : $this->summary,
+            'summary' => $isPupil && ($isImported || ! $this->resource->isCompleted()) ? null : $this->summary,
+            'is_imported' => $isImported,
             'payment_status' => $this->lessonPayment?->status?->value ?? ($this->order?->isPrepaid() ? 'paid' : null),
             'payment_mode' => $this->order?->payment_mode->value,
             ...AlternativePayments::lessonFlags($this->resource),
