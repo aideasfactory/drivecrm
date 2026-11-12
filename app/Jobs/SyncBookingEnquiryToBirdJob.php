@@ -33,11 +33,12 @@ class SyncBookingEnquiryToBirdJob implements ShouldQueue
      * job reads the saved data and a queue error can't surface mid-commit.
      *
      * Skipped for bookings made by the bookings team or an owner: the enquiry
-     * was stamped as a staff booking, or the signed-in user is an owner.
+     * was stamped as a staff booking or as started by an owner, or the
+     * signed-in user is an owner.
      */
     public static function dispatchSafely(Enquiry $enquiry): void
     {
-        if ($enquiry->isStaffBooking() || auth()->user()?->isOwner() === true) {
+        if ($enquiry->isStaffBooking() || $enquiry->wasStartedByOwner() || auth()->user()?->isOwner() === true) {
             Log::info('Bird sync skipped for staff booking', [
                 'enquiry_id' => $enquiry->id,
                 'user_id' => auth()->id(),
