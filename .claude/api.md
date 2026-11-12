@@ -6345,6 +6345,7 @@ Returns all conversations for the authenticated user, grouped by the other parti
         "name": "Jane Doe"
       },
       "student_id": 3,
+      "chat_type": "student",
       "latest_message": {
         "id": 42,
         "message": "See you at 9am tomorrow!",
@@ -6360,6 +6361,7 @@ Returns all conversations for the authenticated user, grouped by the other parti
         "name": "Tom Brown"
       },
       "student_id": 5,
+      "chat_type": "student",
       "latest_message": {
         "id": 38,
         "message": "Thanks for the feedback on today's lesson.",
@@ -6380,6 +6382,7 @@ Returns all conversations for the authenticated user, grouped by the other parti
 | `user.id` | integer | The other participant's **user ID** (users table — not a student ID) |
 | `user.name` | string | The other participant's name |
 | `student_id` | integer\|null | When the authenticated user is an **instructor** and this participant is one of **their** students: that student's ID (students table — matches `GET /api/v1/instructor/students`). `null` otherwise (admin/owner participants, students of other instructors, or when the authenticated user is a student). |
+| `chat_type` | string | Which kind of chat this row is: `"support"` (the other participant is an admin/owner — the shared support thread; messages with every admin are collapsed into one row whose `user` is the admin who sent/received the latest message), `"student"` (a pupil) or `"instructor"` (seen by a student). Pass it as `type` when opening/marking the thread: `support` → `{user}` = `user.id`; `student` → `{user}` = `student_id`; `instructor` → `{user}` = `user.id`. |
 | `latest_message.id` | integer | Message ID |
 | `latest_message.message` | string | Message content |
 | `latest_message.is_own` | boolean | Whether the authenticated user sent this message |
@@ -6479,7 +6482,24 @@ Returns paginated messages between the authenticated user and the specified user
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `user` | integer | The other participant's user ID |
+| `user` | integer | **Instructors:** the pupil's **student ID** (students table — `student_id` on conversation / unread-count objects, `id` from `GET /instructor/students`). **Students:** the other participant's **user ID**. Admin/owner (support) is matched by user ID. |
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `type` | string | No (recommended) | `student`, `support` or `instructor` (same values as `chat_type`) — which kind of ID `{user}` is. Student IDs and user IDs share a number range (an admin's user ID can equal a pupil's student ID), so the app should always send it. |
+
+**ID resolution:**
+
+| `type` | `{user}` means | Not found |
+|--------|----------------|-----------|
+| `support` | An admin/owner **user ID** (e.g. support user `1`). Returns the shared support thread. Any role. | `404` "Support user not found." if that user isn't an owner |
+| `student` | **Instructors only:** one of the instructor's **own** students, by **student ID** | `404` "Student not found." (also for student-authenticated callers) |
+| `instructor` | **Students:** their instructor's **user ID** | `404` "Instructor not found." if that user isn't an instructor; `403` if it isn't the pupil's own instructor |
+| omitted (legacy builds) | Instructors: own student by student ID first, then owner by user ID, then any student ID. Students: owner by user ID, else user ID. | `404` / `403` as before |
+
+Invalid `type` → `422` (`errors.type`: "The chat type must be student, support or instructor."). Unknown query params are ignored, not rejected. The same `type` param and rules apply to `POST /conversations/{user}/read`, and as `recipient_type` on `POST /messages`.
 
 **Request Body:** None
 
@@ -6546,13 +6566,15 @@ Returns paginated messages between the authenticated user and the specified user
 
 Send a new message to another user. Authorization ensures only instructor-student pairs can message each other.
 
-- **Instructors** must provide `recipient_id` (the student ID from the students table).
+- **Instructors** must provide `recipient_id` (the student ID from the students table, or the support user ID with `recipient_type: "support"`).
 - **Students** may omit `recipient_id` — the backend automatically resolves their assigned instructor.
+- Send `recipient_type` (`student` | `support`) so the ID can't be misread — same rules as `type` on `GET /messages/conversations/{user}`.
 
 **Request Body (instructor):**
 ```json
 {
   "recipient_id": 5,
+  "recipient_type": "student",
   "message": "Great lesson today! Keep up the good work."
 }
 ```
@@ -6566,7 +6588,8 @@ Send a new message to another user. Authorization ensures only instructor-studen
 
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
-| `recipient_id` | integer | Instructors: Yes, Students: No | For instructors: the student ID from the students table. For students: omit to auto-resolve instructor, or pass the instructor's user ID. |
+| `recipient_id` | integer | Instructors: Yes. Students: only with `recipient_type` | For instructors: the student ID from the students table (or the support user ID with `recipient_type: "support"`). For students: omit to auto-resolve instructor, or pass the instructor's / support user's user ID. |
+| `recipient_type` | string | No (recommended) | `student`, `support` or `instructor`. `student` → `recipient_id` must be one of the instructor's own students (else `404`); `support` → `recipient_id` must be an admin/owner user ID (else `404`); `instructor` → `recipient_id` must be the pupil's own instructor's user ID (`404` / `403`). Omitted keeps legacy resolution. Invalid → `422`. |
 | `message` | string | Yes | Message content (max 5000 characters) |
 
 **Success Response:** `201 Created`
@@ -6639,11 +6662,13 @@ Returns the authenticated user's total unread message count plus a per-conversat
     {
       "user_id": 8,
       "student_id": 5,
+      "chat_type": "student",
       "unread_count": 3
     },
     {
       "user_id": 5,
       "student_id": 3,
+      "chat_type": "student",
       "unread_count": 2
     }
   ]
@@ -6656,6 +6681,7 @@ Returns the authenticated user's total unread message count plus a per-conversat
 | `conversations` | array | Per-conversation breakdown, highest unread count first |
 | `conversations[].user_id` | integer | The **sender's user ID** (the other participant) |
 | `conversations[].student_id` | integer\|null | When the authenticated user is an **instructor** and the sender is one of **their** students: that student's ID (students table — matches `GET /api/v1/instructor/students`). `null` otherwise (admin/owner senders, students of other instructors, or when the authenticated user is a student). |
+| `conversations[].chat_type` | string\|null | `"support"` (sender is an admin/owner), `"student"` or `"instructor"` — same values as `chat_type` on `GET /messages/conversations`. `null` only if the sender's account no longer exists. |
 | `conversations[].unread_count` | integer | Unread messages from that sender |
 
 > **Note:** `user_id` here is always a **user** ID (matching `sender_id` on message objects and `user.id` on conversation objects) — not a student ID. Use `student_id` to map a conversation onto the instructor app's student list.
@@ -6677,6 +6703,8 @@ When `{user}` is an owner (admin/support), unread messages from **every** owner 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `user` | integer | Same convention as `GET /api/v1/messages/conversations/{user}`: for **instructors** this is the **student ID** (from the students table); for **students** it is the other participant's **user ID**. Admin/owner is always matched by user ID. |
+
+**Query Parameters:** `type` (`student` | `support`, optional but recommended) — identical rules to `GET /api/v1/messages/conversations/{user}`.
 
 **Request Body:** None
 
@@ -8256,6 +8284,9 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-11 | **Practical tests can no longer repeat.** `POST /api/v1/instructor/calendar/items` (and the web `POST /instructors/{instructor}/calendar/items`) now returns 422 on `recurrence_pattern` ("Practical tests cannot repeat. Please add each test on its own.") when `is_practical_test=true` and `recurrence_pattern` is not `none`. Previously the recurring path ignored `is_practical_test` and saved a weekly series of bookable 1-hour *available* slots (found on Malik Arshad's diary). **App action:** hide the Repeat options when Practical test is ticked. | Instructor Calendar (store) |
 | 2026-11-12 | **Pupil lesson notes.** No new endpoint: the pupil reads the instructor's notes for a past lesson from `summary` on `GET /api/v1/students/{student}/lessons/{lesson}` (same field the instructor writes at sign-off). When the caller is the pupil, `summary` is now `null` unless the lesson is signed off (`status: "completed"`), and `payout_status` / `has_payout` are always `null` / `false`. Response shape and instructor responses are unchanged. **App action (pupil):** on tapping a past lesson, call the detail endpoint with the pupil's own `profile.id` and show `summary` as "Instructor's notes", with an empty state when it is `null`. | Student Lessons (show) |
 | 2026-11-12 | **Pupil lesson notes: imported lessons.** New boolean `is_imported` on `GET /api/v1/students/{student}/lessons/{lesson}` (every caller; `true` only while `summary` is still the note the importer brought over from the old system's diary). When the caller is the pupil, `summary` is `null` while `is_imported` is `true`. Notes written here (sign-off, including on an imported booking) replace the imported note, set `is_imported` to `false` and show to the pupil. Instructor `summary` is unchanged. Additive only. **App action (pupil):** when `is_imported` is `true`, show "This lesson was imported, so there are no notes" instead of the notes empty state. | Student Lessons (show) |
+| 2026-11-12 | **Instructor pupil chat opened the wrong thread.** For instructors, `{user}` on `GET /messages/conversations/{user}` and `POST /messages/conversations/{user}/read`, and `recipient_id` on `POST /messages`, now resolve to the instructor's **own student** first. Previously the backend checked "is this an owner user ID?" first, so a pupil whose student ID equalled an admin's user ID opened the (empty) support thread — the list showed their preview/unread badge, the chat said "No messages yet", mark-read never cleared the badge, and replies went to the admin (found on Mark Terry-Lush / Marni James). No shape changes. **App action:** none — keep passing `student_id` for pupil chats and the support user ID for support. *(Superseded by the next entry: always send the chat type.)* | Messages (conversation, mark read, send) |
+| 2026-11-12 | **Explicit chat type for messages.** Removes the student-ID-vs-admin-user-ID ambiguity in both directions. New optional `?type=student\|support` on `GET /messages/conversations/{user}` and `POST /messages/conversations/{user}/read`, and `recipient_type` (`student`\|`support`) on `POST /messages`. `support` → `{user}` / `recipient_id` is an admin/owner **user ID** (shared support thread; `404` otherwise); `student` → one of the instructor's own students by **student ID** (`404` otherwise, incl. student callers). Omitted → legacy resolution (instructor's own student first, then owner user ID). New `chat_type` (`support`\|`student`\|`instructor`) on every `GET /messages/conversations` object and `GET /messages/unread-count` `conversations[]` item. Additive — no fields removed, no schema change. **App action:** read `chat_type` on list/unread rows; open/mark-read/send with `type=support` + `user.id` for support rows and `type=student` + `student_id` for pupil rows. | Messages (conversations, conversation, mark read, send, unread-count) |
+| 2026-11-12 | **Chat type follow-up.** `type` / `recipient_type` now also accept `instructor` (pupil → their instructor, by user ID), so every `chat_type` value can be passed straight back; previously `instructor` returned `422`. `GET /messages/conversations` now returns **one** `support` row for all admins (it opens the shared support thread; `unread_count` covers every admin) instead of one row per admin. `GET /messages/unread-count` is unchanged — still one row per sending admin, so sum the `chat_type: "support"` rows for the support badge. | Messages (conversations, conversation, mark read, send) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

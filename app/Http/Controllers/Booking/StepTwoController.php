@@ -7,6 +7,7 @@ use App\Jobs\SyncBookingEnquiryToBirdJob;
 use App\Mail\BookingEnquirySubmittedMail;
 use App\Models\Enquiry;
 use App\Models\Instructor;
+use App\Support\TestPassGuarantee;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -58,6 +59,7 @@ class StepTwoController extends Controller
             'maxStepReached' => $enquiry->max_step_reached,
             'source' => $tracking['source'] ?? null,
             'gclid' => $tracking['gclid'] ?? null,
+            'testPassGuaranteePrice' => number_format(TestPassGuarantee::price(), 2),
         ]);
     }
 

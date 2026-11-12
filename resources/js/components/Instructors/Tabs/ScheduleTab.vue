@@ -1255,7 +1255,7 @@ onMounted(() => {
                         @click="setView('day')"
                     >
                         <CalendarIcon class="mr-1.5 h-4 w-4" />
-                        Today
+                        Daily
                     </Button>
                     <Button
                         variant="ghost"

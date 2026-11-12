@@ -18,7 +18,7 @@ class GetUnreadCountsAction
      * When the user is an instructor, each conversation also carries the
      * sender's student id (null when the sender isn't one of their students).
      *
-     * @return array{total: int, conversations: array<int, array{user_id: int, student_id: int|null, unread_count: int}>}
+     * @return array{total: int, conversations: array<int, array{user_id: int, student_id: int|null, chat_type: string|null, unread_count: int}>}
      */
     public function __invoke(User $user): array
     {
@@ -30,16 +30,21 @@ class GetUnreadCountsAction
             ->orderByDesc('unread_count')
             ->get();
 
-        $studentIdsByUserId = $this->studentIdsByUserId(
-            $user,
-            $counts->pluck('sender_id')->map(fn ($id) => (int) $id)->all()
-        );
+        $senderIds = $counts->pluck('sender_id')->map(fn ($id) => (int) $id)->all();
+
+        $studentIdsByUserId = $this->studentIdsByUserId($user, $senderIds);
+
+        $sendersById = User::query()
+            ->whereIn('id', $senderIds)
+            ->get(['id', 'role'])
+            ->keyBy('id');
 
         return [
             'total' => (int) $counts->sum('unread_count'),
             'conversations' => $counts->map(fn ($row) => [
                 'user_id' => (int) $row->sender_id,
                 'student_id' => $studentIdsByUserId[(int) $row->sender_id] ?? null,
+                'chat_type' => $sendersById->get((int) $row->sender_id)?->chatType(),
                 'unread_count' => (int) $row->unread_count,
             ])->values()->all(),
         ];

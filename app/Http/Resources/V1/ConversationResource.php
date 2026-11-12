@@ -22,6 +22,7 @@ class ConversationResource extends JsonResource
                 'name' => $this['user']->name,
             ],
             'student_id' => $this['student_id'] ?? null,
+            'chat_type' => $this['user']->chatType(),
             'latest_message' => [
                 'id' => $this['latest_message']->id,
                 'message' => $this['latest_message']->message,
