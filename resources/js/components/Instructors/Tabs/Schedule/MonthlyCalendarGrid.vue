@@ -124,7 +124,11 @@ function formatTime(t: string): string {
 }
 
 function statusLabel(event: CalendarEvent): string {
+    if (event.itemType === 'travel') return 'Travel'
     if (event.itemType === 'practical_test') return 'Practical Test'
+    if (event.isProvisional === true) {
+        return event.provisionalHandledBy === 'instructor' ? 'Double booked' : 'Provisional'
+    }
 
     const status = event.status
 
