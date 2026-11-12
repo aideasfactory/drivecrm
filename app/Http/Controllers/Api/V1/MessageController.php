@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\ConversationTypeRequest;
 use App\Http\Requests\Api\V1\SendMessageRequest;
 use App\Http\Resources\V1\ConversationResource;
 use App\Http\Resources\V1\MessageResource;
@@ -43,11 +44,12 @@ class MessageController extends Controller
      *
      * The mobile app sends a student ID (from the students table).
      * We resolve it to the parent user for the conversation lookup.
-     * Messages are returned newest first for pagination.
+     * Messages are returned newest first for pagination. An optional
+     * ?type=student|support says which kind of id it is.
      */
-    public function show(Request $request, int $conversationUserId): AnonymousResourceCollection
+    public function show(ConversationTypeRequest $request, int $conversationUserId): AnonymousResourceCollection
     {
-        $user = $this->resolveConversationUser($request->user(), $conversationUserId);
+        $user = $this->resolveConversationUser($request->user(), $conversationUserId, $request->validated('type'));
 
         Gate::authorize('viewConversation', [Message::class, $user]);
 
@@ -95,7 +97,11 @@ class MessageController extends Controller
         if ($sender->isStudent() && ! $request->validated('recipient_id')) {
             $recipient = $this->resolveStudentInstructor($sender);
         } else {
-            $recipient = $this->resolveConversationUser($sender, (int) $request->validated('recipient_id'));
+            $recipient = $this->resolveConversationUser(
+                $sender,
+                (int) $request->validated('recipient_id'),
+                $request->validated('recipient_type')
+            );
         }
 
         $recipient->load(['instructor', 'student']);
@@ -122,11 +128,12 @@ class MessageController extends Controller
      * Marks every unread message sent by the other participant to the
      * authenticated user. Same ID convention as `show`: instructors pass a
      * student ID, students pass a user ID, owners are matched by user ID.
-     * Idempotent — repeat calls return marked_read: 0.
+     * Idempotent — repeat calls return marked_read: 0. Accepts the same
+     * optional ?type=student|support as `show`.
      */
-    public function markConversationRead(Request $request, int $conversationUserId): JsonResponse
+    public function markConversationRead(ConversationTypeRequest $request, int $conversationUserId): JsonResponse
     {
-        $user = $this->resolveConversationUser($request->user(), $conversationUserId);
+        $user = $this->resolveConversationUser($request->user(), $conversationUserId, $request->validated('type'));
 
         Gate::authorize('viewConversation', [Message::class, $user]);
 
@@ -188,14 +195,43 @@ class MessageController extends Controller
     /**
      * Resolve the conversation partner's User model.
      *
-     * Owners (admin/support) are addressed directly by user id from either
-     * role — instructors and students can both open a thread with the admin.
-     * Otherwise the existing instructor↔student convention applies: for an
-     * instructor, the id is a student id (resolve to its parent user);
-     * for a student, the id is already a user id.
+     * Student ids and user ids share a number range, so an owner's user id can
+     * equal a pupil's student id; $type removes the ambiguity. "support" only
+     * matches an owner by user id; "instructor" only matches an instructor by
+     * user id (the policy then limits it to the pupil's own instructor);
+     * "student" only matches one of the
+     * instructor's own students by student id. Without a type (legacy app
+     * builds), an instructor's own student wins, then owners by user id, then
+     * any student id for instructors or a user id for students.
      */
-    private function resolveConversationUser(User $authUser, int $id): User
+    private function resolveConversationUser(User $authUser, int $id, ?string $type = null): User
     {
+        if ($type === 'support') {
+            $owner = User::find($id);
+            abort_unless($owner?->isOwner(), 404, 'Support user not found.');
+
+            return $owner;
+        }
+
+        if ($type === 'instructor') {
+            $instructorUser = User::find($id);
+            abort_unless($instructorUser?->isInstructor(), 404, 'Instructor not found.');
+
+            return $instructorUser;
+        }
+
+        if ($authUser->isInstructor() && $authUser->instructor) {
+            $ownStudent = Student::query()
+                ->where('instructor_id', $authUser->instructor->id)
+                ->find($id);
+
+            if ($ownStudent) {
+                return User::findOrFail($ownStudent->user_id);
+            }
+        }
+
+        abort_if($type === 'student', 404, 'Student not found.');
+
         $asUser = User::find($id);
         if ($asUser?->isOwner()) {
             return $asUser;

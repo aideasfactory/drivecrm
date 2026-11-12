@@ -222,4 +222,13 @@ class User extends Authenticatable
     {
         return $this->role === UserRole::STUDENT;
     }
+
+    /**
+     * The kind of chat a conversation with this user is, as seen by the other
+     * participant: "support" (any owner), "student" or "instructor".
+     */
+    public function chatType(): string
+    {
+        return $this->isOwner() ? 'support' : $this->role->value;
+    }
 }
