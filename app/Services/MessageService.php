@@ -76,7 +76,7 @@ class MessageService extends BaseService
      *
      * Not cached — unread counts are volatile and must be real-time.
      *
-     * @return array{total: int, conversations: array<int, array{user_id: int, student_id: int|null, unread_count: int}>}
+     * @return array{total: int, conversations: array<int, array{user_id: int, student_id: int|null, chat_type: string|null, unread_count: int}>}
      */
     public function getUnreadCounts(User $user): array
     {

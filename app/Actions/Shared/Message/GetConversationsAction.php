@@ -18,7 +18,9 @@ class GetConversationsAction
      * ordered by most recent first, with the number of unread messages the
      * user has received in each conversation. When the user is an instructor,
      * each conversation also carries the other participant's student id
-     * (null when the participant isn't one of their students).
+     * (null when the participant isn't one of their students). Messages with
+     * every owner form one shared support row (matching the merged thread in
+     * GetConversationAction), keyed to the owner of the latest message.
      *
      * @return Collection<int, array{user: User, student_id: int|null, latest_message: Message, unread_count: int}>
      */
@@ -29,17 +31,23 @@ class GetConversationsAction
         $messages = Message::query()
             ->where('from', $userId)
             ->orWhere('to', $userId)
-            ->with('sender:id,name', 'recipient:id,name')
+            ->with('sender:id,name,role', 'recipient:id,name,role')
             ->orderByDesc('created_at')
             ->get();
 
         $grouped = $messages->groupBy(function (Message $message) use ($userId) {
+            $otherUser = $message->from === $userId ? $message->recipient : $message->sender;
+
+            if ($otherUser?->isOwner()) {
+                return 'support';
+            }
+
             return $message->from === $userId ? $message->to : $message->from;
         });
 
         $studentIdsByUserId = $this->studentIdsByUserId(
             $user,
-            $grouped->keys()->map(fn ($id) => (int) $id)->all()
+            $grouped->keys()->reject(fn ($key) => $key === 'support')->map(fn ($id) => (int) $id)->values()->all()
         );
 
         return $grouped->map(function (Collection $conversationMessages) use ($userId, $studentIdsByUserId) {
