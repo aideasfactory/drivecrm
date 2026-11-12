@@ -21,6 +21,7 @@ class LessonResource extends JsonResource
         return [
             'id' => $this['id'],
             'student_lesson_number' => $this['student_lesson_number'],
+            'is_practical_test' => $this['is_practical_test'] ?? false,
             'order_id' => $this['order_id'],
             'instructor_name' => $this['instructor_name'],
             'instructor_avatar' => $this['instructor_avatar'],

@@ -159,6 +159,10 @@ class BankLessonsAction
             throw new RuntimeException('This lesson is completed or already paid out and cannot be taken out of the diary.');
         }
 
+        if ($lesson->is_practical_test) {
+            throw new RuntimeException('A driving test is booked for a fixed date, so it can\'t be kept to rebook later. Cancel it instead.');
+        }
+
         if (! $lesson->canBeBanked()) {
             throw new RuntimeException("This booking hasn't been paid yet, so its lessons can't be kept to rebook later. Move it or cancel it instead.");
         }

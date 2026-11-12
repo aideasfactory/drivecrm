@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Actions\Calendar\MoveLessonAndFutureSiblingsAction;
+use App\Enums\OrderSource;
 use App\Enums\RecurrencePattern;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\BankLessonsRequest;
@@ -17,8 +18,10 @@ use App\Http\Requests\Api\V1\UpdateCalendarItemRequest;
 use App\Http\Resources\V1\CalendarItemResource;
 use App\Http\Resources\V1\SlotOfferResource;
 use App\Models\CalendarItem;
+use App\Models\Student;
 use App\Services\InstructorCalendarService;
 use App\Services\InstructorService;
+use App\Services\OrderService;
 use App\Services\SlotOfferService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -31,6 +34,7 @@ class InstructorCalendarController extends Controller
         protected InstructorService $instructorService,
         protected MoveLessonAndFutureSiblingsAction $moveLessonAndFutureSiblings,
         protected SlotOfferService $slotOfferService,
+        protected OrderService $orderService,
     ) {}
 
     /**
@@ -106,6 +110,26 @@ class InstructorCalendarController extends Controller
             return response()->json([
                 'data' => new CalendarItemResource($firstItem),
                 'recurring_count' => $items->count(),
+            ], 201);
+        }
+
+        if ($request->chargesPupil()) {
+            $result = $this->orderService->bookPracticalTest(
+                $instructor,
+                Student::findOrFail($request->integer('student_id')),
+                $request->input('date'),
+                $request->input('start_time'),
+                $request->input('end_time'),
+                $request->input('notes'),
+                $request->integer('package_id') ?: null,
+                $request->filled('one_off_price_pence') ? $request->integer('one_off_price_pence') : null,
+                OrderSource::INSTRUCTOR_APP
+            );
+
+            return response()->json([
+                'data' => new CalendarItemResource($result['calendar_item']),
+                'order_id' => $result['order']->id,
+                'payment_link_sent' => true,
             ], 201);
         }
 

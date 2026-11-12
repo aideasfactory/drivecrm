@@ -1362,6 +1362,7 @@ Returns the authenticated instructor's lessons for a specific date, ordered by s
 |-------|------|-------------|
 | `id` | integer | Lesson record ID (internal — used for routing) |
 | `student_lesson_number` | integer | Per-student running lesson number (1, 2, 3, …). Increments across all of the student's orders and is the user-facing reference shown in the UI |
+| `is_practical_test` | boolean | `true` when this lesson is a **paid driving test** booked by the instructor. Show it as "Driving test" (e.g. a badge on the card). Its date/times are the test appointment. It can't be kept to rebook later. |
 | `order_id` | integer | The order this lesson belongs to |
 | `date` | string\|null | Lesson date (YYYY-MM-DD) |
 | `start_time` | string\|null | Start time (HH:MM) |
@@ -2672,6 +2673,19 @@ Creates a new calendar item (time slot) for the authenticated instructor. Suppor
 | `travel_time_minutes` | integer\|null | No | Travel time block after the slot: `15`, `30`, `45`, or `60` minutes. Creates a separate travel item. |
 | `is_practical_test` | boolean | No | If `true`, creates a practical test slot. Blocks 1 hour before `start_time` and 30 minutes after `end_time`. Automatically marked unavailable. Cannot be combined with a `recurrence_pattern` other than `none` (422 on `recurrence_pattern`). |
 | `student_id` | integer\|null | No | Student assigned to a practical test. Must exist in `students`. When supplied with `is_practical_test=true`, the test `date` is carried over to that student's `book_practical_test` checklist item (its `date` is set and the item is marked checked). Ignored for non-practical slots. |
+| `package_id` | integer\|null | No | **Charge the pupil for the test** with one of the instructor's own active **1-lesson** packages. Only with `is_practical_test=true` and a `student_id` (the pupil must be the instructor's). Cannot be sent with `one_off_price_pence`. 422 on `package_id` for another instructor's, inactive or multi-lesson package. |
+| `one_off_price_pence` | integer\|null | No | **Charge the pupil for the test** at a one-off price (pence, min 1). Same rules as `package_id`. Creates/reuses a private One-Off Package (never listed for pupils to buy). |
+
+**Paid driving test:** when `package_id` or `one_off_price_pence` is sent, the test is added to the diary and booked as a 1-lesson **pay in full** order (`package_name: "Driving test"`). The pupil is emailed the normal payment link (price + booking fee + digital fee). The diary entry is held until the payment is due (48 hours before the test); if it isn't paid the booking is released and the entry stays as a plain unpaid test. Cancelling follows the normal lesson rules. The test pass guarantee is never added. Without either field the test is a diary entry only, as before.
+
+Paid test response (`201`):
+```json
+{
+  "data": { "id": 4521, "item_type": "practical_test", "status": "draft", "...": "CalendarItemResource" },
+  "order_id": 18412,
+  "payment_link_sent": true
+}
+```
 
 **Example — Single slot with travel time:**
 ```json
@@ -4673,6 +4687,7 @@ Returns lessons for a given student across all their orders. Supports optional f
 |-------|------|-------------|
 | `id` | integer | Lesson record ID (internal — used for routing) |
 | `student_lesson_number` | integer | Per-student running lesson number (1, 2, 3, …). Increments across all of the student's orders and is the user-facing reference shown in the UI |
+| `is_practical_test` | boolean | `true` when this lesson is a **paid driving test** booked by the instructor. Show it as "Driving test" (e.g. a badge on the card). Its date/times are the test appointment. It can't be kept to rebook later. |
 | `order_id` | integer | The order this lesson belongs to |
 | `instructor_name` | string\|null | Instructor's full name |
 | `instructor_avatar` | string\|null | Instructor's profile picture URL (S3) |
@@ -4819,6 +4834,7 @@ Instructor responses are unchanged.
 |-------|------|-------------|
 | `id` | integer | Lesson record ID (internal — used for routing) |
 | `student_lesson_number` | integer | Per-student running lesson number (1, 2, 3, …). Increments across all of the student's orders and is the user-facing reference shown in the UI |
+| `is_practical_test` | boolean | `true` when this lesson is a **paid driving test** booked by the instructor. Show it as "Driving test" (e.g. a badge on the card). Its date/times are the test appointment. It can't be kept to rebook later. |
 | `order_id` | integer | The order this lesson belongs to |
 | `instructor_id` | integer | The instructor's record ID |
 | `instructor_name` | string\|null | Instructor's full name |
@@ -8282,6 +8298,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-04 | **Cancelled lessons on the pupil lessons list (opt-in).** New `include_cancelled` query param (default `false`): when `true`, cancelled lessons are returned with `status: "cancelled"` and new `card_status: "cancelled"`. Three new nullable fields on every lesson list item: `cancelled_at`, `cancellation_reason_label`, `cancellation_reason`. Additive only — no fields removed, default response unchanged. Lesson detail still 404s for cancelled lessons. **App action:** on cancelled rows hide `student_lesson_number` (can repeat an open lesson's number) and show `payment_status: "due"` as "Unpaid" (invoice voided, nothing owed). | Student (lessons index) |
 | 2026-11-04 | **Admin diary names instructor-made holds (web only, no mobile API change).** The web `GET /instructors/{instructor}/calendar` now sets `student_name` on `draft` items using the same rule as `GET /api/v1/instructor/calendar/items` (named when the instructor or Head Office booked; `null` for the pupil's own website/app checkout), and the diary labels them "Held - <name>" like the app. This supersedes the "labels the block Held" note in the 2026-10-01 entry. | Admin diary (web) |
 | 2026-11-11 | **Practical tests can no longer repeat.** `POST /api/v1/instructor/calendar/items` (and the web `POST /instructors/{instructor}/calendar/items`) now returns 422 on `recurrence_pattern` ("Practical tests cannot repeat. Please add each test on its own.") when `is_practical_test=true` and `recurrence_pattern` is not `none`. Previously the recurring path ignored `is_practical_test` and saved a weekly series of bookable 1-hour *available* slots (found on Malik Arshad's diary). **App action:** hide the Repeat options when Practical test is ticked. | Instructor Calendar (store) |
+| 2026-11-11 | **Paid driving tests.** `POST /api/v1/instructor/calendar/items` (and web `POST /instructors/{instructor}/calendar/items`) accept `package_id` (instructor's active 1-lesson package) **or** `one_off_price_pence` with `is_practical_test=true` + `student_id`: the test is booked as a 1-lesson pay-in-full order and the pupil is emailed a payment link. New response fields `order_id`, `payment_link_sent` on that path. `is_practical_test` added to `GET /api/v1/students/{student}/lessons`, `GET /api/v1/students/{student}/lessons/{lesson}` and `GET /api/v1/instructor/lessons/{date}`. Banking a test lesson returns an error. Additive: free tests and every other request unchanged. **App action:** add the package / one-off price choice to Add Practical Test; show "Driving test" on lesson cards with `is_practical_test: true`; hide "Rebook later" for them (`can_bank` is already `false`). | Instructor Calendar (store), Lessons |
 | 2026-11-12 | **Pupil lesson notes.** No new endpoint: the pupil reads the instructor's notes for a past lesson from `summary` on `GET /api/v1/students/{student}/lessons/{lesson}` (same field the instructor writes at sign-off). When the caller is the pupil, `summary` is now `null` unless the lesson is signed off (`status: "completed"`), and `payout_status` / `has_payout` are always `null` / `false`. Response shape and instructor responses are unchanged. **App action (pupil):** on tapping a past lesson, call the detail endpoint with the pupil's own `profile.id` and show `summary` as "Instructor's notes", with an empty state when it is `null`. | Student Lessons (show) |
 | 2026-11-12 | **Pupil lesson notes: imported lessons.** New boolean `is_imported` on `GET /api/v1/students/{student}/lessons/{lesson}` (every caller; `true` only while `summary` is still the note the importer brought over from the old system's diary). When the caller is the pupil, `summary` is `null` while `is_imported` is `true`. Notes written here (sign-off, including on an imported booking) replace the imported note, set `is_imported` to `false` and show to the pupil. Instructor `summary` is unchanged. Additive only. **App action (pupil):** when `is_imported` is `true`, show "This lesson was imported, so there are no notes" instead of the notes empty state. | Student Lessons (show) |
 | 2026-11-12 | **Instructor pupil chat opened the wrong thread.** For instructors, `{user}` on `GET /messages/conversations/{user}` and `POST /messages/conversations/{user}/read`, and `recipient_id` on `POST /messages`, now resolve to the instructor's **own student** first. Previously the backend checked "is this an owner user ID?" first, so a pupil whose student ID equalled an admin's user ID opened the (empty) support thread — the list showed their preview/unread badge, the chat said "No messages yet", mark-read never cleared the badge, and replies went to the admin (found on Mark Terry-Lush / Marni James). No shape changes. **App action:** none — keep passing `student_id` for pupil chats and the support user ID for support. *(Superseded by the next entry: always send the chat type.)* | Messages (conversation, mark read, send) |
