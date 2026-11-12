@@ -8,6 +8,7 @@ use App\Models\Instructor;
 use App\Models\Package;
 use App\Services\PackageService;
 use App\Services\PriceUpliftService;
+use App\Support\TestPassGuarantee;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -74,6 +75,8 @@ class StepThreeController extends Controller
             ->map(function ($package) use ($uplift, $discount) {
                 $this->priceUpliftService->applyUpliftToPackage($package, $uplift);
                 $pricing = $this->packageService->calculateEnquiryPricing($package, $discount);
+                // Packages of 5+ lessons always include the Pass Your Test Guarantee, so it is in the price shown.
+                $guaranteePence = TestPassGuarantee::includedInPackagePricePence($package);
 
                 return [
                     'id' => $package->id,
@@ -85,7 +88,8 @@ class StepThreeController extends Controller
                     'booking_fee' => $package->booking_fee,
                     'digital_fee' => $package->digital_fee,
                     'total_price' => $package->total_price,
-                    'total_with_fees' => '£'.number_format($pricing['total'], 2),
+                    'total_with_fees' => '£'.number_format($pricing['total'] + $guaranteePence / 100, 2),
+                    'test_pass_guarantee' => $guaranteePence > 0 ? '£'.number_format($guaranteePence / 100, 2) : null,
                     'weekly_payment' => '£'.number_format($pricing['weekly_payment'], 2),
                     'lessons_count' => $package->lessons_count,
                     'isIntroOffer' => $package->is_intro_offer,

@@ -115,12 +115,13 @@
                         </template>
                         <div v-else class="text-3xl font-bold">{{ pkg.total_with_fees }}</div>
                         <div class="text-xs text-muted-foreground mt-1">
-                          or {{ pkg.weekly_payment }} per lesson if paid weekly
+                          or {{ pkg.weekly_payment }} per lesson if paid weekly<template v-if="pkg.test_pass_guarantee"> (+ {{ pkg.test_pass_guarantee }} guarantee with the first payment)</template>
                         </div>
                         <div class="text-xs text-muted-foreground mt-2">
                           Lessons {{ discount ? getDiscountedPrice(pkg.formatted_total_price) : pkg.formatted_total_price }}
                           <template v-if="pkg.booking_fee !== '£0.00'">+ booking fee {{ pkg.booking_fee }}</template>
                           <template v-if="pkg.digital_fee !== '£0.00'">+ digital fee {{ pkg.digital_fee }}</template>
+                          <template v-if="pkg.test_pass_guarantee">+ Pass Your Test Guarantee {{ pkg.test_pass_guarantee }}</template>
                         </div>
                       </div>
                       <p class="text-xs text-muted-foreground leading-relaxed">{{ pkg.description }}</p>
