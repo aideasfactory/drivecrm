@@ -45,7 +45,7 @@ class StepTwoController extends Controller
 
         if ($isFirstVisit) {
             $this->notifyAdmin($enquiry);
-            SyncBookingEnquiryToBirdJob::dispatch($enquiry);
+            SyncBookingEnquiryToBirdJob::dispatchSafely($enquiry);
         }
 
         $tracking = $enquiry->getTracking() ?? [];

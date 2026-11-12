@@ -31,9 +31,21 @@ class SyncBookingEnquiryToBirdJob implements ShouldQueue
      * payment confirmation, which must not fail because Bird or the queue is
      * unavailable. Queued once any open database transaction commits, so the
      * job reads the saved data and a queue error can't surface mid-commit.
+     *
+     * Skipped for bookings made by the bookings team or an owner: the enquiry
+     * was stamped as a staff booking, or the signed-in user is an owner.
      */
     public static function dispatchSafely(Enquiry $enquiry): void
     {
+        if ($enquiry->isStaffBooking() || auth()->user()?->isOwner() === true) {
+            Log::info('Bird sync skipped for staff booking', [
+                'enquiry_id' => $enquiry->id,
+                'user_id' => auth()->id(),
+            ]);
+
+            return;
+        }
+
         DB::afterCommit(function () use ($enquiry): void {
             try {
                 app(Dispatcher::class)->dispatch(new self($enquiry));
