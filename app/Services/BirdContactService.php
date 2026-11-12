@@ -10,6 +10,7 @@ use App\Models\Enquiry;
 use App\Models\Instructor;
 use App\Models\Order;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -62,7 +63,10 @@ class BirdContactService extends BaseService
             ));
         }
 
-        $payload = $this->buildPayload($step1, $step2, $enquiry->getTracking() ?? []);
+        $tracking = $enquiry->getTracking() ?? [];
+        $tracking['gclid'] = $enquiry->adClickIds()['gclid'] ?? null;
+
+        $payload = $this->buildPayload($step1, $step2, $tracking);
 
         $url = sprintf(
             '%s/workspaces/%s/contacts/identifiers/emailaddress/%s',
@@ -90,6 +94,7 @@ class BirdContactService extends BaseService
         $this->assertSuccessful($response, $enquiry->id);
 
         $this->syncBookingDetails($enquiry, $url, $apiKey);
+        $this->syncAdClickIds($enquiry, $url, $apiKey);
 
         return $response->json() ?? [];
     }
@@ -102,13 +107,31 @@ class BirdContactService extends BaseService
      */
     private function syncBookingDetails(Enquiry $enquiry, string $url, string $apiKey): void
     {
-        $attributes = $this->buildBookingAttributes($enquiry);
+        $this->patchAttributesNonFatally($enquiry, $url, $apiKey, $this->buildBookingAttributes($enquiry), 'booking details');
+    }
 
+    /**
+     * Send the Google Ads iOS click IDs (gbraid/wbraid) on their own request,
+     * so a workspace missing these custom attributes can't make Bird reject
+     * the contact or the booking details alongside them.
+     */
+    private function syncAdClickIds(Enquiry $enquiry, string $url, string $apiKey): void
+    {
+        $this->patchAttributesNonFatally($enquiry, $url, $apiKey, Arr::only($enquiry->adClickIds(), ['gbraid', 'wbraid']), 'ad click IDs');
+    }
+
+    /**
+     * PATCH extra contact attributes, logging rather than throwing on failure.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private function patchAttributesNonFatally(Enquiry $enquiry, string $url, string $apiKey, array $attributes, string $label): void
+    {
         if ($attributes === []) {
             return;
         }
 
-        Log::info('Bird booking details request', [
+        Log::info("Bird {$label} request", [
             'enquiry_id' => $enquiry->id,
             'attributes' => $attributes,
         ]);
@@ -118,7 +141,7 @@ class BirdContactService extends BaseService
                 ->withHeaders(['Authorization' => 'AccessKey '.$apiKey])
                 ->patch($url, ['attributes' => $attributes]);
         } catch (Throwable $exception) {
-            Log::error('Bird booking details request failed', [
+            Log::error("Bird {$label} request failed", [
                 'enquiry_id' => $enquiry->id,
                 'error' => $exception->getMessage(),
             ]);
@@ -127,7 +150,7 @@ class BirdContactService extends BaseService
         }
 
         if ($response->failed()) {
-            Log::error('Bird rejected booking details', [
+            Log::error("Bird rejected {$label}", [
                 'enquiry_id' => $enquiry->id,
                 'status' => $response->status(),
                 'body' => $response->json() ?? $response->body(),

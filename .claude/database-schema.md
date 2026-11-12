@@ -372,6 +372,9 @@ Extended profile for users with student role.
 | `inactive_reason` | text | NULLABLE | Reason for status change (e.g., why student was made inactive) |
 | `test_pass_guarantee_at` | timestamp | NULLABLE | When the student got Pass Your Test Guarantee (free or paid). NULL = no guarantee. Set by `GrantTestPassGuaranteeAction` only after the covering payment is confirmed. Drives the "Pass Your Test Guarantee" badge in the admin pupil views. |
 | `test_pass_guarantee_order_id` | bigint unsigned | FOREIGN KEY (orders.id), NULLABLE, ON DELETE SET NULL | Booking-form order that gave the guarantee |
+| `gclid` | varchar(255) | NULLABLE | Google Ads click ID, copied from the enquiry when the Student row is created/updated at onboarding checkout |
+| `gbraid` | varchar(255) | NULLABLE | Google Ads iOS app click ID, copied from the enquiry like `gclid` |
+| `wbraid` | varchar(255) | NULLABLE | Google Ads iOS web click ID, copied from the enquiry like `gclid` |
 | `app_last_active_at` | timestamp | NULLABLE | Last time the student made an authenticated mobile-app API request. NULL means they have never used the app. Drives the "App" / has_app indicator on the instructor pupils view. Stamped (throttled to every 15 min) by the `ResolveApiProfile` middleware. |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
@@ -826,11 +829,15 @@ Stores all onboarding and booking session data.
 | `privacy_consent` | boolean | NOT NULL, DEFAULT false | User ticked the required Terms / Privacy / Cookie box at step 1 |
 | `marketing_consent` | boolean | NOT NULL, DEFAULT false | Marketing-list flag. Currently always `true` on successful step-1 submission — the client opted for a bundled-consent model with small print under the submit button ("By submitting your details you agree to being contacted about driving lessons") instead of a separate opt-in box. The schema retains the column so the policy can be reverted to a proper unbundled opt-in without a migration. |
 | `consented_at` | timestamp | NULLABLE | When the step-1 consent decisions were recorded |
+| `gclid` | varchar(255) | NULLABLE | Google Ads click ID from the landing URL |
+| `gbraid` | varchar(255) | NULLABLE | Google Ads iOS app click ID from the landing URL |
+| `wbraid` | varchar(255) | NULLABLE | Google Ads iOS web click ID from the landing URL |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
 **Business Logic:**
 - UUID is generated on creation (`/booking` or `/onboarding` entry point)
+- `gclid` / `gbraid` / `wbraid` are captured at the entry point, on the booking step 1 page and from the booking step 1 hidden fields; an empty value never clears a stored one. Older enquiries only have `gclid` in `data.tracking` (`Enquiry::adClickIds()` falls back to it). Copied onto `students` at onboarding checkout and sent to Bird (gclid in the contact upsert, gbraid/wbraid in the non-fatal follow-up request)
 - `data` field stores the JSON structure for all steps
 - `current_step` is denormalised for quick queries
 - `privacy_consent` and `marketing_consent` are promoted out of `data` JSON so subject-access / right-to-be-forgotten requests can be served with a simple `where` clause without parsing JSON

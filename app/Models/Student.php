@@ -41,6 +41,9 @@ class Student extends Model
         'profile_picture_path',
         'test_pass_guarantee_at',
         'test_pass_guarantee_order_id',
+        'gclid',
+        'gbraid',
+        'wbraid',
     ];
 
     protected $appends = [

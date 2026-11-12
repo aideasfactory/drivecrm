@@ -74,6 +74,8 @@ class EnquiryController extends Controller
                 'Consented at',
                 'Tracking source',
                 'GCLID',
+                'GBRAID',
+                'WBRAID',
             ]);
 
             foreach ($enquiries as $enquiry) {
@@ -135,7 +137,9 @@ class EnquiryController extends Controller
             $enquiry->marketing_consent ? 'Yes' : 'No',
             $enquiry->consented_at?->timezone((string) config('app.timezone'))->format('Y-m-d H:i:s'),
             $tracking['source'] ?? null,
-            $tracking['gclid'] ?? null,
+            $row['gclid'],
+            $row['gbraid'],
+            $row['wbraid'],
         ];
     }
 
@@ -158,6 +162,7 @@ class EnquiryController extends Controller
         $step1 = $data['steps']['step1'] ?? [];
         $source = $data['source'] ?? 'onboarding';
         $totalSteps = $source === 'booking' ? 2 : 6;
+        $adClickIds = $enquiry->adClickIds();
 
         $status = match ($enquiry->max_step_reached) {
             2 => 'completed',
@@ -180,6 +185,9 @@ class EnquiryController extends Controller
             'phone' => $step1['phone'] ?? null,
             'postcode' => $step1['postcode'] ?? null,
             'transmission' => $step1['transmission'] ?? null,
+            'gclid' => $adClickIds['gclid'] ?? null,
+            'gbraid' => $adClickIds['gbraid'] ?? null,
+            'wbraid' => $adClickIds['wbraid'] ?? null,
             'created_at' => $enquiry->created_at?->toIso8601String(),
             'updated_at' => $enquiry->updated_at?->toIso8601String(),
             'data' => $data,
