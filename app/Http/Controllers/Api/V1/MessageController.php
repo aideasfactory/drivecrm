@@ -197,7 +197,9 @@ class MessageController extends Controller
      *
      * Student ids and user ids share a number range, so an owner's user id can
      * equal a pupil's student id; $type removes the ambiguity. "support" only
-     * matches an owner by user id; "student" only matches one of the
+     * matches an owner by user id; "instructor" only matches an instructor by
+     * user id (the policy then limits it to the pupil's own instructor);
+     * "student" only matches one of the
      * instructor's own students by student id. Without a type (legacy app
      * builds), an instructor's own student wins, then owners by user id, then
      * any student id for instructors or a user id for students.
@@ -209,6 +211,13 @@ class MessageController extends Controller
             abort_unless($owner?->isOwner(), 404, 'Support user not found.');
 
             return $owner;
+        }
+
+        if ($type === 'instructor') {
+            $instructorUser = User::find($id);
+            abort_unless($instructorUser?->isInstructor(), 404, 'Instructor not found.');
+
+            return $instructorUser;
         }
 
         if ($authUser->isInstructor() && $authUser->instructor) {

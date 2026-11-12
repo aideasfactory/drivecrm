@@ -33,7 +33,7 @@ class SendMessageRequest extends FormRequest
 
         return [
             'recipient_id' => $recipientRule,
-            'recipient_type' => ['sometimes', 'string', 'in:student,support'],
+            'recipient_type' => ['sometimes', 'string', 'in:student,support,instructor'],
             'message' => ['required', 'string', 'max:5000'],
         ];
     }
@@ -48,7 +48,7 @@ class SendMessageRequest extends FormRequest
         return [
             'recipient_id.required' => 'A recipient is required.',
             'recipient_id.required_with' => 'A recipient is required.',
-            'recipient_type.in' => 'The recipient type must be student or support.',
+            'recipient_type.in' => 'The recipient type must be student, support or instructor.',
             'recipient_id.exists' => 'The selected recipient does not exist.',
             'message.required' => 'A message is required.',
             'message.max' => 'The message must not exceed 5000 characters.',
