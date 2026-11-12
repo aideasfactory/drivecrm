@@ -13,9 +13,11 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet'
-import { CalendarPlus, Clock, Loader2, Send } from 'lucide-vue-next'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { CalendarPlus, Clock, Loader2, Send, TriangleAlert } from 'lucide-vue-next'
 import { toast } from '@/components/ui/toast'
 import PackagePriceBreakdown from '@/components/Instructors/PackagePriceBreakdown.vue'
+import { CANCELLATION_PERIOD_WARNING, isWithinCancellationPeriod } from '@/lib/cancellationPeriod'
 
 interface Package {
     id: number
@@ -78,6 +80,12 @@ watch(weeklyAvailable, (available) => {
 
 const selectedSlot = computed(() =>
     slots.value.find((s) => s.id === selectedSlotId.value),
+)
+
+const isInsideCancellationPeriod = computed(() =>
+    selectedSlot.value
+        ? isWithinCancellationPeriod(firstLessonDate.value, selectedSlot.value.start_time)
+        : false,
 )
 
 const loadPackages = async () => {
@@ -366,6 +374,13 @@ const handleSubmit = async () => {
                             {{ errors.start_time }}
                         </p>
                     </div>
+
+                    <Alert v-if="isInsideCancellationPeriod">
+                        <TriangleAlert class="h-4 w-4" />
+                        <AlertDescription>
+                            {{ CANCELLATION_PERIOD_WARNING }}
+                        </AlertDescription>
+                    </Alert>
 
                     <!-- Submit -->
                     <div class="flex justify-end gap-2 pt-4">
