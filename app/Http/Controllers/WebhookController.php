@@ -199,6 +199,15 @@ class WebhookController extends Controller
             return;
         }
 
+        if ($order->booked_within_cancellation_period) {
+            Log::info('Webhook: Checkout session expired on a booking made inside the cancellation period — booking kept for the instructor to cancel', [
+                'order_id' => $order->id,
+                'session_id' => $session->id,
+            ]);
+
+            return;
+        }
+
         app(OrderService::class)->releaseUnpaidOrder($order, 'checkout_session_expired');
     }
 

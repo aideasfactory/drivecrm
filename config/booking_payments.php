@@ -10,7 +10,10 @@ declare(strict_types=1);
  *   then; slots are held for `learner_hold_minutes` from the moment they go
  *   to payment. Choosing a time on the booking form holds nothing.
  * - Instructor bookings email a payment link; slots are held until
- *   `instructor_hold_hours_before_lesson` before the first lesson.
+ *   `instructor_hold_hours_before_lesson` before the first lesson. A booking
+ *   made inside that window (the cancellation period) is payable until the
+ *   first lesson starts and is never released automatically; the instructor
+ *   cancels it by hand if it is not paid.
  * - Bookings-team (staff) bookings email a payment link; slots are held until
  *   midnight in `timezone`.
  * - Emailed-link holds are never shorter than `minimum_hold_minutes`.

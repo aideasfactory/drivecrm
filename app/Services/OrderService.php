@@ -141,6 +141,8 @@ class OrderService extends BaseService
                 'payment_hold_expires_at' => $returnCheckoutUrl
                     ? BookingPayments::learnerHoldExpiresAt()
                     : BookingPayments::instructorHoldExpiresAt($firstLessonDate, $startTime),
+                'booked_within_cancellation_period' => ! $returnCheckoutUrl
+                    && BookingPayments::isWithinCancellationPeriod($firstLessonDate, $startTime),
             ]);
 
             if ($returnCheckoutUrl) {
@@ -370,7 +372,7 @@ class OrderService extends BaseService
      * Reuses the order's open session when there is one, otherwise creates a
      * fresh one that expires no later than the hold.
      *
-     * @return array{status: 'checkout', url: string}|array{status: 'paid'|'unavailable'|'error', message: string}
+     * @return array{status: 'checkout', url: string}|array{status: 'paid'|'unavailable'|'closed'|'error', message: string}
      */
     public function openPaymentLinkCheckout(Order $order, string $bookingSource): array
     {
@@ -379,6 +381,10 @@ class OrderService extends BaseService
         }
 
         if (! $order->isAwaitingFirstPayment()) {
+            if ($order->isPending() && $order->booked_within_cancellation_period) {
+                return ['status' => 'closed', 'message' => 'The time to pay for this booking online has passed.'];
+            }
+
             return ['status' => 'unavailable', 'message' => 'The time to pay for this booking has passed, so the lessons have been released.'];
         }
 
@@ -464,9 +470,11 @@ class OrderService extends BaseService
         if ($order->hasPaymentHoldExpired()) {
             // Alternative-payment bookings are not released when the hold passes.
             throw ValidationException::withMessages([
-                'order' => AlternativePayments::canConfirmBooking($order)
-                    ? 'The time to pay by card has passed. If the pupil is paying another way, confirm the alternative payment.'
-                    : 'The time to pay for this booking has passed, so the lessons are being released. Please book again.',
+                'order' => match (true) {
+                    AlternativePayments::canConfirmBooking($order) => 'The time to pay by card has passed. If the pupil is paying another way, confirm the alternative payment.',
+                    $order->booked_within_cancellation_period => 'The lesson has started, so this booking can no longer be paid by card. It will not be cancelled automatically — cancel it if it is not going ahead.',
+                    default => 'The time to pay for this booking has passed, so the lessons are being released. Please book again.',
+                },
             ]);
         }
     }
@@ -923,6 +931,9 @@ class OrderService extends BaseService
      * up to the lesson. Learner self-bookings (website, learner app) are
      * released as normal. Turning the pupil's switch off puts them back here.
      *
+     * Instructor bookings made inside the cancellation period are never
+     * released either; the instructor cancels them by hand if unpaid.
+     *
      * @return array{released: int, kept: int}
      */
     public function releaseExpiredHolds(): array
@@ -932,6 +943,7 @@ class OrderService extends BaseService
 
         Order::query()
             ->where('status', OrderStatus::PENDING)
+            ->where('booked_within_cancellation_period', false)
             ->whereIn('payment_mode', [PaymentMode::UPFRONT, PaymentMode::WEEKLY])
             ->whereNotNull('payment_hold_expires_at')
             ->where('payment_hold_expires_at', '<=', now())

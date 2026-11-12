@@ -38,6 +38,7 @@ class Order extends Model
         'includes_test_pass_guarantee',
         'test_pass_guarantee_pence',
         'payment_hold_expires_at',
+        'booked_within_cancellation_period',
         'invoice_sent_at',
         'purchase_tracked_at',
         'booked_by_user_id',
@@ -61,6 +62,7 @@ class Order extends Model
             'includes_test_pass_guarantee' => 'boolean',
             'test_pass_guarantee_pence' => 'integer',
             'payment_hold_expires_at' => 'datetime',
+            'booked_within_cancellation_period' => 'boolean',
             'invoice_sent_at' => 'datetime',
             'purchase_tracked_at' => 'datetime',
         ];
