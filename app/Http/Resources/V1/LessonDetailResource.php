@@ -16,10 +16,16 @@ class LessonDetailResource extends JsonResource
      * Expects a Lesson model with eager-loaded relationships
      * and a computed card_status attribute.
      *
+     * For the pupil, `summary` is only shown once the lesson is signed off
+     * (imported upcoming lessons can carry the old system's diary notes), and
+     * the instructor's payout fields are blanked.
+     *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
     {
+        $isPupil = $request->user()?->isStudent() === true;
+
         return [
             'id' => $this->id,
             'student_lesson_number' => $this->student_lesson_number,
@@ -39,12 +45,12 @@ class LessonDetailResource extends JsonResource
             'banked_expires_at' => $this->resource->bankedExpiresAt()?->toISOString(),
             'provisional_handled_by' => $this->resource->provisionalHandledBy()?->value,
             'completed_at' => $this->completed_at?->toISOString(),
-            'summary' => $this->summary,
+            'summary' => $isPupil && ! $this->resource->isCompleted() ? null : $this->summary,
             'payment_status' => $this->lessonPayment?->status?->value ?? ($this->order?->isPrepaid() ? 'paid' : null),
             'payment_mode' => $this->order?->payment_mode->value,
             ...AlternativePayments::lessonFlags($this->resource),
-            'payout_status' => $this->payout?->statusForInstructor()->value,
-            'has_payout' => $this->payout !== null,
+            'payout_status' => $isPupil ? null : $this->payout?->statusForInstructor()->value,
+            'has_payout' => ! $isPupil && $this->payout !== null,
             'calendar_date' => $this->calendarItem?->calendar?->date?->format('Y-m-d'),
             'card_status' => $this->getAttribute('card_status'),
             'has_reflective_log' => $this->reflectiveLog !== null,

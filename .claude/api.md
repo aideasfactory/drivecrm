@@ -4737,12 +4737,19 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 
 **Draft lessons ARE returned by this endpoint** (unlike the index, which requires `include_drafts=true`). Tapping a draft card from the instructor's pupil view therefore resolves. Cancelled lessons still return 404. A draft lesson comes back with `status: "draft"` and `card_status: "draft"`. For `payment_mode: "upfront"`, `payment_status` is `null` (no payment record exists until Stripe Checkout completes — same as the index). For `payment_mode: "weekly"`, `payment_status` is `"due"` (the weekly payment rows are created at booking). Sign-off remains impossible for drafts: `POST .../sign-off` only accepts `pending` lessons and returns 404 for a draft.
 
+**Pupil: lesson notes.** This is the endpoint for the pupil's "tap a past lesson, see the instructor's notes" screen. The notes are `summary` — the same text the instructor writes when signing the lesson off (app sign-off or Drive CRM). When the caller is the pupil (`role: student`):
+- `summary` is only returned once the lesson is signed off (`status: "completed"` / `card_status: "signed_off"`); for any other lesson it is `null`. `summary` can also be `null` on a signed-off lesson if the instructor left no notes — show an empty state.
+- `payout_status` is always `null` and `has_payout` always `false` (instructor payout data is not shared with the pupil).
+- The pupil can only open their own lessons: `{student}` must be their own student ID (`profile.id` from `GET /auth/user`), otherwise `403`; a lesson that isn't on one of their bookings returns `404`.
+
+Instructor responses are unchanged.
+
 **URL Parameters:**
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `student` | integer | The student record ID |
-| `lesson` | integer | The lesson record ID |
+| `student` | integer | The student record ID (pupil: their own `profile.id`) |
+| `lesson` | integer | The lesson record ID (`id` from `GET /students/{student}/lessons`) |
 
 **Request Body:** None
 
@@ -4821,7 +4828,7 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 | `end_time` | string\|null | End time (HH:MM) |
 | `status` | string | Lesson status: `pending`, `completed`, or `draft` (upfront booking awaiting payment). **Cancelled lessons return 404, so `cancelled` never appears.** |
 | `completed_at` | string\|null | ISO 8601 timestamp when lesson was completed |
-| `summary` | string\|null | Instructor's lesson summary/notes |
+| `summary` | string\|null | Instructor's lesson summary/notes (written at sign-off). **Pupil:** `null` until the lesson is signed off |
 | `payment_status` | string\|null | Payment status: `paid`, `due`, `refunded`, or null. **Always `null` for `draft` lessons** (no payment record exists until checkout completes) |
 | `payment_mode` | string\|null | Package payment mode: `upfront` or `weekly` |
 | `alternative_payment_allowed` | boolean\|null | Head Office has turned on alternative payments for the pupil (pays the instructor directly, e.g. cash) **and** this is a weekly or pay-in-full booking. Show a "Pays by alternative method" badge. `null` when there is no lesson |
@@ -4833,8 +4840,8 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 | `banked_at` | string\|null | When it was banked (ISO 8601) |
 | `banked_expires_at` | string\|null | Rebook-by date (ISO 8601): not rebooked by then, it is cancelled and refunded automatically |
 | `provisional_handled_by` | string\|null | Who rearranges a provisional lesson. `instructor` when the pupil's instructor booked the clash: show *"Potential clash – your instructor will be in touch"*. `drive_team` otherwise: keep *"Potential clash – the DRIVE team will be in touch"*. `null` when the lesson is not provisional |
-| `payout_status` | string\|null | Instructor payout status: `pending`, `paid`, `failed`, or null |
-| `has_payout` | boolean | Whether a payout has been created for this lesson |
+| `payout_status` | string\|null | Instructor payout status: `pending`, `paid`, `failed`, or null. **Pupil:** always `null` |
+| `has_payout` | boolean | Whether a payout has been created for this lesson. **Pupil:** always `false` |
 | `calendar_date` | string\|null | Calendar date for the lesson slot (YYYY-MM-DD) |
 | `card_status` | string | Computed UI card status: `signed_off`, `needs_sign_off`, `current`, `upcoming`, `draft`, `banked`. Draft lessons never consume the `current` slot |
 | `has_reflective_log` | boolean | Leftover four-prompt log present and complete. **Do not** gate sign-off on this — use `status` / `card_status` / `summary` |
@@ -8244,6 +8251,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-04 | **Cancelled lessons on the pupil lessons list (opt-in).** New `include_cancelled` query param (default `false`): when `true`, cancelled lessons are returned with `status: "cancelled"` and new `card_status: "cancelled"`. Three new nullable fields on every lesson list item: `cancelled_at`, `cancellation_reason_label`, `cancellation_reason`. Additive only — no fields removed, default response unchanged. Lesson detail still 404s for cancelled lessons. **App action:** on cancelled rows hide `student_lesson_number` (can repeat an open lesson's number) and show `payment_status: "due"` as "Unpaid" (invoice voided, nothing owed). | Student (lessons index) |
 | 2026-11-04 | **Admin diary names instructor-made holds (web only, no mobile API change).** The web `GET /instructors/{instructor}/calendar` now sets `student_name` on `draft` items using the same rule as `GET /api/v1/instructor/calendar/items` (named when the instructor or Head Office booked; `null` for the pupil's own website/app checkout), and the diary labels them "Held - <name>" like the app. This supersedes the "labels the block Held" note in the 2026-10-01 entry. | Admin diary (web) |
 | 2026-11-11 | **Practical tests can no longer repeat.** `POST /api/v1/instructor/calendar/items` (and the web `POST /instructors/{instructor}/calendar/items`) now returns 422 on `recurrence_pattern` ("Practical tests cannot repeat. Please add each test on its own.") when `is_practical_test=true` and `recurrence_pattern` is not `none`. Previously the recurring path ignored `is_practical_test` and saved a weekly series of bookable 1-hour *available* slots (found on Malik Arshad's diary). **App action:** hide the Repeat options when Practical test is ticked. | Instructor Calendar (store) |
+| 2026-11-12 | **Pupil lesson notes.** No new endpoint: the pupil reads the instructor's notes for a past lesson from `summary` on `GET /api/v1/students/{student}/lessons/{lesson}` (same field the instructor writes at sign-off). When the caller is the pupil, `summary` is now `null` unless the lesson is signed off (`status: "completed"`), and `payout_status` / `has_payout` are always `null` / `false`. Response shape and instructor responses are unchanged. **App action (pupil):** on tapping a past lesson, call the detail endpoint with the pupil's own `profile.id` and show `summary` as "Instructor's notes", with an empty state when it is `null`. | Student Lessons (show) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

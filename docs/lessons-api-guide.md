@@ -275,10 +275,10 @@ Returns full detail for a single lesson including the reflective log and attache
 |-------|------|---------|
 | `instructor_id` | integer | Instructor record ID |
 | `amount_pence` | integer\|null | Lesson cost (3500 = £35.00) |
-| `summary` | string\|null | Instructor's notes about the lesson |
+| `summary` | string\|null | Instructor's notes about the lesson. When the pupil calls this, `null` until the lesson is signed off |
 | `payment_mode` | string\|null | `upfront` or `weekly` |
-| `payout_status` | string\|null | `pending`, `paid`, `failed`, or null |
-| `has_payout` | boolean | Whether instructor has been paid |
+| `payout_status` | string\|null | `pending`, `paid`, `failed`, or null. Always `null` for the pupil |
+| `has_payout` | boolean | Whether instructor has been paid. Always `false` for the pupil |
 | `calendar_date` | string\|null | Calendar slot date |
 | `reflective_log` | object\|null | Full reflective log (see fields above), or null |
 | `resources` | array | List of attached resources (can be empty `[]`) |
