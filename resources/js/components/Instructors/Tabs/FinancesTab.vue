@@ -94,8 +94,10 @@ interface MileageLog {
     date: string
     vehicle_id: number | null
     start_mileage: number
-    end_mileage: number
+    end_mileage: number | null
     miles: number
+    is_complete: boolean
+    finish_mileage_needed: boolean
     type: 'business' | 'personal'
     type_label: string
     notes: string | null
@@ -349,7 +351,7 @@ const openMileageEditSheet = (log: MileageLog) => {
         date: log.date,
         vehicle_id: log.vehicle_id ?? null,
         start_mileage: log.start_mileage.toString(),
-        end_mileage: log.end_mileage.toString(),
+        end_mileage: log.end_mileage?.toString() ?? '',
         type: log.type,
         notes: log.notes || '',
     }
@@ -506,7 +508,7 @@ const handleMileageSubmit = async () => {
         date: mileageForm.value.date,
         vehicle_id: mileageForm.value.vehicle_id,
         start_mileage: parseInt(mileageForm.value.start_mileage || '0', 10),
-        end_mileage: parseInt(mileageForm.value.end_mileage || '0', 10),
+        end_mileage: mileageForm.value.end_mileage === '' ? null : parseInt(mileageForm.value.end_mileage, 10),
         type: mileageForm.value.type,
         notes: mileageForm.value.notes || null,
     }
@@ -622,7 +624,8 @@ const mileageVehicleMethodHint = computed<string | null>(() => {
 
 const milesPreview = computed(() => {
     const start = parseInt(mileageForm.value.start_mileage || '0', 10)
-    const end = parseInt(mileageForm.value.end_mileage || '0', 10)
+    if (mileageForm.value.end_mileage === '') return null
+    const end = parseInt(mileageForm.value.end_mileage, 10)
     if (!Number.isFinite(start) || !Number.isFinite(end)) return null
     if (end < start) return null
     return end - start
@@ -880,7 +883,10 @@ onMounted(() => {
                                     </Badge>
                                 </TableCell>
                                 <TableCell class="text-right font-mono">{{ log.start_mileage.toLocaleString() }}</TableCell>
-                                <TableCell class="text-right font-mono">{{ log.end_mileage.toLocaleString() }}</TableCell>
+                                <TableCell class="text-right font-mono">
+                                    <template v-if="log.end_mileage !== null">{{ log.end_mileage.toLocaleString() }}</template>
+                                    <Badge v-else variant="outline" class="border-amber-500 font-sans text-amber-600">Finish mileage needed</Badge>
+                                </TableCell>
                                 <TableCell class="text-right font-medium">{{ log.miles.toLocaleString() }}</TableCell>
                                 <TableCell>
                                     <p v-if="log.notes" class="max-w-[240px] truncate text-sm text-muted-foreground">
@@ -1190,8 +1196,8 @@ onMounted(() => {
                             <p v-if="mileageErrors.start_mileage" class="text-sm text-destructive">{{ mileageErrors.start_mileage }}</p>
                         </div>
                         <div class="space-y-2">
-                            <Label for="end_mileage">End *</Label>
-                            <Input id="end_mileage" v-model="mileageForm.end_mileage" type="number" min="0" placeholder="0" :disabled="isSubmitting" />
+                            <Label for="end_mileage">End</Label>
+                            <Input id="end_mileage" v-model="mileageForm.end_mileage" type="number" min="0" placeholder="Add later" :disabled="isSubmitting" />
                             <p v-if="mileageErrors.end_mileage" class="text-sm text-destructive">{{ mileageErrors.end_mileage }}</p>
                         </div>
                     </div>

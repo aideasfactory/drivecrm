@@ -1649,9 +1649,11 @@ class InstructorController extends Controller
             'date' => ['required', 'date', 'date_format:Y-m-d'],
             'vehicle_id' => ['nullable', 'integer', Rule::exists('vehicles', 'id')->where('instructor_id', $instructor->id)],
             'start_mileage' => ['required', 'integer', 'min:0'],
-            'end_mileage' => ['required', 'integer', 'min:0', 'gte:start_mileage'],
+            'end_mileage' => ['nullable', 'integer', 'min:0', 'gte:start_mileage'],
             'type' => ['required', 'string', Rule::in(array_keys(config('finances.mileage_types', [])))],
             'notes' => ['nullable', 'string', 'max:1000'],
+        ], [
+            'end_mileage.gte' => MileageLog::FINISH_MILEAGE_MESSAGE,
         ]);
 
         $log = $this->instructorService->createMileageLog($instructor, $data);
@@ -1674,18 +1676,18 @@ class InstructorController extends Controller
             'date' => ['sometimes', 'date', 'date_format:Y-m-d'],
             'vehicle_id' => ['nullable', 'integer', Rule::exists('vehicles', 'id')->where('instructor_id', $instructor->id)],
             'start_mileage' => ['sometimes', 'integer', 'min:0'],
-            'end_mileage' => ['sometimes', 'integer', 'min:0'],
+            'end_mileage' => ['sometimes', 'nullable', 'integer', 'min:0'],
             'type' => ['sometimes', 'string', Rule::in(array_keys(config('finances.mileage_types', [])))],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        // Enforce end >= start regardless of which of the two fields was sent.
+        // Enforce end >= start regardless of which of the two fields was sent; a null end means the trip is incomplete.
         $effectiveStart = $data['start_mileage'] ?? $mileageLog->start_mileage;
-        $effectiveEnd = $data['end_mileage'] ?? $mileageLog->end_mileage;
-        if ($effectiveEnd < $effectiveStart) {
+        $effectiveEnd = array_key_exists('end_mileage', $data) ? $data['end_mileage'] : $mileageLog->end_mileage;
+        if ($effectiveEnd !== null && $effectiveEnd < $effectiveStart) {
             return response()->json([
-                'message' => 'The end mileage must be greater than or equal to the start mileage.',
-                'errors' => ['end_mileage' => ['The end mileage must be greater than or equal to the start mileage.']],
+                'message' => MileageLog::FINISH_MILEAGE_MESSAGE,
+                'errors' => ['end_mileage' => [MileageLog::FINISH_MILEAGE_MESSAGE]],
             ], 422);
         }
 
@@ -1767,6 +1769,8 @@ class InstructorController extends Controller
             'start_mileage' => $log->start_mileage,
             'end_mileage' => $log->end_mileage,
             'miles' => $log->miles,
+            'is_complete' => $log->isComplete(),
+            'finish_mileage_needed' => ! $log->isComplete(),
             'type' => $log->type,
             'type_label' => config("finances.mileage_types.{$log->type}"),
             'notes' => $log->notes,

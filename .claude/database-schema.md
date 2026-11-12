@@ -1251,8 +1251,8 @@ Separate ledger for instructor mileage — not a sub-type of `instructor_finance
 | `vehicle_id` | bigint unsigned | NULLABLE, FOREIGN KEY → vehicles.id, NULL ON DELETE | Vehicle this trip was driven in. Nullable on creation to allow backfill of historical rows by `BackfillPrimaryVehicleAction`; new rows enforce non-null at the application layer. |
 | `date` | date | NOT NULL | Date of the trip |
 | `start_mileage` | int unsigned | NOT NULL | Starting odometer reading |
-| `end_mileage` | int unsigned | NOT NULL | Ending odometer reading (must be ≥ start_mileage — enforced in controller) |
-| `miles` | int unsigned | NOT NULL | Denormalised `end - start`, set server-side |
+| `end_mileage` | int unsigned | NULLABLE | Ending odometer reading (must be ≥ start_mileage when set — enforced in validation). NULL = incomplete trip, finish reading not logged yet. |
+| `miles` | int unsigned | NOT NULL | Denormalised `end - start`, set server-side (`MileageLog::calculateMiles()`). `0` while `end_mileage` is NULL, so totals that `SUM(miles)` count incomplete trips as 0. |
 | `type` | enum('business','personal') | NOT NULL | Trip classification |
 | `notes` | text | NULLABLE | Optional notes |
 | `created_at` | timestamp | NULLABLE | Created timestamp |
