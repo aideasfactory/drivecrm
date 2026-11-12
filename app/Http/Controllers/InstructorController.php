@@ -16,6 +16,7 @@ use App\Actions\Shared\LogActivityAction;
 use App\Enums\BusinessType;
 use App\Enums\InstructorStatus;
 use App\Enums\LessonCancellationReason;
+use App\Enums\OrderSource;
 use App\Enums\PdiStatus;
 use App\Enums\RecurrencePattern;
 use App\Enums\TransmissionType;
@@ -49,6 +50,7 @@ use App\Models\Location;
 use App\Models\MileageLog;
 use App\Models\Package;
 use App\Models\Payout;
+use App\Models\Student;
 use App\Models\User;
 use App\Services\HmrcService;
 use App\Services\InstructorService;
@@ -660,6 +662,27 @@ class InstructorController extends Controller
             return response()->json([
                 'calendar_item' => $this->formatCalendarItem($firstItem),
                 'recurring_count' => $items->count(),
+            ], 201);
+        }
+
+        // Paid driving test: diary entry + pay-in-full order, payment link emailed to the pupil
+        if ($request->chargesPupil()) {
+            $result = $this->orderService->bookPracticalTest(
+                $instructor,
+                Student::findOrFail($request->integer('student_id')),
+                $request->input('date'),
+                $request->input('start_time'),
+                $request->input('end_time'),
+                $request->input('notes'),
+                $request->integer('package_id') ?: null,
+                $request->filled('one_off_price_pence') ? $request->integer('one_off_price_pence') : null,
+                OrderSource::CRM
+            );
+
+            return response()->json([
+                'calendar_item' => $this->formatCalendarItem($result['calendar_item']),
+                'order_id' => $result['order']->id,
+                'payment_link_sent' => true,
             ], 201);
         }
 

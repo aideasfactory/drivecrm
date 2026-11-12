@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Actions\Calendar\CloseOpenSlotOffersForItemsAction;
 use App\Actions\Onboarding\SendOrderConfirmationEmailAction;
+use App\Actions\Package\ResolvePracticalTestPackageAction;
 use App\Actions\Payment\ClaimPurchaseEventAction;
 use App\Actions\Payment\NotifyInstructorOfLessonPaidAction;
 use App\Actions\Payment\SendLessonInvoiceAction;
@@ -42,6 +43,7 @@ use App\Support\BookingPayments;
 use App\Support\CashBookings;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
@@ -51,6 +53,9 @@ use Throwable;
 
 class OrderService extends BaseService
 {
+    /** Order name for paid driving tests (shown on the payment link, checkout and emails). */
+    public const PRACTICAL_TEST_ORDER_NAME = 'Driving test';
+
     public function __construct(
         protected CreateDraftCalendarItemsAction $createDraftCalendarItems,
         protected CreateOrderFromApiAction $createOrderFromApi,
@@ -207,6 +212,87 @@ class OrderService extends BaseService
             $bookedBy,
             $cashNote
         );
+    }
+
+    /**
+     * Add a paid driving test to the instructor's diary for one of their pupils.
+     *
+     * The practical test entry is created as usual (1 hour before the test to
+     * 30 minutes after it), then booked as a 1-lesson pay-in-full order through
+     * the normal instructor-booking path: the lesson sits on the test entry and
+     * is flagged `is_practical_test`, the entry is held until the payment is due
+     * and the pupil is emailed the usual payment link (lesson price + booking and
+     * digital fees). If the hold expires or the test is cancelled, the entry goes
+     * back to a plain unpaid test; it never becomes availability. The test pass
+     * guarantee is never added to these orders.
+     *
+     * @param  string  $testStartTime  Test appointment start (H:i)
+     * @param  string  $testEndTime  Test appointment end (H:i)
+     * @return array{calendar_item: CalendarItem, order: Order}
+     *
+     * @throws ValidationException
+     */
+    public function bookPracticalTest(
+        Instructor $instructor,
+        Student $student,
+        string $date,
+        string $testStartTime,
+        string $testEndTime,
+        ?string $notes,
+        ?int $packageId,
+        ?int $oneOffPricePence,
+        ?OrderSource $source = null,
+    ): array {
+        if ($student->instructor_id !== $instructor->id) {
+            throw ValidationException::withMessages([
+                'student_id' => 'This pupil is not assigned to this instructor.',
+            ]);
+        }
+
+        $package = app(ResolvePracticalTestPackageAction::class)($instructor, $packageId, $oneOffPricePence);
+
+        [$calendarItem, $order] = DB::transaction(function () use ($instructor, $student, $date, $testStartTime, $testEndTime, $notes, $package, $source): array {
+            $calendarItem = $this->instructorService->addCalendarItem(
+                $instructor,
+                $date,
+                $testStartTime,
+                $testEndTime,
+                false,
+                $notes,
+                null,
+                null,
+                true,
+                $student->id
+            );
+
+            $order = ($this->createOrderFromApi)(
+                $student,
+                $package,
+                PaymentMode::UPFRONT,
+                $date,
+                $testStartTime,
+                $testEndTime,
+                [$calendarItem->id],
+                $source,
+                true
+            );
+
+            $order->update([
+                'package_name' => self::PRACTICAL_TEST_ORDER_NAME,
+                'payment_hold_expires_at' => BookingPayments::instructorHoldExpiresAt($date, $testStartTime),
+            ]);
+
+            return [$calendarItem, $order];
+        });
+
+        $this->sendPaymentLinkEmail->execute($order, $student, $this->paymentLinkUrl($order, 'instructor_booking'));
+
+        $this->invalidateStudentCacheForBooking($student->instructor_id);
+
+        return [
+            'calendar_item' => $calendarItem->fresh(['calendar']),
+            'order' => $order->fresh(['lessons']),
+        ];
     }
 
     /**

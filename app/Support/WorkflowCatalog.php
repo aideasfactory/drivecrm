@@ -92,7 +92,6 @@ final class WorkflowCatalog
         $instructorHoldHours = (int) config('booking_payments.instructor_hold_hours_before_lesson', 48);
         $minimumHoldMinutes = (int) config('booking_payments.minimum_hold_minutes', 15);
         $weeklyDueHours = BookingPayments::weeklyPaymentDueHoursBeforeLesson();
-        $guaranteeFreeHours = (float) config('test_pass_guarantee.free_minimum_hours', 10);
         $guaranteePrice = '£'.number_format((float) config('test_pass_guarantee.price', 50), 2);
 
         $paidInFullMessages = [
@@ -129,7 +128,7 @@ final class WorkflowCatalog
                 self::step('They click to pay', "Their account is created and the lessons are held for {$holdMinutes} minutes while they pay on the secure Stripe checkout page.", [
                     self::none('Nothing is sent yet.'),
                 ]),
-                self::step('Payment goes through', "The booking is confirmed, the lessons go into the instructor's diary and the learner is linked to the instructor. Packages of {$guaranteeFreeHours} hours or more paid in full include the Pass Your Test Guarantee free.", $paidInFullMessages),
+                self::step('Payment goes through', "The booking is confirmed, the lessons go into the instructor's diary and the learner is linked to the instructor. If the learner added the Pass Your Test Guarantee ({$guaranteePrice}), it is granted now.", $paidInFullMessages),
                 self::step('If they do not pay in time', 'The lessons are released. See "Booking not paid in time".', []),
             ]),
 

@@ -85,6 +85,7 @@ class ImportDiaryItemAction
 
         $price = $this->nullable($row, 'price');
         $mileage = $this->nullable($row, 'mileage');
+        $summary = FillImportedLessonSummaryAction::summaryText($row);
 
         $lesson = Lesson::create([
             'order_id' => $order->id,
@@ -96,7 +97,8 @@ class ImportDiaryItemAction
             'calendar_item_id' => $item->id,
             'status' => $isCompleted ? LessonStatus::COMPLETED : LessonStatus::PENDING,
             'completed_at' => $isCompleted ? $date->setTimeFromTimeString($endTime) : null,
-            'summary' => FillImportedLessonSummaryAction::summaryText($row),
+            'summary' => $summary,
+            'summary_from_import' => $summary !== null,
             'mileage' => $mileage !== null ? (int) $mileage : null,
             'student_lesson_number' => $lessonNumber,
         ]);

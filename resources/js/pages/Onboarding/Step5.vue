@@ -300,9 +300,9 @@
                         <span class="min-w-0">Discount ({{ pricing?.uuid_discount_percentage }}% off — {{ pricing?.uuid_discount_label }})</span>
                         <span class="shrink-0 font-medium">-£{{ pricing?.uuid_discount }}</span>
                       </div>
-                      <div v-if="testPassGuarantee?.free_when_paid_in_full" class="flex items-start justify-between gap-3">
+                      <div v-if="testPassGuarantee" class="flex items-start justify-between gap-3">
                         <TestPassGuaranteeInfo class="min-w-0" />
-                        <span class="shrink-0 font-medium">Free if paid in full</span>
+                        <span class="shrink-0 font-medium">Optional, £{{ testPassGuarantee.price }}</span>
                       </div>
                       <Separator />
                       <div class="flex items-start justify-between gap-3">

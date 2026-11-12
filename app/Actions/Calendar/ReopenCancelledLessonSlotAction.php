@@ -17,12 +17,24 @@ class ReopenCancelledLessonSlotAction
      * A slot offer that was booked into this slot is closed so the slot can be
      * offered again. The cancelled lesson must already be detached.
      *
+     * A cancelled paid driving test is never offered as availability: its
+     * practical test entry stays in the diary as a plain (unpaid) test for the
+     * instructor to keep or delete.
+     *
      * @throws RuntimeException If a lesson is still attached to the slot
      */
     public function __invoke(CalendarItem $calendarItem): CalendarItem
     {
         if ($calendarItem->lessons()->exists()) {
             throw new RuntimeException('Cannot reopen a diary slot that still has a lesson attached.');
+        }
+
+        if ($calendarItem->isPracticalTest()) {
+            $calendarItem->is_available = false;
+            $calendarItem->status = null;
+            $calendarItem->save();
+
+            return $calendarItem;
         }
 
         CalendarItem::query()

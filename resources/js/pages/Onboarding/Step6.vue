@@ -53,10 +53,7 @@
                   </template>
                   <div v-if="selectedGuarantee?.included" class="flex justify-between">
                     <TestPassGuaranteeInfo class="text-muted-foreground">Pass Your Test Guarantee:</TestPassGuaranteeInfo>
-                    <span v-if="selectedGuarantee.is_free" class="font-medium">
-                      <s class="font-normal text-muted-foreground">£{{ testPassGuarantee.price }}</s> £0.00
-                    </span>
-                    <span v-else class="font-medium">£{{ testPassGuarantee.price }}</span>
+                    <span class="font-medium">£{{ testPassGuarantee.price }}</span>
                   </div>
                   <div class="flex justify-between font-semibold">
                     <span>Total:</span>
@@ -178,44 +175,25 @@
                         <p class="text-xs">First lesson: {{ formatDate(schedule?.date) }}</p>
                         <p class="text-xs">Payment per lesson: {{ pricing?.weekly?.per_lesson || '0.00' }}</p>
                         <p class="text-xs">
-                          First payment<template v-if="guaranteeFor('weekly').included"> (includes £{{ testPassGuarantee.price }} Pass Your Test Guarantee)</template>: {{ weeklyFirstPayment }}
+                          First payment<template v-if="selectedGuarantee.included"> (includes £{{ testPassGuarantee.price }} Pass Your Test Guarantee)</template>: {{ weeklyFirstPayment }}
                         </p>
                       </AlertDescription>
                     </Alert>
                   </div>
 
                   <!-- Pass Your Test Guarantee -->
-                  <Card
-                    v-if="testPassGuarantee"
-                    class="transition-colors"
-                    :class="selectedGuarantee.is_free ? 'border-green-500 bg-green-50 dark:border-green-600 dark:bg-green-950/30' : ''"
-                  >
+                  <Card v-if="testPassGuarantee">
                     <CardHeader>
                       <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                         <CardTitle class="flex items-center gap-2 text-lg">
-                          <ShieldCheck
-                            class="h-5 w-5 shrink-0"
-                            :class="selectedGuarantee.is_free ? 'text-green-600 dark:text-green-500' : 'text-primary'"
-                          />
+                          <ShieldCheck class="h-5 w-5 shrink-0 text-primary" />
                           <TestPassGuaranteeInfo />
                         </CardTitle>
-                        <div v-if="selectedGuarantee.is_free" class="flex flex-wrap items-center gap-2 sm:shrink-0">
-                          <s class="text-sm text-muted-foreground">£{{ testPassGuarantee.price }}</s>
-                          <Badge class="bg-green-600 text-white hover:bg-green-600">£0 &middot; Included free</Badge>
-                        </div>
-                        <Badge v-else variant="secondary">£{{ testPassGuarantee.price }}</Badge>
+                        <Badge variant="secondary">£{{ testPassGuarantee.price }}</Badge>
                       </div>
                       <CardDescription>
-                        <template v-if="selectedGuarantee.is_free">
-                          Included free because you're paying in full for {{ formatHours(testPassGuarantee.booked_hours) }} hours of lessons.
-                        </template>
-                        <template v-else-if="testPassGuarantee.free_when_paid_in_full">
-                          Pay in full and it's included free, or add it to your weekly payments for £{{ testPassGuarantee.price }}.
-                        </template>
-                        <template v-else>
-                          Add the guarantee to your booking for £{{ testPassGuarantee.price }}. It's included free on
-                          bookings of {{ formatHours(testPassGuarantee.free_minimum_hours) }}+ hours paid in full.
-                        </template>
+                        Add the guarantee to your booking for £{{ testPassGuarantee.price }}. To claim it you'll need
+                        to complete at least 10 hours of lessons with DRIVE before your test.
                         <a
                           :href="testPassGuarantee.terms_url"
                           target="_blank"
@@ -228,23 +206,15 @@
                       <div class="flex items-start gap-3">
                         <Checkbox
                           id="test-pass-guarantee"
-                          v-model="guaranteeChecked"
-                          :disabled="selectedGuarantee.is_free"
+                          v-model="includeTestPassGuarantee"
                           class="mt-0.5 cursor-pointer"
-                          :class="selectedGuarantee.is_free ? 'disabled:opacity-100 data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600' : ''"
                         />
                         <label
                           for="test-pass-guarantee"
-                          class="text-sm font-medium leading-snug"
-                          :class="selectedGuarantee.is_free ? 'cursor-not-allowed' : 'cursor-pointer'"
+                          class="cursor-pointer text-sm font-medium leading-snug"
                         >
-                          <template v-if="selectedGuarantee.is_free">
-                            Pass Your Test Guarantee included (<s class="font-normal text-muted-foreground">£{{ testPassGuarantee.price }}</s> free)
-                          </template>
-                          <template v-else>
-                            Include Pass Your Test Guarantee (+£{{ testPassGuarantee.price }})
-                          </template>
-                          <span v-if="!selectedGuarantee.is_free && form.payment_mode === 'weekly'" class="font-normal text-muted-foreground">
+                          Include Pass Your Test Guarantee (+£{{ testPassGuarantee.price }})
+                          <span v-if="form.payment_mode === 'weekly'" class="font-normal text-muted-foreground">
                             — added to your first weekly payment
                           </span>
                         </label>
@@ -366,42 +336,17 @@ const uuid = computed(() => props.uuid || page.props.enquiry?.id)
 
 const weeklyAvailable = computed(() => props.package?.allows_weekly_payment ?? false)
 
-// Mirrors TestPassGuarantee::resolve() — free when paid in full on a large
-// enough booking, otherwise charged only if the learner opts in.
-function guaranteeFor(paymentMode) {
+// Mirrors TestPassGuarantee::resolve() — charged only if the learner opts in,
+// the same price whether they pay in full or weekly.
+const selectedGuarantee = computed(() => {
   const guarantee = props.testPassGuarantee
-  if (!guarantee) {
-    return { included: false, charge_pence: 0, is_free: false }
-  }
-
-  if (paymentMode === 'upfront' && guarantee.free_when_paid_in_full) {
-    return { included: true, charge_pence: 0, is_free: true }
-  }
-
-  return includeTestPassGuarantee.value
-    ? { included: true, charge_pence: guarantee.price_pence, is_free: false }
-    : { included: false, charge_pence: 0, is_free: false }
-}
-
-const selectedGuarantee = computed(() => guaranteeFor(form.payment_mode))
-
-// Locked on when it's free; otherwise reflects the learner's own choice, which
-// is kept so switching back to weekly restores it.
-const guaranteeChecked = computed({
-  get: () => selectedGuarantee.value.is_free || includeTestPassGuarantee.value,
-  set: (value) => {
-    if (!selectedGuarantee.value.is_free) {
-      includeTestPassGuarantee.value = value
-    }
-  }
+  return guarantee && includeTestPassGuarantee.value
+    ? { included: true, charge_pence: guarantee.price_pence }
+    : { included: false, charge_pence: 0 }
 })
 
 function formatPence(pence) {
   return `£${((pence || 0) / 100).toFixed(2)}`
-}
-
-function formatHours(hours) {
-  return Number.isInteger(hours) ? hours : Number(hours).toFixed(1)
 }
 
 function lessonLabel(count) {
@@ -419,15 +364,15 @@ function weeklyInvoiceLabel(count) {
 }
 
 const upfrontTotal = computed(() =>
-  formatPence((props.pricing?.package_total_with_fees_pence ?? 0) + guaranteeFor('upfront').charge_pence)
+  formatPence((props.pricing?.package_total_with_fees_pence ?? 0) + selectedGuarantee.value.charge_pence)
 )
 
 const weeklyTotal = computed(() =>
-  formatPence((props.pricing?.package_total_with_fees_pence ?? 0) + guaranteeFor('weekly').charge_pence)
+  formatPence((props.pricing?.package_total_with_fees_pence ?? 0) + selectedGuarantee.value.charge_pence)
 )
 
 const weeklyFirstPayment = computed(() =>
-  formatPence((props.pricing?.weekly_payment_pence ?? 0) + guaranteeFor('weekly').charge_pence)
+  formatPence((props.pricing?.weekly_payment_pence ?? 0) + selectedGuarantee.value.charge_pence)
 )
 
 const paymentButtonText = computed(() => {

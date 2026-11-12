@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Actions\Onboarding;
 
+use App\Actions\Import\CreateImportedPickupPointsAction;
+use App\Actions\Student\PickupPoint\CreatePickupPointAction;
 use App\Enums\UserRole;
 use App\Models\Enquiry;
 use App\Models\Student;
@@ -17,7 +19,8 @@ use Illuminate\Support\Str;
 class CreateUserAndStudentFromEnquiryAction
 {
     public function __construct(
-        protected StripeService $stripeService
+        protected StripeService $stripeService,
+        protected CreatePickupPointAction $createPickupPoint,
     ) {}
 
     /**
@@ -116,6 +119,8 @@ class CreateUserAndStudentFromEnquiryAction
                 ]);
             }
 
+            $this->addBookingPostcodeAsPickupPoint($student, $step1['postcode'] ?? null);
+
             DB::commit();
 
             Log::info('Successfully created/retrieved user and student from enquiry', [
@@ -142,6 +147,52 @@ class CreateUserAndStudentFromEnquiryAction
             ]);
 
             throw $e;
+        }
+    }
+
+    /**
+     * Save the postcode entered on the booking form as one of the pupil's
+     * pickup points. A pupil with no pickup points gets it as their default
+     * "Home" point; otherwise it is added as an extra, non-default point so
+     * existing pickup points are never overwritten. A postcode the pupil
+     * already has (ignoring spaces and case) is not added again.
+     *
+     * Runs in its own savepoint and never throws, so a failure here can
+     * never roll back or block the checkout it is part of.
+     */
+    protected function addBookingPostcodeAsPickupPoint(Student $student, ?string $postcode): void
+    {
+        $postcode = strtoupper(trim((string) $postcode));
+
+        if ($postcode === '') {
+            return;
+        }
+
+        try {
+            DB::transaction(function () use ($student, $postcode): void {
+                $existingPostcodes = $student->pickupPoints()
+                    ->pluck('postcode')
+                    ->map(fn (string $existing): string => strtoupper((string) preg_replace('/\s+/', '', $existing)));
+
+                if ($existingPostcodes->contains((string) preg_replace('/\s+/', '', $postcode))) {
+                    return;
+                }
+
+                $isFirstPickupPoint = $existingPostcodes->isEmpty();
+
+                ($this->createPickupPoint)($student, [
+                    'label' => $isFirstPickupPoint ? CreateImportedPickupPointsAction::FIRST_LABEL : CreateImportedPickupPointsAction::OTHER_LABEL,
+                    'address' => $postcode,
+                    'postcode' => $postcode,
+                    'is_default' => $isFirstPickupPoint,
+                ]);
+            });
+        } catch (\Throwable $e) {
+            Log::warning('Failed to save booking postcode as pickup point', [
+                'student_id' => $student->id,
+                'postcode' => $postcode,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 
