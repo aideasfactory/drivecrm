@@ -17,8 +17,8 @@ class LessonDetailResource extends JsonResource
      * and a computed card_status attribute.
      *
      * For the pupil, `summary` is only shown once the lesson is signed off and
-     * never on an imported lesson (the importer fills it from the old
-     * system's private diary notes), and the instructor's payout fields are
+     * never while it is still the one the importer brought over from the old
+     * system's private diary notes, and the instructor's payout fields are
      * blanked.
      *
      * @return array<string, mixed>
@@ -26,7 +26,7 @@ class LessonDetailResource extends JsonResource
     public function toArray(Request $request): array
     {
         $isPupil = $request->user()?->isStudent() === true;
-        $isImported = $this->order?->isImported() === true;
+        $isImported = $this->summary_from_import === true;
 
         return [
             'id' => $this->id,

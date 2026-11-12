@@ -276,8 +276,8 @@ Returns full detail for a single lesson including the reflective log and attache
 |-------|------|---------|
 | `instructor_id` | integer | Instructor record ID |
 | `amount_pence` | integer\|null | Lesson cost (3500 = £35.00) |
-| `summary` | string\|null | Instructor's notes about the lesson. When the pupil calls this, `null` until the lesson is signed off, and always `null` on an imported lesson |
-| `is_imported` | boolean | Lesson was imported from the old system (on the imported booking). Pupil: show "This lesson was imported, so there are no notes" |
+| `summary` | string\|null | Instructor's notes about the lesson. When the pupil calls this, `null` until the lesson is signed off, and always `null` while `is_imported` is `true` |
+| `is_imported` | boolean | `summary` is still the note the importer brought over from the old system (a sign-off here replaces it and sets this `false`). Pupil: show "This lesson was imported, so there are no notes" |
 | `payment_mode` | string\|null | `upfront` or `weekly` |
 | `payout_status` | string\|null | `pending`, `paid`, `failed`, or null. Always `null` for the pupil |
 | `has_payout` | boolean | Whether instructor has been paid. Always `false` for the pupil |

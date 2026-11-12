@@ -35,7 +35,7 @@ class FillImportedLessonSummaryAction
         return Lesson::query()
             ->whereKey($lessonId)
             ->where(fn ($query) => $query->whereNull('summary')->orWhere('summary', ''))
-            ->update(['summary' => $summary]) > 0;
+            ->update(['summary' => $summary, 'summary_from_import' => true]) > 0;
     }
 
     /**
