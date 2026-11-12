@@ -92,10 +92,10 @@
             <ShieldCheck class="h-5 w-5" />
           </div>
           <div>
-            <p class="font-semibold"><TestPassGuaranteeInfo>Pass Your Test Guarantee available</TestPassGuaranteeInfo></p>
+            <p class="font-semibold"><TestPassGuaranteeInfo>Pass Your Test Guarantee included</TestPassGuaranteeInfo></p>
             <p class="text-sm text-muted-foreground">
-              Add it to your booking for £{{ testPassGuaranteePrice }}. Complete 10 hours or more with DRIVE and if you
-              don't pass first time, DRIVE pays for your second test.
+              Included (£{{ testPassGuaranteePrice }}) with every package of 10 hours or more, and optional on smaller
+              bookings. Complete 10 hours or more with DRIVE and if you don't pass first time, DRIVE pays for your second test.
             </p>
           </div>
         </CardContent>

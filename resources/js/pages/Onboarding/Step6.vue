@@ -189,11 +189,19 @@
                           <ShieldCheck class="h-5 w-5 shrink-0 text-primary" />
                           <TestPassGuaranteeInfo />
                         </CardTitle>
-                        <Badge variant="secondary">£{{ testPassGuarantee.price }}</Badge>
+                        <Badge variant="secondary">
+                          <template v-if="testPassGuarantee.mandatory">Included &middot; </template>£{{ testPassGuarantee.price }}
+                        </Badge>
                       </div>
                       <CardDescription>
-                        Add the guarantee to your booking for £{{ testPassGuarantee.price }}. To claim it you'll need
-                        to complete at least 10 hours of lessons with DRIVE before your test.
+                        <template v-if="testPassGuarantee.mandatory">
+                          Included with every package of {{ testPassGuarantee.mandatory_minimum_hours }} hours or more
+                          (£{{ testPassGuarantee.price }}<template v-if="form.payment_mode === 'weekly'">, added to your first weekly payment</template>).
+                        </template>
+                        <template v-else>
+                          Add the guarantee to your booking for £{{ testPassGuarantee.price }}.
+                        </template>
+                        To claim it you'll need to complete at least 10 hours of lessons with DRIVE before your test.
                         <a
                           :href="testPassGuarantee.terms_url"
                           target="_blank"
@@ -202,7 +210,7 @@
                         >Terms apply</a>.
                       </CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent v-if="!testPassGuarantee.mandatory">
                       <div class="flex items-start gap-3">
                         <Checkbox
                           id="test-pass-guarantee"
@@ -336,11 +344,12 @@ const uuid = computed(() => props.uuid || page.props.enquiry?.id)
 
 const weeklyAvailable = computed(() => props.package?.allows_weekly_payment ?? false)
 
-// Mirrors TestPassGuarantee::resolve() — charged only if the learner opts in,
-// the same price whether they pay in full or weekly.
+// Mirrors TestPassGuarantee::resolveForPackage() — always charged on mandatory
+// (10+ hour) packages, otherwise only if the learner opts in; the same price
+// whether they pay in full or weekly.
 const selectedGuarantee = computed(() => {
   const guarantee = props.testPassGuarantee
-  return guarantee && includeTestPassGuarantee.value
+  return guarantee && (guarantee.mandatory || includeTestPassGuarantee.value)
     ? { included: true, charge_pence: guarantee.price_pence }
     : { included: false, charge_pence: 0 }
 })

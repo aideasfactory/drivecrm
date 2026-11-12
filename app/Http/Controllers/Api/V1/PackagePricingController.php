@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\V1\PackagePricingResource;
 use App\Models\Package;
 use App\Services\PackageService;
+use App\Support\TestPassGuarantee;
 use Illuminate\Http\Request;
 
 class PackagePricingController extends Controller
@@ -45,6 +46,16 @@ class PackagePricingController extends Controller
         }
 
         $pricing = $this->packageService->calculatePricing($package, $promoDiscount);
+
+        // Mandatory guarantee is part of the order total but is charged with
+        // the first payment, so `weekly_payment` stays the spread without it.
+        $guaranteePence = TestPassGuarantee::includedChargePence($package);
+        $pricing['includes_test_pass_guarantee'] = $guaranteePence > 0;
+        $pricing['test_pass_guarantee'] = $guaranteePence / 100;
+        $pricing['test_pass_guarantee_pence'] = $guaranteePence;
+        $pricing['subtotal'] = round($pricing['subtotal'] + $guaranteePence / 100, 2);
+        $pricing['total'] = round($pricing['total'] + $guaranteePence / 100, 2);
+        $pricing['total_pence'] += $guaranteePence;
 
         return new PackagePricingResource($pricing);
     }

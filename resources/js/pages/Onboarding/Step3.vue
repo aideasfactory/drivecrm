@@ -115,12 +115,17 @@
                         </template>
                         <div v-else class="text-3xl font-bold">{{ pkg.total_with_fees }}</div>
                         <div class="text-xs text-muted-foreground mt-1">
-                          or {{ pkg.weekly_payment }} per lesson if paid weekly
+                          or {{ pkg.weekly_payment }} per lesson if paid weekly<template v-if="includesGuarantee(pkg)">, plus {{ pkg.test_pass_guarantee }} guarantee with the first payment</template>
                         </div>
                         <div class="text-xs text-muted-foreground mt-2">
                           Lessons {{ discount ? getDiscountedPrice(pkg.formatted_total_price) : pkg.formatted_total_price }}
                           <template v-if="pkg.booking_fee !== '£0.00'">+ booking fee {{ pkg.booking_fee }}</template>
                           <template v-if="pkg.digital_fee !== '£0.00'">+ digital fee {{ pkg.digital_fee }}</template>
+                          <template v-if="includesGuarantee(pkg)">+ Pass Your Test Guarantee {{ pkg.test_pass_guarantee }}</template>
+                        </div>
+                        <div v-if="includesGuarantee(pkg)" class="mt-2 flex items-center justify-center gap-1 text-xs font-medium text-primary">
+                          <ShieldCheck class="h-3.5 w-3.5" />
+                          Pass Your Test Guarantee included
                         </div>
                       </div>
                       <p class="text-xs text-muted-foreground leading-relaxed">{{ pkg.description }}</p>
@@ -209,7 +214,7 @@ import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 import { step2 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step3'
-import { ArrowLeft, ArrowRight, Car, GraduationCap, Trophy, Rocket, Check, Flame, AlertTriangle, Info } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, Car, GraduationCap, Trophy, Rocket, Check, Flame, AlertTriangle, Info, ShieldCheck } from 'lucide-vue-next'
 
 const props = defineProps({
   uuid: String,
@@ -258,6 +263,10 @@ function getDiscountedPrice(formattedPrice: string): string {
   const price = parseFloat(formattedPrice.replace('£', '').replace(',', ''))
   const discounted = price * (1 - props.discount.percentage / 100)
   return '£' + discounted.toFixed(2)
+}
+
+function includesGuarantee(pkg: any): boolean {
+  return !!pkg.test_pass_guarantee && pkg.test_pass_guarantee !== '£0.00'
 }
 
 // Get appropriate icon component for package

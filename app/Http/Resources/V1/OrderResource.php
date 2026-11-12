@@ -25,6 +25,8 @@ class OrderResource extends JsonResource
             'package_lessons_count' => $this->package_lessons_count,
             'booking_fee_pence' => $this->booking_fee_pence,
             'digital_fee_pence' => $this->digital_fee_pence,
+            'includes_test_pass_guarantee' => (bool) $this->includes_test_pass_guarantee,
+            'test_pass_guarantee_pence' => (int) $this->test_pass_guarantee_pence,
             'total_price_pence' => $this->total_price_pence,
             'payment_mode' => $this->payment_mode->value,
             'status' => $this->status->value,

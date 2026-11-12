@@ -128,7 +128,7 @@ final class WorkflowCatalog
                 self::step('They click to pay', "Their account is created and the lessons are held for {$holdMinutes} minutes while they pay on the secure Stripe checkout page.", [
                     self::none('Nothing is sent yet.'),
                 ]),
-                self::step('Payment goes through', "The booking is confirmed, the lessons go into the instructor's diary and the learner is linked to the instructor. If the learner added the Pass Your Test Guarantee ({$guaranteePrice}), it is granted now.", $paidInFullMessages),
+                self::step('Payment goes through', "The booking is confirmed, the lessons go into the instructor's diary and the learner is linked to the instructor. The Pass Your Test Guarantee ({$guaranteePrice}, included with every package of 10 hours or more, optional on smaller ones) is granted now if it was on the order.", $paidInFullMessages),
                 self::step('If they do not pay in time', 'The lessons are released. See "Booking not paid in time".', []),
             ]),
 

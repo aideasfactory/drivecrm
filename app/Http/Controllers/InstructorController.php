@@ -1839,6 +1839,7 @@ class InstructorController extends Controller
             'formatted_lesson_price' => $package->formatted_lesson_price,
             'booking_fee' => $package->booking_fee,
             'digital_fee' => $package->digital_fee,
+            'test_pass_guarantee' => $package->test_pass_guarantee,
             'total_price' => $package->total_price,
             'weekly_payment' => $package->weekly_payment,
             'allows_weekly_payment' => $package->allowsWeeklyPayment(),

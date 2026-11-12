@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\Fees;
+use App\Support\TestPassGuarantee;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -44,6 +45,7 @@ class Package extends Model
         'formatted_lesson_price',
         'booking_fee',
         'digital_fee',
+        'test_pass_guarantee',
         'total_price',
         'weekly_payment',
     ];
@@ -143,10 +145,28 @@ class Package extends Model
         return '£'.number_format(Fees::digitalFeePerLesson() * $this->lessons_count, 2);
     }
 
+    /**
+     * Mandatory Pass Your Test Guarantee included in the price ("£0.00" when
+     * it is optional for this package).
+     */
+    public function getTestPassGuaranteeAttribute(): string
+    {
+        return '£'.number_format(TestPassGuarantee::includedChargePence($this) / 100, 2);
+    }
+
+    public function includesTestPassGuarantee(): bool
+    {
+        return TestPassGuarantee::isMandatoryFor($this);
+    }
+
+    /**
+     * What the pupil pays in full: lessons, fees and any mandatory guarantee.
+     */
     public function getTotalPriceAttribute(): string
     {
         $packagePrice = $this->total_price_pence / 100;
-        $total = $packagePrice + Fees::bookingFee() + (Fees::digitalFeePerLesson() * $this->lessons_count);
+        $total = $packagePrice + Fees::bookingFee() + (Fees::digitalFeePerLesson() * $this->lessons_count)
+            + (TestPassGuarantee::includedChargePence($this) / 100);
 
         return '£'.number_format($total, 2);
     }

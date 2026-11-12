@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\V1;
 
+use App\Support\TestPassGuarantee;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -25,6 +26,9 @@ class PackageResource extends JsonResource
             'formatted_lesson_price' => $this->formatted_lesson_price,
             'booking_fee' => $this->booking_fee,
             'digital_fee' => $this->digital_fee,
+            'includes_test_pass_guarantee' => $this->includesTestPassGuarantee(),
+            'test_pass_guarantee' => $this->test_pass_guarantee,
+            'test_pass_guarantee_pence' => TestPassGuarantee::includedChargePence($this->resource),
             'total_price' => $this->total_price,
             'weekly_payment' => $this->weekly_payment,
             'active' => $this->active,
