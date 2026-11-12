@@ -29,7 +29,7 @@ class GetConversationsAction
         $messages = Message::query()
             ->where('from', $userId)
             ->orWhere('to', $userId)
-            ->with('sender:id,name', 'recipient:id,name')
+            ->with('sender:id,name,role', 'recipient:id,name,role')
             ->orderByDesc('created_at')
             ->get();
 
