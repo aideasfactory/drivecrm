@@ -190,7 +190,13 @@ class StepSixController extends Controller
         ]);
 
         $paymentMode = PaymentMode::from($validated['payment_mode']);
-        $testPassGuaranteeOptedIn = (bool) ($validated['test_pass_guarantee'] ?? false);
+
+        // Only an optional add-on is the learner's choice. Remembering the
+        // forced tick of a mandatory package would pre-tick the add-on if they
+        // go back and switch to a smaller package.
+        $selectedPackage = Package::find(($enquiry->getStepData(3) ?? [])['package_id'] ?? null);
+        $testPassGuaranteeOptedIn = (bool) ($validated['test_pass_guarantee'] ?? false)
+            && ! ($selectedPackage && TestPassGuarantee::isMandatoryFor($selectedPackage));
 
         // Record the add-on choice before the order is built, as the order
         // action reads it from the enquiry's step 6 data.
