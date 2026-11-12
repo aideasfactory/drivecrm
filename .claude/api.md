@@ -5644,6 +5644,12 @@ How the first payment is taken depends on who is booking (the same for both paym
 - **Student (mobile app):** the Stripe Checkout URL is returned in the response as `checkout_url`. The mobile app should load this URL in an in-app browser. The lessons are held for **10 minutes**.
 - **Instructor (mobile app or admin diary Add Booking):** a payment link is emailed to the student (or their contact person). No `checkout_url` is returned. The lessons are held until **48 hours before the first lesson**, and never less than 15 minutes.
 
+**Booking inside the 48-hour cancellation period (instructor bookings only, since 2026-11-12):** when the first lesson starts fewer than 48 hours from now (UK time, `Europe/London`), the order is created with `booked_within_cancellation_period: true` and `payment_hold_expires_at` = **the first lesson's start time** (min. 15 minutes from now). The learner can pay through the emailed link until then. The booking is **never released or cancelled automatically** if unpaid — not by `orders:release-expired-holds` and not when a Stripe Checkout session expires. It stays `pending` (lessons `draft`) until the instructor cancels it. After the lesson starts the payment link shows "Payment Closed" (contact your instructor). Bookings made 48 hours or more ahead are unchanged (`booked_within_cancellation_period: false`).
+
+> **App action — warning before booking (instructor app):** compute it on the device from the chosen first lesson date + `start_time` (from the form, or the diary slot's `date` + `start_time` when booking by `calendar_item_id`), read as UK wall-clock time: show the warning when `now >= lessonStart(Europe/London) − 48h`. Exact text: **"This lesson is being booked within the 48 hour cancellation period and won't be cancelled automatically"**. After the `201`, `data.booked_within_cancellation_period` is the server's answer; if it is `true` and you didn't warn (e.g. the clock crossed the boundary), show the same text in the success toast. Student-initiated bookings are never flagged; do not show the warning to learners.
+>
+> **App action — learner "Payment Expired":** base it on the order only: an order is payable while `status == "pending"` and `payment_hold_expires_at` is in the future. Do not derive a deadline from the lesson time (e.g. lesson − 48h); for flagged bookings the deadline is the lesson start.
+
 For `weekly` orders, each later week is invoiced by email and due **48 hours before the lesson**.
 
 **Booking against a specific open diary slot:** send `calendar_item_id` instead of `first_lesson_date` / `start_time` / `end_time`. Date and time are taken from that slot. The slot must belong to the student's instructor and still be empty availability. The first lesson claims that slot (under a row lock); remaining lessons in a multi-lesson package are placed weekly at the same time, reusing matching empty slots where they exist. Any open short-notice offer on a claimed slot is closed.
@@ -5707,6 +5713,7 @@ For `weekly` orders, each later week is invoiced by email and due **48 hours bef
     "payment_mode": "upfront",
     "status": "pending",
     "payment_hold_expires_at": "2026-03-23T10:15:00+00:00",
+    "booked_within_cancellation_period": false,
     "lessons_count": 10,
     "created_at": "2026-03-23T10:00:00.000000Z"
   }
@@ -5734,6 +5741,7 @@ For `weekly` orders, each later week is invoiced by email and due **48 hours bef
     "payment_mode": "upfront",
     "status": "pending",
     "payment_hold_expires_at": "2026-03-30T07:00:00+00:00",
+    "booked_within_cancellation_period": false,
     "lessons_count": 10,
     "created_at": "2026-03-23T10:00:00.000000Z"
   }
@@ -5759,7 +5767,8 @@ A student-initiated `weekly` booking returns the same shape as the student-initi
 | `total_price_pence` | integer | Total charge amount sent to Stripe (package + booking fee + digital fees) |
 | `payment_mode` | string | `upfront` or `weekly` |
 | `status` | string | Order status: `pending` (awaiting first payment), `active`, `completed`, `cancelled` (cancelled by the instructor/admin) or `expired` (not paid before `payment_hold_expires_at`; lessons deleted and slots released). Treat `expired` as gone: hide it, its lessons no longer exist. |
-| `payment_hold_expires_at` | string\|null | ISO 8601 time the unpaid booking is released if the first payment hasn't been made. `null` for legacy/imported orders |
+| `payment_hold_expires_at` | string\|null | ISO 8601 time the unpaid booking is released if the first payment hasn't been made (for `booked_within_cancellation_period` orders: the first lesson's start; online payment closes then but the booking is **not** released). `null` for legacy/imported orders |
+| `booked_within_cancellation_period` | boolean | `true` when an instructor booked it fewer than 48 hours before the first lesson: payable until the lesson starts and never cancelled automatically if unpaid — the instructor cancels it. Always `false` for learner bookings |
 | `lessons_count` | integer\|null | Number of lessons created |
 | `created_at` | string\|null | ISO 8601 timestamp |
 
@@ -5820,7 +5829,7 @@ The error key is `calendar_item_id` when the booking was made from a chosen diar
 > **Mobile App Flow (instructor booking on behalf of a student — upfront or weekly):**
 > 1. POST to create order as an authenticated instructor → no `checkout_url` returned
 > 2. A payment link to `/orders/{order}/payment-link/pay` (signed URL) is emailed to the student. Each click opens a Stripe Checkout session
-> 3. The student completes Stripe Checkout before the hold (48 hours before the first lesson) runs out
+> 3. The student completes Stripe Checkout before the hold (48 hours before the first lesson, or the lesson start when `booked_within_cancellation_period` is `true`) runs out
 > 4. On success, the order becomes `active` and a confirmation email is sent. After the hold, the link shows a "no longer available" page
 >
 > **Weekly payments after the first week:**
@@ -5888,6 +5897,7 @@ The recipient email is embedded in `message` so the app can surface it in a toas
 | Order `expired` (released unpaid booking) | `The time to pay for this booking ran out and the lessons were released.` |
 | Hold has run out (release pending) | `The time to pay for this booking has passed, so the lessons are being released. Please book again.` |
 | Hold has run out, pupil has alternative payments on (booking is **not** released) | `The time to pay by card has passed. If the pupil is paying another way, confirm the alternative payment.` — offer `POST /students/{student}/orders/{order}/alternative-payment` |
+| Hold has run out on a `booked_within_cancellation_period` order (lesson started; booking is **not** released) | `The lesson has started, so this booking can no longer be paid by card. It will not be cancelled automatically — cancel it if it is not going ahead.` |
 | Package no longer available | `The package for this order is no longer available, so a payment link cannot be generated.` |
 | No email on file for the booker | `No email address is on file for this student, so the payment link could not be sent.` |
 
@@ -8244,6 +8254,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-04 | **Cancelled lessons on the pupil lessons list (opt-in).** New `include_cancelled` query param (default `false`): when `true`, cancelled lessons are returned with `status: "cancelled"` and new `card_status: "cancelled"`. Three new nullable fields on every lesson list item: `cancelled_at`, `cancellation_reason_label`, `cancellation_reason`. Additive only — no fields removed, default response unchanged. Lesson detail still 404s for cancelled lessons. **App action:** on cancelled rows hide `student_lesson_number` (can repeat an open lesson's number) and show `payment_status: "due"` as "Unpaid" (invoice voided, nothing owed). | Student (lessons index) |
 | 2026-11-04 | **Admin diary names instructor-made holds (web only, no mobile API change).** The web `GET /instructors/{instructor}/calendar` now sets `student_name` on `draft` items using the same rule as `GET /api/v1/instructor/calendar/items` (named when the instructor or Head Office booked; `null` for the pupil's own website/app checkout), and the diary labels them "Held - <name>" like the app. This supersedes the "labels the block Held" note in the 2026-10-01 entry. | Admin diary (web) |
 | 2026-11-11 | **Practical tests can no longer repeat.** `POST /api/v1/instructor/calendar/items` (and the web `POST /instructors/{instructor}/calendar/items`) now returns 422 on `recurrence_pattern` ("Practical tests cannot repeat. Please add each test on its own.") when `is_practical_test=true` and `recurrence_pattern` is not `none`. Previously the recurring path ignored `is_practical_test` and saved a weekly series of bookable 1-hour *available* slots (found on Malik Arshad's diary). **App action:** hide the Repeat options when Practical test is ticked. | Instructor Calendar (store) |
+| 2026-11-12 | **Instructor bookings inside the 48-hour cancellation period.** Previously an instructor booking made fewer than 48h before the first lesson got a 15-minute hold (its "48h before the lesson" deadline had already passed), so the learner hit an expired payment page and the booking was auto-released. Now such orders get `payment_hold_expires_at` = the first lesson's start and are never released automatically; the instructor cancels them if unpaid. Order object gains additive `booked_within_cancellation_period` (boolean). Resend-payment-link has a new 422 message once the lesson has started on such an order. Bookings 48h+ ahead and learner bookings are unchanged. **App action:** before an instructor books, show "This lesson is being booked within the 48 hour cancellation period and won't be cancelled automatically" when `now >= first lesson start (Europe/London) − 48h`; treat the learner's order as payable while `status == "pending"` and `payment_hold_expires_at` is in the future. | Orders (store, order object, resend-payment-link) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.
