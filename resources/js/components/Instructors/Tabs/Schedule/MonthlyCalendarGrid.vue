@@ -55,34 +55,68 @@ function isCurrentMonth(date: Date): boolean {
         date.getFullYear() === props.currentMonth.getFullYear()
 }
 
-/** Status-based dot color */
-function dotColor(event: CalendarEvent): string {
-    if (event.itemType === 'practical_test') return 'bg-teal-500'
+type EventTone =
+    | 'provisional'
+    | 'travel'
+    | 'practicalTest'
+    | 'completed'
+    | 'bookedPaid'
+    | 'bookedUnpaid'
+    | 'draft'
+    | 'reserved'
+    | 'unavailable'
+    | 'available'
+
+/** Must follow the same precedence as colorClasses in CalendarEventBlock (daily/weekly views) */
+function eventTone(event: CalendarEvent): EventTone {
+    if (event.isProvisional === true) return 'provisional'
+    if (event.itemType === 'travel') return 'travel'
+    if (event.itemType === 'practical_test') return 'practicalTest'
 
     const status = event.status
 
-    if (status === 'booked') return 'bg-blue-500'
-    if (status === 'draft') return 'bg-gray-400'
-    if (status === 'reserved') return 'bg-orange-500'
-    if (status === 'completed') return 'bg-green-500'
-    if (!event.isAvailable) return 'bg-red-500'
+    if (status === 'completed') return 'completed'
+    if (status === 'booked' && event.isPaid === true) return 'bookedPaid'
+    if (status === 'booked') return 'bookedUnpaid'
+    if (status === 'draft') return 'draft'
+    if (status === 'reserved') return 'reserved'
+    if (!event.isAvailable) return 'unavailable'
 
-    return 'bg-yellow-500'
+    return 'available'
 }
 
-/** Status-based event pill classes */
+const dotColors: Record<EventTone, string> = {
+    provisional: 'bg-red-500',
+    travel: 'bg-purple-500',
+    practicalTest: 'bg-teal-500',
+    completed: 'bg-green-500',
+    bookedPaid: 'bg-amber-500',
+    bookedUnpaid: 'bg-gray-500',
+    draft: 'bg-gray-300',
+    reserved: 'bg-orange-500',
+    unavailable: 'bg-red-500',
+    available: 'bg-blue-500',
+}
+
+const pillColors: Record<EventTone, string> = {
+    provisional: 'border border-dashed border-red-400 bg-red-50 text-red-800 dark:border-red-600 dark:bg-red-900/20 dark:text-red-300',
+    travel: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+    practicalTest: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300',
+    completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+    bookedPaid: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+    bookedUnpaid: 'bg-gray-100 text-gray-800 dark:bg-gray-800/30 dark:text-gray-300',
+    draft: 'bg-gray-50 text-gray-600 dark:bg-gray-800/20 dark:text-gray-400',
+    reserved: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+    unavailable: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+    available: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+}
+
+function dotColor(event: CalendarEvent): string {
+    return dotColors[eventTone(event)]
+}
+
 function pillClasses(event: CalendarEvent): string {
-    if (event.itemType === 'practical_test') return 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300'
-
-    const status = event.status
-
-    if (status === 'booked') return 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-    if (status === 'draft') return 'bg-gray-100 text-gray-700 dark:bg-gray-800/40 dark:text-gray-300'
-    if (status === 'reserved') return 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300'
-    if (status === 'completed') return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
-    if (!event.isAvailable) return 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
-
-    return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300'
+    return pillColors[eventTone(event)]
 }
 
 function formatTime(t: string): string {
@@ -90,7 +124,11 @@ function formatTime(t: string): string {
 }
 
 function statusLabel(event: CalendarEvent): string {
+    if (event.itemType === 'travel') return 'Travel'
     if (event.itemType === 'practical_test') return 'Practical Test'
+    if (event.isProvisional === true) {
+        return event.provisionalHandledBy === 'instructor' ? 'Double booked' : 'Provisional'
+    }
 
     const status = event.status
 
