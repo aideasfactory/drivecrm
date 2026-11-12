@@ -76,7 +76,9 @@
                       </div>
                       <div class="shrink-0 text-right">
                         <div class="text-xl font-bold">{{ upfrontTotal }}</div>
-                        <div class="text-sm text-muted-foreground">incl. booking &amp; digital fees</div>
+                        <div class="text-sm text-muted-foreground">
+                          incl. booking &amp; digital fees<template v-if="testPassGuarantee?.mandatory"> &amp; Pass Your Test Guarantee</template>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
@@ -302,7 +304,9 @@
                       </div>
                       <div v-if="testPassGuarantee" class="flex items-start justify-between gap-3">
                         <TestPassGuaranteeInfo class="min-w-0" />
-                        <span class="shrink-0 font-medium">Optional, £{{ testPassGuarantee.price }}</span>
+                        <span class="shrink-0 font-medium">
+                          {{ testPassGuarantee.mandatory ? `£${testPassGuarantee.price}` : `Optional, £${testPassGuarantee.price}` }}
+                        </span>
                       </div>
                       <Separator />
                       <div class="flex items-start justify-between gap-3">
@@ -310,7 +314,7 @@
                         <span class="shrink-0 text-xl font-bold">{{ upfrontTotal }}</span>
                       </div>
                       <div class="text-sm text-muted-foreground">
-                        Or pay <span class="font-semibold">£{{ pricing?.weekly_payment ?? '0.00' }} weekly</span>
+                        Or pay <span class="font-semibold">£{{ pricing?.weekly_payment ?? '0.00' }} weekly</span><template v-if="testPassGuarantee?.mandatory"> (+ £{{ testPassGuarantee.price }} guarantee with the first payment)</template>
                       </div>
                     </div>
                   </AlertDescription>
@@ -511,14 +515,17 @@ function formatPence(pence) {
   return `£${((pence || 0) / 100).toFixed(2)}`
 }
 
-// Pay-in-full total; the optional guarantee add-on is chosen at the payment step
+// Pay-in-full total. A mandatory guarantee (5+ lesson packages) is included;
+// the optional add-on on smaller packages is chosen at the payment step.
 const upfrontTotal = computed(() => {
   const baseTotalPence = props.pricing?.package_total_with_fees_pence
   if (baseTotalPence === undefined || baseTotalPence === null) {
     return props.package?.total_price || '0.00'
   }
 
-  return formatPence(baseTotalPence)
+  const guaranteePence = props.testPassGuarantee?.mandatory ? props.testPassGuarantee.price_pence : 0
+
+  return formatPence(baseTotalPence + guaranteePence)
 })
 
 const uuid = computed(() => props.uuid || page.props.enquiry?.id)

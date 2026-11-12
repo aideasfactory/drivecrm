@@ -87,7 +87,7 @@ class CreateOrderFromEnquiryAction
                 $lessonPricePence = (int) floor($packagePricePence / $package->lessons_count);
             }
 
-            $testPassGuarantee = TestPassGuarantee::resolveForEnquiry($enquiry);
+            $testPassGuarantee = TestPassGuarantee::resolveForEnquiry($enquiry, $package);
 
             // Total includes base package price + fees + any paid guarantee add-on
             $totalPricePence = $packagePricePence + $bookingFeePence + $digitalFeePence + $testPassGuarantee['charge_pence'];
