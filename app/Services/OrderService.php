@@ -382,6 +382,18 @@ class OrderService extends BaseService
 
         if (! $order->isAwaitingFirstPayment()) {
             if ($order->isPending() && $order->booked_within_cancellation_period) {
+                $storedSession = $this->storedCheckoutSessionState($order);
+
+                if ($storedSession['state'] === 'paid') {
+                    $this->confirmPaidCheckoutSession($order, $order->stripe_checkout_session_id, $storedSession['payment_intent']);
+
+                    return ['status' => 'paid', 'message' => 'This booking has already been paid for.'];
+                }
+
+                if ($storedSession['state'] === 'processing') {
+                    return ['status' => 'error', 'message' => 'Your payment is being processed. Please check your email for confirmation before trying again.'];
+                }
+
                 return ['status' => 'closed', 'message' => 'The time to pay for this booking online has passed.'];
             }
 
