@@ -21,6 +21,7 @@ use App\Models\Package;
 use App\Models\Student;
 use App\Services\InstructorCalendarService;
 use App\Support\BookingPayments;
+use App\Support\TestPassGuarantee;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -56,6 +57,14 @@ class CreateOrderFromApiAction
                 $pricing['total_pence'] = (int) $package->total_price_pence;
             }
 
+            // Mandatory on packages of 10+ hours (never trusted from the client).
+            // Cash orders are collected lesson by lesson with no Stripe charge,
+            // so the guarantee is left off them.
+            $testPassGuarantee = $paymentMode === PaymentMode::CASH
+                ? TestPassGuarantee::resolve(false)
+                : TestPassGuarantee::resolveForPackage($package, false);
+            $pricing['total_pence'] += $testPassGuarantee['charge_pence'];
+
             $order = Order::create([
                 'student_id' => $student->id,
                 'instructor_id' => $instructorId,
@@ -70,6 +79,8 @@ class CreateOrderFromApiAction
                 'status' => OrderStatus::PENDING,
                 'payment_mode' => $paymentMode,
                 'source' => $source,
+                'includes_test_pass_guarantee' => $testPassGuarantee['included'],
+                'test_pass_guarantee_pence' => $testPassGuarantee['charge_pence'],
             ]);
 
             Log::info('Created order from API', [
@@ -77,7 +88,11 @@ class CreateOrderFromApiAction
                 'student_id' => $student->id,
                 'package_id' => $package->id,
                 'payment_mode' => $paymentMode->value,
+                'includes_test_pass_guarantee' => $testPassGuarantee['included'],
+                'test_pass_guarantee_pence' => $testPassGuarantee['charge_pence'],
             ]);
+
+            $spreadTotalPence = $order->total_price_pence - $testPassGuarantee['charge_pence'];
 
             // Both payment modes stay DRAFT until the first payment is confirmed
             // (ConfirmCalendarItemsAction handles the transition).
@@ -112,13 +127,17 @@ class CreateOrderFromApiAction
                 ]);
 
                 if ($paymentMode === PaymentMode::WEEKLY) {
+                    $guaranteeForPayment = $i === 0 ? $testPassGuarantee['charge_pence'] : 0;
+
                     LessonPayment::create([
                         'lesson_id' => $lesson->id,
                         // Each weekly payment carries its share of the booking +
                         // digital fees (the order total spread evenly), matching
                         // the weekly figure shown at checkout — not just the base
-                        // lesson price.
-                        'amount_pence' => LessonPayment::weeklyAmountForIndex($order->total_price_pence, $package->lessons_count, $i),
+                        // lesson price. The guarantee is charged in full on the
+                        // first payment.
+                        'amount_pence' => LessonPayment::weeklyAmountForIndex($spreadTotalPence, $package->lessons_count, $i) + $guaranteeForPayment,
+                        'test_pass_guarantee_pence' => $guaranteeForPayment,
                         'status' => PaymentStatus::DUE,
                         'due_date' => BookingPayments::weeklyPaymentDueDate($scheduledDate->toDateString(), $startTime),
                     ]);

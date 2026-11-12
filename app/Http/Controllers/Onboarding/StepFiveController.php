@@ -162,7 +162,7 @@ class StepFiveController extends Controller
             ] : null,
 
             'testPassGuarantee' => $package
-                ? TestPassGuarantee::bookingFormData($enquiry)
+                ? TestPassGuarantee::bookingFormData($enquiry, $package)
                 : null,
 
             // Available promo codes (for demo)

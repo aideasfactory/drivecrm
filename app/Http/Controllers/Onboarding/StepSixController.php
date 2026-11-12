@@ -87,7 +87,7 @@ class StepSixController extends Controller
         $packagePrice = '£'.number_format($pricing['total'], 2);
         $lessonPrice = '£'.number_format($pricing['weekly_payment'], 2);
 
-        $testPassGuarantee = TestPassGuarantee::bookingFormData($enquiry);
+        $testPassGuarantee = TestPassGuarantee::bookingFormData($enquiry, $package);
         // Fee-inclusive, discount-aware total before any guarantee add-on
         $packageTotalWithFeesPence = (int) $pricing['total_pence'];
         $weeklyPaymentPence = $package->lessons_count > 0

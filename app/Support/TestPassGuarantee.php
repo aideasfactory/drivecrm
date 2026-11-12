@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Models\Enquiry;
+use App\Models\Package;
 use Carbon\Carbon;
 
 /**
- * Pricing rules for the Pass Your Test Guarantee add-on sold on the public
- * booking form. It is always optional and always charged at `price()`,
- * whatever the package size or payment mode. Values come from
+ * Pricing rules for the Pass Your Test Guarantee. It is mandatory on packages
+ * of `mandatoryMinimumHours()` or more (always added to the order and its
+ * displayed price) and an optional add-on on smaller packages. Either way it
+ * is charged at `price()`, whatever the payment mode. Values come from
  * config/test_pass_guarantee.php.
  *
  * Orders created before 2026-11-12 may still carry a guarantee included free
@@ -31,6 +33,34 @@ final class TestPassGuarantee
     public static function termsUrl(): string
     {
         return (string) config('test_pass_guarantee.terms_url');
+    }
+
+    public static function mandatoryMinimumHours(): float
+    {
+        return (float) config('test_pass_guarantee.mandatory_minimum_hours', 10);
+    }
+
+    /**
+     * Driving hours in a package. Every lesson is `fees.lesson_hours` long
+     * (the diary only creates slots of that length).
+     */
+    public static function packageHours(Package $package): float
+    {
+        return (int) $package->lessons_count * (float) config('fees.lesson_hours', 2);
+    }
+
+    public static function isMandatoryFor(Package $package): bool
+    {
+        return self::packageHours($package) >= self::mandatoryMinimumHours();
+    }
+
+    /**
+     * Guarantee charge built into the package's displayed price: the full
+     * price on mandatory packages, nothing on packages where it is optional.
+     */
+    public static function includedChargePence(Package $package): int
+    {
+        return self::isMandatoryFor($package) ? self::pricePence() : 0;
     }
 
     /**
@@ -72,6 +102,17 @@ final class TestPassGuarantee
     }
 
     /**
+     * Resolve the guarantee for an order of this package. Mandatory packages
+     * always include it, whatever the client sent.
+     *
+     * @return array{included: bool, charge_pence: int}
+     */
+    public static function resolveForPackage(Package $package, bool $optedIn): array
+    {
+        return self::resolve($optedIn || self::isMandatoryFor($package));
+    }
+
+    /**
      * Whether the learner ticked the add-on on the payment step.
      */
     public static function optedInForEnquiry(Enquiry $enquiry): bool
@@ -84,14 +125,18 @@ final class TestPassGuarantee
     /**
      * Booking-form view data shared by the summary and payment steps.
      *
-     * @return array{opted_in: bool, price: string, price_pence: int, terms_url: string}
+     * @return array{mandatory: bool, opted_in: bool, price: string, price_pence: int, mandatory_minimum_hours: float, terms_url: string}
      */
-    public static function bookingFormData(Enquiry $enquiry): array
+    public static function bookingFormData(Enquiry $enquiry, Package $package): array
     {
+        $mandatory = self::isMandatoryFor($package);
+
         return [
-            'opted_in' => self::optedInForEnquiry($enquiry),
+            'mandatory' => $mandatory,
+            'opted_in' => $mandatory || self::optedInForEnquiry($enquiry),
             'price' => number_format(self::price(), 2),
             'price_pence' => self::pricePence(),
+            'mandatory_minimum_hours' => self::mandatoryMinimumHours(),
             'terms_url' => self::termsUrl(),
         ];
     }
@@ -99,8 +144,8 @@ final class TestPassGuarantee
     /**
      * @return array{included: bool, charge_pence: int}
      */
-    public static function resolveForEnquiry(Enquiry $enquiry): array
+    public static function resolveForEnquiry(Enquiry $enquiry, Package $package): array
     {
-        return self::resolve(self::optedInForEnquiry($enquiry));
+        return self::resolveForPackage($package, self::optedInForEnquiry($enquiry));
     }
 }
