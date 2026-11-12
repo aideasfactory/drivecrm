@@ -524,7 +524,8 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 | `end_time` | time | NULLABLE | Scheduled end time |
 | `calendar_item_id` | bigint unsigned | FOREIGN KEY (calendar_items.id), NULLABLE, ON DELETE SET NULL | Associated calendar slot |
 | `completed_at` | datetime | NULLABLE | When lesson was completed |
-| `summary` | text | NULLABLE | Instructor's summary of the lesson (written at sign-off, used for AI resource matching) |
+| `summary` | text | NULLABLE | Instructor's summary of the lesson (written at sign-off, used for AI resource matching). Shown to the pupil once signed off, unless `summary_from_import` |
+| `summary_from_import` | boolean | NOT NULL, DEFAULT false | `summary` is still the note the importer brought over from the old system's diary (`ImportDiaryItemAction`, `FillImportedLessonSummaryAction`). Cleared by `SaveLessonSummaryAction` (sign-off). Hides the note from the pupil (`is_imported` on lesson detail). Added 2026-11-12; backfilled for importer-created lessons with a summary and no sign-off activity log |
 | `cancellation_reason` | text | NULLABLE | Free-text details the canceller added (required when the reason is `other`). Retained for history. Before 2026-10-19 this held the whole free-text reason |
 | `cancellation_reason_code` | varchar(50) | NULLABLE | Structured cancellation reason, cast to `App\Enums\LessonCancellationReason` (`pupil_request`, `pupil_unwell`, `pupil_no_show`, `pupil_stopped_lessons`, `instructor_unavailable`, `instructor_unwell`, `vehicle_problem`, `weather`, `other`, and system-only `banked_expired`). Each reason maps to who cancelled (pupil / instructor / other). NULL for lessons cancelled before 2026-10-19 |
 | `cancelled_at` | timestamp | NULLABLE | When the lesson was cancelled |
