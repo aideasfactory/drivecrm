@@ -1583,7 +1583,10 @@ Returns all active packages for the authenticated instructor.
       "formatted_lesson_price": "£35.00",
       "booking_fee": "£19.99",
       "digital_fee": "£39.90",
-      "total_price": "£409.89",
+      "includes_test_pass_guarantee": true,
+      "test_pass_guarantee": "£50.00",
+      "test_pass_guarantee_pence": 5000,
+      "total_price": "£459.89",
       "weekly_payment": "£40.99",
       "active": true,
       "is_one_off": false,
@@ -1608,8 +1611,11 @@ Returns all active packages for the authenticated instructor.
 | `formatted_lesson_price` | string | Base per-lesson price, before fees (e.g., "£35.00") |
 | `booking_fee` | string | One-off booking fee per order, formatted (e.g., "£19.99") |
 | `digital_fee` | string | Digital fee for the whole package (£3.99 × lessons), formatted (e.g., "£39.90") |
-| `total_price` | string | **What the pupil pays**: package + booking fee + digital fee, formatted (e.g., "£409.89") |
-| `weekly_payment` | string | Per-lesson amount when paying weekly, fees included (`total_price ÷ lessons_count`), formatted |
+| `includes_test_pass_guarantee` | boolean | `true` when the Pass Your Test Guarantee is mandatory for this package (10+ hours, i.e. 5+ two-hour lessons). It is always added to the order; there is no opt-out |
+| `test_pass_guarantee` | string | Mandatory guarantee included in `total_price`, formatted (e.g., "£50.00"); "£0.00" when not included |
+| `test_pass_guarantee_pence` | integer | Same as `test_pass_guarantee`, in pence (0 when not included) |
+| `total_price` | string | **What the pupil pays**: package + booking fee + digital fee + any mandatory guarantee, formatted (e.g., "£459.89") |
+| `weekly_payment` | string | Per-lesson amount when paying weekly, fees included (package + fees ÷ `lessons_count`), formatted. **Excludes** the guarantee, which is added once to the first weekly payment |
 | `active` | boolean | Whether the package is active |
 | `is_one_off` | boolean | `true` for reusable short-notice "One-Off Package" rows created from Offer Slot |
 | `visible_to_pupils` | boolean | `true` when pupils can choose this package. `false` is a private package (friends and family). Instructor lists still include it. Pupil package lists omit it. Defaults to `true` when omitted on create. |
@@ -1617,7 +1623,7 @@ Returns all active packages for the authenticated instructor.
 
 > **Note:** Only active packages are returned. Private packages (`visible_to_pupils: false`) are included here so the instructor app can show the toggle. Packages without a Stripe price (`has_stripe_price: false`) cannot be used for upfront payments.
 
-> **Pricing shown to pupils:** Any screen a pupil (or an instructor booking on a pupil's behalf) uses to choose a package must show `total_price` / `weekly_payment` and itemise `booking_fee` + `digital_fee` — never `formatted_total_price` alone, which excludes the fees the pupil is charged. Use `GET /api/v1/packages/{package}/pricing` for raw numeric values.
+> **Pricing shown to pupils:** Any screen a pupil (or an instructor booking on a pupil's behalf) uses to choose a package must show `total_price` / `weekly_payment` and itemise `booking_fee` + `digital_fee` (+ `test_pass_guarantee` when `includes_test_pass_guarantee` is `true`) — never `formatted_total_price` alone, which excludes the fees the pupil is charged. Use `GET /api/v1/packages/{package}/pricing` for raw numeric values. For weekly payment on a guarantee package, show the first payment as `weekly_payment` + `test_pass_guarantee`.
 
 ---
 
@@ -2503,9 +2509,12 @@ A **student** token receives **404** when the package is private (`visible_to_pu
     "lessons_count": 10,
     "promo_code": null,
     "promo_discount": 0,
-    "subtotal": 409.89,
-    "total": 409.89,
-    "total_pence": 40989,
+    "includes_test_pass_guarantee": true,
+    "test_pass_guarantee": 50,
+    "test_pass_guarantee_pence": 5000,
+    "subtotal": 459.89,
+    "total": 459.89,
+    "total_pence": 45989,
     "weekly_payment": 40.99
   }
 }
@@ -2523,9 +2532,12 @@ A **student** token receives **404** when the package is private (`visible_to_pu
     "lessons_count": 10,
     "promo_code": "SAVE10",
     "promo_discount": 35.00,
-    "subtotal": 409.89,
-    "total": 374.89,
-    "total_pence": 37489,
+    "includes_test_pass_guarantee": true,
+    "test_pass_guarantee": 50,
+    "test_pass_guarantee_pence": 5000,
+    "subtotal": 459.89,
+    "total": 424.89,
+    "total_pence": 42489,
     "weekly_payment": 37.49
   }
 }
@@ -2543,10 +2555,13 @@ A **student** token receives **404** when the package is private (`visible_to_pu
 | `lessons_count` | integer | Number of lessons in the package |
 | `promo_code` | string\|null | Applied promo code (uppercase), or `null` if none |
 | `promo_discount` | float | Discount amount from promo code (applied to package price only) |
-| `subtotal` | float | `package_price + booking_fee + digital_fee_total` (before discounts) |
+| `includes_test_pass_guarantee` | boolean | `true` when the Pass Your Test Guarantee is mandatory for this package (10+ hours). No opt-out |
+| `test_pass_guarantee` | float | Mandatory guarantee in pounds (0 when not included). Never discounted |
+| `test_pass_guarantee_pence` | integer | Same, in pence |
+| `subtotal` | float | `package_price + booking_fee + digital_fee_total + test_pass_guarantee` (before discounts) |
 | `total` | float | `subtotal - promo_discount` |
 | `total_pence` | integer | Total in pence (for Stripe) |
-| `weekly_payment` | float | `total ÷ lessons_count` |
+| `weekly_payment` | float | `(total - test_pass_guarantee) ÷ lessons_count`. The first weekly payment is `weekly_payment + test_pass_guarantee` |
 
 > **Important for mobile developers:** Always use this endpoint to display pricing — never hardcode fee values. The booking fee, digital fee, and promo codes are managed server-side and may change without an app update.
 
@@ -5703,7 +5718,9 @@ For `weekly` orders, each later week is invoiced by email and due **48 hours bef
     "package_lessons_count": 10,
     "booking_fee_pence": 1999,
     "digital_fee_pence": 3990,
-    "total_price_pence": 40989,
+    "includes_test_pass_guarantee": true,
+    "test_pass_guarantee_pence": 5000,
+    "total_price_pence": 45989,
     "payment_mode": "upfront",
     "status": "pending",
     "payment_hold_expires_at": "2026-03-23T10:15:00+00:00",
@@ -5730,7 +5747,9 @@ For `weekly` orders, each later week is invoiced by email and due **48 hours bef
     "package_lessons_count": 10,
     "booking_fee_pence": 1999,
     "digital_fee_pence": 3990,
-    "total_price_pence": 40989,
+    "includes_test_pass_guarantee": true,
+    "test_pass_guarantee_pence": 5000,
+    "total_price_pence": 45989,
     "payment_mode": "upfront",
     "status": "pending",
     "payment_hold_expires_at": "2026-03-30T07:00:00+00:00",
@@ -5756,7 +5775,9 @@ A student-initiated `weekly` booking returns the same shape as the student-initi
 | `package_lessons_count` | integer | Number of lessons in the package |
 | `booking_fee_pence` | integer | Booking fee in pence (e.g., 1999 = £19.99) |
 | `digital_fee_pence` | integer | Total digital fee in pence (£3.99 × lessons) |
-| `total_price_pence` | integer | Total charge amount sent to Stripe (package + booking fee + digital fees) |
+| `includes_test_pass_guarantee` | boolean | Whether the order includes the Pass Your Test Guarantee. Always `true` for non-cash orders of packages of 10+ hours (set by the server; there is no request field for it) |
+| `test_pass_guarantee_pence` | integer | Guarantee charge in pence (0 when not included). Charged in full with the first payment (upfront: on the checkout; weekly: on the first week) |
+| `total_price_pence` | integer | Total charge amount (package + booking fee + digital fees + guarantee) |
 | `payment_mode` | string | `upfront` or `weekly` |
 | `status` | string | Order status: `pending` (awaiting first payment), `active`, `completed`, `cancelled` (cancelled by the instructor/admin) or `expired` (not paid before `payment_hold_expires_at`; lessons deleted and slots released). Treat `expired` as gone: hide it, its lessons no longer exist. |
 | `payment_hold_expires_at` | string\|null | ISO 8601 time the unpaid booking is released if the first payment hasn't been made. `null` for legacy/imported orders |
@@ -8275,6 +8296,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-12 | **Instructor pupil chat opened the wrong thread.** For instructors, `{user}` on `GET /messages/conversations/{user}` and `POST /messages/conversations/{user}/read`, and `recipient_id` on `POST /messages`, now resolve to the instructor's **own student** first. Previously the backend checked "is this an owner user ID?" first, so a pupil whose student ID equalled an admin's user ID opened the (empty) support thread — the list showed their preview/unread badge, the chat said "No messages yet", mark-read never cleared the badge, and replies went to the admin (found on Mark Terry-Lush / Marni James). No shape changes. **App action:** none — keep passing `student_id` for pupil chats and the support user ID for support. *(Superseded by the next entry: always send the chat type.)* | Messages (conversation, mark read, send) |
 | 2026-11-12 | **Explicit chat type for messages.** Removes the student-ID-vs-admin-user-ID ambiguity in both directions. New optional `?type=student\|support` on `GET /messages/conversations/{user}` and `POST /messages/conversations/{user}/read`, and `recipient_type` (`student`\|`support`) on `POST /messages`. `support` → `{user}` / `recipient_id` is an admin/owner **user ID** (shared support thread; `404` otherwise); `student` → one of the instructor's own students by **student ID** (`404` otherwise, incl. student callers). Omitted → legacy resolution (instructor's own student first, then owner user ID). New `chat_type` (`support`\|`student`\|`instructor`) on every `GET /messages/conversations` object and `GET /messages/unread-count` `conversations[]` item. Additive — no fields removed, no schema change. **App action:** read `chat_type` on list/unread rows; open/mark-read/send with `type=support` + `user.id` for support rows and `type=student` + `student_id` for pupil rows. | Messages (conversations, conversation, mark read, send, unread-count) |
 | 2026-11-12 | **Chat type follow-up.** `type` / `recipient_type` now also accept `instructor` (pupil → their instructor, by user ID), so every `chat_type` value can be passed straight back; previously `instructor` returned `422`. `GET /messages/conversations` now returns **one** `support` row for all admins (it opens the shared support thread; `unread_count` covers every admin) instead of one row per admin. `GET /messages/unread-count` is unchanged — still one row per sending admin, so sum the `chat_type: "support"` rows for the support badge. | Messages (conversations, conversation, mark read, send) |
+| 2026-11-12 | **Pass Your Test Guarantee mandatory on 10+ hour packages.** Packages of 10 hours or more (5+ two-hour lessons) always include the £50 guarantee; it stays an optional web-only add-on on smaller packages. Package objects (`GET /instructor/packages`, `GET /student/packages`, instructor package create/update/delete, slot offer `package`) gain `includes_test_pass_guarantee`, `test_pass_guarantee` ("£50.00" / "£0.00") and `test_pass_guarantee_pence`; **`total_price` now includes the guarantee** for those packages (`weekly_payment` does not — the guarantee is added once to the first weekly payment). `GET /packages/{package}/pricing` gains the same three fields and its `subtotal` / `total` / `total_pence` now include the guarantee (`weekly_payment` excludes it). `POST /students/{student}/orders` (upfront and weekly, not cash) now adds the guarantee server-side for 10+ hour packages: `total_price_pence` and the Stripe checkout include it (own line item), the first weekly payment includes it. Order objects gain `includes_test_pass_guarantee` and `test_pass_guarantee_pence`. No request changes. **App action:** show `total_price` and itemise `test_pass_guarantee` when `includes_test_pass_guarantee` is true; show the first weekly payment as `weekly_payment + test_pass_guarantee`. | Instructor Packages, Student Packages, Package Pricing, Orders (store), Slot Offers |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.
