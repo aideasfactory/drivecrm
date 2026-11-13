@@ -72,6 +72,10 @@ Users (1) ──┬── (1) Instructors ──┬── (Many) Packages
                           Instructors (Many)
 
 Students (Many) ──── (0..1) Orders   [students.test_pass_guarantee_order_id]
+
+Students (1) ──── (Many) StudentTests ──── (0..1) CalendarItems   [student_tests.calendar_item_id]
+InstructorFinances (Many) ──── (0..1) Students / (0..1) Lessons   [instructor_finances.student_id / lesson_id, import only]
+ImportRuns (1) ──── (Many) ImportStagedRows   [temporary, emptied after each run]
 ```
 
 ---
@@ -262,6 +266,7 @@ Core user table storing all users in the system (owners, instructors, and studen
 | `password_change_required` | boolean | DEFAULT false | Forces password reset on next login (set when a temp password is issued) |
 | `welcome_email_pending` | boolean | DEFAULT false | True between new-user creation and the welcome email being dispatched. Cleared by `SendOrderConfirmationEmailAction` (web onboarding) or `SendInstructorWelcomeEmailAction` (instructor invite). Stays `true` if sending fails so admins can resend. |
 | `welcome_email_last_sent_at` | timestamp | NULLABLE | When the instructor onboarding (password-setup) email was last queued — first send or admin resend. Set by `SendInstructorWelcomeEmailAction`. Null for users never sent one (and for sends before 2026-11-03). Added 2026-11-03. |
+| `exclude_from_emails` | boolean | DEFAULT false | Never email this user. Set on users with a placeholder address (imported pupils with no real email: `no-email+<ref>@drive-plus.co.uk`, the first import's `no-email+…@just-drive.co.uk`, the legacy `example@<id>-student.com`) by the importer and `users:exclude-placeholder-emails`. The mail guard (`App\Listeners\DropMailToExcludedRecipients`, on `MessageSending`) drops every email to a flagged user or placeholder address, whatever sends it; welcome emails skip them. Added 2026-11-13. |
 | `imported_at` | timestamp | NULLABLE, INDEXED | Set when the account was created by the legacy importer (Data Import page). No emails go out at import; `import:send-welcome-emails` sends the welcome email to every imported user still `welcome_email_pending = true`. |
 | `role` | enum('owner', 'instructor', 'student') | DEFAULT 'student' | User role in the system |
 | `owner_access` | varchar(20) | DEFAULT 'all' | Admin-area access level (`OwnerAccess` enum), only meaningful when `role = owner`. `all` = entire admin area; `restricted` = Instructors, Students, Transfer Student, Support Messages, Enquiries and own Settings only (enforced by `RestrictOwnerAccess` middleware). Managed by full-access owners on the Owner Access page (`/owners`); owners cannot change their own value. Added 2026-10-01. |
@@ -1204,6 +1209,8 @@ Tracks payments received and expenses incurred by instructors. Supports recurrin
 | `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Finance record ID |
 | `instructor_id` | bigint unsigned | FOREIGN KEY → instructors.id, CASCADE DELETE, INDEXED | Owning instructor |
 | `vehicle_id` | bigint unsigned | NULLABLE, FOREIGN KEY → vehicles.id, NULL ON DELETE | Vehicle this row belongs to. Nullable because non-vehicle categories (advertising, phone, accountant fees, business insurance, etc.) don't carry one. Populated by `BackfillPrimaryVehicleAction` for historical rows. |
+| `student_id` | bigint unsigned | NULLABLE, FOREIGN KEY → students.id, NULL ON DELETE | The pupil this row was for, as recorded by the legacy system (Go Roadie import only). Bookkeeping only — nothing in the payment pipeline reads it. Added 2026-11-13. |
+| `lesson_id` | bigint unsigned | NULLABLE, FOREIGN KEY → lessons.id, NULL ON DELETE | The lesson this row was for, as recorded by the legacy system (Go Roadie import only). Bookkeeping only. Added 2026-11-13. |
 | `type` | enum('payment','expense') | NOT NULL | Whether this is income or an expense |
 | `category` | varchar(64) | NOT NULL, DEFAULT 'none' | Slug from `config/finances.php` — `expense_categories` when type=expense, `payment_categories` when type=payment. Joined to `category_tax_mapping.category` for HMRC bucket + VAT treatment + method-dependence. |
 | `payment_method` | varchar(32) | NULLABLE | Slug from `config('finances.payment_methods')` |
@@ -1237,6 +1244,30 @@ Tracks payments received and expenses incurred by instructors. Supports recurrin
 - **Lesson income is not stored here.** The CRM Finances tab adds it read-only on the fly (`GetInstructorLessonIncomeAction`, returned as `lesson_income` by `GET /instructors/{instructor}/finances`): paid `payouts` plus cash / alternative-payment signed-off lessons (`GetInstructorCashLessonsAction`), the same figures as the Reports tab. Never copy them into this table — they would double count.
 - `imported` ("Imported (legacy)") is the catch-all for rows brought in by the legacy importer — present in both category lists, tax-treated like `none` (`outside_scope`, not claimable, no ITSA bucket) and hidden from the picker (`selectable_in_picker = false`).
 - **Recurring series are materialised upfront at creation** (`CreateInstructorFinanceAction`): a recurring create generates `recurrence_iterations` records (first on `date`, subsequent dates stepped by frequency using no-overflow month/year arithmetic), all sharing a `recurrence_group_id`. Updates/deletes affect single records only — no series regeneration. Receipts attach to individual records (typically the first).
+
+---
+
+### 22a. **student_tests**
+
+A pupil's theory or practical test and its result. Filled by the data import (Go Roadie `tests.csv`) for now; no UI yet. Separate from `calendar_items` (`item_type = practical_test`), which is the diary slot — a practical test row links to its slot. Added 2026-11-13.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Test ID |
+| `student_id` | bigint unsigned | FK → students.id, CASCADE ON DELETE | The pupil |
+| `instructor_id` | bigint unsigned | NULLABLE, FK → instructors.id, NULL ON DELETE | Instructor at the time |
+| `calendar_item_id` | bigint unsigned | NULLABLE, FK → calendar_items.id, NULL ON DELETE | The diary slot (practical tests) |
+| `type` | varchar(16) | NOT NULL | `StudentTestType`: `theory`, `practical` |
+| `date` | date | NOT NULL | Test date |
+| `time` | time | NULLABLE | Test time |
+| `test_centre` | varchar(255) | NULLABLE | Test centre name |
+| `result` | varchar(16) | NOT NULL | `StudentTestResult`: `booked` (not yet sat), `pass`, `fail`, `cancelled` |
+| `driving_faults` / `serious_faults` / `dangerous_faults` | smallint unsigned | NULLABLE | Fault counts from the test report |
+| `notes` | text | NULLABLE | Free text |
+| `created_at` / `updated_at` | timestamp | - | Timestamps |
+
+**Indexes:** `(student_id, date)`
+**Relationships:** belongs to `Student` (`Student::tests()`), `Instructor`, `CalendarItem`.
 
 ---
 
@@ -1579,12 +1610,33 @@ One execution of the legacy importer: a Data Import page upload, or an `import:*
 | `source` | varchar(16) | NOT NULL | `upload` (Data Import page) or `command` (`import:lessons` and other single-file import commands) |
 | `file_name` | varchar(255) | NULLABLE | Original zip file name (CSV basename for `command` runs) |
 | `status` | varchar(16) | DEFAULT 'running' | `queued` (waiting for `ImportBundleJob`; imports run one at a time), `running`, `completed`, `failed` |
+| `dry_run` | boolean | DEFAULT false | A check-only run: reads and plans the zip, reports what an import would do, writes nothing to Drive's tables. Added 2026-11-13. |
+| `stage` | varchar(32) | NULLABLE | Stage running now in a staged (multi-job) import, e.g. `students`, `diary`. Added 2026-11-13. |
 | `totals` | json | NULLABLE | Counts created: instructors_created, instructors_linked, locations, students, students_skipped, lessons, lessons_skipped, diary_blocks, finances, receipts. While `running` also `instructors_done` / `instructors_to_import` (progress). `import:lessons` runs: rows, already_imported, lessons, lessons_already_in_diary, lessons_marked_completed, skipped_* |
+| `stage_totals` | json | NULLABLE | Per-stage progress and counts in a staged import: `{stage: {jobs_done, jobs_total, added, filled, skipped, …}}`. Added 2026-11-13. |
 | `error` | text | NULLABLE | Exception message when `failed` (instructors before the failure stay imported) |
 | `completed_at` | timestamp | NULLABLE | When the run finished (either outcome) |
 | `created_at` / `updated_at` | timestamp | - | Timestamps |
 
-**Relationships:** belongs to `User`; has many `ImportMapping`.
+**Relationships:** belongs to `User`; has many `ImportMapping`; has many `ImportStagedRow`.
+
+---
+
+### 32a. **import_staged_rows**
+
+Temporary holding area for an uploaded import zip. Every CSV row is read in once, then the import jobs work through it a few instructors at a time. Rows are deleted when the run finishes; they never leave the database (the upload bucket is public). Added 2026-11-13.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Row ID |
+| `import_run_id` | bigint unsigned | FK → import_runs.id, CASCADE ON DELETE | The run the row belongs to |
+| `file` | varchar(32) | NOT NULL | Bundle section, e.g. `students`, `diary`, `progress` |
+| `instructor_ref` | varchar(64) | NULLABLE | The row's instructor ref (how jobs split the work) |
+| `source_ref` | varchar(191) | NULLABLE | The row's own ref (diary_ref, test_ref …) |
+| `line` | int unsigned | NOT NULL | Line number in the CSV, for the report |
+| `row` | json | NOT NULL | The CSV row (header => value) |
+
+**Indexes:** `(import_run_id, file, instructor_ref)`, `(import_run_id, file, source_ref)`. No timestamps.
 
 ---
 
@@ -1596,7 +1648,7 @@ The permanent record of everything the importer brought in. Links a legacy syste
 |--------|------|-------------|-------------|
 | `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Mapping ID |
 | `import_run_id` | bigint unsigned | NULLABLE, FK → import_runs.id (NULL ON DELETE) | Run that created/linked the row |
-| `entity` | varchar(32) | NOT NULL | `instructor` (→ instructors.id), `location` (→ locations.id, ref `{instructor_ref}:{sector}`), `student` (→ students.id), `diary` (→ calendar_items.id), `lesson` (→ lessons.id, ref = diary_ref), `finance` (→ instructor_finances.id), `mileage` (→ mileage_logs.id, ref = mileage_ref; `import:mileage`) |
+| `entity` | varchar(32) | NOT NULL | `instructor` (→ instructors.id), `location` (→ locations.id, ref `{instructor_ref}:{sector}`), `student` (→ students.id), `diary` (→ calendar_items.id), `lesson` (→ lessons.id, ref = diary_ref), `finance` (→ instructor_finances.id), `mileage` (→ mileage_logs.id, ref = mileage_ref; `import:mileage`), `test` (→ student_tests.id, ref = test_ref), `progress` (→ student_progress.id, ref = `{student_ref}:{category}:{skill}`), `reflective_log` (→ reflective_logs.id, ref = log_ref), `pickup_point` (→ student_pickup_points.id, ref = `{student_ref}:{position}`) — the last four added 2026-11-13 for the Go Roadie export. `ImportMapping::modelIdsFor()` resolves many refs in one query |
 | `source_ref` | varchar(191) | NOT NULL | The legacy system's own ID for the row |
 | `model_id` | bigint unsigned | NOT NULL | ID of the row (no FK — polymorphic by `entity`) |
 | `action` | varchar(16) | DEFAULT 'created' | `created` by the import, or `linked` (an existing instructor matched by email — not created, not changed) |

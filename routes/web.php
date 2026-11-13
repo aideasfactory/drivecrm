@@ -520,6 +520,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
             ->name('imports.template');
         Route::post('/imports/check', [ImportController::class, 'check'])
             ->name('imports.check');
+        Route::post('/imports/check-export', [ImportController::class, 'checkExport'])
+            ->name('imports.check-export');
         Route::post('/imports', [ImportController::class, 'store'])
             ->name('imports.store');
         Route::get('/imports/runs/{importRun}', [ImportController::class, 'show'])

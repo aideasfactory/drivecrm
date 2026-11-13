@@ -12,6 +12,7 @@ use App\Models\ImportRun;
 use App\Models\Instructor;
 use App\Models\User;
 use App\Support\ImportValues;
+use App\Support\PlaceholderEmails;
 
 class ImportInstructorAction
 {
@@ -25,6 +26,9 @@ class ImportInstructorAction
      *
      * - Ref already imported → the mapped instructor, untouched.
      * - Email belongs to an existing instructor → linked, untouched.
+     * - Email belongs to another kind of account (e.g. a pupil) → that
+     *   account is untouched; the new instructor gets a placeholder email
+     *   (`no-email+ins-1@drive-plus.co.uk`) and `exclude_from_emails`.
      * - Otherwise a new user + instructor is created with no email sent:
      *   `imported_at` set, `welcome_email_pending = true`, random password.
      *   `import:send-welcome-emails` sends the password-setup email later.
@@ -53,6 +57,14 @@ class ImportInstructorAction
             return ['instructor' => $existing, 'created' => false];
         }
 
+        // The email is already on another Drive account (e.g. a pupil): that account is left alone and the
+        // instructor gets a stand-in address instead, never emailed.
+        $emailTaken = User::query()->where('email', $email)->exists();
+
+        if ($emailTaken) {
+            $email = PlaceholderEmails::forRef($ref);
+        }
+
         $postcode = $this->nullable($row, 'postcode');
         $coordinates = $postcode ? ($this->fetchPostcodeCoordinates)($postcode) : null;
 
@@ -62,6 +74,7 @@ class ImportInstructorAction
             'password' => ImportValues::placeholderPasswordHash(),
             'password_change_required' => true,
             'welcome_email_pending' => true,
+            'exclude_from_emails' => $emailTaken,
             'imported_at' => now(),
             'role' => UserRole::INSTRUCTOR,
         ]);

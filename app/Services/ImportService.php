@@ -6,11 +6,12 @@ namespace App\Services;
 
 use App\Actions\Import\BuildImportTemplateAction;
 use App\Actions\Import\CompleteImportedLessonAction;
-use App\Actions\Import\CreateImportedPickupPointsAction;
 use App\Actions\Import\ConvertImportedLessonToPracticalTestAction;
+use App\Actions\Import\CreateImportedPickupPointsAction;
 use App\Actions\Import\FetchRemoteImportFileAction;
 use App\Actions\Import\FillImportedLessonSummaryAction;
 use App\Actions\Import\FixImportedPupilsAction;
+use App\Actions\Import\FlagPlaceholderEmailUsersAction;
 use App\Actions\Import\GetPendingImportedUsersAction;
 use App\Actions\Import\ImportCoverageAction;
 use App\Actions\Import\ImportDiaryItemAction;
@@ -45,8 +46,8 @@ use App\Models\User;
 use App\Support\ImportValues;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -111,7 +112,18 @@ class ImportService extends BaseService
         protected TickImportedChecklistItemAction $tickImportedChecklistItem,
         protected ImportMileageLogAction $importMileageLog,
         protected FetchRemoteImportFileAction $fetchRemoteImportFile,
+        protected FlagPlaceholderEmailUsersAction $flagPlaceholderEmailUsers,
     ) {}
+
+    /**
+     * Flag users with a placeholder email so nothing is ever emailed to them.
+     *
+     * @return array{users: int, by_style: array<string, int>}
+     */
+    public function excludePlaceholderEmailUsers(bool $dryRun = false): array
+    {
+        return ($this->flagPlaceholderEmailUsers)($dryRun);
+    }
 
     /**
      * Build the downloadable template zip (spec + example CSVs).
@@ -408,6 +420,18 @@ class ImportService extends BaseService
             ]);
 
         ImportBundleJob::releaseOverlapLock();
+
+        // Staged rows left behind by runs that are no longer active (in batches, so the table isn't locked for long).
+        $finishedRunIds = ImportRun::query()
+            ->whereNotIn('status', [ImportRun::STATUS_QUEUED, ImportRun::STATUS_RUNNING])
+            ->whereHas('stagedRows')
+            ->pluck('id');
+
+        foreach ($finishedRunIds as $runId) {
+            do {
+                $deleted = DB::table('import_staged_rows')->where('import_run_id', $runId)->limit(10000)->delete();
+            } while ($deleted > 0);
+        }
 
         return $count;
     }
@@ -1399,7 +1423,7 @@ class ImportService extends BaseService
      *
      * @return int Lessons completed
      */
-    protected function closeOffPastImportedLessons(): int
+    public function closeOffPastImportedLessons(): int
     {
         return DB::transaction(function (): int {
             $completed = 0;

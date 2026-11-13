@@ -12,6 +12,7 @@ use App\Models\Instructor;
 use App\Models\Student;
 use App\Models\User;
 use App\Support\ImportValues;
+use App\Support\PlaceholderEmails;
 
 class ImportStudentAction
 {
@@ -34,6 +35,10 @@ class ImportStudentAction
      * is not changed. An invalid email, or one on an account that isn't a
      * pupil (e.g. an instructor), is skipped (student null).
      *
+     * A blank or legacy-generated email (e.g. `example@<id>-student.com`) gets
+     * a placeholder (`no-email+<ref>@drive-plus.co.uk`) on both the user and
+     * the student, and the user is flagged `exclude_from_emails`.
+     *
      * @param  array<string, string|int>  $row
      * @return array{student: Student|null, created: bool, linked: bool}
      */
@@ -41,12 +46,28 @@ class ImportStudentAction
     {
         $ref = (string) $row['student_ref'];
 
-        $mappedId = ImportMapping::modelIdFor(ImportMapping::ENTITY_STUDENT, $ref);
-        if ($mappedId !== null) {
-            return ['student' => Student::query()->findOrFail($mappedId), 'created' => false, 'linked' => false];
+        $mapping = ImportMapping::query()
+            ->where('entity', ImportMapping::ENTITY_STUDENT)
+            ->where('source_ref', $ref)
+            ->first(['model_id', 'action']);
+
+        if ($mapping !== null) {
+            // A pupil deleted in Drive since it was imported stays deleted: skipped (student null), never recreated.
+            // A ref linked by email stays linked on every re-run, so its row never fills or ticks the pupil it was linked to.
+            return [
+                'student' => Student::query()->find($mapping->model_id),
+                'created' => false,
+                'linked' => $mapping->action === ImportMapping::ACTION_LINKED,
+            ];
         }
 
-        $email = strtolower((string) $row['email']);
+        $email = strtolower(trim((string) $row['email']));
+        $isPlaceholder = $email === '' || PlaceholderEmails::isPlaceholder($email);
+
+        // No real email: a stand-in address built from the ref; never emailed.
+        if ($isPlaceholder) {
+            $email = PlaceholderEmails::forRef($ref);
+        }
 
         if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return ['student' => null, 'created' => false, 'linked' => false];
@@ -76,6 +97,7 @@ class ImportStudentAction
             'password' => ImportValues::placeholderPasswordHash(),
             'password_change_required' => true,
             'welcome_email_pending' => true,
+            'exclude_from_emails' => $isPlaceholder,
             'imported_at' => now(),
             'role' => UserRole::STUDENT,
         ]);

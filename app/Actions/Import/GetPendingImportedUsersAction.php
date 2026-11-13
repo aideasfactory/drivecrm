@@ -13,7 +13,8 @@ class GetPendingImportedUsersAction
 {
     /**
      * Imported users whose welcome email has not gone out yet, instructors
-     * first so each instructor hears before their students do.
+     * first so each instructor hears before their students do. Users flagged
+     * `exclude_from_emails` (placeholder addresses) are never included.
      *
      * @param  array<int, int>  $instructorIds  Limit to these instructors and their students (empty = everyone)
      * @param  string  $only  `all`, `instructors` or `students`
@@ -30,6 +31,7 @@ class GetPendingImportedUsersAction
         return User::query()
             ->whereNotNull('imported_at')
             ->where('welcome_email_pending', true)
+            ->where('exclude_from_emails', false)
             ->whereIn('role', $roles)
             ->when($instructorIds !== [], fn (Builder $query) => $query->where(
                 fn (Builder $scoped) => $scoped

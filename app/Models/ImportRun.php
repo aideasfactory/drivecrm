@@ -32,7 +32,10 @@ class ImportRun extends Model
         'source',
         'file_name',
         'status',
+        'dry_run',
+        'stage',
         'totals',
+        'stage_totals',
         'error',
         'completed_at',
     ];
@@ -40,9 +43,16 @@ class ImportRun extends Model
     protected function casts(): array
     {
         return [
+            'dry_run' => 'boolean',
             'totals' => 'array',
+            'stage_totals' => 'array',
             'completed_at' => 'datetime',
         ];
+    }
+
+    public function stagedRows(): HasMany
+    {
+        return $this->hasMany(ImportStagedRow::class);
     }
 
     public function user(): BelongsTo

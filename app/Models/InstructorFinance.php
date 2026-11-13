@@ -17,6 +17,8 @@ class InstructorFinance extends Model
     protected $fillable = [
         'instructor_id',
         'vehicle_id',
+        'student_id',
+        'lesson_id',
         'type',
         'category',
         'payment_method',
@@ -56,6 +58,22 @@ class InstructorFinance extends Model
     public function vehicle(): BelongsTo
     {
         return $this->belongsTo(Vehicle::class);
+    }
+
+    /**
+     * The pupil this row was for, as recorded by the legacy system (import only; bookkeeping).
+     */
+    public function student(): BelongsTo
+    {
+        return $this->belongsTo(Student::class)->withTrashed();
+    }
+
+    /**
+     * The lesson this row was for, as recorded by the legacy system (import only; bookkeeping).
+     */
+    public function lesson(): BelongsTo
+    {
+        return $this->belongsTo(Lesson::class);
     }
 
     /**

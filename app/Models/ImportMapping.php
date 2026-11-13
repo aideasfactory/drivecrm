@@ -30,6 +30,14 @@ class ImportMapping extends Model
 
     public const ENTITY_MILEAGE = 'mileage'; // → mileage_logs.id (ref: the mileage_ref; import:mileage)
 
+    public const ENTITY_TEST = 'test'; // → student_tests.id (ref: the test_ref)
+
+    public const ENTITY_PROGRESS = 'progress'; // → student_progress.id (ref: "{student_ref}:{category}:{skill}")
+
+    public const ENTITY_REFLECTIVE_LOG = 'reflective_log'; // → reflective_logs.id (ref: the log_ref)
+
+    public const ENTITY_PICKUP_POINT = 'pickup_point'; // → student_pickup_points.id (ref: "{student_ref}:{position}")
+
     /** Row was created by the import. */
     public const ACTION_CREATED = 'created';
 
@@ -65,6 +73,29 @@ class ImportMapping extends Model
             ->where('entity', $entity)
             ->where('source_ref', $sourceRef)
             ->value('model_id');
+    }
+
+    /**
+     * Resolve many source refs at once (one query per 1,000 refs) — for the
+     * import jobs, which would otherwise look refs up one row at a time.
+     *
+     * @param  array<int, string>  $sourceRefs
+     * @return array<string, int> source ref => model ID, for refs already imported
+     */
+    public static function modelIdsFor(string $entity, array $sourceRefs): array
+    {
+        $ids = [];
+
+        foreach (array_chunk(array_values(array_unique($sourceRefs)), 1000) as $chunk) {
+            $ids += static::query()
+                ->where('entity', $entity)
+                ->whereIn('source_ref', $chunk)
+                ->pluck('model_id', 'source_ref')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+        }
+
+        return $ids;
     }
 
     /**

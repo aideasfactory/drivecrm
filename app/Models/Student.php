@@ -245,6 +245,14 @@ class Student extends Model
         return $this->hasMany(StudentChecklistItem::class);
     }
 
+    /**
+     * Theory and practical tests with their results (imported for now).
+     */
+    public function tests(): HasMany
+    {
+        return $this->hasMany(StudentTest::class);
+    }
+
     public function mockTests(): HasMany
     {
         return $this->hasMany(MockTest::class);

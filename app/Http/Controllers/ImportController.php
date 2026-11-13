@@ -9,6 +9,7 @@ use App\Http\Requests\ImportWelcomeEmailsRequest;
 use App\Models\ImportRun;
 use App\Models\User;
 use App\Services\ImportService;
+use App\Services\StagedImportService;
 use App\Support\ImportValues;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
@@ -18,9 +19,10 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Throwable;
 
 /**
- * Owner-only Data Import page: download the template, check a bundle zip,
- * then import it. The check reads the upload in the request; the import
- * stores the zip just long enough for ImportBundleJob to run it.
+ * Owner-only Data Import page: download the template, check a zip, then
+ * import it. Both run in the background (StagedImportService): the zip is
+ * stored just long enough for PrepareImportJob to read it, and the import
+ * runs in stages of small jobs. Add-only; no emails are sent.
  */
 class ImportController extends Controller
 {
@@ -28,11 +30,13 @@ class ImportController extends Controller
 
     public function __construct(
         protected ImportService $importService,
+        protected StagedImportService $stagedImportService,
     ) {}
 
     public function index(): Response
     {
-        $latestRun = ImportRun::query()->latest('id')->first();
+        // Check-only runs (dry_run) report in their own card, not as the latest import.
+        $latestRun = ImportRun::query()->where('dry_run', false)->latest('id')->first();
 
         return Inertia::render('Imports/Index', [
             'latestRun' => $latestRun ? $this->runPayload($latestRun) : null,
@@ -81,16 +85,38 @@ class ImportController extends Controller
     }
 
     /**
-     * Queue an uploaded bundle for import. The page has already checked it;
-     * the job checks it again before writing anything. No emails are sent.
-     *
-     * Imports run one at a time in the background — a second upload waits
-     * behind the first — and re-running skips everything already imported.
+     * Queue a check of a full export zip (Go Roadie structure, or the original
+     * bundle) in the background. Writes nothing to Drive's data; the page
+     * polls the run for the report.
+     */
+    public function checkExport(ImportBundleRequest $request): JsonResponse
+    {
+        try {
+            $run = $this->stagedImportService->queueCheck($request->file('file'), $request->user()->id);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json(['message' => 'Could not start the check. Try again.'], 500);
+        }
+
+        return response()->json([
+            'message' => 'Checking the file in the background. Nothing will be imported.',
+            'run' => $this->runPayload($run),
+        ], 202);
+    }
+
+    /**
+     * Queue an uploaded zip for import. The page has already checked it; the
+     * job checks it again before writing anything, then imports it in stages.
+     * Only one import at a time (409 while another is running); re-running
+     * skips everything already imported. No emails are sent.
      */
     public function store(ImportBundleRequest $request): JsonResponse
     {
         try {
-            $run = $this->importService->queueImport($request->file('file'), $request->user()->id);
+            $run = $this->stagedImportService->queueImport($request->file('file'), $request->user()->id);
+        } catch (RuntimeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 409);
         } catch (Throwable $exception) {
             report($exception);
 
@@ -100,7 +126,7 @@ class ImportController extends Controller
         }
 
         return response()->json([
-            'message' => 'Import started. It runs in the background — you can leave this page.',
+            'message' => 'Import started. The file is checked again, then imported in stages in the background — you can leave this page.',
             'run' => $this->runPayload($run),
         ], 202);
     }
@@ -153,15 +179,18 @@ class ImportController extends Controller
     }
 
     /**
-     * @return array{id: int, status: string, file_name: string|null, totals: array<string, int>|null, error: string|null, created_at: string|null, completed_at: string|null}
+     * @return array{id: int, status: string, dry_run: bool, stage: string|null, file_name: string|null, totals: array<string, mixed>|null, stage_totals: array<string, array<string, int>>|null, error: string|null, created_at: string|null, completed_at: string|null}
      */
     private function runPayload(ImportRun $run): array
     {
         return [
             'id' => $run->id,
             'status' => $run->status,
+            'dry_run' => (bool) $run->dry_run,
+            'stage' => $run->stage,
             'file_name' => $run->file_name,
             'totals' => $run->totals,
+            'stage_totals' => $run->stage_totals,
             'error' => $run->error,
             'created_at' => $run->created_at?->toIso8601String(),
             'completed_at' => $run->completed_at?->toIso8601String(),

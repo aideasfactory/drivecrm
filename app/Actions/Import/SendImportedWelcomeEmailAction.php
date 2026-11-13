@@ -23,10 +23,17 @@ class SendImportedWelcomeEmailAction
      * - Student → username + fresh temporary password; the flag is cleared here
      *   because the student invite action does not track it.
      *
+     * A user flagged `exclude_from_emails` (placeholder address) is never sent
+     * one and stays pending.
+     *
      * @return bool True when the email was queued
      */
     public function __invoke(User $user): bool
     {
+        if ($user->exclude_from_emails) {
+            return false;
+        }
+
         if ($user->role === UserRole::INSTRUCTOR && $user->instructor) {
             return ($this->sendInstructorWelcomeEmail)($user->instructor);
         }
