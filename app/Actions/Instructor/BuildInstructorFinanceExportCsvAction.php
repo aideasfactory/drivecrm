@@ -45,7 +45,7 @@ class BuildInstructorFinanceExportCsvAction
         }
 
         fwrite($handle, "\xEF\xBB\xBF");
-        fputcsv($handle, self::COLUMNS);
+        fputcsv($handle, self::COLUMNS, escape: '');
 
         $paymentRows = $finances->where('type', 'payment')
             ->map(fn (InstructorFinance $finance): array => $this->financeRow($finance))
@@ -88,7 +88,7 @@ class BuildInstructorFinanceExportCsvAction
 
         foreach ([$paymentRows, $expenseRows, $mileageRows] as $rows) {
             foreach ($rows as $row) {
-                fputcsv($handle, $row);
+                fputcsv($handle, array_map($this->neutraliseFormula(...), $row), escape: '');
             }
         }
 
@@ -120,6 +120,19 @@ class BuildInstructorFinanceExportCsvAction
             null,
             $finance->notes,
         ];
+    }
+
+    /**
+     * Prefix free-text cells that a spreadsheet would run as a formula
+     * (= + - @, tab, CR) with an apostrophe. Numbers are left untouched.
+     */
+    private function neutraliseFormula(string|int|float|null $value): string|int|float|null
+    {
+        if (! is_string($value) || $value === '' || is_numeric($value)) {
+            return $value;
+        }
+
+        return in_array($value[0], ['=', '+', '-', '@', "\t", "\r"], true) ? "'".$value : $value;
     }
 
     private function gbp(int $pence): string

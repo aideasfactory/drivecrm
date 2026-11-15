@@ -2048,7 +2048,7 @@ Exports the instructor's payments (manual payments **and** lesson income), expen
 - `Content-Type: text/csv; charset=UTF-8`
 - `Content-Disposition: attachment; filename="finances-2026-04-06-to-2026-11-15.csv"`
 
-**CSV format:** UTF-8 with BOM (opens cleanly in Excel), comma-separated, one header row. Rows come in three blocks, each oldest first: payments, then expenses, then mileage. An empty range returns just the header row.
+**CSV format:** UTF-8 with BOM (opens cleanly in Excel), comma-separated, one header row. Rows come in three blocks, each oldest first: payments, then expenses, then mileage. An empty range returns just the header row. Fields are RFC 4180 quoted (embedded `"` doubled). Text cells starting with `=`, `+`, `-`, `@`, tab or CR are prefixed with `'` so spreadsheets don't run them as formulas; numeric cells are never prefixed.
 
 | Column | Payments | Expenses | Mileage |
 |--------|----------|----------|---------|
