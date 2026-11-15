@@ -34,9 +34,26 @@ class InstructorWelcomeLinkController extends Controller
             );
         }
 
+        if (! hash_equals(self::fingerprint($user), (string) $request->query('fingerprint'))) {
+            return redirect()->route('password.request')->with(
+                'status',
+                'This account set-up link is no longer valid. Enter your email below and we\'ll send you a new link to set your password.'
+            );
+        }
+
         return redirect()->route('password.reset', [
             'token' => Password::broker()->createToken($user),
             'email' => $user->email,
         ]);
+    }
+
+    /**
+     * Binds a set-up link to the user's current email and password, so it dies
+     * when an admin corrects the email (the old address must not be able to
+     * claim the account) or the password is changed or reset.
+     */
+    public static function fingerprint(User $user): string
+    {
+        return hash_hmac('sha256', $user->email.'|'.$user->password, (string) config('app.key'));
     }
 }

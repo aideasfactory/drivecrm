@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Instructor;
 
 use App\Actions\Shared\LogActivityAction;
+use App\Http\Controllers\InstructorWelcomeLinkController;
 use App\Mail\InstructorWelcomeMail;
 use App\Models\Instructor;
 use App\Models\User;
@@ -53,7 +54,10 @@ class SendInstructorWelcomeEmailAction
             $setupUrl = URL::temporarySignedRoute(
                 'instructor.welcome.setup',
                 $linkExpiresAt,
-                ['user' => $user->id],
+                [
+                    'user' => $user->id,
+                    'fingerprint' => InstructorWelcomeLinkController::fingerprint($user),
+                ],
             );
 
             Mail::to($user->email)->queue(new InstructorWelcomeMail(

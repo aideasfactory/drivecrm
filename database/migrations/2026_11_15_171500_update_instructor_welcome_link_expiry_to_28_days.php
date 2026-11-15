@@ -6,21 +6,36 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    private const OLD_COPY = 'For your security, this setup link will expire in 24 hours.';
-
-    private const NEW_COPY = 'This setup link expires on {{link_expires_at}} (28 days after this email was sent).';
+    /**
+     * Old copy => new copy, applied in order. The full default sentence goes
+     * first; the shorter phrases catch staff-edited copy that kept the old
+     * wording (`{{expires_in_minutes}}` is no longer filled and would render blank).
+     *
+     * @var array<string, string>
+     */
+    private const REPLACEMENTS = [
+        'For your security, this setup link will expire in 24 hours.' => 'This setup link expires on {{link_expires_at}} (28 days after this email was sent).',
+        'expire in 24 hours' => 'expire on {{link_expires_at}}',
+        'expire in {{expires_in_minutes}} minutes' => 'expire on {{link_expires_at}}',
+    ];
 
     public function up(): void
     {
-        $this->replaceCopy(self::OLD_COPY, self::NEW_COPY);
+        $this->replaceCopy(self::REPLACEMENTS);
     }
 
     public function down(): void
     {
-        $this->replaceCopy(self::NEW_COPY, self::OLD_COPY);
+        $this->replaceCopy([
+            'This setup link expires on {{link_expires_at}} (28 days after this email was sent).' => 'For your security, this setup link will expire in 24 hours.',
+            'expire on {{link_expires_at}}' => 'expire in 24 hours',
+        ]);
     }
 
-    private function replaceCopy(string $search, string $replace): void
+    /**
+     * @param  array<string, string>  $replacements
+     */
+    private function replaceCopy(array $replacements): void
     {
         if (! Schema::hasTable('email_templates')) {
             return;
@@ -31,7 +46,7 @@ return new class extends Migration
             ->get(['id', 'body']);
 
         foreach ($templates as $template) {
-            $body = str_replace($search, $replace, (string) $template->body);
+            $body = str_replace(array_keys($replacements), array_values($replacements), (string) $template->body);
 
             if ($body === $template->body) {
                 continue;
