@@ -103,6 +103,7 @@ Route::prefix('v1')->group(function (): void {
             Route::delete('calendar/items/{calendarItem}/offers', [InstructorCalendarController::class, 'destroyOffer']);
             Route::get('finances/config', [InstructorFinanceController::class, 'config']);
             Route::get('finances/summary', [InstructorFinanceController::class, 'summary']);
+            Route::post('finances/export', [InstructorFinanceController::class, 'export'])->middleware('throttle:10,1');
             Route::get('finances', [InstructorFinanceController::class, 'index']);
             Route::post('finances', [InstructorFinanceController::class, 'store']);
             Route::get('finances/{finance}', [InstructorFinanceController::class, 'show']);
