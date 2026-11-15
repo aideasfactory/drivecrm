@@ -10,7 +10,7 @@ use App\Models\Instructor;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\URL;
 
 class SendInstructorWelcomeEmailAction
 {
@@ -23,8 +23,9 @@ class SendInstructorWelcomeEmailAction
      *
      * Flow:
      * 1. Mark the user's `welcome_email_pending` flag so admins can see if it never sends.
-     * 2. Mint a password-broker reset token (Laravel's standard, time-limited token).
-     * 3. Queue the welcome email with a link to the standard password.reset page.
+     * 2. Sign a set-up URL valid for `auth.instructor_welcome_link_expire_days`.
+     *    Clicking it mints a standard password-broker token and opens password.reset.
+     * 3. Queue the welcome email with that link and its expiry date.
      * 4. On success, clear the pending flag, stamp `welcome_email_last_sent_at`
      *    and log activity on the instructor.
      * 5. On failure, leave the pending flag set, log the error, and return false —
@@ -47,19 +48,18 @@ class SendInstructorWelcomeEmailAction
         $user->forceFill(['welcome_email_pending' => true])->save();
 
         try {
-            $token = Password::broker()->createToken($user);
+            $linkExpiresAt = now()->addDays((int) config('auth.instructor_welcome_link_expire_days', 28));
 
-            $setupUrl = route('password.reset', [
-                'token' => $token,
-                'email' => $user->email,
-            ]);
-
-            $expiresInMinutes = (int) config('auth.passwords.users.expire', 60 * 24);
+            $setupUrl = URL::temporarySignedRoute(
+                'instructor.welcome.setup',
+                $linkExpiresAt,
+                ['user' => $user->id],
+            );
 
             Mail::to($user->email)->queue(new InstructorWelcomeMail(
                 user: $user,
                 setupUrl: $setupUrl,
-                expiresInMinutes: $expiresInMinutes,
+                linkExpiresAt: $linkExpiresAt,
             ));
 
             $user->forceFill([

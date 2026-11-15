@@ -21,6 +21,7 @@ use App\Http\Controllers\Hmrc\Vat\VatController;
 use App\Http\Controllers\Hmrc\Vehicles\VehicleController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\InstructorController;
+use App\Http\Controllers\InstructorWelcomeLinkController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\LessonsBookedController;
 use App\Http\Controllers\MobileStripeOnboardingController;
@@ -749,6 +750,11 @@ Route::get('/stripe/setup/{instructor}', [StripeSetupLinkController::class, 'sta
     ->name('stripe.setup.start');
 Route::get('/stripe/setup/{instructor}/complete', [StripeSetupLinkController::class, 'complete'])
     ->name('stripe.setup.complete');
+
+// Instructor welcome email set-up link. Unauthenticated — the controller
+// checks the signature itself so expired links go to forgot-password.
+Route::get('/welcome/instructor/{user}', InstructorWelcomeLinkController::class)
+    ->name('instructor.welcome.setup');
 
 // Payment-link checkout return (instructor-sent Stripe payment links).
 // Unauthenticated — the student is clicking through from an email and has

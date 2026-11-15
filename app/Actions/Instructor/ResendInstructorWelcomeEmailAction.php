@@ -25,8 +25,8 @@ class ResendInstructorWelcomeEmailAction
      * Admin-triggered resend of the onboarding (welcome / password-setup) email.
      *
      * Allowed while the instructor hasn't signed up yet, or while the original
-     * send is still flagged as failed. Each send mints a fresh password-broker
-     * token, which replaces any earlier (possibly expired) setup link.
+     * send is still flagged as failed. Each send signs a fresh setup link
+     * with a new expiry date, which replaces an expired earlier link.
      *
      * @return bool True when the email was queued
      *
