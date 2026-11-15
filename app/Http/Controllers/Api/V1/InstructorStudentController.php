@@ -24,7 +24,8 @@ class InstructorStudentController extends Controller
      * Get the authenticated instructor's students grouped by status.
      *
      * Pass `?active_only=1` for pickers that start a booking: every group then
-     * holds only `status = active` students, so `passed` and `inactive` are empty.
+     * holds only `status = active` students, so `passed` and `inactive` are empty,
+     * and `active` is every active student (no limit) sorted by first name then surname.
      */
     public function index(Request $request): JsonResponse
     {
@@ -38,7 +39,9 @@ class InstructorStudentController extends Controller
 
         if ((bool) ($validated['active_only'] ?? false)) {
             $grouped = [
-                'active' => $grouped['active'],
+                'active' => $grouped['active']
+                    ->sortBy(fn (Student $student): string => mb_strtolower(trim("{$student->first_name} {$student->surname}")))
+                    ->values(),
                 'passed' => collect(),
                 'inactive' => collect(),
                 'recent_activity' => $grouped['recent_activity']
