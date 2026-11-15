@@ -48,6 +48,10 @@ class ExportInstructorsRequest extends FormRequest
                 GetInstructorListAction::AVAILABILITY_ADDED,
                 GetInstructorListAction::AVAILABILITY_NOT_ADDED,
             ])],
+            'low_availability' => ['nullable', Rule::in([
+                GetInstructorListAction::LOW_AVAILABILITY,
+                GetInstructorListAction::NOT_LOW_AVAILABILITY,
+            ])],
         ];
     }
 
@@ -64,6 +68,7 @@ class ExportInstructorsRequest extends FormRequest
             'signed_up.in' => 'The signed up filter must be signed_up or not_signed_up.',
             'stripe.in' => 'The Stripe filter must be connected or not_connected.',
             'availability.in' => 'The availability filter must be added or not_added.',
+            'low_availability.in' => 'The low availability filter must be low or not_low.',
         ];
     }
 }

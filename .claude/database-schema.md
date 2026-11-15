@@ -244,6 +244,10 @@ Organizational teams for grouping users. The default team is "Drive" (id=1). The
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
+**Known `settings` keys (default team id=1):**
+- `default_lesson_duration_minutes` (int, seeded 60)
+- `low_availability` (object, optional — admin-editable in Settings → Low Availability): `{ "weeks": 4, "min_slots_per_week": 1 }`. An active, Stripe-connected instructor is flagged as low availability when any of the next `weeks` rolling 7-day weeks has fewer than `min_slots_per_week` open "Available" slots (`CalendarItem::emptyAvailability`). Defaults apply when the key is missing (`GetLowAvailabilitySettingsAction`).
+
 **Relationships:**
 - Has many `Users` (via `users.current_team_id`)
 

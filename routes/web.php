@@ -383,6 +383,10 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('reports.availability');
     Route::get('/reports/availability/export', [ReportController::class, 'exportAvailability'])
         ->name('reports.availability.export');
+    Route::get('/reports/low-availability', [ReportController::class, 'lowAvailability'])
+        ->name('reports.low-availability');
+    Route::get('/reports/low-availability/export', [ReportController::class, 'exportLowAvailability'])
+        ->name('reports.low-availability.export');
     Route::get('/reports/invoice-due', [ReportController::class, 'invoiceDue'])
         ->name('reports.invoice-due');
     Route::get('/reports/invoice-due/export', [ReportController::class, 'exportInvoiceDue'])

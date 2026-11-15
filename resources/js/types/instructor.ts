@@ -10,9 +10,17 @@ export interface Instructor {
   stripe_connected: boolean
   availability_added: boolean
   setup_complete: boolean
+  available_slots_by_week: number[]
+  total_available_slots: number
+  low_availability: boolean
   pupils_count: number
   last_sync: string
   pending_deletion_on: string | null
+}
+
+export interface LowAvailabilitySettings {
+  weeks: number
+  min_slots_per_week: number
 }
 
 export interface InstructorDetail {

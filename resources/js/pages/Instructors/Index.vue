@@ -15,8 +15,8 @@ import {
 } from '@/components/ui/table'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { Search, Plus, Download, FileUp, Check, X } from 'lucide-vue-next'
-import type { Instructor, InstructorFormOptions } from '@/types/instructor'
+import { Search, Plus, Download, FileUp, Check, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-vue-next'
+import type { Instructor, InstructorFormOptions, LowAvailabilitySettings } from '@/types/instructor'
 import AddInstructorSheet from '@/components/Instructors/AddInstructorSheet.vue'
 import CsvImportSheet from '@/components/CsvImportSheet.vue'
 import { useRole } from '@/composables/useRole'
@@ -25,6 +25,7 @@ import { exportCsv } from '@/actions/App/Http/Controllers/InstructorController'
 interface Props {
     instructors: Instructor[]
     formOptions: InstructorFormOptions
+    lowAvailability: LowAvailabilitySettings
 }
 
 const props = defineProps<Props>()
@@ -36,6 +37,8 @@ type OnboardingEmailFilter = '' | 'sent' | 'not_sent'
 type SignedUpFilter = '' | 'signed_up' | 'not_signed_up'
 type StripeFilter = '' | 'connected' | 'not_connected'
 type AvailabilityFilter = '' | 'added' | 'not_added'
+type LowAvailabilityFilter = '' | 'low' | 'not_low'
+type SlotsSort = '' | 'asc' | 'desc'
 
 interface Filters {
     setup: SetupFilter
@@ -43,6 +46,7 @@ interface Filters {
     signed_up: SignedUpFilter
     stripe: StripeFilter
     availability: AvailabilityFilter
+    low_availability: LowAvailabilityFilter
 }
 
 // Filters live in the page address so a chase list can be bookmarked or shared.
@@ -58,6 +62,8 @@ const onboardingEmailFilter = ref<OnboardingEmailFilter>(fromQuery('onboarding_e
 const signedUpFilter = ref<SignedUpFilter>(fromQuery('signed_up', ['signed_up', 'not_signed_up']))
 const stripeFilter = ref<StripeFilter>(fromQuery('stripe', ['connected', 'not_connected']))
 const availabilityFilter = ref<AvailabilityFilter>(fromQuery('availability', ['added', 'not_added']))
+const lowAvailabilityFilter = ref<LowAvailabilityFilter>(fromQuery('low_availability', ['low', 'not_low']))
+const slotsSort = ref<SlotsSort>(fromQuery('sort_slots', ['asc', 'desc']))
 
 const filterSelectClass =
     'h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
@@ -87,6 +93,7 @@ const currentFilters = computed<Filters>(() => ({
     signed_up: signedUpFilter.value,
     stripe: stripeFilter.value,
     availability: availabilityFilter.value,
+    low_availability: lowAvailabilityFilter.value,
 }))
 
 // Mirrors GetInstructorListAction::applyFilters so the CSV export matches the list on screen.
@@ -102,13 +109,28 @@ const matches = (instructor: Instructor, filters: Filters) => {
         matchesFilter(instructor.onboarding_email_sent, filters.onboarding_email, 'sent') &&
         matchesFilter(instructor.signed_up, filters.signed_up, 'signed_up') &&
         matchesFilter(instructor.stripe_connected, filters.stripe, 'connected') &&
-        matchesFilter(instructor.availability_added, filters.availability, 'added')
+        matchesFilter(instructor.availability_added, filters.availability, 'added') &&
+        matchesFilter(instructor.low_availability, filters.low_availability, 'low')
     )
 }
 
-const filteredInstructors = computed(() =>
-    props.instructors.filter((instructor) => matches(instructor, currentFilters.value)),
-)
+const filteredInstructors = computed(() => {
+    const rows = props.instructors.filter((instructor) => matches(instructor, currentFilters.value))
+    const direction = slotsSort.value === 'asc' ? 1 : slotsSort.value === 'desc' ? -1 : 0
+
+    return direction === 0
+        ? rows
+        : [...rows].sort((a, b) => (a.total_available_slots - b.total_available_slots) * direction)
+})
+
+const toggleSlotsSort = () => {
+    slotsSort.value = slotsSort.value === '' ? 'asc' : slotsSort.value === 'asc' ? 'desc' : ''
+}
+
+const slotsTitle = (instructor: Instructor) =>
+    instructor.available_slots_by_week
+        .map((slots, week) => `Week ${week + 1}: ${slots} slot${slots === 1 ? '' : 's'}`)
+        .join('\n')
 
 /** How many instructors an option would show, given the search and the other filters. */
 const optionCount = <K extends keyof Filters>(key: K, value: Filters[K]) =>
@@ -129,6 +151,7 @@ const clearFilters = () => {
     signedUpFilter.value = ''
     stripeFilter.value = ''
     availabilityFilter.value = ''
+    lowAvailabilityFilter.value = ''
 }
 
 const filterQuery = computed(() => {
@@ -144,8 +167,8 @@ const filterQuery = computed(() => {
     return query
 })
 
-watch(filterQuery, (query) => {
-    const params = new URLSearchParams(query).toString()
+watch([filterQuery, slotsSort], ([query, sort]) => {
+    const params = new URLSearchParams(sort ? { ...query, sort_slots: sort } : query).toString()
     window.history.replaceState(
         window.history.state,
         '',
@@ -279,6 +302,15 @@ const breadcrumbs = [{ title: 'Instructors' }]
                         <option value="added">Availability: Added ({{ optionCount('availability', 'added') }})</option>
                         <option value="not_added">Availability: Not added ({{ optionCount('availability', 'not_added') }})</option>
                     </select>
+                    <select
+                        v-model="lowAvailabilityFilter"
+                        aria-label="Filter by low availability"
+                        :class="filterSelectClass"
+                    >
+                        <option value="">Low availability: All ({{ optionCount('low_availability', '') }})</option>
+                        <option value="low">Low availability: Yes ({{ optionCount('low_availability', 'low') }})</option>
+                        <option value="not_low">Low availability: No ({{ optionCount('low_availability', 'not_low') }})</option>
+                    </select>
                     <Button v-if="hasActiveFilters" variant="ghost" size="sm" @click="clearFilters">
                         <X class="mr-2 h-4 w-4" />
                         Clear filters
@@ -301,6 +333,19 @@ const breadcrumbs = [{ title: 'Instructors' }]
                                 <TableHead>Signed up</TableHead>
                                 <TableHead>Stripe</TableHead>
                                 <TableHead>Availability</TableHead>
+                                <TableHead>
+                                    <button
+                                        type="button"
+                                        class="inline-flex items-center gap-1 hover:text-foreground"
+                                        :title="`Open slots over the next ${props.lowAvailability.weeks} weeks`"
+                                        @click="toggleSlotsSort"
+                                    >
+                                        Available slots
+                                        <ArrowUp v-if="slotsSort === 'asc'" class="h-3 w-3" />
+                                        <ArrowDown v-else-if="slotsSort === 'desc'" class="h-3 w-3" />
+                                        <ArrowUpDown v-else class="h-3 w-3" />
+                                    </button>
+                                </TableHead>
                                 <TableHead>Pupils</TableHead>
                                 <TableHead>Last Sync</TableHead>
                             </TableRow>
@@ -347,6 +392,16 @@ const breadcrumbs = [{ title: 'Instructors' }]
                                     </Badge>
                                 </TableCell>
                                 <TableCell>
+                                    <div class="flex items-center gap-2" :title="slotsTitle(instructor)">
+                                        <span class="font-medium tabular-nums">
+                                            {{ instructor.total_available_slots }}
+                                        </span>
+                                        <Badge v-if="instructor.low_availability" variant="destructive">
+                                            Low availability
+                                        </Badge>
+                                    </div>
+                                </TableCell>
+                                <TableCell>
                                     <span class="font-medium">
                                         {{ instructor.pupils_count }}
                                     </span>
@@ -358,7 +413,7 @@ const breadcrumbs = [{ title: 'Instructors' }]
                                 </TableCell>
                             </TableRow>
                             <TableRow v-if="filteredInstructors.length === 0">
-                                <TableCell colspan="7" class="text-center">
+                                <TableCell colspan="8" class="text-center">
                                     <div class="py-8 text-muted-foreground">
                                         No instructors found
                                     </div>

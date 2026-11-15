@@ -3,15 +3,20 @@ import { Link } from '@inertiajs/vue3';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { computed } from 'vue';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
+import { useRole } from '@/composables/useRole';
 import { toUrl } from '@/lib/utils';
 import { edit as editAppearance } from '@/routes/appearance';
+import { edit as editLowAvailability } from '@/routes/low-availability-settings';
 import { edit as editProfile } from '@/routes/profile';
 import { show } from '@/routes/two-factor';
 import { edit as editPassword } from '@/routes/user-password';
 import { type NavItem } from '@/types';
 
-const sidebarNavItems: NavItem[] = [
+const { hasFullOwnerAccess } = useRole();
+
+const accountNavItems: NavItem[] = [
     {
         title: 'Profile',
         href: editProfile(),
@@ -29,6 +34,12 @@ const sidebarNavItems: NavItem[] = [
         href: editAppearance(),
     },
 ];
+
+const sidebarNavItems = computed<NavItem[]>(() =>
+    hasFullOwnerAccess.value
+        ? [...accountNavItems, { title: 'Low Availability', href: editLowAvailability() }]
+        : accountNavItems,
+);
 
 const { isCurrentUrl } = useCurrentUrl();
 </script>

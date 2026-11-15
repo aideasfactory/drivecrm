@@ -10,6 +10,11 @@ class Team extends Model
 {
     use HasFactory;
 
+    /**
+     * The seeded "Drive" team whose settings hold platform-wide configuration.
+     */
+    public const DEFAULT_TEAM_ID = 1;
+
     protected $fillable = [
         'uuid',
         'name',
