@@ -12,7 +12,10 @@ use Illuminate\Support\Facades\Log;
 
 class SendPushNotificationAction
 {
-    public function __invoke(PushNotification $notification): bool
+    /**
+     * @param  string|null  $priority  Expo priority ('default', 'normal', 'high'); null keeps Expo's default.
+     */
+    public function __invoke(PushNotification $notification, ?string $priority = null): bool
     {
         $user = $notification->user;
         $token = $user->expo_push_token;
@@ -34,6 +37,10 @@ class SendPushNotificationAction
 
             if ($notification->data) {
                 $message->setData($notification->data);
+            }
+
+            if ($priority) {
+                $message->setPriority($priority);
             }
 
             $response = (new Expo)->send($message)->to([$token])->push();

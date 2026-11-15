@@ -92,4 +92,34 @@ class PushNotificationService extends BaseService
             return null;
         }
     }
+
+    /**
+     * Like queueIfHasToken, but sends straight away at Expo 'high' priority
+     * instead of waiting for push:send-queued. For time-sensitive pushes
+     * (chat messages): Android 'normal' priority is deferred by Doze until
+     * the device wakes. A failed send is marked FAILED and not retried.
+     *
+     * @param  array<string, mixed>|null  $data
+     */
+    public function sendNowIfHasToken(?User $user, string $title, string $body, ?array $data = null): ?PushNotification
+    {
+        if (! $user || ! $user->expo_push_token) {
+            return null;
+        }
+
+        try {
+            $notification = ($this->queuePushNotification)($user, $title, $body, $data);
+            ($this->sendPushNotification)($notification, 'high');
+
+            return $notification;
+        } catch (\Exception $e) {
+            Log::warning('Failed to send push notification', [
+                'user_id' => $user->id,
+                'title' => $title,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
 }
