@@ -131,6 +131,8 @@ class PupilController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
+        $this->instructorService->invalidateStudentCache($instructor);
+
         return response()->json(['message' => 'Instructor assigned successfully.']);
     }
 
@@ -855,6 +857,10 @@ class PupilController extends Controller
     {
         $student = app(UpdateStudentStatusAction::class)($student, $request->validated());
 
+        if ($student->instructor) {
+            $this->instructorService->invalidateStudentCache($student->instructor);
+        }
+
         return response()->json([
             'student' => $student,
             'message' => 'Student status updated successfully.',
@@ -899,7 +905,13 @@ class PupilController extends Controller
             return response()->json(['message' => 'Student is not assigned to an instructor.'], 422);
         }
 
+        $instructor = $student->instructor;
+
         $student = app(RemoveStudentFromInstructorAction::class)($student);
+
+        if ($instructor) {
+            $this->instructorService->invalidateStudentCache($instructor);
+        }
 
         return response()->json([
             'student' => $student,

@@ -54,6 +54,13 @@ class StudentTransferService extends BaseService
         TransferReason $reason,
         ?string $notes = null,
     ): array {
-        return ($this->executeTransfer)($student, $destination, $admin, $reason, $notes);
+        $result = ($this->executeTransfer)($student, $destination, $admin, $reason, $notes);
+
+        $this->invalidate([
+            $this->cacheKey('instructor', $result['source_instructor']->id, 'grouped_students'),
+            $this->cacheKey('instructor', $destination->id, 'grouped_students'),
+        ]);
+
+        return $result;
     }
 }
