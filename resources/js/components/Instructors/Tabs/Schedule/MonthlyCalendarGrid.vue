@@ -201,6 +201,7 @@ const MAX_VISIBLE_EVENTS = 3
                         :key="evt.id"
                         class="flex items-center gap-1 rounded px-1 py-0.5 text-[10px] leading-tight"
                         :class="pillClasses(evt)"
+                        :title="`${formatTime(evt.startTime)} ${statusLabel(evt)}`"
                         @click.stop="emit('eventClick', evt)"
                     >
                         <span class="inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full" :class="dotColor(evt)"></span>
