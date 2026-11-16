@@ -13,6 +13,7 @@ export interface Pupil {
     has_app: boolean
     has_test_pass_guarantee: boolean
     status: 'active' | 'pending' | 'completed' | 'cancelled'
+    transferred_away: boolean
 }
 
 export interface PupilListing {

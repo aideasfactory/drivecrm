@@ -55,6 +55,9 @@ const canBroadcast = computed(
 )
 
 const pupils = ref<Pupil[]>([])
+const broadcastRecipientCount = computed(
+    () => pupils.value.filter((pupil) => !pupil.transferred_away).length,
+)
 const loading = ref(true)
 const searchQuery = ref('')
 const showAllPupils = ref(false)
@@ -477,6 +480,13 @@ const handleCreatePupil = async () => {
                             </TableCell>
                             <TableCell>
                                 <Badge
+                                    v-if="pupil.transferred_away"
+                                    variant="outline"
+                                >
+                                    Transferred – sign-off due
+                                </Badge>
+                                <Badge
+                                    v-else
                                     :variant="getStatusVariant(pupil.status)"
                                 >
                                     {{ getStatusLabel(pupil.status) }}
@@ -578,8 +588,8 @@ const handleCreatePupil = async () => {
 
                 <p class="text-sm text-muted-foreground">
                     This message will be sent to
-                    <span class="font-semibold">{{ pupils.length }}</span>
-                    {{ pupils.length === 1 ? 'pupil' : 'pupils' }}.
+                    <span class="font-semibold">{{ broadcastRecipientCount }}</span>
+                    {{ broadcastRecipientCount === 1 ? 'pupil' : 'pupils' }}.
                 </p>
 
                 <div class="flex justify-end gap-3 pt-4">

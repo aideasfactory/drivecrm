@@ -15,6 +15,10 @@ class GetInstructorPupilsAction
     /**
      * Get all students belonging to an instructor with computed stats.
      *
+     * Also includes pupils transferred to another instructor while a past
+     * lesson this instructor taught is still waiting for sign-off, flagged
+     * `transferred_away`, so the instructor can open and sign it off.
+     *
      * @param  Instructor  $instructor  The instructor to fetch pupils for
      * @param  string|null  $search  Optional search term (name, email, phone)
      * @param  string  $status  Filter by student status ('active' by default, 'all' to show everyone)
@@ -22,7 +26,15 @@ class GetInstructorPupilsAction
      */
     public function __invoke(Instructor $instructor, ?string $search = null, string $status = 'active'): Collection
     {
-        $query = Student::where('instructor_id', $instructor->id)
+        $query = Student::query()
+            ->where(function ($q) use ($instructor) {
+                $q->where('instructor_id', $instructor->id)
+                    ->orWhereHas('orders.lessons', fn ($lessons) => $lessons
+                        ->where('instructor_id', $instructor->id)
+                        ->where('status', LessonStatus::PENDING)
+                        ->whereNull('banked_at')
+                        ->whereDate('date', '<=', Carbon::today()));
+            })
             ->with(['user', 'orders.lessons.lessonPayment']);
 
         if ($status !== 'all') {
@@ -43,7 +55,7 @@ class GetInstructorPupilsAction
             });
         }
 
-        return $query->get()->map(function (Student $student) {
+        return $query->get()->map(function (Student $student) use ($instructor) {
             $activeOrder = $student->orders->first();
             $lessonsTotal = 0;
             $lessonsCompleted = 0;
@@ -85,6 +97,7 @@ class GetInstructorPupilsAction
                 'has_app' => $student->app_last_active_at !== null,
                 'has_test_pass_guarantee' => $student->hasTestPassGuarantee(),
                 'status' => $student->status ?? 'active',
+                'transferred_away' => $student->instructor_id !== $instructor->id,
             ];
         });
     }
