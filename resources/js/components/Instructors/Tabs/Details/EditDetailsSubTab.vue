@@ -154,7 +154,7 @@ const savePackage = async (formData: PackageFormData) => {
         } else if (selectedPackage.value) {
             // Update existing package
             await axios.put(
-                `/packages/${selectedPackage.value.id}`,
+                `/instructors/${props.instructor.id}/packages/${selectedPackage.value.id}`,
                 formData
             )
             toast({ title: 'Package updated successfully!' })
@@ -165,8 +165,17 @@ const savePackage = async (formData: PackageFormData) => {
         closeSheet()
     } catch (error: any) {
         console.error('Failed to save package:', error)
-        const message = error.response?.data?.message || 'Failed to save package'
-        toast({ title: message, variant: 'destructive' })
+        const errors = error.response?.data?.errors
+        if (errors) {
+            toast({
+                title: 'Please fix the following',
+                description: (Object.values(errors).flat() as string[]).join(' '),
+                variant: 'destructive',
+            })
+        } else {
+            const message = error.response?.data?.message || 'Failed to save package'
+            toast({ title: message, variant: 'destructive' })
+        }
     } finally {
         saving.value = false
     }

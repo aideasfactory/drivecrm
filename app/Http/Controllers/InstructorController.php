@@ -41,6 +41,7 @@ use App\Http\Requests\StoreSlotOfferRequest;
 use App\Http\Requests\UpdateCalendarItemRequest;
 use App\Http\Requests\UpdateInstructorPriceUpliftRequest;
 use App\Http\Requests\UpdateInstructorRequest;
+use App\Http\Requests\UpdatePackageRequest;
 use App\Models\CalendarItem;
 use App\Models\Contact;
 use App\Models\Instructor;
@@ -53,6 +54,7 @@ use App\Models\Payout;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\HmrcService;
+use App\Services\InstructorPackageService;
 use App\Services\InstructorService;
 use App\Services\OrderService;
 use App\Services\PriceUpliftService;
@@ -454,6 +456,20 @@ class InstructorController extends Controller
         return response()->json([
             'package' => $this->packagePayload($package),
         ], 201);
+    }
+
+    /**
+     * Update an instructor-owned package.
+     */
+    public function updatePackage(UpdatePackageRequest $request, Instructor $instructor, Package $package, InstructorPackageService $packageService): JsonResponse
+    {
+        $this->assertPackageBelongsToInstructor($instructor, $package);
+
+        $updated = $packageService->updatePackage($package, $request->validated());
+
+        return response()->json([
+            'package' => $this->packagePayload($updated),
+        ]);
     }
 
     /**

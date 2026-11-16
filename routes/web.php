@@ -119,6 +119,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('instructors.packages');
     Route::post('/instructors/{instructor}/packages', [InstructorController::class, 'createPackage'])
         ->name('instructors.packages.store');
+    Route::put('/instructors/{instructor}/packages/{package}', [InstructorController::class, 'updatePackage'])
+        ->name('instructors.packages.update');
     Route::delete('/instructors/{instructor}/packages/{package}', [InstructorController::class, 'deactivatePackage'])
         ->name('instructors.packages.destroy');
     Route::patch('/instructors/{instructor}/packages/{package}/restore', [InstructorController::class, 'reactivatePackage'])
