@@ -4764,6 +4764,8 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 
 Instructor responses are unchanged.
 
+**Transferred pupils.** Besides the pupil's current instructor, the instructor who taught the lesson (`instructor_id`) can open it, even after the pupil was transferred to another instructor. That is how the previous instructor opens a past, unsigned lesson from their diary (`GET /instructor/lessons`) to sign it off.
+
 **URL Parameters:**
 
 | Parameter | Type | Description |
@@ -4911,6 +4913,8 @@ Sign off a lesson as completed. **Same contract and pipeline as admin CRM:** bod
 The mobile API runs the existing `LessonSignOffService` (the same code the admin job uses) **in this request**, then returns the lesson. Admin still queues `ProcessLessonSignOffJob`; that job and the payout/onboarding/payment guards are unchanged.
 
 Unpaid weekly lessons, unpaid upfront orders, and instructors who are not Stripe-onboarded return `422` with the service message. A non-pending lesson (draft / already completed) returns `404` from the pending-only lookup — same as before.
+
+**Who can sign off:** only the instructor who taught the lesson (`instructor_id` on the lesson), who is also the instructor paid for it. This is not always the pupil's current instructor: a transfer only moves future lessons, so after a transfer the **previous** instructor still signs off the past lessons they taught (`403` for the new instructor), and the payout goes to the previous instructor as for any other lesson. The pending-lesson lookup runs first, so an unknown or non-pending lesson returns `404` before the `403` check.
 
 **URL Parameters:**
 
@@ -8309,6 +8313,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-12 | **Instructor pupil chat opened the wrong thread.** For instructors, `{user}` on `GET /messages/conversations/{user}` and `POST /messages/conversations/{user}/read`, and `recipient_id` on `POST /messages`, now resolve to the instructor's **own student** first. Previously the backend checked "is this an owner user ID?" first, so a pupil whose student ID equalled an admin's user ID opened the (empty) support thread — the list showed their preview/unread badge, the chat said "No messages yet", mark-read never cleared the badge, and replies went to the admin (found on Mark Terry-Lush / Marni James). No shape changes. **App action:** none — keep passing `student_id` for pupil chats and the support user ID for support. *(Superseded by the next entry: always send the chat type.)* | Messages (conversation, mark read, send) |
 | 2026-11-12 | **Explicit chat type for messages.** Removes the student-ID-vs-admin-user-ID ambiguity in both directions. New optional `?type=student\|support` on `GET /messages/conversations/{user}` and `POST /messages/conversations/{user}/read`, and `recipient_type` (`student`\|`support`) on `POST /messages`. `support` → `{user}` / `recipient_id` is an admin/owner **user ID** (shared support thread; `404` otherwise); `student` → one of the instructor's own students by **student ID** (`404` otherwise, incl. student callers). Omitted → legacy resolution (instructor's own student first, then owner user ID). New `chat_type` (`support`\|`student`\|`instructor`) on every `GET /messages/conversations` object and `GET /messages/unread-count` `conversations[]` item. Additive — no fields removed, no schema change. **App action:** read `chat_type` on list/unread rows; open/mark-read/send with `type=support` + `user.id` for support rows and `type=student` + `student_id` for pupil rows. | Messages (conversations, conversation, mark read, send, unread-count) |
 | 2026-11-12 | **Chat type follow-up.** `type` / `recipient_type` now also accept `instructor` (pupil → their instructor, by user ID), so every `chat_type` value can be passed straight back; previously `instructor` returned `422`. `GET /messages/conversations` now returns **one** `support` row for all admins (it opens the shared support thread; `unread_count` covers every admin) instead of one row per admin. `GET /messages/unread-count` is unchanged — still one row per sending admin, so sum the `chat_type: "support"` rows for the support badge. | Messages (conversations, conversation, mark read, send) |
+| 2026-11-16 | **Sign-off after a pupil transfer.** `POST /students/{student}/lessons/{lesson}/sign-off` now authorises the instructor who taught the lesson (`lessons.instructor_id`) instead of the pupil's current instructor: the previous instructor can sign off past lessons taught before a transfer, and the new instructor gets `403` for them. `GET /students/{student}/lessons/{lesson}` also allows the instructor who taught the lesson. No request/response shape change. | Lesson Sign-Off, Lesson Detail |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

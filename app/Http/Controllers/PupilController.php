@@ -576,6 +576,9 @@ class PupilController extends Controller
 
     /**
      * Sign off a lesson as completed, triggering payout and notifications.
+     *
+     * Staff can sign off any lesson; an instructor only the lessons they taught,
+     * which stay theirs after the pupil is transferred to another instructor.
      */
     public function signOffLesson(Student $student, Lesson $lesson): JsonResponse
     {
@@ -591,6 +594,12 @@ class PupilController extends Controller
 
         if (! $lessonBelongsToStudent) {
             return response()->json(['message' => 'Lesson not found for this student.'], 404);
+        }
+
+        if (request()->user()?->isInstructor() && request()->user()->cannot('signOffLesson', $lesson)) {
+            return response()->json([
+                'message' => 'Only the instructor who taught this lesson can sign it off.',
+            ], 403);
         }
 
         // Lesson must be pending

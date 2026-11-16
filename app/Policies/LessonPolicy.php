@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use App\Models\Lesson;
 use App\Models\Student;
 use App\Models\User;
 
@@ -24,12 +25,15 @@ class LessonPolicy
     /**
      * Determine whether the user can view a specific lesson for the given student.
      *
-     * Same access rules as viewAny — the lesson's ownership to the student
-     * is enforced at the query level (scoped via student's orders).
+     * Same access rules as viewAny, plus the instructor who taught the lesson,
+     * so an instructor keeps access to lessons of a pupil transferred away.
+     * The lesson's ownership to the student is enforced at the query level
+     * (scoped via student's orders).
      */
-    public function view(User $user, Student $student): bool
+    public function view(User $user, Student $student, ?Lesson $lesson = null): bool
     {
-        return $this->canAccessStudentLessons($user, $student);
+        return $this->canAccessStudentLessons($user, $student)
+            || ($lesson !== null && $this->taughtLesson($user, $lesson));
     }
 
     /**
@@ -40,6 +44,19 @@ class LessonPolicy
     public function signOff(User $user, Student $student): bool
     {
         return $this->isStudentsInstructor($user, $student);
+    }
+
+    /**
+     * Determine whether the user can sign off this specific lesson.
+     *
+     * Only the instructor who taught it (`lessons.instructor_id`), who is also
+     * the instructor the payout goes to. A transfer only moves future lessons,
+     * so the previous instructor keeps signing off the lessons he taught and
+     * the pupil's new instructor cannot sign them off.
+     */
+    public function signOffLesson(User $user, Lesson $lesson): bool
+    {
+        return $this->taughtLesson($user, $lesson);
     }
 
     /**
@@ -58,6 +75,16 @@ class LessonPolicy
     private function isStudentsInstructor(User $user, Student $student): bool
     {
         return $user->isInstructor() && $student->instructor_id === $user->instructor?->id;
+    }
+
+    /**
+     * Check if the user is the instructor assigned to the lesson.
+     */
+    private function taughtLesson(User $user, Lesson $lesson): bool
+    {
+        return $user->isInstructor()
+            && $lesson->instructor_id !== null
+            && $lesson->instructor_id === $user->instructor?->id;
     }
 
     /**
