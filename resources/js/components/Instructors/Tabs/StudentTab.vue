@@ -36,6 +36,8 @@ interface StudentDetail extends EditableStudentDetail {
     has_test_pass_guarantee: boolean
     test_pass_guarantee_at: string | null
     can_book_cash: boolean
+    // Pupil moved to another instructor; the viewer only signs off the lessons they taught.
+    transferred_away?: boolean
 }
 
 interface Props {
@@ -66,7 +68,7 @@ const formattedDateOfBirth = computed(() => {
 
 type SubTabType = 'overview' | 'lessons' | 'payments' | 'transfer' | 'emergency' | 'messages' | 'actions' | 'log'
 
-const subTabs: { key: SubTabType; label: string }[] = [
+const allSubTabs: { key: SubTabType; label: string }[] = [
     { key: 'overview', label: 'Overview' },
     { key: 'lessons', label: 'Lessons' },
     { key: 'payments', label: 'Payments' },
@@ -76,7 +78,17 @@ const subTabs: { key: SubTabType; label: string }[] = [
     { key: 'log', label: 'Log' },
 ]
 
-const activeSubTab = computed(() => props.subtab || 'overview')
+const isTransferredAway = computed(() => student.value?.transferred_away === true)
+
+const subTabs = computed(() =>
+    isTransferredAway.value
+        ? allSubTabs.filter((subtab) => subtab.key === 'lessons')
+        : allSubTabs,
+)
+
+const activeSubTab = computed(() =>
+    isTransferredAway.value ? 'lessons' : props.subtab || 'overview',
+)
 
 const switchSubTab = (subTabKey: SubTabType) => {
     router.visit(`/instructors/${props.instructor.id}`, {
@@ -216,7 +228,10 @@ onMounted(() => {
                         </div>
                     </div>
 
-                    <div class="flex items-center gap-2">
+                    <Badge v-if="isTransferredAway" variant="outline">
+                        Transferred – sign-off due
+                    </Badge>
+                    <div v-else class="flex items-center gap-2">
                         <Button
                             variant="outline"
                             class="cursor-pointer"
@@ -300,7 +315,7 @@ onMounted(() => {
         </Card>
 
         <EditStudentDetailsSheet
-            v-if="student"
+            v-if="student && !isTransferredAway"
             v-model:open="isEditSheetOpen"
             :student="student"
             @updated="loadStudent"

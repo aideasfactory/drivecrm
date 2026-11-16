@@ -192,9 +192,13 @@ const getStatusLabel = (status: string) => {
     return status.charAt(0).toUpperCase() + status.slice(1)
 }
 
-const viewPupil = (pupilId: number) => {
+const viewPupil = (pupil: Pupil) => {
     router.visit(`/instructors/${props.instructor.id}`, {
-        data: { tab: 'student', student: pupilId, subtab: 'overview' },
+        data: {
+            tab: 'student',
+            student: pupil.id,
+            subtab: pupil.transferred_away ? 'lessons' : 'overview',
+        },
         preserveState: true,
         preserveScroll: true,
     })
@@ -388,7 +392,7 @@ const handleCreatePupil = async () => {
                             v-for="pupil in filteredPupils"
                             :key="pupil.id"
                             class="cursor-pointer hover:bg-muted/50"
-                            @click="viewPupil(pupil.id)"
+                            @click="viewPupil(pupil)"
                         >
                             <TableCell>
                                 <div class="flex items-center gap-3">
@@ -494,7 +498,7 @@ const handleCreatePupil = async () => {
                             </TableCell>
                             <TableCell class="text-right" @click.stop>
                                 <Button
-                                    v-if="!pupil.has_app"
+                                    v-if="!pupil.has_app && !pupil.transferred_away"
                                     variant="outline"
                                     size="sm"
                                     class="cursor-pointer"
