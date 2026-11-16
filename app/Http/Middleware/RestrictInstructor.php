@@ -45,6 +45,12 @@ class RestrictInstructor
             return $next($request);
         }
 
+        // A 302 keeps PUT/PATCH/DELETE, so redirecting a blocked write would
+        // replay it against the instructor's own routes (e.g. instructors.update).
+        if (! $request->isMethodSafe()) {
+            abort(403, 'This action is not available to instructors.');
+        }
+
         // Redirect everything else to the instructor's own page
         return redirect()->route('instructors.show', $instructor);
     }
