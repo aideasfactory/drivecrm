@@ -36,7 +36,7 @@ class FindInstructorsByPostcodeSectorAction
                 $query->whereNotIn('id', $excludedIds);
             })
             ->whereHas('locations', function ($query) use ($postcodeSector) {
-                $query->where('postcode_sector', $postcodeSector);
+                $query->whereRaw("UPPER(REPLACE(postcode_sector, ' ', '')) = ?", [$postcodeSector]);
             })
             ->with([
                 'user',
@@ -78,21 +78,21 @@ class FindInstructorsByPostcodeSectorAction
     }
 
     /**
-     * Extract postcode sector from full postcode.
+     * Extract the outward code from a full or outward-only postcode. Coverage
+     * is matched on the whole outward code, so PE1 never matches PE13.
      *
-     * @param  string  $postcode  Full postcode (e.g., "TS7 1AB", "NE12 8GH")
-     * @return string|null Postcode sector (e.g., "TS7", "NE12")
+     * @param  string  $postcode  Full or outward-only postcode (e.g., "PE13 2HE", "pe3")
+     * @return string|null Outward code (e.g., "PE13", "PE3")
      */
     private function extractPostcodeSector(string $postcode): ?string
     {
-        $normalized = strtoupper(preg_replace('/\s+/', '', trim($postcode)));
+        $normalized = strtoupper(preg_replace('/\s+/', '', $postcode));
 
-        if (empty($normalized) || strlen($normalized) < 5) {
-            return null;
+        if (preg_match('/^([A-Z]{1,2}[0-9][A-Z0-9]?)(?:[0-9][A-Z]{2})?$/', $normalized, $matches)) {
+            return $matches[1];
         }
 
-        // UK inward code is always the last 3 characters, outward code is everything before
-        return substr($normalized, 0, -3);
+        return null;
     }
 
     /**
