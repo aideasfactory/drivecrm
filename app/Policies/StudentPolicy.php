@@ -32,6 +32,17 @@ class StudentPolicy
     }
 
     /**
+     * Determine whether a previous instructor (e.g. before a transfer) can open
+     * the pupil's profile header to sign off a lesson they taught. Only grants
+     * the profile itself; notes, pickup points, orders etc. still use `view`.
+     */
+    public function viewForSignOff(User $user, Student $student): bool
+    {
+        return $user->isInstructor()
+            && $student->hasSignOffDueForPreviousInstructor($user->instructor);
+    }
+
+    /**
      * Determine whether the user can update the student record.
      *
      * Access is granted if:

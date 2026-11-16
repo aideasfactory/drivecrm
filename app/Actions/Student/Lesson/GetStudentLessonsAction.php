@@ -23,8 +23,9 @@ class GetStudentLessonsAction
      * Draft (awaiting-payment) lessons are excluded by default and only
      * included when the `include_drafts` flag is set (instructor pupil view).
      * Cancelled lessons are likewise excluded unless `include_cancelled` is set.
+     * `instructor_id` keeps only the lessons that instructor taught.
      *
-     * @param  array{status?: string, from_date?: string, sort?: string, limit?: int, include_drafts?: bool, include_cancelled?: bool}  $filters
+     * @param  array{status?: string, from_date?: string, sort?: string, limit?: int, include_drafts?: bool, include_cancelled?: bool, instructor_id?: int}  $filters
      */
     public function __invoke(Student $student, array $filters = []): Collection
     {
@@ -49,6 +50,10 @@ class GetStudentLessonsAction
                     ->when(
                         isset($filters['from_date']),
                         fn ($q) => $q->where('date', '>=', $filters['from_date'])
+                    )
+                    ->when(
+                        isset($filters['instructor_id']),
+                        fn ($q) => $q->where('instructor_id', $filters['instructor_id'])
                     )
                     ->with([
                         'instructor.user:id,name',

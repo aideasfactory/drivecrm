@@ -15,11 +15,25 @@ class LessonPolicy
      *
      * Access is granted if:
      * 1. The authenticated user IS the student (user_id match), OR
-     * 2. The authenticated user is an instructor linked to the student (instructor_id match)
+     * 2. The authenticated user is an instructor linked to the student (instructor_id match), OR
+     * 3. The authenticated user is a previous instructor (e.g. before a transfer)
+     *    with a lesson they taught still to sign off — the controller then
+     *    limits the list to the lessons they taught.
      */
     public function viewAny(User $user, Student $student): bool
     {
-        return $this->canAccessStudentLessons($user, $student);
+        return $this->canAccessStudentLessons($user, $student)
+            || $this->isPreviousInstructorWithSignOffDue($user, $student);
+    }
+
+    /**
+     * Determine whether the user only sees the lessons they taught for this
+     * student: a previous instructor, not the student or current instructor.
+     */
+    public function viewTaughtLessonsOnly(User $user, Student $student): bool
+    {
+        return ! $this->canAccessStudentLessons($user, $student)
+            && $this->isPreviousInstructorWithSignOffDue($user, $student);
     }
 
     /**
@@ -85,6 +99,16 @@ class LessonPolicy
         return $user->isInstructor()
             && $lesson->instructor_id !== null
             && $lesson->instructor_id === $user->instructor?->id;
+    }
+
+    /**
+     * Check if the user is a previous instructor of the student with a lesson
+     * they taught still waiting for sign-off.
+     */
+    private function isPreviousInstructorWithSignOffDue(User $user, Student $student): bool
+    {
+        return $user->isInstructor()
+            && $student->hasSignOffDueForPreviousInstructor($user->instructor);
     }
 
     /**

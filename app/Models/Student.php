@@ -167,6 +167,24 @@ class Student extends Model
     }
 
     /**
+     * Check if this instructor is a previous instructor of the pupil (e.g.
+     * before a transfer) who still has a lesson they taught to sign off. Grants
+     * that instructor the lesson list and sign-off only, never the rest of the
+     * pupil's record. Always false for the pupil's current instructor.
+     */
+    public function hasSignOffDueForPreviousInstructor(?Instructor $instructor): bool
+    {
+        if ($instructor === null || $this->instructor_id === $instructor->id) {
+            return false;
+        }
+
+        return Lesson::query()
+            ->awaitingSignOffBy($instructor->id)
+            ->whereHas('order', fn ($query) => $query->where('student_id', $this->id))
+            ->exists();
+    }
+
+    /**
      * Check if the pupil was brought in from another system (e.g. GoRoadie)
      * by the importer.
      */

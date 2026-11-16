@@ -252,6 +252,20 @@ class Lesson extends Model
     }
 
     /**
+     * Pending, dated lessons up to today taught by this instructor: the ones
+     * they still have to sign off, which stay theirs after a pupil transfer.
+     *
+     * @param  Builder<Lesson>  $query
+     */
+    public function scopeAwaitingSignOffBy(Builder $query, int $instructorId): void
+    {
+        $query->where('instructor_id', $instructorId)
+            ->where('status', LessonStatus::PENDING)
+            ->whereNull('banked_at')
+            ->whereDate('date', '<=', now(BookingPayments::timezone())->toDateString());
+    }
+
+    /**
      * Check if lesson has been paid for.
      */
     public function isPaid(): bool
