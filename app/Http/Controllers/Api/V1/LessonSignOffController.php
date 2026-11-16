@@ -56,6 +56,12 @@ class LessonSignOffController extends Controller
             return response()->json(['message' => "This lesson is waiting to be rebooked, so it can't be signed off yet."], 422);
         }
 
+        if (! $lesson->hasStarted()) {
+            $startsAt = $lesson->date->format('j M Y').($lesson->start_time ? ' at '.$lesson->start_time->format('H:i') : '');
+
+            return response()->json(['message' => "This lesson can't be signed off until it has started ({$startsAt})."], 422);
+        }
+
         $summary = $request->validated('summary');
 
         $this->alternativePaymentService->prepareSignOff(
