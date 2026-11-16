@@ -1854,6 +1854,10 @@ class InstructorController extends Controller
      */
     public function updateLessonMileage(Request $request, Instructor $instructor, Lesson $lesson): JsonResponse
     {
+        if ($lesson->instructor_id !== $instructor->id) {
+            return response()->json(['message' => 'Lesson not found for this instructor.'], 404);
+        }
+
         $validated = $request->validate([
             'mileage' => ['nullable', 'integer', 'min:0', 'max:9999'],
         ]);
