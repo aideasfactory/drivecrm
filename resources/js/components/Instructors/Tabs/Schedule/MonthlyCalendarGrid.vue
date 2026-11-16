@@ -132,7 +132,7 @@ function statusLabel(event: CalendarEvent): string {
 
     const status = event.status
 
-    if (status === 'booked') return 'Booked'
+    if (status === 'booked') return event.studentName ? `Booked - ${event.studentName}` : 'Booked'
     if (status === 'draft') return event.studentName ? `Held - ${event.studentName}` : 'Held'
     if (status === 'reserved') return 'Reserved'
     if (status === 'completed') return 'Completed'
