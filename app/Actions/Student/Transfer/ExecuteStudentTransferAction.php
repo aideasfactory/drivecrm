@@ -31,6 +31,9 @@ class ExecuteStudentTransferAction
      * notification emails. The new instructor's email lists any clashes with
      * their existing diary so they can rebook.
      *
+     * Lessons that have already started (including earlier today) stay with the
+     * instructor who taught them, who signs them off and is paid for them.
+     *
      * @return array{
      *     student: Student,
      *     source_instructor: Instructor,
@@ -65,7 +68,9 @@ class ExecuteStudentTransferAction
             ->whereDoesntHave('payout')
             ->orderBy('date')
             ->orderBy('start_time')
-            ->get();
+            ->get()
+            ->reject(fn (Lesson $lesson): bool => $lesson->hasStarted())
+            ->values();
 
         $clashingLessons = ($this->detectClashes)($destination, $futureLessons);
 

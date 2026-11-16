@@ -44,13 +44,19 @@ class StudentController extends Controller
     /**
      * Return a single student record.
      *
-     * Authorised for the student themselves or their assigned instructor.
+     * Authorised for the student themselves or their assigned instructor, and
+     * for a previous instructor with a lesson they taught still to sign off
+     * (without email, phone or date of birth).
      */
     public function show(Request $request, int $id): StudentResource
     {
         $student = $this->studentService->getById($id);
 
-        Gate::authorize('view', $student);
+        if (Gate::denies('view', $student)) {
+            Gate::authorize('viewForSignOff', $student);
+
+            return (new StudentResource($student))->withoutContactDetails();
+        }
 
         return new StudentResource($student);
     }

@@ -4295,6 +4295,7 @@ Creates a new student with a user account and assigns them to the authenticated 
 Returns a single student record. Access is controlled by a policy:
 - **Students** can only view their own record (user_id must match the authenticated user).
 - **Instructors** can only view students assigned to them (instructor_id must match the authenticated instructor).
+- **Previous instructor (transferred pupil):** an instructor who taught a lesson of this pupil that is still pending, not kept to rebook, and dated today or earlier (UK date) can also open the record, so the pupil screen loads from the diary → "View Pupil Profile" to sign it off. `email`, `phone` and `date_of_birth` are `null` for them. Notes, pickup points, checklist, progress, messages and orders stay `403` for them. Access ends once those lessons are signed off.
 
 **URL Parameters:**
 
@@ -4602,6 +4603,8 @@ Resends the app login invite (welcome email) to a student. Because the original 
 
 Returns lessons for a given student across all their orders. Supports optional filtering, sorting, and limiting via query parameters.
 
+**Previous instructor (transferred pupil):** an instructor who still has a lesson of this pupil to sign off (see `GET /students/{student}`) also gets `200`, but only with the lessons they taught (`instructor_id` = theirs). The pupil's current instructor and the pupil still get every lesson.
+
 **URL Parameters:**
 
 | Parameter | Type | Description |
@@ -4764,6 +4767,8 @@ Returns full detail for a single lesson belonging to a student. The lesson must 
 
 Instructor responses are unchanged.
 
+**Transferred pupils.** Besides the pupil's current instructor, the instructor who taught the lesson (`instructor_id`) can open it, even after the pupil was transferred to another instructor. That is how the previous instructor opens a past, unsigned lesson from their diary (`GET /instructor/lessons`) to sign it off.
+
 **URL Parameters:**
 
 | Parameter | Type | Description |
@@ -4910,7 +4915,9 @@ Sign off a lesson as completed. **Same contract and pipeline as admin CRM:** bod
 
 The mobile API runs the existing `LessonSignOffService` (the same code the admin job uses) **in this request**, then returns the lesson. Admin still queues `ProcessLessonSignOffJob`; that job and the payout/onboarding/payment guards are unchanged.
 
-Unpaid weekly lessons, unpaid upfront orders, and instructors who are not Stripe-onboarded return `422` with the service message. A non-pending lesson (draft / already completed) returns `404` from the pending-only lookup — same as before.
+Unpaid weekly lessons, unpaid upfront orders, and instructors who are not Stripe-onboarded return `422` with the service message. A non-pending lesson (draft / already completed) returns `404` from the pending-only lookup — same as before. A lesson that hasn't started yet (UK time) returns `422` "This lesson can't be signed off until it has started (…)." — same rule as admin sign-off; nothing is voided or paid.
+
+**Who can sign off:** only the instructor who taught the lesson (`instructor_id` on the lesson), who is also the instructor paid for it. This is not always the pupil's current instructor: a transfer only moves future lessons, so after a transfer the **previous** instructor still signs off the past lessons they taught (`403` for the new instructor), and the payout goes to the previous instructor as for any other lesson. The pending-lesson lookup runs first, so an unknown or non-pending lesson returns `404` before the `403` check.
 
 **URL Parameters:**
 
@@ -8309,6 +8316,8 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-12 | **Instructor pupil chat opened the wrong thread.** For instructors, `{user}` on `GET /messages/conversations/{user}` and `POST /messages/conversations/{user}/read`, and `recipient_id` on `POST /messages`, now resolve to the instructor's **own student** first. Previously the backend checked "is this an owner user ID?" first, so a pupil whose student ID equalled an admin's user ID opened the (empty) support thread — the list showed their preview/unread badge, the chat said "No messages yet", mark-read never cleared the badge, and replies went to the admin (found on Mark Terry-Lush / Marni James). No shape changes. **App action:** none — keep passing `student_id` for pupil chats and the support user ID for support. *(Superseded by the next entry: always send the chat type.)* | Messages (conversation, mark read, send) |
 | 2026-11-12 | **Explicit chat type for messages.** Removes the student-ID-vs-admin-user-ID ambiguity in both directions. New optional `?type=student\|support` on `GET /messages/conversations/{user}` and `POST /messages/conversations/{user}/read`, and `recipient_type` (`student`\|`support`) on `POST /messages`. `support` → `{user}` / `recipient_id` is an admin/owner **user ID** (shared support thread; `404` otherwise); `student` → one of the instructor's own students by **student ID** (`404` otherwise, incl. student callers). Omitted → legacy resolution (instructor's own student first, then owner user ID). New `chat_type` (`support`\|`student`\|`instructor`) on every `GET /messages/conversations` object and `GET /messages/unread-count` `conversations[]` item. Additive — no fields removed, no schema change. **App action:** read `chat_type` on list/unread rows; open/mark-read/send with `type=support` + `user.id` for support rows and `type=student` + `student_id` for pupil rows. | Messages (conversations, conversation, mark read, send, unread-count) |
 | 2026-11-12 | **Chat type follow-up.** `type` / `recipient_type` now also accept `instructor` (pupil → their instructor, by user ID), so every `chat_type` value can be passed straight back; previously `instructor` returned `422`. `GET /messages/conversations` now returns **one** `support` row for all admins (it opens the shared support thread; `unread_count` covers every admin) instead of one row per admin. `GET /messages/unread-count` is unchanged — still one row per sending admin, so sum the `chat_type: "support"` rows for the support badge. | Messages (conversations, conversation, mark read, send) |
+| 2026-11-16 | **Sign-off after a pupil transfer.** `POST /students/{student}/lessons/{lesson}/sign-off` now authorises the instructor who taught the lesson (`lessons.instructor_id`) instead of the pupil's current instructor: the previous instructor can sign off past lessons taught before a transfer, and the new instructor gets `403` for them. `GET /students/{student}/lessons/{lesson}` also allows the instructor who taught the lesson. No request/response shape change. | Lesson Sign-Off, Lesson Detail |
+| 2026-11-16 | **Transferred pupil reachable from the previous instructor's diary.** The app opens sign-off via diary → pupil profile → Lessons, which loads `GET /students/{student}` and `GET /students/{student}/lessons` first; both returned `403` for the previous instructor. Now, while that instructor has a pending, dated (today or earlier) lesson of the pupil that they taught: `GET /students/{student}` returns `200` with `email`, `phone`, `date_of_birth` as `null`, and `GET /students/{student}/lessons` returns `200` with only the lessons they taught. Every other pupil endpoint stays `403`. No shape change. **App action:** none required; the Sign Off button for a lesson taught by someone else still shows for the current instructor and gets `403` — hide it when `instructor_id` on the lesson isn't the signed-in instructor. `POST /students/{student}/lessons/{lesson}/sign-off` now returns `422` for a lesson that hasn't started (UK time), checked before any alternative-payment invoice voiding; the app already only offers sign-off after the start time. | Student Detail, Student Lessons, Lesson Sign-Off |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

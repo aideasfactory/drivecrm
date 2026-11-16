@@ -139,6 +139,22 @@ class PupilController extends Controller
      */
     public function show(Student $student): JsonResponse
     {
+        if ($this->isPreviousInstructorOf($student)) {
+            return response()->json([
+                'student' => [
+                    'id' => $student->id,
+                    'instructor_id' => $student->instructor_id,
+                    'name' => trim($student->first_name.' '.$student->surname),
+                    'avatar' => $student->avatar,
+                    'first_name' => $student->first_name,
+                    'surname' => $student->surname,
+                    'status' => $student->status ?? 'active',
+                    'has_test_pass_guarantee' => $student->hasTestPassGuarantee(),
+                    'transferred_away' => true,
+                ],
+            ]);
+        }
+
         $data = (new GetStudentDetailAction)($student);
         $data['is_imported'] = $student->isImported();
         $data['cash_payments_enabled'] = $student->cash_payments_enabled;
@@ -294,6 +310,19 @@ class PupilController extends Controller
     }
 
     /**
+     * Whether the signed-in instructor is a previous instructor of the pupil
+     * with a lesson still to sign off (RestrictInstructor only lets them reach
+     * the pupil header, lessons and sign-off), so only their own lessons show.
+     */
+    private function isPreviousInstructorOf(Student $student): bool
+    {
+        $user = request()->user();
+
+        return $user?->isInstructor() === true
+            && $student->hasSignOffDueForPreviousInstructor($user->instructor);
+    }
+
+    /**
      * Get notes for a student. Instructors only ever receive regular notes;
      * owners choose the set via the `internal` query param.
      */
@@ -440,13 +469,24 @@ class PupilController extends Controller
     /**
      * Get all lessons for a student, oldest first, plus any bookings awaiting
      * their first payment that can be confirmed as paid by an alternative method.
+     * A previous instructor only gets the lessons they taught.
      */
     public function lessons(Student $student, LessonSignOffService $service): JsonResponse
     {
-        $lessons = $service->getStudentLessons($student, ['sort' => 'asc', 'include_cancelled' => true]);
+        if ($this->isPreviousInstructorOf($student)) {
+            return response()->json([
+                'lessons' => $service->getStudentLessons($student, [
+                    'sort' => 'asc',
+                    'include_cancelled' => true,
+                    'instructor_id' => request()->user()->instructor->id,
+                ]),
+                'alternative_payment_allowed' => $student->cash_payments_enabled === true,
+                'alternative_payment_bookings' => [],
+            ]);
+        }
 
         return response()->json([
-            'lessons' => $lessons,
+            'lessons' => $service->getStudentLessons($student, ['sort' => 'asc', 'include_cancelled' => true]),
             'alternative_payment_allowed' => $student->cash_payments_enabled === true,
             'alternative_payment_bookings' => $this->alternativePaymentService->getConfirmableBookings($student),
         ]);
@@ -576,6 +616,9 @@ class PupilController extends Controller
 
     /**
      * Sign off a lesson as completed, triggering payout and notifications.
+     *
+     * Staff can sign off any lesson; an instructor only the lessons they taught,
+     * which stay theirs after the pupil is transferred to another instructor.
      */
     public function signOffLesson(Student $student, Lesson $lesson): JsonResponse
     {
@@ -591,6 +634,12 @@ class PupilController extends Controller
 
         if (! $lessonBelongsToStudent) {
             return response()->json(['message' => 'Lesson not found for this student.'], 404);
+        }
+
+        if (request()->user()?->isInstructor() && request()->user()->cannot('signOffLesson', $lesson)) {
+            return response()->json([
+                'message' => 'Only the instructor who taught this lesson can sign it off.',
+            ], 403);
         }
 
         // Lesson must be pending

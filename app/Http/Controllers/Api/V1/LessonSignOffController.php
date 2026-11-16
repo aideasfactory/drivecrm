@@ -32,15 +32,18 @@ class LessonSignOffController extends Controller
      * recorded as paid that way first). Runs the existing LessonSignOffService
      * in this request so the app receives the completed lesson instead of
      * "being processed". Admin still queues ProcessLessonSignOffJob.
+     *
+     * Only the instructor who taught the lesson can sign it off, including
+     * after the pupil has been transferred to another instructor.
      */
     public function store(SignOffLessonRequest $request, Student $student, int $lessonId): JsonResponse
     {
-        Gate::authorize('signOff', [Lesson::class, $student]);
-
         $lesson = Lesson::query()
             ->whereHas('order', fn ($q) => $q->where('student_id', $student->id))
             ->where('status', 'pending')
             ->findOrFail($lessonId);
+
+        Gate::authorize('signOffLesson', $lesson);
 
         $instructor = $lesson->instructor;
 
@@ -51,6 +54,12 @@ class LessonSignOffController extends Controller
         // Checked before the alternative payment step, which voids the Stripe invoice
         if ($lesson->isBanked()) {
             return response()->json(['message' => "This lesson is waiting to be rebooked, so it can't be signed off yet."], 422);
+        }
+
+        if (! $lesson->hasStarted()) {
+            $startsAt = $lesson->date->format('j M Y').($lesson->start_time ? ' at '.$lesson->start_time->format('H:i') : '');
+
+            return response()->json(['message' => "This lesson can't be signed off until it has started ({$startsAt})."], 422);
         }
 
         $summary = $request->validated('summary');

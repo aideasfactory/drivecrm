@@ -55,6 +55,9 @@ const canBroadcast = computed(
 )
 
 const pupils = ref<Pupil[]>([])
+const broadcastRecipientCount = computed(
+    () => pupils.value.filter((pupil) => !pupil.transferred_away).length,
+)
 const loading = ref(true)
 const searchQuery = ref('')
 const showAllPupils = ref(false)
@@ -189,9 +192,13 @@ const getStatusLabel = (status: string) => {
     return status.charAt(0).toUpperCase() + status.slice(1)
 }
 
-const viewPupil = (pupilId: number) => {
+const viewPupil = (pupil: Pupil) => {
     router.visit(`/instructors/${props.instructor.id}`, {
-        data: { tab: 'student', student: pupilId, subtab: 'overview' },
+        data: {
+            tab: 'student',
+            student: pupil.id,
+            subtab: pupil.transferred_away ? 'lessons' : 'overview',
+        },
         preserveState: true,
         preserveScroll: true,
     })
@@ -385,7 +392,7 @@ const handleCreatePupil = async () => {
                             v-for="pupil in filteredPupils"
                             :key="pupil.id"
                             class="cursor-pointer hover:bg-muted/50"
-                            @click="viewPupil(pupil.id)"
+                            @click="viewPupil(pupil)"
                         >
                             <TableCell>
                                 <div class="flex items-center gap-3">
@@ -477,6 +484,13 @@ const handleCreatePupil = async () => {
                             </TableCell>
                             <TableCell>
                                 <Badge
+                                    v-if="pupil.transferred_away"
+                                    variant="outline"
+                                >
+                                    Transferred – sign-off due
+                                </Badge>
+                                <Badge
+                                    v-else
                                     :variant="getStatusVariant(pupil.status)"
                                 >
                                     {{ getStatusLabel(pupil.status) }}
@@ -484,7 +498,7 @@ const handleCreatePupil = async () => {
                             </TableCell>
                             <TableCell class="text-right" @click.stop>
                                 <Button
-                                    v-if="!pupil.has_app"
+                                    v-if="!pupil.has_app && !pupil.transferred_away"
                                     variant="outline"
                                     size="sm"
                                     class="cursor-pointer"
@@ -578,8 +592,8 @@ const handleCreatePupil = async () => {
 
                 <p class="text-sm text-muted-foreground">
                     This message will be sent to
-                    <span class="font-semibold">{{ pupils.length }}</span>
-                    {{ pupils.length === 1 ? 'pupil' : 'pupils' }}.
+                    <span class="font-semibold">{{ broadcastRecipientCount }}</span>
+                    {{ broadcastRecipientCount === 1 ? 'pupil' : 'pupils' }}.
                 </p>
 
                 <div class="flex justify-end gap-3 pt-4">

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
+import { usePage } from '@inertiajs/vue3'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -128,6 +129,7 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const page = usePage()
 
 // Data state
 const lessons = ref<Lesson[]>([])
@@ -317,8 +319,15 @@ const openSignOffSheet = (lesson: Lesson) => {
     isSignOffSheetOpen.value = true
 }
 
+// Staff can sign off any lesson; an instructor only the ones they taught (kept after a pupil transfer).
+const viewerInstructorId = computed(() => page.props.auth?.instructor_id ?? null)
+
+const taughtByViewer = (lesson: Lesson): boolean =>
+    viewerInstructorId.value === null || lesson.instructor_id === viewerInstructorId.value
+
 const canSignOff = (lesson: Lesson): boolean =>
     lesson.status === 'pending' &&
+    taughtByViewer(lesson) &&
     lesson.has_started &&
     (lesson.payment_status === 'paid' || lesson.can_sign_off_with_alternative_payment)
 
@@ -799,6 +808,12 @@ onMounted(() => {
                                     <ClipboardCheck class="h-4 w-4" />
                                     Sign Off
                                 </Button>
+                                <span
+                                    v-else-if="lesson.status === 'pending' && lesson.has_started && !taughtByViewer(lesson)"
+                                    class="text-xs text-muted-foreground"
+                                >
+                                    Sign-off by {{ lesson.instructor_name ?? 'previous instructor' }}
+                                </span>
                                 <span
                                     v-else-if="lesson.status === 'pending' && !lesson.has_started"
                                     class="text-xs text-muted-foreground"

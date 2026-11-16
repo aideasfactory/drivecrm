@@ -23,13 +23,20 @@ class StudentLessonController extends Controller
      * Return lessons for a student, with optional filtering.
      *
      * Query params: status, from_date, sort (asc|desc), limit, include_drafts, include_cancelled.
-     * Authorised for the student themselves or their assigned instructor.
+     * Authorised for the student themselves or their assigned instructor, and
+     * for a previous instructor with a lesson they taught still to sign off,
+     * who only gets the lessons they taught.
      */
     public function index(Request $request, Student $student): LessonCollection
     {
         Gate::authorize('viewAny', [Lesson::class, $student]);
 
+        $taughtByInstructorId = Gate::allows('viewTaughtLessonsOnly', [Lesson::class, $student])
+            ? $request->user()->instructor->id
+            : null;
+
         $filters = array_filter([
+            'instructor_id' => $taughtByInstructorId,
             'status' => $request->query('status'),
             'from_date' => $request->query('from_date'),
             'sort' => $request->query('sort'),
@@ -46,11 +53,16 @@ class StudentLessonController extends Controller
     /**
      * Return a single lesson detail for a student.
      *
-     * Authorised for the student themselves or their assigned instructor.
+     * Authorised for the student themselves, their assigned instructor, or the
+     * instructor who taught this lesson (e.g. before the pupil was transferred).
      */
     public function show(Request $request, Student $student, int $lesson): LessonDetailResource
     {
-        Gate::authorize('view', [Lesson::class, $student]);
+        $studentLesson = Lesson::query()
+            ->whereHas('order', fn ($q) => $q->where('student_id', $student->id))
+            ->find($lesson);
+
+        Gate::authorize('view', [Lesson::class, $student, $studentLesson]);
 
         $lesson = $this->lessonSignOffService->getLessonDetail($student, $lesson);
 

@@ -9,6 +9,19 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class StudentResource extends JsonResource
 {
+    protected bool $withoutContactDetails = false;
+
+    /**
+     * Leave out email, phone and date of birth, for a previous instructor who
+     * only opens the pupil to sign off a lesson they taught.
+     */
+    public function withoutContactDetails(): static
+    {
+        $this->withoutContactDetails = true;
+
+        return $this;
+    }
+
     /**
      * Transform the resource into an array.
      *
@@ -20,9 +33,9 @@ class StudentResource extends JsonResource
             'id' => $this->id,
             'first_name' => $this->first_name,
             'surname' => $this->surname,
-            'email' => $this->email ?? $this->user?->email,
-            'phone' => $this->phone,
-            'date_of_birth' => $this->date_of_birth?->toDateString(),
+            'email' => $this->withoutContactDetails ? null : ($this->email ?? $this->user?->email),
+            'phone' => $this->withoutContactDetails ? null : $this->phone,
+            'date_of_birth' => $this->withoutContactDetails ? null : $this->date_of_birth?->toDateString(),
             'status' => $this->status,
             'has_app' => $this->user_id !== null,
             'app_last_active_at' => $this->app_last_active_at?->toIso8601String(),
