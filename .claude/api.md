@@ -40,6 +40,7 @@
     - [Offer Slot (Withdraw)](#delete-apiv1instructorcalendaritemscalendaritemoffers)
     - [Finances (Config)](#get-apiv1instructorfinancesconfig)
     - [Finances (Summary)](#get-apiv1instructorfinancessummary)
+    - [Finances (Export CSV)](#post-apiv1instructorfinancesexport)
     - [Finances (List)](#get-apiv1instructorfinances)
     - [Finances (Show)](#get-apiv1instructorfinancesfinance)
     - [Finances (Create)](#post-apiv1instructorfinances)
@@ -1685,10 +1686,13 @@ Creates a new bespoke package for the authenticated instructor. The instructor m
 }
 ```
 
-`500 Internal Server Error` — Stripe onboarding incomplete:
+`422 Unprocessable Entity` — Stripe onboarding incomplete:
 ```json
 {
-  "message": "Instructor must complete Stripe Connect onboarding before creating packages."
+  "message": "Stripe must be connected before packages can be created for this instructor.",
+  "errors": {
+    "package": ["Stripe must be connected before packages can be created for this instructor."]
+  }
 }
 ```
 
@@ -1879,7 +1883,8 @@ Returns the dropdown options used by the finance screens **plus** the per-catego
     "insurance": "Insurance",
     "mot": "MOT",
     "repairs": "Repairs",
-    "advertising": "Advertising"
+    "advertising": "Advertising",
+    "franchise_fee": "Franchise Fee"
   },
   "payment_categories": {
     "none": "None",
@@ -1916,7 +1921,9 @@ Returns the dropdown options used by the finance screens **plus** the per-catego
     "fuel":       { "method_dependent": true,  "claimable": true,  "selectable_in_picker": true, "itsa_bucket": "carVanTravelExpenses" },
     "mot":        { "method_dependent": true,  "claimable": true,  "selectable_in_picker": true, "itsa_bucket": "carVanTravelExpenses" },
     "advertising":{ "method_dependent": false, "claimable": true,  "selectable_in_picker": true, "itsa_bucket": "advertisingCosts" },
-    "food_drink": { "method_dependent": false, "claimable": false, "selectable_in_picker": false, "itsa_bucket": null }
+    "food_drink": { "method_dependent": false, "claimable": false, "selectable_in_picker": false, "itsa_bucket": null },
+    "franchise_fee":    { "method_dependent": false, "claimable": true, "selectable_in_picker": true,  "itsa_bucket": "professionalFees" },
+    "franchise_payout": { "method_dependent": false, "claimable": true, "selectable_in_picker": false, "itsa_bucket": "professionalFees" }
   },
   "vehicles": [
     {
@@ -1945,7 +1952,9 @@ Category + payment-method keys above are illustrative — the full list lives in
 |------|---------|
 | `method_dependent` | `true` for vehicle running costs (fuel, MOT, servicing, repairs, road tax, vehicle insurance, breakdown cover). When `true`, the expense form **must show a vehicle picker** and `vehicle_id` should be sent on POST/PUT. When the picked vehicle has `method = "simplified"`, show a warning that the row will be kept for records but excluded from HMRC payloads (mileage allowance covers it). |
 | `claimable` | `false` for categories that never reach HMRC (`hmrc_tax`, `food_drink`, internal `our_account`, etc.). |
-| `selectable_in_picker` | `false` for categories that are kept in the table for historical-row integrity but hidden from new entry. Filter your dropdown by this. |
+| `selectable_in_picker` | `false` for categories that are kept in the table for historical-row integrity but hidden from new entry. Filter your dropdown by this. Current hidden slugs: `food_drink`, `imported`, `franchise_payout`. When **editing** a record that already uses a hidden slug, keep that slug as an option (or leave `category` out of the PUT) so the record still saves. |
+
+**Franchise fees:** log them as `type: "expense"`, `category: "franchise_fee"` (label "Franchise Fee"). The old `franchise_payout` payment slug is hidden (`selectable_in_picker: false`) but stays in `payment_categories` so existing payment rows keep their "Franchise Payout" label and can still be edited.
 | `itsa_bucket` | The HMRC ITSA expense bucket (camelCase) this category maps to. Informational — the mobile app does not need to send this anywhere. `null` when the category is excluded from HMRC payloads. |
 
 **`vehicles` list:**
@@ -2011,6 +2020,68 @@ When both `from` and `to` are omitted, the response covers **the last 30 days** 
 - `stats.total_records` counts finance rows only (not mileage, not lesson income).
 - `lesson_income` is the money the instructor received for lessons in the date range (by lesson date), newest first. It is **read-only** and derived on the fly, not stored as finance records, so it has no `id` and can't be edited, deleted or given a receipt. `source`: `payout` (card lesson, Stripe payout paid), `cash` or `alternative` (pupil paid the instructor directly, lesson signed off). Card lessons appear only once their payout is paid. Never `POST` these to `/finances`, as they would be counted twice.
 - `stats.total_payments_pence` and `stats.net_balance_pence` **include** lesson income (matches the CRM Finances tab). `stats.total_lesson_income_pence` gives the lesson-income part on its own.
+
+---
+
+#### `POST /api/v1/instructor/finances/export`
+
+**Auth required:** Yes (Bearer token — instructor only). Rate limited to 10 requests per minute.
+
+Exports the instructor's payments (manual payments **and** lesson income), expenses and mileage in a date range as one CSV. Same rows as `/finances/summary` for that range. The instructor is always taken from the token, so only their own data is exported.
+
+**Request Body (JSON):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `from` | string | Yes | YYYY-MM-DD, inclusive. |
+| `to` | string | Yes | YYYY-MM-DD, inclusive. Must be on or after `from`. |
+| `delivery` | string | No | `email` (default) or `download`. |
+
+```json
+{ "from": "2026-04-06", "to": "2026-11-15", "delivery": "email" }
+```
+
+**Success Response — `delivery: "email"`:** `202 Accepted`. The CSV is queued as an attachment to the instructor's account email.
+```json
+{
+  "message": "Your finance export has been emailed to sam@example.com.",
+  "email": "sam@example.com",
+  "from": "2026-04-06",
+  "to": "2026-11-15",
+  "counts": { "payments": 132, "expenses": 82, "mileage": 96 }
+}
+```
+
+**Success Response — `delivery: "download"`:** `200 OK`, body is the CSV file.
+- `Content-Type: text/csv; charset=UTF-8`
+- `Content-Disposition: attachment; filename="finances-2026-04-06-to-2026-11-15.csv"`
+
+**CSV format:** UTF-8 with BOM (opens cleanly in Excel), comma-separated, one header row. Rows come in three blocks, each oldest first: payments, then expenses, then mileage. An empty range returns just the header row. Fields are RFC 4180 quoted (embedded `"` doubled). Text cells starting with `=`, `+`, `-`, `@`, tab or CR are prefixed with `'` so spreadsheets don't run them as formulas; numeric cells are never prefixed.
+
+| Column | Payments | Expenses | Mileage |
+|--------|----------|----------|---------|
+| `record_type` | `payment` | `expense` | `mileage` |
+| `date` | YYYY-MM-DD | YYYY-MM-DD | YYYY-MM-DD |
+| `source` | `manual` (finance record), or `payout` / `cash` / `alternative` (lesson income) | `manual` | empty |
+| `category` | Category label (e.g. `Lesson income`, `Referral`) | Category label (e.g. `Fuel`) | empty |
+| `description` | Description (lesson income: `Lesson – <pupil name>`) | Description | empty |
+| `amount_gbp` | e.g. `35.00` | e.g. `75.00` | empty |
+| `payment_method` | Payment method label, or empty | Payment method label, or empty | empty |
+| `mileage_type` | empty | empty | `Business` / `Personal` |
+| `start_mileage` | empty | empty | Odometer start |
+| `end_mileage` | empty | empty | Odometer finish, or empty if not logged yet |
+| `miles` | empty | empty | Miles (`0` while finish is missing) |
+| `notes` | Notes (lesson income: package name) | Notes | Notes |
+
+**Error Responses:**
+- `401` — missing/invalid token.
+- `403` — the user is not an instructor: `{ "message": "Only instructors can export finances." }`
+- `422` — validation, e.g. `{ "message": "The to field must be a date after or equal to from.", "errors": { "to": ["The to field must be a date after or equal to from."] } }`
+- `429` — more than 10 exports in a minute.
+
+**Notes:**
+- Prefer `email`: no file handling needed in the app. Use `download` only if the app wants to save/share the file itself.
+- The email subject is "Your finance export for <period>" and is editable in the admin email templates (`instructor.finance_export`).
 
 ---
 
@@ -2132,13 +2203,13 @@ Creates a finance record. Preferred flow: create first (JSON), then upload a rec
 | `notes` | string | No | Max 1000 chars |
 | `receipt` | file | No | Multipart only. PDF, JPG/JPEG, or PNG, max `/finances/config.receipt.max_size_kb` (20 MB default). See "Single-request alternative" above. |
 
-**Example Request (recurring monthly payment, 12 occurrences):**
+**Example Request (recurring monthly expense, 12 occurrences):**
 ```json
 {
-  "type": "payment",
-  "category": "franchise_payout",
+  "type": "expense",
+  "category": "franchise_fee",
   "payment_method": "bank_transfer",
-  "description": "Franchise payout",
+  "description": "Franchise fee",
   "amount_pence": 25000,
   "is_recurring": true,
   "recurrence_frequency": "monthly",
@@ -6933,7 +7004,7 @@ Removes the user's stored Expo push token so no more push notifications are sent
 | Weekly-payment reminder issued (booking-time and on prior-lesson sign-off) | `"Time to pay for your lesson"` | `"Check your email to pay for your upcoming lesson on {Day D Mon}."` | `{ type: "lesson_payment", lesson_payment_id, lesson_id, hosted_invoice_url }` |
 | Lesson marked as paid (instructor) — weekly lesson invoice paid, first weekly payment, or pay-in-full booking paid | `"Lesson paid"` (`"Lessons paid"` for pay in full) | `"{Pupil name} has paid for their lesson on {Day D Mon} at {HH:MM}."` — pay in full: `"{Pupil name} has paid for {n} lessons, starting {Day D Mon} at {HH:MM}."` | `{ type: "lesson_paid", lesson_id, lesson_ids, lesson_payment_ids, student_id }` (`lesson_id` is the earliest paid lesson) |
 
-Pushes are queued to the `push_notifications` table and delivered by the every-minute `push:send-queued` cron (so up to ~60s latency is normal). Email and in-app delivery are unaffected by push success or failure — push is a strictly additive layer.
+**Direct in-app messages** (pupil ↔ instructor, and support chats) are pushed **immediately** when the message is sent, at Expo `priority: "high"` so Android doesn't defer them in Doze; the row is still recorded in `push_notifications` (`sent` / `failed`). A failed immediate send is not retried. All other pushes — including broadcast messages and the "on my way" / "arrived" lesson status messages — are queued to the `push_notifications` table and delivered by the every-minute `push:send-queued` cron (so up to ~60s latency is normal; rows younger than 15s wait for the next run). Email and in-app delivery are unaffected by push success or failure — push is a strictly additive layer.
 
 ---
 
@@ -8314,6 +8385,10 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-12 | **Explicit chat type for messages.** Removes the student-ID-vs-admin-user-ID ambiguity in both directions. New optional `?type=student\|support` on `GET /messages/conversations/{user}` and `POST /messages/conversations/{user}/read`, and `recipient_type` (`student`\|`support`) on `POST /messages`. `support` → `{user}` / `recipient_id` is an admin/owner **user ID** (shared support thread; `404` otherwise); `student` → one of the instructor's own students by **student ID** (`404` otherwise, incl. student callers). Omitted → legacy resolution (instructor's own student first, then owner user ID). New `chat_type` (`support`\|`student`\|`instructor`) on every `GET /messages/conversations` object and `GET /messages/unread-count` `conversations[]` item. Additive — no fields removed, no schema change. **App action:** read `chat_type` on list/unread rows; open/mark-read/send with `type=support` + `user.id` for support rows and `type=student` + `student_id` for pupil rows. | Messages (conversations, conversation, mark read, send, unread-count) |
 | 2026-11-12 | **Chat type follow-up.** `type` / `recipient_type` now also accept `instructor` (pupil → their instructor, by user ID), so every `chat_type` value can be passed straight back; previously `instructor` returned `422`. `GET /messages/conversations` now returns **one** `support` row for all admins (it opens the shared support thread; `unread_count` covers every admin) instead of one row per admin. `GET /messages/unread-count` is unchanged — still one row per sending admin, so sum the `chat_type: "support"` rows for the support badge. | Messages (conversations, conversation, mark read, send) |
 | 2026-11-17 | **Open lesson from the diary.** New read-only `has_started` (boolean) on the lesson-detail object, so the app can show Sign Off on the day of the lesson like the CRM does. Also documented the instructor "Open lesson" flow: a diary item's `lesson_id` + `student_id` lead to the existing lesson show, sign-off and pupil notes endpoints. Additive — no fields removed, no schema change, sign-off unchanged. **Diary `student_id` fix:** `GET /instructor/calendar/items` (and every endpoint returning calendar items) now returns `student_id: null` on a `draft` from the pupil's own checkout, matching `student_name`. Before, it leaked the ID of a learner who had not paid yet. `can_confirm_alternative_payment` is always `false` on those items, so no app action used it. | Student Lessons (show, sign-off response); Instructor Calendar items |
+| 2026-11-15 | **Package create before Stripe is connected.** `POST /instructor/packages` for an instructor who hasn't finished Stripe onboarding (or has charges disabled) now returns `422` with `errors.package` and a readable `message`, instead of `500`. Same rule, nothing is created either way. **App action:** show `message` as the error. | Instructor Packages (create) |
+| 2026-11-17 | **Franchise Fee is now an expense.** `/finances/config.expense_categories` gains `franchise_fee` ("Franchise Fee"), and `category_meta.franchise_fee` is `{ method_dependent: false, claimable: true, selectable_in_picker: true, itsa_bucket: "professionalFees" }`. POST/PUT accept `type: "expense", category: "franchise_fee"`. The `franchise_payout` payment slug now has `category_meta.franchise_payout.selectable_in_picker: false`. It is still in `payment_categories` and still valid, so existing payment rows keep their label and totals, and can still be edited. Existing rows are not migrated. Additive, no fields removed. **App action:** filter both category dropdowns by `category_meta.{slug}.selectable_in_picker`, but keep a hidden slug as an option when editing a record that already uses it. | Instructor Finances (config, store, update) |
+| 2026-11-15 | **Instant message pushes.** Direct-message pushes (pupil ↔ instructor, support) are now sent immediately at Expo `priority: "high"` instead of waiting up to ~60s for `push:send-queued`. Broadcast and lesson status pushes are still queued. Title, body and data payload (`{ type: "message", message_id, from_user_id }`) are unchanged. No request/response changes. **App action:** none beyond handling the tap (open the chat). | Push notifications, Messages (send) |
+| 2026-11-15 | **Finance export (CSV).** New `POST /api/v1/instructor/finances/export` with `from`, `to` (required, YYYY-MM-DD) and `delivery` (`email` default \| `download`). Exports the instructor's payments (incl. lesson income), expenses and mileage in the range as one CSV — same rows as `/finances/summary`. `email` → `202` JSON with `email`, `from`, `to`, `counts`; the CSV is emailed as an attachment. `download` → `200` `text/csv` attachment. Rate limited to 10/min. Additive only. **App action:** add an Export button to the Finances screen with a date-range picker that calls this endpoint (default `email`) and shows `message` on success. | Instructor Finances (export) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

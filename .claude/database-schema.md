@@ -2431,6 +2431,7 @@ Lookup table joining DRIVE's finance-category slugs to the HMRC ITSA expense buc
 **Notes:**
 - Seeded baseline (migration `2026_05_19_075511_create_category_tax_mapping_table`): the 18 slugs from `config/finances.php` as of Phase 6.
 - Phase 6 additions (migration `2026_05_19_075511_update_finance_categories_for_method_aware_picker`): `servicing`, `repairs`, `road_tax`, `breakdown_cover`, `vehicle_insurance` (method-dependent vehicle running costs); `business_insurance`, `phone`, `accountant_fees` (general); plus `food_drink.selectable_in_picker = false`.
+- Migration `2026_11_17_094000_move_franchise_fee_to_expense_categories`: adds `franchise_fee` (expense, `exempt`, `professionalFees`, claimable, not method-dependent) and sets `franchise_payout.selectable_in_picker = false`. Existing `type=payment` rows keep `franchise_payout` and are not migrated.
 - The legacy `insurance` slug remains in the table for historical-row integrity but new rows should use `vehicle_insurance` or `business_insurance`. The one-time `InsuranceReview` UI re-tags existing rows.
 
 ### year_end_archives

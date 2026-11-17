@@ -4,7 +4,7 @@ import axios from 'axios'
 import { Head, router } from '@inertiajs/vue3'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
-import { Loader2, MailWarning, SkipForward, Trash2, Undo2 } from 'lucide-vue-next'
+import { CreditCard, Loader2, MailWarning, SkipForward, Trash2, Undo2 } from 'lucide-vue-next'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { useRole } from '@/composables/useRole'
 import AppLayout from '@/layouts/AppLayout.vue'
@@ -96,7 +96,8 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const isEditSheetOpen = ref(false)
-const { isOwner } = useRole()
+const { isOwner, hasFullOwnerAccess } = useRole()
+const showProfileTabs = computed(() => props.instructor.onboarding_complete || hasFullOwnerAccess.value)
 const isResendingInvite = ref(false)
 const welcomeEmailPending = ref(Boolean(props.instructor.welcome_email_pending))
 const welcomeEmailLastSentAt = ref(props.instructor.welcome_email_last_sent_at ?? null)
@@ -338,15 +339,25 @@ const breadcrumbs = [
                 </Button>
             </div>
 
+            <!-- Full-access owners manage the profile before Stripe is connected; payouts still need Stripe -->
+            <Alert v-if="!instructor.onboarding_complete && hasFullOwnerAccess">
+                <CreditCard class="h-4 w-4" />
+                <AlertTitle>Stripe not connected</AlertTitle>
+                <AlertDescription>
+                    {{ instructor.name }} hasn't finished connecting Stripe, so they can't take card payments or
+                    receive payouts yet. Use "Send Stripe link" above to help them finish.
+                </AlertDescription>
+            </Alert>
+
             <!-- Onboarding welcome (shown until Stripe is connected) -->
             <StripeOnboardingWelcome
-                v-if="!instructor.onboarding_complete"
+                v-else-if="!instructor.onboarding_complete"
                 :instructor="instructor"
                 class="py-6"
             />
 
             <!-- Tab Navigation (hidden when viewing a student or HMRC sub-page) -->
-            <div class="flex gap-1 border-b" v-if="instructor.onboarding_complete && activeTab !== 'student' && activeTab !== 'hmrc'">
+            <div class="flex gap-1 border-b" v-if="showProfileTabs && activeTab !== 'student' && activeTab !== 'hmrc'">
                 <button
                     v-for="tab in tabs"
                     :key="tab.key"
@@ -363,7 +374,7 @@ const breadcrumbs = [
             </div>
 
             <!-- Tab Content -->
-            <div class="flex flex-col gap-6" v-if="instructor.onboarding_complete">
+            <div class="flex flex-col gap-6" v-if="showProfileTabs">
                 <!-- Schedule Tab -->
                 <ScheduleTab v-if="activeTab === 'schedule'" :instructor-id="instructor.id" />
 

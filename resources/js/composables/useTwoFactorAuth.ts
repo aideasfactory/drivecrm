@@ -1,5 +1,6 @@
 import type { ComputedRef, Ref } from 'vue';
 import { computed, ref } from 'vue';
+import { handleExpiredSession } from '@/lib/sessionExpiry';
 import { qrCode, recoveryCodes, secretKey } from '@/routes/two-factor';
 
 export type UseTwoFactorAuthReturn = {
@@ -23,6 +24,8 @@ const fetchJson = async <T>(url: string): Promise<T> => {
     });
 
     if (!response.ok) {
+        handleExpiredSession(response.status);
+
         throw new Error(`Failed to fetch: ${response.status}`);
     }
 

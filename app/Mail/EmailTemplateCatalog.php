@@ -515,6 +515,14 @@ final class EmailTemplateCatalog
                 'link_expires_at' => 'Download link expiry',
                 'retention_years' => 'How long the archive is kept',
             ], 'Your {{tax_year_label}} tax-year archive is ready', 'Hello {{recipient_name}},', "Your {{tax_year_label}} tax-year archive is ready to download.\n\nIt includes {{finance_rows}} finance rows, {{mileage_rows}} mileage logs, {{receipts}} receipts and {{submissions}} submissions{{#if file_size}} ({{file_size}}){{/if}}.\n\n{{action_button}}\n\nThis download link expires on {{link_expires_at}}. We keep a copy for {{retention_years}} years to meet HMRC record-keeping rules.", null, 'Download archive'),
+
+            self::entry(EmailTemplateKey::InstructorFinanceExport, 'Finance export', $audience, 'Sent with a CSV attachment when the instructor exports their finances from the app.', [
+                'recipient_name' => 'Instructor name',
+                'period' => 'Export date range',
+                'payment_rows' => 'Payment row count (incl. lesson income)',
+                'expense_rows' => 'Expense row count',
+                'mileage_rows' => 'Mileage row count',
+            ], 'Your finance export for {{period}}', 'Hello {{recipient_name}},', "Your finance export for {{period}} is attached as a CSV file.\n\nIt includes {{payment_rows}} payments, {{expense_rows}} expenses and {{mileage_rows}} mileage logs.", null, null),
         ];
     }
 

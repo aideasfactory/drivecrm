@@ -88,6 +88,15 @@ class Enquiry extends Model
     }
 
     /**
+     * Whether a signed-in owner (admin or bookings team) started this enquiry,
+     * with or without the staff_booking flag.
+     */
+    public function wasStartedByOwner(): bool
+    {
+        return isset($this->data['started_by_owner']);
+    }
+
+    /**
      * Whether this enquiry came from the 2-step /booking coverage form rather
      * than the full /onboarding booking flow.
      */
