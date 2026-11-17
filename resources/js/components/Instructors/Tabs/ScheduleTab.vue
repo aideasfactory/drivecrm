@@ -930,10 +930,13 @@ function openOfferSlot() {
     isOfferSlotSheetOpen.value = true
 }
 
-/** The diary item being edited links to a named pupil's lesson, so it can be opened. */
+/**
+ * The diary item being edited links to a named pupil's lesson, so it can be opened.
+ * Drafts (awaiting first payment) are left out of the pupil's Lessons list, so there is nothing to open.
+ */
 const editItemCanOpenLesson = computed(() => {
     const item = itemsMap.value.get(editForm.value.id)
-    return !!item?.lesson_id && !!item?.student_id
+    return !!item?.lesson_id && !!item?.student_id && item.status !== 'draft'
 })
 
 /** Open the lesson in the pupil's Lessons tab (details, summary and sign-off). */

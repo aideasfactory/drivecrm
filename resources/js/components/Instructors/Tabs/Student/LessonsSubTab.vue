@@ -277,15 +277,17 @@ const paymentLabel = (lesson: Lesson): string => {
 }
 
 // API calls
-const loadLessons = async () => {
+const loadLessons = async (): Promise<boolean> => {
     loading.value = true
     try {
         const response = await axios.get(`/students/${props.studentId}/lessons`)
         lessons.value = response.data.lessons || []
         alternativePaymentAllowed.value = response.data.alternative_payment_allowed === true
         alternativePaymentBookings.value = response.data.alternative_payment_bookings || []
+        return true
     } catch {
         toast.error('Failed to load lessons')
+        return false
     } finally {
         loading.value = false
     }
@@ -529,8 +531,13 @@ const handleSignOff = async () => {
 }
 
 const openFocusedLesson = async () => {
+    if (!props.focusLessonId) return
+
     const lesson = lessons.value.find((l) => l.id === props.focusLessonId)
-    if (!lesson) return
+    if (!lesson) {
+        toast.error("This lesson isn't in this pupil's lessons list")
+        return
+    }
 
     await nextTick()
     document.getElementById(`lesson-row-${lesson.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -543,8 +550,9 @@ const openFocusedLesson = async () => {
 }
 
 onMounted(async () => {
-    await loadLessons()
-    await openFocusedLesson()
+    if (await loadLessons()) {
+        await openFocusedLesson()
+    }
 })
 </script>
 
