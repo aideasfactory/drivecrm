@@ -98,6 +98,13 @@ class OnboardingController extends Controller
             ];
         }
 
+        // Stamped separately from staff_booking so a learner-flow booking by an
+        // owner keeps Stripe Checkout but is still kept out of Bird, including
+        // the session-less sync from the payment webhook.
+        if ($request->user()?->isOwner()) {
+            $data['started_by_owner'] = ['user_id' => $request->user()->id];
+        }
+
         $maxStep = 1;
 
         // If instructor_id is prefilled, auto-populate step 2 data and advance
