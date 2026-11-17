@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Actions\Import\MergeDuplicateProgressFrameworkAction;
-use App\Actions\Import\ResolveImportedLessonClashesAction;
 use App\Actions\Import\RemoveSlotsUnderImportedLessonsAction;
+use App\Actions\Import\ResolveImportedLessonClashesAction;
 
 class ImportRepairService extends BaseService
 {

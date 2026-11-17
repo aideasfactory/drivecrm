@@ -7,6 +7,7 @@ namespace App\Actions\Import;
 use App\Models\ProgressCategory;
 use App\Models\ProgressSubcategory;
 use App\Models\StudentProgress;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -118,7 +119,7 @@ class MergeDuplicateProgressFrameworkAction
     /**
      * Active categories sharing an instructor and name, oldest first.
      *
-     * @return array<int, \Illuminate\Support\Collection<int, ProgressCategory>>
+     * @return array<int, Collection<int, ProgressCategory>>
      */
     protected function duplicateCategoryGroups(): array
     {
@@ -139,7 +140,7 @@ class MergeDuplicateProgressFrameworkAction
     /**
      * Active skills sharing a category and name, oldest first.
      *
-     * @return array<int, \Illuminate\Support\Collection<int, ProgressSubcategory>>
+     * @return array<int, Collection<int, ProgressSubcategory>>
      */
     protected function duplicateSkillGroups(): array
     {
