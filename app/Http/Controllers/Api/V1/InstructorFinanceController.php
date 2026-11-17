@@ -18,6 +18,7 @@ use App\Support\FinanceReceiptUploads;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -81,6 +82,40 @@ class InstructorFinanceController extends Controller
             'mileage' => MileageLogResource::collection($summary['mileage'])->resolve(),
             'stats' => $summary['stats'],
         ]);
+    }
+
+    /**
+     * Export payments (incl. lesson income), expenses and mileage in a date range
+     * as CSV — emailed to the instructor's account email (default) or returned
+     * as a file download (`delivery=download`).
+     */
+    public function export(Request $request): JsonResponse|Response
+    {
+        $validated = $request->validate([
+            'from' => ['required', 'date', 'date_format:Y-m-d'],
+            'to' => ['required', 'date', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'delivery' => ['sometimes', 'string', 'in:email,download'],
+        ]);
+
+        $instructor = $request->user()->instructor;
+
+        abort_if($instructor === null, 403, 'Only instructors can export finances.');
+
+        if (($validated['delivery'] ?? 'email') === 'download') {
+            $export = $this->instructorService->buildFinanceExport($instructor, $validated['from'], $validated['to']);
+
+            return response($export['csv'], 200, [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => 'attachment; filename="'.$export['filename'].'"',
+            ]);
+        }
+
+        $result = $this->instructorService->emailFinanceExport($instructor, $validated['from'], $validated['to']);
+
+        return response()->json([
+            'message' => "Your finance export has been emailed to {$result['email']}.",
+            ...$result,
+        ], 202);
     }
 
     /**

@@ -40,6 +40,7 @@
     - [Offer Slot (Withdraw)](#delete-apiv1instructorcalendaritemscalendaritemoffers)
     - [Finances (Config)](#get-apiv1instructorfinancesconfig)
     - [Finances (Summary)](#get-apiv1instructorfinancessummary)
+    - [Finances (Export CSV)](#post-apiv1instructorfinancesexport)
     - [Finances (List)](#get-apiv1instructorfinances)
     - [Finances (Show)](#get-apiv1instructorfinancesfinance)
     - [Finances (Create)](#post-apiv1instructorfinances)
@@ -2011,6 +2012,68 @@ When both `from` and `to` are omitted, the response covers **the last 30 days** 
 - `stats.total_records` counts finance rows only (not mileage, not lesson income).
 - `lesson_income` is the money the instructor received for lessons in the date range (by lesson date), newest first. It is **read-only** and derived on the fly, not stored as finance records, so it has no `id` and can't be edited, deleted or given a receipt. `source`: `payout` (card lesson, Stripe payout paid), `cash` or `alternative` (pupil paid the instructor directly, lesson signed off). Card lessons appear only once their payout is paid. Never `POST` these to `/finances`, as they would be counted twice.
 - `stats.total_payments_pence` and `stats.net_balance_pence` **include** lesson income (matches the CRM Finances tab). `stats.total_lesson_income_pence` gives the lesson-income part on its own.
+
+---
+
+#### `POST /api/v1/instructor/finances/export`
+
+**Auth required:** Yes (Bearer token — instructor only). Rate limited to 10 requests per minute.
+
+Exports the instructor's payments (manual payments **and** lesson income), expenses and mileage in a date range as one CSV. Same rows as `/finances/summary` for that range. The instructor is always taken from the token, so only their own data is exported.
+
+**Request Body (JSON):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `from` | string | Yes | YYYY-MM-DD, inclusive. |
+| `to` | string | Yes | YYYY-MM-DD, inclusive. Must be on or after `from`. |
+| `delivery` | string | No | `email` (default) or `download`. |
+
+```json
+{ "from": "2026-04-06", "to": "2026-11-15", "delivery": "email" }
+```
+
+**Success Response — `delivery: "email"`:** `202 Accepted`. The CSV is queued as an attachment to the instructor's account email.
+```json
+{
+  "message": "Your finance export has been emailed to sam@example.com.",
+  "email": "sam@example.com",
+  "from": "2026-04-06",
+  "to": "2026-11-15",
+  "counts": { "payments": 132, "expenses": 82, "mileage": 96 }
+}
+```
+
+**Success Response — `delivery: "download"`:** `200 OK`, body is the CSV file.
+- `Content-Type: text/csv; charset=UTF-8`
+- `Content-Disposition: attachment; filename="finances-2026-04-06-to-2026-11-15.csv"`
+
+**CSV format:** UTF-8 with BOM (opens cleanly in Excel), comma-separated, one header row. Rows come in three blocks, each oldest first: payments, then expenses, then mileage. An empty range returns just the header row. Fields are RFC 4180 quoted (embedded `"` doubled). Text cells starting with `=`, `+`, `-`, `@`, tab or CR are prefixed with `'` so spreadsheets don't run them as formulas; numeric cells are never prefixed.
+
+| Column | Payments | Expenses | Mileage |
+|--------|----------|----------|---------|
+| `record_type` | `payment` | `expense` | `mileage` |
+| `date` | YYYY-MM-DD | YYYY-MM-DD | YYYY-MM-DD |
+| `source` | `manual` (finance record), or `payout` / `cash` / `alternative` (lesson income) | `manual` | empty |
+| `category` | Category label (e.g. `Lesson income`, `Referral`) | Category label (e.g. `Fuel`) | empty |
+| `description` | Description (lesson income: `Lesson – <pupil name>`) | Description | empty |
+| `amount_gbp` | e.g. `35.00` | e.g. `75.00` | empty |
+| `payment_method` | Payment method label, or empty | Payment method label, or empty | empty |
+| `mileage_type` | empty | empty | `Business` / `Personal` |
+| `start_mileage` | empty | empty | Odometer start |
+| `end_mileage` | empty | empty | Odometer finish, or empty if not logged yet |
+| `miles` | empty | empty | Miles (`0` while finish is missing) |
+| `notes` | Notes (lesson income: package name) | Notes | Notes |
+
+**Error Responses:**
+- `401` — missing/invalid token.
+- `403` — the user is not an instructor: `{ "message": "Only instructors can export finances." }`
+- `422` — validation, e.g. `{ "message": "The to field must be a date after or equal to from.", "errors": { "to": ["The to field must be a date after or equal to from."] } }`
+- `429` — more than 10 exports in a minute.
+
+**Notes:**
+- Prefer `email`: no file handling needed in the app. Use `download` only if the app wants to save/share the file itself.
+- The email subject is "Your finance export for <period>" and is editable in the admin email templates (`instructor.finance_export`).
 
 ---
 
@@ -8310,6 +8373,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-12 | **Explicit chat type for messages.** Removes the student-ID-vs-admin-user-ID ambiguity in both directions. New optional `?type=student\|support` on `GET /messages/conversations/{user}` and `POST /messages/conversations/{user}/read`, and `recipient_type` (`student`\|`support`) on `POST /messages`. `support` → `{user}` / `recipient_id` is an admin/owner **user ID** (shared support thread; `404` otherwise); `student` → one of the instructor's own students by **student ID** (`404` otherwise, incl. student callers). Omitted → legacy resolution (instructor's own student first, then owner user ID). New `chat_type` (`support`\|`student`\|`instructor`) on every `GET /messages/conversations` object and `GET /messages/unread-count` `conversations[]` item. Additive — no fields removed, no schema change. **App action:** read `chat_type` on list/unread rows; open/mark-read/send with `type=support` + `user.id` for support rows and `type=student` + `student_id` for pupil rows. | Messages (conversations, conversation, mark read, send, unread-count) |
 | 2026-11-12 | **Chat type follow-up.** `type` / `recipient_type` now also accept `instructor` (pupil → their instructor, by user ID), so every `chat_type` value can be passed straight back; previously `instructor` returned `422`. `GET /messages/conversations` now returns **one** `support` row for all admins (it opens the shared support thread; `unread_count` covers every admin) instead of one row per admin. `GET /messages/unread-count` is unchanged — still one row per sending admin, so sum the `chat_type: "support"` rows for the support badge. | Messages (conversations, conversation, mark read, send) |
 | 2026-11-15 | **Instant message pushes.** Direct-message pushes (pupil ↔ instructor, support) are now sent immediately at Expo `priority: "high"` instead of waiting up to ~60s for `push:send-queued`. Broadcast and lesson status pushes are still queued. Title, body and data payload (`{ type: "message", message_id, from_user_id }`) are unchanged. No request/response changes. **App action:** none beyond handling the tap (open the chat). | Push notifications, Messages (send) |
+| 2026-11-15 | **Finance export (CSV).** New `POST /api/v1/instructor/finances/export` with `from`, `to` (required, YYYY-MM-DD) and `delivery` (`email` default \| `download`). Exports the instructor's payments (incl. lesson income), expenses and mileage in the range as one CSV — same rows as `/finances/summary`. `email` → `202` JSON with `email`, `from`, `to`, `counts`; the CSV is emailed as an attachment. `download` → `200` `text/csv` attachment. Rate limited to 10/min. Additive only. **App action:** add an Export button to the Finances screen with a date-range picker that calls this endpoint (default `email`) and shows `message` on success. | Instructor Finances (export) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

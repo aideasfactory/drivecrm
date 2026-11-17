@@ -19,6 +19,7 @@ class PreviewEmailTemplateAction
      */
     private const MAILABLE_TEMPLATES = [
         EmailTemplateKey::AdminWelcome,
+        EmailTemplateKey::InstructorFinanceExport,
         EmailTemplateKey::InstructorStripeSetupLink,
         EmailTemplateKey::InstructorWelcome,
         EmailTemplateKey::InstructorYearEndArchiveReady,
@@ -95,6 +96,8 @@ class PreviewEmailTemplateAction
         'file_size' => '12.34 MB',
         'finance_rows' => 214,
         'mileage_rows' => 96,
+        'payment_rows' => 132,
+        'expense_rows' => 82,
         'receipts' => 58,
         'submissions' => 4,
         'link_expires_at' => '4 November 2026',
