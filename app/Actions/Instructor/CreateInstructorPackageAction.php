@@ -8,6 +8,7 @@ use App\Models\Package;
 use App\Services\StripeService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class CreateInstructorPackageAction
 {
@@ -22,7 +23,9 @@ class CreateInstructorPackageAction
     {
         // Check if instructor has completed Stripe onboarding
         if (! $instructor->hasCompletedOnboarding() || ! $instructor->charges_enabled) {
-            throw new \Exception('Instructor must complete Stripe Connect onboarding before creating packages.');
+            throw ValidationException::withMessages([
+                'package' => 'Stripe must be connected before packages can be created for this instructor.',
+            ]);
         }
 
         DB::beginTransaction();
