@@ -84,6 +84,7 @@ interface Props {
     tab?: string
     subtab?: string
     student?: number
+    lesson?: number | null
     hmrc?: HmrcData | null
     hmrcService?: HmrcServicePayload | null
     formOptions: InstructorFormOptions
@@ -411,6 +412,7 @@ const breadcrumbs = [
                     :instructor="instructor"
                     :student-id="student"
                     :subtab="subtab"
+                    :lesson-id="lesson"
                 />
 
                 <!-- HMRC Tab -->
