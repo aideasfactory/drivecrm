@@ -47,6 +47,7 @@ class LessonDetailResource extends JsonResource
             'banked_at' => $this->banked_at?->toISOString(),
             'banked_expires_at' => $this->resource->bankedExpiresAt()?->toISOString(),
             'provisional_handled_by' => $this->resource->provisionalHandledBy()?->value,
+            'has_started' => $this->resource->hasStarted(),
             'completed_at' => $this->completed_at?->toISOString(),
             'summary' => $isPupil && ($isImported || ! $this->resource->isCompleted()) ? null : $this->summary,
             'is_imported' => $isImported,

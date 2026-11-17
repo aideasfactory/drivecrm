@@ -4795,6 +4795,7 @@ Instructor responses are unchanged.
     "start_time": "14:00",
     "end_time": "15:00",
     "status": "completed",
+    "has_started": true,
     "completed_at": "2026-03-18T15:05:00.000000Z",
     "summary": "Good progress on parallel parking. Needs more practice with mirrors.",
     "is_imported": false,
@@ -4849,6 +4850,7 @@ Instructor responses are unchanged.
 | `start_time` | string\|null | Start time (HH:MM) |
 | `end_time` | string\|null | End time (HH:MM) |
 | `status` | string | Lesson status: `pending`, `completed`, or `draft` (upfront booking awaiting payment). **Cancelled lessons return 404, so `cancelled` never appears.** |
+| `has_started` | boolean | The lesson's start time (UK) has been reached. `false` for a banked lesson; `true` for a lesson with no date. Same rule the CRM uses to show **Sign Off**: show it when `status === "pending"` && `has_started` && (`payment_status === "paid"` \|\| `can_sign_off_with_alternative_payment`). `card_status` only becomes `needs_sign_off` the day after, so use this for same-day sign-off |
 | `completed_at` | string\|null | ISO 8601 timestamp when lesson was completed |
 | `summary` | string\|null | Instructor's lesson summary/notes (written at sign-off). **Pupil:** `null` until the lesson is signed off, and always `null` when `is_imported` is `true` |
 | `is_imported` | boolean | `summary` is the note the importer brought over from the old system and has not been replaced by a sign-off here. Returned to every caller. `false` when the importer left no note, and for every lesson booked or signed off here. **Pupil:** show *"This lesson was imported, so there are no notes"* instead of the notes |
@@ -4899,6 +4901,8 @@ Instructor responses are unchanged.
 | `sort_order` | integer | Admin-defined display position within the resource's library folder |
 
 > **Note:** If the lesson exists but belongs to a different student, a 404 is returned (not 403), preventing information leakage. Lesson `resources` are ordered by library `sort_order` then title.
+
+**Instructor app: "Open lesson" from the diary.** A booked / reserved / draft / completed item from `GET /instructor/calendar/items` carries `lesson_id` and `student_id`. When both are non-null, open the lesson with `GET /students/{student_id}/lessons/{lesson_id}`, sign it off with `POST /students/{student_id}/lessons/{lesson_id}/sign-off`, and read / write the pupil's notes with `GET|POST|PUT|DELETE /students/{student_id}/notes`. Pickup address: `GET /students/{student_id}/pickup-points`. The lesson's own notes are `summary` (written at sign-off). Items with `lesson_id: null` (available / unavailable slots, travel) have no lesson to open.
 
 ---
 
@@ -8309,6 +8313,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-12 | **Instructor pupil chat opened the wrong thread.** For instructors, `{user}` on `GET /messages/conversations/{user}` and `POST /messages/conversations/{user}/read`, and `recipient_id` on `POST /messages`, now resolve to the instructor's **own student** first. Previously the backend checked "is this an owner user ID?" first, so a pupil whose student ID equalled an admin's user ID opened the (empty) support thread — the list showed their preview/unread badge, the chat said "No messages yet", mark-read never cleared the badge, and replies went to the admin (found on Mark Terry-Lush / Marni James). No shape changes. **App action:** none — keep passing `student_id` for pupil chats and the support user ID for support. *(Superseded by the next entry: always send the chat type.)* | Messages (conversation, mark read, send) |
 | 2026-11-12 | **Explicit chat type for messages.** Removes the student-ID-vs-admin-user-ID ambiguity in both directions. New optional `?type=student\|support` on `GET /messages/conversations/{user}` and `POST /messages/conversations/{user}/read`, and `recipient_type` (`student`\|`support`) on `POST /messages`. `support` → `{user}` / `recipient_id` is an admin/owner **user ID** (shared support thread; `404` otherwise); `student` → one of the instructor's own students by **student ID** (`404` otherwise, incl. student callers). Omitted → legacy resolution (instructor's own student first, then owner user ID). New `chat_type` (`support`\|`student`\|`instructor`) on every `GET /messages/conversations` object and `GET /messages/unread-count` `conversations[]` item. Additive — no fields removed, no schema change. **App action:** read `chat_type` on list/unread rows; open/mark-read/send with `type=support` + `user.id` for support rows and `type=student` + `student_id` for pupil rows. | Messages (conversations, conversation, mark read, send, unread-count) |
 | 2026-11-12 | **Chat type follow-up.** `type` / `recipient_type` now also accept `instructor` (pupil → their instructor, by user ID), so every `chat_type` value can be passed straight back; previously `instructor` returned `422`. `GET /messages/conversations` now returns **one** `support` row for all admins (it opens the shared support thread; `unread_count` covers every admin) instead of one row per admin. `GET /messages/unread-count` is unchanged — still one row per sending admin, so sum the `chat_type: "support"` rows for the support badge. | Messages (conversations, conversation, mark read, send) |
+| 2026-11-17 | **Open lesson from the diary.** New read-only `has_started` (boolean) on the lesson-detail object, so the app can show Sign Off on the day of the lesson like the CRM does. Also documented the instructor "Open lesson" flow: a diary item's `lesson_id` + `student_id` lead to the existing lesson show, sign-off and pupil notes endpoints. Additive — no fields removed, no schema change, sign-off unchanged. | Student Lessons (show, sign-off response) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.
