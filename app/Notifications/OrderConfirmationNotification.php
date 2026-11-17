@@ -51,6 +51,7 @@ class OrderConfirmationNotification extends Notification implements ShouldQueue
                 'lessons_count' => $order->package_lessons_count,
                 'instructor_name' => $instructor->user->name,
                 'first_lesson_date' => $firstLesson ? Carbon::parse($firstLesson->date)->format('l, F j, Y') : '',
+                'lesson_details' => $order->lessonDetailsList(),
                 ...$order->costBreakdownPlaceholders(),
                 'total' => $order->formatted_amount_paid,
                 'weekly_instalment' => $isPaidInFull ? '' : $order->formatted_weekly_instalment,

@@ -52,6 +52,7 @@ class CashBookingConfirmedNotification extends Notification implements ShouldQue
                 'lessons_count' => $order->package_lessons_count,
                 'instructor_name' => $order->instructor?->user?->name ?? 'your instructor',
                 'first_lesson_date' => $firstLesson ? Carbon::parse($firstLesson->date)->format('l, F j, Y') : '',
+                'lesson_details' => $order->lessonDetailsList(),
                 'lesson_price' => $order->formatted_package_lesson_price,
                 'total' => $order->formatted_amount_paid,
                 'app_name' => config('app.name'),

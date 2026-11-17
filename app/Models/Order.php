@@ -459,6 +459,86 @@ class Order extends Model
     }
 
     /**
+     * The order's lessons that have not been cancelled, in date order, as one
+     * email line each with the instructor, start time, duration and the
+     * learner's pickup point, e.g. "Lesson 1: Tuesday, October 27, 2026 at
+     * 10:00 AM (2 hours) with Sam Taylor. Pickup: 1 High Street, AB1 2CD".
+     * Parts with no value are left out.
+     */
+    public function lessonDetailsList(): string
+    {
+        $pickup = $this->pickupLocationLine();
+        $orderInstructorName = $this->instructor?->user?->name;
+
+        return $this->lessons()
+            ->with('instructor.user')
+            ->where('status', '!=', LessonStatus::CANCELLED)
+            ->orderBy('date')
+            ->orderBy('start_time')
+            ->get()
+            ->values()
+            ->map(function (Lesson $lesson, int $index) use ($pickup, $orderInstructorName): string {
+                $duration = $lesson->start_time && $lesson->end_time
+                    ? self::formatLessonDuration((int) round($lesson->start_time->diffInMinutes($lesson->end_time)))
+                    : null;
+                $instructorName = $lesson->instructor?->user?->name ?? $orderInstructorName;
+
+                return 'Lesson '.($index + 1).': '
+                    .$lesson->date->format('l, F j, Y')
+                    .($lesson->start_time ? ' at '.$lesson->start_time->format('g:i A') : '')
+                    .($duration ? " ({$duration})" : '')
+                    .($instructorName ? " with {$instructorName}" : '')
+                    .($pickup ? ". Pickup: {$pickup}" : '');
+            })
+            ->implode("\n");
+    }
+
+    /**
+     * The learner's default pickup point (or their first one) as a single
+     * line, or null when they have none.
+     */
+    protected function pickupLocationLine(): ?string
+    {
+        $pickupPoint = $this->student?->pickupPoints()
+            ->orderByDesc('is_default')
+            ->orderBy('id')
+            ->first();
+
+        if (! $pickupPoint) {
+            return null;
+        }
+
+        $address = trim((string) $pickupPoint->address);
+        $postcode = trim((string) $pickupPoint->postcode);
+
+        if ($postcode !== '' && str_contains(strtoupper(str_replace(' ', '', $address)), strtoupper(str_replace(' ', '', $postcode)))) {
+            $postcode = '';
+        }
+
+        $line = implode(', ', array_filter([$address, $postcode], fn (string $part): bool => $part !== ''));
+
+        return $line !== '' ? $line : null;
+    }
+
+    /**
+     * e.g. "45 minutes", "1 hour", "1 hour 30 minutes", "2 hours".
+     */
+    protected static function formatLessonDuration(int $minutes): ?string
+    {
+        if ($minutes <= 0) {
+            return null;
+        }
+
+        $hours = intdiv($minutes, 60);
+        $remainder = $minutes % 60;
+
+        return trim(
+            ($hours > 0 ? $hours.' '.($hours === 1 ? 'hour' : 'hours') : '')
+            .($remainder > 0 ? ' '.$remainder.' minutes' : '')
+        );
+    }
+
+    /**
      * Get formatted lesson price from snapshot (e.g., "£50.00").
      */
     public function getFormattedPackageLessonPriceAttribute(): string

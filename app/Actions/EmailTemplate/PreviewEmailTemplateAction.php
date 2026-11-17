@@ -65,6 +65,7 @@ class PreviewEmailTemplateAction
         'lesson_time' => '10:00 – 12:00',
         'lesson_list' => "Monday, 2 November 2026, 10:00 – 12:00\nMonday, 9 November 2026, 10:00 – 12:00 (clash)",
         'lessons_list' => "Monday, 2 November 2026, 10:00 – 12:00\nMonday, 9 November 2026, 10:00 – 12:00\nMonday, 16 November 2026, 10:00 – 12:00",
+        'lesson_details' => "Lesson 1: Monday, November 2, 2026 at 10:00 AM (2 hours) with Sam Taylor. Pickup: 12 High Street, Leeds, LS1 4AB\nLesson 2: Monday, November 9, 2026 at 10:00 AM (2 hours) with Sam Taylor. Pickup: 12 High Street, Leeds, LS1 4AB",
         'reason' => 'Instructor unwell',
         'instructor_notes' => 'Great progress on roundabouts today. Next time we will focus on parallel parking.',
         'summary_excerpt' => 'Great progress on roundabouts today. Next time we will focus on parallel parking.',

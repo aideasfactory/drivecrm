@@ -61,6 +61,7 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
                 ...$costBreakdown,
                 'total' => $totalFormatted,
                 'first_lesson_date' => $firstLesson ? Carbon::parse($firstLesson->date)->format('l, F j, Y') : '',
+                'lesson_details' => $order->lessonDetailsList(),
                 'pay_by' => $order->payment_hold_expires_at
                     ? BookingPayments::formatDeadline($order->payment_hold_expires_at)
                     : '',
