@@ -459,11 +459,11 @@ class Order extends Model
     }
 
     /**
-     * The order's lessons that have not been cancelled, in date order, as one
-     * email line each with the instructor, start time, duration and the
-     * learner's pickup point, e.g. "Lesson 1: Tuesday, October 27, 2026 at
-     * 10:00 AM (2 hours) with Sam Taylor. Pickup: 1 High Street, AB1 2CD".
-     * Parts with no value are left out.
+     * The order's dated lessons that have not been cancelled, in date order,
+     * as one email line each with the instructor, start time, duration and
+     * the learner's pickup point, e.g. "Lesson 1: Tuesday, 27 October 2026
+     * at 10:00 (2 hours) with Sam Taylor. Pickup: 1 High Street, AB1 2CD".
+     * Banked lessons have no date and are left out, as are parts with no value.
      */
     public function lessonDetailsList(): string
     {
@@ -473,6 +473,7 @@ class Order extends Model
         return $this->lessons()
             ->with('instructor.user')
             ->where('status', '!=', LessonStatus::CANCELLED)
+            ->whereNotNull('date')
             ->orderBy('date')
             ->orderBy('start_time')
             ->get()
@@ -484,8 +485,8 @@ class Order extends Model
                 $instructorName = $lesson->instructor?->user?->name ?? $orderInstructorName;
 
                 return 'Lesson '.($index + 1).': '
-                    .$lesson->date->format('l, F j, Y')
-                    .($lesson->start_time ? ' at '.$lesson->start_time->format('g:i A') : '')
+                    .$lesson->date->format('l, j F Y')
+                    .($lesson->start_time ? ' at '.$lesson->start_time->format('H:i') : '')
                     .($duration ? " ({$duration})" : '')
                     .($instructorName ? " with {$instructorName}" : '')
                     .($pickup ? ". Pickup: {$pickup}" : '');
@@ -508,8 +509,8 @@ class Order extends Model
             return null;
         }
 
-        $address = trim((string) $pickupPoint->address);
-        $postcode = trim((string) $pickupPoint->postcode);
+        $address = trim((string) preg_replace('/\s+/', ' ', (string) $pickupPoint->address));
+        $postcode = trim((string) preg_replace('/\s+/', ' ', (string) $pickupPoint->postcode));
 
         if ($postcode !== '' && str_contains(strtoupper(str_replace(' ', '', $address)), strtoupper(str_replace(' ', '', $postcode)))) {
             $postcode = '';
