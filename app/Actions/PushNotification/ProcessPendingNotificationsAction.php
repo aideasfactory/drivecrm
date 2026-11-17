@@ -14,12 +14,17 @@ class ProcessPendingNotificationsAction
     ) {}
 
     /**
+     * Rows younger than 15s are skipped: PushNotificationService::sendNowIfHasToken
+     * creates its row as pending and is still sending it inline (Expo call
+     * capped at 5s), so picking it up here would deliver it twice.
+     *
      * @return array{sent: int, failed: int}
      */
     public function __invoke(): array
     {
         $pending = PushNotification::query()
             ->where('status', PushNotificationStatus::PENDING)
+            ->where('created_at', '<=', now()->subSeconds(15))
             ->with('user')
             ->oldest()
             ->limit(100)

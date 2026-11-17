@@ -390,6 +390,9 @@ final class WorkflowCatalog
                 self::step('Tax-year archive is ready', 'When the instructor requests their year-end download.', [
                     self::email(EmailTemplateKey::InstructorYearEndArchiveReady, 'Instructor'),
                 ]),
+                self::step('Finance export', 'When the instructor exports their finances from the app by email.', [
+                    self::email(EmailTemplateKey::InstructorFinanceExport, 'Instructor'),
+                ]),
             ]),
         ];
     }
