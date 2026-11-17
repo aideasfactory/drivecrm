@@ -235,6 +235,7 @@ The exception is **the year of buying a new car** — if the instructor is about
 | `insurance` (business / PI / public liability) | `otherExpenses` or `premisesRunningCosts` | ✅ | Always claimable regardless of vehicle method. **This is why we need to split `insurance` into two categories** — see §5. |
 | `internet` | `adminCosts` | ✅ (apportioned) | Business-use % only. Most instructors should claim a fraction (e.g. 50%), not the full bill. |
 | `mot` | `carVanTravelExpenses` | ✅ if Actual; ❌ if Simplified | Same rule as fuel |
+| `franchise_fee` | `professionalFees` | ✅ | Fee the instructor pays their franchise. Added 2026-11-17 (migration `2026_11_17_094000_move_franchise_fee_to_expense_categories`) to replace the `franchise_payout` payment slug for new entries. Same bucket / VAT treatment (`exempt`) as `franchise_payout`. |
 
 ### 4.2 Payment categories ([config/finances.php:33-40](../config/finances.php#L33-L40))
 
@@ -243,7 +244,7 @@ These are money flowing **out** that aren't general expenses — they need separ
 | DRIVE category | HMRC bucket | Claimable? | Notes |
 |---|---|---|---|
 | `none` | — | n/a | Excluded |
-| `franchise_payout` | `professionalFees` or `paymentsToSubcontractors` | ✅ | Depends on contract structure — most ADI franchise fees are `professionalFees`. **Open question for client:** is the franchise fee a flat weekly fee, or is it commission per-pupil? If commission-style, `paymentsToSubcontractors` may fit better. |
+| `franchise_payout` | `professionalFees` or `paymentsToSubcontractors` | ✅ | **Legacy since 2026-11-17:** hidden from pickers (`selectable_in_picker = false`); new franchise fees use the `franchise_fee` expense. Existing `type=payment` rows keep this slug and, like all payment rows, are not summed into HMRC expense buckets. Depends on contract structure — most ADI franchise fees are `professionalFees`. **Open question for client:** is the franchise fee a flat weekly fee, or is it commission per-pupil? If commission-style, `paymentsToSubcontractors` may fit better. |
 | `hmrc_tax` | — | ❌ | **Income tax is never an allowable expense.** Excluded. |
 | `insurance` | (same split as expense) | ✅ | Same routing as expense `insurance` after split |
 | `referral` | `advertisingCosts` | ✅ | Commission paid for new pupil intro |
