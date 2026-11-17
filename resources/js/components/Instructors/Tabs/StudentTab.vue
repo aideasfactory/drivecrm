@@ -42,6 +42,8 @@ interface Props {
     instructor: InstructorDetail
     studentId: number
     subtab?: string
+    /** Lesson to open in the Lessons sub-tab (e.g. "Open lesson" from the diary). */
+    lessonId?: number | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -270,6 +272,7 @@ onMounted(() => {
                     :student-last-name="student?.surname"
                     :student-email="student?.email"
                     :instructor-id="student?.instructor_id"
+                    :focus-lesson-id="lessonId"
                 />
                 <PaymentsSubTab
                     v-if="activeSubTab === 'payments'"

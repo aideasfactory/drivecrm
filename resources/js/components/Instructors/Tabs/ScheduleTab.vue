@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted } from 'vue'
+import { router } from '@inertiajs/vue3'
 import axios from 'axios'
 import {
     Plus,
@@ -29,6 +30,7 @@ import {
     Save,
     PoundSterling,
     Archive,
+    ExternalLink,
 } from 'lucide-vue-next'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -531,6 +533,7 @@ async function loadCalendarRange(startDate: string, endDate: string) {
                     parent_item_id: item.parent_item_id ?? null,
                     notes: item.notes ?? null,
                     unavailability_reason: item.unavailability_reason ?? null,
+                    student_id: item.student_id ?? null,
                     student_name: item.student_name ?? null,
                     is_paid: item.is_paid ?? null,
                     is_cash: item.is_cash ?? null,
@@ -925,6 +928,24 @@ function openAddBookingFromSlot() {
 function openOfferSlot() {
     isEmptySlotActionsOpen.value = false
     isOfferSlotSheetOpen.value = true
+}
+
+/** The diary item being edited links to a named pupil's lesson, so it can be opened. */
+const editItemCanOpenLesson = computed(() => {
+    const item = itemsMap.value.get(editForm.value.id)
+    return !!item?.lesson_id && !!item?.student_id
+})
+
+/** Open the lesson in the pupil's Lessons tab (details, summary and sign-off). */
+function openLesson() {
+    const item = itemsMap.value.get(editForm.value.id)
+    if (!item?.lesson_id || !item.student_id) return
+
+    isBookedSlotActionsOpen.value = false
+    isEditSheetOpen.value = false
+    router.visit(`/instructors/${props.instructorId}`, {
+        data: { tab: 'student', student: item.student_id, subtab: 'lessons', lesson: item.lesson_id },
+    })
 }
 
 function openBookedSlotMove() {
@@ -1975,6 +1996,16 @@ onMounted(() => {
                     </div>
 
                     <Button
+                        v-if="editItemCanOpenLesson"
+                        variant="outline"
+                        class="w-full"
+                        @click="openLesson"
+                    >
+                        <ExternalLink class="mr-2 h-4 w-4" />
+                        Open lesson
+                    </Button>
+
+                    <Button
                         variant="outline"
                         class="w-full"
                         @click="isEditSheetOpen = false"
@@ -2468,6 +2499,17 @@ onMounted(() => {
                     </DialogDescription>
                 </DialogHeader>
                 <div class="flex flex-col gap-2">
+                    <Button
+                        v-if="editItemCanOpenLesson"
+                        class="h-auto w-full items-start justify-start gap-3 whitespace-normal px-4 py-3 text-left"
+                        @click="openLesson"
+                    >
+                        <ExternalLink class="mt-0.5 h-4 w-4 shrink-0" />
+                        <span>
+                            <span class="block font-medium">Open lesson</span>
+                            <span class="block text-xs font-normal opacity-80">Lesson details, summary and sign-off</span>
+                        </span>
+                    </Button>
                     <Button
                         variant="outline"
                         class="h-auto w-full items-start justify-start gap-3 whitespace-normal px-4 py-3 text-left"

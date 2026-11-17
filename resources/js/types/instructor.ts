@@ -171,6 +171,8 @@ export interface CalendarItemResponse {
   parent_item_id: number | null
   notes: string | null
   unavailability_reason: string | null
+  /** The pupil's student ID; null when the slot is unnamed (e.g. a learner's own unpaid checkout). */
+  student_id?: number | null
   student_name: string | null
   is_paid: boolean | null
   /** Under 48 hours' notice. Informational: late cancellations are never paid out. */

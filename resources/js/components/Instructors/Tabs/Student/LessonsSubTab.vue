@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -125,6 +125,8 @@ interface Props {
     studentLastName?: string | null
     studentEmail?: string | null
     instructorId?: number | null
+    /** Lesson opened from the diary: scrolled to, highlighted and its sign-off / summary opened. */
+    focusLessonId?: number | null
 }
 
 const props = defineProps<Props>()
@@ -526,8 +528,23 @@ const handleSignOff = async () => {
     }
 }
 
-onMounted(() => {
-    loadLessons()
+const openFocusedLesson = async () => {
+    const lesson = lessons.value.find((l) => l.id === props.focusLessonId)
+    if (!lesson) return
+
+    await nextTick()
+    document.getElementById(`lesson-row-${lesson.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+    if (canSignOff(lesson)) {
+        openSignOffSheet(lesson)
+    } else if (lesson.status === 'completed' && lesson.summary) {
+        openViewSummary(lesson)
+    }
+}
+
+onMounted(async () => {
+    await loadLessons()
+    await openFocusedLesson()
 })
 </script>
 
@@ -674,7 +691,12 @@ onMounted(() => {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        <TableRow v-for="lesson in lessons" :key="lesson.id">
+                        <TableRow
+                            v-for="lesson in lessons"
+                            :id="`lesson-row-${lesson.id}`"
+                            :key="lesson.id"
+                            :class="lesson.id === focusLessonId ? 'bg-muted' : undefined"
+                        >
                             <TableCell class="font-medium tabular-nums">
                                 {{ lesson.status === 'cancelled' ? '—' : `#${lesson.student_lesson_number}` }}
                             </TableCell>

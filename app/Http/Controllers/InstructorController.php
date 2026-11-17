@@ -295,6 +295,7 @@ class InstructorController extends Controller
             'tab' => $tab,
             'subtab' => request()->query('subtab', 'summary'),
             'student' => request()->query('student') ? (int) request()->query('student') : null,
+            'lesson' => request()->query('lesson') ? (int) request()->query('lesson') : null,
             'hmrc' => $hmrc,
             'hmrcService' => $hmrcService,
             'formOptions' => $this->instructorFormOptions(),

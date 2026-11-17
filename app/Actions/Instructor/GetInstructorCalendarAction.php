@@ -46,6 +46,7 @@ class GetInstructorCalendarAction
                 'date' => $calendar->date->format('Y-m-d'),
                 'items' => $calendar->items->map(function ($item) use ($calendar) {
                     $studentName = null;
+                    $studentId = null;
                     $isPaid = null;
                     $lesson = null;
 
@@ -69,6 +70,7 @@ class GetInstructorCalendarAction
                             && ($item->status !== CalendarItemStatus::DRAFT || AlternativePayments::isStaffOrInstructorBooking($lesson->order))) {
                             $student = $lesson->order->student;
                             $studentName = trim($student->first_name.' '.$student->surname);
+                            $studentId = $student->id;
                         }
                         if ($lesson) {
                             // Weekly: per-lesson payment status. Upfront: paid once confirmed —
@@ -127,6 +129,7 @@ class GetInstructorCalendarAction
                         'item_type' => $item->item_type?->value ?? 'slot',
                         'travel_time_minutes' => $item->travel_time_minutes,
                         'parent_item_id' => $item->parent_item_id,
+                        'student_id' => $studentId,
                         'student_name' => $studentName,
                         'is_paid' => $isPaid,
                         'is_cash' => $lesson ? $lesson->order?->isCash() === true : null,
