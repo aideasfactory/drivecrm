@@ -187,8 +187,9 @@ const activeCategories = computed<Record<string, string>>(() => {
         : config.value.expense_categories
     const meta = config.value.category_meta ?? {}
     const filtered: Record<string, string> = {}
+    const keptCategory = editingFinance.value?.type === form.value.type ? editingFinance.value.category : null
     for (const [slug, label] of Object.entries(source)) {
-        if (meta[slug] && meta[slug].selectable_in_picker === false) {
+        if (meta[slug] && meta[slug].selectable_in_picker === false && slug !== keptCategory) {
             continue
         }
         filtered[slug] = label

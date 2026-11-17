@@ -12,7 +12,14 @@ use Illuminate\Support\Facades\Log;
 
 class SendPushNotificationAction
 {
-    public function __invoke(PushNotification $notification): bool
+    /**
+     * The Expo HTTP call is capped at 5s: direct-message pushes are sent inline
+     * in the request that created the message, and the SDK's Guzzle client has
+     * no timeout by default.
+     *
+     * @param  string|null  $priority  Expo priority ('default', 'normal', 'high'); null keeps Expo's default.
+     */
+    public function __invoke(PushNotification $notification, ?string $priority = null): bool
     {
         $user = $notification->user;
         $token = $user->expo_push_token;
@@ -36,7 +43,14 @@ class SendPushNotificationAction
                 $message->setData($notification->data);
             }
 
-            $response = (new Expo)->send($message)->to([$token])->push();
+            if ($priority) {
+                $message->setPriority($priority);
+            }
+
+            $response = (new Expo(null, ['connect_timeout' => 3, 'timeout' => 5]))
+                ->send($message)
+                ->to([$token])
+                ->push();
 
             $responseData = $response->getData();
 

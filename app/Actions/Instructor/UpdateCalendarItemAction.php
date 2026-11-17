@@ -44,9 +44,10 @@ class UpdateCalendarItemAction
         $oldCalendar = $calendarItem->calendar;
         $newDate = Carbon::parse($date)->format('Y-m-d');
         $isMoved = ! $calendarItem->isAt($newDate, $startTime, $endTime);
+        $isDateChanged = $oldCalendar->date->format('Y-m-d') !== $newDate;
 
         // Check if date changed - need to move to different calendar
-        if ($oldCalendar->date->format('Y-m-d') !== $newDate) {
+        if ($isDateChanged) {
             // Find or create calendar for the new date
             $newCalendar = Calendar::firstOrCreate([
                 'instructor_id' => $instructor->id,
@@ -54,11 +55,6 @@ class UpdateCalendarItemAction
             ]);
 
             $calendarItem->calendar_id = $newCalendar->id;
-
-            // Clean up old calendar if it has no more items
-            if ($oldCalendar->items()->where('id', '!=', $calendarItem->id)->count() === 0) {
-                $oldCalendar->delete();
-            }
         }
 
         // Update times
@@ -97,9 +93,28 @@ class UpdateCalendarItemAction
         // Handle travel-time block changes
         $this->syncTravelBlock($calendarItem, $travelTimeMinutes);
 
+        if ($isDateChanged) {
+            $this->deleteOldCalendarIfEmpty($oldCalendar);
+        }
+
         $calendarItem->load('calendar');
 
         return $calendarItem;
+    }
+
+    /**
+     * Remove the day the item was moved off once nothing is left on it.
+     *
+     * Must run only after the item (and its travel block) have been saved to
+     * the new day: deleting a calendar cascades to every calendar item still
+     * on it, and a deleted item sets its lessons' `calendar_item_id` to null,
+     * leaving a booked lesson with no diary slot.
+     */
+    private function deleteOldCalendarIfEmpty(Calendar $oldCalendar): void
+    {
+        if (! $oldCalendar->items()->exists()) {
+            $oldCalendar->delete();
+        }
     }
 
     /**

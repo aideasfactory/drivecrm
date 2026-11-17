@@ -7,6 +7,7 @@ use App\Actions\Calendar\CancelBookingAction;
 use App\Actions\Calendar\DetectCalendarClashesAction;
 use App\Actions\FetchPostcodeCoordinatesAction;
 use App\Actions\FindInstructorsByPostcodeSectorAction;
+use App\Actions\Instructor\BuildInstructorFinanceExportCsvAction;
 use App\Actions\Instructor\BulkImportInstructorsAction;
 use App\Actions\Instructor\CancelInstructorDeletionAction;
 use App\Actions\Instructor\CompleteAppOnboardingStepAction;
@@ -69,6 +70,7 @@ use App\Enums\LessonCancellationReason;
 use App\Enums\MessageType;
 use App\Enums\RecurrencePattern;
 use App\Enums\UserRole;
+use App\Mail\InstructorFinanceExportMail;
 use App\Models\AccountDeletionRequest;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
@@ -92,6 +94,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -162,6 +165,7 @@ class InstructorService extends BaseService
         protected StartStripeOnboardingAction $startStripeOnboarding,
         protected SyncStripeAccountStatusAction $syncStripeAccountStatus,
         protected ResetInstructorStripeConnectionAction $resetStripeConnection,
+        protected BuildInstructorFinanceExportCsvAction $buildInstructorFinanceExportCsv,
     ) {}
 
     /**
@@ -1484,6 +1488,58 @@ class InstructorService extends BaseService
                 'personal_miles' => $personalMiles,
                 'total_miles' => $businessMiles + $personalMiles,
             ],
+        ];
+    }
+
+    /**
+     * CSV of the instructor's payments (incl. lesson income), expenses and
+     * mileage in the date range — the same rows as the Finances overview.
+     *
+     * @return array{filename: string, csv: string, from: string, to: string, counts: array{payments: int, expenses: int, mileage: int}}
+     */
+    public function buildFinanceExport(Instructor $instructor, string $from, string $to): array
+    {
+        $summary = $this->getFinanceSummary($instructor, $from, $to);
+        $fromDate = $summary['date_range']['from'];
+        $toDate = $summary['date_range']['to'];
+
+        return [
+            'filename' => "finances-{$fromDate}-to-{$toDate}.csv",
+            'csv' => ($this->buildInstructorFinanceExportCsv)($summary['finances'], $summary['lesson_income'], $summary['mileage']),
+            'from' => $fromDate,
+            'to' => $toDate,
+            'counts' => [
+                'payments' => $summary['finances']->where('type', 'payment')->count() + $summary['lesson_income']->count(),
+                'expenses' => $summary['finances']->where('type', 'expense')->count(),
+                'mileage' => $summary['mileage']->count(),
+            ],
+        ];
+    }
+
+    /**
+     * Queue the finance export CSV as an email attachment to the instructor's
+     * account email address.
+     *
+     * @return array{email: string, from: string, to: string, counts: array{payments: int, expenses: int, mileage: int}}
+     */
+    public function emailFinanceExport(Instructor $instructor, string $from, string $to): array
+    {
+        $export = $this->buildFinanceExport($instructor, $from, $to);
+        $user = $instructor->user;
+
+        Mail::to($user->email, $user->name)->queue(new InstructorFinanceExportMail(
+            recipientName: $user->name ?: 'there',
+            period: Carbon::parse($export['from'])->format('j M Y').' – '.Carbon::parse($export['to'])->format('j M Y'),
+            filename: $export['filename'],
+            csv: $export['csv'],
+            counts: $export['counts'],
+        ));
+
+        return [
+            'email' => $user->email,
+            'from' => $export['from'],
+            'to' => $export['to'],
+            'counts' => $export['counts'],
         ];
     }
 }

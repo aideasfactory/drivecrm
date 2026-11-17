@@ -44,6 +44,7 @@ enum EmailTemplateKey: string
     case InstructorItsaDueSoon = 'instructor.itsa_due_soon';
     case InstructorHmrcReconnect = 'instructor.hmrc_reconnect';
     case InstructorYearEndArchiveReady = 'instructor.year_end_archive_ready';
+    case InstructorFinanceExport = 'instructor.finance_export';
     case SharedNewMessage = 'shared.new_message';
     case AdminWelcome = 'admin.welcome';
 }

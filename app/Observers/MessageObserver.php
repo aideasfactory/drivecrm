@@ -91,21 +91,29 @@ class MessageObserver
 
     /**
      * Email + push for a generic message, addressed to the recipient user.
+     * Direct messages push immediately at high priority; broadcast fan-out
+     * stays on the scheduled queue so one send doesn't make an Expo call per
+     * recipient inside the request.
      */
     protected function notifyRecipient(Message $message): void
     {
         $message->recipient->notify(new NewMessageNotification($message, $message->sender));
 
-        $this->pushNotificationService->queueIfHasToken(
-            $message->recipient,
-            'New message from '.($message->sender->name ?: 'Someone'),
-            Str::limit($message->message, 140),
-            [
-                'type' => 'message',
-                'message_id' => $message->id,
-                'from_user_id' => $message->sender->id,
-            ]
-        );
+        $title = 'New message from '.($message->sender->name ?: 'Someone');
+        $body = Str::limit($message->message, 140);
+        $data = [
+            'type' => 'message',
+            'message_id' => $message->id,
+            'from_user_id' => $message->sender->id,
+        ];
+
+        if ($message->type === MessageType::BROADCAST) {
+            $this->pushNotificationService->queueIfHasToken($message->recipient, $title, $body, $data);
+
+            return;
+        }
+
+        $this->pushNotificationService->sendNowIfHasToken($message->recipient, $title, $body, $data);
     }
 
     /**
