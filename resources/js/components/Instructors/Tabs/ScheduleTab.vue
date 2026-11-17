@@ -1011,7 +1011,25 @@ const pendingBulkMove = ref<{
     siblingsCount: number
 } | null>(null)
 
-async function handleEventMove(eventId: number, newDate: string, newStartTime: string, newEndTime: string) {
+const pendingLessonMove = ref<{
+    eventId: number
+    oldItem: CalendarItemResponse
+    newDate: string
+    newStartTime: string
+    newEndTime: string
+} | null>(null)
+
+function formatMoveSlot(date: string, time: string): string {
+    const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    const d = new Date(`${date}T00:00:00`)
+    return `${weekdayNames[d.getDay()]} ${d.getDate()} ${shortMonthNames[d.getMonth()]} ${normaliseTime(time)}`
+}
+
+function handleEventDrag(eventId: number, newDate: string, newStartTime: string, newEndTime: string) {
+    return handleEventMove(eventId, newDate, newStartTime, newEndTime, true)
+}
+
+async function handleEventMove(eventId: number, newDate: string, newStartTime: string, newEndTime: string, confirmLearnerNotice = false) {
     const item = itemsMap.value.get(eventId)
     if (!item) return
 
@@ -1024,6 +1042,43 @@ async function handleEventMove(eventId: number, newDate: string, newStartTime: s
     item.start_time = newStartTime
     item.end_time = newEndTime
     rebuildEvents()
+
+    if (confirmLearnerNotice && (item.lesson_id || item.student_name)) {
+        pendingLessonMove.value = {
+            eventId,
+            oldItem: oldItem as CalendarItemResponse,
+            newDate,
+            newStartTime,
+            newEndTime,
+        }
+        return
+    }
+
+    await continueMove(eventId, oldItem as CalendarItemResponse, newDate, newStartTime, newEndTime)
+}
+
+async function confirmLessonMove() {
+    const pending = pendingLessonMove.value
+    if (!pending) return
+
+    pendingLessonMove.value = null
+
+    await continueMove(pending.eventId, pending.oldItem, pending.newDate, pending.newStartTime, pending.newEndTime)
+}
+
+function cancelLessonMove() {
+    const pending = pendingLessonMove.value
+    if (!pending) return
+
+    itemsMap.value.set(pending.eventId, pending.oldItem)
+    rebuildEvents()
+
+    pendingLessonMove.value = null
+}
+
+async function continueMove(eventId: number, oldItem: CalendarItemResponse, newDate: string, newStartTime: string, newEndTime: string) {
+    const item = itemsMap.value.get(eventId)
+    if (!item) return
 
     // If this lesson has future siblings in the same booking, prompt the admin
     // before committing — they can choose to move just this one or all of them.
@@ -1361,7 +1416,7 @@ onMounted(() => {
                             :events="events"
                             @click-slot="handleSlotClick"
                             @event-click="handleEventClick"
-                            @event-move="handleEventMove"
+                            @event-move="handleEventDrag"
                         />
                     </div>
                 </div>
@@ -2393,6 +2448,31 @@ onMounted(() => {
                         <Loader2 v-if="formLoading" class="mr-2 h-4 w-4 animate-spin" />
                         <Trash2 v-else class="mr-2 h-4 w-4" />
                         {{ formLoading ? (editItemIsBooking ? 'Cancelling...' : 'Removing...') : (editItemIsBooking ? 'Cancel Lesson' : 'Remove') }}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        <Dialog
+            :open="pendingLessonMove !== null"
+            @update:open="(open) => { if (!open) cancelLessonMove() }"
+        >
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Move lesson?</DialogTitle>
+                    <DialogDescription v-if="pendingLessonMove">
+                        Move {{ pendingLessonMove.oldItem.student_name ?? 'the learner' }}'s lesson from
+                        {{ formatMoveSlot(pendingLessonMove.oldItem.date, pendingLessonMove.oldItem.start_time) }} to
+                        {{ formatMoveSlot(pendingLessonMove.newDate, pendingLessonMove.newStartTime) }}?
+                        The learner will be notified.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter class="flex-col gap-2 sm:flex-row sm:justify-end">
+                    <Button variant="outline" @click="cancelLessonMove">
+                        Cancel
+                    </Button>
+                    <Button @click="confirmLessonMove">
+                        Confirm
                     </Button>
                 </DialogFooter>
             </DialogContent>
