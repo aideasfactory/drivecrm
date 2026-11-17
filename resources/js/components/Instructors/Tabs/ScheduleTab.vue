@@ -556,6 +556,7 @@ async function loadCalendarRange(startDate: string, endDate: string) {
             }
         }
 
+        reapplyPendingMoves(newItemsMap)
         itemsMap.value = newItemsMap
         rebuildEvents()
     } catch (error: any) {
@@ -1018,6 +1019,22 @@ const pendingLessonMove = ref<{
     newStartTime: string
     newEndTime: string
 } | null>(null)
+
+/**
+ * A reload can land while a move dialog is still open (e.g. the refresh after an
+ * earlier move). Keep the unconfirmed move on screen and refresh what Cancel restores.
+ */
+function reapplyPendingMoves(map: Map<number, CalendarItemResponse>) {
+    for (const pending of [pendingLessonMove.value, pendingBulkMove.value]) {
+        const freshItem = pending ? map.get(pending.eventId) : undefined
+        if (!pending || !freshItem) continue
+
+        pending.oldItem = { ...freshItem }
+        freshItem.date = pending.newDate
+        freshItem.start_time = pending.newStartTime
+        freshItem.end_time = pending.newEndTime
+    }
+}
 
 function formatMoveSlot(date: string, time: string): string {
     const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
