@@ -45,8 +45,10 @@ class UpdateCalendarItemAction
         $newDate = Carbon::parse($date)->format('Y-m-d');
         $isMoved = ! $calendarItem->isAt($newDate, $startTime, $endTime);
 
+        $isDateChanged = $oldCalendar->date->format('Y-m-d') !== $newDate;
+
         // Check if date changed - need to move to different calendar
-        if ($oldCalendar->date->format('Y-m-d') !== $newDate) {
+        if ($isDateChanged) {
             // Find or create calendar for the new date
             $newCalendar = Calendar::firstOrCreate([
                 'instructor_id' => $instructor->id,
@@ -54,11 +56,6 @@ class UpdateCalendarItemAction
             ]);
 
             $calendarItem->calendar_id = $newCalendar->id;
-
-            // Clean up old calendar if it has no more items
-            if ($oldCalendar->items()->where('id', '!=', $calendarItem->id)->count() === 0) {
-                $oldCalendar->delete();
-            }
         }
 
         // Update times
@@ -96,6 +93,13 @@ class UpdateCalendarItemAction
 
         // Handle travel-time block changes
         $this->syncTravelBlock($calendarItem, $travelTimeMinutes);
+
+        // Only once the item (and its travel block) are saved on the new day:
+        // deleting a calendar cascades to every item still pointing at it, which
+        // would delete this item and unlink its lesson from the diary.
+        if ($isDateChanged && $oldCalendar->items()->count() === 0) {
+            $oldCalendar->delete();
+        }
 
         $calendarItem->load('calendar');
 
