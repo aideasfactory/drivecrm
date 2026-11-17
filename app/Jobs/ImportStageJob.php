@@ -25,7 +25,7 @@ class ImportStageJob implements ShouldQueue
     public int $timeout = 900;
 
     /**
-     * Retried by time, not by attempt count: a students job waiting for the
+     * Retried by time, not by attempt count: a students or progress job waiting for the
      * stage lock is released, and each release counts as an attempt. Real
      * errors still fail the job after 3, and a timeout fails it at once.
      */
@@ -53,19 +53,21 @@ class ImportStageJob implements ShouldQueue
     ) {}
 
     /**
-     * Pupils are created one job at a time, so two jobs can never create
-     * accounts for the same email at once.
+     * Stages that create shared records run one job at a time: pupils (two
+     * jobs could create accounts for the same email) and progress (two jobs
+     * could each add the same instructor's framework — a pupil's scores go
+     * to their current instructor, who may sit in another job's group).
      *
      * @return array<int, object>
      */
     public function middleware(): array
     {
-        if ($this->stage !== 'students') {
+        if (! in_array($this->stage, ['students', 'progress'], true)) {
             return [];
         }
 
         return [
-            (new WithoutOverlapping("import-run-{$this->run->id}-students"))
+            (new WithoutOverlapping("import-run-{$this->run->id}-{$this->stage}"))
                 ->releaseAfter(5)
                 ->expireAfter($this->timeout + 60),
         ];
