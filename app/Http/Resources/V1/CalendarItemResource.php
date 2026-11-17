@@ -47,7 +47,7 @@ class CalendarItemResource extends JsonResource
             'order_id' => $lesson?->order_id,
             // The pupil's student ID, for pupil-scoped calls from the diary
             // (e.g. POST /students/{student}/orders/{order}/alternative-payment).
-            'student_id' => $lesson?->order?->student_id,
+            'student_id' => $this->studentId($lesson),
             'student_name' => $this->studentName($lesson),
             'is_paid' => $this->isPaid($lesson),
             // A package week booked onto a time already taken: shown stacked next
@@ -107,6 +107,15 @@ class CalendarItemResource extends JsonResource
     }
 
     /**
+     * The student's ID, withheld exactly when the name is: a learner's own
+     * unpaid checkout must not lead the instructor to the pupil's records.
+     */
+    protected function studentId(?Lesson $lesson): ?int
+    {
+        return $this->isNamedBooking($lesson) ? $lesson->order->student_id : null;
+    }
+
+    /**
      * The student's name for any booking-family slot. Draft holds awaiting the
      * first payment are only named when staff or the instructor made the
      * booking: a learner's own unpaid checkout stays unnamed so it does not
@@ -114,23 +123,28 @@ class CalendarItemResource extends JsonResource
      */
     protected function studentName(?Lesson $lesson): ?string
     {
-        $order = $lesson?->order;
-
-        if (! $order) {
+        if (! $this->isNamedBooking($lesson)) {
             return null;
         }
 
-        if ($this->status === CalendarItemStatus::DRAFT && ! AlternativePayments::isStaffOrInstructorBooking($order)) {
-            return null;
-        }
-
-        $student = $order->student;
+        $student = $lesson->order->student;
 
         if (! $student) {
             return null;
         }
 
         return trim($student->first_name.' '.$student->surname);
+    }
+
+    protected function isNamedBooking(?Lesson $lesson): bool
+    {
+        $order = $lesson?->order;
+
+        if (! $order) {
+            return false;
+        }
+
+        return $this->status !== CalendarItemStatus::DRAFT || AlternativePayments::isStaffOrInstructorBooking($order);
     }
 
     protected function isPaid(?Lesson $lesson): ?bool
