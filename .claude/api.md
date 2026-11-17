@@ -1880,7 +1880,8 @@ Returns the dropdown options used by the finance screens **plus** the per-catego
     "insurance": "Insurance",
     "mot": "MOT",
     "repairs": "Repairs",
-    "advertising": "Advertising"
+    "advertising": "Advertising",
+    "franchise_fee": "Franchise Fee"
   },
   "payment_categories": {
     "none": "None",
@@ -1917,7 +1918,9 @@ Returns the dropdown options used by the finance screens **plus** the per-catego
     "fuel":       { "method_dependent": true,  "claimable": true,  "selectable_in_picker": true, "itsa_bucket": "carVanTravelExpenses" },
     "mot":        { "method_dependent": true,  "claimable": true,  "selectable_in_picker": true, "itsa_bucket": "carVanTravelExpenses" },
     "advertising":{ "method_dependent": false, "claimable": true,  "selectable_in_picker": true, "itsa_bucket": "advertisingCosts" },
-    "food_drink": { "method_dependent": false, "claimable": false, "selectable_in_picker": false, "itsa_bucket": null }
+    "food_drink": { "method_dependent": false, "claimable": false, "selectable_in_picker": false, "itsa_bucket": null },
+    "franchise_fee":    { "method_dependent": false, "claimable": true, "selectable_in_picker": true,  "itsa_bucket": "professionalFees" },
+    "franchise_payout": { "method_dependent": false, "claimable": true, "selectable_in_picker": false, "itsa_bucket": "professionalFees" }
   },
   "vehicles": [
     {
@@ -1946,7 +1949,9 @@ Category + payment-method keys above are illustrative — the full list lives in
 |------|---------|
 | `method_dependent` | `true` for vehicle running costs (fuel, MOT, servicing, repairs, road tax, vehicle insurance, breakdown cover). When `true`, the expense form **must show a vehicle picker** and `vehicle_id` should be sent on POST/PUT. When the picked vehicle has `method = "simplified"`, show a warning that the row will be kept for records but excluded from HMRC payloads (mileage allowance covers it). |
 | `claimable` | `false` for categories that never reach HMRC (`hmrc_tax`, `food_drink`, internal `our_account`, etc.). |
-| `selectable_in_picker` | `false` for categories that are kept in the table for historical-row integrity but hidden from new entry. Filter your dropdown by this. |
+| `selectable_in_picker` | `false` for categories that are kept in the table for historical-row integrity but hidden from new entry. Filter your dropdown by this. Current hidden slugs: `food_drink`, `imported`, `franchise_payout`. When **editing** a record that already uses a hidden slug, keep that slug as an option (or leave `category` out of the PUT) so the record still saves. |
+
+**Franchise fees:** log them as `type: "expense"`, `category: "franchise_fee"` (label "Franchise Fee"). The old `franchise_payout` payment slug is hidden (`selectable_in_picker: false`) but stays in `payment_categories` so existing payment rows keep their "Franchise Payout" label and can still be edited.
 | `itsa_bucket` | The HMRC ITSA expense bucket (camelCase) this category maps to. Informational — the mobile app does not need to send this anywhere. `null` when the category is excluded from HMRC payloads. |
 
 **`vehicles` list:**
@@ -2195,13 +2200,13 @@ Creates a finance record. Preferred flow: create first (JSON), then upload a rec
 | `notes` | string | No | Max 1000 chars |
 | `receipt` | file | No | Multipart only. PDF, JPG/JPEG, or PNG, max `/finances/config.receipt.max_size_kb` (20 MB default). See "Single-request alternative" above. |
 
-**Example Request (recurring monthly payment, 12 occurrences):**
+**Example Request (recurring monthly expense, 12 occurrences):**
 ```json
 {
-  "type": "payment",
-  "category": "franchise_payout",
+  "type": "expense",
+  "category": "franchise_fee",
   "payment_method": "bank_transfer",
-  "description": "Franchise payout",
+  "description": "Franchise fee",
   "amount_pence": 25000,
   "is_recurring": true,
   "recurrence_frequency": "monthly",
@@ -8372,6 +8377,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-12 | **Instructor pupil chat opened the wrong thread.** For instructors, `{user}` on `GET /messages/conversations/{user}` and `POST /messages/conversations/{user}/read`, and `recipient_id` on `POST /messages`, now resolve to the instructor's **own student** first. Previously the backend checked "is this an owner user ID?" first, so a pupil whose student ID equalled an admin's user ID opened the (empty) support thread — the list showed their preview/unread badge, the chat said "No messages yet", mark-read never cleared the badge, and replies went to the admin (found on Mark Terry-Lush / Marni James). No shape changes. **App action:** none — keep passing `student_id` for pupil chats and the support user ID for support. *(Superseded by the next entry: always send the chat type.)* | Messages (conversation, mark read, send) |
 | 2026-11-12 | **Explicit chat type for messages.** Removes the student-ID-vs-admin-user-ID ambiguity in both directions. New optional `?type=student\|support` on `GET /messages/conversations/{user}` and `POST /messages/conversations/{user}/read`, and `recipient_type` (`student`\|`support`) on `POST /messages`. `support` → `{user}` / `recipient_id` is an admin/owner **user ID** (shared support thread; `404` otherwise); `student` → one of the instructor's own students by **student ID** (`404` otherwise, incl. student callers). Omitted → legacy resolution (instructor's own student first, then owner user ID). New `chat_type` (`support`\|`student`\|`instructor`) on every `GET /messages/conversations` object and `GET /messages/unread-count` `conversations[]` item. Additive — no fields removed, no schema change. **App action:** read `chat_type` on list/unread rows; open/mark-read/send with `type=support` + `user.id` for support rows and `type=student` + `student_id` for pupil rows. | Messages (conversations, conversation, mark read, send, unread-count) |
 | 2026-11-12 | **Chat type follow-up.** `type` / `recipient_type` now also accept `instructor` (pupil → their instructor, by user ID), so every `chat_type` value can be passed straight back; previously `instructor` returned `422`. `GET /messages/conversations` now returns **one** `support` row for all admins (it opens the shared support thread; `unread_count` covers every admin) instead of one row per admin. `GET /messages/unread-count` is unchanged — still one row per sending admin, so sum the `chat_type: "support"` rows for the support badge. | Messages (conversations, conversation, mark read, send) |
+| 2026-11-17 | **Franchise Fee is now an expense.** `/finances/config.expense_categories` gains `franchise_fee` ("Franchise Fee"), and `category_meta.franchise_fee` is `{ method_dependent: false, claimable: true, selectable_in_picker: true, itsa_bucket: "professionalFees" }`. POST/PUT accept `type: "expense", category: "franchise_fee"`. The `franchise_payout` payment slug now has `category_meta.franchise_payout.selectable_in_picker: false`. It is still in `payment_categories` and still valid, so existing payment rows keep their label and totals, and can still be edited. Existing rows are not migrated. Additive, no fields removed. **App action:** filter both category dropdowns by `category_meta.{slug}.selectable_in_picker`, but keep a hidden slug as an option when editing a record that already uses it. | Instructor Finances (config, store, update) |
 | 2026-11-15 | **Instant message pushes.** Direct-message pushes (pupil ↔ instructor, support) are now sent immediately at Expo `priority: "high"` instead of waiting up to ~60s for `push:send-queued`. Broadcast and lesson status pushes are still queued. Title, body and data payload (`{ type: "message", message_id, from_user_id }`) are unchanged. No request/response changes. **App action:** none beyond handling the tap (open the chat). | Push notifications, Messages (send) |
 | 2026-11-15 | **Finance export (CSV).** New `POST /api/v1/instructor/finances/export` with `from`, `to` (required, YYYY-MM-DD) and `delivery` (`email` default \| `download`). Exports the instructor's payments (incl. lesson income), expenses and mileage in the range as one CSV — same rows as `/finances/summary`. `email` → `202` JSON with `email`, `from`, `to`, `counts`; the CSV is emailed as an attachment. `download` → `200` `text/csv` attachment. Rate limited to 10/min. Additive only. **App action:** add an Export button to the Finances screen with a date-range picker that calls this endpoint (default `email`) and shows `message` on success. | Instructor Finances (export) |
 ---

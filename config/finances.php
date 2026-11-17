@@ -39,11 +39,15 @@ return [
         'business_insurance' => 'Business Insurance',
         'phone' => 'Phone',
         'accountant_fees' => 'Accountant Fees',
+        'franchise_fee' => 'Franchise Fee',
     ],
 
     'payment_categories' => [
         'none' => 'None',
         'imported' => 'Imported (legacy)',
+        // Legacy: hidden from pickers via `category_tax_mapping.selectable_in_picker`
+        // but kept so existing payment rows still resolve their label. New
+        // franchise fees are logged as the `franchise_fee` expense.
         'franchise_payout' => 'Franchise Payout',
         'hmrc_tax' => 'HMRC Tax',
         'insurance' => 'Insurance',
