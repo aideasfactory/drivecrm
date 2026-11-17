@@ -103,6 +103,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Instructor Welcome Link Expiry
+    |--------------------------------------------------------------------------
+    |
+    | Days the set-up link in the instructor welcome email stays valid. It is
+    | a signed URL that mints a normal reset token when clicked, so the
+    | password reset expiry above is not affected.
+    |
+    */
+
+    'instructor_welcome_link_expire_days' => (int) env('INSTRUCTOR_WELCOME_LINK_EXPIRE_DAYS', 28),
+
+    /*
+    |--------------------------------------------------------------------------
     | Password Confirmation Timeout
     |--------------------------------------------------------------------------
     |

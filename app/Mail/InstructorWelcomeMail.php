@@ -6,6 +6,7 @@ namespace App\Mail;
 
 use App\Enums\EmailTemplateKey;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
@@ -23,7 +24,7 @@ class InstructorWelcomeMail extends Mailable
     public function __construct(
         public User $user,
         public string $setupUrl,
-        public int $expiresInMinutes,
+        public CarbonInterface $linkExpiresAt,
     ) {}
 
     public function envelope(): Envelope
@@ -50,7 +51,7 @@ class InstructorWelcomeMail extends Mailable
                 'app_name' => config('app.name'),
                 'email' => $this->user->email,
                 'setup_url' => $this->setupUrl,
-                'expires_in_minutes' => $this->expiresInMinutes,
+                'link_expires_at' => $this->linkExpiresAt->format('j F Y'),
                 'login_url' => url('/login'),
             ],
             $this->setupUrl,
