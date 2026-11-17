@@ -8,18 +8,30 @@ export const SESSION_EXPIRED_MESSAGE =
 export const isSessionExpired = ref(false);
 
 /**
- * 419 is Laravel's CSRF token mismatch and 401 is an unauthenticated JSON
- * response. Guest pages (onboarding, booking) are skipped because the user
- * never had a CRM session there, so a "log in" prompt would be wrong.
+ * Public checkout pages. Staff are logged in there during a bookings-team
+ * booking, but the routes are guest routes, so reloading never reaches the
+ * login page and the booking state lives on the enquiry, not the session.
  */
-function handleExpiredSession(status: number | undefined): boolean {
+const PUBLIC_PAGE_PREFIXES = ['Onboarding/', 'Booking/', 'PaymentLink/'];
+
+/**
+ * 419 is Laravel's CSRF token mismatch and 401 is an unauthenticated JSON
+ * response. Pages without a logged-in user are skipped because there is no
+ * CRM session to restore, so a "log in" prompt would be wrong.
+ */
+export function handleExpiredSession(status: number | undefined): boolean {
     if (status !== 419 && status !== 401) {
         return false;
     }
 
     const page = usePage<{ auth?: { user?: unknown } }>();
 
-    if (!page.props?.auth?.user) {
+    if (
+        !page.props?.auth?.user ||
+        PUBLIC_PAGE_PREFIXES.some((prefix) =>
+            page.component?.startsWith(prefix),
+        )
+    ) {
         return false;
     }
 
