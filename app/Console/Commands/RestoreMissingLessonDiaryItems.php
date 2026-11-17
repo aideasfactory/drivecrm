@@ -21,7 +21,7 @@ class RestoreMissingLessonDiaryItems extends Command
      *
      * @var string
      */
-    protected $description = 'Give a booked diary item back to every open, dated lesson that lost it (moved off a day where it was the only item), so instructors can move, rebook later or cancel it again. No emails, payments or Stripe. Safe to re-run.';
+    protected $description = 'Give a booked diary item back to every open lesson from today onwards, on an active booking, that lost it (moved off a day where it was the only item), so instructors can move, rebook later or cancel it again. Lessons whose time has since been taken are flagged provisional; past lessons and inactive bookings are only reported. No emails, payments or Stripe. Safe to re-run.';
 
     /**
      * Execute the console command.
