@@ -68,6 +68,9 @@ class CalendarItemResource extends JsonResource
             // booking to rebook later (POST .../bank). False for an unpaid booking.
             'can_bank' => $lesson?->canBeBanked() === true,
             'package_name' => $lesson?->order?->package_name,
+            // `imported` for lessons brought in from another system (settled
+            // outside Drive): moved, rebooked later and cancelled like any other.
+            'payment_mode' => $lesson?->order?->payment_mode?->value,
             // Alternative payment method (pupil pays the instructor directly, owner
             // switch on the pupil): what the instructor can do about payment.
             ...AlternativePayments::lessonFlags($lesson),
