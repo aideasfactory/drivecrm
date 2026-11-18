@@ -15,8 +15,8 @@ import {
 } from '@/components/ui/table'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { Search, Plus, Download, FileUp, Check, X } from 'lucide-vue-next'
-import type { Instructor, InstructorFormOptions } from '@/types/instructor'
+import { Search, Plus, Download, FileUp, X, ArrowUpDown, ArrowUp, ArrowDown, Mail, UserCheck, CreditCard, CalendarCheck } from 'lucide-vue-next'
+import type { Instructor, InstructorFormOptions, LowAvailabilitySettings } from '@/types/instructor'
 import AddInstructorSheet from '@/components/Instructors/AddInstructorSheet.vue'
 import CsvImportSheet from '@/components/CsvImportSheet.vue'
 import { useRole } from '@/composables/useRole'
@@ -25,6 +25,7 @@ import { exportCsv } from '@/actions/App/Http/Controllers/InstructorController'
 interface Props {
     instructors: Instructor[]
     formOptions: InstructorFormOptions
+    lowAvailability: LowAvailabilitySettings
 }
 
 const props = defineProps<Props>()
@@ -36,6 +37,8 @@ type OnboardingEmailFilter = '' | 'sent' | 'not_sent'
 type SignedUpFilter = '' | 'signed_up' | 'not_signed_up'
 type StripeFilter = '' | 'connected' | 'not_connected'
 type AvailabilityFilter = '' | 'added' | 'not_added'
+type LowAvailabilityFilter = '' | 'low' | 'not_low'
+type SlotsSort = '' | 'asc' | 'desc'
 
 interface Filters {
     setup: SetupFilter
@@ -43,6 +46,7 @@ interface Filters {
     signed_up: SignedUpFilter
     stripe: StripeFilter
     availability: AvailabilityFilter
+    low_availability: LowAvailabilityFilter
 }
 
 // Filters live in the page address so a chase list can be bookmarked or shared.
@@ -58,6 +62,8 @@ const onboardingEmailFilter = ref<OnboardingEmailFilter>(fromQuery('onboarding_e
 const signedUpFilter = ref<SignedUpFilter>(fromQuery('signed_up', ['signed_up', 'not_signed_up']))
 const stripeFilter = ref<StripeFilter>(fromQuery('stripe', ['connected', 'not_connected']))
 const availabilityFilter = ref<AvailabilityFilter>(fromQuery('availability', ['added', 'not_added']))
+const lowAvailabilityFilter = ref<LowAvailabilityFilter>(fromQuery('low_availability', ['low', 'not_low']))
+const slotsSort = ref<SlotsSort>(fromQuery('sort_slots', ['asc', 'desc']))
 
 const filterSelectClass =
     'h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
@@ -87,6 +93,7 @@ const currentFilters = computed<Filters>(() => ({
     signed_up: signedUpFilter.value,
     stripe: stripeFilter.value,
     availability: availabilityFilter.value,
+    low_availability: lowAvailabilityFilter.value,
 }))
 
 // Mirrors GetInstructorListAction::applyFilters so the CSV export matches the list on screen.
@@ -102,13 +109,28 @@ const matches = (instructor: Instructor, filters: Filters) => {
         matchesFilter(instructor.onboarding_email_sent, filters.onboarding_email, 'sent') &&
         matchesFilter(instructor.signed_up, filters.signed_up, 'signed_up') &&
         matchesFilter(instructor.stripe_connected, filters.stripe, 'connected') &&
-        matchesFilter(instructor.availability_added, filters.availability, 'added')
+        matchesFilter(instructor.availability_added, filters.availability, 'added') &&
+        matchesFilter(instructor.low_availability, filters.low_availability, 'low')
     )
 }
 
-const filteredInstructors = computed(() =>
-    props.instructors.filter((instructor) => matches(instructor, currentFilters.value)),
-)
+const filteredInstructors = computed(() => {
+    const rows = props.instructors.filter((instructor) => matches(instructor, currentFilters.value))
+    const direction = slotsSort.value === 'asc' ? 1 : slotsSort.value === 'desc' ? -1 : 0
+
+    return direction === 0
+        ? rows
+        : [...rows].sort((a, b) => (a.total_available_slots - b.total_available_slots) * direction)
+})
+
+const toggleSlotsSort = () => {
+    slotsSort.value = slotsSort.value === '' ? 'asc' : slotsSort.value === 'asc' ? 'desc' : ''
+}
+
+const slotsTitle = (instructor: Instructor) =>
+    instructor.available_slots_by_week
+        .map((slots, week) => `Week ${week + 1}: ${slots} slot${slots === 1 ? '' : 's'}`)
+        .join('\n')
 
 /** How many instructors an option would show, given the search and the other filters. */
 const optionCount = <K extends keyof Filters>(key: K, value: Filters[K]) =>
@@ -129,6 +151,7 @@ const clearFilters = () => {
     signedUpFilter.value = ''
     stripeFilter.value = ''
     availabilityFilter.value = ''
+    lowAvailabilityFilter.value = ''
 }
 
 const filterQuery = computed(() => {
@@ -144,8 +167,8 @@ const filterQuery = computed(() => {
     return query
 })
 
-watch(filterQuery, (query) => {
-    const params = new URLSearchParams(query).toString()
+watch([filterQuery, slotsSort], ([query, sort]) => {
+    const params = new URLSearchParams(sort ? { ...query, sort_slots: sort } : query).toString()
     window.history.replaceState(
         window.history.state,
         '',
@@ -168,10 +191,32 @@ const getInitials = (name: string) => {
 }
 
 const setupSteps = (instructor: Instructor) => [
-    { key: 'onboarding_email', label: instructor.onboarding_email_sent ? 'Sent' : 'Not sent', done: instructor.onboarding_email_sent },
-    { key: 'signed_up', label: instructor.signed_up ? 'Signed up' : 'Not signed up', done: instructor.signed_up },
-    { key: 'stripe', label: instructor.stripe_connected ? 'Connected' : 'Not connected', done: instructor.stripe_connected },
-    { key: 'availability', label: instructor.availability_added ? 'Added' : 'Not added', done: instructor.availability_added },
+    {
+        key: 'onboarding_email',
+        icon: Mail,
+        done: instructor.onboarding_email_sent,
+        title: `Onboarding email: ${instructor.onboarding_email_sent ? 'Sent' : 'Not sent'}`,
+    },
+    {
+        key: 'signed_up',
+        icon: UserCheck,
+        done: instructor.signed_up,
+        title: instructor.signed_up
+            ? 'Signed up'
+            : ['Not signed up', notSignedUpTitle(instructor)].filter(Boolean).join(' — '),
+    },
+    {
+        key: 'stripe',
+        icon: CreditCard,
+        done: instructor.stripe_connected,
+        title: `Stripe: ${instructor.stripe_connected ? 'Connected' : 'Not connected'}`,
+    },
+    {
+        key: 'availability',
+        icon: CalendarCheck,
+        done: instructor.availability_added,
+        title: `Availability: ${instructor.availability_added ? 'Added' : 'Not added'}`,
+    },
 ]
 
 /** Hover text on the "Not signed up" badge: when the onboarding email last went out. */
@@ -279,6 +324,15 @@ const breadcrumbs = [{ title: 'Instructors' }]
                         <option value="added">Availability: Added ({{ optionCount('availability', 'added') }})</option>
                         <option value="not_added">Availability: Not added ({{ optionCount('availability', 'not_added') }})</option>
                     </select>
+                    <select
+                        v-model="lowAvailabilityFilter"
+                        aria-label="Filter by low availability"
+                        :class="filterSelectClass"
+                    >
+                        <option value="">Low availability: All ({{ optionCount('low_availability', '') }})</option>
+                        <option value="low">Low availability: Yes ({{ optionCount('low_availability', 'low') }})</option>
+                        <option value="not_low">Low availability: No ({{ optionCount('low_availability', 'not_low') }})</option>
+                    </select>
                     <Button v-if="hasActiveFilters" variant="ghost" size="sm" @click="clearFilters">
                         <X class="mr-2 h-4 w-4" />
                         Clear filters
@@ -297,12 +351,22 @@ const breadcrumbs = [{ title: 'Instructors' }]
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Name</TableHead>
-                                <TableHead>Onboarding email</TableHead>
-                                <TableHead>Signed up</TableHead>
-                                <TableHead>Stripe</TableHead>
-                                <TableHead>Availability</TableHead>
-                                <TableHead>Pupils</TableHead>
-                                <TableHead>Last Sync</TableHead>
+                                <TableHead title="Onboarding email · Signed up · Stripe · Availability">Setup</TableHead>
+                                <TableHead>
+                                    <button
+                                        type="button"
+                                        class="inline-flex items-center gap-1 whitespace-nowrap hover:text-foreground"
+                                        :title="`Diary slots added (open or booked) over the next ${props.lowAvailability.weeks} weeks`"
+                                        @click="toggleSlotsSort"
+                                    >
+                                        Slots added
+                                        <ArrowUp v-if="slotsSort === 'asc'" class="h-3 w-3" />
+                                        <ArrowDown v-else-if="slotsSort === 'desc'" class="h-3 w-3" />
+                                        <ArrowUpDown v-else class="h-3 w-3" />
+                                    </button>
+                                </TableHead>
+                                <TableHead class="text-right">Pupils</TableHead>
+                                <TableHead class="whitespace-nowrap">Last updated</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -336,29 +400,45 @@ const breadcrumbs = [{ title: 'Instructors' }]
                                         </div>
                                     </div>
                                 </TableCell>
-                                <TableCell v-for="step in setupSteps(instructor)" :key="step.key">
-                                    <Badge
-                                        :variant="step.done ? 'secondary' : 'destructive'"
-                                        :title="step.key === 'signed_up' && !step.done ? notSignedUpTitle(instructor) : undefined"
-                                    >
-                                        <Check v-if="step.done" class="mr-1 h-3 w-3" />
-                                        <X v-else class="mr-1 h-3 w-3" />
-                                        {{ step.label }}
-                                    </Badge>
+                                <TableCell>
+                                    <div class="flex items-center gap-1.5">
+                                        <span
+                                            v-for="step in setupSteps(instructor)"
+                                            :key="step.key"
+                                            :title="step.title"
+                                            :aria-label="step.title"
+                                            class="inline-flex h-7 w-7 items-center justify-center rounded-md"
+                                            :class="step.done
+                                                ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400'
+                                                : 'bg-destructive/15 text-destructive'"
+                                        >
+                                            <component :is="step.icon" class="h-3.5 w-3.5" />
+                                        </span>
+                                    </div>
                                 </TableCell>
                                 <TableCell>
-                                    <span class="font-medium">
+                                    <div class="flex items-center gap-2 whitespace-nowrap" :title="slotsTitle(instructor)">
+                                        <span class="font-medium tabular-nums">
+                                            {{ instructor.total_available_slots }}
+                                        </span>
+                                        <Badge v-if="instructor.low_availability" variant="destructive">
+                                            Low
+                                        </Badge>
+                                    </div>
+                                </TableCell>
+                                <TableCell class="text-right">
+                                    <span class="font-medium tabular-nums">
                                         {{ instructor.pupils_count }}
                                     </span>
                                 </TableCell>
-                                <TableCell>
-                                    <span class="text-muted-foreground">
+                                <TableCell class="whitespace-nowrap">
+                                    <span class="text-sm text-muted-foreground">
                                         {{ instructor.last_sync }}
                                     </span>
                                 </TableCell>
                             </TableRow>
                             <TableRow v-if="filteredInstructors.length === 0">
-                                <TableCell colspan="7" class="text-center">
+                                <TableCell colspan="5" class="text-center">
                                     <div class="py-8 text-muted-foreground">
                                         No instructors found
                                     </div>

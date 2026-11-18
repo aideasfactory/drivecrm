@@ -10,6 +10,7 @@ use App\Actions\Report\GetCancelledLessonsAction;
 use App\Actions\Report\GetClashingLessonsAction;
 use App\Actions\Report\GetInstructorAvailabilityAnalyticsAction;
 use App\Actions\Report\GetInvoiceDueWithin48HoursAction;
+use App\Actions\Report\GetLowAvailabilityInstructorsAction;
 use App\Actions\Report\GetOffSlotLessonsAction;
 use App\Models\Lesson;
 use App\Models\User;
@@ -25,7 +26,18 @@ class ReportService extends BaseService
         protected ConfirmProvisionalLessonAction $confirmProvisionalLesson,
         protected GetBankedLessonsReportAction $getBankedLessonsReport,
         protected GetOffSlotLessonsAction $getOffSlotLessons,
+        protected GetLowAvailabilityInstructorsAction $getLowAvailabilityInstructors,
     ) {}
+
+    /**
+     * Get active, Stripe-connected instructors below the low availability threshold.
+     *
+     * @return array{rows: Collection, settings: array{weeks: int, min_slots_per_week: int}, week_starts: list<string>, generated_at: string}
+     */
+    public function getLowAvailabilityInstructors(): array
+    {
+        return ($this->getLowAvailabilityInstructors)();
+    }
 
     /**
      * Get upcoming lessons booked outside a pre-made slot.

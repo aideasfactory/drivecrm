@@ -34,6 +34,15 @@ class GetInstructorListAction
     /** At least one setup step missing — the instructors to chase. */
     public const SETUP_INCOMPLETE = 'incomplete';
 
+    public const LOW_AVAILABILITY = 'low';
+
+    public const NOT_LOW_AVAILABILITY = 'not_low';
+
+    public function __construct(
+        protected GetLowAvailabilitySettingsAction $getLowAvailabilitySettings,
+        protected GetWeeklyAvailableSlotsAction $getWeeklyAvailableSlots,
+    ) {}
+
     /**
      * Build the instructors list rows with their setup status, optionally
      * narrowed by search and setup filters. Every filter must match. The
@@ -49,7 +58,11 @@ class GetInstructorListAction
      * - Availability added: at least one open "Available" diary slot
      *   (CalendarItem::emptyAvailability) that starts in the future.
      *
-     * @param  array{search?: ?string, setup?: ?string, onboarding_email?: ?string, signed_up?: ?string, stripe?: ?string, availability?: ?string}  $filters
+     * Low availability (GetLowAvailabilitySettingsAction): an active,
+     * Stripe-connected instructor with fewer than the minimum slots added
+     * (open or booked) in any one of the next N weeks (GetWeeklyAvailableSlotsAction).
+     *
+     * @param  array{search?: ?string, setup?: ?string, onboarding_email?: ?string, signed_up?: ?string, stripe?: ?string, availability?: ?string, low_availability?: ?string}  $filters
      * @return Collection<int, array{
      *     id: int,
      *     name: string,
@@ -62,6 +75,9 @@ class GetInstructorListAction
      *     stripe_connected: bool,
      *     availability_added: bool,
      *     setup_complete: bool,
+     *     available_slots_by_week: list<int>,
+     *     total_available_slots: int,
+     *     low_availability: bool,
      *     pupils_count: int,
      *     last_sync: string
      * }>
@@ -71,6 +87,9 @@ class GetInstructorListAction
         $now = Carbon::now();
         $today = $now->toDateString();
         $currentTime = $now->format('H:i:s');
+        $lowAvailability = ($this->getLowAvailabilitySettings)();
+        $weeklySlots = ($this->getWeeklyAvailableSlots)($lowAvailability['weeks']);
+        $noSlots = array_fill(0, $lowAvailability['weeks'], 0);
 
         $rows = Instructor::query()
             ->where('status', '!=', InstructorStatus::Archived->value)
@@ -85,10 +104,11 @@ class GetInstructorListAction
                         ->orWhere('calendar_items.start_time', '>', $currentTime))),
             ])
             ->get()
-            ->map(function (Instructor $instructor): array {
+            ->map(function (Instructor $instructor) use ($lowAvailability, $weeklySlots, $noSlots): array {
                 $stripeConnected = $instructor->isStripeConnected();
                 $onboardingEmailSent = ! $instructor->user->welcome_email_pending;
                 $availabilityAdded = (bool) $instructor->has_future_availability;
+                $slotsByWeek = $weeklySlots[$instructor->id] ?? $noSlots;
 
                 return [
                     'id' => $instructor->id,
@@ -102,6 +122,11 @@ class GetInstructorListAction
                     'stripe_connected' => $stripeConnected,
                     'availability_added' => $availabilityAdded,
                     'setup_complete' => $onboardingEmailSent && $stripeConnected && $availabilityAdded,
+                    'available_slots_by_week' => $slotsByWeek,
+                    'total_available_slots' => array_sum($slotsByWeek),
+                    'low_availability' => $instructor->status === InstructorStatus::Active->value
+                        && $stripeConnected
+                        && min($slotsByWeek) < $lowAvailability['min_slots_per_week'],
                     'pupils_count' => (int) $instructor->students_count,
                     'last_sync' => $instructor->updated_at->diffForHumans(),
                     'pending_deletion_on' => $instructor->user->accountDeletionRequests->first()?->scheduled_for?->toDateString(),
@@ -113,7 +138,7 @@ class GetInstructorListAction
 
     /**
      * @param  Collection<int, array<string, mixed>>  $rows
-     * @param  array{search?: ?string, setup?: ?string, onboarding_email?: ?string, signed_up?: ?string, stripe?: ?string, availability?: ?string}  $filters
+     * @param  array{search?: ?string, setup?: ?string, onboarding_email?: ?string, signed_up?: ?string, stripe?: ?string, availability?: ?string, low_availability?: ?string}  $filters
      * @return Collection<int, array<string, mixed>>
      */
     private function applyFilters(Collection $rows, array $filters): Collection
@@ -131,6 +156,7 @@ class GetInstructorListAction
             'signed_up' => $this->expectedFlag($filters['signed_up'] ?? null, self::SIGNED_UP, self::NOT_SIGNED_UP),
             'stripe_connected' => $this->expectedFlag($filters['stripe'] ?? null, self::STRIPE_CONNECTED, self::STRIPE_NOT_CONNECTED),
             'availability_added' => $this->expectedFlag($filters['availability'] ?? null, self::AVAILABILITY_ADDED, self::AVAILABILITY_NOT_ADDED),
+            'low_availability' => $this->expectedFlag($filters['low_availability'] ?? null, self::LOW_AVAILABILITY, self::NOT_LOW_AVAILABILITY),
         ];
 
         foreach ($statusFilters as $field => $expected) {

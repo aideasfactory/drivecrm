@@ -95,6 +95,52 @@ class ReportController extends Controller
     }
 
     /**
+     * Display active, Stripe-connected instructors with low availability.
+     */
+    public function lowAvailability(): Response
+    {
+        return Inertia::render('Reports/LowAvailability', [
+            'report' => $this->reportService->getLowAvailabilityInstructors(),
+        ]);
+    }
+
+    /**
+     * Download the low availability instructors as a CSV file.
+     */
+    public function exportLowAvailability(): StreamedResponse
+    {
+        $report = $this->reportService->getLowAvailabilityInstructors();
+
+        return response()->streamDownload(function () use ($report): void {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, [
+                'Instructor',
+                'Email',
+                'Phone',
+                ...array_map(
+                    fn (string $weekStart): string => 'Week of '.CarbonImmutable::parse($weekStart)->format('d M'),
+                    $report['week_starts'],
+                ),
+                'Total Slots',
+            ]);
+
+            foreach ($report['rows'] as $row) {
+                fputcsv($handle, [
+                    $row['name'],
+                    $row['email'],
+                    $row['phone'],
+                    ...$row['available_slots_by_week'],
+                    $row['total_available_slots'],
+                ]);
+            }
+
+            fclose($handle);
+        }, 'low-availability-instructors-'.CarbonImmutable::now()->format('Y-m-d').'.csv', [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
+    /**
      * Keep a provisional lesson where it is and take it off the Clashes report.
      */
     public function confirmClash(Request $request, Lesson $lesson): JsonResponse
@@ -304,6 +350,13 @@ class ReportController extends Controller
                 'description' => 'Slot utilisation per instructor — booked vs free capacity.',
                 'icon' => 'CalendarCheck',
                 'route' => route('reports.availability'),
+            ],
+            [
+                'key' => 'low-availability',
+                'title' => 'Low Availability Instructors',
+                'description' => 'Active, Stripe-connected instructors with too few diary slots added in an upcoming week — chase them to add availability.',
+                'icon' => 'CalendarX',
+                'route' => route('reports.low-availability'),
             ],
             [
                 'key' => 'invoice-due',

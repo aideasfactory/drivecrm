@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Actions\Calendar\MoveLessonAndFutureSiblingsAction;
 use App\Actions\Instructor\CountInstructorPupilsByStatusAction;
 use App\Actions\Instructor\GetInstructorListAction;
+use App\Actions\Instructor\GetLowAvailabilitySettingsAction;
 use App\Actions\Shared\AdminResetPasswordAction;
 use App\Actions\Shared\Contact\CreateContactAction;
 use App\Actions\Shared\Contact\DeleteContactAction;
@@ -81,6 +82,7 @@ class InstructorController extends Controller
         protected PriceUpliftService $priceUpliftService,
         protected SlotOfferService $slotOfferService,
         protected GetInstructorListAction $getInstructorList,
+        protected GetLowAvailabilitySettingsAction $getLowAvailabilitySettings,
     ) {}
 
     /**
@@ -91,6 +93,7 @@ class InstructorController extends Controller
         return Inertia::render('Instructors/Index', [
             'instructors' => ($this->getInstructorList)(),
             'formOptions' => $this->instructorFormOptions(),
+            'lowAvailability' => ($this->getLowAvailabilitySettings)(),
         ]);
     }
 
@@ -104,7 +107,7 @@ class InstructorController extends Controller
 
         return response()->streamDownload(function () use ($instructors): void {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Name', 'Email', 'Mobile', 'Onboarding email sent', 'Signed up', 'Stripe connected', 'Availability added']);
+            fputcsv($handle, ['Name', 'Email', 'Mobile', 'Onboarding email sent', 'Signed up', 'Stripe connected', 'Availability added', 'Slots added', 'Low availability']);
 
             foreach ($instructors as $instructor) {
                 fputcsv($handle, [
@@ -115,6 +118,8 @@ class InstructorController extends Controller
                     $instructor['signed_up'] ? 'Y' : 'N',
                     $instructor['stripe_connected'] ? 'Y' : 'N',
                     $instructor['availability_added'] ? 'Y' : 'N',
+                    $instructor['total_available_slots'],
+                    $instructor['low_availability'] ? 'Y' : 'N',
                 ]);
             }
 
