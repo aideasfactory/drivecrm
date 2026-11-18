@@ -16,6 +16,11 @@ class Order extends Model
 {
     use HasFactory;
 
+    /**
+     * Shown to an instructor who tries to cancel a lesson Head Office booked.
+     */
+    public const HEAD_OFFICE_RESCHEDULE_ONLY_MESSAGE = 'This lesson can only be rearranged, to cancel please contact support.';
+
     protected $fillable = [
         'student_id',
         'instructor_id',
@@ -222,6 +227,24 @@ class Order extends Model
     public function isStaffBooking(): bool
     {
         return $this->booked_by_user_id !== null;
+    }
+
+    /**
+     * Whether Head Office (the bookings team) booked this order on the
+     * student's behalf, rather than the instructor or the learner.
+     */
+    public function wasBookedByHeadOffice(): bool
+    {
+        return $this->source === OrderSource::BOOKINGS_TEAM || $this->isStaffBooking();
+    }
+
+    /**
+     * Whether the user may cancel lessons in this order. Instructors can only
+     * rearrange lessons Head Office booked; owners can still cancel them.
+     */
+    public function canBeCancelledBy(?User $user): bool
+    {
+        return ! ($user?->isInstructor() === true && $this->wasBookedByHeadOffice());
     }
 
     /**

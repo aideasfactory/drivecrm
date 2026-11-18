@@ -185,6 +185,8 @@ export interface CalendarItemResponse {
   is_provisional?: boolean
   /** Can be taken out of the diary but kept in its booking to rebook later (confirmed booking only). */
   can_bank?: boolean
+  /** Booked by Head Office: instructors can only reschedule it, not cancel it. */
+  booked_by_head_office?: boolean
   /** Name of the package the lesson belongs to. */
   package_name?: string | null
   /** Who rearranges a provisional lesson: the instructor when they booked the clash, otherwise the DRIVE team. */

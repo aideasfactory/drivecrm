@@ -18,6 +18,7 @@ use App\Http\Requests\Api\V1\UpdateCalendarItemRequest;
 use App\Http\Resources\V1\CalendarItemResource;
 use App\Http\Resources\V1\SlotOfferResource;
 use App\Models\CalendarItem;
+use App\Models\Order;
 use App\Models\Student;
 use App\Services\InstructorCalendarService;
 use App\Services\InstructorService;
@@ -287,6 +288,10 @@ class InstructorCalendarController extends Controller
         try {
             // Booking slot: cancel the lesson(s) rather than delete an availability slot.
             if ($calendarItem->lessons()->exists()) {
+                if ($calendarItem->lessons->first()?->order?->canBeCancelledBy($request->user()) === false) {
+                    return response()->json(['message' => Order::HEAD_OFFICE_RESCHEDULE_ONLY_MESSAGE], 403);
+                }
+
                 $result = $this->instructorService->cancelBooking(
                     $calendarItem,
                     $request->reasonCode(),

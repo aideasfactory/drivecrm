@@ -706,6 +706,10 @@ class PupilController extends Controller
             return response()->json(['message' => 'Lesson not found for this student.'], 404);
         }
 
+        if (! $lesson->order->canBeCancelledBy($request->user())) {
+            return response()->json(['message' => Order::HEAD_OFFICE_RESCHEDULE_ONLY_MESSAGE], 403);
+        }
+
         try {
             $result = $this->instructorService->cancelBankedLesson(
                 $lesson,

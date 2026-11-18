@@ -38,6 +38,8 @@ class BankedLessonResource extends JsonResource
             'expires_at' => $this->resource->bankedExpiresAt()?->toISOString(),
             'banked_reason' => $this->banked_reason,
             'banked_by_name' => $this->bankedBy?->name,
+            'booked_by_head_office' => $this->order?->wasBookedByHeadOffice() === true,
+            'can_cancel' => $this->order?->canBeCancelledBy($request->user()) ?? true,
         ];
     }
 }

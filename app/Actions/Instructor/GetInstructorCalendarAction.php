@@ -145,6 +145,8 @@ class GetInstructorCalendarAction
                         'is_provisional' => $lesson?->isProvisional() === true,
                         // Can be kept in its booking to rebook later instead of cancelled
                         'can_bank' => $lesson?->canBeBanked() === true,
+                        // Instructors can only reschedule it, not cancel it
+                        'booked_by_head_office' => $lesson?->order?->wasBookedByHeadOffice() === true,
                         'package_name' => $lesson?->order?->package_name,
                         'provisional_handled_by' => $lesson?->provisionalHandledBy()?->value,
                         'lesson_id' => $lessonId,
