@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Actions\Instructor\BuildInstructorCalendarFeedAction;
+use App\Actions\Instructor\EnsureCalendarFeedTokenAction;
 use App\Actions\Instructor\GetInstructorCalendarItemsAction;
 use App\Actions\Instructor\GetInstructorCalendarItemsInRangeAction;
+use App\Actions\Instructor\RegenerateCalendarFeedTokenAction;
 use App\Actions\Onboarding\PreviewPackageClashesAction;
 use App\Models\CalendarItem;
 use App\Models\Instructor;
@@ -17,6 +20,9 @@ class InstructorCalendarService extends BaseService
         protected GetInstructorCalendarItemsAction $getCalendarItems,
         protected GetInstructorCalendarItemsInRangeAction $getCalendarItemsInRange,
         protected PreviewPackageClashesAction $previewPackageClashes,
+        protected EnsureCalendarFeedTokenAction $ensureCalendarFeedToken,
+        protected RegenerateCalendarFeedTokenAction $regenerateCalendarFeedToken,
+        protected BuildInstructorCalendarFeedAction $buildCalendarFeed,
     ) {}
 
     /**
@@ -78,5 +84,52 @@ class InstructorCalendarService extends BaseService
             $this->cacheKey('instructor', $instructorId, "calendar:{$date}:drafts"),
             $this->cacheKey('instructor', $instructorId, "calendar:{$date}:all:drafts"),
         ]);
+    }
+
+    /**
+     * Links to the instructor's subscribable calendar feed, creating its
+     * secret token on first use.
+     *
+     * @return array{url: string, webcal_url: string, google_url: string}
+     */
+    public function calendarFeedLinks(Instructor $instructor): array
+    {
+        return $this->feedLinksFor(($this->ensureCalendarFeedToken)($instructor));
+    }
+
+    /**
+     * Replace the feed token, revoking the old URL, and return the new links.
+     *
+     * @return array{url: string, webcal_url: string, google_url: string}
+     */
+    public function resetCalendarFeed(Instructor $instructor): array
+    {
+        return $this->feedLinksFor(($this->regenerateCalendarFeedToken)($instructor));
+    }
+
+    /**
+     * The iCalendar document for a feed token, or null when no instructor has it.
+     * Not cached: it would go stale between per-date cache invalidations.
+     */
+    public function calendarFeedForToken(string $token): ?string
+    {
+        $instructor = Instructor::query()->where('calendar_feed_token', $token)->first();
+
+        return $instructor ? ($this->buildCalendarFeed)($instructor) : null;
+    }
+
+    /**
+     * @return array{url: string, webcal_url: string, google_url: string}
+     */
+    private function feedLinksFor(string $token): array
+    {
+        $url = route('calendar.feed', ['token' => $token]);
+        $webcalUrl = (string) preg_replace('#^https?://#', 'webcal://', $url);
+
+        return [
+            'url' => $url,
+            'webcal_url' => $webcalUrl,
+            'google_url' => 'https://calendar.google.com/calendar/r?cid='.rawurlencode($webcalUrl),
+        ];
     }
 }

@@ -40,6 +40,13 @@ export interface InstructorDetail {
   app_onboarding_complete?: boolean
   pending_deletion?: InstructorPendingDeletion | null
   upcoming_lessons_count?: number
+  calendar_feed?: CalendarFeedLinks
+}
+
+export interface CalendarFeedLinks {
+  url: string
+  webcal_url: string
+  google_url: string
 }
 
 export interface InstructorPendingDeletion {

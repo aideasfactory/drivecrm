@@ -10,6 +10,7 @@ import {
     Phone,
     MessageSquare,
 } from 'lucide-vue-next'
+import CalendarFeedCard from '@/components/Instructors/CalendarFeedCard.vue'
 import type { InstructorDetail } from '@/types/instructor'
 
 interface Props {
@@ -107,6 +108,11 @@ function formatDateRange(start: string, end: string): string {
                 </div>
             </CardContent>
         </Card>
- 
+
+        <CalendarFeedCard
+            v-if="instructor.calendar_feed"
+            :instructor-id="instructor.id"
+            :feed="instructor.calendar_feed"
+        />
     </div>
 </template>

@@ -307,6 +307,7 @@ Extended profile for users with instructor role.
 | `bio` | text | NULLABLE | Instructor biography for display |
 | `phone` | varchar(20) | NULLABLE | Instructor phone number |
 | `pin` | varchar(10) | NULLABLE, UNIQUE | Instructor PIN code for student attachment. Auto-generated as a unique 6-digit numeric string on create (`Instructor::booted` creating hook) unless already set; existing non-archived instructors backfilled by `2026_11_04_140000_backfill_instructor_pins`. Cleared to NULL on account deletion. |
+| `calendar_feed_token` | varchar(64) | NULLABLE, UNIQUE | Secret in the instructor's subscribable calendar feed URL (`GET /calendar/feed/{token}.ics`). 40 random characters, created the first time the feed URL is shown (`EnsureCalendarFeedTokenAction`); replaced by Reset (`RegenerateCalendarFeedTokenAction`), which revokes the old URL. Hidden from model serialisation. Migration `2026_11_18_160000_add_calendar_feed_token_to_instructors_table` |
 | `rating` | float(3,2) | NULLABLE | Instructor rating (0.00-5.00) |
 | `transmission_type` | enum('manual', 'automatic') | NOT NULL | Vehicle transmission type |
 | `status` | varchar(50) | DEFAULT 'active' | Instructor status |
@@ -333,6 +334,7 @@ Extended profile for users with instructor role.
 - `stripe_account_id`
 - Composite index on `(latitude, longitude)` named `instructors_coordinates_index`
 - `pin` (unique)
+- `calendar_feed_token` (unique — MySQL allows multiple NULLs)
 - `vrn` (unique — MySQL allows multiple NULLs)
 
 **Relationships:**

@@ -53,6 +53,7 @@ use App\Models\Payout;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\HmrcService;
+use App\Services\InstructorCalendarService;
 use App\Services\InstructorService;
 use App\Services\OrderService;
 use App\Services\PriceUpliftService;
@@ -80,6 +81,7 @@ class InstructorController extends Controller
         protected PriceUpliftService $priceUpliftService,
         protected SlotOfferService $slotOfferService,
         protected GetInstructorListAction $getInstructorList,
+        protected InstructorCalendarService $calendarService,
     ) {}
 
     /**
@@ -291,6 +293,7 @@ class InstructorController extends Controller
                     'staff_requested' => $pendingDeletion->isStaffRequested(),
                 ] : null,
                 'upcoming_lessons_count' => $this->instructorService->countUpcomingLessons($instructor),
+                'calendar_feed' => $this->calendarService->calendarFeedLinks($instructor),
             ],
             'tab' => $tab,
             'subtab' => request()->query('subtab', 'summary'),

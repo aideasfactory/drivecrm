@@ -38,6 +38,8 @@
     - [Cancel Banked Lesson](#post-apiv1instructorlessonslessoncancel-banked)
     - [Offer Slot (Create)](#post-apiv1instructorcalendaritemscalendaritemoffers)
     - [Offer Slot (Withdraw)](#delete-apiv1instructorcalendaritemscalendaritemoffers)
+    - [Calendar Feed (Links)](#get-apiv1instructorcalendar-feed)
+    - [Calendar Feed (Reset)](#post-apiv1instructorcalendar-feedreset)
     - [Finances (Config)](#get-apiv1instructorfinancesconfig)
     - [Finances (Summary)](#get-apiv1instructorfinancessummary)
     - [Finances (Export CSV)](#post-apiv1instructorfinancesexport)
@@ -1832,6 +1834,75 @@ Removes one of the authenticated instructor's own packages. This is the same act
 ```
 
 > **App action:** confirm before calling (mirror the CRM dialog: "This hides {name} from booking and the mobile app. Existing orders, lessons, and payments keep their history and are not changed."). On `200`, drop the package from the list (or re-fetch `GET /instructor/packages`). Do not offer Restore in the app; tell the instructor it can be restored from the web portal.
+
+---
+
+### Instructor Calendar Feed
+
+A private, subscribable iCalendar (`.ics`) feed of the instructor's booked lessons and driving tests, for Google, Apple and Outlook Calendar. Read-only: the calendar app polls the feed URL (typically every few hours, Google up to ~24h), so changes in the diary — moves, cancellations, new bookings — appear on the next refresh. Nothing is written back.
+
+**Calendar Feed Object:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `url` | string | `https://…/calendar/feed/{token}.ics` — the feed itself. Show it with a Copy button (for Outlook or "subscribe by URL"). |
+| `webcal_url` | string | Same URL with the `webcal://` scheme. Opening it on iOS/macOS offers to subscribe in Apple Calendar. |
+| `google_url` | string | `https://calendar.google.com/calendar/r?cid=<url-encoded webcal_url>` — opens Google Calendar's "Add calendar" for this feed. |
+
+**What the feed contains:** one event per diary item from 30 days ago to 12 months ahead (UK dates): reserved, booked and completed lessons; holds the instructor or Head Office made (shown as tentative); and practical tests. Cancelled lessons, open/blocked-out slots, travel time and a pupil's own unpaid website/app checkout holds are left out. Each event's title is `Lesson - {pupil name}` or `Driving test - {pupil name}` (`Driving test` alone when no pupil is linked). Times are `Europe/London` (with a `VTIMEZONE`). The location is the pupil's default pickup point when they have one. No phone numbers, emails or payment details are included. Event UIDs are stable (`lesson-{id}` / `calendar-item-{id}`), so a moved lesson updates rather than duplicates.
+
+**Public feed endpoint (no Bearer token):** `GET /calendar/feed/{token}.ics` → `200 text/calendar`; unknown or reset token → `404`. Rate limited to 30 requests/min per feed and 120/min per IP (`429`). The app never needs to call it — hand the URLs to the calendar app.
+
+---
+
+#### `GET /api/v1/instructor/calendar-feed`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Returns the instructor's feed links. The secret token is created on the first call, so the links are stable across calls until reset.
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "url": "https://app.drive-plus.co.uk/calendar/feed/Xr4b9QdT1mZk0aVnW3sLpE7yGh2cJ8uFo5iBqN6t.ics",
+    "webcal_url": "webcal://app.drive-plus.co.uk/calendar/feed/Xr4b9QdT1mZk0aVnW3sLpE7yGh2cJ8uFo5iBqN6t.ics",
+    "google_url": "https://calendar.google.com/calendar/r?cid=webcal%3A%2F%2Fapp.drive-plus.co.uk%2Fcalendar%2Ffeed%2FXr4b9QdT1mZk0aVnW3sLpE7yGh2cJ8uFo5iBqN6t.ics"
+  }
+}
+```
+
+**Error Responses:**
+
+`403 Forbidden` — token is not an instructor:
+```json
+{
+  "message": "Only instructors have a calendar feed."
+}
+```
+
+---
+
+#### `POST /api/v1/instructor/calendar-feed/reset`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Replaces the secret token. The old URL returns `404` straight away, so any calendar subscribed to it stops updating and the instructor must add the new link. No request body. Rate limited to 10/min. Logged in the instructor's activity log.
+
+**Success Response:** `200 OK` — same shape as `GET`, with the new links:
+```json
+{
+  "data": {
+    "url": "https://app.drive-plus.co.uk/calendar/feed/N0vA7kq2RtYs5LmXc9WbZ3pHf1gJd8eUo4iCyT6r.ics",
+    "webcal_url": "webcal://app.drive-plus.co.uk/calendar/feed/N0vA7kq2RtYs5LmXc9WbZ3pHf1gJd8eUo4iCyT6r.ics",
+    "google_url": "https://calendar.google.com/calendar/r?cid=webcal%3A%2F%2Fapp.drive-plus.co.uk%2Fcalendar%2Ffeed%2FN0vA7kq2RtYs5LmXc9WbZ3pHf1gJd8eUo4iCyT6r.ics"
+  }
+}
+```
+
+**Error Responses:** `403` as above; `429 Too Many Requests` over the limit.
+
+> **App action:** on a "Calendar sync" screen call `GET`, then offer "Add to Apple Calendar" (open `webcal_url`), "Add to Google Calendar" (open `google_url` in the browser) and "Copy link" (`url`). Offer "Reset link" behind a confirm ("The current link stops working and any calendar using it stops updating."), then replace the shown links with the response. Tell the instructor to keep the link private: anyone with it can see pupil names.
 
 ---
 
@@ -7093,6 +7164,8 @@ The `role` field is always returned in user responses. Use it to determine which
 | POST | `/api/v1/instructor/lessons/{lesson}/cancel-banked` | Yes | Instructor | Cancel a banked lesson for good |
 | POST | `/api/v1/instructor/calendar/items/{calendarItem}/offers` | Yes | Instructor | Offer an empty diary slot at short notice |
 | DELETE | `/api/v1/instructor/calendar/items/{calendarItem}/offers` | Yes | Instructor | Withdraw an open short-notice offer |
+| GET | `/api/v1/instructor/calendar-feed` | Yes | Instructor | Subscribable calendar (.ics) feed links: `url`, `webcal_url`, `google_url` |
+| POST | `/api/v1/instructor/calendar-feed/reset` | Yes | Instructor | Replace the calendar feed link (old one stops working) |
 | GET | `/api/v1/instructor/finances` | Yes | Instructor | List finance records |
 | POST | `/api/v1/instructor/finances` | Yes | Instructor | Create finance record |
 | PUT | `/api/v1/instructor/finances/{finance}` | Yes | Instructor | Update finance record |
@@ -8389,6 +8462,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-17 | **Franchise Fee is now an expense.** `/finances/config.expense_categories` gains `franchise_fee` ("Franchise Fee"), and `category_meta.franchise_fee` is `{ method_dependent: false, claimable: true, selectable_in_picker: true, itsa_bucket: "professionalFees" }`. POST/PUT accept `type: "expense", category: "franchise_fee"`. The `franchise_payout` payment slug now has `category_meta.franchise_payout.selectable_in_picker: false`. It is still in `payment_categories` and still valid, so existing payment rows keep their label and totals, and can still be edited. Existing rows are not migrated. Additive, no fields removed. **App action:** filter both category dropdowns by `category_meta.{slug}.selectable_in_picker`, but keep a hidden slug as an option when editing a record that already uses it. | Instructor Finances (config, store, update) |
 | 2026-11-15 | **Instant message pushes.** Direct-message pushes (pupil ↔ instructor, support) are now sent immediately at Expo `priority: "high"` instead of waiting up to ~60s for `push:send-queued`. Broadcast and lesson status pushes are still queued. Title, body and data payload (`{ type: "message", message_id, from_user_id }`) are unchanged. No request/response changes. **App action:** none beyond handling the tap (open the chat). | Push notifications, Messages (send) |
 | 2026-11-15 | **Finance export (CSV).** New `POST /api/v1/instructor/finances/export` with `from`, `to` (required, YYYY-MM-DD) and `delivery` (`email` default \| `download`). Exports the instructor's payments (incl. lesson income), expenses and mileage in the range as one CSV — same rows as `/finances/summary`. `email` → `202` JSON with `email`, `from`, `to`, `counts`; the CSV is emailed as an attachment. `download` → `200` `text/csv` attachment. Rate limited to 10/min. Additive only. **App action:** add an Export button to the Finances screen with a date-range picker that calls this endpoint (default `email`) and shows `message` on success. | Instructor Finances (export) |
+| 2026-11-18 | **Calendar sync (subscribable .ics feed).** New `GET /api/v1/instructor/calendar-feed` → `{ "data": { "url", "webcal_url", "google_url" } }` and `POST /api/v1/instructor/calendar-feed/reset` (same shape, new links; old URL 404s; 10/min). The URL is a public, token-secured `GET /calendar/feed/{token}.ics` (`text/calendar`, no Bearer token, 30/min per feed) with the instructor's reserved/booked/completed lessons, instructor/Head Office holds (tentative) and practical tests from 30 days ago to 12 months ahead, titled `Lesson - {pupil}` / `Driving test - {pupil}`, `Europe/London` times, location = pupil's default pickup point. Learner unpaid checkout holds and cancelled lessons are excluded. Additive only. **App action:** add a Calendar sync screen (see the Instructor Calendar Feed section). | Instructor Calendar Feed (NEW) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

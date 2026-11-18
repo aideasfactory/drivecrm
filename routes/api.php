@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AccountDeletionController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\HazardPerceptionController;
 use App\Http\Controllers\Api\V1\InstructorCalendarController;
+use App\Http\Controllers\Api\V1\InstructorCalendarFeedController;
 use App\Http\Controllers\Api\V1\InstructorFinanceController;
 use App\Http\Controllers\Api\V1\InstructorLessonController;
 use App\Http\Controllers\Api\V1\InstructorMileageController;
@@ -99,6 +100,8 @@ Route::prefix('v1')->group(function (): void {
             Route::post('lessons/{lesson}/rebook', [InstructorLessonController::class, 'rebook']);
             Route::post('lessons/{lesson}/cancel-banked', [InstructorLessonController::class, 'cancelBanked']);
             Route::get('lesson-cancellation-reasons', [InstructorCalendarController::class, 'cancellationReasons']);
+            Route::get('calendar-feed', [InstructorCalendarFeedController::class, 'show']);
+            Route::post('calendar-feed/reset', [InstructorCalendarFeedController::class, 'reset'])->middleware('throttle:10,1');
             Route::post('calendar/items/{calendarItem}/offers', [InstructorCalendarController::class, 'storeOffer']);
             Route::delete('calendar/items/{calendarItem}/offers', [InstructorCalendarController::class, 'destroyOffer']);
             Route::get('finances/config', [InstructorFinanceController::class, 'config']);
