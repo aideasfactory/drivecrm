@@ -66,7 +66,6 @@ import {
 } from '@/actions/App/Http/Controllers/PupilController'
 import { cancellationReasons as cancellationReasonsRoute } from '@/actions/App/Http/Controllers/InstructorController'
 import type { CancellationReasonOption } from '@/types/instructor'
-import { useRole } from '@/composables/useRole'
 
 interface Lesson {
     id: number
@@ -137,7 +136,7 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const { isInstructor } = useRole()
+const { isInstructor, isOwner } = useRole()
 
 // Data state
 const lessons = ref<Lesson[]>([])
@@ -184,8 +183,7 @@ const isCancellingBanked = ref(false)
 const cancellationReasons = ref<CancellationReasonOption[]>([])
 const cancellationReasonsLoading = ref(false)
 
-// Admin only: delete a signed-off or past lesson that never took place
-const { isOwner } = useRole()
+// Owner only: delete a signed-off or past lesson that never took place
 const isDeleteLessonOpen = ref(false)
 const deleteLessonTarget = ref<Lesson | null>(null)
 const deleteLessonReasonCode = ref('')
