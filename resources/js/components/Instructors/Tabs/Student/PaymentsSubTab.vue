@@ -53,6 +53,7 @@ interface Payment {
     payout_paid_manually: boolean
     payout_manual_payment_reference: string | null
     payout_failure_message: string | null
+    lesson_cancelled: boolean
 }
 
 interface Props {
@@ -69,7 +70,7 @@ const loading = ref(true)
 const paidPayments = computed(() => payments.value.filter((p) => p.status === 'paid'))
 const duePayments = computed(() => payments.value.filter((p) => p.status === 'due'))
 const refundedPayments = computed(() => payments.value.filter((p) => p.status === 'refunded'))
-const unpaidInstructorPayouts = computed(() => payments.value.filter((p) => p.payout_status === 'failed'))
+const unpaidInstructorPayouts = computed(() => payments.value.filter((p) => p.payout_status === 'failed' && !p.lesson_cancelled))
 
 const totalPaidPence = computed(() => paidPayments.value.reduce((sum, p) => sum + p.amount_pence, 0))
 const totalDuePence = computed(() => duePayments.value.reduce((sum, p) => sum + p.amount_pence, 0))
@@ -321,7 +322,7 @@ onMounted(() => {
                                 {{ formatDateTime(payment.paid_at) }}
                             </TableCell>
                             <TableCell class="text-center">
-                                <TooltipProvider v-if="isOwner && payment.payout_status === 'failed'">
+                                <TooltipProvider v-if="isOwner && payment.payout_status === 'failed' && !payment.lesson_cancelled">
                                     <Tooltip>
                                         <TooltipTrigger>
                                             <span class="inline-flex flex-col items-center gap-1 text-amber-800">

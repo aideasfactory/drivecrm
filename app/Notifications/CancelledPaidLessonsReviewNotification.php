@@ -34,6 +34,7 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
     /**
      * @param  Collection<int, Lesson>  $paidLessons  Cancelled lessons that had been paid for.
      * @param  array<int, int|null>  $hoursNotice  Hours' notice given for each lesson, keyed by lesson id (negative once it had started).
+     * @param  bool  $deletedByAdmin  An admin deleted signed-off or past lessons that never took place, so notice and late-cancellation rules do not apply.
      */
     public function __construct(
         public ?Student $student,
@@ -45,6 +46,7 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
         public array $hoursNotice = [],
         public ?string $cancelledByName = null,
         public bool $guaranteeRemoved = false,
+        public bool $deletedByAdmin = false,
     ) {}
 
     /**
@@ -68,16 +70,23 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
             ->partition(fn (Lesson $lesson): bool => $lesson->lessonPayment?->isPaidByAlternativeMethod() === true
                 || ($lesson->order ?? $this->order)?->isCash() === true);
         $alternativeOnly = $cardLessons->isEmpty();
-        $paidOutLessons = $this->paidLessons->filter(fn (Lesson $lesson): bool => $lesson->payout !== null);
+        $payoutLessons = $this->paidLessons->filter(fn (Lesson $lesson): bool => $lesson->payout !== null);
+        $paidOutLessons = $payoutLessons->filter(fn (Lesson $lesson): bool => $lesson->payout->isCompleted());
 
         $message = (new MailMessage)
             ->subject($alternativeOnly
                 ? 'Action Required: Review Cancelled Lesson(s) Paid to the Instructor'
                 : 'Action Required: Review Cancelled Paid Lesson(s)')
-            ->greeting('Cancelled paid lessons to review')
+            ->greeting('Cancelled paid lessons to review');
+
+        if ($this->deletedByAdmin) {
+            $message->line('An admin has **deleted** one or more paid lessons that **did not take place** (they had been signed off or their time had passed). The pupil has not been emailed.');
+        }
+
+        $message
             ->line($alternativeOnly
-                ? 'A booking has been cancelled and one or more lessons the pupil **paid the instructor for directly** (alternative payment method) need a decision. Drive did not take this money, so there is nothing to refund in Stripe.'
-                : 'A booking has been cancelled and one or more **paid** lessons need a decision. Nothing has been refunded to the pupil'
+                ? ($this->deletedByAdmin ? 'The pupil **paid the instructor for them directly** (cash or alternative payment method) and they' : 'A booking has been cancelled and one or more lessons the pupil **paid the instructor for directly** (alternative payment method)').' need a decision. Drive did not take this money, so there is nothing to refund in Stripe.'
+                : ($this->deletedByAdmin ? 'They need a decision.' : 'A booking has been cancelled and one or more **paid** lessons need a decision.').' Nothing has been refunded to the pupil'
                     .($paidOutLessons->isEmpty() ? ' and the instructor has not been paid for these lessons.' : '.'))
             ->line('')
             ->line("**Student:** {$studentName}")
@@ -98,8 +107,8 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
             $this->addAlternativeLessons($message, $alternativeLessons);
         }
 
-        if ($paidOutLessons->isNotEmpty()) {
-            $this->addPaidOutLessons($message, $paidOutLessons);
+        if ($payoutLessons->isNotEmpty()) {
+            $this->addPayoutLessons($message, $payoutLessons);
         }
 
         if ($this->guaranteeRemoved) {
@@ -109,11 +118,13 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
 
         $message->line('');
 
-        if ($cardLessons->isNotEmpty()) {
+        if ($this->deletedByAdmin) {
+            $message->line('**What to do:** contact the pupil and the instructor to confirm the lesson did not take place. The pupil is normally owed what they paid: refund card payments in Stripe, and ask the instructor to return any money paid to them directly. Late-cancellation rules do not apply.');
+        } elseif ($cardLessons->isNotEmpty()) {
             $message->line('**What to do:** contact the pupil and the instructor to confirm what happened. If the instructor cancelled, refund the pupil in Stripe. If the pupil cancelled with less than '.BookingPayments::lateCancellationHours().' hours\' notice, decide whether to refund the pupil or pay the instructor for the lesson.');
         }
 
-        if ($alternativeLessons->isNotEmpty()) {
+        if (! $this->deletedByAdmin && $alternativeLessons->isNotEmpty()) {
             $message->line('**'.($cardLessons->isNotEmpty() ? 'For the lessons paid to the instructor' : 'What to do').':** contact the pupil and the instructor to confirm what happened. If the pupil is owed their money back (for example, the instructor cancelled), the instructor must return it to them directly. If the pupil cancelled with less than '.BookingPayments::lateCancellationHours().' hours\' notice, the instructor may keep it.');
         }
 
@@ -190,24 +201,40 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
     }
 
     /**
-     * List lessons signed off (and the instructor paid) before an admin
-     * deleted them. The payout is kept: it is never reversed automatically.
+     * List the instructor payouts of lessons signed off before an admin
+     * deleted them. A paid payout is kept: it is never reversed automatically.
+     * A failed one was never paid and can no longer be marked paid manually.
      *
      * @param  Collection<int, Lesson>  $lessons
      */
-    protected function addPaidOutLessons(MailMessage $message, Collection $lessons): void
+    protected function addPayoutLessons(MailMessage $message, Collection $lessons): void
     {
-        $message->line('')
-            ->line('**Instructor already paid for these lessons (signed off before they were deleted):**');
+        [$paid, $unpaid] = $lessons->partition(fn (Lesson $lesson): bool => $lesson->payout->isCompleted());
 
-        foreach ($lessons as $lesson) {
-            $payout = $lesson->payout;
+        if ($paid->isNotEmpty()) {
+            $message->line('')
+                ->line('**Instructor already paid for these lessons (signed off before they were deleted):**');
 
-            $message->line('• '.$this->formatLessonTime($lesson).' — payout '.$payout->formatted_amount
-                .' ('.$payout->status?->value.($payout->stripe_transfer_id ? ", Stripe transfer {$payout->stripe_transfer_id}" : '').')');
+            foreach ($paid as $lesson) {
+                $payout = $lesson->payout;
+
+                $message->line('• '.$this->formatLessonTime($lesson).' — payout '.$payout->formatted_amount
+                    .' ('.($payout->stripe_transfer_id ? "Stripe transfer {$payout->stripe_transfer_id}" : 'paid manually').')');
+            }
+
+            $message->line('This payout has **not** been reversed in Stripe. If the pupil is refunded, recover it from the instructor by hand.');
         }
 
-        $message->line('This payout has **not** been reversed in Stripe. If the pupil is refunded, recover it from the instructor by hand.');
+        if ($unpaid->isNotEmpty()) {
+            $message->line('')
+                ->line('**Instructor payouts that never went through (signed off before they were deleted):**');
+
+            foreach ($unpaid as $lesson) {
+                $message->line('• '.$this->formatLessonTime($lesson).' — payout '.$lesson->payout->formatted_amount.' ('.$lesson->payout->status?->value.')');
+            }
+
+            $message->line('Do **not** pay the instructor for these lessons. They can no longer be marked paid manually.');
+        }
     }
 
     /**
@@ -215,6 +242,10 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
      */
     protected function formatNotice(Lesson $lesson): string
     {
+        if ($this->deletedByAdmin) {
+            return 'deleted after the lesson time — it did not take place';
+        }
+
         $hours = $this->hoursNotice[$lesson->id] ?? null;
 
         if ($hours === null) {

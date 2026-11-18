@@ -1385,9 +1385,12 @@ onMounted(async () => {
                     <AlertDescription>
                         <ul class="mt-1 list-disc space-y-1 pl-4">
                             <li>Only delete it if it never took place. It is marked cancelled and removed from the diary.</li>
-                            <li v-if="deleteLessonTarget.has_payout">
+                            <li v-if="deleteLessonTarget.payout_status === 'paid'">
                                 The instructor has already been paid for it. That payout is <strong>not</strong> reversed —
                                 Head Office must recover it by hand if the pupil is refunded.
+                            </li>
+                            <li v-else-if="deleteLessonTarget.has_payout">
+                                The instructor payout never went through. It is left unpaid and can no longer be marked as paid.
                             </li>
                             <li v-if="deleteLessonTarget.payment_status === 'paid'">
                                 It was paid for, so Head Office is emailed to decide on a refund. Nothing is refunded
@@ -1396,7 +1399,7 @@ onMounted(async () => {
                             <li v-else-if="deleteLessonTarget.payment_status === 'due'">
                                 It hasn't been paid for: any open invoice is cancelled.
                             </li>
-                            <li>The lesson is not returned to the pupil's package. The pupil is emailed. This can't be undone.</li>
+                            <li>The lesson is not returned to the pupil's package. The pupil is not emailed. This can't be undone.</li>
                         </ul>
                     </AlertDescription>
                 </Alert>

@@ -152,13 +152,16 @@ class CancelBookingAction
      * Admin only: delete a lesson that was signed off, or whose time has
      * passed, because it never took place. It is cancelled like any other
      * lesson (kept for history, Head Office emailed when it was paid), but its
-     * past diary slot is removed rather than reopened as free time.
+     * past diary slot is removed rather than reopened as free time, the pupil
+     * is not sent a "cancelled" email, and a booking with signed-off lessons
+     * is never marked cancelled (it is completed once nothing is left open).
      *
      * Nothing is refunded or reversed. A payout already sent to the instructor
      * on sign-off is kept and flagged in the instructor note and the Head
      * Office email, so staff can recover it by hand if the pupil is refunded.
+     * A failed payout stays failed and can no longer be marked paid manually.
      *
-     * @return array{cancelled_count: int, refund_required_count: int, payout_count: int} `payout_count` is the number of payouts already made that were kept.
+     * @return array{cancelled_count: int, refund_required_count: int, payout_count: int} `payout_count` is the number of payouts already paid to the instructor that were kept.
      */
     public function deleteSignedOffLesson(
         Lesson $lesson,
@@ -202,14 +205,14 @@ class CancelBookingAction
             ]);
         }
 
-        return [...$result, 'payout_count' => $lesson->payout ? 1 : 0];
+        return [...$result, 'payout_count' => $lesson->payout?->isCompleted() ? 1 : 0];
     }
 
     /**
      * Cancel the lessons once nothing can be paid for them any more.
      *
      * @param  Collection<int, Lesson>  $cancelSet
-     * @param  bool  $removeSlots  Delete the diary slots instead of reopening them (past lessons removed by an admin).
+     * @param  bool  $deletedByAdmin  Past lessons removed by an admin: their diary slots are deleted instead of reopened, and see deleteSignedOffLesson().
      * @return array{cancelled_count: int, refund_required_count: int, payout_count: int}
      */
     protected function cancelLessons(
@@ -220,7 +223,7 @@ class CancelBookingAction
         ?string $details,
         ?User $actor,
         bool $isUnpaidBooking,
-        bool $removeSlots = false,
+        bool $deletedByAdmin = false,
     ): array {
         /** @var Collection<int, LessonCancellationOutcome> $outcomes */
         $outcomes = $cancelSet->mapWithKeys(fn (Lesson $lesson): array => [
@@ -237,7 +240,7 @@ class CancelBookingAction
 
         $affectedDates = collect();
 
-        DB::transaction(function () use ($cancelSet, $reasonCode, $details, $affectedDates, $isUnpaidBooking, $order, $removeSlots): void {
+        DB::transaction(function () use ($cancelSet, $reasonCode, $details, $affectedDates, $isUnpaidBooking, $order, $deletedByAdmin): void {
             if ($isUnpaidBooking) {
                 $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->first();
 
@@ -265,7 +268,7 @@ class CancelBookingAction
                 if ($calendarItem) {
                     $affectedDates->push($calendarItem->calendar?->date?->format('Y-m-d'));
 
-                    if ($removeSlots) {
+                    if ($deletedByAdmin) {
                         if (! $calendarItem->lessons()->exists()) {
                             ($this->deleteCalendarItem)($calendarItem);
                         }
@@ -281,7 +284,7 @@ class CancelBookingAction
             }
         });
 
-        $orderCancelled = $this->cancelOrderIfFullyCancelled($order);
+        $orderCancelled = $this->cancelOrderIfFullyCancelled($order, $deletedByAdmin);
 
         $guaranteeRemoved = $this->removeRefundedGuarantee($order, $refundLessons, $orderCancelled);
 
@@ -295,7 +298,7 @@ class CancelBookingAction
 
         $this->noteOutcomesOnInstructor($instructor, $cancelSet, $outcomes, $order, $reasonText);
 
-        $this->sendNotifications($cancelSet, $refundLessons, $order, $reasonCode, $details, $hoursNotice, $orderCancelled, $actor, $guaranteeRemoved);
+        $this->sendNotifications($cancelSet, $refundLessons, $order, $reasonCode, $details, $hoursNotice, $orderCancelled, $actor, $guaranteeRemoved, $deletedByAdmin);
 
         return [
             'cancelled_count' => $cancelSet->count(),
@@ -343,9 +346,11 @@ class CancelBookingAction
                 : '';
 
             $signedOff = $lesson->completed_at ? ' Lesson had been signed off.' : '';
-            $payout = $lesson->payout
-                ? " Instructor payout {$lesson->payout->formatted_amount} ({$lesson->payout->status?->value}".($lesson->payout->stripe_transfer_id ? ", Stripe transfer {$lesson->payout->stripe_transfer_id}" : '').') was already made and has NOT been reversed.'
-                : '';
+            $payout = match (true) {
+                $lesson->payout === null => '',
+                $lesson->payout->isCompleted() => " Instructor payout {$lesson->payout->formatted_amount}".($lesson->payout->stripe_transfer_id ? " (Stripe transfer {$lesson->payout->stripe_transfer_id})" : ' (paid manually)').' was already made and has NOT been reversed.',
+                default => " Instructor payout {$lesson->payout->formatted_amount} ({$lesson->payout->status?->value}) was never paid — do not pay it.",
+            };
 
             ($this->createNote)(
                 $instructor,
@@ -511,8 +516,12 @@ class CancelBookingAction
     /**
      * If every non-completed lesson in the order is now cancelled, mark the
      * order itself cancelled.
+     *
+     * When an admin deleted a lesson that never took place, a booking that
+     * still has signed-off lessons is not cancelled (that would also remove
+     * its Pass Your Test Guarantee): it is marked completed instead.
      */
-    protected function cancelOrderIfFullyCancelled(?Order $order): bool
+    protected function cancelOrderIfFullyCancelled(?Order $order, bool $deletedByAdmin = false): bool
     {
         if (! $order) {
             return false;
@@ -524,6 +533,15 @@ class CancelBookingAction
             ->exists();
 
         if ($hasOpenLessons || $order->isClosed()) {
+            return false;
+        }
+
+        if ($deletedByAdmin && $order->lessons()->where('status', LessonStatus::COMPLETED)->exists()) {
+            if ($order->isActive()) {
+                $order->status = OrderStatus::COMPLETED;
+                $order->save();
+            }
+
             return false;
         }
 
@@ -574,8 +592,9 @@ class CancelBookingAction
     }
 
     /**
-     * Always email the student. Email Head Office only when paid lessons were
-     * cancelled, so they can review them by hand.
+     * Email the student, unless an admin deleted a past lesson that never took
+     * place (Head Office contacts the pupil instead). Email Head Office only
+     * when paid lessons were cancelled, so they can review them by hand.
      *
      * @param  Collection<int, Lesson>  $cancelSet
      * @param  Collection<int, Lesson>  $refundLessons  Paid lessons for Head Office to review.
@@ -591,6 +610,7 @@ class CancelBookingAction
         bool $orderCancelled,
         ?User $actor,
         bool $guaranteeRemoved = false,
+        bool $deletedByAdmin = false,
     ): void {
         $student = $order?->student;
         $instructor = $order?->instructor;
@@ -598,16 +618,18 @@ class CancelBookingAction
         $reason = $reasonCode->describe($details);
 
         if ($student?->user) {
-            $student->user->notify(new BookingCancelledNotification(
-                $student,
-                $instructor,
-                $cancelSet,
-                $reason,
-                $refundRequired,
-            ));
+            if (! $deletedByAdmin) {
+                $student->user->notify(new BookingCancelledNotification(
+                    $student,
+                    $instructor,
+                    $cancelSet,
+                    $reason,
+                    $refundRequired,
+                ));
+            }
 
             $student->logActivity(
-                "Cancelled {$cancelSet->count()} lesson(s) in booking #{$order?->id}: {$reason}",
+                ($deletedByAdmin ? 'Admin deleted' : 'Cancelled')." {$cancelSet->count()} lesson(s) in booking #{$order?->id}: {$reason}",
                 'notification',
                 [
                     'order_id' => $order?->id,
@@ -617,8 +639,9 @@ class CancelBookingAction
                     'head_office_review_lesson_ids' => $refundLessons->pluck('id')->all(),
                     'order_cancelled' => $orderCancelled,
                     'cancelled_by_user_id' => $actor?->id,
+                    'deleted_by_admin' => $deletedByAdmin,
                 ],
-                "Cancelled {$cancelSet->count()} lesson(s): {$reason}",
+                ($deletedByAdmin ? 'Admin deleted' : 'Cancelled')." {$cancelSet->count()} lesson(s): {$reason}",
             );
         }
 
@@ -634,6 +657,7 @@ class CancelBookingAction
                     $hoursNotice,
                     $actor?->name ?? 'System',
                     $guaranteeRemoved,
+                    $deletedByAdmin,
                 ));
         }
     }
