@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/table'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { Search, Plus, Download, FileUp, Check, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-vue-next'
+import { Search, Plus, Download, FileUp, X, ArrowUpDown, ArrowUp, ArrowDown, Mail, UserCheck, CreditCard, CalendarCheck } from 'lucide-vue-next'
 import type { Instructor, InstructorFormOptions, LowAvailabilitySettings } from '@/types/instructor'
 import AddInstructorSheet from '@/components/Instructors/AddInstructorSheet.vue'
 import CsvImportSheet from '@/components/CsvImportSheet.vue'
@@ -191,10 +191,32 @@ const getInitials = (name: string) => {
 }
 
 const setupSteps = (instructor: Instructor) => [
-    { key: 'onboarding_email', label: instructor.onboarding_email_sent ? 'Sent' : 'Not sent', done: instructor.onboarding_email_sent },
-    { key: 'signed_up', label: instructor.signed_up ? 'Signed up' : 'Not signed up', done: instructor.signed_up },
-    { key: 'stripe', label: instructor.stripe_connected ? 'Connected' : 'Not connected', done: instructor.stripe_connected },
-    { key: 'availability', label: instructor.availability_added ? 'Added' : 'Not added', done: instructor.availability_added },
+    {
+        key: 'onboarding_email',
+        icon: Mail,
+        done: instructor.onboarding_email_sent,
+        title: `Onboarding email: ${instructor.onboarding_email_sent ? 'Sent' : 'Not sent'}`,
+    },
+    {
+        key: 'signed_up',
+        icon: UserCheck,
+        done: instructor.signed_up,
+        title: instructor.signed_up
+            ? 'Signed up'
+            : ['Not signed up', notSignedUpTitle(instructor)].filter(Boolean).join(' — '),
+    },
+    {
+        key: 'stripe',
+        icon: CreditCard,
+        done: instructor.stripe_connected,
+        title: `Stripe: ${instructor.stripe_connected ? 'Connected' : 'Not connected'}`,
+    },
+    {
+        key: 'availability',
+        icon: CalendarCheck,
+        done: instructor.availability_added,
+        title: `Availability: ${instructor.availability_added ? 'Added' : 'Not added'}`,
+    },
 ]
 
 /** Hover text on the "Not signed up" badge: when the onboarding email last went out. */
@@ -329,14 +351,11 @@ const breadcrumbs = [{ title: 'Instructors' }]
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Name</TableHead>
-                                <TableHead>Onboarding email</TableHead>
-                                <TableHead>Signed up</TableHead>
-                                <TableHead>Stripe</TableHead>
-                                <TableHead>Availability</TableHead>
+                                <TableHead title="Onboarding email · Signed up · Stripe · Availability">Setup</TableHead>
                                 <TableHead>
                                     <button
                                         type="button"
-                                        class="inline-flex items-center gap-1 hover:text-foreground"
+                                        class="inline-flex items-center gap-1 whitespace-nowrap hover:text-foreground"
                                         :title="`Diary slots added (open or booked) over the next ${props.lowAvailability.weeks} weeks`"
                                         @click="toggleSlotsSort"
                                     >
@@ -346,8 +365,8 @@ const breadcrumbs = [{ title: 'Instructors' }]
                                         <ArrowUpDown v-else class="h-3 w-3" />
                                     </button>
                                 </TableHead>
-                                <TableHead>Pupils</TableHead>
-                                <TableHead>Last Sync</TableHead>
+                                <TableHead class="text-right">Pupils</TableHead>
+                                <TableHead class="whitespace-nowrap">Last updated</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -381,39 +400,45 @@ const breadcrumbs = [{ title: 'Instructors' }]
                                         </div>
                                     </div>
                                 </TableCell>
-                                <TableCell v-for="step in setupSteps(instructor)" :key="step.key">
-                                    <Badge
-                                        :variant="step.done ? 'secondary' : 'destructive'"
-                                        :title="step.key === 'signed_up' && !step.done ? notSignedUpTitle(instructor) : undefined"
-                                    >
-                                        <Check v-if="step.done" class="mr-1 h-3 w-3" />
-                                        <X v-else class="mr-1 h-3 w-3" />
-                                        {{ step.label }}
-                                    </Badge>
+                                <TableCell>
+                                    <div class="flex items-center gap-1.5">
+                                        <span
+                                            v-for="step in setupSteps(instructor)"
+                                            :key="step.key"
+                                            :title="step.title"
+                                            :aria-label="step.title"
+                                            class="inline-flex h-7 w-7 items-center justify-center rounded-md"
+                                            :class="step.done
+                                                ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400'
+                                                : 'bg-destructive/15 text-destructive'"
+                                        >
+                                            <component :is="step.icon" class="h-3.5 w-3.5" />
+                                        </span>
+                                    </div>
                                 </TableCell>
                                 <TableCell>
-                                    <div class="flex items-center gap-2" :title="slotsTitle(instructor)">
+                                    <div class="flex items-center gap-2 whitespace-nowrap" :title="slotsTitle(instructor)">
                                         <span class="font-medium tabular-nums">
                                             {{ instructor.total_available_slots }}
                                         </span>
                                         <Badge v-if="instructor.low_availability" variant="destructive">
-                                            Low availability
+                                            Low
                                         </Badge>
                                     </div>
                                 </TableCell>
-                                <TableCell>
-                                    <span class="font-medium">
+                                <TableCell class="text-right">
+                                    <span class="font-medium tabular-nums">
                                         {{ instructor.pupils_count }}
                                     </span>
                                 </TableCell>
-                                <TableCell>
-                                    <span class="text-muted-foreground">
+                                <TableCell class="whitespace-nowrap">
+                                    <span class="text-sm text-muted-foreground">
                                         {{ instructor.last_sync }}
                                     </span>
                                 </TableCell>
                             </TableRow>
                             <TableRow v-if="filteredInstructors.length === 0">
-                                <TableCell colspan="8" class="text-center">
+                                <TableCell colspan="5" class="text-center">
                                     <div class="py-8 text-muted-foreground">
                                         No instructors found
                                     </div>
