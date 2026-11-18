@@ -15,9 +15,11 @@ class RegenerateCalendarFeedTokenAction
      */
     public function __invoke(Instructor $instructor): string
     {
+        $hadToken = filled($instructor->calendar_feed_token);
+
         $instructor->forceFill(['calendar_feed_token' => Str::random(40)])->save();
 
-        $instructor->logActivity('Calendar feed link reset', 'instructor');
+        $instructor->logActivity($hadToken ? 'Calendar feed link reset' : 'Calendar feed link created', 'instructor');
 
         return $instructor->calendar_feed_token;
     }

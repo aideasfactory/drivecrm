@@ -31,7 +31,7 @@ class RestrictInstructor
         $path = $request->path();
 
         // Allow access to the instructor's own routes
-        if (str_starts_with($path, "instructors/{$instructor->id}")) {
+        if ($path === "instructors/{$instructor->id}" || str_starts_with($path, "instructors/{$instructor->id}/")) {
             return $next($request);
         }
 

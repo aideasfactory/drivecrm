@@ -293,7 +293,9 @@ class InstructorController extends Controller
                     'staff_requested' => $pendingDeletion->isStaffRequested(),
                 ] : null,
                 'upcoming_lessons_count' => $this->instructorService->countUpcomingLessons($instructor),
-                'calendar_feed' => $this->calendarService->calendarFeedLinks($instructor),
+                'calendar_feed' => auth()->id() === $instructor->user_id
+                    ? $this->calendarService->calendarFeedLinks($instructor)
+                    : $this->calendarService->existingCalendarFeedLinks($instructor),
             ],
             'tab' => $tab,
             'subtab' => request()->query('subtab', 'summary'),

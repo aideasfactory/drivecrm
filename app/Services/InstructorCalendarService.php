@@ -98,7 +98,21 @@ class InstructorCalendarService extends BaseService
     }
 
     /**
+     * Links to the instructor's calendar feed if one has been created, without
+     * creating it.
+     *
+     * @return array{url: string, webcal_url: string, google_url: string}|null
+     */
+    public function existingCalendarFeedLinks(Instructor $instructor): ?array
+    {
+        return filled($instructor->calendar_feed_token)
+            ? $this->feedLinksFor($instructor->calendar_feed_token)
+            : null;
+    }
+
+    /**
      * Replace the feed token, revoking the old URL, and return the new links.
+     * Creates the first token when there is none yet.
      *
      * @return array{url: string, webcal_url: string, google_url: string}
      */

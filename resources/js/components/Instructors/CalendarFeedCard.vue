@@ -19,16 +19,20 @@ import type { CalendarFeedLinks } from '@/types/instructor'
 
 interface Props {
     instructorId: number
-    feed: CalendarFeedLinks
+    feed: CalendarFeedLinks | null
 }
 
 const props = defineProps<Props>()
 
-const links = ref<CalendarFeedLinks>(props.feed)
+const links = ref<CalendarFeedLinks | null>(props.feed)
 const isResetDialogOpen = ref(false)
 const isResetting = ref(false)
 
 const copyLink = async () => {
+    if (!links.value) {
+        return
+    }
+
     try {
         await navigator.clipboard.writeText(links.value.url)
         toast({ title: 'Calendar link copied to clipboard' })
@@ -68,7 +72,7 @@ const resetLink = async () => {
                     refresh the link every few hours. Keep it private: anyone with the link can see pupil names.
                 </CardDescription>
             </CardHeader>
-            <CardContent class="flex flex-col gap-4">
+            <CardContent v-if="links" class="flex flex-col gap-4">
                 <div class="flex gap-2">
                     <Input :model-value="links.url" readonly aria-label="Calendar feed link" @focus="($event.target as HTMLInputElement).select()" />
                     <Button variant="outline" @click="copyLink">
@@ -90,6 +94,13 @@ const resetLink = async () => {
                         Reset link
                     </Button>
                 </div>
+            </CardContent>
+            <CardContent v-else>
+                <Button variant="outline" :disabled="isResetting" @click="resetLink">
+                    <Loader2 v-if="isResetting" class="mr-2 h-4 w-4 animate-spin" />
+                    <CalendarPlus v-else class="mr-2 h-4 w-4" />
+                    Create calendar link
+                </Button>
             </CardContent>
         </Card>
 

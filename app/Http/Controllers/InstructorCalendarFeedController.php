@@ -34,13 +34,17 @@ class InstructorCalendarFeedController extends Controller
     }
 
     /**
-     * Replace the instructor's feed link. Calendars subscribed to the old link
-     * stop updating.
+     * Replace the instructor's feed link, or create the first one. Calendars
+     * subscribed to the old link stop updating.
      */
     public function reset(Instructor $instructor): JsonResponse
     {
+        $message = filled($instructor->calendar_feed_token)
+            ? 'Calendar link reset. Re-add it to your calendar app.'
+            : 'Calendar link created.';
+
         return response()->json([
-            'message' => 'Calendar link reset. Re-add it to your calendar app.',
+            'message' => $message,
             'calendar_feed' => $this->calendarService->resetCalendarFeed($instructor),
         ]);
     }

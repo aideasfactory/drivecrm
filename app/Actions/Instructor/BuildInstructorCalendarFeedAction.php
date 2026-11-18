@@ -102,13 +102,7 @@ class BuildInstructorCalendarFeedAction
             return null;
         }
 
-        $date = $calendar->date->format('Y-m-d');
-        $start = CarbonImmutable::parse("{$date} {$item->start_time}", self::TIMEZONE);
-        $end = CarbonImmutable::parse("{$date} {$item->end_time}", self::TIMEZONE);
-
-        if ($end->lessThanOrEqualTo($start)) {
-            $end = $end->addDay();
-        }
+        [$start, $end] = $this->times($calendar, $item, $isTest ? $lesson : null);
 
         /** @var Student|null $student */
         $student = $lesson?->order?->student ?? $item->student;
@@ -119,7 +113,7 @@ class BuildInstructorCalendarFeedAction
             ? trim(implode(', ', array_filter([$pickupPoint->address, $pickupPoint->postcode])))
             : '';
 
-        $uid = $lesson ? "lesson-{$lesson->id}" : "calendar-item-{$item->id}";
+        $uid = $lesson && ! $isTest ? "lesson-{$lesson->id}" : "calendar-item-{$item->id}";
         $lastModified = collect([$item->updated_at, $lesson?->updated_at])->filter()->max();
 
         $lines = [
@@ -144,6 +138,51 @@ class BuildInstructorCalendarFeedAction
         $lines[] = 'END:VEVENT';
 
         return $lines;
+    }
+
+    /**
+     * Start and end of the event. A practical-test diary item spans the prep
+     * and buffer around the test; a paid test's lesson holds the appointment
+     * itself, so it is used when it falls inside the item. Unpaid tests have
+     * no appointment time of their own (imported ones carry no padding), so
+     * they show the whole item.
+     *
+     * @return array{0: CarbonImmutable, 1: CarbonImmutable}
+     */
+    private function times(Calendar $calendar, CalendarItem $item, ?Lesson $testLesson): array
+    {
+        $date = $calendar->date->format('Y-m-d');
+        [$start, $end] = $this->range($date, (string) $item->start_time, (string) $item->end_time);
+
+        if ($testLesson?->start_time !== null && $testLesson->end_time !== null
+            && $testLesson->date?->format('Y-m-d') === $date) {
+            [$testStart, $testEnd] = $this->range(
+                $date,
+                $testLesson->start_time->format('H:i:s'),
+                $testLesson->end_time->format('H:i:s'),
+            );
+
+            if ($testStart->greaterThanOrEqualTo($start) && $testEnd->lessThanOrEqualTo($end)) {
+                return [$testStart, $testEnd];
+            }
+        }
+
+        return [$start, $end];
+    }
+
+    /**
+     * @return array{0: CarbonImmutable, 1: CarbonImmutable}
+     */
+    private function range(string $date, string $startTime, string $endTime): array
+    {
+        $start = CarbonImmutable::parse("{$date} {$startTime}", self::TIMEZONE);
+        $end = CarbonImmutable::parse("{$date} {$endTime}", self::TIMEZONE);
+
+        if ($end->lessThanOrEqualTo($start)) {
+            $end = $end->addDay();
+        }
+
+        return [$start, $end];
     }
 
     /**

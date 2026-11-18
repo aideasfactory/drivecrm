@@ -110,7 +110,7 @@ function formatDateRange(start: string, end: string): string {
         </Card>
 
         <CalendarFeedCard
-            v-if="instructor.calendar_feed"
+            v-if="instructor.calendar_feed !== undefined"
             :instructor-id="instructor.id"
             :feed="instructor.calendar_feed"
         />
