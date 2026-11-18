@@ -24,7 +24,8 @@ use Illuminate\Support\Collection;
  * Lessons paid by the alternative method (the pupil paid the instructor
  * directly, e.g. a pay-in-full booking the instructor confirmed) are listed
  * apart: Drive never took that money, so there is nothing to refund in Stripe
- * and any refund is owed by the instructor.
+ * and any refund is owed by the instructor. Signed-off cash lessons deleted by
+ * an admin are listed the same way.
  */
 class CancelledPaidLessonsReviewNotification extends Notification implements ShouldQueue
 {
@@ -64,8 +65,10 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
         $details = trim((string) $this->details);
 
         [$alternativeLessons, $cardLessons] = $this->paidLessons
-            ->partition(fn (Lesson $lesson): bool => $lesson->lessonPayment?->isPaidByAlternativeMethod() === true);
+            ->partition(fn (Lesson $lesson): bool => $lesson->lessonPayment?->isPaidByAlternativeMethod() === true
+                || ($lesson->order ?? $this->order)?->isCash() === true);
         $alternativeOnly = $cardLessons->isEmpty();
+        $paidOutLessons = $this->paidLessons->filter(fn (Lesson $lesson): bool => $lesson->payout !== null);
 
         $message = (new MailMessage)
             ->subject($alternativeOnly
@@ -74,7 +77,8 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
             ->greeting('Cancelled paid lessons to review')
             ->line($alternativeOnly
                 ? 'A booking has been cancelled and one or more lessons the pupil **paid the instructor for directly** (alternative payment method) need a decision. Drive did not take this money, so there is nothing to refund in Stripe.'
-                : 'A booking has been cancelled and one or more **paid** lessons need a decision. Nothing has been refunded to the pupil and the instructor has not been paid for these lessons.')
+                : 'A booking has been cancelled and one or more **paid** lessons need a decision. Nothing has been refunded to the pupil'
+                    .($paidOutLessons->isEmpty() ? ' and the instructor has not been paid for these lessons.' : '.'))
             ->line('')
             ->line("**Student:** {$studentName}")
             ->line("**Instructor:** {$instructorName}")
@@ -92,6 +96,10 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
 
         if ($alternativeLessons->isNotEmpty()) {
             $this->addAlternativeLessons($message, $alternativeLessons);
+        }
+
+        if ($paidOutLessons->isNotEmpty()) {
+            $this->addPaidOutLessons($message, $paidOutLessons);
         }
 
         if ($this->guaranteeRemoved) {
@@ -163,7 +171,7 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
     protected function addAlternativeLessons(MailMessage $message, Collection $lessons): void
     {
         $message->line('')
-            ->line('**Lessons paid to the instructor directly (alternative payment method) cancelled:**');
+            ->line('**Lessons paid to the instructor directly (cash or alternative payment method) cancelled:**');
 
         $totalPence = 0;
         foreach ($lessons as $lesson) {
@@ -179,6 +187,27 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
         $message->line('')
             ->line('**Total paid to the instructor for cancelled lessons:** '.$this->formatPence($totalPence).' (no booking or digital fees)')
             ->line('**Amount the instructor returns if the pupil is refunded:** '.$this->formatPence($totalPence));
+    }
+
+    /**
+     * List lessons signed off (and the instructor paid) before an admin
+     * deleted them. The payout is kept: it is never reversed automatically.
+     *
+     * @param  Collection<int, Lesson>  $lessons
+     */
+    protected function addPaidOutLessons(MailMessage $message, Collection $lessons): void
+    {
+        $message->line('')
+            ->line('**Instructor already paid for these lessons (signed off before they were deleted):**');
+
+        foreach ($lessons as $lesson) {
+            $payout = $lesson->payout;
+
+            $message->line('• '.$this->formatLessonTime($lesson).' — payout '.$payout->formatted_amount
+                .' ('.$payout->status?->value.($payout->stripe_transfer_id ? ", Stripe transfer {$payout->stripe_transfer_id}" : '').')');
+        }
+
+        $message->line('This payout has **not** been reversed in Stripe. If the pupil is refunded, recover it from the instructor by hand.');
     }
 
     /**

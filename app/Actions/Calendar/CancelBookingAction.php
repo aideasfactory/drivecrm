@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Calendar;
 
+use App\Actions\Instructor\DeleteCalendarItemAction;
 use App\Actions\Shared\Note\CreateNoteAction;
 use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
 use App\Actions\Student\RevokeTestPassGuaranteeAction;
@@ -38,6 +39,7 @@ class CancelBookingAction
         protected RecalculateStudentLessonNumbersAction $recalculateStudentLessonNumbers,
         protected RevokeTestPassGuaranteeAction $revokeTestPassGuarantee,
         protected StripeService $stripeService,
+        protected DeleteCalendarItemAction $deleteCalendarItem,
     ) {}
 
     /**
@@ -147,9 +149,67 @@ class CancelBookingAction
     }
 
     /**
+     * Admin only: delete a lesson that was signed off, or whose time has
+     * passed, because it never took place. It is cancelled like any other
+     * lesson (kept for history, Head Office emailed when it was paid), but its
+     * past diary slot is removed rather than reopened as free time.
+     *
+     * Nothing is refunded or reversed. A payout already sent to the instructor
+     * on sign-off is kept and flagged in the instructor note and the Head
+     * Office email, so staff can recover it by hand if the pupil is refunded.
+     *
+     * @return array{cancelled_count: int, refund_required_count: int, payout_count: int} `payout_count` is the number of payouts already made that were kept.
+     */
+    public function deleteSignedOffLesson(
+        Lesson $lesson,
+        LessonCancellationReason $reasonCode,
+        ?string $details,
+        User $actor,
+    ): array {
+        $lesson->loadMissing(['calendarItem.calendar', 'order.student.user', 'order.instructor', 'lessonPayment', 'payout']);
+
+        if ($lesson->status === LessonStatus::CANCELLED) {
+            throw new RuntimeException('This lesson is already cancelled.');
+        }
+
+        if ($lesson->isBanked()) {
+            throw new RuntimeException('This lesson is waiting to be rebooked. Cancel it from the rebook sheet instead.');
+        }
+
+        if ($lesson->status !== LessonStatus::COMPLETED && ! $lesson->hasStarted()) {
+            throw new RuntimeException("This lesson hasn't happened yet. Cancel it from the diary instead.");
+        }
+
+        $cancelSet = new Collection([$lesson]);
+
+        $voidedPayments = $this->stopOpenInvoices($cancelSet);
+
+        try {
+            $result = $this->cancelLessons($cancelSet, $lesson->order, $lesson->order?->instructor, $reasonCode, $details, $actor, false, true);
+        } catch (Throwable $e) {
+            $this->forgetVoidedInvoices($voidedPayments);
+
+            throw $e;
+        }
+
+        if ($lesson->payout) {
+            Log::warning('Admin deleted a lesson whose instructor payout was already made — payout kept, not reversed', [
+                'lesson_id' => $lesson->id,
+                'payout_id' => $lesson->payout->id,
+                'payout_status' => $lesson->payout->status?->value,
+                'stripe_transfer_id' => $lesson->payout->stripe_transfer_id,
+                'deleted_by_user_id' => $actor->id,
+            ]);
+        }
+
+        return [...$result, 'payout_count' => $lesson->payout ? 1 : 0];
+    }
+
+    /**
      * Cancel the lessons once nothing can be paid for them any more.
      *
      * @param  Collection<int, Lesson>  $cancelSet
+     * @param  bool  $removeSlots  Delete the diary slots instead of reopening them (past lessons removed by an admin).
      * @return array{cancelled_count: int, refund_required_count: int, payout_count: int}
      */
     protected function cancelLessons(
@@ -160,6 +220,7 @@ class CancelBookingAction
         ?string $details,
         ?User $actor,
         bool $isUnpaidBooking,
+        bool $removeSlots = false,
     ): array {
         /** @var Collection<int, LessonCancellationOutcome> $outcomes */
         $outcomes = $cancelSet->mapWithKeys(fn (Lesson $lesson): array => [
@@ -176,7 +237,7 @@ class CancelBookingAction
 
         $affectedDates = collect();
 
-        DB::transaction(function () use ($cancelSet, $reasonCode, $details, $affectedDates, $isUnpaidBooking, $order): void {
+        DB::transaction(function () use ($cancelSet, $reasonCode, $details, $affectedDates, $isUnpaidBooking, $order, $removeSlots): void {
             if ($isUnpaidBooking) {
                 $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->first();
 
@@ -204,9 +265,13 @@ class CancelBookingAction
                 if ($calendarItem) {
                     $affectedDates->push($calendarItem->calendar?->date?->format('Y-m-d'));
 
-                    // A provisional lesson's own slot sits on top of whatever it
-                    // clashed with, so it is removed rather than offered as free time.
-                    if ($wasProvisional && $calendarItem->created_by_hold === true) {
+                    if ($removeSlots) {
+                        if (! $calendarItem->lessons()->exists()) {
+                            ($this->deleteCalendarItem)($calendarItem);
+                        }
+                    } elseif ($wasProvisional && $calendarItem->created_by_hold === true) {
+                        // A provisional lesson's own slot sits on top of whatever it
+                        // clashed with, so it is removed rather than offered as free time.
                         $calendarItem->travelItem?->delete();
                         $calendarItem->delete();
                     } else {
@@ -277,9 +342,14 @@ class CancelBookingAction
                 ? ' '.$lesson->start_time->format('H:i').'–'.$lesson->end_time->format('H:i')
                 : '';
 
+            $signedOff = $lesson->completed_at ? ' Lesson had been signed off.' : '';
+            $payout = $lesson->payout
+                ? " Instructor payout {$lesson->payout->formatted_amount} ({$lesson->payout->status?->value}".($lesson->payout->stripe_transfer_id ? ", Stripe transfer {$lesson->payout->stripe_transfer_id}" : '').') was already made and has NOT been reversed.'
+                : '';
+
             ($this->createNote)(
                 $instructor,
-                "{$outcomes[$lesson->id]->noteLabel()} — {$studentName}, {$date}{$time} (booking #{$order?->id}). Reason: {$reason}",
+                "{$outcomes[$lesson->id]->noteLabel()} — {$studentName}, {$date}{$time} (booking #{$order?->id}). Reason: {$reason}{$signedOff}{$payout}",
             );
         }
     }

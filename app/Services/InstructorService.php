@@ -587,6 +587,17 @@ class InstructorService extends BaseService
     }
 
     /**
+     * Admin only: delete a signed-off or past lesson that never took place.
+     * Nothing is refunded and a payout already made is kept and flagged.
+     *
+     * @return array{cancelled_count: int, refund_required_count: int, payout_count: int}
+     */
+    public function deleteSignedOffLesson(Lesson $lesson, LessonCancellationReason $reasonCode, ?string $details, User $actor): array
+    {
+        return $this->cancelBooking->deleteSignedOffLesson($lesson, $reasonCode, $details, $actor);
+    }
+
+    /**
      * The instructor's lessons waiting to be rebooked, oldest first.
      *
      * @return EloquentCollection<int, Lesson>
