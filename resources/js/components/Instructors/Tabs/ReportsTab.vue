@@ -48,9 +48,7 @@ const filteredPayouts = computed(() => {
     return payouts.value.filter((p) => p.status === activeFilter.value)
 })
 
-const needsPayment = (payout: InstructorPayout): boolean => payout.status === 'failed' && !payout.lesson_cancelled
-
-const failedPayouts = computed(() => payouts.value.filter(needsPayment))
+const failedPayouts = computed(() => payouts.value.filter((p) => p.status === 'failed'))
 
 const summaryCards = computed(() => {
     const filtered = filteredPayouts.value
@@ -340,7 +338,7 @@ onMounted(() => {
                         <TableRow
                             v-for="payout in filteredPayouts"
                             :key="payout.id"
-                            :class="isOwner && needsPayment(payout) ? 'bg-amber-50' : ''"
+                            :class="isOwner && payout.status === 'failed' ? 'bg-amber-50' : ''"
                         >
                             <TableCell class="font-medium">
                                 {{ payout.student_name || '—' }}
@@ -361,15 +359,12 @@ onMounted(() => {
                                 <div class="flex flex-col items-start gap-1">
                                     <Badge :variant="statusBadgeVariant(payout.status)" class="gap-1">
                                         <component :is="statusIcon(payout.status)" class="h-3 w-3" />
-                                        {{ isOwner && needsPayment(payout) ? 'Needs payment' : payout.status.charAt(0).toUpperCase() + payout.status.slice(1) }}
+                                        {{ isOwner && payout.status === 'failed' ? 'Needs payment' : payout.status.charAt(0).toUpperCase() + payout.status.slice(1) }}
                                     </Badge>
                                     <p v-if="isOwner && payout.paid_manually" class="text-xs text-muted-foreground">
                                         Paid manually<template v-if="payout.manual_payment_reference"> · Ref: {{ payout.manual_payment_reference }}</template>
                                     </p>
-                                    <p v-if="isOwner && payout.lesson_cancelled" class="max-w-xs text-xs text-muted-foreground">
-                                        Lesson deleted — {{ payout.status === 'paid' ? 'payout kept, not reversed' : 'do not pay' }}
-                                    </p>
-                                    <p v-else-if="isOwner && payout.status === 'failed'" class="max-w-xs text-xs text-amber-800">
+                                    <p v-if="isOwner && payout.status === 'failed'" class="max-w-xs text-xs text-amber-800">
                                         {{ payout.failure_message || 'Check the Stripe balance or pay the instructor manually.' }}
                                     </p>
                                 </div>

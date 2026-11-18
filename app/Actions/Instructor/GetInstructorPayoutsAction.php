@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Actions\Instructor;
 
-use App\Enums\LessonStatus;
 use App\Models\Instructor;
 use App\Models\Payout;
 use Illuminate\Support\Collection;
@@ -51,7 +50,6 @@ class GetInstructorPayoutsAction
                     'lesson_date' => $lesson?->date?->format('Y-m-d'),
                     'lesson_start_time' => $lesson?->start_time?->format('H:i'),
                     'lesson_end_time' => $lesson?->end_time?->format('H:i'),
-                    'lesson_cancelled' => $lesson?->status === LessonStatus::CANCELLED,
                 ];
             });
     }

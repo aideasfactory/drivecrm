@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Actions\Student\Payment;
 
-use App\Enums\LessonStatus;
 use App\Enums\PaymentMode;
 use App\Enums\PaymentStatus;
 use App\Models\LessonPayment;
@@ -25,7 +24,7 @@ class GetStudentPaymentsAction
             $query->whereIn('order_id', $orderIds);
         })
             ->with([
-                'lesson:id,order_id,date,start_time,end_time,status',
+                'lesson:id,order_id,date,start_time,end_time',
                 'lesson.order:id,package_name,payment_mode',
                 'lesson.payout:id,lesson_id,instructor_id,status,failure_code,failure_message,stripe_transfer_id,manual_payment_reference,paid_at',
             ])
@@ -57,7 +56,6 @@ class GetStudentPaymentsAction
                     'payout_manual_payment_reference' => $payout?->manual_payment_reference,
                     'payout_failure_message' => $payout?->isFailed() ? $payout->failure_message : null,
                     'failure_code' => $payout?->failure_code,
-                    'lesson_cancelled' => $lesson?->status === LessonStatus::CANCELLED,
                 ];
             });
     }

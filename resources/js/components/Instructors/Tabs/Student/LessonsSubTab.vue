@@ -216,6 +216,16 @@ const canDeleteAsAdmin = (lesson: Lesson): boolean =>
     !lesson.is_banked &&
     (lesson.status === 'completed' || (lesson.status === 'pending' && lesson.has_started))
 
+// Mirrors CancelBookingAction::hasStripeMoney(): a payout in any state, or a card payment taken.
+const hasStripeMoney = (lesson: Lesson): boolean =>
+    lesson.has_payout ||
+    (lesson.payment_mode !== 'cash' &&
+        lesson.payment_mode !== 'imported' &&
+        !lesson.paid_by_alternative_method &&
+        (lesson.payment_status === 'paid' || lesson.payment_status === 'refunded'))
+
+const deleteLessonBlocked = computed(() => (deleteLessonTarget.value ? hasStripeMoney(deleteLessonTarget.value) : false))
+
 // Purchase lessons URL
 const canPurchaseLessons = computed(() => {
     return !!(props.studentFirstName && props.studentLastName && props.studentEmail && props.instructorId)
@@ -1377,7 +1387,23 @@ onMounted(async () => {
                     </DialogDescription>
                 </DialogHeader>
 
-                <Alert variant="destructive">
+                <Alert v-if="deleteLessonBlocked" variant="destructive">
+                    <TriangleAlert class="h-4 w-4" />
+                    <AlertTitle>This lesson can't be deleted</AlertTitle>
+                    <AlertDescription>
+                        <ul class="mt-1 list-disc space-y-1 pl-4">
+                            <li v-if="deleteLessonTarget.has_payout">
+                                An instructor payout is attached to it ({{ deleteLessonTarget.payout_status }}).
+                            </li>
+                            <li v-if="deleteLessonTarget.payment_status === 'paid' || deleteLessonTarget.payment_status === 'refunded'">
+                                The pupil paid for it by card through Stripe{{ deleteLessonTarget.payment_status === 'refunded' ? ' (since refunded)' : '' }}.
+                            </li>
+                            <li>Refund the pupil or reverse the instructor transfer in Stripe first.</li>
+                        </ul>
+                    </AlertDescription>
+                </Alert>
+
+                <Alert v-else variant="destructive">
                     <TriangleAlert class="h-4 w-4" />
                     <AlertTitle>
                         {{ deleteLessonTarget.status === 'completed' ? 'This lesson has been signed off' : 'This lesson is in the past' }}
@@ -1385,16 +1411,9 @@ onMounted(async () => {
                     <AlertDescription>
                         <ul class="mt-1 list-disc space-y-1 pl-4">
                             <li>Only delete it if it never took place. It is marked cancelled and removed from the diary.</li>
-                            <li v-if="deleteLessonTarget.payout_status === 'paid'">
-                                The instructor has already been paid for it. That payout is <strong>not</strong> reversed —
-                                Head Office must recover it by hand if the pupil is refunded.
-                            </li>
-                            <li v-else-if="deleteLessonTarget.has_payout">
-                                The instructor payout never went through. It is left unpaid and can no longer be marked as paid.
-                            </li>
                             <li v-if="deleteLessonTarget.payment_status === 'paid'">
-                                It was paid for, so Head Office is emailed to decide on a refund. Nothing is refunded
-                                automatically.
+                                It was paid to the instructor directly, so Head Office is emailed to review it. Nothing is
+                                refunded automatically.
                             </li>
                             <li v-else-if="deleteLessonTarget.payment_status === 'due'">
                                 It hasn't been paid for: any open invoice is cancelled.
@@ -1404,7 +1423,7 @@ onMounted(async () => {
                     </AlertDescription>
                 </Alert>
 
-                <div class="space-y-2">
+                <div v-if="!deleteLessonBlocked" class="space-y-2">
                     <Label for="delete-lesson-reason">Reason *</Label>
                     <select
                         id="delete-lesson-reason"
@@ -1419,7 +1438,7 @@ onMounted(async () => {
                     </select>
                 </div>
 
-                <div class="space-y-2">
+                <div v-if="!deleteLessonBlocked" class="space-y-2">
                     <Label for="delete-lesson-details">
                         Details
                         <span v-if="selectedDeleteLessonReason?.details_required" class="text-destructive">*</span>
@@ -1440,7 +1459,7 @@ onMounted(async () => {
                     </Button>
                     <Button
                         variant="destructive"
-                        :disabled="isDeletingLesson || !deleteLessonIsComplete"
+                        :disabled="isDeletingLesson || deleteLessonBlocked || !deleteLessonIsComplete"
                         @click="handleDeleteLesson"
                     >
                         <Loader2 v-if="isDeletingLesson" class="mr-2 h-4 w-4 animate-spin" />

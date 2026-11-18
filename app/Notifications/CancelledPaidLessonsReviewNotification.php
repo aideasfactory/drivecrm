@@ -70,8 +70,6 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
             ->partition(fn (Lesson $lesson): bool => $lesson->lessonPayment?->isPaidByAlternativeMethod() === true
                 || ($lesson->order ?? $this->order)?->isCash() === true);
         $alternativeOnly = $cardLessons->isEmpty();
-        $payoutLessons = $this->paidLessons->filter(fn (Lesson $lesson): bool => $lesson->payout !== null);
-        $paidOutLessons = $payoutLessons->filter(fn (Lesson $lesson): bool => $lesson->payout->isCompleted());
 
         $message = (new MailMessage)
             ->subject($alternativeOnly
@@ -86,8 +84,7 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
         $message
             ->line($alternativeOnly
                 ? ($this->deletedByAdmin ? 'The pupil **paid the instructor for them directly** (cash or alternative payment method) and they' : 'A booking has been cancelled and one or more lessons the pupil **paid the instructor for directly** (alternative payment method)').' need a decision. Drive did not take this money, so there is nothing to refund in Stripe.'
-                : ($this->deletedByAdmin ? 'They need a decision.' : 'A booking has been cancelled and one or more **paid** lessons need a decision.').' Nothing has been refunded to the pupil'
-                    .($paidOutLessons->isEmpty() ? ' and the instructor has not been paid for these lessons.' : '.'))
+                : 'A booking has been cancelled and one or more **paid** lessons need a decision. Nothing has been refunded to the pupil and the instructor has not been paid for these lessons.')
             ->line('')
             ->line("**Student:** {$studentName}")
             ->line("**Instructor:** {$instructorName}")
@@ -107,10 +104,6 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
             $this->addAlternativeLessons($message, $alternativeLessons);
         }
 
-        if ($payoutLessons->isNotEmpty()) {
-            $this->addPayoutLessons($message, $payoutLessons);
-        }
-
         if ($this->guaranteeRemoved) {
             $message->line('')
                 ->line("The Pass Your Test Guarantee has been removed from the pupil's account. Re-grant it if the pupil is not refunded.");
@@ -119,7 +112,7 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
         $message->line('');
 
         if ($this->deletedByAdmin) {
-            $message->line('**What to do:** contact the pupil and the instructor to confirm the lesson did not take place. The pupil is normally owed what they paid: refund card payments in Stripe, and ask the instructor to return any money paid to them directly. Late-cancellation rules do not apply.');
+            $message->line('**What to do:** contact the pupil and the instructor to confirm the lesson did not take place. The pupil is normally owed what they paid, so ask the instructor to return it to them directly. Late-cancellation rules do not apply.');
         } elseif ($cardLessons->isNotEmpty()) {
             $message->line('**What to do:** contact the pupil and the instructor to confirm what happened. If the instructor cancelled, refund the pupil in Stripe. If the pupil cancelled with less than '.BookingPayments::lateCancellationHours().' hours\' notice, decide whether to refund the pupil or pay the instructor for the lesson.');
         }
@@ -198,43 +191,6 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
         $message->line('')
             ->line('**Total paid to the instructor for cancelled lessons:** '.$this->formatPence($totalPence).' (no booking or digital fees)')
             ->line('**Amount the instructor returns if the pupil is refunded:** '.$this->formatPence($totalPence));
-    }
-
-    /**
-     * List the instructor payouts of lessons signed off before an admin
-     * deleted them. A paid payout is kept: it is never reversed automatically.
-     * A failed one was never paid and can no longer be marked paid manually.
-     *
-     * @param  Collection<int, Lesson>  $lessons
-     */
-    protected function addPayoutLessons(MailMessage $message, Collection $lessons): void
-    {
-        [$paid, $unpaid] = $lessons->partition(fn (Lesson $lesson): bool => $lesson->payout->isCompleted());
-
-        if ($paid->isNotEmpty()) {
-            $message->line('')
-                ->line('**Instructor already paid for these lessons (signed off before they were deleted):**');
-
-            foreach ($paid as $lesson) {
-                $payout = $lesson->payout;
-
-                $message->line('• '.$this->formatLessonTime($lesson).' — payout '.$payout->formatted_amount
-                    .' ('.($payout->stripe_transfer_id ? "Stripe transfer {$payout->stripe_transfer_id}" : 'paid manually').')');
-            }
-
-            $message->line('This payout has **not** been reversed in Stripe. If the pupil is refunded, recover it from the instructor by hand.');
-        }
-
-        if ($unpaid->isNotEmpty()) {
-            $message->line('')
-                ->line('**Instructor payouts that never went through (signed off before they were deleted):**');
-
-            foreach ($unpaid as $lesson) {
-                $message->line('• '.$this->formatLessonTime($lesson).' — payout '.$lesson->payout->formatted_amount.' ('.$lesson->payout->status?->value.')');
-            }
-
-            $message->line('Do **not** pay the instructor for these lessons. They can no longer be marked paid manually.');
-        }
     }
 
     /**

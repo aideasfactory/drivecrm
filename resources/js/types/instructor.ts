@@ -219,7 +219,6 @@ export interface InstructorPayout {
   lesson_date: string | null
   lesson_start_time: string | null
   lesson_end_time: string | null
-  lesson_cancelled: boolean
 }
 
 /** A reason that can be picked when cancelling a booked lesson. */

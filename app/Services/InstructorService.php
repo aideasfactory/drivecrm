@@ -587,8 +587,8 @@ class InstructorService extends BaseService
     }
 
     /**
-     * Admin only: delete a signed-off or past lesson that never took place.
-     * Nothing is refunded and a payout already made is kept and flagged.
+     * Owner only: delete a signed-off or past lesson that never took place.
+     * Refused when Stripe money (card payment or instructor payout) is tied to it.
      *
      * @return array{cancelled_count: int, refund_required_count: int, payout_count: int}
      */

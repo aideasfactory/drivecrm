@@ -10,6 +10,7 @@ use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
 use App\Actions\Student\RevokeTestPassGuaranteeAction;
 use App\Enums\LessonCancellationOutcome;
 use App\Enums\LessonCancellationReason;
+use App\Enums\LessonPaymentMethod;
 use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
@@ -33,6 +34,11 @@ use Throwable;
 
 class CancelBookingAction
 {
+    /**
+     * Shown when an admin tries to delete a lesson with Stripe money tied to it.
+     */
+    public const STRIPE_MONEY_MESSAGE = 'This lesson has a Stripe payment or instructor payout attached, so it can\'t be deleted. Refund the pupil or reverse the instructor transfer in Stripe first.';
+
     public function __construct(
         protected ReopenCancelledLessonSlotAction $reopenCancelledLessonSlot,
         protected CreateNoteAction $createNote,
@@ -155,13 +161,15 @@ class CancelBookingAction
      * past diary slot is removed rather than reopened as free time, the pupil
      * is not sent a "cancelled" email, and a booking with signed-off lessons
      * is never marked cancelled (it is completed once nothing is left open).
+     * The owner who deleted it is stored in `lessons.cancelled_by_user_id`.
      *
-     * Nothing is refunded or reversed. A payout already sent to the instructor
-     * on sign-off is kept and flagged in the instructor note and the Head
-     * Office email, so staff can recover it by hand if the pupil is refunded.
-     * A failed payout stays failed and can no longer be marked paid manually.
+     * Refused whenever Stripe money is tied to the lesson (see
+     * hasStripeMoney()): Head Office must refund the pupil or reverse the
+     * instructor transfer in Stripe first. Only lessons with no Stripe money get
+     * through: unpaid ones (an open invoice is voided, as on any cancel) and
+     * cash, alternative-method or imported ones. Nothing is refunded here.
      *
-     * @return array{cancelled_count: int, refund_required_count: int, payout_count: int} `payout_count` is the number of payouts already paid to the instructor that were kept.
+     * @return array{cancelled_count: int, refund_required_count: int, payout_count: int}
      */
     public function deleteSignedOffLesson(
         Lesson $lesson,
@@ -183,29 +191,58 @@ class CancelBookingAction
             throw new RuntimeException("This lesson hasn't happened yet. Cancel it from the diary instead.");
         }
 
+        if ($this->hasStripeMoney($lesson)) {
+            throw new RuntimeException(self::STRIPE_MONEY_MESSAGE);
+        }
+
         $cancelSet = new Collection([$lesson]);
 
         $voidedPayments = $this->stopOpenInvoices($cancelSet);
 
+        // The invoice may have been paid just before it could be voided.
+        if ($this->hasStripeMoney($lesson)) {
+            throw new RuntimeException(self::STRIPE_MONEY_MESSAGE);
+        }
+
         try {
-            $result = $this->cancelLessons($cancelSet, $lesson->order, $lesson->order?->instructor, $reasonCode, $details, $actor, false, true);
+            return $this->cancelLessons($cancelSet, $lesson->order, $lesson->order?->instructor, $reasonCode, $details, $actor, false, true);
         } catch (Throwable $e) {
             $this->forgetVoidedInvoices($voidedPayments);
 
             throw $e;
         }
+    }
 
-        if ($lesson->payout) {
-            Log::warning('Admin deleted a lesson whose instructor payout was already made — payout kept, not reversed', [
-                'lesson_id' => $lesson->id,
-                'payout_id' => $lesson->payout->id,
-                'payout_status' => $lesson->payout->status?->value,
-                'stripe_transfer_id' => $lesson->payout->stripe_transfer_id,
-                'deleted_by_user_id' => $actor->id,
-            ]);
+    /**
+     * True when Stripe money is tied to the lesson: an instructor payout in any
+     * state (pending, paid or failed), or a card payment that was taken (paid or
+     * since refunded), including an upfront card booking with no per-lesson
+     * payment row. Cash, imported and alternative-method lessons never move
+     * money through Stripe. An open, unpaid invoice is not money taken.
+     */
+    protected function hasStripeMoney(Lesson $lesson): bool
+    {
+        if ($lesson->payout !== null) {
+            return true;
         }
 
-        return [...$result, 'payout_count' => $lesson->payout?->isCompleted() ? 1 : 0];
+        $order = $lesson->order;
+
+        if ($order?->isCash() || $order?->isImported()) {
+            return false;
+        }
+
+        $payment = $lesson->lessonPayment;
+
+        if ($payment === null) {
+            return $order?->isUpfront() === true;
+        }
+
+        if ($payment->payment_method === LessonPaymentMethod::ALTERNATIVE) {
+            return false;
+        }
+
+        return $payment->isPaid() || $payment->isRefunded();
     }
 
     /**
@@ -240,7 +277,7 @@ class CancelBookingAction
 
         $affectedDates = collect();
 
-        DB::transaction(function () use ($cancelSet, $reasonCode, $details, $affectedDates, $isUnpaidBooking, $order, $deletedByAdmin): void {
+        DB::transaction(function () use ($cancelSet, $reasonCode, $details, $affectedDates, $isUnpaidBooking, $order, $deletedByAdmin, $actor): void {
             if ($isUnpaidBooking) {
                 $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->first();
 
@@ -257,6 +294,10 @@ class CancelBookingAction
                 $lesson->cancellation_reason_code = $reasonCode;
                 $lesson->cancelled_at = now();
                 $lesson->provisional_at = null;
+
+                if ($deletedByAdmin) {
+                    $lesson->cancelled_by_user_id = $actor?->id;
+                }
 
                 $calendarItem = $lesson->calendarItem;
 
@@ -346,15 +387,10 @@ class CancelBookingAction
                 : '';
 
             $signedOff = $lesson->completed_at ? ' Lesson had been signed off.' : '';
-            $payout = match (true) {
-                $lesson->payout === null => '',
-                $lesson->payout->isCompleted() => " Instructor payout {$lesson->payout->formatted_amount}".($lesson->payout->stripe_transfer_id ? " (Stripe transfer {$lesson->payout->stripe_transfer_id})" : ' (paid manually)').' was already made and has NOT been reversed.',
-                default => " Instructor payout {$lesson->payout->formatted_amount} ({$lesson->payout->status?->value}) was never paid — do not pay it.",
-            };
 
             ($this->createNote)(
                 $instructor,
-                "{$outcomes[$lesson->id]->noteLabel()} — {$studentName}, {$date}{$time} (booking #{$order?->id}). Reason: {$reason}{$signedOff}{$payout}",
+                "{$outcomes[$lesson->id]->noteLabel()} — {$studentName}, {$date}{$time} (booking #{$order?->id}). Reason: {$reason}{$signedOff}",
             );
         }
     }

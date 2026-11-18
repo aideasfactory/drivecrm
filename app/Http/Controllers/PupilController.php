@@ -727,8 +727,9 @@ class PupilController extends Controller
     }
 
     /**
-     * Admin only: delete a signed-off or past lesson that never took place.
-     * Paid ones go to Head Office to review; nothing is refunded or reversed.
+     * Owner only: delete a signed-off or past lesson that never took place.
+     * Refused when Stripe money is tied to it; a cash or alternative-method
+     * paid one goes to Head Office to review. Nothing is refunded.
      */
     public function deleteSignedOffLesson(CancelBankedLessonRequest $request, Student $student, Lesson $lesson): JsonResponse
     {
@@ -748,9 +749,6 @@ class PupilController extends Controller
         }
 
         $message = 'Lesson deleted.';
-        if ($result['payout_count'] > 0) {
-            $message .= ' The instructor payout was already made and has not been reversed.';
-        }
         if ($result['refund_required_count'] > 0) {
             $message .= ' Head Office has been emailed to review the payment.';
         }
@@ -759,7 +757,6 @@ class PupilController extends Controller
             'message' => $message,
             'cancelled_count' => $result['cancelled_count'],
             'refund_required_count' => $result['refund_required_count'],
-            'payout_count' => $result['payout_count'],
         ]);
     }
 
