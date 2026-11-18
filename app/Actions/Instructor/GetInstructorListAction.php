@@ -59,8 +59,8 @@ class GetInstructorListAction
      *   (CalendarItem::emptyAvailability) that starts in the future.
      *
      * Low availability (GetLowAvailabilitySettingsAction): an active,
-     * Stripe-connected instructor with fewer than the minimum open slots in
-     * any one of the next N weeks (GetWeeklyAvailableSlotsAction).
+     * Stripe-connected instructor with fewer than the minimum slots added
+     * (open or booked) in any one of the next N weeks (GetWeeklyAvailableSlotsAction).
      *
      * @param  array{search?: ?string, setup?: ?string, onboarding_email?: ?string, signed_up?: ?string, stripe?: ?string, availability?: ?string, low_availability?: ?string}  $filters
      * @return Collection<int, array{

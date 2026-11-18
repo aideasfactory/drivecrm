@@ -106,7 +106,7 @@ class InstructorController extends Controller
 
         return response()->streamDownload(function () use ($instructors): void {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Name', 'Email', 'Mobile', 'Onboarding email sent', 'Signed up', 'Stripe connected', 'Availability added', 'Available slots', 'Low availability']);
+            fputcsv($handle, ['Name', 'Email', 'Mobile', 'Onboarding email sent', 'Signed up', 'Stripe connected', 'Availability added', 'Slots added', 'Low availability']);
 
             foreach ($instructors as $instructor) {
                 fputcsv($handle, [

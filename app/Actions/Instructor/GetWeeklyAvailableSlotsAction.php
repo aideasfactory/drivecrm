@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Instructor;
 
+use App\Enums\CalendarItemType;
 use App\Models\CalendarItem;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -11,11 +12,13 @@ use Illuminate\Database\Eloquent\Builder;
 class GetWeeklyAvailableSlotsAction
 {
     /**
-     * Count each instructor's open "Available" diary slots
-     * (CalendarItem::emptyAvailability — unbooked, not blocked out) in each of
-     * the next `$weeks` rolling 7-day weeks, week 0 starting today. Slots that
-     * already started today are not counted. Instructors with no slots in the
-     * window are left out; treat them as all zeros.
+     * Count the diary slots each instructor has added in each of the next
+     * `$weeks` rolling 7-day weeks, week 0 starting today: open "Available"
+     * slots plus slots holding a lesson, so a fully booked diary is not short
+     * of availability. Slots marked unavailable, travel blocks and practical
+     * tests are not counted, nor slots that already started today.
+     * Instructors with no slots in the window are left out; treat them as all
+     * zeros.
      *
      * @return array<int, list<int>> instructor id => slot count per week
      */
@@ -26,7 +29,10 @@ class GetWeeklyAvailableSlotsAction
         $lastDay = $today->copy()->addDays($weeks * 7 - 1);
 
         $dailyCounts = CalendarItem::query()
-            ->emptyAvailability()
+            ->where('calendar_items.item_type', CalendarItemType::Slot)
+            ->where(fn (Builder $query) => $query
+                ->where('calendar_items.is_available', true)
+                ->orWhereHas('lessons'))
             ->join('calendars', 'calendars.id', '=', 'calendar_items.calendar_id')
             ->whereDate('calendars.date', '>=', $today->toDateString())
             ->whereDate('calendars.date', '<=', $lastDay->toDateString())

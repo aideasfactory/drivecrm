@@ -47,9 +47,9 @@ const isShortWeek = (slots: number): boolean => slots < props.report.settings.mi
                     <h1 class="text-2xl font-bold tracking-tight">Low Availability Instructors</h1>
                     <p class="text-sm text-muted-foreground">
                         Active instructors with Stripe connected who have fewer than
-                        {{ report.settings.min_slots_per_week }} open slot{{ report.settings.min_slots_per_week === 1 ? '' : 's' }}
-                        in at least one of the next {{ report.settings.weeks }} weeks. Open slots are unbooked "Available"
-                        diary slots. Change the threshold in Settings → Low Availability.
+                        {{ report.settings.min_slots_per_week }} diary slot{{ report.settings.min_slots_per_week === 1 ? '' : 's' }}
+                        added in at least one of the next {{ report.settings.weeks }} weeks. Slots added are open "Available"
+                        slots plus booked ones, so a fully booked diary is not flagged. Change the threshold in Settings → Low Availability.
                     </p>
                 </div>
                 <Button v-if="report.rows.length > 0" as="a" :href="exportUrl" variant="outline">

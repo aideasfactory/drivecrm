@@ -337,10 +337,10 @@ const breadcrumbs = [{ title: 'Instructors' }]
                                     <button
                                         type="button"
                                         class="inline-flex items-center gap-1 hover:text-foreground"
-                                        :title="`Open slots over the next ${props.lowAvailability.weeks} weeks`"
+                                        :title="`Diary slots added (open or booked) over the next ${props.lowAvailability.weeks} weeks`"
                                         @click="toggleSlotsSort"
                                     >
-                                        Available slots
+                                        Slots added
                                         <ArrowUp v-if="slotsSort === 'asc'" class="h-3 w-3" />
                                         <ArrowDown v-else-if="slotsSort === 'desc'" class="h-3 w-3" />
                                         <ArrowUpDown v-else class="h-3 w-3" />

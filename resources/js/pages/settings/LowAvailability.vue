@@ -66,7 +66,7 @@ const breadcrumbItems: BreadcrumbItem[] = [
                     </div>
 
                     <div class="grid gap-2">
-                        <Label for="min_slots_per_week">Minimum open slots per week</Label>
+                        <Label for="min_slots_per_week">Minimum slots added per week</Label>
                         <Input
                             id="min_slots_per_week"
                             name="min_slots_per_week"

@@ -16,7 +16,7 @@ class GetLowAvailabilitySettingsAction
      * The low availability threshold, stored under `low_availability` in the
      * default team's settings. An active, Stripe-connected instructor is
      * flagged when any one of the next `weeks` weeks has fewer than
-     * `min_slots_per_week` open slots. Defaults: 4 weeks, 1 slot (i.e. a week
+     * `min_slots_per_week` slots added (open or booked). Defaults: 4 weeks, 1 slot (i.e. a week
      * with no availability at all).
      *
      * @return array{weeks: int, min_slots_per_week: int}

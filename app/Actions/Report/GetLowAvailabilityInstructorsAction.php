@@ -18,7 +18,7 @@ class GetLowAvailabilityInstructorsAction
 
     /**
      * Instructors flagged as low availability on the Instructors list, fewest
-     * open slots first. `week_starts` holds the first day of each rolling
+     * slots added first. `week_starts` holds the first day of each rolling
      * 7-day week the slot counts cover.
      *
      * @return array{rows: Collection<int, array{instructor_id: int, name: string, email: string, phone: ?string, available_slots_by_week: list<int>, total_available_slots: int}>, settings: array{weeks: int, min_slots_per_week: int}, week_starts: list<string>, generated_at: string}

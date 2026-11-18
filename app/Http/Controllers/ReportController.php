@@ -354,7 +354,7 @@ class ReportController extends Controller
             [
                 'key' => 'low-availability',
                 'title' => 'Low Availability Instructors',
-                'description' => 'Active, Stripe-connected instructors short of open slots in an upcoming week — chase them to add availability.',
+                'description' => 'Active, Stripe-connected instructors with too few diary slots added in an upcoming week — chase them to add availability.',
                 'icon' => 'CalendarX',
                 'route' => route('reports.low-availability'),
             ],
