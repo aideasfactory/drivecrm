@@ -48,6 +48,7 @@ use App\Models\InstructorFinance;
 use App\Models\Lesson;
 use App\Models\Location;
 use App\Models\MileageLog;
+use App\Models\Order;
 use App\Models\Package;
 use App\Models\Payout;
 use App\Models\Student;
@@ -819,6 +820,10 @@ class InstructorController extends Controller
             // Booking slot (draft/reserved/booked lesson attached): cancelling
             // requires a reason and offers a "this / this + future in booking" scope.
             if ($calendarItem->lessons()->exists()) {
+                if ($calendarItem->lessons->first()?->order?->canBeCancelledBy(request()->user()) === false) {
+                    return response()->json(['message' => Order::HEAD_OFFICE_RESCHEDULE_ONLY_MESSAGE], 403);
+                }
+
                 $reasonCode = LessonCancellationReason::tryFrom((string) request()->input('reason_code'));
                 $details = trim((string) request()->input('reason', ''));
 

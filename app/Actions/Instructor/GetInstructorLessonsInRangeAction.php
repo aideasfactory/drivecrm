@@ -32,6 +32,7 @@ class GetInstructorLessonsInRangeAction
                     'package_name', 'package_lesson_price_pence', 'payment_mode', 'status',
                     'package_lessons_count', 'package_total_price_pence', 'booking_fee_pence',
                     'digital_fee_pence', 'total_price_pence', 'test_pass_guarantee_pence', 'source',
+                    'booked_by_user_id',
                 ]),
                 'order.student:id,user_id,first_name,surname,email,phone,status,cash_payments_enabled',
                 'order.student.user:id,name,email',

@@ -67,6 +67,10 @@ class CalendarItemResource extends JsonResource
             // True when the lesson can be taken out of the diary but kept in its
             // booking to rebook later (POST .../bank). False for an unpaid booking.
             'can_bank' => $lesson?->canBeBanked() === true,
+            // Booked by Head Office: an instructor can only move it (reschedule),
+            // not cancel it. `can_cancel` is false exactly then for instructors.
+            'booked_by_head_office' => $lesson?->order?->wasBookedByHeadOffice() === true,
+            'can_cancel' => $lesson?->order?->canBeCancelledBy($request->user()) ?? true,
             'package_name' => $lesson?->order?->package_name,
             // Alternative payment method (pupil pays the instructor directly, owner
             // switch on the pupil): what the instructor can do about payment.
