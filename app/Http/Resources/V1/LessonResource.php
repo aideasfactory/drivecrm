@@ -44,6 +44,9 @@ class LessonResource extends JsonResource
             'resources_count' => $this['resources_count'],
             'payment_status' => $this['payment_status'],
             'payment_mode' => $this['payment_mode'],
+            'booked_by_head_office' => $this['booked_by_head_office'],
+            // Same rule as Order::canBeCancelledBy(): instructors can only rearrange Head Office bookings.
+            'can_cancel' => ! ($request->user()?->isInstructor() === true && $this['booked_by_head_office']),
             'payment_breakdown' => $this['payment_breakdown'],
             'alternative_payment_allowed' => $this['alternative_payment_allowed'],
             'can_confirm_alternative_payment' => $this['can_confirm_alternative_payment'],

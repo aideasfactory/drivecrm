@@ -11,6 +11,7 @@ use App\Http\Requests\Api\V1\RebookBankedLessonRequest;
 use App\Http\Resources\V1\BankedLessonResource;
 use App\Http\Resources\V1\InstructorDayLessonCollection;
 use App\Models\Lesson;
+use App\Models\Order;
 use App\Services\InstructorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -158,6 +159,10 @@ class InstructorLessonController extends Controller
         $instructor = $request->user()->instructor;
 
         abort_unless($lesson->instructor_id === $instructor->id, 403, 'This lesson does not belong to you.');
+
+        if ($lesson->order?->canBeCancelledBy($request->user()) === false) {
+            return response()->json(['message' => Order::HEAD_OFFICE_RESCHEDULE_ONLY_MESSAGE], 403);
+        }
 
         try {
             $result = $this->instructorService->cancelBankedLesson(

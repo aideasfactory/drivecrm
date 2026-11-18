@@ -53,6 +53,8 @@ class LessonDetailResource extends JsonResource
             'is_imported' => $isImported,
             'payment_status' => $this->lessonPayment?->status?->value ?? ($this->order?->isPrepaid() ? 'paid' : null),
             'payment_mode' => $this->order?->payment_mode->value,
+            'booked_by_head_office' => $this->order?->wasBookedByHeadOffice() === true,
+            'can_cancel' => $this->order?->canBeCancelledBy($request->user()) ?? true,
             ...AlternativePayments::lessonFlags($this->resource),
             'payout_status' => $isPupil ? null : $this->payout?->statusForInstructor()->value,
             'has_payout' => ! $isPupil && $this->payout !== null,

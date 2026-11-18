@@ -60,6 +60,7 @@ import AddBookingFromSlotSheet from './Schedule/AddBookingFromSlotSheet.vue'
 import OfferSlotSheet from './Schedule/OfferSlotSheet.vue'
 import type { CalendarEvent } from './Schedule/CalendarEventBlock.vue'
 import { useCalendarNavigation } from '@/composables/useCalendarNavigation'
+import { useRole } from '@/composables/useRole'
 import {
     DIARY_START_MINUTES,
     DIARY_MAX_END_MINUTES,
@@ -72,6 +73,10 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+const { isInstructor } = useRole()
+
+const HEAD_OFFICE_RESCHEDULE_ONLY_MESSAGE = 'This lesson can only be rearranged, to cancel please contact support.'
 
 // ── Navigation ───────────────────────────────────────────
 const {
@@ -102,6 +107,7 @@ const isEditSheetOpen = ref(false)
 const isDeleteDialogOpen = ref(false)
 const isEmptySlotActionsOpen = ref(false)
 const isBookedSlotActionsOpen = ref(false)
+const isRescheduleNoticeOpen = ref(false)
 const isAddBookingSheetOpen = ref(false)
 const isOfferSlotSheetOpen = ref(false)
 const formLoading = ref(false)
@@ -331,6 +337,12 @@ const editItemCanBank = computed(() => {
     return editItemIsBooking.value && item?.can_bank === true
 })
 
+/** Head Office booked it, so an instructor can only reschedule it; owners can still cancel. */
+const editItemIsHeadOfficeRescheduleOnly = computed(() => {
+    const item = itemsMap.value.get(editForm.value.id)
+    return isInstructor.value && editItemIsBooking.value && item?.booked_by_head_office === true
+})
+
 /** The package the booking being removed belongs to. */
 const editItemPackageName = computed(() => itemsMap.value.get(editForm.value.id)?.package_name ?? null)
 
@@ -541,6 +553,7 @@ async function loadCalendarRange(startDate: string, endDate: string) {
                     awaiting_payment: item.awaiting_payment ?? null,
                     is_provisional: item.is_provisional ?? false,
                     can_bank: item.can_bank ?? false,
+                    booked_by_head_office: item.booked_by_head_office ?? false,
                     package_name: item.package_name ?? null,
                     provisional_handled_by: item.provisional_handled_by ?? null,
                     lesson_id: item.lesson_id ?? null,
@@ -954,7 +967,13 @@ function openLesson() {
 
 function openBookedSlotMove() {
     isBookedSlotActionsOpen.value = false
+    isRescheduleNoticeOpen.value = false
     isEditSheetOpen.value = true
+}
+
+function openRescheduleNotice() {
+    isBookedSlotActionsOpen.value = false
+    isRescheduleNoticeOpen.value = true
 }
 
 function openBookedSlotDelete() {
@@ -1207,6 +1226,11 @@ function cancelBulkMove() {
 
 // ── Delete time slot ─────────────────────────────────────
 function openDeleteDialog(mode?: 'cancel' | 'bank' | Event) {
+    if (mode !== 'bank' && editItemIsHeadOfficeRescheduleOnly.value) {
+        openRescheduleNotice()
+        return
+    }
+
     isEditSheetOpen.value = false
     // Also bound straight to @click, where the first argument is the click event.
     removalMode.value = mode === 'bank' ? 'bank' : 'cancel'
@@ -2471,7 +2495,7 @@ onMounted(() => {
                         Keep
                     </Button>
                     <Button
-                        v-if="isBanking"
+                        v-if="isBanking && !editItemIsHeadOfficeRescheduleOnly"
                         variant="ghost"
                         @click="removalMode = 'cancel'"
                         :disabled="formLoading"
@@ -2611,6 +2635,19 @@ onMounted(() => {
                         </span>
                     </Button>
                     <Button
+                        v-if="editItemIsHeadOfficeRescheduleOnly"
+                        variant="outline"
+                        class="h-auto w-full items-start justify-start gap-3 whitespace-normal px-4 py-3 text-left"
+                        @click="openRescheduleNotice"
+                    >
+                        <Move class="mt-0.5 h-4 w-4 shrink-0" />
+                        <span>
+                            <span class="block font-medium">Reschedule</span>
+                            <span class="block text-xs font-normal text-muted-foreground">Booked by Head Office. Move it to a new date and time agreed with the pupil</span>
+                        </span>
+                    </Button>
+                    <Button
+                        v-else
                         variant="outline"
                         class="h-auto w-full items-start justify-start gap-3 whitespace-normal px-4 py-3 text-left"
                         @click="openBookedSlotMove"
@@ -2634,6 +2671,7 @@ onMounted(() => {
                         </span>
                     </Button>
                     <Button
+                        v-if="!editItemIsHeadOfficeRescheduleOnly"
                         variant="outline"
                         class="h-auto w-full items-start justify-start gap-3 whitespace-normal px-4 py-3 text-left text-destructive hover:bg-destructive/10 hover:text-destructive"
                         @click="openBookedSlotDelete"
@@ -2645,6 +2683,26 @@ onMounted(() => {
                         </span>
                     </Button>
                 </div>
+            </DialogContent>
+        </Dialog>
+
+        <Dialog v-model:open="isRescheduleNoticeOpen">
+            <DialogContent class="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Reschedule lesson</DialogTitle>
+                    <DialogDescription>{{ bookedSlotWhen }}</DialogDescription>
+                </DialogHeader>
+                <Alert>
+                    <AlertTriangle class="h-4 w-4" />
+                    <AlertDescription>{{ HEAD_OFFICE_RESCHEDULE_ONLY_MESSAGE }}</AlertDescription>
+                </Alert>
+                <DialogFooter>
+                    <Button variant="outline" @click="isRescheduleNoticeOpen = false">Close</Button>
+                    <Button @click="openBookedSlotMove">
+                        <Move class="mr-2 h-4 w-4" />
+                        Reschedule
+                    </Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
 

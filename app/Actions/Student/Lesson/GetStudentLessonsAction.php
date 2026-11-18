@@ -100,6 +100,7 @@ class GetStudentLessonsAction
                     'has_stripe_invoice' => $lesson->lessonPayment?->stripe_invoice_id !== null,
                     'invoice_cancelled' => $lesson->lessonPayment?->hasInvoiceCancelled() === true,
                     'payment_mode' => $order->payment_mode->value,
+                    'booked_by_head_office' => $order->wasBookedByHeadOffice(),
                     'payout_status' => $lesson->payout?->statusForInstructor()->value,
                     'has_payout' => $lesson->payout !== null,
                     'calendar_date' => $lesson->calendarItem?->calendar?->date?->format('Y-m-d'),

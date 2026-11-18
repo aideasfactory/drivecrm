@@ -27,7 +27,7 @@ class GetStudentLessonDetailAction
             ->where('status', '!=', LessonStatus::CANCELLED)
             ->with([
                 'instructor.user:id,name',
-                'order:id,student_id,source,package_name,package_id,payment_mode,status,package_lessons_count,package_total_price_pence,booking_fee_pence,digital_fee_pence,total_price_pence,test_pass_guarantee_pence',
+                'order:id,student_id,source,booked_by_user_id,package_name,package_id,payment_mode,status,package_lessons_count,package_total_price_pence,booking_fee_pence,digital_fee_pence,total_price_pence,test_pass_guarantee_pence',
                 'order.package:id,name',
                 'calendarItem.calendar:id,date',
                 'lessonPayment:id,lesson_id,amount_pence,test_pass_guarantee_pence,status,payment_method,alternative_payment_confirmed_at,paid_at',

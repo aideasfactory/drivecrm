@@ -63,6 +63,7 @@ import {
 } from '@/actions/App/Http/Controllers/PupilController'
 import { cancellationReasons as cancellationReasonsRoute } from '@/actions/App/Http/Controllers/InstructorController'
 import type { CancellationReasonOption } from '@/types/instructor'
+import { useRole } from '@/composables/useRole'
 
 interface Lesson {
     id: number
@@ -100,6 +101,8 @@ interface Lesson {
     /** Voided automatically: still unpaid a week after the lesson. */
     invoice_cancelled: boolean
     payment_mode: 'upfront' | 'weekly' | 'imported' | 'cash'
+    /** Booked by Head Office: instructors can only rearrange it, not cancel it. */
+    booked_by_head_office: boolean
     payout_status: 'pending' | 'paid' | 'failed' | null
     has_payout: boolean
     calendar_date: string | null
@@ -130,6 +133,8 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+const { isInstructor } = useRole()
 
 // Data state
 const lessons = ref<Lesson[]>([])
@@ -1210,7 +1215,13 @@ onMounted(async () => {
 
                         <Separator />
 
-                        <div class="flex items-center justify-between gap-3">
+                        <Alert v-if="isInstructor && rebookTarget.booked_by_head_office">
+                            <TriangleAlert class="h-4 w-4" />
+                            <AlertDescription>
+                                This lesson can only be rearranged, to cancel please contact support.
+                            </AlertDescription>
+                        </Alert>
+                        <div v-else class="flex items-center justify-between gap-3">
                             <p class="text-sm text-muted-foreground">Won't go ahead at all?</p>
                             <Button type="button" variant="outline" size="sm" @click="openCancelBanked">
                                 <CalendarX class="mr-2 h-4 w-4" />
