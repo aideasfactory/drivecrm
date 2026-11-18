@@ -731,6 +731,40 @@ class PupilController extends Controller
     }
 
     /**
+     * Owner only: delete a signed-off or past lesson that never took place.
+     * Refused when Stripe money is tied to it; a cash or alternative-method
+     * paid one goes to Head Office to review. Nothing is refunded.
+     */
+    public function deleteSignedOffLesson(CancelBankedLessonRequest $request, Student $student, Lesson $lesson): JsonResponse
+    {
+        if ($lesson->order?->student_id !== $student->id) {
+            return response()->json(['message' => 'Lesson not found for this student.'], 404);
+        }
+
+        try {
+            $result = $this->instructorService->deleteSignedOffLesson(
+                $lesson,
+                $request->reasonCode(),
+                $request->validated('reason'),
+                $request->user(),
+            );
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        $message = 'Lesson deleted.';
+        if ($result['refund_required_count'] > 0) {
+            $message .= ' Head Office has been emailed to review the payment.';
+        }
+
+        return response()->json([
+            'message' => $message,
+            'cancelled_count' => $result['cancelled_count'],
+            'refund_required_count' => $result['refund_required_count'],
+        ]);
+    }
+
+    /**
      * Get activity logs for a student.
      */
     public function activityLogs(Student $student): JsonResponse

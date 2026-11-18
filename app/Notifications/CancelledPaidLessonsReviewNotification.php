@@ -24,7 +24,8 @@ use Illuminate\Support\Collection;
  * Lessons paid by the alternative method (the pupil paid the instructor
  * directly, e.g. a pay-in-full booking the instructor confirmed) are listed
  * apart: Drive never took that money, so there is nothing to refund in Stripe
- * and any refund is owed by the instructor.
+ * and any refund is owed by the instructor. Signed-off cash lessons deleted by
+ * an admin are listed the same way.
  */
 class CancelledPaidLessonsReviewNotification extends Notification implements ShouldQueue
 {
@@ -33,6 +34,7 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
     /**
      * @param  Collection<int, Lesson>  $paidLessons  Cancelled lessons that had been paid for.
      * @param  array<int, int|null>  $hoursNotice  Hours' notice given for each lesson, keyed by lesson id (negative once it had started).
+     * @param  bool  $deletedByAdmin  An admin deleted signed-off or past lessons that never took place, so notice and late-cancellation rules do not apply.
      */
     public function __construct(
         public ?Student $student,
@@ -44,6 +46,7 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
         public array $hoursNotice = [],
         public ?string $cancelledByName = null,
         public bool $guaranteeRemoved = false,
+        public bool $deletedByAdmin = false,
     ) {}
 
     /**
@@ -64,16 +67,23 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
         $details = trim((string) $this->details);
 
         [$alternativeLessons, $cardLessons] = $this->paidLessons
-            ->partition(fn (Lesson $lesson): bool => $lesson->lessonPayment?->isPaidByAlternativeMethod() === true);
+            ->partition(fn (Lesson $lesson): bool => $lesson->lessonPayment?->isPaidByAlternativeMethod() === true
+                || ($lesson->order ?? $this->order)?->isCash() === true);
         $alternativeOnly = $cardLessons->isEmpty();
 
         $message = (new MailMessage)
             ->subject($alternativeOnly
                 ? 'Action Required: Review Cancelled Lesson(s) Paid to the Instructor'
                 : 'Action Required: Review Cancelled Paid Lesson(s)')
-            ->greeting('Cancelled paid lessons to review')
+            ->greeting('Cancelled paid lessons to review');
+
+        if ($this->deletedByAdmin) {
+            $message->line('An admin has **deleted** one or more paid lessons that **did not take place** (they had been signed off or their time had passed). The pupil has not been emailed.');
+        }
+
+        $message
             ->line($alternativeOnly
-                ? 'A booking has been cancelled and one or more lessons the pupil **paid the instructor for directly** (alternative payment method) need a decision. Drive did not take this money, so there is nothing to refund in Stripe.'
+                ? ($this->deletedByAdmin ? 'The pupil **paid the instructor for them directly** (cash or alternative payment method) and they' : 'A booking has been cancelled and one or more lessons the pupil **paid the instructor for directly** (alternative payment method)').' need a decision. Drive did not take this money, so there is nothing to refund in Stripe.'
                 : 'A booking has been cancelled and one or more **paid** lessons need a decision. Nothing has been refunded to the pupil and the instructor has not been paid for these lessons.')
             ->line('')
             ->line("**Student:** {$studentName}")
@@ -101,11 +111,13 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
 
         $message->line('');
 
-        if ($cardLessons->isNotEmpty()) {
+        if ($this->deletedByAdmin) {
+            $message->line('**What to do:** contact the pupil and the instructor to confirm the lesson did not take place. The pupil is normally owed what they paid, so ask the instructor to return it to them directly. Late-cancellation rules do not apply.');
+        } elseif ($cardLessons->isNotEmpty()) {
             $message->line('**What to do:** contact the pupil and the instructor to confirm what happened. If the instructor cancelled, refund the pupil in Stripe. If the pupil cancelled with less than '.BookingPayments::lateCancellationHours().' hours\' notice, decide whether to refund the pupil or pay the instructor for the lesson.');
         }
 
-        if ($alternativeLessons->isNotEmpty()) {
+        if (! $this->deletedByAdmin && $alternativeLessons->isNotEmpty()) {
             $message->line('**'.($cardLessons->isNotEmpty() ? 'For the lessons paid to the instructor' : 'What to do').':** contact the pupil and the instructor to confirm what happened. If the pupil is owed their money back (for example, the instructor cancelled), the instructor must return it to them directly. If the pupil cancelled with less than '.BookingPayments::lateCancellationHours().' hours\' notice, the instructor may keep it.');
         }
 
@@ -163,7 +175,7 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
     protected function addAlternativeLessons(MailMessage $message, Collection $lessons): void
     {
         $message->line('')
-            ->line('**Lessons paid to the instructor directly (alternative payment method) cancelled:**');
+            ->line('**Lessons paid to the instructor directly (cash or alternative payment method) cancelled:**');
 
         $totalPence = 0;
         foreach ($lessons as $lesson) {
@@ -186,6 +198,10 @@ class CancelledPaidLessonsReviewNotification extends Notification implements Sho
      */
     protected function formatNotice(Lesson $lesson): string
     {
+        if ($this->deletedByAdmin) {
+            return 'deleted after the lesson time — it did not take place';
+        }
+
         $hours = $this->hoursNotice[$lesson->id] ?? null;
 
         if ($hours === null) {

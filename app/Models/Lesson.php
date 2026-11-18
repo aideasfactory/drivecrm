@@ -34,6 +34,7 @@ class Lesson extends Model
         'cancellation_reason',
         'cancellation_reason_code',
         'cancelled_at',
+        'cancelled_by_user_id',
         'provisional_at',
         'banked_at',
         'banked_reason',
@@ -90,6 +91,14 @@ class Lesson extends Model
     public function payout(): HasOne
     {
         return $this->hasOne(Payout::class);
+    }
+
+    /**
+     * Get the owner who deleted this lesson because it never took place.
+     */
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by_user_id');
     }
 
     /**

@@ -53,17 +53,19 @@ import {
     Archive,
     CalendarPlus,
     CalendarX,
+    Trash2,
 } from 'lucide-vue-next'
 import { toast } from '@/components/ui/sonner'
+import { useRole } from '@/composables/useRole'
 import {
     availableSlots,
     cancelBankedLesson,
     confirmAlternativePayment,
+    deleteSignedOffLesson,
     rebookBankedLesson,
 } from '@/actions/App/Http/Controllers/PupilController'
 import { cancellationReasons as cancellationReasonsRoute } from '@/actions/App/Http/Controllers/InstructorController'
 import type { CancellationReasonOption } from '@/types/instructor'
-import { useRole } from '@/composables/useRole'
 
 interface Lesson {
     id: number
@@ -134,7 +136,7 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const { isInstructor } = useRole()
+const { isInstructor, isOwner } = useRole()
 
 // Data state
 const lessons = ref<Lesson[]>([])
@@ -181,6 +183,13 @@ const isCancellingBanked = ref(false)
 const cancellationReasons = ref<CancellationReasonOption[]>([])
 const cancellationReasonsLoading = ref(false)
 
+// Owner only: delete a signed-off or past lesson that never took place
+const isDeleteLessonOpen = ref(false)
+const deleteLessonTarget = ref<Lesson | null>(null)
+const deleteLessonReasonCode = ref('')
+const deleteLessonDetails = ref('')
+const isDeletingLesson = ref(false)
+
 // Computed
 const activeLessons = computed(() => lessons.value.filter((l) => l.status !== 'cancelled'))
 const pendingLessons = computed(() => lessons.value.filter((l) => l.status === 'pending'))
@@ -195,6 +204,30 @@ const cancelBankedIsComplete = computed(() => {
     const reason = selectedCancelBankedReason.value
     return reason !== null && (!reason.details_required || cancelBankedDetails.value.trim() !== '')
 })
+
+const selectedDeleteLessonReason = computed(() =>
+    cancellationReasons.value.find((reason) => reason.value === deleteLessonReasonCode.value) ?? null,
+)
+
+const deleteLessonIsComplete = computed(() => {
+    const reason = selectedDeleteLessonReason.value
+    return reason !== null && (!reason.details_required || deleteLessonDetails.value.trim() !== '')
+})
+
+const canDeleteAsAdmin = (lesson: Lesson): boolean =>
+    isOwner.value &&
+    !lesson.is_banked &&
+    (lesson.status === 'completed' || (lesson.status === 'pending' && lesson.has_started))
+
+// Mirrors CancelBookingAction::hasStripeMoney(): a payout in any state, or a card payment taken.
+const hasStripeMoney = (lesson: Lesson): boolean =>
+    lesson.has_payout ||
+    (lesson.payment_mode !== 'cash' &&
+        lesson.payment_mode !== 'imported' &&
+        !lesson.paid_by_alternative_method &&
+        (lesson.payment_status === 'paid' || lesson.payment_status === 'refunded'))
+
+const deleteLessonBlocked = computed(() => (deleteLessonTarget.value ? hasStripeMoney(deleteLessonTarget.value) : false))
 
 // Purchase lessons URL
 const canPurchaseLessons = computed(() => {
@@ -413,7 +446,10 @@ const openCancelBanked = async () => {
 
     showCancelBanked.value = true
 
-    const instructorId = props.instructorId ?? lesson.instructor_id
+    await loadCancellationReasons(props.instructorId ?? lesson.instructor_id)
+}
+
+const loadCancellationReasons = async (instructorId: number | null | undefined) => {
     if (cancellationReasons.value.length > 0 || !instructorId) return
 
     cancellationReasonsLoading.value = true
@@ -445,6 +481,36 @@ const handleCancelBanked = async () => {
         toast.error(data?.errors?.reason?.[0] || data?.message || 'Failed to cancel lesson')
     } finally {
         isCancellingBanked.value = false
+    }
+}
+
+const openDeleteLesson = async (lesson: Lesson) => {
+    deleteLessonTarget.value = lesson
+    deleteLessonReasonCode.value = ''
+    deleteLessonDetails.value = ''
+    isDeleteLessonOpen.value = true
+
+    await loadCancellationReasons(props.instructorId ?? lesson.instructor_id)
+}
+
+const handleDeleteLesson = async () => {
+    if (!deleteLessonTarget.value || !deleteLessonIsComplete.value) return
+
+    isDeletingLesson.value = true
+    try {
+        const response = await axios.post(
+            deleteSignedOffLesson.url({ student: props.studentId, lesson: deleteLessonTarget.value.id }),
+            { reason_code: deleteLessonReasonCode.value, reason: deleteLessonDetails.value.trim() },
+        )
+        toast.success(response.data.message || 'Lesson deleted')
+        isDeleteLessonOpen.value = false
+        deleteLessonTarget.value = null
+        await loadLessons()
+    } catch (error: any) {
+        const data = error.response?.data
+        toast.error(data?.errors?.reason?.[0] || data?.message || 'Failed to delete lesson')
+    } finally {
+        isDeletingLesson.value = false
     }
 }
 
@@ -814,55 +880,68 @@ onMounted(async () => {
                                 </div>
                             </TableCell>
                             <TableCell class="text-right">
-                                <Button
-                                    v-if="lesson.is_banked"
-                                    variant="outline"
-                                    size="sm"
-                                    @click="openRebookSheet(lesson)"
-                                    class="gap-1"
-                                >
-                                    <CalendarPlus class="h-4 w-4" />
-                                    Rebook
-                                </Button>
-                                <Button
-                                    v-else-if="canSignOff(lesson)"
-                                    variant="outline"
-                                    size="sm"
-                                    @click="openSignOffSheet(lesson)"
-                                    class="gap-1"
-                                >
-                                    <ClipboardCheck class="h-4 w-4" />
-                                    Sign Off
-                                </Button>
-                                <span
-                                    v-else-if="lesson.status === 'pending' && !lesson.has_started"
-                                    class="text-xs text-muted-foreground"
-                                >
-                                    Not started yet
-                                </span>
-                                <span
-                                    v-else-if="lesson.status === 'pending'"
-                                    class="text-xs text-muted-foreground"
-                                >
-                                    Awaiting payment
-                                </span>
-                                <Button
-                                    v-else-if="lesson.status === 'completed' && lesson.summary"
-                                    variant="ghost"
-                                    size="sm"
-                                    @click="openViewSummary(lesson)"
-                                    class="gap-1"
-                                >
-                                    <FileText class="h-4 w-4" />
-                                    View Summary
-                                </Button>
-                                <span
-                                    v-else-if="lesson.status === 'completed'"
-                                    class="text-sm text-muted-foreground"
-                                >
-                                    Signed off
-                                </span>
-                                <span v-else class="text-sm text-muted-foreground">—</span>
+                                <div class="flex items-center justify-end gap-2">
+                                    <Button
+                                        v-if="lesson.is_banked"
+                                        variant="outline"
+                                        size="sm"
+                                        @click="openRebookSheet(lesson)"
+                                        class="gap-1"
+                                    >
+                                        <CalendarPlus class="h-4 w-4" />
+                                        Rebook
+                                    </Button>
+                                    <Button
+                                        v-else-if="canSignOff(lesson)"
+                                        variant="outline"
+                                        size="sm"
+                                        @click="openSignOffSheet(lesson)"
+                                        class="gap-1"
+                                    >
+                                        <ClipboardCheck class="h-4 w-4" />
+                                        Sign Off
+                                    </Button>
+                                    <span
+                                        v-else-if="lesson.status === 'pending' && !lesson.has_started"
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        Not started yet
+                                    </span>
+                                    <span
+                                        v-else-if="lesson.status === 'pending'"
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        Awaiting payment
+                                    </span>
+                                    <Button
+                                        v-else-if="lesson.status === 'completed' && lesson.summary"
+                                        variant="ghost"
+                                        size="sm"
+                                        @click="openViewSummary(lesson)"
+                                        class="gap-1"
+                                    >
+                                        <FileText class="h-4 w-4" />
+                                        View Summary
+                                    </Button>
+                                    <span
+                                        v-else-if="lesson.status === 'completed'"
+                                        class="text-sm text-muted-foreground"
+                                    >
+                                        Signed off
+                                    </span>
+                                    <span v-else class="text-sm text-muted-foreground">—</span>
+                                    <Button
+                                        v-if="canDeleteAsAdmin(lesson)"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="gap-1 text-destructive hover:text-destructive"
+                                        title="Delete this lesson (admin only)"
+                                        @click="openDeleteLesson(lesson)"
+                                    >
+                                        <Trash2 class="h-4 w-4" />
+                                        Delete
+                                    </Button>
+                                </div>
                             </TableCell>
                         </TableRow>
                     </TableBody>
@@ -1302,5 +1381,102 @@ onMounted(async () => {
                 </div>
             </SheetContent>
         </Sheet>
+
+        <!-- Delete signed-off / past lesson (admin only) -->
+        <Dialog v-model:open="isDeleteLessonOpen">
+            <DialogContent v-if="deleteLessonTarget" class="sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle class="flex items-center gap-2">
+                        <Trash2 class="h-5 w-5" />
+                        Delete lesson
+                    </DialogTitle>
+                    <DialogDescription>
+                        {{ formatDate(deleteLessonTarget.date) }}, {{ formatTime(deleteLessonTarget.start_time, deleteLessonTarget.end_time) }}
+                        — {{ deleteLessonTarget.instructor_name || 'Instructor' }}
+                    </DialogDescription>
+                </DialogHeader>
+
+                <Alert v-if="deleteLessonBlocked" variant="destructive">
+                    <TriangleAlert class="h-4 w-4" />
+                    <AlertTitle>This lesson can't be deleted</AlertTitle>
+                    <AlertDescription>
+                        <ul class="mt-1 list-disc space-y-1 pl-4">
+                            <li v-if="deleteLessonTarget.has_payout">
+                                An instructor payout is attached to it ({{ deleteLessonTarget.payout_status }}).
+                            </li>
+                            <li v-if="deleteLessonTarget.payment_status === 'paid' || deleteLessonTarget.payment_status === 'refunded'">
+                                The pupil paid for it by card through Stripe{{ deleteLessonTarget.payment_status === 'refunded' ? ' (since refunded)' : '' }}.
+                            </li>
+                            <li>Refund the pupil or reverse the instructor transfer in Stripe first.</li>
+                        </ul>
+                    </AlertDescription>
+                </Alert>
+
+                <Alert v-else variant="destructive">
+                    <TriangleAlert class="h-4 w-4" />
+                    <AlertTitle>
+                        {{ deleteLessonTarget.status === 'completed' ? 'This lesson has been signed off' : 'This lesson is in the past' }}
+                    </AlertTitle>
+                    <AlertDescription>
+                        <ul class="mt-1 list-disc space-y-1 pl-4">
+                            <li>Only delete it if it never took place. It is marked cancelled and removed from the diary.</li>
+                            <li v-if="deleteLessonTarget.payment_status === 'paid'">
+                                It was paid to the instructor directly, so Head Office is emailed to review it. Nothing is
+                                refunded automatically.
+                            </li>
+                            <li v-else-if="deleteLessonTarget.payment_status === 'due'">
+                                It hasn't been paid for: any open invoice is cancelled.
+                            </li>
+                            <li>The lesson is not returned to the pupil's package. The pupil is not emailed. This can't be undone.</li>
+                        </ul>
+                    </AlertDescription>
+                </Alert>
+
+                <div v-if="!deleteLessonBlocked" class="space-y-2">
+                    <Label for="delete-lesson-reason">Reason *</Label>
+                    <select
+                        id="delete-lesson-reason"
+                        v-model="deleteLessonReasonCode"
+                        :disabled="cancellationReasonsLoading"
+                        class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                        <option value="" disabled>{{ cancellationReasonsLoading ? 'Loading reasons...' : 'Choose a reason...' }}</option>
+                        <option v-for="reason in cancellationReasons" :key="reason.value" :value="reason.value">
+                            {{ reason.label }}
+                        </option>
+                    </select>
+                </div>
+
+                <div v-if="!deleteLessonBlocked" class="space-y-2">
+                    <Label for="delete-lesson-details">
+                        Details
+                        <span v-if="selectedDeleteLessonReason?.details_required" class="text-destructive">*</span>
+                        <span v-else class="text-muted-foreground">(optional)</span>
+                    </Label>
+                    <Textarea
+                        id="delete-lesson-details"
+                        v-model="deleteLessonDetails"
+                        placeholder="Why the lesson didn't take place (the student will see this too)"
+                        class="min-h-[80px]"
+                        maxlength="1000"
+                    />
+                </div>
+
+                <DialogFooter>
+                    <Button variant="outline" :disabled="isDeletingLesson" @click="isDeleteLessonOpen = false">
+                        Keep lesson
+                    </Button>
+                    <Button
+                        variant="destructive"
+                        :disabled="isDeletingLesson || deleteLessonBlocked || !deleteLessonIsComplete"
+                        @click="handleDeleteLesson"
+                    >
+                        <Loader2 v-if="isDeletingLesson" class="mr-2 h-4 w-4 animate-spin" />
+                        <Trash2 v-else class="mr-2 h-4 w-4" />
+                        Delete lesson
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </div>
 </template>

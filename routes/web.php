@@ -341,6 +341,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('students.lessons.rebook');
     Route::post('/students/{student}/lessons/{lesson}/cancel-banked', [PupilController::class, 'cancelBankedLesson'])
         ->name('students.lessons.cancel-banked');
+    Route::post('/students/{student}/lessons/{lesson}/delete-signed-off', [PupilController::class, 'deleteSignedOffLesson'])
+        ->middleware(EnsureOwner::class)
+        ->name('students.lessons.delete-signed-off');
     Route::post('/students/{student}/orders/{order}/alternative-payment', [PupilController::class, 'confirmAlternativePayment'])
         ->name('students.orders.alternative-payment');
 
