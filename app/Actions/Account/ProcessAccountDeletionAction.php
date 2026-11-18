@@ -74,6 +74,7 @@ class ProcessAccountDeletionAction
             'latitude' => null,
             'longitude' => null,
             'pin' => null,
+            'calendar_feed_token' => null,
             'profile_picture_path' => null,
             'nino' => null,
             'utr' => null,

@@ -20,6 +20,7 @@ use App\Http\Controllers\Hmrc\Itsa\ItsaController;
 use App\Http\Controllers\Hmrc\Vat\VatController;
 use App\Http\Controllers\Hmrc\Vehicles\VehicleController;
 use App\Http\Controllers\ImportController;
+use App\Http\Controllers\InstructorCalendarFeedController;
 use App\Http\Controllers\InstructorController;
 use App\Http\Controllers\InstructorWelcomeLinkController;
 use App\Http\Controllers\IntegrationController;
@@ -91,6 +92,14 @@ Route::get('/privacy-policy', fn () => Inertia::render('Legal/PrivacyPolicy'))
 Route::get('/cookie-policy', fn () => Inertia::render('Legal/CookiePolicy'))
     ->name('legal.cookies');
 
+// Subscribable instructor calendar (.ics). Polled by calendar apps with no
+// session, so the web stack (session, CSRF, Inertia) is skipped.
+Route::get('/calendar/feed/{token}.ics', [InstructorCalendarFeedController::class, 'show'])
+    ->where('token', '[A-Za-z0-9]{40}')
+    ->withoutMiddleware('web')
+    ->middleware('throttle:calendar-feed')
+    ->name('calendar.feed');
+
 Route::get('dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerAccess::class])
     ->name('dashboard');
@@ -161,6 +170,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('instructors.calendar.items.offers.destroy');
     Route::patch('/instructors/{instructor}/lessons/{lesson}/mileage', [InstructorController::class, 'updateLessonMileage'])
         ->name('instructors.lessons.mileage.update');
+    Route::post('/instructors/{instructor}/calendar-feed/reset', [InstructorCalendarFeedController::class, 'reset'])
+        ->name('instructors.calendar-feed.reset');
 
     // Stripe Connect Onboarding Routes
     Route::post('/instructors/{instructor}/stripe/onboarding/start', [InstructorController::class, 'startStripeOnboarding'])

@@ -56,6 +56,10 @@ class Instructor extends Model
         'mtd_itsa_status_checked_at',
     ];
 
+    protected $hidden = [
+        'calendar_feed_token',
+    ];
+
     protected function casts(): array
     {
         return [

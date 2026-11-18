@@ -469,6 +469,7 @@ class MergeInstructorAccountsAction
         $from->forceFill([
             'status' => InstructorStatus::Archived->value,
             'pin' => null,
+            'calendar_feed_token' => null,
         ])->save();
     }
 }
