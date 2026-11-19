@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Student\Transfer;
 
+use App\Enums\InstructorStatus;
 use App\Models\Instructor;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -14,7 +15,8 @@ class GetOnboardedInstructorsAction
     /**
      * Return instructors capable of receiving Stripe transfers, for the destination picker.
      * Filters to those who have completed Stripe Connect onboarding and have payouts enabled —
-     * otherwise the next lesson sign-off would fail with a Stripe Transfer rejection.
+     * otherwise the next lesson sign-off would fail with a Stripe Transfer rejection. Archived
+     * (deleted or merged-away) instructors are never offered.
      *
      * Optionally filters by a search term matched against the instructor's name and email
      * (held on the linked user) and phone number, and caps the result set for
@@ -25,6 +27,7 @@ class GetOnboardedInstructorsAction
     public function __invoke(?string $search = null, ?int $limit = null): Collection
     {
         return Instructor::query()
+            ->where('status', '!=', InstructorStatus::Archived->value)
             ->where('payouts_enabled', true)
             ->whereNotNull('stripe_account_id')
             ->when($search !== null && $search !== '', function (Builder $query) use ($search): void {

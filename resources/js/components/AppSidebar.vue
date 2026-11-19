@@ -8,6 +8,7 @@ import {
     DatabaseZap,
     Mail,
     FileText,
+    GitMerge,
     GraduationCap,
     Inbox,
     LayoutGrid,
@@ -38,6 +39,7 @@ import {
 } from '@/components/ui/sidebar';
 import { useRole } from '@/composables/useRole';
 import { dashboard } from '@/routes';
+import { index as instructorMergesIndex } from '@/routes/instructor-merges';
 import { index as integrationsIndex } from '@/routes/integrations';
 import { index as instructorsIndex } from '@/routes/instructors';
 import { edit as profileEdit } from '@/routes/profile';
@@ -95,6 +97,12 @@ const allNavItems: NavItem[] = [
         icon: ArrowRightLeft,
         roles: ['owner'],
         restrictedOwnerVisible: true,
+    },
+    {
+        title: 'Merge Instructors',
+        href: instructorMergesIndex(),
+        icon: GitMerge,
+        roles: ['owner'],
     },
     {
         title: 'Data Import',

@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class MergeInstructorAccountsAction
 {
@@ -27,6 +28,7 @@ class MergeInstructorAccountsAction
         'locations',
         'slot_offers',
         'vehicles',
+        'student_tests',
     ];
 
     /**
@@ -40,7 +42,20 @@ class MergeInstructorAccountsAction
         ['notes', 'user_id'],
         ['orders', 'booked_by_user_id'],
         ['lessons', 'banked_by_user_id'],
+        ['lessons', 'cancelled_by_user_id'],
         ['lesson_payments', 'alternative_payment_confirmed_by'],
+    ];
+
+    /**
+     * User-id columns under a unique (column, partner) index: re-pointed where the kept login has no row
+     * for the same partner yet, otherwise the retired login's duplicate row is removed.
+     *
+     * @var array<int, array{0: string, 1: string, 2: string}>
+     */
+    private const UNIQUE_USER_COLUMNS = [
+        ['support_ticket_archives', 'participant_id', 'owner_id'],
+        ['support_ticket_archives', 'owner_id', 'participant_id'],
+        ['resource_watches', 'user_id', 'resource_id'],
     ];
 
     /**
@@ -56,31 +71,50 @@ class MergeInstructorAccountsAction
      * - Pupil progress moves onto the kept tracker's subcategory with the same category + subcategory name
      *   (the caller guarantees every one maps); if both exist for a pupil the most recently updated score wins.
      * - The old login is locked (email rewritten, password randomised, tokens and sessions removed) and the old
-     *   profile archived. With `$takeEmail` the kept login then takes the retired login's email.
+     *   profile archived with a record of the merge (into whom, by whom, when, its original email).
+     *   With `$takeEmail` the kept login then takes the retired login's email.
+     * - Only foreign keys move. No amount, Stripe id or payment status is changed.
      *
-     * With `$dryRun` the counts are worked out and nothing is written.
+     * With `$dryRun` the counts are worked out and nothing is written. Otherwise everything runs in one
+     * transaction: both instructor rows and both user rows are locked (in id order) and reloaded, an
+     * archived or already-merged account on either side is refused, then `$guardLocked` runs against the
+     * locked models so the caller's checks see the state the merge will act on. Any exception rolls back.
      *
+     * @param  (callable(Instructor, Instructor): void)|null  $guardLocked
      * @return array<string, mixed>
+     *
+     * @throws RuntimeException
      */
-    public function __invoke(Instructor $from, Instructor $into, bool $takeEmail, bool $dryRun): array
+    public function __invoke(Instructor $from, Instructor $into, bool $takeEmail, bool $dryRun, ?User $mergedBy = null, ?callable $guardLocked = null): array
     {
         $from->loadMissing('user');
         $into->loadMissing('user');
 
-        $ids = $this->collectIds($from, $into);
-        $report = $this->report($from, $into, $ids, $takeEmail);
-
         if ($dryRun) {
-            return $report;
+            return $this->report($from, $into, $this->collectIds($from, $into), $takeEmail);
         }
 
-        DB::transaction(function () use ($from, $into, $ids, $report, $takeEmail): void {
+        [$report, $from, $into, $fromEmail, $intoEmail] = DB::transaction(function () use ($from, $into, $takeEmail, $mergedBy, $guardLocked): array {
+            [$from, $into] = $this->lockAndReload($from, $into);
+
+            if ($guardLocked !== null) {
+                $guardLocked($from, $into);
+            }
+
+            $fromEmail = $from->user->email;
+            $intoEmail = $into->user->email;
+
+            $ids = $this->collectIds($from, $into);
+            $report = $this->report($from, $into, $ids, $takeEmail);
+
             $this->mergeCalendars($from, $into, $ids['shared_days'], $ids['removable_slots'], $ids['emptied_days']);
 
             DB::table('orders')->where('instructor_id', $from->id)->whereNotIn('id', $ids['pinned_orders'])
                 ->update(['instructor_id' => $into->id]);
             DB::table('lessons')->where('instructor_id', $from->id)->whereNotIn('id', $ids['pinned_lessons'])
                 ->update(['instructor_id' => $into->id]);
+
+            $this->dropDuplicateLocations($from, $into);
 
             foreach (self::INSTRUCTOR_TABLES as $table) {
                 DB::table($table)->where('instructor_id', $from->id)->update(['instructor_id' => $into->id]);
@@ -90,25 +124,23 @@ class MergeInstructorAccountsAction
                 DB::table($table)->where($column, $from->user_id)->update([$column => $into->user_id]);
             }
 
+            foreach (self::UNIQUE_USER_COLUMNS as [$table, $column, $partner]) {
+                $this->repointUniqueUserColumn($table, $column, $partner, $from->user_id, $into->user_id);
+            }
+
             $this->moveProgress($from, $ids['progress_map']);
             DB::table('progress_categories')->where('instructor_id', $from->id)->delete();
 
             $this->repointMorphs('activity_logs', 'loggable', $from, $into);
             $this->repointMorphs('contacts', 'contactable', $from, $into);
+            $this->repointMorphs('notes', 'noteable', $from, $into);
 
             DB::table('import_mappings')->where('entity', 'instructor')->where('model_id', $from->id)
                 ->update(['model_id' => $into->id, 'updated_at' => now()]);
 
-            $into->logActivity(
-                "Merged instructor account #{$from->id} ({$from->user->email}) into this account",
-                'instructor',
-                ['from_instructor_id' => $from->id, 'from_user_id' => $from->user_id] + $report,
-            );
-
-            $fromEmail = $from->user->email;
             $fromEmailVerifiedAt = $from->user->email_verified_at;
 
-            $this->retire($from, $report['retired_email']);
+            $this->retire($from, $into, $report['retired_email'], $mergedBy);
 
             if ($takeEmail) {
                 $into->user->forceFill([
@@ -116,9 +148,90 @@ class MergeInstructorAccountsAction
                     'email_verified_at' => $fromEmailVerifiedAt ?? $into->user->email_verified_at,
                 ])->save();
             }
+
+            return [$report, $from, $into, $fromEmail, $intoEmail];
         });
 
+        $byline = $mergedBy ? " by {$mergedBy->name} (user #{$mergedBy->id})" : '';
+        $metadata = [
+            'from_instructor_id' => $from->id,
+            'from_user_id' => $from->user_id,
+            'from_email' => $fromEmail,
+            'into_instructor_id' => $into->id,
+            'into_user_id' => $into->user_id,
+            'into_email_before_merge' => $intoEmail,
+            'merged_by_user_id' => $mergedBy?->id,
+        ] + $report;
+
+        $into->logActivity(
+            "Merged instructor account #{$from->id} ({$fromEmail}) into this account{$byline}",
+            'instructor',
+            $metadata,
+            "Account #{$from->id} ({$fromEmail}) merged into this account",
+        );
+        $from->logActivity(
+            "Merged this account into instructor account #{$into->id} ({$intoEmail}){$byline}; this account was then deactivated",
+            'instructor',
+            $metadata,
+            "Merged into account #{$into->id} ({$intoEmail})",
+        );
+
         return $report;
+    }
+
+    /**
+     * Lock both instructor rows, then both user rows (each in id order so opposite-direction merges queue
+     * rather than deadlock), and return fresh copies. Refuses when either side is archived or already merged.
+     *
+     * @return array{0: Instructor, 1: Instructor}
+     *
+     * @throws RuntimeException
+     */
+    private function lockAndReload(Instructor $from, Instructor $into): array
+    {
+        $instructors = Instructor::query()->whereKey([$from->id, $into->id])->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+        $lockedFrom = $instructors->get($from->id);
+        $lockedInto = $instructors->get($into->id);
+
+        if ($lockedFrom === null || $lockedInto === null || $lockedFrom->is($lockedInto)) {
+            throw new RuntimeException('Refusing to merge: both accounts must exist and be different instructors.');
+        }
+
+        $users = User::query()->whereKey([$lockedFrom->user_id, $lockedInto->user_id])->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+        $lockedFrom->setRelation('user', $users->get($lockedFrom->user_id));
+        $lockedInto->setRelation('user', $users->get($lockedInto->user_id));
+
+        foreach (['old' => $lockedFrom, 'live' => $lockedInto] as $label => $instructor) {
+            if ($instructor->user === null || $instructor->merged_at !== null || $instructor->status === InstructorStatus::Archived->value) {
+                throw new RuntimeException("Refusing to merge: the {$label} account is archived or already merged.");
+            }
+        }
+
+        return [$lockedFrom, $lockedInto];
+    }
+
+    /**
+     * Postcode sectors both accounts cover: drop the retired account's copy (re-pointing its import
+     * mapping to the kept row) so the kept account isn't listed twice for the same sector.
+     */
+    private function dropDuplicateLocations(Instructor $from, Instructor $into): void
+    {
+        $keptBySector = DB::table('locations')->where('instructor_id', $into->id)
+            ->orderBy('id')->get(['id', 'postcode_sector'])
+            ->unique(fn (object $row): string => mb_strtoupper(trim((string) $row->postcode_sector)))
+            ->mapWithKeys(fn (object $row): array => [mb_strtoupper(trim((string) $row->postcode_sector)) => (int) $row->id]);
+
+        foreach (DB::table('locations')->where('instructor_id', $from->id)->get(['id', 'postcode_sector']) as $row) {
+            $keptId = $keptBySector->get(mb_strtoupper(trim((string) $row->postcode_sector)));
+
+            if ($keptId === null) {
+                continue;
+            }
+
+            DB::table('import_mappings')->where('entity', 'location')->where('model_id', $row->id)
+                ->update(['model_id' => $keptId, 'updated_at' => now()]);
+            DB::table('locations')->where('id', $row->id)->delete();
+        }
     }
 
     /**
@@ -181,6 +294,9 @@ class MergeInstructorAccountsAction
         foreach (self::USER_COLUMNS as [$table, $column]) {
             $tables["{$table}.{$column} (user)"] = DB::table($table)->where($column, $from->user_id)->count();
         }
+        foreach (self::UNIQUE_USER_COLUMNS as [$table, $column]) {
+            $tables["{$table}.{$column} (user)"] = DB::table($table)->where($column, $from->user_id)->count();
+        }
 
         $sharedDays = $ids['shared_days'];
 
@@ -202,6 +318,7 @@ class MergeInstructorAccountsAction
             'progress_categories_dropped' => DB::table('progress_categories')->where('instructor_id', $from->id)->count(),
             'activity_logs' => $this->morphQuery('activity_logs', 'loggable', $from)->count(),
             'contacts' => $this->morphQuery('contacts', 'contactable', $from)->count(),
+            'notes' => $this->morphQuery('notes', 'noteable', $from)->count(),
             'import_mappings' => DB::table('import_mappings')->where('entity', 'instructor')->where('model_id', $from->id)->count(),
             'retired_email' => "merged-instructor-{$from->id}@deleted.invalid",
             'kept_login_email' => $takeEmail ? $from->user->email : $into->user->email,
@@ -256,13 +373,15 @@ class MergeInstructorAccountsAction
     }
 
     /**
-     * Empty availability slots: open slots with no pupil, no lesson and no slot offer.
+     * Empty availability slots: open slots with no booking status, pupil, lesson or slot offer
+     * (CalendarItem::scopeEmptyAvailability plus the pupil and slot-offer conditions).
      */
     private function emptySlots(): Builder
     {
         return DB::table('calendar_items as own')
             ->where('own.item_type', 'slot')
             ->where('own.is_available', true)
+            ->whereNull('own.status')
             ->whereNull('own.student_id')
             ->whereNotExists(fn (Builder $query) => $query->select(DB::raw(1))->from('lessons')
                 ->whereColumn('lessons.calendar_item_id', 'own.id'))
@@ -330,6 +449,56 @@ class MergeInstructorAccountsAction
         }
 
         return $clashing;
+    }
+
+    /**
+     * The retired-account diary items that would still overlap a kept-account item after the merge
+     * (the same pairs `calendar_slots_clashing` counts), for an admin to resolve beforehand.
+     *
+     * @return array<int, array{date: string, retired_item_id: int, retired_type: string, retired_start: string, retired_end: string, kept_item_id: int, kept_type: string, kept_start: string, kept_end: string}>
+     */
+    public function clashingItems(Instructor $from, Instructor $into, int $limit = 50): array
+    {
+        $sharedDays = $this->sharedCalendarDays($from, $into);
+
+        if ($sharedDays === []) {
+            return [];
+        }
+
+        $removableSlotIds = $this->removableSlots($from, $sharedDays);
+
+        return DB::table('calendar_items as old')
+            ->join('calendars as day', 'day.id', '=', 'old.calendar_id')
+            ->join('calendars as kept_day', function ($join) use ($into): void {
+                $join->on('kept_day.date', '=', 'day.date')->where('kept_day.instructor_id', '=', $into->id);
+            })
+            ->join('calendar_items as kept', 'kept.calendar_id', '=', 'kept_day.id')
+            ->whereIn('old.calendar_id', array_keys($sharedDays))
+            ->whereNotIn('old.id', $removableSlotIds)
+            ->whereNotIn('kept.id', $removableSlotIds)
+            ->whereColumn('kept.start_time', '<', 'old.end_time')
+            ->whereColumn('kept.end_time', '>', 'old.start_time')
+            ->orderBy('day.date')
+            ->orderBy('old.start_time')
+            ->limit($limit)
+            ->get([
+                'day.date', 'old.id as retired_item_id', 'old.item_type as retired_type',
+                'old.start_time as retired_start', 'old.end_time as retired_end',
+                'kept.id as kept_item_id', 'kept.item_type as kept_type',
+                'kept.start_time as kept_start', 'kept.end_time as kept_end',
+            ])
+            ->map(fn (object $row): array => [
+                'date' => (string) $row->date,
+                'retired_item_id' => (int) $row->retired_item_id,
+                'retired_type' => (string) $row->retired_type,
+                'retired_start' => (string) $row->retired_start,
+                'retired_end' => (string) $row->retired_end,
+                'kept_item_id' => (int) $row->kept_item_id,
+                'kept_type' => (string) $row->kept_type,
+                'kept_start' => (string) $row->kept_start,
+                'kept_end' => (string) $row->kept_end,
+            ])
+            ->all();
     }
 
     /**
@@ -445,14 +614,30 @@ class MergeInstructorAccountsAction
         $this->morphQuery($table, $morph, $from)->update(["{$morph}_id" => $into->id]);
     }
 
+    private function repointUniqueUserColumn(string $table, string $column, string $partner, int $fromUserId, int $intoUserId): void
+    {
+        DB::table("{$table} as old")
+            ->where("old.{$column}", $fromUserId)
+            ->whereNotExists(fn (Builder $query) => $query->select(DB::raw(1))
+                ->from("{$table} as kept")
+                ->where("kept.{$column}", $intoUserId)
+                ->whereColumn("kept.{$partner}", "old.{$partner}"))
+            ->pluck('old.id')
+            ->chunk(500)
+            ->each(fn ($ids) => DB::table($table)->whereIn('id', $ids->all())->update([$column => $intoUserId]));
+
+        DB::table($table)->where($column, $fromUserId)->delete();
+    }
+
     /**
-     * Lock the old login and archive the old instructor profile. Its Stripe account id stays on the
-     * archived profile with its payout history.
+     * Lock the old login and archive the old instructor profile with a record of the merge. Its Stripe
+     * account id stays on the archived profile with its payout history.
      */
-    private function retire(Instructor $from, string $retiredEmail): void
+    private function retire(Instructor $from, Instructor $into, string $retiredEmail, ?User $mergedBy): void
     {
         /** @var User $user */
         $user = $from->user;
+        $originalEmail = $user->email;
 
         $user->tokens()->delete();
         DB::table('sessions')->where('user_id', $user->id)->delete();
@@ -469,6 +654,10 @@ class MergeInstructorAccountsAction
         $from->forceFill([
             'status' => InstructorStatus::Archived->value,
             'pin' => null,
+            'merged_into_instructor_id' => $into->id,
+            'merged_by_user_id' => $mergedBy?->id,
+            'merged_at' => now(),
+            'merged_original_email' => $originalEmail,
         ])->save();
     }
 }

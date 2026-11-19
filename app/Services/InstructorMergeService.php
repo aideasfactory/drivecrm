@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Actions\Instructor\GetInstructorMergeChecksAction;
+use App\Actions\Instructor\GetInstructorMergeHistoryAction;
 use App\Actions\Instructor\MergeInstructorAccountsAction;
+use App\Actions\Instructor\SearchMergeableInstructorsAction;
 use App\Models\Instructor;
 use App\Models\User;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -14,15 +18,18 @@ class InstructorMergeService extends BaseService
 {
     public function __construct(
         protected MergeInstructorAccountsAction $mergeInstructorAccounts,
+        protected GetInstructorMergeChecksAction $getInstructorMergeChecks,
+        protected SearchMergeableInstructorsAction $searchMergeableInstructors,
+        protected GetInstructorMergeHistoryAction $getInstructorMergeHistory,
     ) {}
 
     /**
      * Merge the instructor account logged in with `$fromEmail` into the one logged in with `$intoEmail`,
      * then retire the `$fromEmail` account. With `$takeEmail` the kept account takes `$fromEmail` as its login.
      *
-     * Refuses (RuntimeException) when the retired account holds anything a script must not decide:
-     * a Stripe Connect account (unless `$leaveStripe`), HMRC data, year-end archives, or pupil progress
-     * on a tracker subcategory the kept account doesn't have.
+     * Refuses (RuntimeException) when GetInstructorMergeChecksAction finds a blocker, checked again under the
+     * merge's row locks. `$leaveStripe` allows a Stripe Connect account on the retired profile (it stays there
+     * with its payout history).
      *
      * @return array{from: Instructor, into: Instructor, report: array<string, mixed>}
      */
@@ -31,24 +38,119 @@ class InstructorMergeService extends BaseService
         $from = $this->findInstructor($fromEmail);
         $into = $this->findInstructor($intoEmail);
 
-        if ($from->is($into)) {
-            throw new RuntimeException('Both emails belong to the same instructor.');
-        }
+        $this->guardNoBlockers($from, $into, $leaveStripe);
 
-        $this->guardNothingUnmovable($from, $into, $leaveStripe);
-
-        $report = ($this->mergeInstructorAccounts)($from, $into, $takeEmail, $dryRun);
-
-        if (! $dryRun) {
-            foreach ([$from->id, $into->id] as $instructorId) {
-                $this->invalidate(array_map(
-                    fn (string $suffix): string => $this->cacheKey('instructor', $instructorId, $suffix),
-                    ['grouped_students', 'packages', 'vehicles', 'year_end_archives'],
-                ));
-            }
-        }
+        $report = $dryRun
+            ? ($this->mergeInstructorAccounts)($from, $into, $takeEmail, true)
+            : $this->runMerge($from, $into, $takeEmail, null, function (Instructor $lockedFrom, Instructor $lockedInto) use ($leaveStripe): void {
+                $this->guardNoBlockers($lockedFrom, $lockedInto, $leaveStripe);
+            });
 
         return ['from' => $from, 'into' => $into, 'report' => $report];
+    }
+
+    /**
+     * What merging `$from` into `$into` would do: the dry-run counts, blockers, warnings to acknowledge,
+     * likely duplicate pupils and diary clashes. Nothing is written.
+     *
+     * @return array{
+     *     report: array<string, mixed>|null,
+     *     blockers: list<string>,
+     *     warnings: list<array{key: string, message: string}>,
+     *     duplicate_pupils: list<array{retired_student_id: int, kept_student_id: int, name: string, matched_on: string}>,
+     *     clashes: array<int, array<string, int|string>>,
+     *     warnings_token: string,
+     * }
+     */
+    public function preview(Instructor $from, Instructor $into, bool $takeEmail = false): array
+    {
+        $checks = ($this->getInstructorMergeChecks)($from, $into);
+
+        return [
+            'report' => $from->is($into) ? null : ($this->mergeInstructorAccounts)($from, $into, $takeEmail, true),
+            'warnings_token' => $this->warningsToken($checks['warnings']),
+        ] + $checks;
+    }
+
+    /**
+     * Merge `$from` into `$into` on behalf of an owner. The checks run again inside the merge transaction
+     * against the locked, reloaded accounts: any blocker, or warnings other than the ones the owner
+     * acknowledged (`$acknowledgedWarningsToken` from the preview), throws and rolls back.
+     *
+     * @return array<string, mixed> the merge report
+     *
+     * @throws RuntimeException
+     */
+    public function mergeInstructors(Instructor $from, Instructor $into, User $mergedBy, bool $takeEmail, ?string $acknowledgedWarningsToken): array
+    {
+        $guard = function (Instructor $lockedFrom, Instructor $lockedInto) use ($acknowledgedWarningsToken): void {
+            $checks = $this->guardNoBlockers($lockedFrom, $lockedInto, false);
+
+            if ($checks['warnings'] !== [] && ! hash_equals($this->warningsToken($checks['warnings']), (string) $acknowledgedWarningsToken)) {
+                throw new RuntimeException('The warnings for this merge have changed or were not acknowledged. Review them, tick the acknowledgement and confirm again.');
+            }
+        };
+
+        $guard($from, $into);
+
+        return $this->runMerge($from, $into, $takeEmail, $mergedBy, $guard);
+    }
+
+    /**
+     * @return Collection<int, Instructor>
+     */
+    public function searchInstructors(?string $search, int $limit): Collection
+    {
+        return ($this->searchMergeableInstructors)($search, $limit);
+    }
+
+    /**
+     * @return Collection<int, Instructor>
+     */
+    public function getMergeHistory(int $limit = 20): Collection
+    {
+        return ($this->getInstructorMergeHistory)($limit);
+    }
+
+    /**
+     * Identifies the set of warnings an owner saw, so a warning that appears after the preview needs a fresh tick.
+     *
+     * @param  list<array{key: string, message: string}>  $warnings
+     */
+    private function warningsToken(array $warnings): string
+    {
+        $keys = array_column($warnings, 'key');
+        sort($keys);
+
+        return hash('sha256', implode('|', $keys));
+    }
+
+    /**
+     * @param  callable(Instructor, Instructor): void  $guardLocked
+     * @return array<string, mixed>
+     */
+    private function runMerge(Instructor $from, Instructor $into, bool $takeEmail, ?User $mergedBy, callable $guardLocked): array
+    {
+        $report = ($this->mergeInstructorAccounts)($from, $into, $takeEmail, false, $mergedBy, $guardLocked);
+
+        $keptAccountStudentIds = DB::table('students')->where('instructor_id', $into->id)->pluck('id')->all();
+
+        $keys = [];
+        foreach ([$from->id, $into->id] as $instructorId) {
+            foreach (['grouped_students', 'packages', 'vehicles', 'year_end_archives'] as $suffix) {
+                $keys[] = $this->cacheKey('instructor', $instructorId, $suffix);
+            }
+        }
+        foreach ([$from->user_id, $into->user_id] as $userId) {
+            $keys[] = $this->cacheKey('user', $userId, 'watched_resource_ids');
+        }
+        foreach ($keptAccountStudentIds as $studentId) {
+            $keys[] = $this->cacheKey('student', $studentId, 'instructor_profile');
+            $keys[] = $this->cacheKey('student', $studentId, 'dashboard');
+        }
+        $this->invalidate($keys);
+
+        return $report;
     }
 
     private function findInstructor(string $email): Instructor
@@ -69,36 +171,16 @@ class InstructorMergeService extends BaseService
     }
 
     /**
-     * Stop if the retired account holds tax records, an unexpected Stripe account, or progress we can't map.
+     * @return array{blockers: list<string>, warnings: list<array{key: string, message: string}>, duplicate_pupils: array<int, mixed>, clashes: array<int, mixed>}
      */
-    private function guardNothingUnmovable(Instructor $from, Instructor $into, bool $leaveStripe): void
+    private function guardNoBlockers(Instructor $from, Instructor $into, bool $leaveStripe): array
     {
-        $unmappedProgress = 0;
-        $progressMap = $this->mergeInstructorAccounts->progressSubcategoryMap($from, $into);
-        $unmappedSubcategoryIds = array_keys(array_filter($progressMap, fn (?int $keptId): bool => $keptId === null));
+        $checks = ($this->getInstructorMergeChecks)($from, $into, $leaveStripe);
 
-        if ($unmappedSubcategoryIds !== []) {
-            $unmappedProgress = $this->mergeInstructorAccounts->progressQuery($from)
-                ->whereIn('p.progress_subcategory_id', $unmappedSubcategoryIds)
-                ->count();
+        if ($checks['blockers'] !== []) {
+            throw new RuntimeException('Refusing to merge: '.implode(' ', $checks['blockers']));
         }
 
-        $blockers = array_filter([
-            "a Stripe Connect account ({$from->stripe_account_id}) — pass --leave-stripe to keep it on the archived profile" => $from->stripe_account_id !== null && ! $leaveStripe,
-            'year-end archives' => DB::table('year_end_archives')->where('instructor_id', $from->id)->exists(),
-            'HMRC connection' => DB::table('hmrc_tokens')->where('user_id', $from->user_id)->exists(),
-            'HMRC businesses' => DB::table('hmrc_itsa_businesses')->where('instructor_id', $from->id)->exists(),
-            'HMRC quarterly updates' => DB::table('hmrc_itsa_quarterly_updates')->where('instructor_id', $from->id)->exists(),
-            'HMRC VAT returns' => DB::table('hmrc_vat_returns')->where('instructor_id', $from->id)->exists(),
-            "{$unmappedProgress} pupil progress score(s) on tracker items the kept account doesn't have" => $unmappedProgress > 0,
-        ]);
-
-        if ($blockers !== []) {
-            throw new RuntimeException(sprintf(
-                'Refusing to merge: %s has %s.',
-                $from->user->email,
-                implode('; ', array_keys($blockers)),
-            ));
-        }
+        return $checks;
     }
 }
