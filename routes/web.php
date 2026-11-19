@@ -21,6 +21,7 @@ use App\Http\Controllers\Hmrc\Vat\VatController;
 use App\Http\Controllers\Hmrc\Vehicles\VehicleController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\InstructorController;
+use App\Http\Controllers\InstructorMergeController;
 use App\Http\Controllers\InstructorWelcomeLinkController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\LessonsBookedController;
@@ -507,6 +508,18 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
             ->name('student-transfers.search-instructors');
         Route::post('/student-transfers', [StudentTransferController::class, 'store'])
             ->name('student-transfers.store');
+    });
+
+    // Instructor account merge (full-access owners only: not in RestrictOwnerAccess::ALLOWED_PATHS)
+    Route::middleware([EnsureOwner::class])->group(function () {
+        Route::get('/instructor-merges', [InstructorMergeController::class, 'index'])
+            ->name('instructor-merges.index');
+        Route::get('/instructor-merges/search-instructors', [InstructorMergeController::class, 'searchInstructors'])
+            ->name('instructor-merges.search-instructors');
+        Route::get('/instructor-merges/preview', [InstructorMergeController::class, 'preview'])
+            ->name('instructor-merges.preview');
+        Route::post('/instructor-merges', [InstructorMergeController::class, 'store'])
+            ->name('instructor-merges.store');
     });
 
     // Owner Access — full-access owners toggle other owners between all/restricted.
