@@ -10,7 +10,9 @@ declare(strict_types=1);
  *   then; slots are held for `learner_hold_minutes` from the moment they go
  *   to payment. Choosing a time on the booking form holds nothing.
  * - Instructor bookings email a payment link; slots are held until
- *   `instructor_hold_hours_before_lesson` before the first lesson.
+ *   `instructor_hold_hours_before_lesson` before the first lesson. A
+ *   short-notice booking made after that point is held until
+ *   `instructor_short_notice_hold_hours_before_lesson` before the lesson.
  * - Bookings-team (staff) bookings email a payment link; slots are held until
  *   midnight in `timezone`.
  * - Emailed-link holds are never shorter than `minimum_hold_minutes`.
@@ -32,6 +34,8 @@ return [
     'minimum_hold_minutes' => (int) env('BOOKING_MINIMUM_HOLD_MINUTES', 15),
 
     'instructor_hold_hours_before_lesson' => (int) env('BOOKING_INSTRUCTOR_HOLD_HOURS_BEFORE_LESSON', 48),
+
+    'instructor_short_notice_hold_hours_before_lesson' => (int) env('BOOKING_INSTRUCTOR_SHORT_NOTICE_HOLD_HOURS_BEFORE_LESSON', 2),
 
     'weekly_payment_due_hours_before_lesson' => (int) env('BOOKING_WEEKLY_PAYMENT_DUE_HOURS_BEFORE_LESSON', 48),
 

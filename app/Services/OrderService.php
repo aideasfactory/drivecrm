@@ -88,7 +88,8 @@ class OrderService extends BaseService
      * checkout URL is returned so the app can open it in an in-app browser, and the
      * slots are held for the short learner window. When false (instructor or admin
      * diary bookings), a payment link is emailed and the slots are held until the
-     * first payment is due (48 hours before the first lesson).
+     * first payment is due (48 hours before the first lesson, or 2 hours before
+     * it for a short-notice booking).
      *
      * Pay in full charges the whole order; pay weekly charges the first week.
      *

@@ -50,12 +50,23 @@ final class BookingPayments
 
     /**
      * Hold for an instructor booking: until the first payment is due, i.e. the
-     * configured number of hours before the first lesson starts.
+     * configured number of hours before the first lesson starts (48).
+     *
+     * A short-notice booking, made after that point, is held until the
+     * short-notice number of hours before the lesson (2) instead. A booking
+     * made even later still gets the minimum hold.
      */
     public static function instructorHoldExpiresAt(string $firstLessonDate, ?string $firstLessonStartTime): CarbonImmutable
     {
-        $deadline = self::lessonStartsAt($firstLessonDate, $firstLessonStartTime)
+        $lessonStartsAt = self::lessonStartsAt($firstLessonDate, $firstLessonStartTime);
+
+        $deadline = $lessonStartsAt
             ->subHours((int) config('booking_payments.instructor_hold_hours_before_lesson', 48));
+
+        if ($deadline->lessThanOrEqualTo(self::now())) {
+            $deadline = $lessonStartsAt
+                ->subHours((int) config('booking_payments.instructor_short_notice_hold_hours_before_lesson', 2));
+        }
 
         return self::atLeastMinimum($deadline);
     }

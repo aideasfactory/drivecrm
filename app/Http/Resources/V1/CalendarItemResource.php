@@ -63,7 +63,12 @@ class CalendarItemResource extends JsonResource
             'is_late_cancellation' => $this->isLateCancellation($lesson),
             // True when the booking is still awaiting its first payment: cancelling
             // any lesson cancels the whole booking (`scope` is ignored).
-            'awaiting_payment' => $lesson ? $lesson->order?->isPending() === true && ! $lesson->order->isImported() : null,
+            'awaiting_payment' => $this->isAwaitingPayment($lesson),
+            // When an unpaid booking is released if still not paid (ISO 8601),
+            // e.g. "Awaiting payment: cancels at 18:00". Null once paid.
+            'payment_hold_expires_at' => $this->isAwaitingPayment($lesson) === true
+                ? $lesson->order->payment_hold_expires_at?->toIso8601String()
+                : null,
             // True when the lesson can be taken out of the diary but kept in its
             // booking to rebook later (POST .../bank). False for an unpaid booking.
             'can_bank' => $lesson?->canBeBanked() === true,
@@ -165,6 +170,18 @@ class CalendarItemResource extends JsonResource
             ?? ($lesson->order?->isImported() === true
                 || $lesson->order?->isCash() === true
                 || ($lesson->order?->isUpfront() === true && ! $lesson->isDraft()));
+    }
+
+    /**
+     * Whether the booking is still waiting for its first payment.
+     */
+    protected function isAwaitingPayment(?Lesson $lesson): ?bool
+    {
+        if (! $lesson) {
+            return null;
+        }
+
+        return $lesson->order?->isPending() === true && ! $lesson->order->isImported();
     }
 
     protected function isLateCancellation(?Lesson $lesson): ?bool
