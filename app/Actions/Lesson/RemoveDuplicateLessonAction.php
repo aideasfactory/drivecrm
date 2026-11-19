@@ -15,31 +15,38 @@ use App\Models\Lesson;
 use App\Models\LessonPayment;
 use App\Models\Payout;
 use App\Models\ReflectiveLog;
+use App\Support\ImportValues;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Take one duplicate lesson out of the diary in favour of the lesson kept
  * (lessons:remove-duplicates). Must run inside the caller's transaction.
  *
- * Refused (returns `skipped`) unless, checked live: both lessons exist, the
- * kept one is not cancelled, the duplicate still matches the reviewed CSV
- * (status, date, start time, order), both are the same instructor's and
- * pupil's, the duplicate is on an imported (£0, no Stripe) order, and the
- * duplicate has no lesson payment or payout. Stripe-linked records are never
- * moved: Stripe invoice metadata and the invoice webhook identify payments by
- * lesson ID.
+ * Refused (returns `skipped`) unless, checked live under lock: both lessons
+ * exist and still match their reviewed CSV rows (status, date, start time,
+ * order), the kept one is not cancelled, the pair still meets the scan's
+ * duplicate rule (FindDuplicateLessonsAction::isGenuineDuplicate — same
+ * instructor and pupil, and the same slot or a Drive Plus move of the kept
+ * lesson from the duplicate's slot), the duplicate is on an imported (£0, no
+ * Stripe) order, and the duplicate has no lesson payment or payout. Stripe-
+ * linked records are never moved: Stripe invoice metadata and the invoice
+ * webhook identify payments by lesson ID.
  *
  * Then, never changing an amount:
  * - GoRoadie finance rows (`instructor_finances.lesson_id`), the reflective
  *   log (when the kept lesson has none) and attached resources move to the
  *   kept lesson.
- * - The duplicate's `lesson` import mappings point at the kept lesson, and the
- *   `diary` mapping of its diary item at the kept lesson's diary item, so the
- *   GoRoadie booking stays "already imported" and is never brought back.
+ * - Import mappings move to the kept lesson (and its diary item) only when the
+ *   kept lesson is itself importer-created on an imported order. A Drive
+ *   booking is never given an import mapping: that would mark it imported
+ *   (summary overwrites, GoRoadie finance/reflective logs attaching, import
+ *   repair treating it as imported). Otherwise the mappings stay on the
+ *   cancelled duplicate and its deleted diary item — the GoRoadie ref stays
+ *   mapped, so every import path still skips it.
  * - The duplicate is cancelled quietly (reason `other`, "Duplicate of lesson
- *   #…"), kept for history, and its diary item deleted (not reopened) unless
- *   the kept lesson or another lesson shares it. No emails, notes or Head
- *   Office review (CancelBookingAction is not used for that reason).
+ *   #…"), kept for history, and its diary item (and travel block) deleted
+ *   unless another lesson shares it. No emails, notes or Head Office review
+ *   (CancelBookingAction is not used for that reason).
  */
 class RemoveDuplicateLessonAction
 {
@@ -48,10 +55,11 @@ class RemoveDuplicateLessonAction
     ) {}
 
     /**
-     * @param  array{status: string, date: string, start_time: string, order_id: string|int}  $expected  The duplicate as listed in the reviewed CSV
+     * @param  array{status: string, date: string, start_time: string, order_id: string|int}  $expectedRemove  The duplicate's reviewed CSV row
+     * @param  array{status: string, date: string, start_time: string, order_id: string|int}  $expectedKeep  The kept lesson's reviewed CSV row
      * @return array{outcome: string, changes: array<string, mixed>, before: array<string, mixed>|null}
      */
-    public function __invoke(int $removeLessonId, int $keepLessonId, array $expected, string $groupId, bool $dryRun): array
+    public function __invoke(int $removeLessonId, int $keepLessonId, array $expectedRemove, array $expectedKeep, string $groupId, bool $dryRun): array
     {
         $lessons = Lesson::query()
             ->whereKey([$removeLessonId, $keepLessonId])
@@ -63,7 +71,7 @@ class RemoveDuplicateLessonAction
         $remove = $lessons->get($removeLessonId);
         $keep = $lessons->get($keepLessonId);
 
-        $refusal = $this->refusal($remove, $keep, $expected);
+        $refusal = $this->refusal($remove, $keep, $expectedRemove, $expectedKeep);
 
         if ($refusal !== null) {
             return ['outcome' => 'skipped: '.$refusal, 'changes' => [], 'before' => null];
@@ -76,29 +84,41 @@ class RemoveDuplicateLessonAction
             return ['outcome' => 'skipped: both lessons have a reflective log', 'changes' => [], 'before' => null];
         }
 
+        $keepIsImported = $keep->order?->payment_mode === PaymentMode::IMPORTED
+            && ImportMapping::wasImported(ImportMapping::ENTITY_LESSON, $keep->id);
         $keepResourceIds = DB::table('lesson_resource')->where('lesson_id', $keep->id)->pluck('resource_id')->all();
-        $calendarItem = $remove->calendar_item_id !== null ? CalendarItem::query()->find($remove->calendar_item_id) : null;
+        $calendarItem = $remove->calendar_item_id !== null ? CalendarItem::query()->with(['calendar', 'travelItem'])->find($remove->calendar_item_id) : null;
         $deleteCalendarItem = $calendarItem !== null
             && $calendarItem->id !== $keep->calendar_item_id
             && ! Lesson::query()->where('calendar_item_id', $calendarItem->id)->whereKeyNot($remove->id)->exists();
+        $lessonMappingIds = ImportMapping::query()->where('entity', ImportMapping::ENTITY_LESSON)->where('model_id', $remove->id)->pluck('id')->all();
+        $diaryMappingIds = $calendarItem !== null
+            ? ImportMapping::query()->where('entity', ImportMapping::ENTITY_DIARY)->where('model_id', $calendarItem->id)->pluck('id')->all()
+            : [];
+        $repointDiaryMappings = $keepIsImported && $deleteCalendarItem && $keep->calendar_item_id !== null;
 
         $changes = [
             'finance_ids_moved' => InstructorFinance::query()->where('lesson_id', $remove->id)->pluck('id')->all(),
             'reflective_log_id_moved' => $moveReflectiveLog ? $reflectiveLog->id : null,
             'resource_ids_moved' => DB::table('lesson_resource')->where('lesson_id', $remove->id)->whereNotIn('resource_id', $keepResourceIds)->pluck('resource_id')->all(),
-            'lesson_mapping_ids_repointed' => ImportMapping::query()->where('entity', ImportMapping::ENTITY_LESSON)->where('model_id', $remove->id)->pluck('id')->all(),
-            'diary_mapping_ids_repointed' => $deleteCalendarItem && $keep->calendar_item_id !== null
-                ? ImportMapping::query()->where('entity', ImportMapping::ENTITY_DIARY)->where('model_id', $calendarItem->id)->pluck('id')->all()
-                : [],
+            'kept_lesson_is_imported' => $keepIsImported,
+            'lesson_mapping_ids_repointed' => $keepIsImported ? $lessonMappingIds : [],
+            'lesson_mapping_ids_left_on_duplicate' => $keepIsImported ? [] : $lessonMappingIds,
+            'diary_mapping_ids_repointed' => $repointDiaryMappings ? $diaryMappingIds : [],
+            'diary_mapping_ids_left_on_deleted_item' => $repointDiaryMappings ? [] : $diaryMappingIds,
             'calendar_item_deleted' => $deleteCalendarItem ? $calendarItem->id : null,
+            'travel_item_deleted' => $deleteCalendarItem ? $calendarItem->travelItem?->id : null,
             'lesson_cancelled' => $remove->id,
             'kept_lesson_id' => $keep->id,
         ];
 
+        $itemColumns = ['id', 'calendar_id', 'parent_item_id', 'start_time', 'end_time', 'is_available', 'status', 'item_type', 'notes', 'unavailability_reason', 'travel_time_minutes'];
         $before = [
             'lesson' => $remove->only(['id', 'order_id', 'instructor_id', 'status', 'date', 'calendar_item_id', 'provisional_at', 'cancellation_reason', 'cancellation_reason_code', 'cancelled_at', 'student_lesson_number'])
                 + ['start_time' => $remove->getRawOriginal('start_time'), 'end_time' => $remove->getRawOriginal('end_time')],
-            'calendar_item' => $calendarItem?->only(['id', 'calendar_id', 'start_time', 'end_time', 'is_available', 'status', 'item_type', 'notes', 'unavailability_reason', 'travel_time_minutes']),
+            'order' => $remove->order?->only(['id', 'status', 'package_lessons_count']),
+            'calendar_item' => $calendarItem?->only($itemColumns),
+            'travel_item' => $calendarItem?->travelItem?->only($itemColumns),
             'calendar_date' => $calendarItem?->calendar?->date?->toDateString(),
         ];
 
@@ -136,9 +156,10 @@ class RemoveDuplicateLessonAction
     }
 
     /**
-     * @param  array{status: string, date: string, start_time: string, order_id: string|int}  $expected
+     * @param  array{status: string, date: string, start_time: string, order_id: string|int}  $expectedRemove
+     * @param  array{status: string, date: string, start_time: string, order_id: string|int}  $expectedKeep
      */
-    protected function refusal(?Lesson $remove, ?Lesson $keep, array $expected): ?string
+    protected function refusal(?Lesson $remove, ?Lesson $keep, array $expectedRemove, array $expectedKeep): ?string
     {
         if ($remove === null) {
             return 'lesson to remove no longer exists';
@@ -156,21 +177,18 @@ class RemoveDuplicateLessonAction
             return "lesson to keep #{$keep->id} is cancelled";
         }
 
-        $startTime = FindDuplicateLessonsAction::normaliseTime((string) $remove->getRawOriginal('start_time'));
+        foreach (['remove' => [$remove, $expectedRemove], 'keep' => [$keep, $expectedKeep]] as $label => [$lesson, $expected]) {
+            if (trim($expected['date']) !== '' && ImportValues::date(trim($expected['date'])) === null) {
+                return "the CSV date '{$expected['date']}' for lesson #{$lesson->id} isn't YYYY-MM-DD or DD/MM/YYYY — use the file as written by lessons:find-duplicates";
+            }
 
-        if ($remove->status->value !== $expected['status']
-            || $remove->date?->toDateString() !== $expected['date']
-            || $startTime !== FindDuplicateLessonsAction::normaliseTime($expected['start_time'])
-            || (int) $remove->order_id !== (int) $expected['order_id']) {
-            return 'changed since the scan (status, date, time or order) — run lessons:find-duplicates again';
+            if (! $this->matchesCsv($lesson, $expected)) {
+                return "lesson to {$label} #{$lesson->id} changed since the scan (status, date, time or order) — run lessons:find-duplicates again";
+            }
         }
 
-        if ((int) $remove->instructor_id !== (int) $keep->instructor_id) {
-            return 'different instructor from the lesson to keep';
-        }
-
-        if ((int) $remove->order?->student_id !== (int) $keep->order?->student_id) {
-            return 'different pupil from the lesson to keep';
+        if (! FindDuplicateLessonsAction::isGenuineDuplicate($remove, $keep, FindDuplicateLessonsAction::moveLogsForPupilOf($keep))) {
+            return "not a duplicate of #{$keep->id}: different instructor or pupil, or a different date/start time with no Drive Plus move of #{$keep->id} from that time";
         }
 
         if ($remove->order?->payment_mode !== PaymentMode::IMPORTED) {
@@ -186,5 +204,18 @@ class RemoveDuplicateLessonAction
         }
 
         return null;
+    }
+
+    /**
+     * @param  array{status: string, date: string, start_time: string, order_id: string|int}  $expected
+     */
+    protected function matchesCsv(Lesson $lesson, array $expected): bool
+    {
+        $expectedDate = trim($expected['date']) === '' ? null : ImportValues::date(trim($expected['date']))?->toDateString();
+
+        return $lesson->status->value === strtolower(trim($expected['status']))
+            && $lesson->date?->toDateString() === $expectedDate
+            && FindDuplicateLessonsAction::normaliseTime((string) $lesson->getRawOriginal('start_time')) === FindDuplicateLessonsAction::normaliseTime((string) $expected['start_time'])
+            && (int) $lesson->order_id === (int) $expected['order_id'];
     }
 }

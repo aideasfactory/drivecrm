@@ -56,11 +56,11 @@ class FindDuplicateLessonsAction
      */
     public function __invoke(): array
     {
-        $candidates = [
+        $candidates = $this->withoutCancelledLessons([
             ...$this->sameGoRoadieIdCandidates(),
             ...$this->exactDuplicateCandidates(),
             ...$this->movedInDrivePlusCandidates(),
-        ];
+        ]);
 
         $merged = $this->mergeCandidates($candidates);
         $groups = [];
@@ -236,6 +236,39 @@ class FindDuplicateLessonsAction
             });
 
         return $candidates;
+    }
+
+    /**
+     * Drop cancelled lessons from the candidates (and candidates left with
+     * fewer than two lessons) before merging, so a cancelled lesson can't
+     * chain unrelated groups together.
+     *
+     * @param  array<int, array{lesson_ids: array<int, int>, type: string, evidence: array<int, string>}>  $candidates
+     * @return array<int, array{lesson_ids: array<int, int>, type: string, evidence: array<int, string>}>
+     */
+    protected function withoutCancelledLessons(array $candidates): array
+    {
+        $lessonIds = array_values(array_unique(array_merge([], ...array_column($candidates, 'lesson_ids'))));
+        $cancelled = [];
+
+        foreach (array_chunk($lessonIds, 1000) as $chunk) {
+            $cancelled += array_fill_keys(
+                Lesson::query()->whereKey($chunk)->where('status', LessonStatus::CANCELLED)->pluck('id')->map(fn ($id) => (int) $id)->all(),
+                true,
+            );
+        }
+
+        $kept = [];
+
+        foreach ($candidates as $candidate) {
+            $candidate['lesson_ids'] = array_values(array_filter($candidate['lesson_ids'], fn (int $id): bool => ! isset($cancelled[$id])));
+
+            if (count($candidate['lesson_ids']) > 1) {
+                $kept[] = $candidate;
+            }
+        }
+
+        return $kept;
     }
 
     /**
@@ -420,6 +453,10 @@ class FindDuplicateLessonsAction
             if ($lessonFacts['drive_plus_changes'] !== []) {
                 $reviewReasons[] = "lesson #{$lesson->id} to remove has Drive Plus changes";
             }
+
+            if (! self::isGenuineDuplicate($lesson, $keep, $context['move_logs']->get($keep->id, collect()))) {
+                $reviewReasons[] = "lesson #{$lesson->id} ({$this->slotLabel($lesson)}) is not at the same date and start time as #{$keep->id} ({$this->slotLabel($keep)}) and no Drive Plus move of #{$keep->id} from that time links them — linked by GoRoadie ID only, may be a genuine lesson";
+            }
         }
 
         if (in_array(self::TYPE_MOVED, $group['types'], true)) {
@@ -540,6 +577,79 @@ class FindDuplicateLessonsAction
             'finance_ids' => $context['finances']->get($lesson->id, collect())->pluck('id')->map(fn ($id) => (int) $id)->all(),
             'has_stripe_money' => $payments->isNotEmpty() || $lesson->payout !== null,
         ];
+    }
+
+    /**
+     * The duplicate rule every removal must meet: same instructor and pupil,
+     * and either the same date and start time, or $keep was moved in Drive
+     * Plus away from $remove's date and start time (a reschedule log naming
+     * $keep as its lesson or bulk-move anchor). A shared GoRoadie ID alone is
+     * not enough: a banked lesson's reopened slot keeps its diary mapping, so
+     * a later lesson booked into it shares the ID without being a copy.
+     * Expects `order` loaded on both lessons.
+     *
+     * @param  iterable<int, ActivityLog>  $keepMoveLogs  Reschedule activity logs on $keep's pupil
+     */
+    public static function isGenuineDuplicate(Lesson $remove, Lesson $keep, iterable $keepMoveLogs): bool
+    {
+        $studentId = $keep->order?->student_id;
+
+        if ($remove->id === $keep->id || $studentId === null || $remove->date === null
+            || (int) $remove->instructor_id !== (int) $keep->instructor_id
+            || (int) $remove->order?->student_id !== (int) $studentId) {
+            return false;
+        }
+
+        $removeDate = $remove->date->toDateString();
+        $removeStart = self::normaliseTime((string) $remove->getRawOriginal('start_time'));
+
+        if ($removeStart === null) {
+            return false;
+        }
+
+        if ($keep->date?->toDateString() === $removeDate && self::normaliseTime((string) $keep->getRawOriginal('start_time')) === $removeStart) {
+            return true;
+        }
+
+        foreach ($keepMoveLogs as $log) {
+            $metadata = $log->metadata ?? [];
+
+            if ((int) ($metadata['lesson_id'] ?? $metadata['anchor_lesson_id'] ?? 0) === $keep->id
+                && $log->loggable_type === Student::class
+                && (int) $log->loggable_id === (int) $studentId
+                && (string) ($metadata['old_date'] ?? '') === $removeDate
+                && self::normaliseTime((string) ($metadata['old_start_time'] ?? '')) === $removeStart) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Reschedule activity logs on the lesson's pupil (any lesson; filtered by
+     * isGenuineDuplicate()).
+     *
+     * @return Collection<int, ActivityLog>
+     */
+    public static function moveLogsForPupilOf(Lesson $lesson): Collection
+    {
+        $studentId = $lesson->order?->student_id;
+
+        if ($studentId === null) {
+            return collect();
+        }
+
+        return ActivityLog::query()
+            ->where('loggable_type', Student::class)
+            ->where('loggable_id', $studentId)
+            ->whereNotNull('metadata->old_date')
+            ->get();
+    }
+
+    protected function slotLabel(Lesson $lesson): string
+    {
+        return ($lesson->date?->toDateString() ?? 'no date').' '.(self::normaliseTime((string) $lesson->getRawOriginal('start_time')) ?? '');
     }
 
     public static function normaliseRef(string $ref): string

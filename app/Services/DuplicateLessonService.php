@@ -66,7 +66,7 @@ class DuplicateLessonService extends BaseService
 
         foreach ($result['groups'] as $group) {
             foreach ($group['rows'] as $row) {
-                fputcsv($handle, array_map(fn (string $column) => $row[$column] ?? '', self::CSV_COLUMNS));
+                fputcsv($handle, array_map(fn (string $column): string => self::csvSafe((string) ($row[$column] ?? '')), self::CSV_COLUMNS));
             }
         }
 
@@ -111,10 +111,11 @@ class DuplicateLessonService extends BaseService
                 continue;
             }
 
-            $keepLessonId = (int) array_values(array_filter($rows, fn (array $row): bool => $row['decision'] === FindDuplicateLessonsAction::DECISION_KEEP))[0]['lesson_id'];
+            $keepRow = array_values(array_filter($rows, fn (array $row): bool => $row['decision'] === FindDuplicateLessonsAction::DECISION_KEEP))[0];
+            $keepLessonId = (int) $keepRow['lesson_id'];
             $outcomes = $dryRun
-                ? $this->runGroup($groupId, $keepLessonId, $removeRows, true)
-                : $this->runGroupInTransaction($groupId, $keepLessonId, $removeRows, $auditPath);
+                ? $this->runGroup($groupId, $keepRow, $removeRows, true)
+                : $this->runGroupInTransaction($groupId, $keepRow, $removeRows, $auditPath);
 
             $groupRemoved = ! in_array(false, array_map(fn (array $outcome): bool => in_array($outcome['outcome'], ['removed', 'would remove'], true), $outcomes), true);
             $counts[$groupRemoved ? 'groups_done' : 'groups_skipped']++;
@@ -136,17 +137,19 @@ class DuplicateLessonService extends BaseService
     }
 
     /**
+     * @param  array<string, string>  $keepRow
      * @param  array<int, array<string, string>>  $removeRows
      * @return array<int, array{lesson_id: int, outcome: string}>
      */
-    protected function runGroupInTransaction(string $groupId, int $keepLessonId, array $removeRows, string $auditPath): array
+    protected function runGroupInTransaction(string $groupId, array $keepRow, array $removeRows, string $auditPath): array
     {
         $audit = [];
+        $keepLessonId = (int) $keepRow['lesson_id'];
 
         DB::beginTransaction();
 
         try {
-            $outcomes = $this->runGroup($groupId, $keepLessonId, $removeRows, false, $audit);
+            $outcomes = $this->runGroup($groupId, $keepRow, $removeRows, false, $audit);
 
             if (in_array(false, array_map(fn (array $outcome): bool => $outcome['outcome'] === 'removed', $outcomes), true)) {
                 DB::rollBack();
@@ -162,6 +165,10 @@ class DuplicateLessonService extends BaseService
             }
 
             $touchedLessons = $this->tidyAfterRemoval($keepLessonId, array_column($outcomes, 'lesson_id'));
+
+            foreach ($audit as $entry) {
+                $this->audit($auditPath, $entry);
+            }
 
             DB::commit();
         } catch (Throwable $exception) {
@@ -183,8 +190,8 @@ class DuplicateLessonService extends BaseService
             }
         }
 
-        foreach ($audit as $entry) {
-            $this->audit($auditPath, $entry);
+        foreach ($touchedLessons->pluck('instructor_id')->filter()->unique() as $instructorId) {
+            $this->invalidate($this->cacheKey('instructor', (int) $instructorId, 'grouped_students'));
         }
 
         Log::info('lessons:remove-duplicates removed duplicate lessons', [
@@ -198,19 +205,23 @@ class DuplicateLessonService extends BaseService
     }
 
     /**
+     * @param  array<string, string>  $keepRow
      * @param  array<int, array<string, string>>  $removeRows
      * @param  array<int, array<string, mixed>>  $audit
      * @return array<int, array{lesson_id: int, outcome: string}>
      */
-    protected function runGroup(string $groupId, int $keepLessonId, array $removeRows, bool $dryRun, array &$audit = []): array
+    protected function runGroup(string $groupId, array $keepRow, array $removeRows, bool $dryRun, array &$audit = []): array
     {
         $outcomes = [];
+        $keepLessonId = (int) $keepRow['lesson_id'];
+        $expected = fn (array $row): array => ['status' => $row['status'], 'date' => $row['date'], 'start_time' => $row['start_time'], 'order_id' => $row['order_id']];
 
         foreach ($removeRows as $row) {
             $result = ($this->removeDuplicateLesson)(
                 (int) $row['lesson_id'],
                 $keepLessonId,
-                ['status' => $row['status'], 'date' => $row['date'], 'start_time' => $row['start_time'], 'order_id' => $row['order_id']],
+                $expected($row),
+                $expected($keepRow),
                 $groupId,
                 $dryRun,
             );
@@ -315,7 +326,7 @@ class DuplicateLessonService extends BaseService
                 continue;
             }
 
-            $row = array_map(fn ($value) => trim((string) $value), array_combine($header, $values));
+            $row = array_map(fn ($value): string => self::csvUnsafe(trim((string) $value)), array_combine($header, $values));
             $row['decision'] = strtoupper($row['decision']);
             $row['needs_manual_review'] = strtolower($row['needs_manual_review']);
 
@@ -327,6 +338,23 @@ class DuplicateLessonService extends BaseService
         fclose($handle);
 
         return $groups;
+    }
+
+    /**
+     * Stop spreadsheet apps running a cell as a formula (names and notes come
+     * from user input): a leading =, +, - or @ gets a ' prefix.
+     */
+    protected static function csvSafe(string $value): string
+    {
+        return $value !== '' && in_array($value[0], ['=', '+', '-', '@', "\t", "\r"], true) ? "'".$value : $value;
+    }
+
+    /**
+     * Undo csvSafe() when reading a reviewed CSV back.
+     */
+    protected static function csvUnsafe(string $value): string
+    {
+        return strlen($value) > 1 && $value[0] === "'" && in_array($value[1], ['=', '+', '-', '@', "\t", "\r"], true) ? substr($value, 1) : $value;
     }
 
     /**
