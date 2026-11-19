@@ -1537,13 +1537,13 @@ Customer feedback (2026-08-25) replaced postcode/transmission area pricing with 
 
 ### 30. **lesson_reminders**
 
-Idempotency/control table for scheduled reminder notifications (miles + payment-due). One row per `(lesson_id, type)` records that a given reminder has been dispatched, so the `reminders:send` scheduled command never sends the same reminder twice — even after downtime, the unique key guarantees at-most-once delivery. Audit history is still written separately to `activity_logs`; this table holds delivery *state* only.
+Idempotency/control table for scheduled reminder notifications (miles, payment-due and learner lesson-tomorrow). One row per `(lesson_id, type)` records that a given reminder has been dispatched, so the `reminders:send` scheduled command never sends the same reminder twice — even after downtime, the unique key guarantees at-most-once delivery. Audit history is still written separately to `activity_logs`; this table holds delivery *state* only.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique reminder identifier |
 | `lesson_id` | bigint unsigned | FOREIGN KEY (lessons.id), ON DELETE CASCADE | Lesson the reminder relates to |
-| `type` | varchar(255) | NOT NULL | Reminder type (`ReminderType` value): `miles_start`, `miles_end`, `payment_due_48h` |
+| `type` | varchar(255) | NOT NULL | Reminder type (`ReminderType` value): `miles_start`, `miles_end`, `payment_due_48h`, `lesson_day_before` |
 | `sent_at` | timestamp | NULLABLE | When the reminder delivery was queued |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
@@ -1557,11 +1557,12 @@ Idempotency/control table for scheduled reminder notifications (miles + payment-
 - `Lesson` has many `LessonReminder` (via `lessons.reminders()`)
 
 **Enums:**
-- Type (`App\Enums\ReminderType`): `miles_start`, `miles_end`, `payment_due_48h`
+- Type (`App\Enums\ReminderType`): `miles_start`, `miles_end`, `payment_due_48h`, `lesson_day_before`
 
 **Business Logic:**
 - Written by the `SendMilesReminderAction` / `SendPaymentReminderAction` after a delivery is queued (`updateOrCreate` keyed on `lesson_id` + `type`).
 - The scheduled command (`reminders:send`, every 5 minutes) matches due candidates via `whereDoesntHave('reminders', type=…)` so existing rows suppress repeats.
+- `lesson_day_before` is written by `SendLessonDayBeforeReminderAction` (command `reminders:lesson-day-before`) in the same transaction as the learner's queued push, with the lesson row locked. Unlike the other types it only suppresses repeats while `sent_at` is on/after UK midnight at the start of the day before the lesson's current date, so a lesson moved to another day is reminded again (the row's `sent_at` is updated). No schema change: the existing unique `(lesson_id, type)` row is reused.
 
 ---
 

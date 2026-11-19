@@ -238,6 +238,34 @@ class Student extends Model
     }
 
     /**
+     * The default pickup point (or the first one) as a single line, e.g.
+     * "1 High Street, AB1 2CD", or null when the student has none. The
+     * postcode is left off when the address already contains it.
+     */
+    public function pickupLocationLine(): ?string
+    {
+        $pickupPoint = $this->pickupPoints()
+            ->orderByDesc('is_default')
+            ->orderBy('id')
+            ->first();
+
+        if (! $pickupPoint) {
+            return null;
+        }
+
+        $address = trim((string) preg_replace('/\s+/', ' ', (string) $pickupPoint->address));
+        $postcode = trim((string) preg_replace('/\s+/', ' ', (string) $pickupPoint->postcode));
+
+        if ($postcode !== '' && str_contains(strtoupper(str_replace(' ', '', $address)), strtoupper(str_replace(' ', '', $postcode)))) {
+            $postcode = '';
+        }
+
+        $line = implode(', ', array_filter([$address, $postcode], fn (string $part): bool => $part !== ''));
+
+        return $line !== '' ? $line : null;
+    }
+
+    /**
      * Get checklist items for this student.
      */
     public function checklistItems(): HasMany

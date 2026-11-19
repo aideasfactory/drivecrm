@@ -326,7 +326,7 @@ flowchart TD
 | 4 | Instructor POST `instructor/lessons/{lesson}/notify-on-way` | `InstructorService::notifyStudentOnWay` → `Message` (`LESSON_ON_WAY`) → `MessageObserver::handleLessonStatus` | Email (templated) → `InstructorOnWayNotification` (`learner.instructor_on_way`); Push `instructor_on_way` | Student email (falls back to `contact_email`); push to learner user |
 | 5 | Instructor POST `.../notify-arrived` | `InstructorService::notifyStudentArrived` → `Message` (`LESSON_ARRIVED`) | Email (templated) → `InstructorArrivedNotification` (`learner.instructor_arrived`); Push `instructor_arrived` | As above |
 | 6 | On-way/arrived, student has no user | Direct email | Email → same notifications | Student/contact email |
-| 7 | Learner "lesson tomorrow" reminder | **Not implemented**: no learner lesson-time reminder exists on any channel | — | — |
+| 7 | `reminders:lesson-day-before` every 5 min, acts only 18:00–21:00 Europe/London (`config/lessons.php`) for lessons dated tomorrow (UK) | `GetLessonDayBeforeRemindersDueAction` (PENDING, dated, not banked/provisional, order not cancelled/expired, learner has token, no `lesson_day_before` row with `sent_at` since UK midnight the day before) → `SendLessonDayBeforeReminderAction` (locks lesson, re-checks, writes `LessonReminder` + queued push in one transaction, then activity log) | Push `lesson_reminder` ("Driving lesson tomorrow" / "Driving test tomorrow"), delivered by `push:send-queued`. No email | Learner (`order.student.user`) |
 
 ---
 
@@ -467,6 +467,7 @@ All defined in `bootstrap/app.php` → `withSchedule` (`routes/console.php` only
 | Payment due soon | `PaymentDueSoonNotification` | `learner.payment_due_soon` | `SendPaymentReminderAction` | Booker email |
 | Payment reminder | push | `payment_due_48h` | `SendPaymentReminderAction` | Learner (if owns account) |
 | Mileage reminders | push | `miles_start`, `miles_end` | Reminder actions | Instructor |
+| Lesson tomorrow | push | `lesson_reminder` | `SendLessonDayBeforeReminderAction` | Learner |
 | Instructor on way | `InstructorOnWayNotification` + push | `learner.instructor_on_way` / `instructor_on_way` | `MessageObserver::handleLessonStatus` | Learner |
 | Instructor arrived | `InstructorArrivedNotification` + push | `learner.instructor_arrived` / `instructor_arrived` | `MessageObserver::handleLessonStatus` | Learner |
 | Slot offer | push | `slot_offer` ("Short Notice Lesson Available") | `CreateSlotOfferAction` | Instructor's active students |
@@ -492,7 +493,7 @@ All defined in `bootstrap/app.php` → `withSchedule` (`routes/console.php` only
 
 1. **No SMS or WhatsApp from the app.** Bird is only used for a contact upsert and a read-only conversation mirror. Whether Bird automations send SMS/WhatsApp (for example the "we'll notify you when we expand" promise) can't be determined from the code.
 2. **No-instructor branch in `/onboarding` is a dead end.** It sends no admin email, no Bird sync, and creates no lead beyond the `Enquiry` row. Only `/booking` alerts the admin and syncs to Bird.
-3. **No learner lesson reminders** ("lesson tomorrow / in 1 hour") on any channel. The only time-based learner reminder is `payment_due_48h`.
+3. **Learner lesson reminders are push only.** The evening-before `lesson_reminder` push needs the app with notifications on; learners without the app get no lesson reminder (no email or SMS), and there is no same-day ("in 1 hour") reminder.
 4. **Silent hold release.** `ReleaseUnpaidOrderAction` notifies neither learner nor instructor. For instructor bookings, the learner's slot simply disappears.
 5. **Payment failures only log.** `payment_intent.payment_failed` and `invoice.payment_failed` have no follow-up. An unpaid weekly invoice at lesson time has no automated consequence other than blocking sign-off.
 6. **Learners cannot cancel or reschedule.** Only instructor/admin endpoints exist.

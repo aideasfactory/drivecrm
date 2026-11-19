@@ -50,6 +50,14 @@ final class PushNotificationCatalog
                 'trigger' => 'The instructor re-sends a payment link from the app (not sent for staff bookings).',
             ],
             [
+                'key' => 'lesson_reminder',
+                'name' => 'Lesson tomorrow',
+                'audience' => 'learner',
+                'title' => 'Driving lesson tomorrow (or "Driving test tomorrow" for a practical test)',
+                'body' => 'Your lesson with {instructor} is tomorrow, {date}, at {time}. Pickup: {pickup}',
+                'trigger' => 'Once per lesson, between '.config('lessons.day_before_reminder.send_from', '18:00').' and '.config('lessons.day_before_reminder.send_until', '21:00').' (UK time) the evening before. Not sent for cancelled, unpaid (draft), banked or provisional lessons.',
+            ],
+            [
                 'key' => 'instructor_on_way',
                 'name' => 'Instructor on the way',
                 'audience' => 'learner',
