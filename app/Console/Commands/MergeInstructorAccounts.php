@@ -45,6 +45,10 @@ class MergeInstructorAccounts extends Command
         } catch (RuntimeException $exception) {
             $this->error($exception->getMessage());
 
+            if (str_contains($exception->getMessage(), 'Stripe Connect account')) {
+                $this->line('Pass --leave-stripe to keep that Stripe account (and its payout history) on the archived profile.');
+            }
+
             return self::FAILURE;
         }
 
@@ -78,6 +82,7 @@ class MergeInstructorAccounts extends Command
         $rows[] = ['Progress categories dropped (old tracker)', $report['progress_categories_dropped']];
         $rows[] = ['Activity log entries', $report['activity_logs']];
         $rows[] = ['Contacts', $report['contacts']];
+        $rows[] = ['Notes about the instructor', $report['notes']];
         $rows[] = ['Import mappings', $report['import_mappings']];
 
         $this->table([$dryRun ? 'Would move' : 'Moved', 'Rows'], $rows);
