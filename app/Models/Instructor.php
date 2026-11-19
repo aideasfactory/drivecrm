@@ -73,6 +73,7 @@ class Instructor extends Model
             'tax_profile_completed_at' => 'datetime',
             'mtd_itsa_status' => ItsaEnrolmentStatus::class,
             'mtd_itsa_status_checked_at' => 'datetime',
+            'merged_at' => 'datetime',
         ];
     }
 
@@ -111,6 +112,22 @@ class Instructor extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * The instructor account this retired profile was merged into.
+     */
+    public function mergedInto(): BelongsTo
+    {
+        return $this->belongsTo(Instructor::class, 'merged_into_instructor_id');
+    }
+
+    /**
+     * The owner who merged this retired profile into another account.
+     */
+    public function mergedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'merged_by_user_id');
     }
 
     /**

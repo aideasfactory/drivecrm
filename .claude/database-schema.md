@@ -315,6 +315,10 @@ Extended profile for users with instructor role.
 | `rating` | float(3,2) | NULLABLE | Instructor rating (0.00-5.00) |
 | `transmission_type` | enum('manual', 'automatic') | NOT NULL | Vehicle transmission type |
 | `status` | varchar(50) | DEFAULT 'active' | Instructor status |
+| `merged_into_instructor_id` | bigint unsigned | NULLABLE, FK → instructors.id, NULL ON DELETE | Set when this (retired) profile was merged into another instructor account by `MergeInstructorAccountsAction`. Added 2026-11-19 |
+| `merged_by_user_id` | bigint unsigned | NULLABLE, FK → users.id, NULL ON DELETE | Owner who ran the merge (null when run from the `instructor:merge` console command) |
+| `merged_at` | timestamp | NULLABLE | When the merge ran. Non-null = merged away (status is also `archived`) |
+| `merged_original_email` | varchar(255) | NULLABLE | The login email this profile's user had before the merge rewrote it to `merged-instructor-{id}@deleted.invalid` |
 | `pdi_status` | varchar(50) | NULLABLE | PDI certification status |
 | `priority` | boolean | DEFAULT false | Priority listing flag |
 | `address` | text | NULLABLE | Instructor address (street/city) |
@@ -346,9 +350,11 @@ Extended profile for users with instructor role.
 - Has many `Orders`
 - Has many `Lessons`
 - Has many `Payouts`
+- Belongs to `Instructor` as `mergedInto` (`merged_into_instructor_id`) and to `User` as `mergedBy` (`merged_by_user_id`)
 
 **Business Logic:**
 - Instructors must complete Stripe onboarding before receiving payouts
+- **Account merge** (admin *Merge Instructors* page `/instructor-merges`, full-access owners only, or `php artisan instructor:merge`): `MergeInstructorAccountsAction` re-points every row the old profile/login owns onto the kept one in one transaction — `students`, `orders` + `lessons` (except orders with a paid-out lesson, which stay with their `payouts`), `packages`, `calendars`/`calendar_items` (old empty availability removed, shared days merged), `slot_offers`, `locations`, `vehicles`, `instructor_finances`, `mileage_logs`, `student_tests`, `student_progress` (mapped onto the kept tracker; old `progress_categories` dropped), morphs (`activity_logs`, `contacts`, `notes`), `import_mappings` (entity `instructor`) and the login's user-id columns (`messages.from/to`, `notes.user_id`, `orders.booked_by_user_id`, `lessons.banked_by_user_id`, `lessons.cancelled_by_user_id`, `lesson_payments.alternative_payment_confirmed_by`, `support_ticket_archives`, `resource_watches`). No amount, Stripe id or payment status changes. The old profile is then archived with the `merged_*` columns set and its login locked (email rewritten, password randomised, tokens/sessions/push token removed). `GetInstructorMergeChecksAction` blocks merges whose old profile has a Stripe Connect account, HMRC data, year-end archives, unmappable progress, unsigned lessons tied to a paid-out order, a pending deletion, or is a `booking.instructor_ids` target.
 - Can create bespoke packages for their students
 - `app_onboarding_*` columns track the 5-step mobile app onboarding slider (progress only — the slides save data via existing endpoints). Distinct from Stripe `onboarding_complete`. No backfill: instructors existing before this feature start at step 0.
 
