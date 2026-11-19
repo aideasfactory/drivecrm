@@ -521,7 +521,7 @@ class Order extends Model
      * The learner's default pickup point (or their first one) as a single
      * line, or null when they have none.
      */
-    protected function pickupLocationLine(): ?string
+    public function pickupLocationLine(): ?string
     {
         $pickupPoint = $this->student?->pickupPoints()
             ->orderByDesc('is_default')

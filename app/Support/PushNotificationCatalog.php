@@ -42,6 +42,14 @@ final class PushNotificationCatalog
                 'trigger' => 'Once, 48 hours before a lesson that is still unpaid and already has an invoice.',
             ],
             [
+                'key' => 'lesson_day_before',
+                'name' => 'Lesson reminder (day before)',
+                'audience' => 'learner',
+                'title' => 'Your driving lesson is tomorrow (or "Your driving test is tomorrow")',
+                'body' => '{date} at {time} with {instructor}. Pickup: {pickup}.',
+                'trigger' => 'Once per lesson, between 18:00 and 21:00 UK time the evening before an open lesson on a confirmed booking.',
+            ],
+            [
                 'key' => 'payment_link_resent',
                 'name' => 'Payment link re-sent',
                 'audience' => 'learner',

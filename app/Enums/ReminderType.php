@@ -9,4 +9,5 @@ enum ReminderType: string
     case MILES_START = 'miles_start';
     case MILES_END = 'miles_end';
     case PAYMENT_DUE_48H = 'payment_due_48h';
+    case LESSON_DAY_BEFORE = 'lesson_day_before';
 }
