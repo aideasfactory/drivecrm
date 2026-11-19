@@ -88,6 +88,15 @@ class Enquiry extends Model
     }
 
     /**
+     * Whether this is a staff booking and the given user is an owner (full or
+     * restricted access, i.e. admin or bookings team) running it.
+     */
+    public function isStaffBookingBy(?User $user): bool
+    {
+        return $this->isStaffBooking() && $user?->isOwner() === true;
+    }
+
+    /**
      * Whether a signed-in owner (admin or bookings team) started this enquiry,
      * with or without the staff_booking flag.
      */

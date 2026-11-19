@@ -66,7 +66,7 @@ class StepFourController extends Controller
      */
     private function canSeeClashes(Request $request, Enquiry $enquiry): bool
     {
-        return $enquiry->isStaffBooking() && $request->user()?->isOwner() === true;
+        return $enquiry->isStaffBookingBy($request->user());
     }
 
     public function show(Request $request)
@@ -114,6 +114,8 @@ class StepFourController extends Controller
             'availability' => $availability,
             'holdMinutes' => BookingPayments::learnerHoldMinutes(),
             'showClashPreview' => $this->canSeeClashes($request, $enquiry),
+            // Staff bookings by an owner: no forward limit, further months load on demand
+            'noForwardLimit' => $enquiry->isStaffBookingBy($request->user()),
             'disabledDates' => [
                 now()->format('Y-m-d'),           // Today
                 now()->addDay()->format('Y-m-d'), // Tomorrow
@@ -151,17 +153,28 @@ class StepFourController extends Controller
     }
 
     /**
-     * Dynamic availability fetch when instructor changes
+     * Dynamic availability fetch when instructor changes, or for a further
+     * month (?month=YYYY-MM) on staff bookings.
      * Returns JSON for partial reload
      */
     public function availability(Request $request, string $uuid, string $instructor)
     {
         $this->orderService->releaseExpiredHolds();
 
+        $validated = $request->validate([
+            'month' => ['nullable', 'date_format:Y-m'],
+        ]);
+
+        // Only owners running a staff booking may page beyond the learner
+        // window, one calendar month per request.
+        $month = ! empty($validated['month']) && $request->get('enquiry')->isStaffBookingBy($request->user())
+            ? Carbon::createFromFormat('!Y-m', $validated['month'])
+            : null;
+
         $availability = $this->calendarService->getAvailability(
             instructorId: $instructor,
-            fromDate: now()->addDays(2),
-            toDate: now()->addDays(56),
+            fromDate: $month?->copy()->startOfMonth() ?? now()->addDays(2),
+            toDate: $month?->copy()->endOfMonth() ?? now()->addDays(56),
         );
 
         // Return as Inertia partial or JSON
