@@ -30,6 +30,8 @@ class LessonResource extends JsonResource
             'start_time' => $this['start_time'],
             'end_time' => $this['end_time'],
             'status' => $this['status'],
+            // Lesson start time (UK) reached: sign-off opens then (same rule as the CRM and the sign-off endpoint).
+            'has_started' => $this['has_started'],
             'is_provisional' => $this['is_provisional'],
             'is_banked' => $this['is_banked'],
             'banked_at' => $this['banked_at'],

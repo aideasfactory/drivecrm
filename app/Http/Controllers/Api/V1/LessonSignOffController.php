@@ -53,6 +53,16 @@ class LessonSignOffController extends Controller
             return response()->json(['message' => "This lesson is waiting to be rebooked, so it can't be signed off yet."], 422);
         }
 
+        // Same rule as the CRM: sign-off opens at the lesson's start time (UK), not its end.
+        // Checked before the alternative payment step, which voids the Stripe invoice.
+        if (! $lesson->hasStarted()) {
+            $startsAt = $lesson->date->format('j M Y').($lesson->start_time ? ' at '.$lesson->start_time->format('H:i') : '');
+
+            return response()->json([
+                'message' => "This lesson can't be signed off until it has started ({$startsAt}).",
+            ], 422);
+        }
+
         $summary = $request->validated('summary');
 
         $this->alternativePaymentService->prepareSignOff(
