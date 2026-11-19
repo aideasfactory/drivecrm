@@ -24,6 +24,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('orders:release-expired-holds')->everyMinute()->withoutOverlapping();
         $schedule->command('push:send-queued')->everyMinute();
         $schedule->command('reminders:send')->everyFiveMinutes()->withoutOverlapping();
+        // No-op outside the UK send window in config/lessons.php (18:00-21:00 by default)
+        $schedule->command('reminders:lesson-day-before')->everyFiveMinutes()->withoutOverlapping();
         // Backup for weekly invoices, which are normally sent when the previous lesson is signed off
         $schedule->command('lessons:send-invoices')->hourly()->withoutOverlapping();
         $schedule->command('lessons:cancel-overdue-invoices')->hourly()->withoutOverlapping();

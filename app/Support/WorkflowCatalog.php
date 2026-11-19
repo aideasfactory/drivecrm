@@ -245,11 +245,13 @@ final class WorkflowCatalog
     private static function lessonWorkflows(): array
     {
         $recommendationsDelay = (int) config('lessons.recommendations_delay_minutes', 120);
+        $reminderFrom = (string) config('lessons.day_before_reminder.send_from', '18:00');
+        $reminderUntil = (string) config('lessons.day_before_reminder.send_until', '21:00');
 
         return [
             self::workflow('lesson-day', self::GROUP_LESSONS, 'On the day of a lesson', 'What the learner and instructor receive around the lesson itself.', [
-                self::step('Before the lesson', 'There is no lesson reminder for learners.', [
-                    self::none('Nothing is sent to the learner.'),
+                self::step('The evening before the lesson', "Between {$reminderFrom} and {$reminderUntil} (UK time) the learner is reminded of tomorrow's lesson: date, time, instructor and pickup point. Sent once per lesson, and again only if the lesson is moved to another day. There is no reminder email.", [
+                    self::push('Driving lesson tomorrow', 'Learner', 'Only if the learner has the app with notifications on. Not sent for cancelled, unpaid, banked or provisional lessons.'),
                 ]),
                 self::step('30 minutes before the instructor\'s first lesson of the day', 'The instructor is reminded to log their starting mileage.', [
                     self::push('Mileage reminder', 'Instructor'),

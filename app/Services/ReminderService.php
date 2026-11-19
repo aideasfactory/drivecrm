@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Actions\Reminder\GetLessonDayBeforeRemindersDueAction;
 use App\Actions\Reminder\GetMilesEndRemindersDueAction;
 use App\Actions\Reminder\GetMilesStartRemindersDueAction;
 use App\Actions\Reminder\GetPaymentRemindersDueAction;
+use App\Actions\Reminder\SendLessonDayBeforeReminderAction;
 use App\Actions\Reminder\SendMilesReminderAction;
 use App\Actions\Reminder\SendPaymentReminderAction;
 use App\Enums\ReminderType;
 use App\Models\Lesson;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class ReminderService extends BaseService
 {
@@ -20,6 +24,8 @@ class ReminderService extends BaseService
         protected GetPaymentRemindersDueAction $getPaymentReminders,
         protected SendMilesReminderAction $sendMilesReminder,
         protected SendPaymentReminderAction $sendPaymentReminder,
+        protected GetLessonDayBeforeRemindersDueAction $getLessonDayBeforeReminders,
+        protected SendLessonDayBeforeReminderAction $sendLessonDayBeforeReminder,
     ) {}
 
     /**
@@ -56,6 +62,38 @@ class ReminderService extends BaseService
         $lessons->each(fn (Lesson $lesson) => ($this->sendPaymentReminder)($lesson));
 
         return $lessons->count();
+    }
+
+    /**
+     * Queue "lesson tomorrow" pushes to learners. Each lesson is handled on its
+     * own so one failure is logged and retried on the next run without
+     * blocking the rest. Not part of dispatchAll(): it runs from its own
+     * scheduled command.
+     *
+     * @return array{queued: int, skipped: int, failed: int}
+     */
+    public function dispatchLessonDayBeforeReminders(): array
+    {
+        $counts = ['queued' => 0, 'skipped' => 0, 'failed' => 0];
+
+        foreach (($this->getLessonDayBeforeReminders)() as $lesson) {
+            try {
+                if (($this->sendLessonDayBeforeReminder)($lesson)) {
+                    $counts['queued']++;
+                } else {
+                    $counts['skipped']++;
+                }
+            } catch (Throwable $e) {
+                $counts['failed']++;
+
+                Log::error('Failed to queue lesson day-before reminder', [
+                    'lesson_id' => $lesson->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $counts;
     }
 
     /**
