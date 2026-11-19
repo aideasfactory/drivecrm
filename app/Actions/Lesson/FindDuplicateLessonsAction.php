@@ -33,8 +33,9 @@ use Illuminate\Support\Facades\DB;
  *
  * Only non-cancelled lessons are considered. Per group, the lesson to KEEP is
  * the Drive Plus version (moved, signed off with an instructor summary, or
- * booked in Drive rather than imported); otherwise the one with linked
- * payments; otherwise the oldest. Every other lesson is REMOVE. A group is
+ * booked in Drive rather than imported); otherwise the one with a lesson
+ * payment or payout; otherwise the oldest. GoRoadie finance rows don't count:
+ * they move to whichever lesson is kept. Every other lesson is REMOVE. A group is
  * flagged for manual review whenever removing automatically could touch money
  * or the choice is unclear.
  */
@@ -356,7 +357,7 @@ class FindDuplicateLessonsAction
         $reviewReasons = [];
 
         $edited = $lessons->filter(fn (Lesson $lesson): bool => $facts[$lesson->id]['drive_plus_changes'] !== []);
-        $withPayments = fn (Collection $pool): Collection => $pool->filter(fn (Lesson $lesson): bool => $facts[$lesson->id]['has_stripe_money'] || $facts[$lesson->id]['finance_ids'] !== []);
+        $withPayments = fn (Collection $pool): Collection => $pool->filter(fn (Lesson $lesson): bool => $facts[$lesson->id]['has_stripe_money']);
 
         if ($edited->count() === 1) {
             $keep = $edited->first();
@@ -372,7 +373,7 @@ class FindDuplicateLessonsAction
 
             if ($paid->count() === 1) {
                 $keep = $paid->first();
-                $keepReason = 'has linked payments';
+                $keepReason = 'has a lesson payment or payout';
             } else {
                 $keep = $pool->first();
                 $keepReason = 'oldest lesson';
