@@ -16,7 +16,7 @@ class InstructorMergeRequest extends InstructorMergePreviewRequest
     {
         return parent::rules() + [
             'confirm_email' => ['required', 'string', 'max:255'],
-            'warnings_acknowledged' => ['required', 'boolean'],
+            'acknowledged_warnings_token' => ['nullable', 'string', 'size:64'],
         ];
     }
 

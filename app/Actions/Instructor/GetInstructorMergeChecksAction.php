@@ -50,9 +50,9 @@ class GetInstructorMergeChecksAction
      * on the retired profile, HMRC data, year-end archives, progress with no matching tracker item), an
      * account already retired or scheduled for deletion, or a retired profile the public booking flow
      * routes to, or unsigned lessons that would be stranded on the retired profile because their order
-     * already has a payout there. With `$allowRetiredStripeAccount` (CLI `--leave-stripe` only) a Stripe
-     * Connect account on the retired profile is allowed and stays there with its payout history and the
-     * orders tied to it.
+     * already has a payout there (always checked). With `$allowRetiredStripeAccount` (CLI `--leave-stripe`
+     * only) a Stripe Connect account on the retired profile is allowed and stays there with its payout
+     * history and the fully signed-off orders tied to it.
      *
      * Warnings don't stop it but an admin must acknowledge them: diary clashes, pupils who look like the
      * same person on both accounts, unsettled payouts left behind, and a kept account that can't take payouts.
@@ -110,7 +110,7 @@ class GetInstructorMergeChecksAction
                 : "The old account has its own Stripe Connect account ({$from->stripe_account_id}). Its payouts went there, and its unpaid lessons would be paid to the live account's Stripe account instead. This tool won't decide that. Ask the tech team.";
         }
 
-        $strandedLessons = $allowRetiredStripeAccount ? 0 : DB::table('lessons')
+        $strandedLessons = DB::table('lessons')
             ->where('instructor_id', $from->id)
             ->whereIn('status', [LessonStatus::DRAFT->value, LessonStatus::PENDING->value])
             ->whereIn('order_id', DB::table('lessons')

@@ -72,7 +72,7 @@ class InstructorMergeController extends Controller
                 $into,
                 $request->user(),
                 $request->boolean('take_email'),
-                $request->boolean('warnings_acknowledged'),
+                $request->validated('acknowledged_warnings_token'),
             );
         } catch (RuntimeException $exception) {
             return back()->withErrors(['merge' => $exception->getMessage()]);

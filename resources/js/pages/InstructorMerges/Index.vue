@@ -113,6 +113,7 @@ interface MergePreview {
     warnings: MergeWarning[];
     duplicate_pupils: DuplicatePupil[];
     clashes: DiaryClash[];
+    warnings_token: string;
 }
 
 interface MergeHistoryRow {
@@ -322,7 +323,9 @@ const handleMerge = () => {
             from_instructor_id: preview.value.from.id,
             into_instructor_id: preview.value.into.id,
             take_email: takeEmail.value,
-            warnings_acknowledged: warningsAcknowledged.value,
+            acknowledged_warnings_token: warningsAcknowledged.value
+                ? preview.value.warnings_token
+                : null,
             confirm_email: confirmEmail.value.trim(),
         },
         {
