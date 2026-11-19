@@ -360,7 +360,10 @@
             <Button @click="previousMonth" :disabled="!canGoToPreviousMonth" variant="ghost" size="icon">
               <ChevronLeft class="h-4 w-4" />
             </Button>
-            <h4 class="text-lg font-semibold">{{ currentMonthYear }}</h4>
+            <h4 class="flex items-center gap-2 text-lg font-semibold">
+              {{ currentMonthYear }}
+              <Spinner v-if="loadingMonths > 0" class="h-4 w-4" />
+            </h4>
             <Button @click="nextMonth" :disabled="!canGoToNextMonth" variant="ghost" size="icon">
               <ChevronRight class="h-4 w-4" />
             </Button>
@@ -413,6 +416,7 @@ import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
 import OnboardingLeftSidebar from '@/components/Onboarding/OnboardingLeftSidebar.vue'
 import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 import { clashPreview as clashPreviewRoute, step3 } from '@/routes/onboarding'
+import { availability as instructorAvailabilityRoute } from '@/routes/onboarding/instructor'
 import { store } from '@/routes/onboarding/step4'
 import { ArrowLeft, ArrowRight, RefreshCw, Star, GraduationCap, Calendar, CalendarCheck, CalendarX, CheckCircle2, ChevronLeft, ChevronRight, Info, TriangleAlert, XCircle } from 'lucide-vue-next'
 
@@ -425,7 +429,9 @@ const props = defineProps({
   maxStepReached: { type: Number, default: 4 },
   holdMinutes: { type: Number, default: 10 },
   // Bookings team "Book lessons for a student" only
-  showClashPreview: { type: Boolean, default: false }
+  showClashPreview: { type: Boolean, default: false },
+  // Bookings team "Book lessons for a student" only: no forward limit on dates
+  noForwardLimit: { type: Boolean, default: false }
 })
 
 const page = usePage()
@@ -491,13 +497,23 @@ function getInitials(name) {
 // Use instructors from database
 const availableInstructors = ref(props.availableInstructors || [])
 
+// Staff bookings only: availability for months fetched after page load
+const laterMonthDates = ref([])
+
+// Page-load availability plus any later months, by date
+const availabilityDates = computed(() => {
+  const byDate = new Map((props.availability?.dates || []).map(d => [d.date, d]))
+  laterMonthDates.value.forEach(d => byDate.set(d.date, d))
+  return [...byDate.values()]
+})
+
 // Get time slots for the selected date
 const timeSlots = computed(() => {
-  if (!form.date || !props.availability?.dates) {
+  if (!form.date) {
     return []
   }
 
-  const selectedDateData = props.availability.dates.find(d => d.date === form.date)
+  const selectedDateData = availabilityDates.value.find(d => d.date === form.date)
   if (!selectedDateData || !selectedDateData.slots) {
     return []
   }
@@ -539,10 +555,8 @@ const visibleDates = computed(() => {
 
     // Check if this date is in our availability data
     let available = false
-    if (props.availability?.dates) {
-      const availableDate = props.availability.dates.find(d => d.date === dateString)
-      available = availableDate?.has_availability || false
-    }
+    const availableDate = availabilityDates.value.find(d => d.date === dateString)
+    available = availableDate?.has_availability || false
 
     // Enforce 2-day minimum advance booking
     const daysDiff = Math.floor((date - today) / (1000 * 60 * 60 * 24))
@@ -608,10 +622,73 @@ const canGoToPreviousMonth = computed(() => {
 })
 
 const canGoToNextMonth = computed(() => {
+  if (props.noForwardLimit) return true
   if (!lastAvailableMonth.value) return false
   const nextMonthStart = new Date(currentViewMonth.value.getFullYear(), currentViewMonth.value.getMonth() + 1, 1)
   return nextMonthStart <= lastAvailableMonth.value
 })
+
+// Staff bookings: the page loads the same 8-week window as learners get;
+// each later month is fetched once, when it is first brought into view.
+const INITIAL_WINDOW_DAYS = 56
+const fetchedMonths = new Set()
+const loadingMonths = ref(0)
+
+function monthKey(year, monthIndex) {
+  return `${year}-${String(monthIndex + 1).padStart(2, '0')}`
+}
+
+function isInsideInitialWindow(year, monthIndex) {
+  const windowEnd = new Date()
+  windowEnd.setHours(0, 0, 0, 0)
+  // One day short of the server's window, so a timezone difference never leaves a gap
+  windowEnd.setDate(windowEnd.getDate() + INITIAL_WINDOW_DAYS - 1)
+  return new Date(year, monthIndex + 1, 0) <= windowEnd
+}
+
+async function ensureMonthLoaded(year, monthIndex) {
+  if (!props.noForwardLimit || !form.instructor_id) return
+  if (isInsideInitialWindow(year, monthIndex)) return
+
+  const instructorId = form.instructor_id
+  const key = monthKey(year, monthIndex)
+  const cacheKey = `${instructorId}:${key}`
+  if (fetchedMonths.has(cacheKey)) return
+  fetchedMonths.add(cacheKey)
+
+  loadingMonths.value++
+  try {
+    const response = await axios.get(
+      instructorAvailabilityRoute(
+        { uuid: props.uuid || page.props.enquiry?.id || page.props.uuid, instructor: instructorId },
+        { query: { month: key } }
+      ).url
+    )
+    // Ignore a late response for an instructor who is no longer selected
+    if (form.instructor_id === instructorId) {
+      laterMonthDates.value = [...laterMonthDates.value, ...(response.data.availability?.dates || [])]
+    }
+  } catch {
+    fetchedMonths.delete(cacheKey)
+    toast({ title: 'Failed to load availability for that month', variant: 'destructive' })
+  } finally {
+    loadingMonths.value--
+  }
+}
+
+function ensureDatesLoaded(dates) {
+  const seen = new Set()
+  dates.forEach(date => {
+    const key = monthKey(date.getFullYear(), date.getMonth())
+    if (!seen.has(key)) {
+      seen.add(key)
+      ensureMonthLoaded(date.getFullYear(), date.getMonth())
+    }
+  })
+}
+
+watch(currentViewMonth, (month) => ensureMonthLoaded(month.getFullYear(), month.getMonth()))
+watch(visibleDates, (dates) => ensureDatesLoaded(dates.map(d => d.date)))
 
 // Watch for changes and show toast
 watch(() => form.date, () => {
@@ -681,12 +758,8 @@ function isDateAvailable(day) {
   }
 
   // Then check if date exists in availability data
-  if (props.availability?.dates) {
-    const availableDate = props.availability.dates.find(d => d.date === dateString)
-    return availableDate?.has_availability || false
-  }
-
-  return false // No availability data means not available
+  const availableDate = availabilityDates.value.find(d => d.date === dateString)
+  return availableDate?.has_availability || false
 }
 
 function selectDate(dateString) {
@@ -760,6 +833,8 @@ async function selectInstructor(instructor) {
       // Update the props availability data
       props.availability.dates = data.availability.dates
       props.availability.default_selected_index = data.availability.default_selected_index
+      fetchedMonths.clear()
+      laterMonthDates.value = []
 
       // Reset date selection to force re-selection with new availability
       form.date = ''
@@ -769,6 +844,10 @@ async function selectInstructor(instructor) {
 
       // Pre-select the new instructor's next available date and slot
       applyDefaultSelection()
+
+      // Staff bookings: reload any later month still in view for the new instructor
+      ensureMonthLoaded(currentViewMonth.value.getFullYear(), currentViewMonth.value.getMonth())
+      ensureDatesLoaded(visibleDates.value.map(d => d.date))
 
       // Show confirmation toast
       toast({ title: 'Instructor changed successfully' })
@@ -795,6 +874,11 @@ function previousWeek() {
 }
 
 function nextWeek() {
+  if (props.noForwardLimit) {
+    weekOffset.value++
+    return
+  }
+
   // Only allow next while the availability window (last known date) is in view
   const dates = props.availability?.dates
   if (!dates?.length) return
