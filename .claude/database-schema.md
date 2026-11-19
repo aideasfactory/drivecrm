@@ -1543,7 +1543,7 @@ Idempotency/control table for scheduled reminder notifications (miles + payment-
 |--------|------|-------------|-------------|
 | `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Unique reminder identifier |
 | `lesson_id` | bigint unsigned | FOREIGN KEY (lessons.id), ON DELETE CASCADE | Lesson the reminder relates to |
-| `type` | varchar(255) | NOT NULL | Reminder type (`ReminderType` value): `miles_start`, `miles_end`, `payment_due_48h` |
+| `type` | varchar(255) | NOT NULL | Reminder type (`ReminderType` value): `miles_start`, `miles_end`, `payment_due_48h`, `lesson_day_before` |
 | `sent_at` | timestamp | NULLABLE | When the reminder delivery was queued |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
@@ -1557,11 +1557,12 @@ Idempotency/control table for scheduled reminder notifications (miles + payment-
 - `Lesson` has many `LessonReminder` (via `lessons.reminders()`)
 
 **Enums:**
-- Type (`App\Enums\ReminderType`): `miles_start`, `miles_end`, `payment_due_48h`
+- Type (`App\Enums\ReminderType`): `miles_start`, `miles_end`, `payment_due_48h`, `lesson_day_before`
 
 **Business Logic:**
 - Written by the `SendMilesReminderAction` / `SendPaymentReminderAction` after a delivery is queued (`updateOrCreate` keyed on `lesson_id` + `type`).
 - The scheduled command (`reminders:send`, every 5 minutes) matches due candidates via `whereDoesntHave('reminders', type=…)` so existing rows suppress repeats.
+- `lesson_day_before` (learner push the evening before a lesson) is written by `SendLessonDayBeforeReminderAction` via its own command (`reminders:lesson-day-before`, every 5 minutes, sends only 18:00–21:00 UK). The row is locked and written in the same transaction as the queued push. A row only suppresses a repeat when its `sent_at` is on the current UK day, so a lesson moved to a later date is reminded again for its new date (the row's `sent_at` is updated in place). No schema change.
 
 ---
 
