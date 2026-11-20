@@ -10,12 +10,14 @@ use App\Enums\LessonStatus;
 use App\Enums\OrderStatus;
 use App\Models\Lesson;
 use App\Models\LessonDeletionRequest;
+use App\Models\LessonPayment;
 use App\Models\Order;
 use App\Models\User;
 use App\Services\InstructorCalendarService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
+use Throwable;
 
 class ApproveLessonDeletionRequestAction
 {
@@ -50,7 +52,12 @@ class ApproveLessonDeletionRequestAction
                 ? Lesson::query()->whereKey($locked->lesson_id)->lockForUpdate()->first()
                 : null;
 
-            $lesson?->load(['order', 'lessonPayment', 'payout', 'instructorFinances', 'calendarItem.calendar', 'reflectiveLog']);
+            if ($lesson) {
+                // Locked before the check: SendLessonInvoiceAction holds this row while it
+                // creates a Stripe invoice, so we either wait and see the invoice or it skips.
+                $lesson->setRelation('lessonPayment', LessonPayment::query()->where('lesson_id', $lesson->id)->lockForUpdate()->first());
+                $lesson->load(['order', 'payout', 'instructorFinances', 'calendarItem.calendar', 'reflectiveLog']);
+            }
 
             $blocker = ($this->getLessonDeletionBlocker)($lesson);
 
@@ -105,14 +112,22 @@ class ApproveLessonDeletionRequestAction
             'lesson' => $outcome['snapshot'],
         ]);
 
-        $this->closeOrderIfNothingLeft($outcome['order']);
+        try {
+            $this->closeOrderIfNothingLeft($outcome['order']);
 
-        if ($approved->student_id) {
-            ($this->recalculateStudentLessonNumbers)($approved->student_id);
-        }
+            if ($approved->student_id) {
+                ($this->recalculateStudentLessonNumbers)($approved->student_id);
+            }
 
-        if ($outcome['instructor_id'] && $outcome['calendar_date']) {
-            app(InstructorCalendarService::class)->invalidateCalendarCache($outcome['instructor_id'], $outcome['calendar_date']);
+            if ($outcome['instructor_id'] && $outcome['calendar_date']) {
+                app(InstructorCalendarService::class)->invalidateCalendarCache($outcome['instructor_id'], $outcome['calendar_date']);
+            }
+        } catch (Throwable $e) {
+            Log::error('Lesson deleted, but tidying up after the deletion failed', [
+                'lesson_deletion_request_id' => $approved->id,
+                'order_id' => $outcome['snapshot']['order_id'] ?? null,
+                'error' => $e->getMessage(),
+            ]);
         }
 
         return $approved;

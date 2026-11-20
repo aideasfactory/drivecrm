@@ -8,6 +8,7 @@ use App\Enums\LessonDeletionRequestStatus;
 use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\LessonDeletionRequest;
+use App\Models\LessonPayment;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -34,6 +35,9 @@ class RequestLessonDeletionAction
             if ($lockedLesson && $lockedLesson->pendingDeletionRequest()->exists()) {
                 throw new RuntimeException('A deletion request is already pending for this lesson.');
             }
+
+            // Waits for an invoice being created right now, so the check below sees it.
+            $lockedLesson?->setRelation('lessonPayment', LessonPayment::query()->where('lesson_id', $lockedLesson->id)->lockForUpdate()->first());
 
             $blocker = ($this->getLessonDeletionBlocker)($lockedLesson);
 
