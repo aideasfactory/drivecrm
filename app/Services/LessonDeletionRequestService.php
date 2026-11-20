@@ -17,7 +17,9 @@ use App\Models\Lesson;
 use App\Models\LessonDeletionRequest;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
+use Throwable;
 
 /**
  * Instructors ask for a past lesson logged by mistake to be deleted; owners
@@ -178,7 +180,23 @@ class LessonDeletionRequestService extends BaseService
         ])->values()->all();
     }
 
+    /**
+     * The decision is already committed, so a logging failure must not turn
+     * it into an error response.
+     */
     protected function logDecision(LessonDeletionRequest $deletionRequest, User $actor, string $outcome): void
+    {
+        try {
+            $this->writeDecisionLogs($deletionRequest, $actor, $outcome);
+        } catch (Throwable $e) {
+            Log::error('Failed to log a lesson deletion request decision', [
+                'lesson_deletion_request_id' => $deletionRequest->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    protected function writeDecisionLogs(LessonDeletionRequest $deletionRequest, User $actor, string $outcome): void
     {
         $deletionRequest->loadMissing(['instructor', 'student']);
         $message = "Request to delete the lesson with {$this->pupilLabel($deletionRequest)} on {$this->lessonLabel($deletionRequest)} was {$outcome} by {$actor->name}. Reason given: {$deletionRequest->reason}";
