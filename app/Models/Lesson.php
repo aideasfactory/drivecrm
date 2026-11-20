@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\LessonCancellationReason;
+use App\Enums\LessonDeletionRequestStatus;
 use App\Enums\LessonStatus;
 use App\Enums\ProvisionalLessonHandler;
 use App\Support\BookingPayments;
@@ -142,6 +143,31 @@ class Lesson extends Model
     public function reminders(): HasMany
     {
         return $this->hasMany(LessonReminder::class);
+    }
+
+    /**
+     * Instructor finance rows (income records) tied to this lesson.
+     */
+    public function instructorFinances(): HasMany
+    {
+        return $this->hasMany(InstructorFinance::class);
+    }
+
+    /**
+     * Every request the instructor has made to delete this lesson.
+     */
+    public function deletionRequests(): HasMany
+    {
+        return $this->hasMany(LessonDeletionRequest::class);
+    }
+
+    /**
+     * The instructor's deletion request still waiting for an owner, if any.
+     */
+    public function pendingDeletionRequest(): HasOne
+    {
+        return $this->hasOne(LessonDeletionRequest::class)
+            ->where('status', LessonDeletionRequestStatus::PENDING);
     }
 
     /**
