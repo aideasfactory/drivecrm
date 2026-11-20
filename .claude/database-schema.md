@@ -14,7 +14,7 @@ This document provides a comprehensive overview of the database structure for th
 - `ResourceWatch` → Tracks which resources a user has watched (user_id + resource_id, unique)
 - `StudentPickupPoint` → Pickup/drop-off locations per student (geocoded)
 - `StudentChecklistItem` → Progress tracking items per student (theory test, practical test, etc.)
-- `MockTestQuestion` → Theory test question bank (~2,923 questions across 4 categories)
+- `MockTestQuestion` → Theory test question bank. Pupils only get the 758 `Car` questions; Motorcycle/LGV-PCV/ADI rows are kept unused
 - `MockTest` → Student test session (score, pass/fail, timestamps)
 - `MockTestAnswer` → Individual answers per test (right/wrong, for category performance tracking)
 - `HazardPerceptionVideo` → Hazard perception video clips with categorisation, recap flag, and optional recap video; admin-uploaded to S3
@@ -1844,13 +1844,16 @@ No new tables and no schema changes — the feature reuses `lessons.instructor_i
 
 ### mock_test_questions
 
-Theory test question bank imported from DVSA-style Excel files. ~2,923 questions across 4 categories.
+Theory test question bank imported from DVSA Excel files. 1,462 rows (as of 2026-11-20):
+- **`Car` (758): the only bank pupils get.** Source of truth is the DVSA "Car (Cat B) QB Feb 2026" spreadsheet (`database/seeders/data/car-cat-b-qb-feb-2026.xlsx`), which has 445 `AB` (shared car/motorcycle) and 313 `BB` (car-only) codes. Sync with `php artisan mock-tests:import-car-bank [path] [--dry-run]`. It upserts by `item_code`, sets `category = Car` and never deletes. `MockTestQuestion::scopeInBank()` / `BANK_CATEGORY` is the filter every pupil-facing query uses.
+- **`Motorcycle` (165 `AA`), `LGV-PCV` (485), `ADI` (54): kept but unused**, so past `mock_test_answers` still resolve. No data migration, no schema change.
+- Image URLs are `{MOCK_TEST_IMAGE_BASE_URL}/{category}/{file}`, so every Car question loads images from the bucket's `Car/` folder (all 312 present).
 
 | Column | Type | Nullable | Description |
 |--------|------|----------|-------------|
 | id | bigint PK | No | Auto-increment |
 | item_code | varchar(20) | No | Original question code (e.g. AB2001). Unique index. |
-| category | varchar(50) | No | Top-level category: Car, ADI, Motorcycle, LGV-PCV. Indexed. |
+| category | varchar(50) | No | Top-level category: Car, ADI, Motorcycle, LGV-PCV. Indexed. Only `Car` is served to pupils (see above). |
 | topic | varchar(100) | No | Sub-category/topic (e.g. "Alertness", "Road and traffic signs"). Indexed. |
 | stem | text | No | The question text |
 | option_a | text | Yes | Option A text (null if image-only option) |

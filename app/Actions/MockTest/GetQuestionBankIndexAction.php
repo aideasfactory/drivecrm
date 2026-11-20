@@ -14,6 +14,7 @@ class GetQuestionBankIndexAction
     public function __invoke(): array
     {
         $rows = MockTestQuestion::query()
+            ->inBank()
             ->selectRaw('category, topic, COUNT(*) as total')
             ->groupBy('category', 'topic')
             ->orderBy('category')

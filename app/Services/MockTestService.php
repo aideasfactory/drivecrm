@@ -10,6 +10,7 @@ use App\Actions\MockTest\GetQuestionBankIndexAction;
 use App\Actions\MockTest\GetRevisionQuestionsAction;
 use App\Actions\MockTest\GetTestHistoryAction;
 use App\Actions\MockTest\GetTestSummaryAction;
+use App\Actions\MockTest\ImportCarQuestionBankAction;
 use App\Actions\MockTest\SubmitTestAnswersAction;
 use App\Models\MockTest;
 use App\Models\Student;
@@ -25,6 +26,7 @@ class MockTestService extends BaseService
         protected GetQuestionBankIndexAction $getQuestionBankIndex,
         protected GetRevisionQuestionsAction $getRevisionQuestions,
         protected GetTestHistoryAction $getTestHistory,
+        protected ImportCarQuestionBankAction $importCarQuestionBank,
     ) {}
 
     public function startTest(
@@ -64,9 +66,8 @@ class MockTestService extends BaseService
     }
 
     /**
-     * Question-bank index (categories + topics + counts). The bank only
-     * changes via seeding, so a shared cache with TTL expiry is sufficient —
-     * no invalidation hook needed.
+     * Question-bank index (Car bank topics + counts). The bank only changes
+     * via mock-tests:import-car-bank, which clears this cache.
      *
      * @return array<int, array{category: string, total_questions: int, topics: array<int, array{topic: string, total_questions: int}>}>
      */
@@ -75,6 +76,23 @@ class MockTestService extends BaseService
         $key = $this->cacheKey('mock_tests', 'bank', 'index');
 
         return $this->remember($key, fn (): array => ($this->getQuestionBankIndex)());
+    }
+
+    /**
+     * Sync the Car bank from the DVSA spreadsheet, then drop the cached
+     * question-bank index so pupils see the new categories/topics at once.
+     *
+     * @return array{rows: int, created: array<int, string>, updated: array<int, string>, recategorised: array<int, string>, unchanged: int, invalid: array<int, string>, car_not_in_sheet: array<int, string>}
+     */
+    public function importCarQuestionBank(string $path, bool $dryRun = false): array
+    {
+        $result = ($this->importCarQuestionBank)($path, $dryRun);
+
+        if (! $dryRun) {
+            $this->invalidate($this->cacheKey('mock_tests', 'bank', 'index'));
+        }
+
+        return $result;
     }
 
     public function getRevisionQuestions(string $category, ?string $topic = null, int $perPage = 20): LengthAwarePaginator

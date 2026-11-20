@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\MockTest;
 
 use App\Models\MockTestAnswer;
+use App\Models\MockTestQuestion;
 use App\Models\Student;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +19,7 @@ class GetCategoryPerformanceAction
             ->join('mock_test_questions', 'mock_test_answers.mock_test_question_id', '=', 'mock_test_questions.id')
             ->where('mock_tests.student_id', $student->id)
             ->whereNotNull('mock_tests.completed_at')
+            ->where('mock_test_questions.category', MockTestQuestion::BANK_CATEGORY)
             ->when($category, fn ($q) => $q->where('mock_test_questions.category', $category))
             ->groupBy('mock_test_questions.topic')
             ->select([

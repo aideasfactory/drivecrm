@@ -19,7 +19,7 @@ class RevisionQuestionsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'category' => ['required', 'string', 'in:Car,ADI,Motorcycle,LGV-PCV'],
+            'category' => ['required', 'string', 'in:Car'],
             'topic' => ['nullable', 'string', 'max:100'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ];
