@@ -41,10 +41,12 @@ class GetInstructorLessonsInRangeAction
                     'is_available', 'status', 'item_type', 'notes',
                 ]),
                 'calendarItem.calendar:id,instructor_id,date',
-                'lessonPayment:id,lesson_id,amount_pence,test_pass_guarantee_pence,status,payment_method,alternative_payment_confirmed_at,paid_at',
+                'lessonPayment:id,lesson_id,amount_pence,test_pass_guarantee_pence,status,payment_method,alternative_payment_confirmed_at,paid_at,stripe_invoice_id,invoice_cancelled_at',
                 'payout:id,lesson_id,status,failure_code,failure_message,amount_pence,paid_at',
                 'reflectiveLog:id,lesson_id',
                 'resources:id,title,resource_type',
+                'pendingDeletionRequest',
+                'instructorFinances:id,lesson_id',
             ])
             ->orderBy('date')
             ->orderBy('start_time')

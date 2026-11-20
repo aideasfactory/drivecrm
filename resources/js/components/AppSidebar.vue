@@ -4,6 +4,7 @@ import {
     ArrowRightLeft,
     Bell,
     BookOpen,
+    CalendarX,
     CalendarCheck,
     DatabaseZap,
     Mail,
@@ -46,6 +47,7 @@ import { edit as profileEdit } from '@/routes/profile';
 import { index as discountCodesIndex } from '@/routes/discount-codes';
 import { index as packagesIndex } from '@/routes/packages';
 import { index as lessonsBookedIndex } from '@/routes/lessons-booked';
+import { index as lessonDeletionRequestsIndex } from '@/routes/lesson-deletion-requests';
 import { index as pupilsIndex } from '@/routes/pupils';
 import { index as reportsIndex } from '@/routes/reports';
 import { index as pushNotificationsIndex } from '@/routes/push-notifications';
@@ -76,6 +78,13 @@ const allNavItems: NavItem[] = [
         href: instructorsIndex(),
         icon: GraduationCap,
         roles: ['owner'], // Only visible to owners
+        restrictedOwnerVisible: true,
+    },
+    {
+        title: 'Lesson Deletion Requests',
+        href: lessonDeletionRequestsIndex(),
+        icon: CalendarX,
+        roles: ['owner'],
         restrictedOwnerVisible: true,
     },
     {
@@ -199,14 +208,26 @@ const allNavItems: NavItem[] = [
 // Filter nav items based on user role
 const page = usePage();
 
-const supportUnreadCount = computed(() => page.props.supportInbox?.unread_count ?? 0);
+const supportUnreadCount = computed(
+    () => page.props.supportInbox?.unread_count ?? 0,
+);
+const pendingLessonDeletionCount = computed(
+    () => page.props.lessonDeletionRequests?.pending_count ?? 0,
+);
+
+const navBadges = computed<Record<string, number>>(() => ({
+    'Support Messages': supportUnreadCount.value,
+    'Lesson Deletion Requests': pendingLessonDeletionCount.value,
+}));
 
 const mainNavItems = computed(() =>
     allNavItems
-        .filter((item) => canSeeNavItem(item.roles, item.restrictedOwnerVisible))
+        .filter((item) =>
+            canSeeNavItem(item.roles, item.restrictedOwnerVisible),
+        )
         .map((item) =>
-            item.title === 'Support Messages'
-                ? { ...item, badge: supportUnreadCount.value }
+            item.title in navBadges.value
+                ? { ...item, badge: navBadges.value[item.title] }
                 : item,
         ),
 );

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\V1;
 
+use App\Support\LessonDeletionFlags;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -54,6 +55,12 @@ class LessonResource extends JsonResource
             'can_confirm_alternative_payment' => $this['can_confirm_alternative_payment'],
             'can_sign_off_with_alternative_payment' => $this['can_sign_off_with_alternative_payment'],
             'paid_by_alternative_method' => $this['paid_by_alternative_method'],
+            ...LessonDeletionFlags::build(
+                $this['deletion_request'] ?? null,
+                $this['deletion_blocker'] ?? null,
+                $this['instructor_id'] ?? null,
+                $request->user(),
+            ),
         ];
     }
 }

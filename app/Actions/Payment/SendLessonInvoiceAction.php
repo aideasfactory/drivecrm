@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Actions\Payment;
 
 use App\Actions\Shared\LogActivityAction;
+use App\Enums\PaymentStatus;
+use App\Models\LessonDeletionRequest;
 use App\Models\LessonPayment;
 use App\Models\Student;
 use App\Notifications\LessonPaymentReminderNotification;
 use App\Services\PushNotificationService;
 use App\Services\StripeService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 
@@ -24,9 +27,81 @@ class SendLessonInvoiceAction
     /**
      * Create a Stripe invoice for a lesson payment and send a reminder notification.
      *
-     * @return array{success: bool, invoice_id?: string, hosted_invoice_url?: string, error?: string}
+     * The lesson payment row is locked (SELECT ... FOR UPDATE) and re-checked
+     * before Stripe is called, and stays locked until the invoice id is saved.
+     * Approving a lesson deletion locks the same row, so the two can't overlap:
+     * a payment that has gone, is no longer due, is already invoiced or whose
+     * lesson has a pending deletion request is skipped (`skipped: true`) and
+     * Stripe is never called. The reminder email is sent after the commit.
+     *
+     * @return array{success: bool, skipped?: bool, invoice_id?: string, hosted_invoice_url?: string, error?: string}
      */
     public function __invoke(LessonPayment $lessonPayment): array
+    {
+        $outcome = DB::transaction(function () use ($lessonPayment): array {
+            $lockedPayment = LessonPayment::query()->whereKey($lessonPayment->id)->lockForUpdate()->first();
+            $skipReason = $this->skipReason($lockedPayment);
+
+            if ($skipReason !== null) {
+                Log::info('Lesson invoice skipped', [
+                    'lesson_payment_id' => $lessonPayment->id,
+                    'lesson_id' => $lessonPayment->lesson_id,
+                    'reason' => $skipReason,
+                ]);
+
+                return ['result' => ['success' => false, 'skipped' => true, 'error' => $skipReason]];
+            }
+
+            $lessonPayment->setRawAttributes($lockedPayment->getAttributes(), true);
+
+            return $this->createInvoice($lessonPayment);
+        });
+
+        $result = $outcome['result'];
+
+        if (! $result['success']) {
+            return $result;
+        }
+
+        $this->sendReminderNotification($lessonPayment, $outcome['student'], $result['hosted_invoice_url'], $outcome['breakdown']);
+
+        Log::info('Lesson invoice sent successfully', [
+            'lesson_payment_id' => $lessonPayment->id,
+            'lesson_id' => $lessonPayment->lesson_id,
+            'invoice_id' => $result['invoice_id'],
+            'student_id' => $outcome['student']->id,
+        ]);
+
+        return $result;
+    }
+
+    protected function skipReason(?LessonPayment $lockedPayment): ?string
+    {
+        if (! $lockedPayment) {
+            return 'This lesson payment no longer exists.';
+        }
+
+        if ($lockedPayment->status !== PaymentStatus::DUE) {
+            return 'This lesson payment is no longer due.';
+        }
+
+        if ($lockedPayment->stripe_invoice_id !== null) {
+            return 'This lesson payment has already been invoiced.';
+        }
+
+        if (LessonDeletionRequest::query()->where('pending_lesson_id', $lockedPayment->lesson_id)->exists()) {
+            return 'This lesson has a pending deletion request.';
+        }
+
+        return null;
+    }
+
+    /**
+     * Runs inside the lock taken in __invoke.
+     *
+     * @return array{result: array<string, mixed>, student?: Student, breakdown?: array<string, int>|null}
+     */
+    protected function createInvoice(LessonPayment $lessonPayment): array
     {
         $lesson = $lessonPayment->lesson;
         $order = $lesson->order;
@@ -47,7 +122,7 @@ class SendLessonInvoiceAction
                     'error' => $customerResult['error'] ?? 'Unknown',
                 ]);
 
-                return ['success' => false, 'error' => 'Student has no Stripe customer ID'];
+                return ['result' => ['success' => false, 'error' => 'Student has no Stripe customer ID']];
             }
 
             $user->stripe_customer_id = $customerResult['customer_id'];
@@ -69,25 +144,14 @@ class SendLessonInvoiceAction
                 'error' => $result['error'],
             ]);
 
-            return $result;
+            return ['result' => $result];
         }
 
-        // Update lesson payment with invoice ID
         $lessonPayment->update([
             'stripe_invoice_id' => $result['invoice_id'],
         ]);
 
-        // Send payment reminder notification
-        $this->sendReminderNotification($lessonPayment, $student, $result['hosted_invoice_url'], $breakdown);
-
-        Log::info('Lesson invoice sent successfully', [
-            'lesson_payment_id' => $lessonPayment->id,
-            'lesson_id' => $lesson->id,
-            'invoice_id' => $result['invoice_id'],
-            'student_id' => $student->id,
-        ]);
-
-        return $result;
+        return ['result' => $result, 'student' => $student, 'breakdown' => $breakdown];
     }
 
     /**

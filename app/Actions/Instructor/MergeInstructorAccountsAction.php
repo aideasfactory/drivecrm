@@ -29,6 +29,7 @@ class MergeInstructorAccountsAction
         'slot_offers',
         'vehicles',
         'student_tests',
+        'lesson_deletion_requests',
     ];
 
     /**
@@ -44,6 +45,8 @@ class MergeInstructorAccountsAction
         ['lessons', 'banked_by_user_id'],
         ['lessons', 'cancelled_by_user_id'],
         ['lesson_payments', 'alternative_payment_confirmed_by'],
+        ['lesson_deletion_requests', 'requested_by_user_id'],
+        ['lesson_deletion_requests', 'decided_by_user_id'],
     ];
 
     /**

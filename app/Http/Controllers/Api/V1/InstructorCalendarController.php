@@ -75,6 +75,8 @@ class InstructorCalendarController extends Controller
             'lessons.order.lessons.payout',
             'lessons.payout',
             'lessons.lessonPayment',
+            'lessons.pendingDeletionRequest',
+            'lessons.instructorFinances:id,lesson_id',
             'slotOffer',
         ]);
 

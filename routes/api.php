@@ -98,6 +98,8 @@ Route::prefix('v1')->group(function (): void {
             Route::get('banked-lessons', [InstructorLessonController::class, 'banked']);
             Route::post('lessons/{lesson}/rebook', [InstructorLessonController::class, 'rebook']);
             Route::post('lessons/{lesson}/cancel-banked', [InstructorLessonController::class, 'cancelBanked']);
+            Route::post('lessons/{lesson}/deletion-request', [InstructorLessonController::class, 'requestDeletion'])->middleware('throttle:30,1');
+            Route::delete('lessons/{lesson}/deletion-request', [InstructorLessonController::class, 'cancelDeletionRequest']);
             Route::get('lesson-cancellation-reasons', [InstructorCalendarController::class, 'cancellationReasons']);
             Route::post('calendar/items/{calendarItem}/offers', [InstructorCalendarController::class, 'storeOffer']);
             Route::delete('calendar/items/{calendarItem}/offers', [InstructorCalendarController::class, 'destroyOffer']);

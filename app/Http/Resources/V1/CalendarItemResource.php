@@ -9,6 +9,7 @@ use App\Enums\LessonStatus;
 use App\Enums\SlotOfferStatus;
 use App\Models\Lesson;
 use App\Support\AlternativePayments;
+use App\Support\LessonDeletionFlags;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Carbon;
@@ -85,6 +86,9 @@ class CalendarItemResource extends JsonResource
             'mileage' => $lesson?->mileage,
             'future_siblings_count' => $this->futureSiblingsCount($lesson),
             'has_open_offer' => $this->hasOpenOffer(),
+            // Instructor's request for Head Office to delete this past lesson
+            // (logged by mistake): pending state, and whether it can be asked for.
+            ...$this->deletionFlags($lesson, $request),
         ];
     }
 
@@ -209,6 +213,22 @@ class CalendarItemResource extends JsonResource
                 && $sibling->payout === null
                 && $sibling->status !== LessonStatus::COMPLETED)
             ->count();
+    }
+
+    /**
+     * Deletion request flags for the booking's lesson. Only resolved when the
+     * lesson's pending request is eager-loaded (the calendar index endpoint),
+     * so other calendar responses don't query per item.
+     *
+     * @return array<string, mixed>
+     */
+    protected function deletionFlags(?Lesson $lesson, Request $request): array
+    {
+        if ($lesson && ! $lesson->relationLoaded('pendingDeletionRequest')) {
+            $lesson = null;
+        }
+
+        return LessonDeletionFlags::forLesson($lesson, $request->user());
     }
 
     protected function hasOpenOffer(): bool

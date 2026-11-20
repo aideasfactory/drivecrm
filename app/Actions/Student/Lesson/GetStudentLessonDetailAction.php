@@ -30,10 +30,12 @@ class GetStudentLessonDetailAction
                 'order:id,student_id,source,booked_by_user_id,package_name,package_id,payment_mode,status,package_lessons_count,package_total_price_pence,booking_fee_pence,digital_fee_pence,total_price_pence,test_pass_guarantee_pence',
                 'order.package:id,name',
                 'calendarItem.calendar:id,date',
-                'lessonPayment:id,lesson_id,amount_pence,test_pass_guarantee_pence,status,payment_method,alternative_payment_confirmed_at,paid_at',
+                'lessonPayment:id,lesson_id,amount_pence,test_pass_guarantee_pence,status,payment_method,alternative_payment_confirmed_at,paid_at,stripe_invoice_id,invoice_cancelled_at',
                 'payout:id,lesson_id,status,failure_code,failure_message,amount_pence,stripe_transfer_id,paid_at',
                 'reflectiveLog',
                 'resources',
+                'pendingDeletionRequest',
+                'instructorFinances:id,lesson_id',
             ])
             ->findOrFail($lessonId);
 
