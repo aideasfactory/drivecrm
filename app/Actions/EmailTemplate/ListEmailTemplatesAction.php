@@ -7,6 +7,7 @@ namespace App\Actions\EmailTemplate;
 use App\Enums\EmailTemplateAudience;
 use App\Mail\EmailTemplateCatalog;
 use App\Models\EmailTemplate;
+use App\Support\WorkflowCatalog;
 use Illuminate\Support\Collection;
 
 class ListEmailTemplatesAction
@@ -30,6 +31,7 @@ class ListEmailTemplatesAction
      *     salutation: string,
      *     action_text: ?string,
      *     is_customised: bool,
+     *     used_in: list<array{key: string, title: string}>,
      *     updated_at: ?string
      * }>
      */
@@ -41,8 +43,10 @@ class ListEmailTemplatesAction
             ->get()
             ->keyBy('key');
 
+        $usage = WorkflowCatalog::templateUsage();
+
         return collect(EmailTemplateCatalog::definitions())
-            ->map(function (array $definition) use ($stored): array {
+            ->map(function (array $definition) use ($stored, $usage): array {
                 $row = $stored->get($definition['key']);
                 $audience = EmailTemplateAudience::from($definition['audience']);
 
@@ -78,6 +82,7 @@ class ListEmailTemplatesAction
                     'salutation' => $salutation,
                     'action_text' => $actionText,
                     'is_customised' => $row !== null && $this->isCustomised($definition, $row),
+                    'used_in' => $usage[$definition['key']] ?? [],
                     'updated_at' => $row?->updated_at?->timezone(config('app.timezone'))->format('d M Y H:i'),
                 ];
             })

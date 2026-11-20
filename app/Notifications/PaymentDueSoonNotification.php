@@ -8,6 +8,7 @@ use App\Enums\EmailTemplateKey;
 use App\Mail\RendersTemplatedMail;
 use App\Models\LessonPayment;
 use App\Models\Student;
+use App\Support\AlternativePayments;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -53,6 +54,7 @@ class PaymentDueSoonNotification extends Notification implements ShouldQueue
                 ...$this->lessonPayment->costBreakdownPlaceholders(),
                 'amount' => $amount,
                 'booked_by_contact' => $this->isBookedByContact,
+                'alternative_payment' => AlternativePayments::allowedForOrder($order),
             ],
             $this->hostedInvoiceUrl,
         );

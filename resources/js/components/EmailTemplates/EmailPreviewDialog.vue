@@ -27,10 +27,13 @@ interface Props {
     open: boolean
     template: EmailTemplateItem | null
     copy?: EmailPreviewCopy | null
+    /** Cases ticked when the preview opens (e.g. the workflow's case). */
+    initialConditions?: string[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
     copy: null,
+    initialConditions: () => [],
 })
 
 const emit = defineEmits<{
@@ -79,7 +82,9 @@ watch(
     () => [props.open, props.template?.key],
     ([open]) => {
         if (open) {
-            enabledConditions.value = []
+            enabledConditions.value = props.initialConditions.filter((key) =>
+                props.template?.conditions.some((condition) => condition.key === key),
+            )
             html.value = ''
             loadPreview()
         }

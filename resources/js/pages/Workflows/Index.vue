@@ -31,7 +31,7 @@ import EditEmailTemplateSheet, {
     type EmailTemplateItem,
 } from '@/components/EmailTemplates/EditEmailTemplateSheet.vue'
 import EmailPreviewDialog from '@/components/EmailTemplates/EmailPreviewDialog.vue'
-import type { Workflow, WorkflowChannel } from '@/types/workflow'
+import type { Workflow, WorkflowChannel, WorkflowMessage } from '@/types/workflow'
 
 interface Props {
     workflows: Workflow[]
@@ -45,6 +45,8 @@ const isEditSheetOpen = ref(false)
 const editingTemplateKey = ref<string | null>(null)
 const isPreviewOpen = ref(false)
 const previewTemplateKey = ref<string | null>(null)
+/** The case the email was opened for (the workflow's scenario). */
+const openedScenario = ref<string[]>([])
 
 const channelLegend = Object.entries(channels) as [
     WorkflowChannel,
@@ -97,13 +99,15 @@ const previewTemplate = computed(
         ) ?? null,
 )
 
-const openPreview = (key: string) => {
-    previewTemplateKey.value = key
+const openPreview = (message: WorkflowMessage) => {
+    previewTemplateKey.value = message.template
+    openedScenario.value = message.scenario
     isPreviewOpen.value = true
 }
 
-const openTemplate = (key: string) => {
-    editingTemplateKey.value = key
+const openTemplate = (message: WorkflowMessage) => {
+    editingTemplateKey.value = message.template
+    openedScenario.value = message.scenario
     isEditSheetOpen.value = true
 }
 
@@ -264,6 +268,8 @@ const breadcrumbs = [{ title: 'Workflows' }]
         <EditEmailTemplateSheet
             :open="isEditSheetOpen"
             :template="editingTemplate"
+            :workflow-title="selectedWorkflow?.title ?? null"
+            :scenario="openedScenario"
             @update:open="isEditSheetOpen = $event"
             @saved="handleSaved"
         />
@@ -271,6 +277,7 @@ const breadcrumbs = [{ title: 'Workflows' }]
         <EmailPreviewDialog
             :open="isPreviewOpen"
             :template="previewTemplate"
+            :initial-conditions="openedScenario"
             @update:open="isPreviewOpen = $event"
         />
     </AppLayout>
