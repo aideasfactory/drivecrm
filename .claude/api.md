@@ -27,6 +27,8 @@
     - [Notify On Way](#post-apiv1instructorlessonslessonnotify-on-way)
     - [Notify Arrived](#post-apiv1instructorlessonslessonnotify-arrived)
     - [Update Mileage](#patch-apiv1instructorlessonslessonmileage)
+    - [Lesson Deletion Request (Create)](#post-apiv1instructorlessonslessondeletion-request)
+    - [Lesson Deletion Request (Cancel)](#delete-apiv1instructorlessonslessondeletion-request)
     - [Packages (List)](#get-apiv1instructorpackages)
     - [Packages (Create)](#post-apiv1instructorpackages)
     - [Packages (Update)](#put-apiv1instructorpackagespackage)
@@ -1559,6 +1561,153 @@ Records or updates the mileage (miles driven) for a lesson. The lesson must belo
   }
 }
 ```
+
+---
+
+#### `POST /api/v1/instructor/lessons/{lesson}/deletion-request`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Asks Head Office to permanently delete a past lesson that was logged by mistake (a duplicate, or a lesson that never happened). The lesson is **not** deleted now: it stays in the diary with a "Deletion pending" tag until an owner or the bookings team approves (lesson deleted) or rejects (lesson kept) it in the CRM. The instructor gets a push either way (see **Push payloads** below). Pupils are never emailed.
+
+Only lessons where `can_request_deletion` is `true` can be requested. The rules are checked here **and again when Head Office approves**:
+
+- The lesson belongs to the instructor and has already started (UK time).
+- It is still `pending` — not signed off (`completed`), not cancelled, not a draft (unconfirmed) booking, not banked for rebooking.
+- No money has moved: no payout, no paid or refunded payment, no open Stripe invoice, not part of a booking paid upfront, not imported as paid, no instructor finance row linked to it. Cash lessons qualify (cash is only recorded at sign-off).
+- No other request for this lesson is pending.
+
+**Throttle:** 30 requests / minute.
+
+**URL Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `lesson` | integer | Lesson ID. Must belong to the authenticated instructor. |
+
+**Request Body:**
+
+| Field | Type | Required | Validation | Description |
+|-------|------|----------|------------|-------------|
+| `reason` | string | Yes | min:3, max:1000 | Why the lesson should be deleted. Field placeholder: *"Why should this lesson be deleted?"* |
+
+**Example Request:**
+```json
+{
+  "reason": "Duplicate - I logged this lesson twice."
+}
+```
+
+**Success Response:** `201 Created`
+```json
+{
+  "data": {
+    "id": 12,
+    "lesson_id": 345,
+    "status": "pending",
+    "reason": "Duplicate - I logged this lesson twice.",
+    "requested_at": "2026-11-20T10:08:22.000000Z",
+    "decided_at": null,
+    "cancelled_at": null
+  }
+}
+```
+
+**Error Response (not your lesson):** `403 Forbidden`
+```json
+{
+  "message": "This lesson does not belong to you."
+}
+```
+
+**Error Response (reason missing / too short / too long):** `422 Unprocessable Entity`
+```json
+{
+  "message": "Please say why this lesson should be deleted.",
+  "errors": {
+    "reason": ["Please say why this lesson should be deleted."]
+  }
+}
+```
+
+**Error Response (lesson not eligible, or already pending):** `422 Unprocessable Entity` — always under the `lesson` key. Show `message` as is.
+```json
+{
+  "message": "This lesson has been paid for, so it can't be deleted.",
+  "errors": {
+    "lesson": ["This lesson has been paid for, so it can't be deleted."]
+  }
+}
+```
+
+Possible `lesson` messages:
+
+| Message |
+|---------|
+| A deletion request is already pending for this lesson. |
+| This lesson has been cancelled, so there is nothing to delete. |
+| This lesson has been signed off, so it can't be deleted. |
+| This lesson's booking hasn't been confirmed, so it can't be deleted. |
+| This lesson is waiting to be rebooked, so it can't be deleted. |
+| This lesson hasn't happened yet. Cancel it from the diary instead. |
+| This lesson has an instructor payout, so it can't be deleted. |
+| This lesson has been paid for, so it can't be deleted. |
+| This lesson has a refunded payment, so it can't be deleted. |
+| This lesson has an open invoice the pupil could still pay, so it can't be deleted until the invoice is cancelled. |
+| This lesson was paid for upfront as part of its booking, so it can't be deleted. |
+| This lesson was imported as paid from the previous system, so it can't be deleted. |
+| This lesson has a payment recorded in the instructor's finances, so it can't be deleted. |
+
+**Deletion fields on lesson payloads (additive).** Returned on every instructor-facing lesson object: `GET /instructor/lessons`, `GET /instructor/lessons/{date}`, `GET /students/{student}/lessons`, `GET /students/{student}/lessons/{lesson}` and `GET /instructor/calendar/items` (on the calendar item, for its lesson). For pupils, and for calendar items without a lesson, the fields are always `false` / `null`.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `deletion_pending` | boolean | A deletion request is waiting for Head Office. Show the **"Deletion pending"** tag and keep the lesson visible. |
+| `deletion_request` | object\|null | The pending request: `{ "id": 12, "status": "pending", "reason": "…", "requested_at": "2026-11-20T10:08:22.000000Z" }`. `null` when nothing is pending. |
+| `can_request_deletion` | boolean | Show the **"Request deletion"** button. `true` only for the lesson's own instructor, when nothing is pending and the lesson meets the rules above. |
+| `deletion_blocked_reason` | string\|null | Why the lesson can't be deleted (one of the messages above, except "already pending"). `null` when it can be requested or a request is pending. Optional to show; useful as helper text. |
+
+---
+
+#### `DELETE /api/v1/instructor/lessons/{lesson}/deletion-request`
+
+**Auth required:** Yes (Bearer token — instructor only)
+
+Withdraws the instructor's pending deletion request. The lesson stays as it is and the "Deletion pending" tag goes away (`deletion_pending: false`, `can_request_deletion` back to `true` if the lesson still qualifies). The withdrawn request is kept for the audit trail with status `cancelled`. No push is sent.
+
+**Throttle:** 30 requests / minute.
+
+**Request Body:** None
+
+**Success Response:** `200 OK`
+```json
+{
+  "message": "Deletion request cancelled."
+}
+```
+
+**Error Response (not your lesson):** `403 Forbidden`
+```json
+{
+  "message": "This lesson does not belong to you."
+}
+```
+
+**Error Response (nothing pending — e.g. Head Office already decided):** `404 Not Found`
+```json
+{
+  "message": "No pending deletion request found for this lesson."
+}
+```
+
+**Push payloads (instructor).** Queued to the instructor's user when Head Office decides, only when they have an Expo token; delivered by `push:send-queued`.
+
+| Decision | Title | Body | `data` |
+|----------|-------|------|--------|
+| Approved | Lesson deleted | Your request was approved. The lesson with {pupil} on {Tue 17 Nov at 10:00} has been deleted. | `{ "type": "lesson_deletion_approved", "lesson_deletion_request_id": 12, "lesson_id": 345, "student_id": 7, "lesson_date": "2026-11-17", "lesson_start_time": "10:00" }` |
+| Rejected | Deletion request rejected | Your request to delete the lesson with {pupil} on {Tue 17 Nov at 10:00} was rejected. The lesson has been kept. | `{ "type": "lesson_deletion_rejected", "lesson_deletion_request_id": 12, "lesson_id": 345, "student_id": 7, "lesson_date": "2026-11-17", "lesson_start_time": "10:00" }` |
+
+On `lesson_deletion_approved` the lesson no longer exists (`lesson_id` is for matching only; fetching it returns `404`) — refresh the diary or the pupil's lesson list. On `lesson_deletion_rejected`, open the lesson (`GET /students/{student_id}/lessons/{lesson_id}`) or refresh the diary for `lesson_date`. `student_id` may be `null` if the pupil record was removed.
 
 ---
 
@@ -8412,6 +8561,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-19 | **Learner "lesson tomorrow" push.** New scheduled command `reminders:lesson-day-before` (every 5 min, only acts 18:00–21:00 Europe/London) queues one push per lesson to the learner's user (`order.student.user`) for tomorrow's lessons. Sent only for `pending` lessons with a date and start time that are not banked or provisional, on orders that are not cancelled/expired, and only when the learner has an Expo token (turning pushes off with `DELETE /push-token` stops it). Sent once per lesson date (recorded in `lesson_reminders`, type `lesson_day_before`); a lesson moved to another day is reminded again for the new day. Delivered by `push:send-queued` like other queued pushes. New payload `{ type: "lesson_reminder", lesson_id, student_id, date, start_time, end_time, is_practical_test, instructor_name, pickup }`. No endpoints added, no request/response changes, no migration. **App action (pupil):** on tap of `type: "lesson_reminder"`, open the lesson detail with `GET /students/{student_id}/lessons/{lesson_id}` (the pupil's own `profile.id` is `student_id`); `date`/`start_time` etc. can render a placeholder while it loads. If the lesson returns `404` or `status: "cancelled"`, show the lesson list instead. | Push Notifications |
 | 2026-11-19 | **Longer payment window for short-notice instructor bookings + deadline on diary items.** An instructor booking (app or CRM, incl. paid driving tests) made less than 48 hours before the first lesson used to be held for only 15 minutes before it was released. It is now held until **2 hours before the lesson starts** (config `booking_payments.instructor_short_notice_hold_hours_before_lesson`). Bookings made 48+ hours out are unchanged (held until 48 hours before); bookings made under 2 hours out keep the 15-minute minimum. Learners' own checkout (10 minutes) and Head Office bookings (UK midnight) are unchanged. The payment-link email already shows the new "pay by" time. Existing unpaid bookings keep their old deadline. **New additive field** `payment_hold_expires_at` (ISO 8601 \| null) on every calendar item, set when `awaiting_payment` is `true`. **App action (instructor):** on unpaid diary lessons (`awaiting_payment: true`), show *"Awaiting payment: cancels at HH:mm"* from `payment_hold_expires_at` in UK time (add the day when it isn't today). | Instructor Calendar items (`GET/PUT /api/v1/instructor/calendar/items`, resource field), Orders (`payment_hold_expires_at` value), Calendar store (paid driving tests) |
 | 2026-11-19 | **Lesson sign-off opens at the start time (app in line with the CRM).** `POST /students/{student}/lessons/{lesson}/sign-off` now refuses a lesson that hasn't started yet with `422` *"This lesson can't be signed off until it has started (…)"* — before, the endpoint had no time check (the app blocked sign-off until start + 2 hours on the phone only). Sign-off is allowed from the lesson's start time (UK) onwards, including later days, exactly as the CRM. **New additive field** `has_started` (boolean) on each lesson in `GET /students/{student}/lessons` (already on the show endpoint). Payout, invoicing and alternative-payment behaviour unchanged. **App action (instructor):** gate Sign Off on `has_started` instead of "lesson has ended", and offer it on `current` lessons on the day, not only `needs_sign_off`. | Student Lessons (index, sign-off) |
+| 2026-11-20 | **Lesson deletion requests (instructor).** New `POST /api/v1/instructor/lessons/{lesson}/deletion-request` (required `reason`, `201` with the request) and `DELETE` on the same path (withdraw, `200`; `404` when nothing is pending). Only past, unpaid, not signed-off lessons with no payout, open invoice, upfront/imported payment or finance row qualify; the rules are checked again when Head Office approves. Owners and the bookings team approve (lesson **permanently deleted**) or reject (kept) in the CRM. **New additive fields** on instructor lesson payloads (`GET /instructor/lessons`, `/instructor/lessons/{date}`, `/students/{student}/lessons`, `/students/{student}/lessons/{lesson}`, `/instructor/calendar/items`): `deletion_pending`, `deletion_request`, `can_request_deletion`, `deletion_blocked_reason`. **New push types** `lesson_deletion_approved` / `lesson_deletion_rejected` to the instructor. No pupil emails. **App action (instructor):** "Request deletion" button when `can_request_deletion`; reason sheet with placeholder *"Why should this lesson be deleted?"*; "Deletion pending" tag + "Cancel request" while `deletion_pending`; refresh on the two push types. | Instructor Lessons (deletion-request — NEW POST/DELETE), Instructor Lessons (range, day), Student Lessons (index, show), Instructor Calendar items, Push Notifications |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

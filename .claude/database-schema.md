@@ -75,6 +75,7 @@ Students (Many) ──── (0..1) Orders   [students.test_pass_guarantee_order
 
 Students (1) ──── (Many) StudentTests ──── (0..1) CalendarItems   [student_tests.calendar_item_id]
 InstructorFinances (Many) ──── (0..1) Students / (0..1) Lessons   [instructor_finances.student_id / lesson_id, import only]
+LessonDeletionRequests (Many) ──── (0..1) Lessons / Instructors / Students / Users   [lesson_id nulled when the lesson is deleted; one pending per lesson]
 ImportRuns (1) ──── (Many) ImportStagedRows   [temporary, emptied after each run]
 ```
 
@@ -572,6 +573,8 @@ Individual lessons within an order. Each lesson represents a scheduled session w
 - Belongs to one `CalendarItem` (optional - links to specific calendar slot)
 - Has one `LessonPayment`
 - Has one `Payout`
+- Has many `InstructorFinance` (`instructorFinances()`, via `instructor_finances.lesson_id`)
+- Has many `LessonDeletionRequest` (`deletionRequests()`); has one pending (`pendingDeletionRequest()`)
 
 **Enums:**
 - Status: `draft`, `pending`, `completed`, `cancelled`
@@ -1609,6 +1612,49 @@ In-app account deletion with a 30-day grace period (App Store Guideline 5.1.1(v)
 - Processing **anonymises** rather than deletes (users.id cascades would destroy lesson/payment history other parties need): scrubs user name/email/password/push token, revokes all Sanctum tokens, scrubs profile PII (student contact fields; instructor bio/phone/address/pin/nino/utr/vrn etc.), detaches an instructor's students (`students.instructor_id = null`), then sets `status = completed`.
 - **Staff instructor delete** (CRM Delete Instructor, owner only, `ScheduleInstructorDeletionAction`): creates a request due in 30 days with `requested_by_user_id` set (or takes over the user's own pending request, keeping its date), stores `previous_instructor_status`, sets the instructor `suspended` (out of public booking search), revokes Sanctum tokens and web sessions, sends no email. While such a request is pending the user cannot log in (API `LoginAction` + web Fortify). The owner can cancel from the instructor page (`CancelInstructorDeletionAction`): request `cancelled`, status restored if still `suspended`, no email. Upcoming lessons are left as they are (the CRM only warns with a count). The nightly command processes it like any other request (status → `archived`, pupils unassigned).
 - Distinct from **staff learner-profile delete** (`DeleteStudentAction`): that soft-deletes the `students` row and locks the login so duplicates disappear from CRM lists, but it does not scrub historical student names on invoices.
+
+---
+
+### 31a. **lesson_deletion_requests**
+
+An instructor's request to **permanently delete** a past lesson logged by mistake (duplicate, or never happened). Owners and the bookings team (restricted owners) approve or reject it on the CRM page **Instructors → Lesson Deletion Requests** (`/instructors/lesson-deletion-requests`). Approving hard-deletes the lesson; the row is kept as the audit record, so it snapshots everything needed to show it after the lesson is gone. Migration `2026_11_20_100000_create_lesson_deletion_requests_table`.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Request identifier |
+| `lesson_id` | bigint unsigned | NULLABLE, FK → lessons.id (NULL ON DELETE), INDEX with `status` | The lesson. NULL once the lesson has been deleted |
+| `pending_lesson_id` | bigint unsigned | NULLABLE, UNIQUE | Copy of `lesson_id` while `status = pending`, NULL otherwise. The unique key allows **one pending request per lesson** at database level |
+| `instructor_id` | bigint unsigned | NULLABLE, FK → instructors.id (NULL ON DELETE) | Instructor who asked (the lesson's instructor) |
+| `student_id` | bigint unsigned | NULLABLE, FK → students.id (NULL ON DELETE) | The lesson's pupil |
+| `order_id` | bigint unsigned | NULLABLE, INDEX (no FK) | The lesson's order, kept after the lesson is deleted |
+| `requested_by_user_id` | bigint unsigned | NULLABLE, FK → users.id (NULL ON DELETE) | User who submitted it (the instructor's user) |
+| `status` | varchar(20) | DEFAULT 'pending', INDEX | `LessonDeletionRequestStatus`: `pending`, `approved`, `rejected`, `cancelled` (withdrawn by the instructor) |
+| `reason` | text | NOT NULL | Instructor's reason |
+| `instructor_name` | varchar(255) | NULLABLE | Snapshot at request time |
+| `student_name` | varchar(255) | NULLABLE | Snapshot at request time |
+| `lesson_date` | date | NULLABLE | Snapshot at request time |
+| `lesson_start_time` | time | NULLABLE | Snapshot at request time |
+| `lesson_end_time` | time | NULLABLE | Snapshot at request time |
+| `lesson_snapshot` | json | NULLABLE | Written on approval, just before the delete: lesson ids, amount, status, date/times, payment mode, the lesson payment (id, amount, status, due date, Stripe invoice id) and whether a reflective log existed |
+| `requested_at` | timestamp | NULLABLE | When the instructor asked |
+| `decided_by_user_id` | bigint unsigned | NULLABLE, FK → users.id (NULL ON DELETE) | Owner / bookings team member who approved or rejected |
+| `decided_at` | timestamp | NULLABLE | When it was approved or rejected |
+| `cancelled_at` | timestamp | NULLABLE | When the instructor withdrew it |
+| `created_at` / `updated_at` | timestamp | - | |
+
+**Relationships:**
+- Belongs to `Lesson` (nullable), `Instructor`, `Student`, `User` as `requestedBy` and `User` as `decidedBy`
+- `Lesson` has many `deletionRequests()` and has one `pendingDeletionRequest()`
+
+**Enums:**
+- Status (`App\Enums\LessonDeletionRequestStatus`): `pending`, `approved`, `rejected`, `cancelled`
+
+**Business Logic:**
+- Eligibility (`GetLessonDeletionBlockerAction`) is checked when the instructor asks **and again on approval** (inside the transaction, lesson row locked): the lesson is `pending` (not signed off, cancelled or draft), not banked, has started (UK), and has no money tied to it — no `payouts` row, no `paid`/`refunded` `lesson_payments`, no open Stripe invoice, not on an upfront-paid or imported order, no `instructor_finances` row. Cash lessons qualify.
+- **Approve** (`ApproveLessonDeletionRequestAction` → `PermanentlyDeleteLessonAction`): writes `lesson_snapshot`, sets `approved` / `decided_*`, then deletes the `due` `lesson_payments` row, `lesson_reminders`, `reflective_logs`, `lesson_resource` links, the lesson's `import_mappings` row (`entity = lesson`; the `diary` mapping is kept so a re-import doesn't recreate the lesson), nulls `instructor_finances.lesson_id` and other requests' `lesson_id`, deletes the lesson and its diary `calendar_items` row (unless another lesson uses it). Afterwards: an active order with no open lessons left is set `completed` (if any lesson was signed off) or `cancelled`; the pupil's `student_lesson_number`s are recalculated; the instructor's diary cache is cleared.
+- **Reject**: `rejected` / `decided_*`; lesson untouched. **Cancel** (instructor): `cancelled` / `cancelled_at`.
+- Every decision clears `pending_lesson_id`, writes activity logs (instructor; pupil on approve/reject, naming the approver) and, on approve/reject, queues a push to the instructor (`lesson_deletion_approved` / `lesson_deletion_rejected`). No pupil emails.
+- Merged by `MergeInstructorAccountsAction` (`instructor_id`, `requested_by_user_id`, `decided_by_user_id`).
 
 ---
 
