@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources\V1;
 
 use App\Support\AlternativePayments;
+use App\Support\LessonDeletionFlags;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -64,6 +65,7 @@ class InstructorDayLessonResource extends JsonResource
             ] : null,
             'has_reflective_log' => $this->reflectiveLog !== null,
             'resources_count' => $this->resources->count(),
+            ...LessonDeletionFlags::forLesson($this->resource, $request->user()),
         ];
     }
 }

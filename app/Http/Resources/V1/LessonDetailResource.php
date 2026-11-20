@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources\V1;
 
 use App\Support\AlternativePayments;
+use App\Support\LessonDeletionFlags;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -65,6 +66,7 @@ class LessonDetailResource extends JsonResource
                 ? new ReflectiveLogResource($this->reflectiveLog)
                 : null,
             'resources' => LessonResourceResource::collection($this->resources),
+            ...LessonDeletionFlags::forLesson($this->resource, $request->user()),
         ];
     }
 }
