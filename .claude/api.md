@@ -7330,7 +7330,7 @@ The `role` field is always returned in user responses. Use it to determine which
 
 ## Mock Tests
 
-Mock theory test system. Students take randomised 50-question tests from a bank of ~2,923 questions across 4 categories (Car, ADI, Motorcycle, LGV-PCV). Records every answer for per-category performance tracking.
+Mock theory test system. Students take randomised 50-question tests from the **Car bank only**: the 758 questions in the DVSA "Car (Cat B) QB Feb 2026" spreadsheet (synced with `php artisan mock-tests:import-car-bank`). Motorcycle-only, LGV-PCV and ADI questions are still in the database so old answers keep working, but no endpoint serves them to pupils. Records every answer for per-topic performance tracking.
 
 Two modes with different answer-visibility rules:
 - **Test mode** (`start` → `submit` → `review`): questions are served WITHOUT correct answers; scoring is server-side; answers are revealed only in the post-submission review.
@@ -7407,7 +7407,7 @@ Returns aggregated mock test statistics for the authenticated student. Includes 
 
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
-| category | string | No | Filter to a specific category: `Car`, `ADI`, `Motorcycle`, `LGV-PCV` |
+| category | string | No | Filter to a specific category: `Car` or `Mixed` (old values `ADI`, `Motorcycle`, `LGV-PCV` only match old tests). `category_performance` only counts answers to Car-bank questions. |
 
 **Response (200):**
 
@@ -7452,7 +7452,7 @@ Returns aggregated mock test statistics for the authenticated student. Includes 
 
 ### `GET /api/v1/student/mock-tests/categories`
 
-Returns the question-bank index: every category with its total question count and its topics, each with a per-topic question count. Drives the practise/revision navigation UI — the app should read category names from here rather than hard-coding them, then pass the chosen `category` string to the `questions` or `start` endpoints. Cached server-side (10 min) — the bank only changes via seeding.
+Returns the question-bank index: every category with its total question count and its topics, each with a per-topic question count. Drives the practise/revision navigation UI — the app should read category names from here rather than hard-coding them, then pass the chosen `category` string to the `questions` or `start` endpoints. Cached server-side (10 min). `mock-tests:import-car-bank` clears this cache. Only returns the `Car` category.
 
 **Auth:** Bearer token (student role)
 
@@ -7464,18 +7464,11 @@ Returns the question-bank index: every category with its total question count an
     "categories": [
       {
         "category": "Car",
-        "total_questions": 732,
+        "total_questions": 758,
         "topics": [
-          { "topic": "Alertness", "total_questions": 32 },
-          { "topic": "Attitude", "total_questions": 41 },
-          { "topic": "Road and traffic signs", "total_questions": 118 }
-        ]
-      },
-      {
-        "category": "Motorcycle",
-        "total_questions": 690,
-        "topics": [
-          { "topic": "Alertness", "total_questions": 28 }
+          { "topic": "Alertness", "total_questions": 26 },
+          { "topic": "Attitude", "total_questions": 38 },
+          { "topic": "Road and traffic signs", "total_questions": 134 }
         ]
       }
     ]
@@ -7485,7 +7478,7 @@ Returns the question-bank index: every category with its total question count an
 
 **Notes:**
 - If the app only needs the category names (e.g. the practise section picker), use `data.categories[*].category` and ignore the counts.
-- Categories are the 4 bank licence types (`Car`, `ADI`, `Motorcycle`, `LGV-PCV`) — `Mixed` is not a bank category (it's only a label stored on tests started without a category filter).
+- The only bank category is `Car` (since 2026-11-20). `Mixed` is not a bank category. It's only a label stored on tests started without a category, and those tests now draw from the Car bank too.
 
 ---
 
@@ -7499,7 +7492,7 @@ Returns ALL questions for a category (optionally narrowed to a topic), paginated
 
 | Param | Type | Required | Validation | Description |
 |-------|------|----------|------------|-------------|
-| category | string | Yes | `in:Car,ADI,Motorcycle,LGV-PCV` | Category to revise |
+| category | string | Yes | `in:Car` | Category to revise. Anything else returns `422`. |
 | topic | string | No | max:100 | Narrow to one topic (e.g. "Alertness") |
 | per_page | integer | No | min:1, max:100 | Page size (default 20) |
 | page | integer | No | — | Page number (standard Laravel pagination) |
@@ -7603,7 +7596,7 @@ Starts a new test. Generates random questions (default 50, configurable per requ
 
 | Field | Type | Required | Validation | Description |
 |-------|------|----------|------------|-------------|
-| category | string | No | `in:Car,ADI,Motorcycle,LGV-PCV` | Question bank to draw from. Omit for a mixed test across all categories. |
+| category | string | No | `in:Car` | Question bank to draw from. Omit for a "Mixed" test, which is stored as `Mixed` but also draws only from the Car bank. Anything else returns `422`. |
 | topic | string | No | max:100 | Filter to a specific topic (e.g. "Alertness", "Road and traffic signs") |
 | mode | string | No | `in:mock,practice` | `mock` (default) counts toward stats/badges and is pass/fail; `practice` is excluded from stats/badges and never pass/fail. |
 | question_count | integer | No | min:5, max:50 | Number of questions to generate (default: server config, normally 50). Use smaller values for short practise runs. |
@@ -8562,6 +8555,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-19 | **Longer payment window for short-notice instructor bookings + deadline on diary items.** An instructor booking (app or CRM, incl. paid driving tests) made less than 48 hours before the first lesson used to be held for only 15 minutes before it was released. It is now held until **2 hours before the lesson starts** (config `booking_payments.instructor_short_notice_hold_hours_before_lesson`). Bookings made 48+ hours out are unchanged (held until 48 hours before); bookings made under 2 hours out keep the 15-minute minimum. Learners' own checkout (10 minutes) and Head Office bookings (UK midnight) are unchanged. The payment-link email already shows the new "pay by" time. Existing unpaid bookings keep their old deadline. **New additive field** `payment_hold_expires_at` (ISO 8601 \| null) on every calendar item, set when `awaiting_payment` is `true`. **App action (instructor):** on unpaid diary lessons (`awaiting_payment: true`), show *"Awaiting payment: cancels at HH:mm"* from `payment_hold_expires_at` in UK time (add the day when it isn't today). | Instructor Calendar items (`GET/PUT /api/v1/instructor/calendar/items`, resource field), Orders (`payment_hold_expires_at` value), Calendar store (paid driving tests) |
 | 2026-11-19 | **Lesson sign-off opens at the start time (app in line with the CRM).** `POST /students/{student}/lessons/{lesson}/sign-off` now refuses a lesson that hasn't started yet with `422` *"This lesson can't be signed off until it has started (…)"* — before, the endpoint had no time check (the app blocked sign-off until start + 2 hours on the phone only). Sign-off is allowed from the lesson's start time (UK) onwards, including later days, exactly as the CRM. **New additive field** `has_started` (boolean) on each lesson in `GET /students/{student}/lessons` (already on the show endpoint). Payout, invoicing and alternative-payment behaviour unchanged. **App action (instructor):** gate Sign Off on `has_started` instead of "lesson has ended", and offer it on `current` lessons on the day, not only `needs_sign_off`. | Student Lessons (index, sign-off) |
 | 2026-11-20 | **Lesson deletion requests (instructor).** New `POST /api/v1/instructor/lessons/{lesson}/deletion-request` (required `reason`, `201` with the request) and `DELETE` on the same path (withdraw, `200`; `404` when nothing is pending). Only past, unpaid, not signed-off lessons with no payout, open invoice, upfront/imported payment or finance row qualify; the rules are checked again when Head Office approves. Owners and the bookings team approve (lesson **permanently deleted**) or reject (kept) in the CRM. **New additive fields** on instructor lesson payloads (`GET /instructor/lessons`, `/instructor/lessons/{date}`, `/students/{student}/lessons`, `/students/{student}/lessons/{lesson}`, `/instructor/calendar/items`): `deletion_pending`, `deletion_request`, `can_request_deletion`, `deletion_blocked_reason`. **New push types** `lesson_deletion_approved` / `lesson_deletion_rejected` to the instructor. No pupil emails. A lesson with a pending request is not invoiced (hourly job and next-invoice-on-sign-off skip it). **App action (instructor):** "Request deletion" button when `can_request_deletion`; reason sheet with placeholder *"Why should this lesson be deleted?"*; "Deletion pending" tag + "Cancel request" while `deletion_pending`; refresh on the two push types. | Instructor Lessons (deletion-request — NEW POST/DELETE), Instructor Lessons (range, day), Student Lessons (index, show), Instructor Calendar items, Push Notifications |
+| 2026-11-20 | **Mock tests use the Car bank only.** The question bank is now the 758 questions in the DVSA "Car (Cat B) QB Feb 2026" spreadsheet. 462 were missing, and the 223 shared car/motorcycle questions were labelled `Motorcycle`. `start` (including tests with no category, stored as `Mixed`), `questions` and `categories` only use `Car` questions. Before, a mixed test drew motorcycle-only, lorry/bus and ADI questions too. `category` on `POST /mock-tests/start` and `GET /mock-tests/questions` now only accepts `Car`, so `ADI`/`Motorcycle`/`LGV-PCV` return `422`. `GET /mock-tests/categories` returns one category (`Car`). `category_performance` in the summary only counts answers to Car questions. History, review and single-question endpoints are unchanged, so old tests still open with their original questions. Response shapes are unchanged. **App action:** none if the category list is read from `/mock-tests/categories`. Remove any hard-coded Motorcycle/LGV-PCV/ADI options. | Mock Tests (start, questions, categories, summary) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

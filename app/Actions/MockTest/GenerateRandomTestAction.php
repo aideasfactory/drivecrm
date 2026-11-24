@@ -20,6 +20,7 @@ class GenerateRandomTestAction
         $count = $questionCount ?? config('mock_tests.questions_per_test');
 
         $questions = MockTestQuestion::query()
+            ->inBank()
             ->when($category, fn ($q) => $q->where('category', $category))
             ->when($topic, fn ($q) => $q->where('topic', $topic))
             ->inRandomOrder()

@@ -19,7 +19,7 @@ class StartMockTestRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'category' => ['nullable', 'string', 'in:Car,ADI,Motorcycle,LGV-PCV'],
+            'category' => ['nullable', 'string', 'in:Car'],
             'topic' => ['nullable', 'string', 'max:100'],
             'mode' => ['nullable', 'string', 'in:mock,practice'],
             'question_count' => ['nullable', 'integer', 'min:5', 'max:50'],

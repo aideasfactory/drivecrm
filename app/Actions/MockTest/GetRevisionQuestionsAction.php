@@ -12,6 +12,7 @@ class GetRevisionQuestionsAction
     public function __invoke(string $category, ?string $topic = null, int $perPage = 20): LengthAwarePaginator
     {
         return MockTestQuestion::query()
+            ->inBank()
             ->where('category', $category)
             ->when($topic, fn ($query) => $query->where('topic', $topic))
             ->orderBy('topic')
