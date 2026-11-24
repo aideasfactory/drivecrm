@@ -23,7 +23,7 @@ class FindDuplicateLessons extends Command
      *
      * @var string
      */
-    protected $description = 'Read-only: scan every instructor\'s diary for duplicated lessons (same GoRoadie booking ID, same instructor + pupil + date + start time, or a GoRoadie original re-imported at the time a Drive Plus lesson was moved from) and write a CSV marking each lesson KEEP or REMOVE, with reasons and a manual-review flag. Changes no data. Review the CSV, then run lessons:remove-duplicates.';
+    protected $description = 'Read-only: scan every instructor\'s diary for duplicated lessons (same GoRoadie booking ID, same instructor + pupil + date + start time, or a GoRoadie original re-imported at the time a Drive Plus lesson was moved from) and write a CSV marking each lesson KEEP or REMOVE, with reasons and a manual-review flag. Changes no data — send the CSV for review; any clean-up is a separate one-off script.';
 
     public function handle(DuplicateLessonService $duplicateLessonService): int
     {
@@ -42,7 +42,7 @@ class FindDuplicateLessons extends Command
             ['Instructors affected', $counts['instructors']],
             ['Lessons to keep', $counts['lessons_to_keep']],
             ['Lessons to remove', $counts['lessons_to_remove']],
-            ['Groups needing manual review (skipped by lessons:remove-duplicates)', $counts['groups_needing_review']],
+            ['Groups needing manual review', $counts['groups_needing_review']],
             ['  …lessons marked REMOVE in those groups', $counts['lessons_to_remove_after_review']],
         ]);
 

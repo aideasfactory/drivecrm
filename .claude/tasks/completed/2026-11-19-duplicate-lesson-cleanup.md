@@ -1,7 +1,7 @@
 # Task: Find and remove duplicate lessons after the GoRoadie import
 
 **Created:** 2026-11-19
-**Last Updated:** 2026-11-19
+**Last Updated:** 2026-11-24
 **Status:** Complete
 **Ticket:** 01a1f3f3-855d-7293-b1e5-0137466fdb2d (urgent, reporter GB; affected: Mark Collinson and likely others)
 
@@ -21,7 +21,7 @@ leaving payments, invoices and Stripe records with the kept lesson.
 
 ### Success Criteria
 - [x] `lessons:find-duplicates` scans every instructor, makes no data changes, writes one CSV row per lesson with KEEP/REMOVE, reason and manual-review flag
-- [x] `lessons:remove-duplicates --csv=…` is a dry run unless `--confirm`, acts only on REMOVE rows, skips review-flagged groups, one transaction per group, audit of every change
+- [x] ~~`lessons:remove-duplicates`~~ — dropped 2026-11-24 (see Revision)
 - [x] Payments / invoices / Stripe records never moved or changed; amounts never changed
 - [x] Importer no longer re-creates the "moved in Drive Plus" duplicate
 
@@ -44,13 +44,15 @@ leaving payments, invoices and Stripe records with the kept lesson.
 ## 🎯 PHASE 2: IMPLEMENTATION ✅
 
 - [x] `app/Actions/Lesson/FindDuplicateLessonsAction.php` — read-only scan, grouping, keep/remove + review rules
-- [x] `app/Actions/Lesson/RemoveDuplicateLessonAction.php` — live re-checks, re-points bookkeeping links, cancels duplicate
-- [x] `app/Services/DuplicateLessonService.php` — CSV write/read, per-group transactions, JSONL audit
-- [x] `app/Console/Commands/FindDuplicateLessons.php`, `app/Console/Commands/RemoveDuplicateLessons.php`
+- [x] `app/Services/DuplicateLessonService.php` — CSV write
+- [x] `app/Console/Commands/FindDuplicateLessons.php`
 - [x] `app/Actions/Import/ImportDiaryItemAction.php` — `studentHasLessonAt` also true when the pupil's open lesson was moved from that slot
 - [x] `.claude/database-schema.md` — import_mappings note
 
 ### Reflection
 - Verified against a scratch local MySQL database only (seeded scenarios), never real data. No tests written or run (ticket rule).
 
-💳 Payment impact: TOUCHED (read + guarded write path, no payment code changed) — `lessons:remove-duplicates` cancels imported £0 lessons only and refuses any lesson with a `lesson_payments` row or `payouts` row; it never edits lesson_payments, payouts, orders' Stripe IDs or any amount. Re-points only `instructor_finances.lesson_id` (bookkeeping), reflective logs, resources and import mappings. `syncImportedOrder` runs only on imported orders. Before release: DB backup, run the scan, review the CSV, dry run, then `--confirm`.
+### Revision (2026-11-24) — Sam's decision
+Too heavy for a one-off. Removal command, `RemoveDuplicateLessonAction` and the service's remove/audit code deleted. Flow is now: Sam runs `lessons:find-duplicates` on live, sends the CSV for review, and the reviewed CSV is cleaned up by a throwaway one-off script (cancel not hard-delete; skip any lesson with `lesson_payments` / `payouts`). Importer fix kept.
+
+💳 Payment impact: NONE — the branch is now a read-only report plus the importer guard. No payment files, data or amounts touched. The later one-off clean-up script must cancel (not delete) and skip lessons with `lesson_payments` / `payouts`.
