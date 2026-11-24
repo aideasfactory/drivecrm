@@ -81,13 +81,6 @@ const allNavItems: NavItem[] = [
         restrictedOwnerVisible: true,
     },
     {
-        title: 'Lesson Deletion Requests',
-        href: lessonDeletionRequestsIndex(),
-        icon: CalendarX,
-        roles: ['owner'],
-        restrictedOwnerVisible: true,
-    },
-    {
         title: 'Students',
         href: pupilsIndex(),
         icon: Users,
@@ -185,6 +178,13 @@ const allNavItems: NavItem[] = [
         href: '/hmrc',
         icon: ShieldCheck,
         roles: ['instructor'],
+    },
+    {
+        title: 'Lesson Deletion Requests',
+        href: lessonDeletionRequestsIndex(),
+        icon: CalendarX,
+        roles: ['owner'],
+        restrictedOwnerVisible: true,
     },
     {
         title: 'Owner Access',
