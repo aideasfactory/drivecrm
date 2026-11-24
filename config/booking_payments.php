@@ -14,11 +14,12 @@ declare(strict_types=1);
  *   short-notice booking made after that point is held until
  *   `instructor_short_notice_hold_hours_before_lesson` before the lesson.
  * - Bookings-team (staff) bookings email a payment link; slots are held until
- *   midnight in `timezone`.
+ *   midnight in `timezone`, or `instructor_short_notice_hold_hours_before_lesson`
+ *   before the first lesson if that is sooner.
  * - Emailed-link holds are never shorter than `minimum_hold_minutes`.
- * - A paid lesson cancelled more than `late_cancellation_hours` before it
- *   starts is refunded. Inside that window the instructor chooses between
- *   refunding the pupil and being paid for the lesson.
+ * - Cancelling never refunds or pays out automatically: every paid cancelled
+ *   lesson goes to Head Office to refund or pay by hand. Cancelling fewer than
+ *   `late_cancellation_hours` before the lesson is flagged as late in that email.
  * - A weekly lesson invoice still unpaid `overdue_invoice_cancel_days` after
  *   the lesson date is voided, and no invoice is sent for a lesson older than
  *   that (`lessons:cancel-overdue-invoices`).

@@ -35,17 +35,29 @@ final class BookingPayments
     }
 
     /**
-     * Hold for a bookings-team booking: until the coming midnight, UK time.
+     * Hold for a bookings-team booking: until the coming midnight, UK time, or
+     * the short-notice number of hours (2) before the first lesson if that is
+     * sooner, so a same-day booking is never held past its lesson. Never
+     * shorter than the minimum hold.
      */
-    public static function staffHoldExpiresAt(): CarbonImmutable
+    public static function staffHoldExpiresAt(?string $firstLessonDate = null, ?string $firstLessonStartTime = null): CarbonImmutable
     {
-        $midnight = self::now()
+        $deadline = self::now()
             ->setTimezone(self::timezone())
             ->addDay()
             ->startOfDay()
             ->setTimezone(config('app.timezone'));
 
-        return self::atLeastMinimum($midnight);
+        if ($firstLessonDate) {
+            $beforeLesson = self::lessonStartsAt($firstLessonDate, $firstLessonStartTime)
+                ->subHours((int) config('booking_payments.instructor_short_notice_hold_hours_before_lesson', 2));
+
+            if ($beforeLesson->lessThan($deadline)) {
+                $deadline = $beforeLesson;
+            }
+        }
+
+        return self::atLeastMinimum($deadline);
     }
 
     /**

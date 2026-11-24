@@ -164,7 +164,9 @@ class StepSixController extends Controller
             // themselves, or the person booking on the learner's behalf).
             'staffBooking' => $enquiry->isStaffBooking() ? [
                 'recipient_email' => $step1['email'] ?? null,
-                'hold_deadline' => BookingPayments::formatDeadline(BookingPayments::staffHoldExpiresAt()),
+                'hold_deadline' => BookingPayments::formatDeadline(
+                    BookingPayments::staffHoldExpiresAt($step4['date'] ?? null, $step4['start_time'] ?? null)
+                ),
             ] : null,
         ]);
     }
@@ -276,8 +278,10 @@ class StepSixController extends Controller
                 $discount
             );
 
+            $step4 = $enquiry->getStepData(4) ?? [];
+
             $order->payment_hold_expires_at = $enquiry->isStaffBooking()
-                ? BookingPayments::staffHoldExpiresAt()
+                ? BookingPayments::staffHoldExpiresAt($step4['date'] ?? null, $step4['start_time'] ?? null)
                 : BookingPayments::learnerHoldExpiresAt();
             $order->save();
 

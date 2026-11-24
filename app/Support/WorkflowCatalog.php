@@ -159,7 +159,7 @@ final class WorkflowCatalog
                     self::email(EmailTemplateKey::LearnerPaymentLink, 'Learner, or the person paying'),
                     self::email(EmailTemplateKey::InstructorCalendarClash, 'Instructor', 'Only when the new lessons overlap existing diary items.'),
                 ]),
-                self::step('How long the lessons are held', "Instructor bookings are held until {$instructorHoldHours} hours before the first lesson, or {$instructorShortNoticeHoldHours} hours before it when booked at shorter notice. Head office bookings are held until midnight (UK time) on the day they are made. Either way, the hold is at least {$minimumHoldMinutes} minutes.", []),
+                self::step('How long the lessons are held', "Instructor bookings are held until {$instructorHoldHours} hours before the first lesson, or {$instructorShortNoticeHoldHours} hours before it when booked at shorter notice. Head office bookings are held until midnight (UK time) on the day they are made, or {$instructorShortNoticeHoldHours} hours before the first lesson if that is sooner. Either way, the hold is at least {$minimumHoldMinutes} minutes.", []),
                 self::step('The payment link is re-sent', 'The instructor can re-send the link (at most once every 3 minutes).', [
                     self::email(EmailTemplateKey::LearnerPaymentLink, 'Learner, or the person paying'),
                     self::push('Payment link re-sent', 'Learner', 'Instructor bookings only, and only if the learner has their own account in the app.'),
