@@ -40,7 +40,8 @@ class SendLessonInvoices extends Command
             ->whereHas('lesson', function ($query) {
                 $query->whereNotNull('date')
                     ->whereDate('date', '>=', BookingPayments::overdueInvoiceCutoffDate())
-                    ->where('status', '!=', LessonStatus::CANCELLED);
+                    ->where('status', '!=', LessonStatus::CANCELLED)
+                    ->whereDoesntHave('pendingDeletionRequest');
             })
             ->whereHas('lesson.order', function ($query) {
                 $query->where('status', OrderStatus::ACTIVE)
@@ -62,6 +63,7 @@ class SendLessonInvoices extends Command
 
         $successCount = 0;
         $failCount = 0;
+        $skippedCount = 0;
 
         foreach ($lessonPayments as $lessonPayment) {
             $lesson = $lessonPayment->lesson;
@@ -74,6 +76,9 @@ class SendLessonInvoices extends Command
                 if ($result['success']) {
                     $this->info("✓ Invoice sent: {$result['hosted_invoice_url']}");
                     $successCount++;
+                } elseif ($result['skipped'] ?? false) {
+                    $this->info("- Skipped: {$result['error']}");
+                    $skippedCount++;
                 } else {
                     $this->error("✗ Failed: {$result['error']}");
                     $failCount++;
@@ -90,7 +95,7 @@ class SendLessonInvoices extends Command
         }
 
         $this->newLine();
-        $this->info("Summary: {$successCount} succeeded, {$failCount} failed");
+        $this->info("Summary: {$successCount} succeeded, {$skippedCount} skipped, {$failCount} failed");
 
         return $failCount > 0 ? 1 : 0;
     }

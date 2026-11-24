@@ -1096,13 +1096,19 @@ class OrderService extends BaseService
             return null;
         }
 
-        $lessonPayment = LessonPayment::query()
+        $candidates = LessonPayment::query()
             ->join('lessons', 'lessons.id', '=', 'lesson_payments.lesson_id')
             ->where('lessons.order_id', $order->id)
             ->where('lessons.status', '!=', LessonStatus::CANCELLED)
             ->whereNotNull('lessons.date')
             // Lessons more than a week old are never invoiced (see lessons:cancel-overdue-invoices).
             ->whereDate('lessons.date', '>=', BookingPayments::overdueInvoiceCutoffDate())
+            // The instructor has asked Head Office to delete it: never invoice it.
+            ->whereNotExists(function ($query): void {
+                $query->selectRaw('1')
+                    ->from('lesson_deletion_requests')
+                    ->whereColumn('lesson_deletion_requests.pending_lesson_id', 'lessons.id');
+            })
             ->where('lesson_payments.status', PaymentStatus::DUE)
             ->whereNull('lesson_payments.stripe_invoice_id')
             ->whereNull('lesson_payments.alternative_payment_confirmed_at')
@@ -1110,27 +1116,33 @@ class OrderService extends BaseService
             ->orderBy('lessons.start_time')
             ->select('lesson_payments.*')
             ->with('lesson.order.student.user')
-            ->first();
+            ->get();
 
-        if (! $lessonPayment) {
-            Log::info('No outstanding lesson payment to invoice for order', [
-                'order_id' => $order->id,
-            ]);
+        // A candidate can be skipped when its state changed after this query
+        // (e.g. a deletion request came in); move on to the next lesson.
+        foreach ($candidates as $lessonPayment) {
+            try {
+                $result = ($this->sendLessonInvoice)($lessonPayment);
+            } catch (\Exception $e) {
+                Log::error('Failed to send next due lesson invoice', [
+                    'order_id' => $order->id,
+                    'lesson_payment_id' => $lessonPayment->id,
+                    'error' => $e->getMessage(),
+                ]);
 
-            return null;
+                return ['success' => false, 'error' => $e->getMessage()];
+            }
+
+            if (! ($result['skipped'] ?? false)) {
+                return $result;
+            }
         }
 
-        try {
-            return ($this->sendLessonInvoice)($lessonPayment);
-        } catch (\Exception $e) {
-            Log::error('Failed to send next due lesson invoice', [
-                'order_id' => $order->id,
-                'lesson_payment_id' => $lessonPayment->id,
-                'error' => $e->getMessage(),
-            ]);
+        Log::info('No outstanding lesson payment to invoice for order', [
+            'order_id' => $order->id,
+        ]);
 
-            return ['success' => false, 'error' => $e->getMessage()];
-        }
+        return null;
     }
 
     /**

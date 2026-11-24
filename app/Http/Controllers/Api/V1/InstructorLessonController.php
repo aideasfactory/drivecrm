@@ -8,11 +8,14 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\CancelBankedLessonRequest;
 use App\Http\Requests\Api\V1\GetInstructorLessonsRangeRequest;
 use App\Http\Requests\Api\V1\RebookBankedLessonRequest;
+use App\Http\Requests\Api\V1\StoreLessonDeletionRequest;
 use App\Http\Resources\V1\BankedLessonResource;
 use App\Http\Resources\V1\InstructorDayLessonCollection;
+use App\Http\Resources\V1\LessonDeletionRequestResource;
 use App\Models\Lesson;
 use App\Models\Order;
 use App\Services\InstructorService;
+use App\Services\LessonDeletionRequestService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -21,7 +24,8 @@ use Illuminate\Validation\ValidationException;
 class InstructorLessonController extends Controller
 {
     public function __construct(
-        protected InstructorService $instructorService
+        protected InstructorService $instructorService,
+        protected LessonDeletionRequestService $lessonDeletionRequestService,
     ) {}
 
     /**
@@ -180,5 +184,54 @@ class InstructorLessonController extends Controller
             'cancelled_count' => $result['cancelled_count'],
             'refund_required_count' => $result['refund_required_count'],
         ]);
+    }
+
+    /**
+     * Ask Head Office to permanently delete one of the instructor's past
+     * lessons (logged by mistake). The lesson stays, marked as deletion
+     * pending, until an owner approves or rejects.
+     */
+    public function requestDeletion(StoreLessonDeletionRequest $request, Lesson $lesson): JsonResponse
+    {
+        $instructor = $request->user()->instructor;
+
+        abort_unless($instructor && $lesson->instructor_id === $instructor->id, 403, 'This lesson does not belong to you.');
+
+        try {
+            $deletionRequest = $this->lessonDeletionRequestService->requestDeletion(
+                $lesson,
+                $instructor,
+                $request->user(),
+                $request->validated('reason'),
+            );
+        } catch (\RuntimeException $e) {
+            throw ValidationException::withMessages(['lesson' => $e->getMessage()]);
+        }
+
+        return (new LessonDeletionRequestResource($deletionRequest))
+            ->response()
+            ->setStatusCode(201);
+    }
+
+    /**
+     * Withdraw the instructor's pending deletion request for a lesson.
+     */
+    public function cancelDeletionRequest(Request $request, Lesson $lesson): JsonResponse
+    {
+        abort_unless($lesson->instructor_id === $request->user()->instructor?->id, 403, 'This lesson does not belong to you.');
+
+        $deletionRequest = $this->lessonDeletionRequestService->getPendingRequest($lesson);
+
+        if (! $deletionRequest) {
+            return response()->json(['message' => 'No pending deletion request found for this lesson.'], 404);
+        }
+
+        try {
+            $this->lessonDeletionRequestService->cancelRequest($deletionRequest);
+        } catch (\RuntimeException $e) {
+            throw ValidationException::withMessages(['lesson' => $e->getMessage()]);
+        }
+
+        return response()->json(['message' => 'Deletion request cancelled.']);
     }
 }

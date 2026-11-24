@@ -4,15 +4,21 @@ declare(strict_types=1);
 
 namespace App\Actions\Student\Lesson;
 
+use App\Actions\Lesson\GetLessonDeletionBlockerAction;
 use App\Enums\LessonCardStatus;
 use App\Enums\LessonStatus;
 use App\Models\Student;
 use App\Support\AlternativePayments;
+use App\Support\LessonDeletionFlags;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 class GetStudentLessonsAction
 {
+    public function __construct(
+        protected GetLessonDeletionBlockerAction $getLessonDeletionBlocker,
+    ) {}
+
     /**
      * Fetch lessons for a student across all orders.
      *
@@ -58,6 +64,8 @@ class GetStudentLessonsAction
                         'payout:id,lesson_id,status,failure_code,failure_message,amount_pence,stripe_transfer_id,paid_at',
                         'reflectiveLog:id,lesson_id',
                         'resources:id,title,resource_type,video_url,file_path,file_name,file_size,mime_type,thumbnail_url',
+                        'pendingDeletionRequest',
+                        'instructorFinances:id,lesson_id',
                     ])
                     ->orderBy('date')
                     ->orderBy('start_time'),
@@ -107,6 +115,8 @@ class GetStudentLessonsAction
                     ...AlternativePayments::lessonFlags($lesson),
                     'has_reflective_log' => $lesson->reflectiveLog !== null,
                     'resources_count' => $lesson->resources->count(),
+                    'deletion_request' => LessonDeletionFlags::requestPayload($lesson->pendingDeletionRequest),
+                    'deletion_blocker' => $lesson->pendingDeletionRequest === null ? ($this->getLessonDeletionBlocker)($lesson) : null,
                     '_date_obj' => $lesson->date,
                     '_completed_at' => $lesson->completed_at,
                 ];

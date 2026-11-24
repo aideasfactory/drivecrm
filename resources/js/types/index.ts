@@ -27,5 +27,6 @@ export type AppPageProps<
     };
     schoolContact: SchoolContact;
     supportInbox: { unread_count: number } | null;
+    lessonDeletionRequests: { pending_count: number } | null;
     [key: string]: unknown;
 };

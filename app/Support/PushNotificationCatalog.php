@@ -90,6 +90,22 @@ final class PushNotificationCatalog
                 'trigger' => 'A lesson is marked as paid: a weekly lesson invoice or first weekly payment succeeds, or a pay-in-full booking is paid.',
             ],
             [
+                'key' => 'lesson_deletion_approved',
+                'name' => 'Lesson deletion approved',
+                'audience' => 'instructor',
+                'title' => 'Lesson deleted',
+                'body' => 'Your request was approved. The lesson with {pupil} on {date} at {time} has been deleted.',
+                'trigger' => "An owner approves the instructor's request to delete a past lesson.",
+            ],
+            [
+                'key' => 'lesson_deletion_rejected',
+                'name' => 'Lesson deletion rejected',
+                'audience' => 'instructor',
+                'title' => 'Deletion request rejected',
+                'body' => 'Your request to delete the lesson with {pupil} on {date} at {time} was rejected. The lesson has been kept.',
+                'trigger' => "An owner rejects the instructor's request to delete a past lesson.",
+            ],
+            [
                 'key' => 'miles_start',
                 'name' => 'Mileage reminder (start)',
                 'audience' => 'instructor',

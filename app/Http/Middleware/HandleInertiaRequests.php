@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\LessonDeletionRequestService;
 use App\Services\SupportTicketService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -47,6 +48,9 @@ class HandleInertiaRequests extends Middleware
             ],
             'supportInbox' => fn (): ?array => $user?->isOwner()
                 ? ['unread_count' => app(SupportTicketService::class)->unreadConversationCount()]
+                : null,
+            'lessonDeletionRequests' => fn (): ?array => $user?->isOwner()
+                ? ['pending_count' => app(LessonDeletionRequestService::class)->countPending()]
                 : null,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             // Named hmrcFlags (not hmrc) so page props like the Instructor

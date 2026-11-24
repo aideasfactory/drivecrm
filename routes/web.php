@@ -24,6 +24,7 @@ use App\Http\Controllers\InstructorController;
 use App\Http\Controllers\InstructorMergeController;
 use App\Http\Controllers\InstructorWelcomeLinkController;
 use App\Http\Controllers\IntegrationController;
+use App\Http\Controllers\LessonDeletionRequestController;
 use App\Http\Controllers\LessonsBookedController;
 use App\Http\Controllers\MobileStripeOnboardingController;
 use App\Http\Controllers\Onboarding\OnboardingController;
@@ -109,6 +110,17 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
     Route::get('/instructors/export', [InstructorController::class, 'exportCsv'])
         ->middleware(EnsureOwner::class)
         ->name('instructors.export');
+
+    // Instructors' requests to delete past lessons (owners and the bookings team)
+    Route::middleware([EnsureOwner::class])->group(function () {
+        Route::get('/instructors/lesson-deletion-requests', [LessonDeletionRequestController::class, 'index'])
+            ->name('lesson-deletion-requests.index');
+        Route::post('/instructors/lesson-deletion-requests/{lessonDeletionRequest}/approve', [LessonDeletionRequestController::class, 'approve'])
+            ->name('lesson-deletion-requests.approve');
+        Route::post('/instructors/lesson-deletion-requests/{lessonDeletionRequest}/reject', [LessonDeletionRequestController::class, 'reject'])
+            ->name('lesson-deletion-requests.reject');
+    });
+
     Route::get('/instructors/{instructor}', [InstructorController::class, 'show'])
         ->name('instructors.show');
     Route::put('/instructors/{instructor}', [InstructorController::class, 'update'])
