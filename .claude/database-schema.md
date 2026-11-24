@@ -1718,6 +1718,8 @@ The permanent record of everything the importer brought in. Links a legacy syste
 
 **Converted practical tests:** `import:practical-tests` deletes an imported lesson that was really a driving test and its `lesson` mapping; the `diary` mapping stays, pointing at the calendar item (now `item_type = practical_test`, `student_id` set).
 
+**Duplicate lesson report (2026-11-19, trimmed 2026-11-24):** `lessons:find-duplicates` (read-only) writes a review CSV of duplicated lessons — same GoRoadie ref (lesson mapping, or a lesson on the diary mapping's item; refs compared trimmed and case-insensitive), same instructor + pupil + date + start time, or an imported lesson at the date/time a Drive Plus lesson was moved from (the pupil's reschedule `activity_logs` row: `metadata.lesson_id` / `anchor_lesson_id` + `old_date` / `old_start_time`). There is no built-in removal command: the reviewed CSV is acted on by a one-off script (cancel, never hard-delete — lesson delete cascades `lesson_payments` / `payouts`; skip any lesson with Stripe money). The diary importer (`ImportDiaryItemAction::studentHasLessonAt`) also skips a row when the pupil's open lesson was moved in Drive Plus away from that date + start time.
+
 **Other imported markers:** `users.imported_at` (accounts — set only by the importer; shown as an "Imported" badge on the pupil's Actions tab; has no effect on cash payments), `orders.payment_mode = imported` (imported lessons' orders), `instructor_finances.category = imported` (finance rows with no category given). Imported receipts are stored exactly like manual uploads (`instructors/{id}/finance-receipts/{financeId}/…` on s3).
 
 ---

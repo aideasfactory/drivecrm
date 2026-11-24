@@ -7,6 +7,7 @@ namespace App\Actions\Import;
 use App\Enums\CalendarItemStatus;
 use App\Enums\CalendarItemType;
 use App\Enums\LessonStatus;
+use App\Models\ActivityLog;
 use App\Models\Calendar;
 use App\Models\CalendarItem;
 use App\Models\ImportMapping;
@@ -14,6 +15,7 @@ use App\Models\ImportRun;
 use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Order;
+use App\Models\Student;
 use App\Support\ImportValues;
 
 class ImportDiaryItemAction
@@ -111,16 +113,44 @@ class ImportDiaryItemAction
 
     /**
      * Whether the student already has a (non-cancelled) lesson at the row's
-     * date and start time, on any order.
+     * date and start time, on any order — or had one there that was moved in
+     * Drive Plus, so the row is the old booking the move replaced.
      *
      * @param  array<string, string|int>  $row
      */
     public function studentHasLessonAt(int $studentId, array $row): bool
     {
+        $date = ImportValues::date((string) $row['date'])->toDateString();
+        $startTime = ImportValues::time((string) $row['start_time']);
+
         return Lesson::query()
             ->whereHas('order', fn ($query) => $query->where('student_id', $studentId))
-            ->where('date', ImportValues::date((string) $row['date'])->toDateString())
-            ->where('start_time', ImportValues::time((string) $row['start_time']))
+            ->where('date', $date)
+            ->where('start_time', $startTime)
+            ->where('status', '!=', LessonStatus::CANCELLED)
+            ->exists()
+            || $this->studentLessonWasMovedFrom($studentId, $date, $startTime);
+    }
+
+    /**
+     * Whether one of the student's open lessons was moved in Drive Plus away
+     * from this date and start time (the pupil's reschedule activity log).
+     */
+    protected function studentLessonWasMovedFrom(int $studentId, string $date, string $startTime): bool
+    {
+        $movedLessonIds = ActivityLog::query()
+            ->where('loggable_type', Student::class)
+            ->where('loggable_id', $studentId)
+            ->where('metadata->old_date', $date)
+            ->whereIn('metadata->old_start_time', [$startTime, $startTime.':00'])
+            ->get(['metadata'])
+            ->map(fn (ActivityLog $log): int => (int) ($log->metadata['lesson_id'] ?? $log->metadata['anchor_lesson_id'] ?? 0))
+            ->filter()
+            ->all();
+
+        return $movedLessonIds !== [] && Lesson::query()
+            ->whereKey($movedLessonIds)
+            ->whereHas('order', fn ($query) => $query->where('student_id', $studentId))
             ->where('status', '!=', LessonStatus::CANCELLED)
             ->exists();
     }
