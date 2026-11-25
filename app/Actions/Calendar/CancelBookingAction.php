@@ -12,6 +12,7 @@ use App\Enums\LessonCancellationOutcome;
 use App\Enums\LessonCancellationReason;
 use App\Enums\LessonPaymentMethod;
 use App\Enums\LessonStatus;
+use App\Enums\OrderSource;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
 use App\Models\CalendarItem;
@@ -319,7 +320,7 @@ class CancelBookingAction
                         $calendarItem->travelItem?->delete();
                         $calendarItem->delete();
                     } else {
-                        ($this->reopenCancelledLessonSlot)($calendarItem);
+                        ($this->reopenCancelledLessonSlot)($calendarItem, $lesson->order?->source === OrderSource::IMPORTED);
                     }
                 }
             }

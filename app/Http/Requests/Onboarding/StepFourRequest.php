@@ -2,8 +2,11 @@
 
 namespace App\Http\Requests\Onboarding;
 
+use App\Models\CalendarItem;
 use App\Models\Enquiry;
+use App\Support\LessonLength;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class StepFourRequest extends FormRequest
 {
@@ -39,6 +42,29 @@ class StepFourRequest extends FormRequest
             'calendar_item_id' => ['required', 'exists:calendar_items,id'],
             'start_time' => ['required', 'date_format:H:i'],
             'end_time' => ['required', 'date_format:H:i', 'after:start_time'],
+        ];
+    }
+
+    /**
+     * Lessons are 2 hours: refuse a slot shorter than that (short slots are
+     * also hidden from the step 4 calendar).
+     *
+     * @return array<int, callable>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                if ($validator->errors()->isNotEmpty()) {
+                    return;
+                }
+
+                $calendarItem = CalendarItem::find($this->integer('calendar_item_id'));
+
+                if ($calendarItem && LessonLength::slotIsTooShort($calendarItem)) {
+                    $validator->errors()->add('calendar_item_id', LessonLength::TOO_SHORT_MESSAGE);
+                }
+            },
         ];
     }
 

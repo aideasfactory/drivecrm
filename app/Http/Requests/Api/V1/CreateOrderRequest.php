@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Requests\Api\V1;
 
 use App\Enums\PaymentMode;
+use App\Models\CalendarItem;
+use App\Support\LessonLength;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class CreateOrderRequest extends FormRequest
 {
@@ -27,6 +30,36 @@ class CreateOrderRequest extends FormRequest
             'first_lesson_date' => ['required_without:calendar_item_id', 'nullable', 'date', 'date_format:Y-m-d', 'after_or_equal:today'],
             'start_time' => ['required_without:calendar_item_id', 'nullable', 'string', 'date_format:H:i'],
             'end_time' => ['required_without:calendar_item_id', 'nullable', 'string', 'date_format:H:i', 'after:start_time'],
+        ];
+    }
+
+    /**
+     * Lessons are 2 hours: refuse a slot (or typed times) shorter than that.
+     *
+     * @return array<int, callable>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                if ($validator->errors()->isNotEmpty()) {
+                    return;
+                }
+
+                if ($this->filled('calendar_item_id')) {
+                    $calendarItem = CalendarItem::find($this->integer('calendar_item_id'));
+
+                    if ($calendarItem && LessonLength::slotIsTooShort($calendarItem)) {
+                        $validator->errors()->add('calendar_item_id', LessonLength::TOO_SHORT_MESSAGE);
+                    }
+
+                    return;
+                }
+
+                if (LessonLength::isTooShort($this->input('start_time'), $this->input('end_time'))) {
+                    $validator->errors()->add('end_time', LessonLength::TOO_SHORT_MESSAGE);
+                }
+            },
         ];
     }
 }

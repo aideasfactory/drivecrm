@@ -9,6 +9,7 @@ use App\Actions\Shared\Note\CreateNoteAction;
 use App\Actions\Student\Lesson\RecalculateStudentLessonNumbersAction;
 use App\Enums\LessonCancellationReason;
 use App\Enums\LessonStatus;
+use App\Enums\OrderSource;
 use App\Enums\PaymentStatus;
 use App\Models\CalendarItem;
 use App\Models\Lesson;
@@ -117,7 +118,7 @@ class BankLessonsAction
                             $calendarItem->travelItem?->delete();
                             $calendarItem->delete();
                         } else {
-                            ($this->reopenLessonSlot)($calendarItem);
+                            ($this->reopenLessonSlot)($calendarItem, $lesson->order?->source === OrderSource::IMPORTED);
                         }
                     }
                 }

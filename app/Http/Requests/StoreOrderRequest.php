@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Enums\PaymentMode;
+use App\Models\CalendarItem;
 use App\Models\Package;
 use App\Models\Student;
 use App\Support\CashBookings;
+use App\Support\LessonLength;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -63,6 +65,33 @@ class StoreOrderRequest extends FormRequest
                     $validator->errors()->add('payment_mode', 'Cash bookings are only for pupils with cash payments turned on, booked by an owner with full access.');
                 }
             },
+            function (Validator $validator): void {
+                $this->checkLessonLength($validator);
+            },
         ];
+    }
+
+    /**
+     * Lessons are 2 hours: refuse a slot (or typed times) shorter than that.
+     */
+    private function checkLessonLength(Validator $validator): void
+    {
+        if ($validator->errors()->isNotEmpty()) {
+            return;
+        }
+
+        if ($this->filled('calendar_item_id')) {
+            $calendarItem = CalendarItem::find($this->integer('calendar_item_id'));
+
+            if ($calendarItem && LessonLength::slotIsTooShort($calendarItem)) {
+                $validator->errors()->add('calendar_item_id', LessonLength::TOO_SHORT_MESSAGE);
+            }
+
+            return;
+        }
+
+        if (LessonLength::isTooShort($this->input('start_time'), $this->input('end_time'))) {
+            $validator->errors()->add('end_time', LessonLength::TOO_SHORT_MESSAGE);
+        }
     }
 }

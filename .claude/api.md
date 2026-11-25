@@ -3609,6 +3609,7 @@ Once created, the offer is `open`. Active students with an Expo push token are q
 - Neither `package_id` nor `one_off_price_pence` supplied, or both supplied.
 - Slot is not empty availability, already booked, or no longer available.
 - `package_id` is not one of this instructor's active packages.
+- Slot is shorter than 2 hours (`errors.calendar_item`: "Lessons are 2 hours. Only a 2-hour slot can be offered.").
 
 **Error — Not found / not owned (404):**
 ```json
@@ -3741,7 +3742,7 @@ Returns the active packages belonging to the authenticated student's attached in
 
 **Auth required:** Yes (Bearer token — student only)
 
-Returns available calendar slots for the authenticated student's attached instructor on a given date. Unlike the instructor endpoint, this route always filters to **available slots only** and **excludes drafts** — students cannot see travel items, practical test items, unavailable slots, or draft items.
+Returns available calendar slots for the authenticated student's attached instructor on a given date. Unlike the instructor endpoint, this route always filters to **available slots only** and **excludes drafts** — students cannot see travel items, practical test items, unavailable slots, draft items, or slots shorter than 2 hours (lessons are always 2 hours).
 
 **Query Parameters:**
 
@@ -4986,7 +4987,7 @@ The parts always add up to `total_pence`. They are pro-rated from the order's st
 
 **Auth required:** Yes (Bearer token — student or instructor)
 
-Returns full detail for a single lesson belonging to a student. The lesson must belong to the student via one of their orders — otherwise a 404 is returned.
+Returns full detail for a single lesson belonging to a student. The lesson must belong to the student via one of their orders — otherwise a 404 is returned. Access: the pupil, the pupil's current instructor, **or the instructor the lesson belongs to** (so a former instructor can open a lesson they taught before a transfer, e.g. from their diary, to sign it off). The former instructor only gets *that* lesson; the lessons index stays current-instructor only.
 
 **Draft lessons ARE returned by this endpoint** (unlike the index, which requires `include_drafts=true`). Tapping a draft card from the instructor's pupil view therefore resolves. Cancelled lessons still return 404. A draft lesson comes back with `status: "draft"` and `card_status: "draft"`. For `payment_mode: "upfront"`, `payment_status` is `null` (no payment record exists until Stripe Checkout completes — same as the index). For `payment_mode: "weekly"`, `payment_status` is `"due"` (the weekly payment rows are created at booking). Sign-off remains impossible for drafts: `POST .../sign-off` only accepts `pending` lessons and returns 404 for a draft.
 
@@ -5145,6 +5146,8 @@ Instructor responses are unchanged.
 #### `POST /api/v1/students/{student}/lessons/{lesson}/sign-off`
 
 **Auth required:** Yes (Bearer token — instructor only)
+
+**Who may sign off:** the pupil's current instructor, **or the instructor the lesson belongs to** (`lessons.instructor_id`). The second covers a lesson taught before the pupil was transferred to someone else. The payout always goes to the lesson's instructor. Anyone else gets `403`.
 
 Sign off a lesson as completed. **Same contract and pipeline as admin CRM:** body is `{ "summary": "..." }` only. The four-prompt reflective log is leftover and is **not** required — do not collect it or gate on `has_reflective_log`.
 
@@ -6049,6 +6052,20 @@ A student-initiated `weekly` booking returns the same shape as the student-initi
   "errors": {
     "package_id": ["The package id field is required."],
     "payment_mode": ["The payment mode field is required."]
+  }
+}
+```
+
+**Error Response (lesson shorter than 2 hours):** `422 Unprocessable Entity`
+
+Every lesson is 2 hours (only driving tests are shorter, and they're booked through the diary, not this endpoint). A
+`calendar_item_id` slot shorter than 120 minutes returns the error on `calendar_item_id`. Typed `start_time` /
+`end_time` less than 120 minutes apart return it on `end_time`.
+```json
+{
+  "message": "Lessons are 2 hours. This slot is too short — please choose a 2-hour slot.",
+  "errors": {
+    "calendar_item_id": ["Lessons are 2 hours. This slot is too short — please choose a 2-hour slot."]
   }
 }
 ```
@@ -8556,6 +8573,8 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-19 | **Lesson sign-off opens at the start time (app in line with the CRM).** `POST /students/{student}/lessons/{lesson}/sign-off` now refuses a lesson that hasn't started yet with `422` *"This lesson can't be signed off until it has started (…)"* — before, the endpoint had no time check (the app blocked sign-off until start + 2 hours on the phone only). Sign-off is allowed from the lesson's start time (UK) onwards, including later days, exactly as the CRM. **New additive field** `has_started` (boolean) on each lesson in `GET /students/{student}/lessons` (already on the show endpoint). Payout, invoicing and alternative-payment behaviour unchanged. **App action (instructor):** gate Sign Off on `has_started` instead of "lesson has ended", and offer it on `current` lessons on the day, not only `needs_sign_off`. | Student Lessons (index, sign-off) |
 | 2026-11-20 | **Lesson deletion requests (instructor).** New `POST /api/v1/instructor/lessons/{lesson}/deletion-request` (required `reason`, `201` with the request) and `DELETE` on the same path (withdraw, `200`; `404` when nothing is pending). Only past, unpaid, not signed-off lessons with no payout, open invoice, upfront/imported payment or finance row qualify; the rules are checked again when Head Office approves. Owners and the bookings team approve (lesson **permanently deleted**) or reject (kept) in the CRM. **New additive fields** on instructor lesson payloads (`GET /instructor/lessons`, `/instructor/lessons/{date}`, `/students/{student}/lessons`, `/students/{student}/lessons/{lesson}`, `/instructor/calendar/items`): `deletion_pending`, `deletion_request`, `can_request_deletion`, `deletion_blocked_reason`. **New push types** `lesson_deletion_approved` / `lesson_deletion_rejected` to the instructor. No pupil emails. A lesson with a pending request is not invoiced (hourly job and next-invoice-on-sign-off skip it). **App action (instructor):** "Request deletion" button when `can_request_deletion`; reason sheet with placeholder *"Why should this lesson be deleted?"*; "Deletion pending" tag + "Cancel request" while `deletion_pending`; refresh on the two push types. | Instructor Lessons (deletion-request — NEW POST/DELETE), Instructor Lessons (range, day), Student Lessons (index, show), Instructor Calendar items, Push Notifications |
 | 2026-11-20 | **Mock tests use the Car bank only.** The question bank is now the 758 questions in the DVSA "Car (Cat B) QB Feb 2026" spreadsheet. 462 were missing, and the 223 shared car/motorcycle questions were labelled `Motorcycle`. `start` (including tests with no category, stored as `Mixed`), `questions` and `categories` only use `Car` questions. Before, a mixed test drew motorcycle-only, lorry/bus and ADI questions too. `category` on `POST /mock-tests/start` and `GET /mock-tests/questions` now only accepts `Car`, so `ADI`/`Motorcycle`/`LGV-PCV` return `422`. `GET /mock-tests/categories` returns one category (`Car`). `category_performance` in the summary only counts answers to Car questions. History, review and single-question endpoints are unchanged, so old tests still open with their original questions. Response shapes are unchanged. **App action:** none if the category list is read from `/mock-tests/categories`. Remove any hard-coded Motorcycle/LGV-PCV/ADI options. | Mock Tests (start, questions, categories, summary) |
+| 2026-11-25 | **Lessons must be 2 hours.** `POST /api/v1/students/{student}/orders` now returns 422 when the `calendar_item_id` slot (error on `calendar_item_id`) or the typed `start_time`/`end_time` (error on `end_time`) is shorter than 120 minutes. `POST /api/v1/instructor/calendar/items/{calendarItem}/offers` returns 422 (`calendar_item`) for a slot shorter than 2 hours. `GET /api/v1/student/calendar/items` no longer lists open slots shorter than 2 hours. Practical test items are exempt. Also server-side only: a slot freed by a cancelled or banked **imported** lesson that is shorter than 2 hours is now removed from the diary instead of reopened (cancel / bank endpoints unchanged). **App action:** show the 422 message as-is; instructor add-slot is already fixed at 120 minutes. | Orders (store), Slot offers (store), Student calendar (index) |
+| 2026-11-25 | **Former instructor can sign off a lesson they taught before a transfer.** `GET /api/v1/students/{student}/lessons/{lesson}` and `POST /api/v1/students/{student}/lessons/{lesson}/sign-off` now also allow the instructor the lesson belongs to (`lessons.instructor_id`), not only the pupil's current instructor. Previously a pupil transferred before an un-signed-off lesson left it stuck (403). `GET .../lessons` (index) unchanged. No request/response shape change. **App action:** none required; tapping the lesson in the former instructor's diary now opens it and Sign off works. | Student lessons (show, sign-off) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

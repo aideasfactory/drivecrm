@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Calendar;
+use App\Support\LessonLength;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 
@@ -32,6 +33,8 @@ class CalendarService
                         $q->whereNull('item_type')
                             ->orWhereNotIn('item_type', ['travel', 'practical_test']);
                     })
+                    // Lessons are 2 hours — never offer a shorter slot.
+                    ->whereRaw('TIMESTAMPDIFF(MINUTE, start_time, end_time) >= ?', [LessonLength::MIN_MINUTES])
                     ->orderBy('start_time');
             }])
             ->orderBy('date')
