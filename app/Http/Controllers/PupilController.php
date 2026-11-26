@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\Lesson\SendLessonToRebookAction;
 use App\Actions\Payment\ResendLessonInvoiceAction;
 use App\Actions\Shared\AdminResetPasswordAction;
 use App\Actions\Shared\Contact\CreateContactAction;
@@ -29,6 +30,7 @@ use App\Actions\Student\PickupPoint\UpdatePickupPointAction;
 use App\Actions\Student\Status\RemoveStudentFromInstructorAction;
 use App\Actions\Student\Status\UpdateStudentStatusAction;
 use App\Actions\Student\Transfer\GetOnboardedInstructorsAction;
+use App\Enums\LessonCancellationReason;
 use App\Enums\LessonStatus;
 use App\Enums\OrderSource;
 use App\Enums\PaymentMode;
@@ -815,6 +817,42 @@ class PupilController extends Controller
             'message' => $message,
             'cancelled_count' => $result['cancelled_count'],
             'refund_required_count' => $result['refund_required_count'],
+        ]);
+    }
+
+    /**
+     * Owner only: a past lesson that never took place (and wasn't signed off)
+     * goes back to the pupil as an unscheduled lesson with their current
+     * instructor. Payment is untouched and the old instructor isn't paid.
+     */
+    public function returnLessonToPupil(Student $student, Lesson $lesson, SendLessonToRebookAction $sendLessonToRebook): JsonResponse
+    {
+        if ($lesson->order?->student_id !== $student->id) {
+            return response()->json(['message' => 'Lesson not found for this student.'], 404);
+        }
+
+        if ($lesson->status !== LessonStatus::PENDING || $lesson->isBanked() || ! $lesson->hasStarted()) {
+            return response()->json(['message' => 'Only a past lesson that hasn\'t been signed off can be returned to the pupil.'], 422);
+        }
+
+        if (! $student->instructor) {
+            return response()->json(['message' => 'This pupil has no instructor to return the lesson to.'], 422);
+        }
+
+        try {
+            $sendLessonToRebook(
+                $lesson,
+                LessonCancellationReason::InstructorUnavailable,
+                'Lesson did not take place — returned to the pupil by Head Office',
+                $student->instructor,
+                request()->user(),
+            );
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'message' => "Lesson returned to the pupil as an unscheduled lesson with {$student->instructor->name}.",
         ]);
     }
 

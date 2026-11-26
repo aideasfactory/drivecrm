@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import axios from 'axios'
 import { Head, router } from '@inertiajs/vue3'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { Card, CardContent } from '@/components/ui/card'
@@ -10,6 +11,11 @@ import { toast } from '@/components/ui/sonner'
 import TransferSearchSelect, {
     type TransferSearchOption,
 } from '@/components/StudentTransfers/TransferSearchSelect.vue'
+import TransferCheck, {
+    type LessonDecision,
+    type TransferPreview,
+} from '@/components/StudentTransfers/TransferCheck.vue'
+import { Skeleton } from '@/components/ui/skeleton'
 import { ArrowRightLeft, CheckCircle2, Loader2, X } from 'lucide-vue-next'
 
 interface StudentOption extends TransferSearchOption {
@@ -37,11 +43,68 @@ const notes = ref('')
 const submitting = ref(false)
 const lastTransferMessage = ref<string | null>(null)
 
+const preview = ref<TransferPreview | null>(null)
+const previewLoading = ref(false)
+const previewError = ref<string | null>(null)
+const lessonDecisions = ref<Record<number, LessonDecision>>({})
+let previewRequestId = 0
+
+const loadPreview = async (keepDecisions = false) => {
+    const previousDecisions = keepDecisions ? lessonDecisions.value : {}
+    preview.value = null
+    previewError.value = null
+    lessonDecisions.value = {}
+
+    if (!selectedStudent.value || !selectedInstructor.value) return
+
+    const requestId = ++previewRequestId
+    previewLoading.value = true
+
+    try {
+        const response = await axios.get<TransferPreview>('/student-transfers/preview', {
+            params: {
+                student_id: selectedStudent.value.id,
+                destination_instructor_id: selectedInstructor.value.id,
+            },
+        })
+        if (requestId !== previewRequestId) return
+        preview.value = response.data
+        lessonDecisions.value = Object.fromEntries(
+            response.data.past_unsigned
+                .filter((lesson) => previousDecisions[lesson.id])
+                .map((lesson) => [lesson.id, previousDecisions[lesson.id]]),
+        )
+    } catch (error) {
+        if (requestId !== previewRequestId) return
+        previewError.value = axios.isAxiosError(error)
+            ? (error.response?.data?.message ?? 'Could not check this transfer.')
+            : 'Could not check this transfer.'
+    } finally {
+        if (requestId === previewRequestId) previewLoading.value = false
+    }
+}
+
+watch(
+    () => [selectedStudent.value?.id, selectedInstructor.value?.id],
+    () => loadPreview(),
+)
+
+const decideLesson = (lessonId: number, decision: LessonDecision) => {
+    lessonDecisions.value = { ...lessonDecisions.value, [lessonId]: decision }
+}
+
+const allPastLessonsDecided = computed(
+    () =>
+        preview.value !== null &&
+        preview.value.past_unsigned.every((lesson) => lessonDecisions.value[lesson.id]),
+)
+
 const canSubmit = computed(
     () =>
         selectedStudent.value !== null &&
         selectedInstructor.value !== null &&
         selectedReason.value !== '' &&
+        allPastLessonsDecided.value &&
         !submitting.value,
 )
 
@@ -70,6 +133,7 @@ const handleSubmit = () => {
             destination_instructor_id: selectedInstructor.value!.id,
             reason: selectedReason.value,
             notes: notes.value.trim() || null,
+            lesson_decisions: lessonDecisions.value,
         },
         {
             preserveScroll: true,
@@ -90,6 +154,7 @@ const handleSubmit = () => {
                         ? firstError
                         : 'Failed to transfer student',
                 )
+                loadPreview(true)
             },
             onFinish: () => {
                 submitting.value = false
@@ -112,11 +177,11 @@ const breadcrumbs = [{ title: 'Transfer Student' }]
                     Transfer Student
                 </h2>
                 <p class="text-muted-foreground max-w-2xl">
-                    Move a student from one instructor to another. Past lessons stay
-                    with the original instructor. Future lessons are reassigned to
-                    the new instructor's diary at their existing dates and times — any
-                    clashes are flagged in the receiving instructor's email so they
-                    can rebook.
+                    Move a pupil from one instructor to another. Once you pick the pupil
+                    and the new instructor, the Pupil Transfer Check shows what will
+                    happen: past lessons not yet signed off need an answer, future lessons
+                    move into the new diary or become unscheduled if they clash, and
+                    unpaid bookings are cancelled.
                 </p>
             </div>
 
@@ -188,6 +253,27 @@ const breadcrumbs = [{ title: 'Transfer Student' }]
                             </p>
                         </div>
 
+                        <div
+                            v-if="selectedStudent && selectedInstructor"
+                            class="rounded-md border p-4"
+                        >
+                            <div v-if="previewLoading" class="flex flex-col gap-3">
+                                <Skeleton class="h-6 w-48" />
+                                <Skeleton class="h-4 w-full" />
+                                <Skeleton class="h-16 w-full" />
+                                <Skeleton class="h-16 w-full" />
+                            </div>
+                            <p v-else-if="previewError" class="text-sm text-destructive">
+                                {{ previewError }}
+                            </p>
+                            <TransferCheck
+                                v-else-if="preview"
+                                :preview="preview"
+                                :decisions="lessonDecisions"
+                                @decide="decideLesson"
+                            />
+                        </div>
+
                         <div class="flex flex-col gap-2">
                             <Label for="reason">Reason for transfer</Label>
                             <select
@@ -234,12 +320,13 @@ const breadcrumbs = [{ title: 'Transfer Student' }]
                                     class="mr-2 h-4 w-4 animate-spin"
                                 />
                                 <ArrowRightLeft v-else class="mr-2 h-4 w-4" />
-                                {{ submitting ? 'Transferring...' : 'Transfer' }}
+                                {{ submitting ? 'Moving pupil...' : 'Move pupil' }}
                             </Button>
                         </div>
                     </form>
                 </CardContent>
             </Card>
+
 
             <div
                 v-if="!props.hasStudents"

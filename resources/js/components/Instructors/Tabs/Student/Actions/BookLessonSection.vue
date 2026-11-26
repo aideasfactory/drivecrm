@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import axios from 'axios'
+import { router } from '@inertiajs/vue3'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,6 +17,7 @@ import {
 import { CalendarPlus, Clock, Loader2, Send } from 'lucide-vue-next'
 import { toast } from '@/components/ui/toast'
 import PackagePriceBreakdown from '@/components/Instructors/PackagePriceBreakdown.vue'
+import UnscheduledLessonsWarning from '@/components/Instructors/UnscheduledLessonsWarning.vue'
 
 interface Package {
     id: number
@@ -137,7 +139,15 @@ const openSheet = () => {
     isSheetOpen.value = true
 }
 
-const handleSubmit = async () => {
+const useUnscheduledLesson = () => {
+    isSheetOpen.value = false
+    router.visit(`/instructors/${props.instructorId}`, {
+        data: { tab: 'student', student: props.studentId, subtab: 'lessons' },
+        preserveScroll: true,
+    })
+}
+
+const handleSubmit = async (ignoreUnscheduledLessons = false) => {
     errors.value = {}
 
     if (!selectedSlot.value) {
@@ -156,6 +166,7 @@ const handleSubmit = async () => {
                 first_lesson_date: firstLessonDate.value,
                 start_time: selectedSlot.value.start_time,
                 end_time: selectedSlot.value.end_time,
+                ignore_unscheduled_lessons: ignoreUnscheduledLessons,
             },
         )
         toast({ title: response.data.message })
@@ -236,7 +247,7 @@ const handleSubmit = async () => {
                 </SheetHeader>
 
                 <form
-                    @submit.prevent="handleSubmit"
+                    @submit.prevent="handleSubmit()"
                     class="mt-6 space-y-6 px-6 py-4"
                 >
                     <!-- Package Selection -->
@@ -366,6 +377,14 @@ const handleSubmit = async () => {
                             {{ errors.start_time }}
                         </p>
                     </div>
+
+                    <UnscheduledLessonsWarning
+                        v-if="errors.unscheduled_lessons"
+                        :message="errors.unscheduled_lessons"
+                        :is-submitting="isSubmitting"
+                        @use-unscheduled="useUnscheduledLesson"
+                        @book-anyway="handleSubmit(true)"
+                    />
 
                     <!-- Submit -->
                     <div class="flex justify-end gap-2 pt-4">

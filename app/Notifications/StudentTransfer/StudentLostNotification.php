@@ -18,11 +18,15 @@ class StudentLostNotification extends Notification implements ShouldQueue
     use Queueable;
     use RendersTemplatedMail;
 
+    /**
+     * @param  list<string>  $missedLessons  Past lessons Head Office marked as missed ("Sat 21 Nov 2026, 08:00–10:00")
+     */
     public function __construct(
         public Student $student,
         public Instructor $sourceInstructor,
         public Instructor $destinationInstructor,
         public int $lessonsRemoved,
+        public array $missedLessons = [],
     ) {}
 
     /**
@@ -47,6 +51,9 @@ class StudentLostNotification extends Notification implements ShouldQueue
                 'lessons_removed' => $this->lessonsRemoved,
                 'app_name' => config('app.name'),
                 'multiple_lessons' => $this->lessonsRemoved > 1,
+                'missed_count' => count($this->missedLessons),
+                'multiple_missed' => count($this->missedLessons) > 1,
+                'missed_list' => collect($this->missedLessons)->map(fn (string $lesson): string => "• {$lesson}")->implode("\n"),
             ],
         );
     }
@@ -61,6 +68,7 @@ class StudentLostNotification extends Notification implements ShouldQueue
             'source_instructor_id' => $this->sourceInstructor->id,
             'destination_instructor_id' => $this->destinationInstructor->id,
             'lessons_removed' => $this->lessonsRemoved,
+            'missed_lessons' => $this->missedLessons,
         ];
     }
 }

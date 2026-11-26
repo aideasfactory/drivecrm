@@ -51,6 +51,9 @@ class BankLessonsAction
      * Only lessons of a confirmed (active) booking can be banked: an unpaid
      * booking is still cancelled as a whole.
      *
+     * `$notifyStudent = false` skips the pupil's email, for callers that send
+     * their own (a pupil transfer).
+     *
      * @return array{banked_count: int, lessons: Collection<int, Lesson>}
      *
      * @throws RuntimeException When the lesson can't be banked
@@ -61,6 +64,7 @@ class BankLessonsAction
         ?string $details,
         bool $applyToFutureInOrder,
         User $actor,
+        bool $notifyStudent = true,
     ): array {
         $item->loadMissing(['calendar', 'lessons.order.student.user', 'lessons.order.instructor.user', 'lessons.lessonPayment', 'lessons.payout']);
 
@@ -136,7 +140,7 @@ class BankLessonsAction
 
         $this->invalidateCalendarCache($item->calendar?->instructor_id, $affectedDates);
 
-        $this->recordAndNotify($bankSet, $order, $originalSlots, $reasonText, $reasonCode, $actor);
+        $this->recordAndNotify($bankSet, $order, $originalSlots, $reasonText, $reasonCode, $actor, $notifyStudent);
 
         Log::info('Lessons banked to rebook later', [
             'order_id' => $order?->id,
@@ -263,6 +267,7 @@ class BankLessonsAction
         string $reasonText,
         LessonCancellationReason $reasonCode,
         User $actor,
+        bool $notifyStudent,
     ): void {
         $student = $order?->student;
         $instructor = $order?->instructor;
@@ -293,6 +298,10 @@ class BankLessonsAction
             ],
             "Kept {$bankSet->count()} lesson(s) to rebook later: {$reasonText}",
         );
+
+        if (! $notifyStudent) {
+            return;
+        }
 
         $student->user?->notify(new LessonsBankedNotification(
             $student,

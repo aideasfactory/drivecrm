@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import axios from 'axios'
+import { router } from '@inertiajs/vue3'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
@@ -13,6 +14,7 @@ import {
 import { CalendarPlus, Clock, Loader2, Send } from 'lucide-vue-next'
 import { toast } from '@/components/ui/toast'
 import PackagePriceBreakdown from '@/components/Instructors/PackagePriceBreakdown.vue'
+import UnscheduledLessonsWarning from '@/components/Instructors/UnscheduledLessonsWarning.vue'
 
 interface PackageOption {
     id: number
@@ -109,7 +111,15 @@ watch(
     },
 )
 
-const handleSubmit = async () => {
+const useUnscheduledLesson = () => {
+    isOpen.value = false
+    router.visit(`/instructors/${props.instructorId}`, {
+        data: { tab: 'student', student: selectedStudentId.value, subtab: 'lessons' },
+        preserveScroll: true,
+    })
+}
+
+const handleSubmit = async (ignoreUnscheduledLessons = false) => {
     errors.value = {}
 
     if (!props.slot) {
@@ -134,6 +144,7 @@ const handleSubmit = async () => {
             package_id: selectedPackageId.value,
             payment_mode: paymentMode.value,
             calendar_item_id: props.slot.id,
+            ignore_unscheduled_lessons: ignoreUnscheduledLessons,
         })
         toast({ title: response.data.message || 'Booking created. The student has been emailed.' })
         isOpen.value = false
@@ -170,7 +181,7 @@ const handleSubmit = async () => {
                 </SheetDescription>
             </SheetHeader>
 
-            <form @submit.prevent="handleSubmit" class="mt-6 space-y-6 px-6 py-4">
+            <form @submit.prevent="handleSubmit()" class="mt-6 space-y-6 px-6 py-4">
                 <div class="rounded-md bg-muted p-3 text-sm">
                     <p class="flex items-center gap-2 font-medium">
                         <Clock class="h-4 w-4" />
@@ -238,6 +249,14 @@ const handleSubmit = async () => {
                     </p>
                     <p v-if="errors.payment_mode" class="text-sm text-destructive">{{ errors.payment_mode }}</p>
                 </div>
+
+                <UnscheduledLessonsWarning
+                    v-if="errors.unscheduled_lessons"
+                    :message="errors.unscheduled_lessons"
+                    :is-submitting="isSubmitting"
+                    @use-unscheduled="useUnscheduledLesson"
+                    @book-anyway="handleSubmit(true)"
+                />
 
                 <div class="flex justify-end gap-2 pt-4">
                     <Button type="button" variant="outline" :disabled="isSubmitting" @click="isOpen = false">

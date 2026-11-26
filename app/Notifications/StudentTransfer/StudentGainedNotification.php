@@ -21,8 +21,10 @@ class StudentGainedNotification extends Notification implements ShouldQueue
     use RendersTemplatedMail;
 
     /**
-     * @param  Collection<int, Lesson>  $movedLessons
-     * @param  Collection<int, Lesson>  $clashingLessons
+     * @param  Collection<int, Lesson>  $movedLessons  Lessons put in the new instructor's diary
+     * @param  Collection<int, Lesson>  $clashingLessons  Of those, ones that clash with the diary (couldn't be made unscheduled)
+     * @param  int  $unscheduledCount  The pupil's unscheduled lessons now with the new instructor
+     * @param  int  $unscheduledPaidCount  How many of those are already paid
      */
     public function __construct(
         public Student $student,
@@ -30,6 +32,8 @@ class StudentGainedNotification extends Notification implements ShouldQueue
         public Instructor $destinationInstructor,
         public Collection $movedLessons,
         public Collection $clashingLessons,
+        public int $unscheduledCount = 0,
+        public int $unscheduledPaidCount = 0,
     ) {}
 
     /**
@@ -57,6 +61,9 @@ class StudentGainedNotification extends Notification implements ShouldQueue
                 'app_name' => config('app.name'),
                 'multiple_lessons' => $this->movedLessons->count() > 1,
                 'multiple_clashes' => $this->clashingLessons->count() > 1,
+                'unscheduled_count' => $this->unscheduledCount,
+                'unscheduled_paid_count' => $this->unscheduledPaidCount,
+                'multiple_unscheduled' => $this->unscheduledCount > 1,
             ],
         );
     }
@@ -93,6 +100,7 @@ class StudentGainedNotification extends Notification implements ShouldQueue
             'destination_instructor_id' => $this->destinationInstructor->id,
             'moved_lesson_ids' => $this->movedLessons->pluck('id')->all(),
             'clashing_lesson_ids' => $this->clashingLessons->pluck('id')->all(),
+            'unscheduled_count' => $this->unscheduledCount,
         ];
     }
 }

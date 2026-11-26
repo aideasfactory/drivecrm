@@ -35,7 +35,12 @@ class LessonSignOffController extends Controller
      */
     public function store(SignOffLessonRequest $request, Student $student, int $lessonId): JsonResponse
     {
-        Gate::authorize('signOff', [Lesson::class, $student]);
+        // The lesson's own instructor may sign off too (pupil transferred after the lesson).
+        $lessonForAuthorization = Lesson::query()
+            ->whereHas('order', fn ($q) => $q->where('student_id', $student->id))
+            ->find($lessonId);
+
+        Gate::authorize('signOff', [Lesson::class, $student, $lessonForAuthorization]);
 
         $lesson = Lesson::query()
             ->whereHas('order', fn ($q) => $q->where('student_id', $student->id))

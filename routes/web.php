@@ -359,6 +359,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
     Route::post('/students/{student}/lessons/{lesson}/delete-signed-off', [PupilController::class, 'deleteSignedOffLesson'])
         ->middleware(EnsureOwner::class)
         ->name('students.lessons.delete-signed-off');
+    Route::post('/students/{student}/lessons/{lesson}/return-to-pupil', [PupilController::class, 'returnLessonToPupil'])
+        ->middleware(EnsureOwner::class)
+        ->name('students.lessons.return-to-pupil');
     Route::post('/students/{student}/orders/{order}/alternative-payment', [PupilController::class, 'confirmAlternativePayment'])
         ->name('students.orders.alternative-payment');
 
@@ -520,6 +523,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
             ->name('student-transfers.search-students');
         Route::get('/student-transfers/search-instructors', [StudentTransferController::class, 'searchInstructors'])
             ->name('student-transfers.search-instructors');
+        Route::get('/student-transfers/preview', [StudentTransferController::class, 'preview'])
+            ->name('student-transfers.preview');
         Route::post('/student-transfers', [StudentTransferController::class, 'store'])
             ->name('student-transfers.store');
     });

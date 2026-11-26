@@ -50,7 +50,12 @@ class StudentLessonController extends Controller
      */
     public function show(Request $request, Student $student, int $lesson): LessonDetailResource
     {
-        Gate::authorize('view', [Lesson::class, $student]);
+        // The lesson's own instructor may view it too (pupil transferred after the lesson).
+        $lessonForAuthorization = Lesson::query()
+            ->whereHas('order', fn ($q) => $q->where('student_id', $student->id))
+            ->find($lesson);
+
+        Gate::authorize('view', [Lesson::class, $student, $lessonForAuthorization]);
 
         $lesson = $this->lessonSignOffService->getLessonDetail($student, $lesson);
 
