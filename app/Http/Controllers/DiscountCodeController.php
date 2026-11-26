@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\SetDiscountCodeActiveRequest;
 use App\Http\Requests\StoreDiscountCodeRequest;
 use App\Models\DiscountCode;
 use App\Services\DiscountService;
@@ -22,18 +23,10 @@ class DiscountCodeController extends Controller
      */
     public function index(): Response
     {
-        $discountCodes = $this->discountService->getAll();
-
         return Inertia::render('DiscountCodes/Index', [
-            'discountCodes' => $discountCodes->map(fn (DiscountCode $code) => [
-                'id' => $code->id,
-                'label' => $code->label,
-                'percentage' => $code->percentage,
-                'formatted_percentage' => $code->formatted_percentage,
-                'active' => $code->active,
-                'orders_count' => $code->orders()->count(),
-                'created_at' => $code->created_at?->format('d M Y'),
-            ]),
+            'discountCodes' => $this->discountService->getAll()
+                ->map(fn (DiscountCode $code): array => $this->present($code))
+                ->values(),
         ]);
     }
 
@@ -44,24 +37,35 @@ class DiscountCodeController extends Controller
     {
         $discountCode = $this->discountService->create($request->validated());
 
-        return response()->json([
-            'discount_code' => [
-                'id' => $discountCode->id,
-                'label' => $discountCode->label,
-                'percentage' => $discountCode->percentage,
-                'formatted_percentage' => $discountCode->formatted_percentage,
-                'active' => $discountCode->active,
-            ],
-        ], 201);
+        return response()->json(['discount_code' => $this->present($discountCode)], 201);
     }
 
     /**
-     * Delete a discount code.
+     * Switch a code on or off. Codes are never deleted.
      */
-    public function destroy(DiscountCode $discountCode): JsonResponse
+    public function setActive(SetDiscountCodeActiveRequest $request, DiscountCode $discountCode): JsonResponse
     {
-        $this->discountService->delete($discountCode);
+        $discountCode = $this->discountService->setActive($discountCode, $request->boolean('active'));
 
-        return response()->json(null, 204);
+        return response()->json(['discount_code' => $this->present($discountCode)]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function present(DiscountCode $code): array
+    {
+        return [
+            'id' => $code->id,
+            'code' => $code->code,
+            'label' => $code->label,
+            'type' => $code->type?->value,
+            'percentage' => $code->percentage,
+            'amount_pence' => $code->amount_pence,
+            'formatted_percentage' => $code->formatted_percentage,
+            'active' => $code->active,
+            'orders_count' => (int) ($code->used_orders_count ?? 0),
+            'created_at' => $code->created_at?->format('d M Y'),
+        ];
     }
 }

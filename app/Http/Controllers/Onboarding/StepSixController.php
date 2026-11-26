@@ -10,6 +10,7 @@ use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use App\Exceptions\SlotNoLongerAvailableException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Onboarding\ApplyDiscountCodeRequest;
 use App\Http\Requests\Onboarding\StepSixRequest;
 use App\Jobs\SyncBookingEnquiryToBirdJob;
 use App\Models\Enquiry;
@@ -17,11 +18,13 @@ use App\Models\Instructor;
 use App\Models\Order;
 use App\Models\Package;
 use App\Models\Student;
+use App\Services\DiscountService;
 use App\Services\OrderService;
 use App\Services\PackageService;
 use App\Services\PriceUpliftService;
 use App\Services\StripeService;
 use App\Support\BookingPayments;
+use App\Support\Discounts;
 use App\Support\TestPassGuarantee;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -40,6 +43,7 @@ class StepSixController extends Controller
         protected OrderService $orderService,
         protected PriceUpliftService $priceUpliftService,
         protected PackageService $packageService,
+        protected DiscountService $discountService,
     ) {}
 
     /**
@@ -149,13 +153,14 @@ class StepSixController extends Controller
                     'booking_fee' => '£'.number_format($pricing['booking_fee'], 2),
                     'digital_fee' => '£'.number_format($pricing['digital_fee_total'], 2),
                     'discount' => $pricing['promo_discount'] > 0 ? '-£'.number_format($pricing['promo_discount'], 2) : null,
+                    'discount_code' => $pricing['promo_discount'] > 0 ? $pricing['promo_code'] : null,
                 ],
             ],
 
             'testPassGuarantee' => $testPassGuarantee,
 
             // Discount code data
-            'discount' => $discount,
+            'discount' => Discounts::withSummary($discount),
 
             'holdMinutes' => BookingPayments::learnerHoldMinutes(),
             'weeklyPaymentDueHours' => BookingPayments::weeklyPaymentDueHoursBeforeLesson(),
@@ -169,6 +174,31 @@ class StepSixController extends Controller
                 ),
             ] : null,
         ]);
+    }
+
+    /**
+     * Apply a discount code the learner typed. One code per booking: a valid
+     * code replaces any code already applied.
+     */
+    public function applyDiscount(ApplyDiscountCodeRequest $request): RedirectResponse
+    {
+        $enquiry = $request->get('enquiry');
+
+        if (! $this->discountService->applyCodeToEnquiry($enquiry, $request->validated('code'))) {
+            return back()->withErrors(['code' => "This code isn't valid"]);
+        }
+
+        return back()->with('success', 'Code applied');
+    }
+
+    /**
+     * Take the discount code off the booking before paying.
+     */
+    public function removeDiscount(Request $request): RedirectResponse
+    {
+        $this->discountService->removeFromEnquiry($request->get('enquiry'));
+
+        return back()->with('success', 'Discount code removed');
     }
 
     protected function formatPence(int $pence): string
@@ -209,6 +239,19 @@ class StepSixController extends Controller
 
         if ($previousAttempt !== null) {
             return $previousAttempt;
+        }
+
+        // The code may have been switched off in Mission Control since it was
+        // applied: never charge a discounted price for an inactive code.
+        $resolvedDiscount = $this->discountService->resolveForOrder($enquiry);
+
+        if (! $resolvedDiscount['valid']) {
+            $this->discountService->removeFromEnquiry($enquiry);
+
+            return redirect()
+                ->route('onboarding.step6', ['uuid' => $enquiry->id])
+                ->withErrors(['code' => "This code isn't valid"])
+                ->with('error', 'Your discount code is no longer valid and has been removed. Please check the new total before paying.');
         }
 
         try {
@@ -258,8 +301,8 @@ class StepSixController extends Controller
                 'enquiry_id' => $enquiry->id,
             ]);
 
-            // Get discount data from enquiry
-            $discount = $enquiry->getDiscountData();
+            // Discount checked against Mission Control above (fresh snapshot)
+            $discount = $resolvedDiscount['discount'];
 
             // Create order with lessons
             Log::info('Creating order from enquiry', [
@@ -474,7 +517,7 @@ class StepSixController extends Controller
 
         // Check if package has required Stripe IDs (weekly first payments are
         // priced inline, so only pay-in-full checkouts need them)
-        $hasDiscount = $order->discount_percentage !== null && $order->discount_percentage > 0;
+        $hasDiscount = $order->hasDiscount();
 
         if ($order->isUpfront() && $hasDiscount && ! $package->stripe_product_id) {
             Log::error('Package missing Stripe product ID (required for discounted checkout)', [

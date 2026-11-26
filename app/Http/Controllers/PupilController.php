@@ -56,6 +56,7 @@ use App\Models\Student;
 use App\Models\StudentChecklistItem;
 use App\Models\StudentPickupPoint;
 use App\Services\AlternativePaymentService;
+use App\Services\DiscountService;
 use App\Services\InstructorCalendarService;
 use App\Services\InstructorService;
 use App\Services\LessonSignOffService;
@@ -489,6 +490,16 @@ class PupilController extends Controller
         return response()->json([
             'message' => $message->load('sender:id,name'),
         ], 201);
+    }
+
+    /**
+     * Bookings this pupil made with a discount code (Payments tab).
+     */
+    public function discounts(Student $student, DiscountService $discountService): JsonResponse
+    {
+        return response()->json([
+            'orders' => $discountService->getStudentDiscountedOrders($student),
+        ]);
     }
 
     /**

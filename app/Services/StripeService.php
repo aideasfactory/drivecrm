@@ -277,7 +277,7 @@ class StripeService
             $chargeAmountPence = $order->total_price_pence ?? $order->package_total_price_pence;
             $testPassGuaranteePence = $order->total_price_pence !== null ? (int) $order->test_pass_guarantee_pence : 0;
 
-            $hasDiscount = $order->discount_percentage !== null && $order->discount_percentage > 0;
+            $hasDiscount = $order->hasDiscount();
             $hasFeesOrDiscount = $order->total_price_pence !== null || $hasDiscount;
 
             Log::info('StripeService: Creating checkout session', [
@@ -337,6 +337,8 @@ class StripeService
                 'digital_fee_pence' => $order->digital_fee_pence,
                 'discount_code_id' => $order->discount_code_id,
                 'discount_percentage' => $order->discount_percentage,
+                'discount_code' => $order->discount_code,
+                'discount_pence' => $order->discount_pence,
                 'includes_test_pass_guarantee' => $order->includes_test_pass_guarantee ? 'yes' : 'no',
                 'test_pass_guarantee_pence' => $testPassGuaranteePence,
                 'environment' => config('app.env'),
@@ -456,6 +458,8 @@ class StripeService
             'payment_mode' => $order->payment_mode?->value,
             'payment_kind' => 'first_weekly_payment',
             'booking_source' => $bookingSource,
+            'discount_code' => $order->discount_code,
+            'discount_pence' => $order->discount_pence,
             'includes_test_pass_guarantee' => $order->includes_test_pass_guarantee ? 'yes' : 'no',
             'test_pass_guarantee_pence' => (int) $lessonPayment->test_pass_guarantee_pence,
             'environment' => config('app.env'),

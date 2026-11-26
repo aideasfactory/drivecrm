@@ -19,6 +19,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip'
+import DiscountCodesCard from '@/components/Instructors/Tabs/Student/DiscountCodesCard.vue'
 import {
     Banknote,
     CreditCard,
@@ -353,6 +354,8 @@ onMounted(() => {
                 </Table>
             </CardContent>
         </Card>
+
+        <DiscountCodesCard :student-id="studentId" />
 
         <MarkPayoutPaidSheet v-model:open="markSheetOpen" :payout="payoutToMark" @marked="loadPayments" />
     </div>

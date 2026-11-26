@@ -299,7 +299,7 @@
                         <span class="shrink-0 font-medium">-£{{ promoDiscount }}.00</span>
                       </div>
                       <div v-if="pricing?.uuid_discount" class="flex items-start justify-between gap-3 text-green-600">
-                        <span class="min-w-0">Discount ({{ pricing?.uuid_discount_percentage }}% off — {{ pricing?.uuid_discount_label }})</span>
+                        <span class="min-w-0">Discount ({{ pricing?.uuid_discount_summary }} — {{ discount?.code || pricing?.uuid_discount_label }})</span>
                         <span class="shrink-0 font-medium">-£{{ pricing?.uuid_discount }}</span>
                       </div>
                       <div v-if="testPassGuarantee" class="flex items-start justify-between gap-3">

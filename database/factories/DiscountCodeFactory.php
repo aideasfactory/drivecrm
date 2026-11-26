@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\DiscountType;
 use App\Models\DiscountCode;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -20,10 +21,24 @@ class DiscountCodeFactory extends Factory
     public function definition(): array
     {
         return [
+            'code' => strtoupper(fake()->unique()->bothify('PROMO####')),
             'label' => fake()->words(2, true).' discount',
+            'type' => DiscountType::PERCENTAGE,
             'percentage' => fake()->randomElement([5, 10, 15, 20]),
             'active' => true,
         ];
+    }
+
+    /**
+     * A fixed amount off the package price.
+     */
+    public function amount(int $amountPence = 1000): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'type' => DiscountType::AMOUNT,
+            'percentage' => null,
+            'amount_pence' => $amountPence,
+        ]);
     }
 
     /**

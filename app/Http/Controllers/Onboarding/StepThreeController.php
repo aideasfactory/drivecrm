@@ -8,6 +8,7 @@ use App\Models\Instructor;
 use App\Models\Package;
 use App\Services\PackageService;
 use App\Services\PriceUpliftService;
+use App\Support\Discounts;
 use App\Support\TestPassGuarantee;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -88,6 +89,9 @@ class StepThreeController extends Controller
                     'booking_fee' => $package->booking_fee,
                     'digital_fee' => $package->digital_fee,
                     'total_price' => $package->total_price,
+                    'discounted_lessons_price' => $pricing['promo_discount'] > 0
+                        ? '£'.number_format($pricing['package_price'] - $pricing['promo_discount'], 2)
+                        : null,
                     'total_with_fees' => '£'.number_format($pricing['total'] + $guaranteePence / 100, 2),
                     'test_pass_guarantee' => $guaranteePence > 0 ? '£'.number_format($guaranteePence / 100, 2) : null,
                     'weekly_payment' => '£'.number_format($pricing['weekly_payment'], 2),
@@ -107,7 +111,7 @@ class StepThreeController extends Controller
             'selectedInstructor' => $selectedInstructor,
             'packages' => $packages,
             'maxStepReached' => $enquiry->max_step_reached,
-            'discount' => $discount,
+            'discount' => Discounts::withSummary($discount),
         ]);
     }
 

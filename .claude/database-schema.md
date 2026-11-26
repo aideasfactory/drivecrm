@@ -1497,19 +1497,28 @@ Tracks which resources a user has marked as watched. Used to display "Watched" b
 
 ### 29. **discount_codes**
 
-UUID-based discount codes for the onboarding flow. Each code maps to a percentage tier (5%, 10%, 15%, or 20%) and can be shared via URL.
+Discount codes for the website onboarding flow, managed in Mission Control → Discount Codes. A learner types
+the `code` at onboarding step 6 (Apply / Remove), or a link `/onboarding?discount=<id>` pre-applies it.
+A code is either a percentage or a fixed £ amount off the **package price** (incl. any instructor uplift),
+never off the booking or digital fee. It comes off before the price is split into lessons, so lesson prices
+(and instructor payouts) carry the discount. Codes have no expiry or usage limit and are **never deleted**,
+only deactivated (`active = false`). One code per booking.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
-| `id` | uuid | PRIMARY KEY | Unique identifier, used in onboarding URLs |
-| `label` | varchar(255) | NOT NULL | Human-readable label |
-| `percentage` | unsigned tinyint | NOT NULL | Discount percentage (5, 10, 15, or 20) |
-| `active` | boolean | DEFAULT true | Whether the code is currently usable |
+| `id` | uuid | PRIMARY KEY | Unique identifier, used in discount links |
+| `code` | varchar(32) | NULLABLE, UNIQUE | What learners type, stored upper case (e.g. `FEEDBACK10`). Null on old link-only codes |
+| `label` | varchar(255) | NOT NULL | Internal description |
+| `type` | varchar(20) | DEFAULT 'percentage' | `percentage` or `amount` (`App\Enums\DiscountType`) |
+| `percentage` | unsigned tinyint | NULLABLE | Percentage off the package price (1–100) when `type = percentage` |
+| `amount_pence` | unsigned int | NULLABLE | Pence off the package price when `type = amount` (capped at the package price) |
+| `active` | boolean | DEFAULT true | Inactive codes are rejected at step 6 and re-checked when the order is created |
 | `created_at` | timestamp | - | Record creation timestamp |
 | `updated_at` | timestamp | - | Record update timestamp |
 
 **Relationships:**
-- Has many `Orders` (via `orders.discount_code_id`)
+- Has many `Orders` (via `orders.discount_code_id`). A "use" = an order in `active`, `completed` or `cancelled`
+  (`DiscountCode::USED_ORDER_STATUSES`); pending/expired orders were never paid.
 
 ---
 
@@ -1518,7 +1527,9 @@ UUID-based discount codes for the onboarding flow. Each code maps to a percentag
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `discount_code_id` | uuid | NULLABLE, FK → discount_codes.id (ON DELETE SET NULL) | Discount code used |
-| `discount_percentage` | unsigned tinyint | NULLABLE | Snapshot of discount percentage at time of order |
+| `discount_percentage` | unsigned tinyint | NULLABLE | Snapshot of discount percentage at time of order (null for £ codes) |
+| `discount_code` | varchar(255) | NULLABLE | Snapshot of the code used (or the label for link-only codes). Set on every discounted onboarding order since 2026-11-26 |
+| `discount_pence` | unsigned int | NULLABLE | Pence taken off the package price. `package_total_price_pence` is already net of it |
 
 ---
 
