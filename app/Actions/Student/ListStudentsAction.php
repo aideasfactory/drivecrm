@@ -41,7 +41,7 @@ class ListStudentsAction
     public function __invoke(string $assignment, ?string $search = null, string $terms = 'all', ?int $currentTermsVersionId = null): array
     {
         $students = $this->filteredQuery($assignment, $search, $terms, $currentTermsVersionId)
-            ->with(['instructor.user:id,name', 'latestLearnerTermsAcceptance:id,student_id,learner_terms_version_id,accepted_at'])
+            ->with(['instructor.user:id,name', 'latestLearnerTermsAcceptance'])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->paginate(self::PER_PAGE)
