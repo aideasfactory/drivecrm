@@ -339,7 +339,14 @@ final class EmailTemplateCatalog
                 'recipient_name' => 'Learner first name',
                 'instructor_name' => 'New instructor name',
                 'app_name' => 'Application name',
-            ], 'Your driving lessons have moved to a new instructor', 'Hello {{recipient_name}},', "Your driving lessons have been moved to **{{instructor_name}}**.\n\nAny future lessons you already had booked have been transferred into their diary at the same dates and times.\n\n{{instructor_name}} will be in touch shortly to introduce themselves.\n\nIf you have any questions, please reply to this email.", "Safe driving,\nThe {{app_name}} Team", null),
+                'diary_lessons_count' => 'Lessons moved into the new instructor’s diary at the same dates and times',
+                'unscheduled_count' => 'Lessons with no date yet, to arrange with the new instructor',
+                'cancelled_bookings_count' => 'Unpaid bookings cancelled by the transfer',
+            ], 'Your driving lessons have moved to a new instructor', 'Hello {{recipient_name}},', "Your driving lessons have been moved to **{{instructor_name}}**.{{#if diary_lessons_count}}\n\n{{#if multiple_diary_lessons}}Your next {{diary_lessons_count}} lessons are in {{instructor_name}}’s diary at the same dates and times.{{else}}Your next lesson is in {{instructor_name}}’s diary at the same date and time.{{/if}}{{/if}}{{#if unscheduled_count}}\n\n{{#if multiple_unscheduled}}{{unscheduled_count}} of your lessons don’t have a date yet.{{else}}One of your lessons doesn’t have a date yet.{{/if}} {{instructor_name}} will agree a time with you. They stay part of your booking at the price you booked, so you won’t pay for them twice.{{/if}}{{#if cancelled_bookings_count}}\n\n{{#if multiple_cancelled_bookings}}{{cancelled_bookings_count}} bookings that hadn’t been paid for yet were cancelled, so please don’t pay for them.{{else}}A booking that hadn’t been paid for yet was cancelled, so please don’t pay for it.{{/if}} {{instructor_name}} can book new lessons with you.{{/if}}\n\n{{instructor_name}} will be in touch shortly to introduce themselves.\n\nIf you have any questions, please reply to this email.", "Safe driving,\nThe {{app_name}} Team", null, [
+                'multiple_diary_lessons' => 'More than one lesson was moved into the new diary',
+                'multiple_unscheduled' => 'More than one lesson has no date yet',
+                'multiple_cancelled_bookings' => 'More than one unpaid booking was cancelled',
+            ]),
 
             self::entry(EmailTemplateKey::LearnerPasswordReset, 'Admin password reset (learner)', $audience, 'Sent when an admin resets a learner’s password from the CRM.', [
                 'recipient_name' => 'Learner first name',
@@ -433,10 +440,13 @@ final class EmailTemplateCatalog
                 'moved_lessons_count' => 'Number of future lessons added to your diary',
                 'lesson_list' => 'List of transferred lessons (clashes are flagged)',
                 'clash_count' => 'Number of transferred lessons that clash with your diary',
+                'unscheduled_count' => 'The pupil’s lessons with no date yet, now yours to schedule',
+                'unscheduled_paid_count' => 'How many of those are already paid',
                 'app_name' => 'Application name',
-            ], 'New student assigned: {{student_name}}', 'Hello {{recipient_name}},', "**{{student_name}}** has been transferred to you from **{{source_name}}**.\n\n{{#if moved_lessons_count}}{{#if multiple_lessons}}The following {{moved_lessons_count}} lessons have been added to your diary at their existing dates and times:{{else}}The following lesson has been added to your diary at its existing date and time:{{/if}}\n{{lesson_list}}{{#if clash_count}}\n\n⚠️ **{{clash_count}} {{#if multiple_clashes}}clashes{{else}}clash{{/if}} flagged above.** Please review your diary and rebook the affected lessons at alternative times that suit you and the student.{{/if}}{{else}}No future lessons were on the previous instructor’s diary, so nothing has been added to yours yet. The student will book new lessons with you as normal.{{/if}}\n\nPayment for any future lessons will be sent to your Stripe account once the lesson has been signed off.", "Thanks,\nThe {{app_name}} Team", null, [
+            ], 'New student assigned: {{student_name}}', 'Hello {{recipient_name}},', "**{{student_name}}** has been transferred to you from **{{source_name}}**.\n\n{{#if moved_lessons_count}}{{#if multiple_lessons}}These {{moved_lessons_count}} lessons are now in your diary at their existing dates and times:{{else}}This lesson is now in your diary at its existing date and time:{{/if}}\n{{lesson_list}}{{#if clash_count}}\n\n⚠️ **{{clash_count}} {{#if multiple_clashes}}clashes{{else}}clash{{/if}} flagged above.** Please move the affected lessons to times that suit you and the student.{{/if}}{{else}}No lessons have been added to your diary.{{/if}}{{#if unscheduled_count}}\n\n**{{unscheduled_count}} unscheduled {{#if multiple_unscheduled}}lessons are{{else}}lesson is{{/if}} waiting for you** ({{unscheduled_paid_count}} already paid). Agree a time with {{student_name}} and schedule {{#if multiple_unscheduled}}them{{else}}it{{/if}} from their unscheduled lessons. Please don’t book {{student_name}} new lessons until these are used.{{/if}}\n\nPayment for each lesson will be sent to your Stripe account once you’ve signed it off.", "Thanks,\nThe {{app_name}} Team", null, [
                 'multiple_lessons' => 'More than one lesson was added to your diary',
                 'multiple_clashes' => 'More than one transferred lesson clashes',
+                'multiple_unscheduled' => 'More than one unscheduled lesson is waiting',
             ]),
 
             self::entry(EmailTemplateKey::InstructorStudentLost, 'Student transferred away', $audience, 'Sent to the previous instructor when a learner is transferred away.', [
@@ -444,9 +454,12 @@ final class EmailTemplateCatalog
                 'student_name' => 'Learner name',
                 'destination_name' => 'New instructor name',
                 'lessons_removed' => 'Number of future lessons removed from your diary',
+                'missed_count' => 'Past lessons Head Office recorded as missed',
+                'missed_list' => 'List of the lessons recorded as missed',
                 'app_name' => 'Application name',
-            ], 'Student transferred: {{student_name}}', 'Hello {{recipient_name}},', "**{{student_name}}** has been transferred to **{{destination_name}}**.\n\n{{#if lessons_removed}}{{#if multiple_lessons}}{{lessons_removed}} future lessons have been removed from your diary.{{else}}1 future lesson has been removed from your diary.{{/if}}{{else}}No future lessons were on your diary at the time of transfer.{{/if}}\n\nAny lessons you have already taught and been paid for remain attached to you — this transfer only affects future bookings.", "Thanks,\nThe {{app_name}} Team", null, [
+            ], 'Student transferred: {{student_name}}', 'Hello {{recipient_name}},', "**{{student_name}}** has been transferred to **{{destination_name}}**.\n\n{{#if lessons_removed}}{{#if multiple_lessons}}{{lessons_removed}} future lessons have been removed from your diary.{{else}}1 future lesson has been removed from your diary.{{/if}}{{else}}No future lessons were on your diary at the time of transfer.{{/if}}{{#if missed_count}}\n\n**Head Office recorded {{#if multiple_missed}}these lessons{{else}}this lesson{{/if}} as missed:**\n{{missed_list}}\n\n{{#if multiple_missed}}They have{{else}}It has{{/if}} been given back to {{student_name}} to take with {{destination_name}}, so you won’t be paid for {{#if multiple_missed}}them{{else}}it{{/if}}. If you think this is wrong, please reply to this email.{{/if}}\n\nAny other lessons you have already taught stay with you: sign them off as usual to be paid.", "Thanks,\nThe {{app_name}} Team", null, [
                 'multiple_lessons' => 'More than one future lesson was removed',
+                'multiple_missed' => 'More than one lesson was recorded as missed',
             ]),
 
             self::entry(EmailTemplateKey::InstructorLessonsBulkRescheduled, 'Lessons bulk-rescheduled (instructor)', $audience, 'Confirmation to the instructor after they move a run of upcoming lessons.', [

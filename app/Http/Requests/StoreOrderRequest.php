@@ -10,6 +10,7 @@ use App\Models\Package;
 use App\Models\Student;
 use App\Support\CashBookings;
 use App\Support\LessonLength;
+use App\Support\UnscheduledLessons;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -34,6 +35,7 @@ class StoreOrderRequest extends FormRequest
             'first_lesson_date' => ['required_without:calendar_item_id', 'nullable', 'date', 'date_format:Y-m-d', 'after_or_equal:today'],
             'start_time' => ['required_without:calendar_item_id', 'nullable', 'string', 'date_format:H:i'],
             'end_time' => ['required_without:calendar_item_id', 'nullable', 'string', 'date_format:H:i', 'after:start_time'],
+            UnscheduledLessons::CONFIRM_FIELD => ['sometimes', 'boolean'],
         ];
     }
 
@@ -67,6 +69,14 @@ class StoreOrderRequest extends FormRequest
             },
             function (Validator $validator): void {
                 $this->checkLessonLength($validator);
+            },
+            function (Validator $validator): void {
+                UnscheduledLessons::checkBooking(
+                    $validator,
+                    $this->user(),
+                    $this->route('student'),
+                    $this->boolean(UnscheduledLessons::CONFIRM_FIELD),
+                );
             },
         ];
     }

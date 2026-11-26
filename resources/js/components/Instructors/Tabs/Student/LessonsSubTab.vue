@@ -54,6 +54,7 @@ import {
     CalendarPlus,
     CalendarX,
     Trash2,
+    Undo2,
 } from 'lucide-vue-next'
 import { toast } from '@/components/ui/sonner'
 import { useRole } from '@/composables/useRole'
@@ -63,6 +64,7 @@ import {
     confirmAlternativePayment,
     deleteSignedOffLesson,
     rebookBankedLesson,
+    returnLessonToPupil,
 } from '@/actions/App/Http/Controllers/PupilController'
 import { cancellationReasons as cancellationReasonsRoute } from '@/actions/App/Http/Controllers/InstructorController'
 import type { CancellationReasonOption } from '@/types/instructor'
@@ -190,6 +192,10 @@ const deleteLessonReasonCode = ref('')
 const deleteLessonDetails = ref('')
 const isDeletingLesson = ref(false)
 
+// Owner only: give a past lesson that never took place back to the pupil as unscheduled
+const returnToPupilTarget = ref<Lesson | null>(null)
+const isReturningToPupil = ref(false)
+
 // Computed
 const activeLessons = computed(() => lessons.value.filter((l) => l.status !== 'cancelled'))
 const pendingLessons = computed(() => lessons.value.filter((l) => l.status === 'pending'))
@@ -218,6 +224,14 @@ const canDeleteAsAdmin = (lesson: Lesson): boolean =>
     isOwner.value &&
     !lesson.is_banked &&
     (lesson.status === 'completed' || (lesson.status === 'pending' && lesson.has_started))
+
+const canReturnToPupil = (lesson: Lesson): boolean =>
+    isOwner.value &&
+    lesson.status === 'pending' &&
+    lesson.has_started &&
+    !lesson.is_banked &&
+    !lesson.is_practical_test &&
+    !lesson.has_payout
 
 // Mirrors CancelBookingAction::hasStripeMoney(): a payout in any state, or a card payment taken.
 const hasStripeMoney = (lesson: Lesson): boolean =>
@@ -514,6 +528,24 @@ const handleDeleteLesson = async () => {
     }
 }
 
+const handleReturnToPupil = async () => {
+    if (!returnToPupilTarget.value) return
+
+    isReturningToPupil.value = true
+    try {
+        const response = await axios.post(
+            returnLessonToPupil.url({ student: props.studentId, lesson: returnToPupilTarget.value.id }),
+        )
+        toast.success(response.data.message || 'Lesson returned to the pupil')
+        returnToPupilTarget.value = null
+        await loadLessons()
+    } catch (error: any) {
+        toast.error(error.response?.data?.message || 'Failed to return the lesson')
+    } finally {
+        isReturningToPupil.value = false
+    }
+}
+
 // Confirm a booking awaiting its first payment as paid by an alternative method
 const openConfirmBooking = (booking: AlternativePaymentBooking) => {
     confirmBookingTarget.value = booking
@@ -783,7 +815,7 @@ onMounted(async () => {
                                 <template v-if="lesson.is_banked">
                                     <Badge variant="outline" class="gap-1 whitespace-nowrap">
                                         <Archive class="h-3 w-3" />
-                                        To rebook
+                                        Unscheduled
                                     </Badge>
                                     <div v-if="lesson.banked_expires_at" class="mt-1 whitespace-nowrap text-xs font-normal text-muted-foreground">
                                         by {{ formatDate(lesson.banked_expires_at.slice(0, 10)) }}
@@ -930,6 +962,17 @@ onMounted(async () => {
                                         Signed off
                                     </span>
                                     <span v-else class="text-sm text-muted-foreground">—</span>
+                                    <Button
+                                        v-if="canReturnToPupil(lesson)"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="gap-1"
+                                        title="The lesson didn't take place: give it back to the pupil as unscheduled (admin only)"
+                                        @click="returnToPupilTarget = lesson"
+                                    >
+                                        <Undo2 class="h-4 w-4" />
+                                        Return to pupil
+                                    </Button>
                                     <Button
                                         v-if="canDeleteAsAdmin(lesson)"
                                         variant="ghost"
@@ -1381,6 +1424,47 @@ onMounted(async () => {
                 </div>
             </SheetContent>
         </Sheet>
+
+        <!-- Return a past lesson that never took place to the pupil (admin only) -->
+        <Dialog
+            :open="returnToPupilTarget !== null"
+            @update:open="(open: boolean) => { if (!open) returnToPupilTarget = null }"
+        >
+            <DialogContent v-if="returnToPupilTarget" class="sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle class="flex items-center gap-2">
+                        <Undo2 class="h-5 w-5" />
+                        Return lesson to pupil
+                    </DialogTitle>
+                    <DialogDescription>
+                        {{ formatDate(returnToPupilTarget.date) }}, {{ formatTime(returnToPupilTarget.start_time, returnToPupilTarget.end_time) }}
+                        — {{ returnToPupilTarget.instructor_name || 'Instructor' }}
+                    </DialogDescription>
+                </DialogHeader>
+
+                <Alert>
+                    <TriangleAlert class="h-4 w-4" />
+                    <AlertTitle>Only do this if the lesson didn't take place</AlertTitle>
+                    <AlertDescription>
+                        <ul class="mt-1 list-disc space-y-1 pl-4">
+                            <li>The lesson comes out of the diary and becomes unscheduled with the pupil's current instructor, who agrees a new time.</li>
+                            <li>{{ returnToPupilTarget.instructor_name || 'The instructor who had it' }} isn't paid for it. The pupil's payment is kept, and any open invoice is cancelled.</li>
+                            <li>The pupil is emailed.</li>
+                        </ul>
+                    </AlertDescription>
+                </Alert>
+
+                <DialogFooter>
+                    <Button variant="outline" :disabled="isReturningToPupil" @click="returnToPupilTarget = null">
+                        Keep it
+                    </Button>
+                    <Button :disabled="isReturningToPupil" @click="handleReturnToPupil">
+                        <Loader2 v-if="isReturningToPupil" class="mr-2 h-4 w-4 animate-spin" />
+                        Return to pupil
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
 
         <!-- Delete signed-off / past lesson (admin only) -->
         <Dialog v-model:open="isDeleteLessonOpen">

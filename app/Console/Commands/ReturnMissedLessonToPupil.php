@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Actions\Lesson\BankLessonsAction;
+use App\Actions\Lesson\SendLessonToRebookAction;
 use App\Enums\LessonCancellationReason;
 use App\Enums\LessonStatus;
 use App\Models\Lesson;
@@ -35,7 +35,7 @@ class ReturnMissedLessonToPupil extends Command
     /**
      * Execute the console command.
      */
-    public function handle(BankLessonsAction $bankLessons): int
+    public function handle(SendLessonToRebookAction $sendLessonToRebook): int
     {
         $lesson = Lesson::with(['order.student.instructor.user', 'instructor.user', 'calendarItem', 'lessonPayment', 'payout'])
             ->find($this->argument('lesson'));
@@ -99,26 +99,13 @@ class ReturnMissedLessonToPupil extends Command
             return self::SUCCESS;
         }
 
-        if (! $lesson->isBanked()) {
-            try {
-                $bankLessons($lesson->calendarItem, $reason, $this->option('details'), false, $actor);
-            } catch (Throwable $e) {
-                $this->error("Couldn't put it on rebook later: {$e->getMessage()}");
+        try {
+            $sendLessonToRebook($lesson, $reason, $this->option('details'), $currentInstructor, $actor);
+        } catch (Throwable $e) {
+            $this->error("Couldn't put it on rebook later: {$e->getMessage()}");
 
-                return self::FAILURE;
-            }
+            return self::FAILURE;
         }
-
-        $fromInstructorId = $lesson->instructor_id;
-        $fromInstructorName = $lesson->instructor?->user?->name ?? "#{$fromInstructorId}";
-
-        $lesson->refresh()->update(['instructor_id' => $currentInstructor->id]);
-
-        $student->logActivity(
-            "Missed lesson #{$lesson->id} moved from {$fromInstructorName} to {$currentInstructor->user?->name} to rebook",
-            'booking',
-            ['lesson_id' => $lesson->id, 'from_instructor_id' => $fromInstructorId, 'to_instructor_id' => $currentInstructor->id, 'by_user_id' => $actor->id],
-        );
 
         $this->info("Done. {$currentInstructor->user?->name} can now rebook lesson #{$lesson->id} from the pupil's \"To rebook\" list.");
 

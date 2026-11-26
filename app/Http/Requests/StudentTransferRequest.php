@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Actions\Student\Transfer\PreviewStudentTransferAction;
+use App\Enums\TransferLessonDecision;
 use App\Enums\TransferReason;
 use App\Models\Instructor;
+use App\Models\Lesson;
 use App\Models\Student;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -28,6 +31,8 @@ class StudentTransferRequest extends FormRequest
             'destination_instructor_id' => ['required', 'integer', 'exists:instructors,id'],
             'reason' => ['required', 'string', Rule::enum(TransferReason::class)],
             'notes' => ['nullable', 'string', 'max:1000'],
+            'lesson_decisions' => ['nullable', 'array'],
+            'lesson_decisions.*' => ['required', Rule::enum(TransferLessonDecision::class)],
         ];
     }
 
@@ -79,6 +84,31 @@ class StudentTransferRequest extends FormRequest
                     'Selected instructor has not completed Stripe onboarding and cannot receive payouts.',
                 );
             }
+
+            if ($validator->errors()->isNotEmpty()) {
+                return;
+            }
+
+            $decisions = (array) $this->input('lesson_decisions', []);
+            $undecided = app(PreviewStudentTransferAction::class)($student, $destination)['past_unsigned']
+                ->reject(fn (Lesson $lesson): bool => isset($decisions[$lesson->id]));
+
+            if ($undecided->isNotEmpty()) {
+                $validator->errors()->add(
+                    'lesson_decisions',
+                    'Say whether each past lesson took place before moving the pupil.',
+                );
+            }
         });
+    }
+
+    /**
+     * @return array<int, TransferLessonDecision>
+     */
+    public function lessonDecisions(): array
+    {
+        return collect((array) $this->validated('lesson_decisions', []))
+            ->mapWithKeys(fn (string $decision, int|string $lessonId): array => [(int) $lessonId => TransferLessonDecision::from($decision)])
+            ->all();
     }
 }

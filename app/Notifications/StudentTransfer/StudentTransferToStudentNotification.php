@@ -21,6 +21,9 @@ class StudentTransferToStudentNotification extends Notification implements Shoul
     public function __construct(
         public Student $student,
         public Instructor $destinationInstructor,
+        public int $diaryLessonsCount = 0,
+        public int $unscheduledCount = 0,
+        public int $cancelledBookingsCount = 0,
     ) {}
 
     /**
@@ -39,6 +42,12 @@ class StudentTransferToStudentNotification extends Notification implements Shoul
                 'recipient_name' => $this->student->first_name ?: 'there',
                 'instructor_name' => $this->destinationInstructor->name ?? 'your new instructor',
                 'app_name' => config('app.name'),
+                'diary_lessons_count' => $this->diaryLessonsCount,
+                'unscheduled_count' => $this->unscheduledCount,
+                'cancelled_bookings_count' => $this->cancelledBookingsCount,
+                'multiple_diary_lessons' => $this->diaryLessonsCount > 1,
+                'multiple_unscheduled' => $this->unscheduledCount > 1,
+                'multiple_cancelled_bookings' => $this->cancelledBookingsCount > 1,
             ],
         );
     }

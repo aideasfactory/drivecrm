@@ -7,6 +7,7 @@ namespace App\Http\Requests\Api\V1;
 use App\Enums\PaymentMode;
 use App\Models\CalendarItem;
 use App\Support\LessonLength;
+use App\Support\UnscheduledLessons;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -30,6 +31,7 @@ class CreateOrderRequest extends FormRequest
             'first_lesson_date' => ['required_without:calendar_item_id', 'nullable', 'date', 'date_format:Y-m-d', 'after_or_equal:today'],
             'start_time' => ['required_without:calendar_item_id', 'nullable', 'string', 'date_format:H:i'],
             'end_time' => ['required_without:calendar_item_id', 'nullable', 'string', 'date_format:H:i', 'after:start_time'],
+            UnscheduledLessons::CONFIRM_FIELD => ['sometimes', 'boolean'],
         ];
     }
 
@@ -59,6 +61,14 @@ class CreateOrderRequest extends FormRequest
                 if (LessonLength::isTooShort($this->input('start_time'), $this->input('end_time'))) {
                     $validator->errors()->add('end_time', LessonLength::TOO_SHORT_MESSAGE);
                 }
+            },
+            function (Validator $validator): void {
+                UnscheduledLessons::checkBooking(
+                    $validator,
+                    $this->user(),
+                    $this->route('student'),
+                    $this->boolean(UnscheduledLessons::CONFIRM_FIELD),
+                );
             },
         ];
     }

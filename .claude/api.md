@@ -6070,6 +6070,7 @@ For `weekly` orders, each later week is invoiced by email and due **48 hours bef
 | `first_lesson_date` | string | Yes without `calendar_item_id` | First lesson date (YYYY-MM-DD, `after_or_equal:today` — same-day short-notice bookings are allowed) |
 | `start_time` | string | Yes without `calendar_item_id` | Lesson start time (HH:MM format) |
 | `end_time` | string | Yes without `calendar_item_id` | Lesson end time (HH:MM format, must be after start_time) |
+| `ignore_unscheduled_lessons` | boolean | No | Instructor bookings only. Send `true` after the booker chose **Book a new lesson anyway** on the unscheduled-lessons warning (see the error below). Default `false`. Ignored for student tokens. |
 
 **Success Response (upfront payment — student-initiated):** `201 Created`
 ```json
@@ -6164,6 +6165,29 @@ A student-initiated `weekly` booking returns the same shape as the student-initi
   }
 }
 ```
+
+**Error Response (pupil still has unscheduled lessons):** `422 Unprocessable Entity`
+
+Instructor tokens only (a pupil booking for themselves is never asked). When the pupil still has **unscheduled
+lessons** (lessons kept in a booking with no date yet: `is_banked: true`, listed by `GET /instructor/banked-lessons`),
+the booking is refused and nothing is held or charged, unless the request has `ignore_unscheduled_lessons: true`. This
+check runs only once every other field is valid. The message says how many unscheduled lessons there are and how many
+are already paid:
+
+```json
+{
+  "message": "This pupil has already booked and paid for 2 lessons they have remaining. Would you like to use these instead?",
+  "errors": {
+    "unscheduled_lessons": ["This pupil has already booked and paid for 2 lessons they have remaining. Would you like to use these instead?"]
+  }
+}
+```
+
+When only some are paid: `This pupil has already booked 3 lessons they have remaining (1 already paid). Would you like to use these instead?`
+
+**App action:** on `errors.unscheduled_lessons`, show the message with two buttons: **Use an unscheduled lesson**
+(open the pupil's unscheduled lessons and the existing Rebook flow) and **Book a new lesson anyway** (send the same
+request again with `ignore_unscheduled_lessons: true`).
 
 **Error Response (lesson shorter than 2 hours):** `422 Unprocessable Entity`
 
@@ -8687,6 +8711,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-25 | **Lessons must be 2 hours.** `POST /api/v1/students/{student}/orders` now returns 422 when the `calendar_item_id` slot (error on `calendar_item_id`) or the typed `start_time`/`end_time` (error on `end_time`) is shorter than 120 minutes. `POST /api/v1/instructor/calendar/items/{calendarItem}/offers` returns 422 (`calendar_item`) for a slot shorter than 2 hours. `GET /api/v1/student/calendar/items` no longer lists open slots shorter than 2 hours. Practical test items are exempt. Also server-side only: a slot freed by a cancelled or banked **imported** lesson that is shorter than 2 hours is now removed from the diary instead of reopened (cancel / bank endpoints unchanged). **App action:** show the 422 message as-is; instructor add-slot is already fixed at 120 minutes. | Orders (store), Slot offers (store), Student calendar (index) |
 | 2026-11-25 | **Former instructor can sign off a lesson they taught before a transfer.** `GET /api/v1/students/{student}/lessons/{lesson}` and `POST /api/v1/students/{student}/lessons/{lesson}/sign-off` now also allow the instructor the lesson belongs to (`lessons.instructor_id`), not only the pupil's current instructor. Previously a pupil transferred before an un-signed-off lesson left it stuck (403). `GET .../lessons` (index) unchanged. No request/response shape change. **App action:** none required; tapping the lesson in the former instructor's diary now opens it and Sign off works. | Student lessons (show, sign-off) |
 | 2026-11-25 | **Learner Terms acceptance.** New `GET /api/v1/student/terms` (current DRIVE+ Learner Terms as Markdown, privacy policy URL, the learner's acceptance) and `POST /api/v1/student/terms/accept` (`version`, `platform` ios\|android, `app_version`; `409` if a newer version was published meanwhile). **New additive field** `learner_terms` on the user object (`/auth/login`, `/auth/user`, `/auth/register/student`; `null` for instructors) with `requires_acceptance`, `is_update`, `current_version`, `current_published_at`, `accepted_version`, `accepted_at`. Terms are versioned in CRM Settings → Learner Terms; nobody is gated until the first version is published. Not enforced server-side on other endpoints yet. **App action (pupil):** full-screen terms gate after sign-in and on every app open while `learner_terms.requires_acceptance` is true; read-only Profile → Terms and Conditions page. See the user journey in `.claude/tasks/app-developer-learner-terms.md`. | Auth (login, user, register/student), Student Learner Terms (NEW show, accept) |
+| 2026-11-26 | **Unscheduled lessons safety net.** `POST /api/v1/students/{student}/orders` from an **instructor** token now returns `422` on `errors.unscheduled_lessons` when the pupil still has unscheduled lessons (banked: in a booking, no date yet), e.g. *"This pupil has already booked and paid for 2 lessons they have remaining. Would you like to use these instead?"*. Nothing is held or charged. New optional request field `ignore_unscheduled_lessons` (boolean) books anyway. Student tokens are never asked. Same rule on the CRM Add Booking. No response shape change. **App action (instructor):** show the warning with **Use an unscheduled lesson** / **Book a new lesson anyway** (resend with `ignore_unscheduled_lessons: true`). Brief: `.claude/tasks/app-developer-unscheduled-lessons.md`. | Orders (store) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.
