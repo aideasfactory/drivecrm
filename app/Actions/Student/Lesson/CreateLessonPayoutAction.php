@@ -7,6 +7,7 @@ namespace App\Actions\Student\Lesson;
 use App\Enums\PayoutStatus;
 use App\Exceptions\InstructorNotOnboardedException;
 use App\Exceptions\PayoutAlreadyProcessedException;
+use App\Jobs\LabelInstructorPayoutJob;
 use App\Models\Instructor;
 use App\Models\Lesson;
 use App\Models\Payout;
@@ -102,7 +103,25 @@ class CreateLessonPayoutAction
         $payout->paid_at = now();
         $payout->save();
 
+        // Label the payment in the instructor's Stripe account with the
+        // learner and lesson. Queued after the sign-off commits and never
+        // throws, so it can't affect the payout.
+        LabelInstructorPayoutJob::dispatchSafely($payout, $this->destinationPaymentId($transferResult));
+
         return $payout;
+    }
+
+    /**
+     * The payment the transfer created in the instructor's account, if Stripe
+     * returned it (the label job looks it up otherwise).
+     *
+     * @param  array<string, mixed>  $transferResult
+     */
+    protected function destinationPaymentId(array $transferResult): ?string
+    {
+        $destinationPayment = $transferResult['transfer']->destination_payment ?? null;
+
+        return is_string($destinationPayment) ? $destinationPayment : null;
     }
 
     /**

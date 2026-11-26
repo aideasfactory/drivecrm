@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Models\Package;
 use App\Models\User;
 use App\Support\BookingPayments;
+use App\Support\PayoutDescriptions;
 use App\Support\TestPassGuarantee;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -698,21 +699,23 @@ class StripeService
         try {
             $order = $lesson->order;
             $studentUser = $order?->student?->user;
-            $lessonDateLabel = $lesson->date?->format('d M Y');
+            $label = PayoutDescriptions::forLesson($lesson);
 
             $payload = [
                 'amount' => $amountPence,
                 'currency' => 'gbp',
                 'destination' => $instructor->stripe_account_id,
-                'description' => implode(' — ', array_filter(['Lesson payout', $studentUser?->name, $lessonDateLabel])),
+                'description' => $label['description'],
                 'metadata' => [
                     'lesson_id' => $lesson->id,
                     'lesson_date' => $lesson->date?->format('Y-m-d'),
                     'order_id' => $lesson->order_id,
+                    'booking_ref' => $label['metadata']['booking_ref'] ?? null,
                     'instructor_id' => $instructor->id,
                     'instructor_name' => $instructor->user?->name,
                     'student_id' => $order?->student_id,
                     'student_name' => $studentUser?->name,
+                    'learner_name' => $label['metadata']['learner_name'],
                     'environment' => config('app.env'),
                 ],
             ];
@@ -746,6 +749,57 @@ class StripeService
                 'error' => $e->getMessage(),
                 'error_code' => $e->getStripeCode(),
             ];
+        }
+    }
+
+    /**
+     * The payment a transfer created in the instructor's connected account
+     * (`destination_payment`), or null if it can't be found. Never throws.
+     */
+    public function getTransferDestinationPaymentId(string $transferId): ?string
+    {
+        try {
+            $transfer = $this->stripe->transfers->retrieve($transferId);
+            $destinationPayment = $transfer->destination_payment;
+
+            return is_string($destinationPayment) ? $destinationPayment : ($destinationPayment->id ?? null);
+        } catch (ApiErrorException $e) {
+            Log::warning('Stripe: could not retrieve transfer for payout label', [
+                'transfer_id' => $transferId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
+     * Put a description and metadata on the payment a transfer created in the
+     * instructor's connected account. Stripe doesn't copy the transfer's own
+     * description across, so without this the instructor only sees "Payment
+     * from DRIVE+". Text only: never touches amounts. Never throws.
+     *
+     * @param  array<string, string>  $metadata
+     */
+    public function labelDestinationPayment(string $destinationPaymentId, string $connectedAccountId, string $description, array $metadata): bool
+    {
+        try {
+            $this->stripe->charges->update(
+                $destinationPaymentId,
+                ['description' => $description, 'metadata' => $metadata],
+                ['stripe_account' => $connectedAccountId],
+            );
+
+            return true;
+        } catch (ApiErrorException $e) {
+            Log::warning('Stripe: could not label instructor payment', [
+                'destination_payment' => $destinationPaymentId,
+                'connected_account' => $connectedAccountId,
+                'error' => $e->getMessage(),
+                'error_code' => $e->getStripeCode(),
+            ]);
+
+            return false;
         }
     }
 
