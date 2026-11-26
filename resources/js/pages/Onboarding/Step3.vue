@@ -35,7 +35,7 @@
                 Choose the lesson package that works best for you
               </CardDescription>
               <Badge v-if="discount" variant="destructive" class="w-fit text-sm mt-2">
-                {{ discount.percentage }}% off &mdash; {{ discount.label }}
+                {{ discount.summary }} &mdash; {{ discount.code || discount.label }}
               </Badge>
             </CardHeader>
 
@@ -118,7 +118,7 @@
                           or {{ pkg.weekly_payment }} per lesson if paid weekly<template v-if="pkg.test_pass_guarantee"> (+ {{ pkg.test_pass_guarantee }} guarantee with the first payment)</template>
                         </div>
                         <div class="text-xs text-muted-foreground mt-2">
-                          Lessons {{ discount ? getDiscountedPrice(pkg.formatted_total_price) : pkg.formatted_total_price }}
+                          Lessons {{ pkg.discounted_lessons_price || pkg.formatted_total_price }}
                           <template v-if="pkg.booking_fee !== '£0.00'">+ booking fee {{ pkg.booking_fee }}</template>
                           <template v-if="pkg.digital_fee !== '£0.00'">+ digital fee {{ pkg.digital_fee }}</template>
                           <template v-if="pkg.test_pass_guarantee">+ Pass Your Test Guarantee {{ pkg.test_pass_guarantee }}</template>
@@ -222,7 +222,7 @@ const props = defineProps({
   packages: Array,
   maxStepReached: { type: Number, default: 3 },
   discount: {
-    type: Object as () => { id: string; label: string; percentage: number } | null,
+    type: Object as () => { id: string; code: string | null; label: string; percentage: number | null; summary: string } | null,
     default: null
   }
 })
@@ -252,14 +252,6 @@ const postcode = computed(() => {
 const selectedInstructor = computed(() => {
   return props.selectedInstructor || null
 })
-
-// Calculate discounted price string from a formatted price like "£500.00"
-function getDiscountedPrice(formattedPrice: string): string {
-  if (!props.discount) return formattedPrice
-  const price = parseFloat(formattedPrice.replace('£', '').replace(',', ''))
-  const discounted = price * (1 - props.discount.percentage / 100)
-  return '£' + discounted.toFixed(2)
-}
 
 // Get appropriate icon component for package
 function getPackageIcon(pkg: any) {

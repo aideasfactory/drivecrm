@@ -293,8 +293,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('discount-codes.index');
     Route::post('/discount-codes', [DiscountCodeController::class, 'store'])
         ->name('discount-codes.store');
-    Route::delete('/discount-codes/{discountCode}', [DiscountCodeController::class, 'destroy'])
-        ->name('discount-codes.destroy');
+    Route::patch('/discount-codes/{discountCode}/active', [DiscountCodeController::class, 'setActive'])
+        ->name('discount-codes.set-active');
 
     Route::get('/pupils', [PupilController::class, 'index'])
         ->name('pupils.index');
@@ -349,6 +349,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('students.orders.store');
 
     // Student Lessons
+    Route::get('/students/{student}/discounts', [PupilController::class, 'discounts'])
+        ->name('students.discounts');
     Route::get('/students/{student}/lessons', [PupilController::class, 'lessons'])
         ->name('students.lessons');
     Route::post('/students/{student}/lessons/{lesson}/sign-off', [PupilController::class, 'signOffLesson'])
@@ -429,6 +431,10 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('reports.banked-lessons');
     Route::get('/reports/banked-lessons/export', [ReportController::class, 'exportBankedLessons'])
         ->name('reports.banked-lessons.export');
+    Route::get('/reports/discount-codes', [ReportController::class, 'discountCodes'])
+        ->name('reports.discount-codes');
+    Route::get('/reports/discount-codes/export', [ReportController::class, 'exportDiscountCodes'])
+        ->name('reports.discount-codes.export');
     // Push Notifications (Owner Only)
     Route::middleware([EnsureOwner::class])->group(function () {
         Route::get('/push-notifications', [PushNotificationController::class, 'index'])
@@ -721,6 +727,11 @@ Route::prefix('/onboarding/{uuid}')
             ->name('onboarding.step6');
         Route::post('/step/6', [StepSixController::class, 'store'])
             ->name('onboarding.step6.store');
+        Route::post('/step/6/discount', [StepSixController::class, 'applyDiscount'])
+            ->middleware('throttle:10,1')
+            ->name('onboarding.step6.discount.apply');
+        Route::delete('/step/6/discount', [StepSixController::class, 'removeDiscount'])
+            ->name('onboarding.step6.discount.remove');
 
         // Checkout callbacks
         Route::get('/checkout/success', [StepSixController::class, 'success'])

@@ -39,7 +39,7 @@
                       <span class="font-medium">{{ pricing.breakdown.lessons }}</span>
                     </div>
                     <div v-if="pricing.breakdown.discount" class="flex justify-between text-green-600">
-                      <span>Discount:</span>
+                      <span>Discount<template v-if="pricing.breakdown.discount_code"> ({{ pricing.breakdown.discount_code }})</template>:</span>
                       <span class="font-medium">{{ pricing.breakdown.discount }}</span>
                     </div>
                     <div v-if="pricing.breakdown.booking_fee !== '£0.00'" class="flex justify-between">
@@ -77,7 +77,7 @@
                 Choose your preferred payment method to secure your driving lesson booking.
               </CardDescription>
               <Badge v-if="discount" variant="destructive" class="w-fit text-sm mt-2">
-                {{ discount.percentage }}% off applied &mdash; {{ discount.label }}
+                {{ discount.summary }} applied &mdash; {{ discount.code || discount.label }}
               </Badge>
             </CardHeader>
 
@@ -236,6 +236,65 @@
                     </CardContent>
                   </Card>
 
+                  <!-- Discount Code -->
+                  <div>
+                    <h3 class="text-lg font-semibold mb-4">Discount code</h3>
+
+                    <div
+                      v-if="discount"
+                      class="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div class="flex min-w-0 items-start gap-3">
+                        <BadgeCheck class="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+                        <div class="min-w-0">
+                          <p class="font-medium">Code applied</p>
+                          <p class="text-sm text-muted-foreground">
+                            {{ discount.code || discount.label }} &mdash; {{ discount.summary }}<template v-if="pricing?.breakdown?.discount"> ({{ pricing.breakdown.discount }})</template>
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        class="w-full cursor-pointer sm:w-auto min-w-[110px]"
+                        :disabled="removingDiscount || form.processing"
+                        @click="removeDiscountCode"
+                      >
+                        <Spinner v-if="removingDiscount" class="mr-2 h-4 w-4 animate-spin" />
+                        <X v-else class="mr-2 h-4 w-4" />
+                        Remove
+                      </Button>
+                    </div>
+
+                    <div v-else>
+                      <div class="flex flex-col gap-3 sm:flex-row">
+                        <Input
+                          v-model="discountForm.code"
+                          type="text"
+                          placeholder="Enter discount code"
+                          autocomplete="off"
+                          class="uppercase sm:max-w-xs"
+                          :aria-invalid="!!discountForm.errors.code"
+                          @keydown.enter.prevent="applyDiscountCode"
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          class="w-full cursor-pointer sm:w-auto min-w-[100px]"
+                          :disabled="discountForm.processing || form.processing || !discountForm.code.trim()"
+                          @click="applyDiscountCode"
+                        >
+                          <Spinner v-if="discountForm.processing" class="mr-2 h-4 w-4 animate-spin" />
+                          <Tag v-else class="mr-2 h-4 w-4" />
+                          Apply
+                        </Button>
+                      </div>
+                      <p v-if="discountForm.errors.code" class="mt-2 text-sm text-destructive">
+                        {{ discountForm.errors.code }}
+                      </p>
+                    </div>
+                  </div>
+
                   <!-- Secure Payment Info -->
                   <Alert>
                     <ShieldCheck class="h-4 w-4" />
@@ -288,12 +347,13 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { Link, useForm, usePage } from '@inertiajs/vue3'
+import { Link, router, useForm, usePage } from '@inertiajs/vue3'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
 import OnboardingHeader from '@/components/Onboarding/OnboardingHeader.vue'
@@ -302,7 +362,8 @@ import OnboardingFooter from '@/components/Onboarding/OnboardingFooter.vue'
 import TestPassGuaranteeInfo from '@/components/Shared/TestPassGuaranteeInfo.vue'
 import { step5 } from '@/routes/onboarding'
 import { store } from '@/routes/onboarding/step6'
-import { ArrowLeft, Lock, Calendar, ShieldCheck, UserCog } from 'lucide-vue-next'
+import { apply as applyDiscountRoute, remove as removeDiscountRoute } from '@/routes/onboarding/step6/discount'
+import { ArrowLeft, BadgeCheck, Lock, Calendar, ShieldCheck, Tag, UserCog, X } from 'lucide-vue-next'
 
 const props = defineProps({
   uuid: String,
@@ -344,6 +405,28 @@ watch(includeTestPassGuarantee, (newValue) => {
 })
 
 const uuid = computed(() => props.uuid || page.props.enquiry?.id)
+
+// Discount code: applying or removing reloads the page, so the prices
+// shown always come from the server (the same figures Stripe charges).
+const discountForm = useForm({ code: '' })
+const removingDiscount = ref(false)
+
+function applyDiscountCode() {
+  if (!discountForm.code.trim() || discountForm.processing) return
+
+  discountForm.post(applyDiscountRoute({ uuid: uuid.value }).url, {
+    preserveScroll: true,
+    onSuccess: () => discountForm.reset()
+  })
+}
+
+function removeDiscountCode() {
+  router.delete(removeDiscountRoute({ uuid: uuid.value }).url, {
+    preserveScroll: true,
+    onStart: () => { removingDiscount.value = true },
+    onFinish: () => { removingDiscount.value = false }
+  })
+}
 
 const weeklyAvailable = computed(() => props.package?.allows_weekly_payment ?? false)
 

@@ -95,6 +95,53 @@ class ReportController extends Controller
     }
 
     /**
+     * Display paid bookings that used a discount code.
+     */
+    public function discountCodes(Request $request): Response
+    {
+        $code = $this->discountCodeFilter($request);
+
+        return Inertia::render('Reports/DiscountCodes', [
+            'report' => $this->reportService->getDiscountedOrders($code),
+            'filters' => ['code' => $code],
+        ]);
+    }
+
+    /**
+     * Download the discount codes report as a CSV file.
+     */
+    public function exportDiscountCodes(Request $request): StreamedResponse
+    {
+        $code = $this->discountCodeFilter($request);
+        $report = $this->reportService->getDiscountedOrders($code);
+
+        return response()->streamDownload(function () use ($report): void {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Booked At', 'Booking', 'Learner', 'Email', 'Instructor', 'Package', 'Code', 'Discount', 'Total Charged', 'Payment', 'Status']);
+
+            foreach ($report['rows'] as $row) {
+                fputcsv($handle, [
+                    $row['booked_at'] ? CarbonImmutable::parse($row['booked_at'])->timezone('Europe/London')->format('Y-m-d H:i') : '',
+                    '#'.$row['order_id'],
+                    $row['learner_name'],
+                    $row['learner_email'],
+                    $row['instructor_name'],
+                    $row['package'],
+                    $row['discount_code'],
+                    number_format($row['discount_pence'] / 100, 2),
+                    number_format($row['total_price_pence'] / 100, 2),
+                    $row['payment_mode'] === 'weekly' ? 'Weekly' : 'Pay in full',
+                    $row['status'],
+                ]);
+            }
+
+            fclose($handle);
+        }, 'discount-codes-'.CarbonImmutable::now()->format('Y-m-d').'.csv', [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
+    /**
      * Display active, Stripe-connected instructors with low availability.
      */
     public function lowAvailability(): Response
@@ -337,6 +384,18 @@ class ReportController extends Controller
     }
 
     /**
+     * The discount codes report's optional code filter.
+     */
+    protected function discountCodeFilter(Request $request): ?string
+    {
+        $validated = $request->validate([
+            'code' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        return $validated['code'] ?? null;
+    }
+
+    /**
      * Metadata for the reports listed on the hub page.
      *
      * @return array<int, array{key: string, title: string, description: string, icon: string, route: string}>
@@ -385,6 +444,13 @@ class ReportController extends Controller
                 'description' => 'Upcoming lessons booked at a time with no pre-made available slot — check the instructor is happy.',
                 'icon' => 'CalendarX',
                 'route' => route('reports.off-slot-lessons'),
+            ],
+            [
+                'key' => 'discount-codes',
+                'title' => 'Discount Codes',
+                'description' => 'Paid bookings that used a discount code — which code, how much came off and what was charged.',
+                'icon' => 'Percent',
+                'route' => route('reports.discount-codes'),
             ],
             [
                 'key' => 'banked-lessons',

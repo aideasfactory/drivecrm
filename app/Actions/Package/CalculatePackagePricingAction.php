@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Package;
 
 use App\Models\Package;
+use App\Support\Discounts;
 use App\Support\Fees;
 
 class CalculatePackagePricingAction
@@ -12,7 +13,7 @@ class CalculatePackagePricingAction
     /**
      * Calculate the full pricing breakdown for a package.
      *
-     * @param  array{code?: string, percentage?: int|float}|null  $promoDiscount
+     * @param  array{code?: ?string, type?: string, percentage?: int|float|null, amount_pence?: int|null}|null  $promoDiscount
      * @return array{
      *   package_price_pence: int,
      *   package_price: float,
@@ -37,13 +38,12 @@ class CalculatePackagePricingAction
 
         $subtotal = $packagePrice + $bookingFee + $digitalFeeTotal;
 
-        $promoAmount = 0.0;
-        $promoCode = null;
-
-        if ($promoDiscount && isset($promoDiscount['percentage'])) {
-            $promoAmount = round($packagePrice * ($promoDiscount['percentage'] / 100), 2);
-            $promoCode = $promoDiscount['code'] ?? null;
-        }
+        // Worked out in pence exactly as order creation does (Discounts),
+        // so the preview matches what Stripe charges. Never off the fees.
+        $promoAmount = $promoDiscount
+            ? (float) (Discounts::discountPence($promoDiscount, (int) $package->total_price_pence) / 100)
+            : 0.0;
+        $promoCode = $promoAmount > 0 ? ($promoDiscount['code'] ?? null) : null;
 
         $total = round($subtotal - $promoAmount, 2);
         $weeklyPayment = $package->lessons_count > 0

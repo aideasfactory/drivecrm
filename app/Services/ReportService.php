@@ -8,6 +8,7 @@ use App\Actions\Lesson\ConfirmProvisionalLessonAction;
 use App\Actions\Report\GetBankedLessonsReportAction;
 use App\Actions\Report\GetCancelledLessonsAction;
 use App\Actions\Report\GetClashingLessonsAction;
+use App\Actions\Report\GetDiscountedOrdersReportAction;
 use App\Actions\Report\GetInstructorAvailabilityAnalyticsAction;
 use App\Actions\Report\GetInvoiceDueWithin48HoursAction;
 use App\Actions\Report\GetLowAvailabilityInstructorsAction;
@@ -27,7 +28,18 @@ class ReportService extends BaseService
         protected GetBankedLessonsReportAction $getBankedLessonsReport,
         protected GetOffSlotLessonsAction $getOffSlotLessons,
         protected GetLowAvailabilityInstructorsAction $getLowAvailabilityInstructors,
+        protected GetDiscountedOrdersReportAction $getDiscountedOrdersReport,
     ) {}
+
+    /**
+     * Paid bookings that used a discount code, optionally for one code.
+     *
+     * @return array{rows: Collection, codes: list<string>, totals: array{orders: int, discount_pence: int}, generated_at: string}
+     */
+    public function getDiscountedOrders(?string $code = null): array
+    {
+        return ($this->getDiscountedOrdersReport)($code);
+    }
 
     /**
      * Get active, Stripe-connected instructors below the low availability threshold.

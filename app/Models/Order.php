@@ -40,6 +40,8 @@ class Order extends Model
         'stripe_subscription_id',
         'discount_code_id',
         'discount_percentage',
+        'discount_code',
+        'discount_pence',
         'includes_test_pass_guarantee',
         'test_pass_guarantee_pence',
         'payment_hold_expires_at',
@@ -63,6 +65,7 @@ class Order extends Model
             'digital_fee_pence' => 'integer',
             'total_price_pence' => 'integer',
             'discount_percentage' => 'integer',
+            'discount_pence' => 'integer',
             'includes_test_pass_guarantee' => 'boolean',
             'test_pass_guarantee_pence' => 'integer',
             'payment_hold_expires_at' => 'datetime',
@@ -109,6 +112,15 @@ class Order extends Model
     public function discountCode(): BelongsTo
     {
         return $this->belongsTo(DiscountCode::class, 'discount_code_id');
+    }
+
+    /**
+     * Whether a discount code was taken off this order's package price.
+     * Older orders only carry the percentage; newer ones the amount too.
+     */
+    public function hasDiscount(): bool
+    {
+        return (int) $this->discount_pence > 0 || (int) $this->discount_percentage > 0;
     }
 
     /**

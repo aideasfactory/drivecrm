@@ -15,6 +15,7 @@ use App\Models\Package;
 use App\Services\PackageService;
 use App\Services\PriceUpliftService;
 use App\Support\ContactDetails;
+use App\Support\Discounts;
 use App\Support\TestPassGuarantee;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -153,8 +154,9 @@ class StepFiveController extends Controller
                 'booking_fee' => number_format($pricing['booking_fee'], 2),
                 'digital_fee' => number_format($pricing['digital_fee_total'], 2),
                 'uuid_discount' => $pricing['promo_discount'] > 0 ? number_format($pricing['promo_discount'], 2) : null,
-                'uuid_discount_percentage' => $discount ? $discount['percentage'] : null,
-                'uuid_discount_label' => $discount ? $discount['label'] : null,
+                'uuid_discount_percentage' => $discount ? ($discount['percentage'] ?? null) : null,
+                'uuid_discount_label' => $discount ? ($discount['label'] ?? null) : null,
+                'uuid_discount_summary' => $discount ? Discounts::summary($discount) : null,
                 'total' => number_format($pricing['total'], 2),
                 'weekly_payment' => number_format($pricing['weekly_payment'], 2),
                 'package_total_with_fees_pence' => $packageTotalWithFeesPence,
@@ -169,7 +171,7 @@ class StepFiveController extends Controller
             'available_promos' => ['SAVE10', 'SAVE20'],
 
             // Discount code data
-            'discount' => $discount,
+            'discount' => Discounts::withSummary($discount),
 
             // Pass back saved form data
             'pickup_address_line_1' => $step5['pickup_address_line_1'] ?? '',

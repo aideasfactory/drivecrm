@@ -10,6 +10,7 @@ use App\Models\Enquiry;
 use App\Models\Instructor;
 use App\Models\Order;
 use App\Services\OrderService;
+use App\Support\Discounts;
 use App\Support\MarketingParams;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -50,11 +51,7 @@ class OnboardingController extends Controller
                 ->first();
 
             if ($discountCode) {
-                $data['discount'] = [
-                    'id' => $discountCode->id,
-                    'label' => $discountCode->label,
-                    'percentage' => $discountCode->percentage,
-                ];
+                $data['discount'] = Discounts::forEnquiry($discountCode);
             }
         }
 

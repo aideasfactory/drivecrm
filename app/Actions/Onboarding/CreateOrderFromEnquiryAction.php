@@ -25,6 +25,7 @@ use App\Models\Student;
 use App\Services\InstructorCalendarService;
 use App\Services\InstructorService;
 use App\Support\BookingPayments;
+use App\Support\Discounts;
 use App\Support\Fees;
 use App\Support\TestPassGuarantee;
 use Carbon\Carbon;
@@ -44,7 +45,7 @@ class CreateOrderFromEnquiryAction
     /**
      * Create order with scheduled lessons from enquiry data.
      *
-     * @param  array{id: string, label: string, percentage: int}|null  $discount
+     * @param  array{id: string, code?: ?string, label: string, type?: string, percentage: ?int, amount_pence?: ?int}|null  $discount
      *
      * @throws \Exception
      */
@@ -81,9 +82,13 @@ class CreateOrderFromEnquiryAction
             $packagePricePence = $package->total_price_pence + ($priceUpliftPence * $package->lessons_count);
             $lessonPricePence = $package->lesson_price_pence + $priceUpliftPence;
 
-            if ($discount) {
-                $discountMultiplier = 1 - ($discount['percentage'] / 100);
-                $packagePricePence = (int) round($packagePricePence * $discountMultiplier);
+            // The discount comes off the package price before it is split
+            // into lessons (so lesson prices and payouts carry it). Fees are
+            // never discounted. Same calculation as the step 3–6 preview.
+            $discountPence = Discounts::discountPence($discount, $packagePricePence);
+
+            if ($discountPence > 0) {
+                $packagePricePence -= $discountPence;
                 $lessonPricePence = (int) floor($packagePricePence / $package->lessons_count);
             }
 
@@ -107,8 +112,10 @@ class CreateOrderFromEnquiryAction
                 'total_price_pence' => $totalPricePence,
                 'status' => OrderStatus::PENDING,
                 'payment_mode' => $paymentMode,
-                'discount_code_id' => $discount['id'] ?? null,
-                'discount_percentage' => $discount['percentage'] ?? null,
+                'discount_code_id' => $discountPence > 0 ? ($discount['id'] ?? null) : null,
+                'discount_percentage' => $discountPence > 0 ? ($discount['percentage'] ?? null) : null,
+                'discount_code' => $discountPence > 0 ? Discounts::displayCode($discount) : null,
+                'discount_pence' => $discountPence > 0 ? $discountPence : null,
                 'includes_test_pass_guarantee' => $testPassGuarantee['included'],
                 'test_pass_guarantee_pence' => $testPassGuarantee['charge_pence'],
                 'booked_by_user_id' => $enquiry->getStaffBooking()['user_id'] ?? null,
