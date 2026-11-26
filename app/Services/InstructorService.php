@@ -56,6 +56,7 @@ use App\Actions\Instructor\SyncStripeAccountStatusAction;
 use App\Actions\Instructor\UpdateCalendarItemAction;
 use App\Actions\Instructor\UpdateInstructorFinanceAction;
 use App\Actions\Instructor\UpdateInstructorProfileAction;
+use App\Actions\Instructor\UpdateTravelTimeAction;
 use App\Actions\Instructor\UploadFinanceReceiptAction;
 use App\Actions\Instructor\UploadInstructorProfilePictureAction;
 use App\Actions\Lesson\BankLessonsAction;
@@ -116,6 +117,7 @@ class InstructorService extends BaseService
         protected CreateCalendarItemAction $createCalendarItem,
         protected DeleteCalendarItemAction $deleteCalendarItem,
         protected UpdateCalendarItemAction $updateCalendarItem,
+        protected UpdateTravelTimeAction $updateTravelTime,
         protected CreateRecurringCalendarItemsAction $createRecurringCalendarItems,
         protected DeleteRecurringCalendarItemsAction $deleteRecurringCalendarItems,
         protected FillAvailableCalendarSlotsAction $fillAvailableCalendarSlots,
@@ -518,6 +520,23 @@ class InstructorService extends BaseService
         }
 
         return $item;
+    }
+
+    /**
+     * Change or remove the travel time after a diary item (0 minutes removes it).
+     *
+     * @param  CalendarItem  $calendarItem  The slot / lesson, or its travel block
+     */
+    public function updateTravelTime(CalendarItem $calendarItem, int $minutes): void
+    {
+        $instructorId = $calendarItem->calendar?->instructor_id;
+        $date = $calendarItem->calendar?->date?->format('Y-m-d');
+
+        ($this->updateTravelTime)($calendarItem, $minutes);
+
+        if ($instructorId && $date) {
+            app(InstructorCalendarService::class)->invalidateCalendarCache($instructorId, $date);
+        }
     }
 
     /**

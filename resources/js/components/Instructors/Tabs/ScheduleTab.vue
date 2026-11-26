@@ -65,7 +65,7 @@ import {
     DIARY_START_MINUTES,
     DIARY_MAX_END_MINUTES,
 } from '@/lib/diary-hours'
-import { bankCalendarItem, cancellationReasons as cancellationReasonsRoute } from '@/actions/App/Http/Controllers/InstructorController'
+import { bankCalendarItem, cancellationReasons as cancellationReasonsRoute, updateTravelTime } from '@/actions/App/Http/Controllers/InstructorController'
 import type { CalendarItemFormData, CalendarItemResponse, CancellationReasonOption, RecurrencePattern, ReflectiveLogData } from '@/types/instructor'
 
 interface Props {
@@ -74,7 +74,7 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const { isInstructor } = useRole()
+const { isInstructor, isOwner } = useRole()
 
 const HEAD_OFFICE_RESCHEDULE_ONLY_MESSAGE = 'This lesson can only be rearranged, to cancel please contact support.'
 
@@ -276,6 +276,39 @@ const editItemIsRecurring = computed(() => {
 const editItemIsTravel = computed(() => {
     return editForm.value.item_type === 'travel'
 })
+
+/** Travel block options, plus the block's current length if it isn't a standard one. */
+const travelBlockOptions = computed(() => {
+    const current = editForm.value.travel_time_minutes
+    if (travelTimeOptions.some((opt) => opt.value === current)) {
+        return travelTimeOptions
+    }
+
+    return [...travelTimeOptions, { value: current, label: `${current} minutes (current)` }]
+})
+
+const travelTimeSaving = ref(false)
+
+/** Owners: change the travel block's length, or remove it with 0. */
+async function saveTravelTime(minutes: number) {
+    travelTimeSaving.value = true
+    try {
+        await axios.put(
+            updateTravelTime.url({ instructor: props.instructorId, calendarItem: editForm.value.id }),
+            { travel_time_minutes: minutes },
+        )
+
+        toast({ title: minutes > 0 ? 'Travel time updated.' : 'Travel time removed.' })
+        await loadCalendarRange(rangeStartFormatted.value, rangeEndFormatted.value)
+
+        isEditSheetOpen.value = false
+    } catch (error: any) {
+        const message = error.response?.data?.message || 'Failed to update travel time'
+        toast({ title: message, variant: 'destructive' })
+    } finally {
+        travelTimeSaving.value = false
+    }
+}
 
 /** Whether the item being edited is a practical test slot */
 const editItemIsPracticalTest = computed(() => {
@@ -896,7 +929,7 @@ function populateEditForm(item: CalendarItemResponse) {
         recurrence_pattern: item.recurrence_pattern ?? 'none',
         recurrence_group_id: item.recurrence_group_id ?? null,
         item_type: item.item_type ?? 'slot',
-        travel_time_minutes: item.travel_time_minutes ?? 0,
+        travel_time_minutes: item.item_type === 'travel' ? Math.max(itemDuration, 0) : (item.travel_time_minutes ?? 0),
     }
 
     editItemLessonId.value = item.lesson_id ?? null
@@ -1930,7 +1963,9 @@ onMounted(() => {
                             This is a travel-time block created automatically after a lesson slot.
                         </p>
                         <p class="mt-1 text-xs text-purple-600 dark:text-purple-400">
-                            Travel time blocks cannot be booked and are managed through the parent lesson slot.
+                            {{ isOwner
+                                ? 'Travel time blocks cannot be booked. Changing the travel time does not affect the lesson or the pupil.'
+                                : 'Travel time blocks cannot be booked and are managed through the parent lesson slot.' }}
                         </p>
                     </div>
                     <div class="space-y-2">
@@ -1940,6 +1975,50 @@ onMounted(() => {
                         <p class="text-sm text-muted-foreground">
                             <strong>Time:</strong> {{ editForm.start_time }} - {{ editForm.end_time }}
                         </p>
+                    </div>
+                    <div v-if="isOwner" class="space-y-2">
+                        <Label for="travel-block-minutes">
+                            <span class="flex items-center gap-1.5">
+                                <Car class="h-4 w-4" />
+                                Travel Time
+                            </span>
+                        </Label>
+                        <select
+                            id="travel-block-minutes"
+                            v-model.number="editForm.travel_time_minutes"
+                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                            <option
+                                v-for="opt in travelBlockOptions"
+                                :key="opt.value"
+                                :value="opt.value"
+                            >
+                                {{ opt.label }}
+                            </option>
+                        </select>
+                        <p v-if="editForm.travel_time_minutes > 0" class="text-xs text-muted-foreground">
+                            Travel block: {{ editForm.start_time }} - {{ minutesToTime(timeToMinutes(editForm.start_time) + editForm.travel_time_minutes) }}
+                        </p>
+                    </div>
+                    <div v-if="isOwner" class="flex gap-2">
+                        <Button
+                            variant="destructive"
+                            class="flex-1"
+                            :disabled="travelTimeSaving"
+                            @click="saveTravelTime(0)"
+                        >
+                            <Trash2 class="mr-2 h-4 w-4" />
+                            Remove
+                        </Button>
+                        <Button
+                            class="flex-1"
+                            :disabled="travelTimeSaving"
+                            @click="saveTravelTime(editForm.travel_time_minutes)"
+                        >
+                            <Loader2 v-if="travelTimeSaving" class="mr-2 h-4 w-4 animate-spin" />
+                            <Save v-else class="mr-2 h-4 w-4" />
+                            Save
+                        </Button>
                     </div>
                     <Button
                         variant="outline"

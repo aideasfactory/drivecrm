@@ -164,6 +164,9 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
         ->name('instructors.calendar.items.update');
     Route::delete('/instructors/{instructor}/calendar/items/{calendarItem}', [InstructorController::class, 'destroyCalendarItem'])
         ->name('instructors.calendar.items.destroy');
+    Route::put('/instructors/{instructor}/calendar/items/{calendarItem}/travel-time', [InstructorController::class, 'updateTravelTime'])
+        ->middleware(EnsureOwner::class)
+        ->name('instructors.calendar.items.travel-time.update');
     Route::post('/instructors/{instructor}/calendar/items/{calendarItem}/bank', [InstructorController::class, 'bankCalendarItem'])
         ->name('instructors.calendar.items.bank');
     Route::get('/instructors/{instructor}/lesson-cancellation-reasons', [InstructorController::class, 'cancellationReasons'])
