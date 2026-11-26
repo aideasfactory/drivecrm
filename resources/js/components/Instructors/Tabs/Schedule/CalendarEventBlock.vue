@@ -10,6 +10,7 @@ import {
     Banknote,
 } from 'lucide-vue-next'
 
+import { useRole } from '@/composables/useRole'
 import type { CalendarItemTypeValue, RecurrencePattern } from '@/types/instructor'
 
 export interface CalendarEvent {
@@ -50,6 +51,8 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+const { isOwner } = useRole()
 
 const emit = defineEmits<{
     click: [event: CalendarEvent]
@@ -224,7 +227,8 @@ function handlePointerDown(e: PointerEvent) {
         :class="[
             hasClash ? 'ring-2 ring-orange-400 ring-offset-1 dark:ring-orange-500' : '',
             colorClasses,
-            isTravel ? 'cursor-default border-dashed opacity-80' : '',
+            isTravel ? 'border-dashed opacity-80' : '',
+            isTravel ? (isOwner ? 'cursor-pointer' : 'cursor-default') : '',
             isPracticalTest ? 'cursor-pointer border-solid' : '',
             !isTravel && !isPracticalTest ? 'cursor-pointer hover:shadow-md' : '',
         ]"

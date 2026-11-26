@@ -42,6 +42,7 @@ use App\Http\Requests\StoreSlotOfferRequest;
 use App\Http\Requests\UpdateCalendarItemRequest;
 use App\Http\Requests\UpdateInstructorPriceUpliftRequest;
 use App\Http\Requests\UpdateInstructorRequest;
+use App\Http\Requests\UpdateTravelTimeRequest;
 use App\Models\CalendarItem;
 use App\Models\Contact;
 use App\Models\Instructor;
@@ -793,6 +794,27 @@ class InstructorController extends Controller
         return response()->json([
             'calendar_item' => $this->formatCalendarItem($calendarItem),
             'mode' => 'single',
+        ]);
+    }
+
+    /**
+     * Owners: change or remove the travel time after a diary item, including a
+     * booked lesson. Accepts the slot or its travel block.
+     */
+    public function updateTravelTime(UpdateTravelTimeRequest $request, Instructor $instructor, CalendarItem $calendarItem): JsonResponse
+    {
+        if ($calendarItem->calendar->instructor_id !== $instructor->id) {
+            return response()->json([
+                'message' => 'Calendar item not found for this instructor.',
+            ], 404);
+        }
+
+        $minutes = $request->integer('travel_time_minutes');
+
+        $this->instructorService->updateTravelTime($calendarItem, $minutes);
+
+        return response()->json([
+            'message' => $minutes > 0 ? 'Travel time updated.' : 'Travel time removed.',
         ]);
     }
 
