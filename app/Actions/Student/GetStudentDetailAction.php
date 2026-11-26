@@ -17,7 +17,9 @@ class GetStudentDetailAction
      */
     public function __invoke(Student $student): array
     {
-        $student->load(['user', 'instructor', 'orders.lessons.lessonPayment']);
+        $student->load(['user', 'instructor', 'orders.lessons.lessonPayment', 'latestLearnerTermsAcceptance.version:id,version']);
+
+        $termsAcceptance = $student->latestLearnerTermsAcceptance;
 
         $defaultPickupPoint = $student->pickupPoints()->default()->first();
 
@@ -64,6 +66,10 @@ class GetStudentDetailAction
             'inactive_reason' => $student->inactive_reason,
             'has_test_pass_guarantee' => $student->hasTestPassGuarantee(),
             'test_pass_guarantee_at' => $student->test_pass_guarantee_at?->toIso8601String(),
+            'learner_terms' => $termsAcceptance ? [
+                'version' => $termsAcceptance->version?->version,
+                'accepted_at' => $termsAcceptance->accepted_at?->toIso8601String(),
+            ] : null,
         ];
     }
 }

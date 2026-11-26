@@ -77,6 +77,7 @@ Students (1) ──── (Many) StudentTests ──── (0..1) CalendarItems 
 InstructorFinances (Many) ──── (0..1) Students / (0..1) Lessons   [instructor_finances.student_id / lesson_id, import only]
 LessonDeletionRequests (Many) ──── (0..1) Lessons / Instructors / Students / Users   [lesson_id nulled when the lesson is deleted; one pending per lesson]
 ImportRuns (1) ──── (Many) ImportStagedRows   [temporary, emptied after each run]
+Students (1) ──── (Many) LearnerTermsAcceptances (Many) ──── (1) LearnerTermsVersions
 ```
 
 ---
@@ -1721,6 +1722,42 @@ The permanent record of everything the importer brought in. Links a legacy syste
 **Duplicate lesson report (2026-11-19, trimmed 2026-11-24):** `lessons:find-duplicates` (read-only) writes a review CSV of duplicated lessons — same GoRoadie ref (lesson mapping, or a lesson on the diary mapping's item; refs compared trimmed and case-insensitive), same instructor + pupil + date + start time, or an imported lesson at the date/time a Drive Plus lesson was moved from (the pupil's reschedule `activity_logs` row: `metadata.lesson_id` / `anchor_lesson_id` + `old_date` / `old_start_time`). There is no built-in removal command: the reviewed CSV is acted on by a one-off script (cancel, never hard-delete — lesson delete cascades `lesson_payments` / `payouts`; skip any lesson with Stripe money). The diary importer (`ImportDiaryItemAction::studentHasLessonAt`) also skips a row when the pupil's open lesson was moved in Drive Plus away from that date + start time.
 
 **Other imported markers:** `users.imported_at` (accounts — set only by the importer; shown as an "Imported" badge on the pupil's Actions tab; has no effect on cash payments), `orders.payment_mode = imported` (imported lessons' orders), `instructor_finances.category = imported` (finance rows with no category given). Imported receipts are stored exactly like manual uploads (`instructors/{id}/finance-receipts/{financeId}/…` on s3).
+
+---
+
+### 34. **learner_terms_versions** (added 2026-11-25)
+
+Versions of the DRIVE+ Learner Terms shown in the student app, managed in CRM Settings → Learner Terms (owners). One editable draft at a time (`published_at` NULL). Publishing stamps `published_at` and the row is never edited again. The **current version** is the latest published row (`published_at` desc, `id` desc). With no published row, nobody is asked to accept.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Version ID |
+| `version` | varchar(20) | UNIQUE | Label shown to learners, e.g. `1.0` |
+| `body` | longtext | NOT NULL | Terms text in Markdown (sent raw to the app; rendered with CommonMark for the CRM preview) |
+| `published_at` | timestamp | NULLABLE, INDEXED | When it was published. NULL = draft |
+| `created_by_user_id` | bigint unsigned | FK → users.id, NULLABLE, NULL ON DELETE | Who created the draft |
+| `published_by_user_id` | bigint unsigned | FK → users.id, NULLABLE, NULL ON DELETE | Who published it |
+| `created_at` / `updated_at` | timestamp | - | Timestamps |
+
+### 35. **learner_terms_acceptances** (added 2026-11-25)
+
+A learner tapping "I agree" on the app's terms screen (`POST /api/v1/student/terms/accept`). The legal record that replaces the GoRoadie agreement. Web checkout does **not** write here — its tick box accepts the separate long `/terms-of-service` page and only sets `students.terms_accepted`.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | bigint unsigned | PRIMARY KEY, AUTO_INCREMENT | Acceptance ID |
+| `student_id` | bigint unsigned | FK → students.id, CASCADE ON DELETE | The learner (students are soft-deleted, so rows survive staff delete) |
+| `learner_terms_version_id` | bigint unsigned | FK → learner_terms_versions.id, RESTRICT ON DELETE | Exact version accepted |
+| `accepted_at` | timestamp | NOT NULL | Server time of acceptance (UTC; shown in Europe/London) |
+| `platform` | varchar(10) | NOT NULL | `ios` or `android` |
+| `app_version` | varchar(30) | NULLABLE | App version string sent by the app, e.g. `2.4.1` |
+| `created_at` / `updated_at` | timestamp | - | Timestamps |
+
+**Indexes:** unique `(student_id, learner_terms_version_id)` (`lta_student_version_unique`), index `(student_id, accepted_at)`
+
+**Relationships:** `Student` hasMany `learnerTermsAcceptances`, hasOne `latestLearnerTermsAcceptance`; `LearnerTermsVersion` hasMany `acceptances`.
+
+**Shown in:** CRM pupil profile header ("Terms accepted: v1.0, 28 Oct 2026 14:02" / "Terms not accepted") and the Students CSV export (`GET /pupils/export`).
 
 ---
 

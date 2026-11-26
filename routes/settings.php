@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Settings\LearnerTermsController;
 use App\Http\Controllers\Settings\LowAvailabilityController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
@@ -37,4 +38,15 @@ Route::middleware(['auth', 'verified', EnsureOwner::class])->group(function () {
         ->name('low-availability-settings.edit');
     Route::put('settings/low-availability', [LowAvailabilityController::class, 'update'])
         ->name('low-availability-settings.update');
+
+    Route::get('settings/learner-terms', [LearnerTermsController::class, 'edit'])
+        ->name('learner-terms-settings.edit');
+    Route::put('settings/learner-terms/draft', [LearnerTermsController::class, 'saveDraft'])
+        ->name('learner-terms-settings.draft.save');
+    Route::delete('settings/learner-terms/draft', [LearnerTermsController::class, 'destroyDraft'])
+        ->name('learner-terms-settings.draft.destroy');
+    Route::post('settings/learner-terms/publish', [LearnerTermsController::class, 'publish'])
+        ->name('learner-terms-settings.publish');
+    Route::post('settings/learner-terms/preview', [LearnerTermsController::class, 'preview'])
+        ->name('learner-terms-settings.preview');
 });

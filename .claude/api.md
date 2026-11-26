@@ -527,10 +527,36 @@ Returns the authenticated user's profile with role-specific data.
       "app_onboarding_step": 0,
       "app_onboarding_complete": false,
       "profile_picture_url": null
-    }
+    },
+    "learner_terms": null
   }
 }
 ```
+
+**`learner_terms`** (added 2026-11-25) — `null` for instructors. For students it is the Learner Terms gate,
+also returned on `POST /auth/login` and `POST /auth/register/student`:
+
+```json
+"learner_terms": {
+  "requires_acceptance": true,
+  "is_update": false,
+  "current_version": "1.0",
+  "current_published_at": "2026-11-25T09:00:00+00:00",
+  "accepted_version": null,
+  "accepted_at": null
+}
+```
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `requires_acceptance` | bool | `true` → show the full-screen terms screen before the home screen. `false` when the learner has accepted the current version, or when no version has been published yet |
+| `is_update` | bool | `true` when they accepted an **older** version → use the "We've updated our Learner Terms…" sub-text |
+| `current_version` | string\|null | Latest published version, `null` if none |
+| `current_published_at` | ISO 8601\|null | UK time |
+| `accepted_version` | string\|null | Version of their most recent acceptance |
+| `accepted_at` | ISO 8601\|null | When they accepted it, UK time |
+
+See [Student Learner Terms](#student-learner-terms) for the text and accept endpoints.
 
 ---
 
@@ -4030,6 +4056,89 @@ Duration is derived from each lesson's `start_time` and `end_time`.
 
 ---
 
+### Student Learner Terms
+
+The DRIVE+ Learner Terms and Conditions every learner must accept in the app. The text is written and versioned
+in the CRM (Settings → Learner Terms). A published version is never edited; publishing a new one sets
+`learner_terms.requires_acceptance` back to `true` for everyone. Web checkout does **not** count as accepting
+these terms, so a learner who booked on the website still sees the screen on their first app sign-in.
+
+---
+
+#### `GET /api/v1/student/terms`
+
+**Auth required:** Yes (Bearer token — student only; `403` for instructors)
+
+The current terms text and the learner's own acceptance. Used by the onboarding terms screen and the read-only
+Profile → Terms and Conditions page.
+
+**Success Response:** `200 OK`
+```json
+{
+  "data": {
+    "version": "1.0",
+    "published_at": "2026-11-25T09:00:00+00:00",
+    "body_markdown": "# DRIVE+ Learner Terms and Conditions\n\n## 1. About us\n\n1.1 DRIVE Driving School ...",
+    "privacy_policy_url": "https://drivecrm.test/privacy-policy",
+    "requires_acceptance": false,
+    "is_update": false,
+    "acceptance": {
+      "version": "1.0",
+      "accepted_at": "2026-11-25T14:02:11+00:00",
+      "platform": "ios",
+      "app_version": "2.4.1"
+    }
+  }
+}
+```
+
+| Field | Notes |
+|-------|-------|
+| `version`, `published_at`, `body_markdown` | `null` when nothing is published yet (then `requires_acceptance` is `false`) |
+| `body_markdown` | CommonMark: `#`/`##`/`###` headings, paragraphs, `**bold**`, `-`/`1.` lists, links. Render with a Markdown component that respects the device font scale |
+| `privacy_policy_url` | Open in an in-app browser |
+| `acceptance` | The learner's most recent acceptance (may be an older version), or `null` |
+
+---
+
+#### `POST /api/v1/student/terms/accept`
+
+**Auth required:** Yes (Bearer token — student only; `403` for instructors)
+
+Records that the learner tapped **I agree**. The server stamps the time. Accepting the same version twice is
+safe and returns the original record.
+
+**Request Body:**
+```json
+{
+  "version": "1.0",
+  "platform": "ios",
+  "app_version": "2.4.1"
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `version` | string | Yes | The `version` the screen showed (from `GET /student/terms`) |
+| `platform` | string | Yes | `ios` or `android` |
+| `app_version` | string | No | App version string, max 30 chars |
+
+**Success Response:** `200 OK` — same body as `GET /api/v1/student/terms`, now with `requires_acceptance: false`
+and `acceptance` filled in.
+
+**Error Responses:**
+
+| Status | When | Body |
+|--------|------|------|
+| `409` | A newer version was published while the learner was reading (or none is published) | `{ "message": "Our Learner Terms have been updated. Please read the latest version and accept again.", "current_version": "1.1" }` — reload `GET /student/terms`, scroll state resets |
+| `422` | Validation (missing `version`, bad `platform`) | Standard validation error |
+| `403` | Not a student | `{ "message": "This action is unauthorized." }` |
+
+**App action:** on any non-2xx (or no network) show *"Something went wrong, please try again"* and keep the
+learner on the terms screen. Only leave the screen after a `200`.
+
+---
+
 ### Student Resources
 
 ---
@@ -7288,6 +7397,8 @@ The `role` field is always returned in user responses. Use it to determine which
 | POST | `/api/v1/student/slot-offers/{slotOffer}/accept` | Yes | Student | Accept/book a short-notice offer (first booking wins) |
 | GET | `/api/v1/student/instructor` | Yes | Student | View attached instructor's public profile |
 | GET | `/api/v1/student/dashboard` | Yes | Student | Student dashboard data (practice hours, suggested resources) |
+| GET | `/api/v1/student/terms` | Yes | Student | Current Learner Terms text + the learner's acceptance |
+| POST | `/api/v1/student/terms/accept` | Yes | Student | Accept the current Learner Terms version |
 | GET | `/api/v1/student/resource-summary` | Yes | Student | Aggregated resource dashboard (recent activity, stats, progress, tips) |
 | GET | `/api/v1/student/resources` | Yes | Student | Full resource library (folder tree + my resources + watched flags) |
 | GET | `/api/v1/student/resources/{resource}` | Yes | Student | Single resource detail with video/file URL |
@@ -8575,6 +8686,7 @@ Bulk-upserts scores for a student. One request per save click (payload holds eve
 | 2026-11-20 | **Mock tests use the Car bank only.** The question bank is now the 758 questions in the DVSA "Car (Cat B) QB Feb 2026" spreadsheet. 462 were missing, and the 223 shared car/motorcycle questions were labelled `Motorcycle`. `start` (including tests with no category, stored as `Mixed`), `questions` and `categories` only use `Car` questions. Before, a mixed test drew motorcycle-only, lorry/bus and ADI questions too. `category` on `POST /mock-tests/start` and `GET /mock-tests/questions` now only accepts `Car`, so `ADI`/`Motorcycle`/`LGV-PCV` return `422`. `GET /mock-tests/categories` returns one category (`Car`). `category_performance` in the summary only counts answers to Car questions. History, review and single-question endpoints are unchanged, so old tests still open with their original questions. Response shapes are unchanged. **App action:** none if the category list is read from `/mock-tests/categories`. Remove any hard-coded Motorcycle/LGV-PCV/ADI options. | Mock Tests (start, questions, categories, summary) |
 | 2026-11-25 | **Lessons must be 2 hours.** `POST /api/v1/students/{student}/orders` now returns 422 when the `calendar_item_id` slot (error on `calendar_item_id`) or the typed `start_time`/`end_time` (error on `end_time`) is shorter than 120 minutes. `POST /api/v1/instructor/calendar/items/{calendarItem}/offers` returns 422 (`calendar_item`) for a slot shorter than 2 hours. `GET /api/v1/student/calendar/items` no longer lists open slots shorter than 2 hours. Practical test items are exempt. Also server-side only: a slot freed by a cancelled or banked **imported** lesson that is shorter than 2 hours is now removed from the diary instead of reopened (cancel / bank endpoints unchanged). **App action:** show the 422 message as-is; instructor add-slot is already fixed at 120 minutes. | Orders (store), Slot offers (store), Student calendar (index) |
 | 2026-11-25 | **Former instructor can sign off a lesson they taught before a transfer.** `GET /api/v1/students/{student}/lessons/{lesson}` and `POST /api/v1/students/{student}/lessons/{lesson}/sign-off` now also allow the instructor the lesson belongs to (`lessons.instructor_id`), not only the pupil's current instructor. Previously a pupil transferred before an un-signed-off lesson left it stuck (403). `GET .../lessons` (index) unchanged. No request/response shape change. **App action:** none required; tapping the lesson in the former instructor's diary now opens it and Sign off works. | Student lessons (show, sign-off) |
+| 2026-11-25 | **Learner Terms acceptance.** New `GET /api/v1/student/terms` (current DRIVE+ Learner Terms as Markdown, privacy policy URL, the learner's acceptance) and `POST /api/v1/student/terms/accept` (`version`, `platform` ios\|android, `app_version`; `409` if a newer version was published meanwhile). **New additive field** `learner_terms` on the user object (`/auth/login`, `/auth/user`, `/auth/register/student`; `null` for instructors) with `requires_acceptance`, `is_update`, `current_version`, `current_published_at`, `accepted_version`, `accepted_at`. Terms are versioned in CRM Settings → Learner Terms; nobody is gated until the first version is published. Not enforced server-side on other endpoints yet. **App action (pupil):** full-screen terms gate after sign-in and on every app open while `learner_terms.requires_acceptance` is true; read-only Profile → Terms and Conditions page. See the user journey in `.claude/tasks/app-developer-learner-terms.md`. | Auth (login, user, register/student), Student Learner Terms (NEW show, accept) |
 ---
 
 > **IMPORTANT FOR DEVELOPERS:** This file is the single source of truth for the mobile API. Every new API feature MUST be documented here before it is considered complete. If the endpoint isn't in this file, it doesn't exist for the mobile app.

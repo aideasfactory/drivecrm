@@ -295,6 +295,8 @@ Route::middleware(['auth', 'verified', RestrictInstructor::class, RestrictOwnerA
 
     Route::get('/pupils', [PupilController::class, 'index'])
         ->name('pupils.index');
+    Route::get('/pupils/export', [PupilController::class, 'exportCsv'])
+        ->name('pupils.export-csv');
     Route::post('/pupils/{student}/assign-instructor', [PupilController::class, 'assignInstructor'])
         ->name('pupils.assign-instructor');
     Route::get('/students/{student}', [PupilController::class, 'show'])

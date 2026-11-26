@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
@@ -235,6 +236,22 @@ class Student extends Model
     public function pickupPoints(): HasMany
     {
         return $this->hasMany(StudentPickupPoint::class);
+    }
+
+    /**
+     * Learner Terms versions this student has accepted in the app.
+     */
+    public function learnerTermsAcceptances(): HasMany
+    {
+        return $this->hasMany(LearnerTermsAcceptance::class);
+    }
+
+    /**
+     * The student's most recent Learner Terms acceptance (any version).
+     */
+    public function latestLearnerTermsAcceptance(): HasOne
+    {
+        return $this->hasOne(LearnerTermsAcceptance::class)->latestOfMany('accepted_at');
     }
 
     /**

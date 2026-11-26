@@ -35,6 +35,7 @@ use App\Http\Controllers\Api\V1\StudentProfilePictureController;
 use App\Http\Controllers\Api\V1\StudentProgressController;
 use App\Http\Controllers\Api\V1\StudentResourceController;
 use App\Http\Controllers\Api\V1\StudentSlotOfferController;
+use App\Http\Controllers\Api\V1\StudentTermsController;
 use App\Http\Middleware\ResolveApiProfile;
 use Illuminate\Support\Facades\Route;
 
@@ -130,6 +131,10 @@ Route::prefix('v1')->group(function (): void {
 
         // Student-scoped routes (identity from token, not URL)
         Route::prefix('student')->group(function (): void {
+            // Learner Terms (app onboarding gate + Profile → Terms and Conditions)
+            Route::get('terms', [StudentTermsController::class, 'show']);
+            Route::post('terms/accept', [StudentTermsController::class, 'accept']);
+
             Route::get('packages', [StudentPackageController::class, 'index']);
             Route::get('calendar/items', [StudentCalendarController::class, 'index']);
             Route::get('slot-offers', [StudentSlotOfferController::class, 'index']);
