@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/sonner'
-import { ArrowLeft, Phone, Mail, MapPin, Cake, UserPen } from 'lucide-vue-next'
+import { ArrowLeft, Phone, Mail, MapPin, Cake, UserPen, FileCheck2, FileX2 } from 'lucide-vue-next'
 import type { InstructorDetail } from '@/types/instructor'
 import OverviewSubTab from './Student/OverviewSubTab.vue'
 import LessonsSubTab from './Student/LessonsSubTab.vue'
@@ -36,6 +36,7 @@ interface StudentDetail extends EditableStudentDetail {
     has_test_pass_guarantee: boolean
     test_pass_guarantee_at: string | null
     can_book_cash: boolean
+    learner_terms: { version: string | null; accepted_at: string | null } | null
 }
 
 interface Props {
@@ -64,6 +65,29 @@ const formattedDateOfBirth = computed(() => {
         month: 'short',
         year: 'numeric',
     })
+})
+
+/** "Terms accepted: v1.0, 28 Oct 2026 14:02" (UK time) or null when never accepted. */
+const termsAcceptedLabel = computed(() => {
+    const terms = student.value?.learner_terms
+    if (!terms?.accepted_at) {
+        return null
+    }
+
+    const acceptedAt = new Date(terms.accepted_at)
+    const date = acceptedAt.toLocaleDateString('en-GB', {
+        timeZone: 'Europe/London',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+    })
+    const time = acceptedAt.toLocaleTimeString('en-GB', {
+        timeZone: 'Europe/London',
+        hour: '2-digit',
+        minute: '2-digit',
+    })
+
+    return `Terms accepted: v${terms.version}, ${date} ${time}`
 })
 
 type SubTabType = 'overview' | 'lessons' | 'payments' | 'transfer' | 'emergency' | 'messages' | 'actions' | 'log'
@@ -213,6 +237,12 @@ onMounted(() => {
                                 >
                                     <Cake class="h-4 w-4" />
                                     <span>{{ formattedDateOfBirth }}</span>
+                                </div>
+
+                                <div class="flex items-center gap-2 text-muted-foreground">
+                                    <FileCheck2 v-if="termsAcceptedLabel" class="h-4 w-4" />
+                                    <FileX2 v-else class="h-4 w-4" />
+                                    <span>{{ termsAcceptedLabel ?? 'Terms not accepted' }}</span>
                                 </div>
                             </div>
                         </div>

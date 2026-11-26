@@ -67,6 +67,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PupilController extends Controller
 {
@@ -85,6 +86,7 @@ class PupilController extends Controller
         $listing = $this->studentService->list($filters);
         $students = $listing['students'];
         $onboardedInstructors = (new GetOnboardedInstructorsAction)();
+        $currentTermsVersionId = $this->studentService->currentLearnerTermsVersionId();
 
         return Inertia::render('Pupils/Index', [
             'pupils' => collect($students->items())->map(fn (Student $student) => [
@@ -95,6 +97,11 @@ class PupilController extends Controller
                 'has_test_pass_guarantee' => $student->hasTestPassGuarantee(),
                 'instructor_id' => $student->instructor_id,
                 'instructor_name' => $student->instructor?->user?->name,
+                'terms_status' => match (true) {
+                    $student->latestLearnerTermsAcceptance === null => 'none',
+                    $student->latestLearnerTermsAcceptance->learner_terms_version_id === $currentTermsVersionId => 'current',
+                    default => 'older',
+                },
             ])->values(),
             'pagination' => [
                 'current_page' => $students->currentPage(),
@@ -111,6 +118,53 @@ class PupilController extends Controller
                 'id' => $instructor->id,
                 'name' => $instructor->name ?? "Instructor #{$instructor->id}",
             ])->values(),
+        ]);
+    }
+
+    /**
+     * Download the Students list as CSV, honouring the page's search and
+     * assignment filter. Includes the latest Learner Terms acceptance (UK time).
+     */
+    public function exportCsv(FilterStudentsRequest $request): StreamedResponse
+    {
+        $students = $this->studentService->listForExport($request->filters());
+
+        return response()->streamDownload(function () use ($students): void {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, [
+                'ID',
+                'Created at',
+                'First name',
+                'Surname',
+                'Email',
+                'Phone',
+                'Status',
+                'Instructor',
+                'Terms version',
+                'Terms accepted at',
+            ]);
+
+            foreach ($students as $student) {
+                $acceptance = $student->latestLearnerTermsAcceptance;
+
+                fputcsv($handle, [
+                    $student->id,
+                    $student->created_at?->timezone('Europe/London')->format('Y-m-d H:i'),
+                    $student->first_name,
+                    $student->surname,
+                    $student->email,
+                    $student->phone,
+                    $student->status,
+                    $student->instructor?->user?->name,
+                    $acceptance?->version?->version,
+                    $acceptance?->accepted_at?->timezone('Europe/London')->format('Y-m-d H:i'),
+                ]);
+            }
+
+            fclose($handle);
+        }, 'students-'.now('Europe/London')->format('Y-m-d').'.csv', [
+            'Content-Type' => 'text/csv',
         ]);
     }
 

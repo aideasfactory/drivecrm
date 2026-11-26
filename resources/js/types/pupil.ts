@@ -23,4 +23,6 @@ export interface PupilListing {
     has_test_pass_guarantee: boolean
     instructor_id: number | null
     instructor_name: string | null
+    /** Learner Terms: accepted the current version, only an older one, or none. */
+    terms_status: 'current' | 'older' | 'none'
 }

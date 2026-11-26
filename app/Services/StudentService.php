@@ -32,11 +32,13 @@ use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\LazyCollection;
 
 class StudentService extends BaseService
 {
     public function __construct(
         protected ListStudentsAction $listStudents,
+        protected LearnerTermsService $learnerTermsService,
         protected GetStudentByIdAction $getStudentById,
         protected CreatePupilAction $createPupil,
         protected ResendStudentInviteAction $resendStudentInvite,
@@ -75,7 +77,42 @@ class StudentService extends BaseService
      */
     public function list(array $filters): array
     {
-        return ($this->listStudents)($filters['assignment'], $filters['q']);
+        return ($this->listStudents)(
+            $filters['assignment'],
+            $filters['q'],
+            $filters['terms'] ?? 'all',
+            $this->currentLearnerTermsVersionId(),
+        );
+    }
+
+    /**
+     * Every student matching the Students page filters, newest first, for the
+     * CSV export. Streams in chunks with the instructor and the latest Learner
+     * Terms acceptance eager-loaded.
+     *
+     * @param  array{assignment: string, terms?: string, q: ?string}  $filters
+     * @return LazyCollection<int, Student>
+     */
+    public function listForExport(array $filters): LazyCollection
+    {
+        return $this->listStudents->filteredQuery(
+            $filters['assignment'],
+            $filters['q'],
+            $filters['terms'] ?? 'all',
+            $this->currentLearnerTermsVersionId(),
+        )
+            ->with(['instructor.user:id,name', 'latestLearnerTermsAcceptance.version:id,version'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->lazy(500);
+    }
+
+    /**
+     * ID of the current published Learner Terms version, or null when none is published.
+     */
+    public function currentLearnerTermsVersionId(): ?int
+    {
+        return $this->learnerTermsService->current()?->id;
     }
 
     /**

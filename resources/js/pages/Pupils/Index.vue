@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import axios from 'axios'
 import AppLayout from '@/layouts/AppLayout.vue'
@@ -27,7 +27,8 @@ import {
 } from '@/components/ui/sheet'
 import DeleteLearnerSection from '@/components/Instructors/Tabs/Student/Actions/DeleteLearnerSection.vue'
 import TestPassGuaranteeBadge from '@/components/Shared/TestPassGuaranteeBadge.vue'
-import { Search, GraduationCap, CalendarPlus, ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { Search, GraduationCap, CalendarPlus, ChevronLeft, ChevronRight, Download } from 'lucide-vue-next'
+import { exportCsv } from '@/actions/App/Http/Controllers/PupilController'
 import { show as instructorsShow } from '@/routes/instructors'
 import { start as onboardingStart } from '@/routes/onboarding'
 import { index as pupilsIndex } from '@/routes/pupils'
@@ -52,6 +53,7 @@ interface StudentSummary {
 }
 
 type Assignment = 'all' | 'assigned' | 'unassigned'
+type TermsFilter = 'all' | 'current' | 'older' | 'none'
 
 interface Pagination {
     current_page: number
@@ -65,6 +67,7 @@ interface Pagination {
 
 interface Filters {
     assignment: Assignment
+    terms: TermsFilter
     q: string | null
 }
 
@@ -84,18 +87,33 @@ const assignmentOptions: { value: Assignment; label: string }[] = [
     { value: 'unassigned', label: 'Unassigned' },
 ]
 
+const termsOptions: { value: TermsFilter; label: string }[] = [
+    { value: 'all', label: 'All terms' },
+    { value: 'current', label: 'Accepted' },
+    { value: 'older', label: 'Older version' },
+    { value: 'none', label: 'Not accepted' },
+]
+
+const termsBadge: Record<PupilListing['terms_status'], { label: string; variant: 'secondary' | 'outline' }> = {
+    current: { label: 'Terms accepted', variant: 'secondary' },
+    older: { label: 'Older terms', variant: 'outline' },
+    none: { label: 'Terms not accepted', variant: 'outline' },
+}
+
 const searchQuery = ref(props.filters.q ?? '')
 let searchDebounce: ReturnType<typeof setTimeout> | undefined
 
 const applyFilters = (changes: Partial<Filters> = {}) => {
     const next: Filters = {
         assignment: props.filters.assignment,
+        terms: props.filters.terms,
         q: searchQuery.value.trim() || null,
         ...changes,
     }
     const query: Record<string, string> = {}
 
     if (next.assignment !== 'all') query.assignment = next.assignment
+    if (next.terms !== 'all') query.terms = next.terms
     if (next.q) query.q = next.q
 
     router.get(pupilsIndex.url({ query }), {}, { preserveScroll: true, preserveState: true })
@@ -110,6 +128,17 @@ watch(searchQuery, () => {
 
         applyFilters()
     }, 400)
+})
+
+/** CSV of every student matching the current search + filter (all pages). */
+const exportUrl = computed(() => {
+    const query: Record<string, string> = {}
+
+    if (props.filters.assignment !== 'all') query.assignment = props.filters.assignment
+    if (props.filters.terms !== 'all') query.terms = props.filters.terms
+    if (props.filters.q) query.q = props.filters.q
+
+    return exportCsv.url({ query })
 })
 
 const goToPage = (url: string | null) => {
@@ -262,6 +291,21 @@ const onLearnerDeleted = () => {
                         </Badge>
                     </Button>
                 </div>
+                <div class="flex items-center gap-1 rounded-md border p-1">
+                    <Button
+                        v-for="option in termsOptions"
+                        :key="option.value"
+                        :variant="filters.terms === option.value ? 'default' : 'ghost'"
+                        size="sm"
+                        @click="applyFilters({ terms: option.value })"
+                    >
+                        {{ option.label }}
+                    </Button>
+                </div>
+                <Button as="a" :href="exportUrl" variant="outline" class="ml-auto">
+                    <Download class="mr-2 h-4 w-4" />
+                    Download CSV
+                </Button>
             </div>
 
             <!-- Students Table -->
@@ -295,6 +339,12 @@ const onLearnerDeleted = () => {
                                                     v-if="pupil.has_test_pass_guarantee"
                                                     short
                                                 />
+                                                <Badge
+                                                    :variant="termsBadge[pupil.terms_status].variant"
+                                                    class="font-normal"
+                                                >
+                                                    {{ termsBadge[pupil.terms_status].label }}
+                                                </Badge>
                                             </div>
                                             <div
                                                 v-if="pupil.email"

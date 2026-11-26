@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\V1;
 
+use App\Enums\UserRole;
+use App\Services\LearnerTermsService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -26,7 +28,22 @@ class UserResource extends JsonResource
             'email_verified_at' => $this->email_verified_at,
             'created_at' => $this->created_at,
             'profile' => $this->resolveProfile(),
+            'learner_terms' => $this->resolveLearnerTerms(),
         ];
+    }
+
+    /**
+     * Learner Terms status for students (null for instructors). The app shows
+     * the terms screen after sign-in, and on every app open, while
+     * `learner_terms.requires_acceptance` is true.
+     */
+    private function resolveLearnerTerms(): ?LearnerTermsStatusResource
+    {
+        if ($this->role !== UserRole::STUDENT || $this->student === null) {
+            return null;
+        }
+
+        return new LearnerTermsStatusResource(app(LearnerTermsService::class)->statusFor($this->student));
     }
 
     /**

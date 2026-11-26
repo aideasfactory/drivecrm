@@ -8,6 +8,7 @@ import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { useRole } from '@/composables/useRole';
 import { toUrl } from '@/lib/utils';
 import { edit as editAppearance } from '@/routes/appearance';
+import { edit as editLearnerTerms } from '@/routes/learner-terms-settings';
 import { edit as editLowAvailability } from '@/routes/low-availability-settings';
 import { edit as editProfile } from '@/routes/profile';
 import { show } from '@/routes/two-factor';
@@ -37,7 +38,11 @@ const accountNavItems: NavItem[] = [
 
 const sidebarNavItems = computed<NavItem[]>(() =>
     hasFullOwnerAccess.value
-        ? [...accountNavItems, { title: 'Low Availability', href: editLowAvailability() }]
+        ? [
+              ...accountNavItems,
+              { title: 'Low Availability', href: editLowAvailability() },
+              { title: 'Learner Terms', href: editLearnerTerms() },
+          ]
         : accountNavItems,
 );
 
