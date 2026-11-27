@@ -8,6 +8,7 @@ use App\Enums\EmailTemplateKey;
 use App\Mail\RendersTemplatedMail;
 use App\Models\Order;
 use App\Models\Student;
+use App\Support\AlternativePayments;
 use App\Support\BookingPayments;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
@@ -69,6 +70,8 @@ class PaymentLinkNotification extends Notification implements ShouldQueue
                 'booked_by_contact' => $this->isBookedByContact,
                 'booked_by_staff' => $this->isBookedByStaff,
                 'pay_weekly' => $firstWeeklyPayment !== null,
+                'alternative_payment' => AlternativePayments::allowedForOrder($order)
+                    && AlternativePayments::isStaffOrInstructorBooking($order),
             ],
             $this->checkoutUrl,
         );

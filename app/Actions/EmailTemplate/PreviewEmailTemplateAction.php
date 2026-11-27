@@ -6,6 +6,7 @@ namespace App\Actions\EmailTemplate;
 
 use App\Enums\EmailTemplateKey;
 use App\Mail\EmailTemplateCatalog;
+use App\Mail\EmailTemplateDerivedPlaceholders;
 use App\Mail\EmailTemplateInterpolator;
 use App\Mail\RenderedEmailTemplate;
 use App\Models\EmailTemplate;
@@ -111,6 +112,7 @@ class PreviewEmailTemplateAction
     public function __construct(
         protected EmailTemplateInterpolator $interpolator,
         protected BuildTemplatedMailMessageAction $buildTemplatedMailMessage,
+        protected EmailTemplateDerivedPlaceholders $derivedPlaceholders,
     ) {}
 
     /**
@@ -126,7 +128,7 @@ class PreviewEmailTemplateAction
         $definition = EmailTemplateCatalog::definition($key);
         $stored = EmailTemplate::query()->where('key', $key->value)->first();
 
-        $replacements = $this->replacements($definition, $enabledConditions);
+        $replacements = $this->derivedPlaceholders->with($this->replacements($definition, $enabledConditions));
 
         $source = fn (string $field): string => (string) (array_key_exists($field, $copy)
             ? $copy[$field]

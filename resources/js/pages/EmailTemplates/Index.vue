@@ -200,6 +200,13 @@ const breadcrumbs = [{ title: 'Email templates' }]
                                         >
                                             Customised
                                         </Badge>
+                                        <Badge
+                                            v-if="template.used_in.length > 1"
+                                            variant="outline"
+                                            :title="template.used_in.map((workflow) => workflow.title).join('\n')"
+                                        >
+                                            In {{ template.used_in.length }} workflows
+                                        </Badge>
                                     </div>
                                 </TableCell>
                                 <TableCell class="max-w-xs truncate">

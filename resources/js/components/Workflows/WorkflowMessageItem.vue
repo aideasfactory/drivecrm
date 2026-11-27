@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Eye, Pencil } from 'lucide-vue-next'
+import { Eye, Pencil, Share2 } from 'lucide-vue-next'
 import { channels } from '@/components/Workflows/channels'
 import type { WorkflowMessage } from '@/types/workflow'
 
@@ -13,8 +13,8 @@ interface Props {
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
-    (e: 'open-template', key: string): void
-    (e: 'preview-template', key: string): void
+    (e: 'open-template', message: WorkflowMessage): void
+    (e: 'preview-template', message: WorkflowMessage): void
 }>()
 
 const channel = computed(() => channels[props.message.channel])
@@ -58,6 +58,15 @@ const channel = computed(() => channels[props.message.channel])
                 <p v-if="message.note" class="text-xs text-muted-foreground">
                     {{ message.note }}
                 </p>
+                <p
+                    v-if="message.shared_with.length"
+                    class="flex items-center gap-1 text-xs text-muted-foreground"
+                    :title="message.shared_with.map((workflow) => workflow.title).join('\n')"
+                >
+                    <Share2 class="h-3 w-3 shrink-0" />
+                    Same email is also sent in {{ message.shared_with.length }}
+                    other {{ message.shared_with.length === 1 ? 'workflow' : 'workflows' }}
+                </p>
             </div>
         </div>
         <div
@@ -69,7 +78,7 @@ const channel = computed(() => channels[props.message.channel])
                 variant="outline"
                 size="sm"
                 class="cursor-pointer"
-                @click="emit('preview-template', message.template)"
+                @click="emit('preview-template', message)"
             >
                 <Eye class="mr-2 h-3 w-3" />
                 Preview email
@@ -79,7 +88,7 @@ const channel = computed(() => channels[props.message.channel])
                 variant="outline"
                 size="sm"
                 class="cursor-pointer"
-                @click="emit('open-template', message.template)"
+                @click="emit('open-template', message)"
             >
                 <Pencil class="mr-2 h-3 w-3" />
                 Edit email

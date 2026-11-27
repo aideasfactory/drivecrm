@@ -17,7 +17,7 @@ use App\Enums\EmailTemplateKey;
  *
  * @phpstan-type WorkflowMessage array{channel: 'email'|'push'|'admin_email'|'bird'|'none', template: ?string, label: string, recipient: string, note: ?string}
  * @phpstan-type WorkflowStep array{when: string, what: string, messages: list<WorkflowMessage>}
- * @phpstan-type Workflow array{key: string, group: string, title: string, summary: string, steps: list<WorkflowStep>}
+ * @phpstan-type Workflow array{key: string, group: string, title: string, summary: string, scenario: list<string>, steps: list<WorkflowStep>}
  */
 final class WorkflowCatalog
 {
@@ -34,6 +34,20 @@ final class WorkflowCatalog
     public const GROUP_ACCOUNTS = 'Accounts & messages';
 
     /**
+     * Email conditions that are always true in a workflow. Opening an email
+     * from that workflow previews it with these ticked, and new paragraphs
+     * written there are shown only in that case. A condition is only applied
+     * to emails that have it.
+     *
+     * @var array<string, list<string>>
+     */
+    private const SCENARIOS = [
+        'booking-weekly' => ['pay_weekly'],
+        'booking-alternative-payment' => ['alternative_payment'],
+        'booking-for-someone-else' => ['booked_by_contact'],
+    ];
+
+    /**
      * @return list<Workflow>
      */
     public static function workflows(): array
@@ -46,6 +60,33 @@ final class WorkflowCatalog
             ...self::instructorWorkflows(),
             ...self::accountWorkflows(),
         ];
+    }
+
+    /**
+     * Which workflows send each email template, in page order.
+     *
+     * @return array<string, list<array{key: string, title: string}>>
+     */
+    public static function templateUsage(): array
+    {
+        $usage = [];
+
+        foreach (self::workflows() as $workflow) {
+            foreach ($workflow['steps'] as $step) {
+                foreach ($step['messages'] as $message) {
+                    if ($message['template'] === null) {
+                        continue;
+                    }
+
+                    $usage[$message['template']][$workflow['key']] = [
+                        'key' => $workflow['key'],
+                        'title' => $workflow['title'],
+                    ];
+                }
+            }
+        }
+
+        return array_map(fn (array $workflows): array => array_values($workflows), $usage);
     }
 
     /**
@@ -447,6 +488,7 @@ final class WorkflowCatalog
             'group' => $group,
             'title' => $title,
             'summary' => $summary,
+            'scenario' => self::SCENARIOS[$key] ?? [],
             'steps' => $steps,
         ];
     }

@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import WorkflowMessageItem from '@/components/Workflows/WorkflowMessageItem.vue'
-import type { Workflow } from '@/types/workflow'
+import type { Workflow, WorkflowMessage } from '@/types/workflow'
 
 interface Props {
     workflow: Workflow
@@ -17,8 +17,8 @@ interface Props {
 defineProps<Props>()
 
 const emit = defineEmits<{
-    (e: 'open-template', key: string): void
-    (e: 'preview-template', key: string): void
+    (e: 'open-template', message: WorkflowMessage): void
+    (e: 'preview-template', message: WorkflowMessage): void
 }>()
 </script>
 

@@ -6,6 +6,7 @@ namespace App\Actions\EmailTemplate;
 
 use App\Enums\EmailTemplateKey;
 use App\Mail\EmailTemplateCatalog;
+use App\Mail\EmailTemplateDerivedPlaceholders;
 use App\Mail\EmailTemplateInterpolator;
 use App\Mail\RenderedEmailTemplate;
 use App\Models\EmailTemplate;
@@ -15,6 +16,7 @@ class RenderEmailTemplateAction
 {
     public function __construct(
         protected EmailTemplateInterpolator $interpolator,
+        protected EmailTemplateDerivedPlaceholders $derivedPlaceholders,
     ) {}
 
     /**
@@ -25,7 +27,7 @@ class RenderEmailTemplateAction
         $definition = EmailTemplateCatalog::definition($key);
         $stored = $this->stored($key);
 
-        $replacements = $this->normaliseReplacements($replacements);
+        $replacements = $this->derivedPlaceholders->with($this->normaliseReplacements($replacements));
 
         return new RenderedEmailTemplate(
             subject: $this->interpolator->interpolate($stored?->subject ?? $definition['subject'], $replacements),
